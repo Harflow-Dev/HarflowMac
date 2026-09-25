@@ -196,6 +196,13 @@ final class CascadeSummaryTests: XCTestCase {
         XCTAssertFalse(text.contains("settling"), text)
     }
 
+    func testAnIncompleteCascadeIsSaid() {
+        let result: [String: JSONValue] = ["status": .string("cancelled"), "cascade": .object([
+            "cascade_incomplete": .bool(true), "unconverged": .array([.string("x"), .string("y")]),
+        ])]
+        XCTAssertTrue(CascadeSummary.describe(result).contains("cascade incomplete: 2 descendants never reached"))
+    }
+
     func testPlainCancel() {
         XCTAssertEqual(CascadeSummary.describe(["status": .string("cancelled")]), "Cancel sent · status cancelled")
     }

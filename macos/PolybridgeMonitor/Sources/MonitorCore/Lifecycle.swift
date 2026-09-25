@@ -266,6 +266,10 @@ public enum CascadeSummary {
         for (key, words) in problems where count(key) > 0 {
             parts.append("\(count(key)) \(words)")
         }
+        if cascade["cascade_incomplete"]?.boolValue == true {
+            let missed = count("unconverged")
+            parts.append("cascade incomplete" + (missed > 0 ? ": \(missed) descendant\(missed == 1 ? "" : "s") never reached" : ""))
+        }
         if result["unrecorded_phase_writes"]?.arrayValue?.isEmpty == false {
             parts.append("some signals could not be recorded")
         }
