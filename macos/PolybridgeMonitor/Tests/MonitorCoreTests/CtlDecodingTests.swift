@@ -185,6 +185,33 @@ final class CtlClientTests: XCTestCase {
         guard case .failure(.launchFailed) = result else { return XCTFail("\(result)") }
     }
 
+    func testTimeoutEscalatesPastAChildIgnoringSIGTERM() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let stubborn = try writeFakeTool(dir, name: "stubborn", body: "trap '' TERM; while :; do sleep 1; done")
+        let started = Date()
+        let output = try ProcessRunner.runBlocking(executable: stubborn, arguments: [], environment: [:], currentDirectory: nil, timeout: 0.5).get()
+        XCTAssertTrue(output.timedOut)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 10)
+    }
+
+    func testNoSignalForAChildThatIsNoLongerTheOneStarted() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        try process.run()
+        defer { process.terminate(); process.waitUntilExit() }
+        let real = try XCTUnwrap(ProcessTable.lookup(process.processIdentifier)?.identity)
+        let stale = ProcessIdentity(pid: real.pid, startSeconds: real.startSeconds - 100, startMicros: 0)
+        XCTAssertFalse(ProcessRunner.signalIfStillOurs(process, stale, SIGKILL), "start time differs: not ours")
+        XCTAssertTrue(process.isRunning)
+        let done = Process()
+        done.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try done.run()
+        done.waitUntilExit()
+        XCTAssertFalse(ProcessRunner.signalIfStillOurs(done, nil, SIGKILL), "a reaped child is never signalled")
+    }
+
     func testTimeoutKillsOnlyThatProcess() throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }

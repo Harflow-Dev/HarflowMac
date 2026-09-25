@@ -124,6 +124,19 @@ public struct ProcessRunner: ProcessRunning {
         }
     }
 
+    /// Signal the child only while it is provably still the process this call started: running
+    /// per Foundation (not yet reaped), and — when its identity was captured — the same pid and
+    /// start time in the process table right now. Returns whether a signal was sent.
+    @discardableResult
+    static func signalIfStillOurs(_ process: Process, _ identity: ProcessIdentity?, _ sig: Int32, table: ProcessTableReading = ProcessTable.system) -> Bool {
+        guard process.isRunning else { return false }
+        let pid = process.processIdentifier
+        if let identity {
+            guard identity.pid == pid, ProcessTable.liveness(identity, in: table) == .live else { return false }
+        }
+        return kill(pid, sig) == 0
+    }
+
     public static func runBlocking(executable: String, arguments: [String], environment: [String: String], currentDirectory: String?, timeout: Double) -> Result<ProcessOutput, ToolError> {
         let tool = (executable as NSString).lastPathComponent
         let process = Process()
@@ -167,15 +180,17 @@ public struct ProcessRunner: ProcessRunning {
         // The parent's copies of the write ends, so EOF arrives when the child exits.
         try? outPipe.fileHandleForWriting.close()
         try? errPipe.fileHandleForWriting.close()
+        // (pid, start time) right after launch: Foundation reaps the child on its own queue, so by
+        // the time a timeout fires the pid may already be free — and reused.
+        let child = ProcessTable.lookup(process.processIdentifier)?.identity
 
         var timedOut = false
         if exited.wait(timeout: .now() + timeout) == .timedOut {
             timedOut = true
-            // Only the process this call started, by its own pid.
-            process.terminate()
+            Self.signalIfStillOurs(process, child, SIGTERM)
             if exited.wait(timeout: .now() + 3) == .timedOut {
-                kill(process.processIdentifier, SIGKILL)
-                exited.wait()
+                Self.signalIfStillOurs(process, child, SIGKILL)
+                _ = exited.wait(timeout: .now() + 10)
             }
         }
         // A grandchild holding a pipe open must not hang the app: bounded drain.
