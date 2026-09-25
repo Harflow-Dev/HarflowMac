@@ -63,13 +63,40 @@ final class TerminalSession: ObservableObject, Identifiable {
         }
     }
 
-    /// Ends only the process this session started, by its own pid.
-    func terminate() {
-        guard !ended else { return }
+    /// Ends only the process this session started, by its own pid, and reports once it is known
+    /// to be gone. SwiftTerm's `terminate()` alone sends one SIGTERM and stops watching, so the
+    /// exit is confirmed (and escalated to SIGKILL) by `ChildReaper`.
+    func terminate(completion: ((ChildReaper.Outcome) -> Void)? = nil) {
+        guard !ended, let pid else {
+            completion?(.alreadyGone)
+            return
+        }
+        guard !terminating else { return }
+        terminating = true
         view.terminate()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let outcome = ChildReaper.terminate(pid: pid)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.terminating = false
+                    switch outcome {
+                    case .exited(let status):
+                        self.processEnded((status & 0x7f) == 0 ? (status >> 8) & 0xff : nil)
+                    case .alreadyGone:
+                        self.processEnded(self.exitCode)
+                    case .survived:
+                        self.attachError = (self.attachError.map { $0 + "\n" } ?? "") + "The terminal's process \(pid) did not exit even after SIGKILL."
+                    }
+                    completion?(outcome)
+                }
+            }
+        }
     }
 
+    @Published private(set) var terminating = false
+
     fileprivate func processEnded(_ code: Int32?) {
+        guard !ended else { return }
         ended = true
         exitCode = code
         onEnded?()
@@ -152,7 +179,8 @@ struct TerminalPane: View {
                 if session.ended {
                     Button("Close") { model.removeSession(session) }
                 } else {
-                    Button("End session") { session.terminate() }
+                    Button(session.terminating ? "Ending…" : "End session") { session.terminate() }
+                        .disabled(session.terminating)
                 }
             }
             .font(.system(size: 11))

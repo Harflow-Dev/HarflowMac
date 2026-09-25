@@ -85,6 +85,19 @@ final class TerminalAppHandoffTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: script.path), "the hand-off files are removed before exec")
     }
 
+    func testScriptDropsEveryPBVariableBeforeTheSession() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let ctl = try writeFakeTool(dir, name: "polybridge-ctl", body: "exit 0")
+        let files = try TerminalAppHandoff.files(ctl: ctl, taskID: "t1", grant: TakeoverGrant(argv: ["/usr/bin/env"], cwd: "/tmp", sessionID: nil, note: ""))
+        let script = try TerminalAppHandoff.write(files, under: dir)
+        // Terminal.app's environment is its own; any PB_* in it must not reach the session.
+        let env = ["PATH": "/usr/bin:/bin", "PB_TASK_ID": "t", "PB_MAX_DEPTH": "1", "PB_LIVE_IDLE_SECONDS": "9", "PB_OPEN_MONITOR": "1"]
+        let output = try ProcessRunner.runBlocking(executable: "/bin/zsh", arguments: ["-f", script.path], environment: env, currentDirectory: nil, timeout: 10).get()
+        let pb = String(decoding: output.stdout, as: UTF8.self).split(separator: "\n").filter { $0.hasPrefix("PB_") }
+        XCTAssertEqual(pb, ["PB_OPEN_MONITOR=0"])
+    }
+
     func testScriptRefusesToStartWhenAttachFails() throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }

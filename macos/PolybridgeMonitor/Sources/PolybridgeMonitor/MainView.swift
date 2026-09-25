@@ -91,7 +91,7 @@ struct NewSessionSheet: View {
                 Picker("Mode", selection: $interactive) {
                     VStack(alignment: .leading) {
                         Text("Interactive terminal")
-                        Text("Opens a terminal here running \(backend) in the repo. You type; it asks before editing, like running it yourself.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text("Opens a terminal here running \(backend) in the repo, exactly as if you ran it yourself — under your own configuration and permissions, not a polybridge freedom level.").font(.system(size: 11)).foregroundStyle(.secondary)
                     }.tag(true)
                     VStack(alignment: .leading) {
                         Text("Headless task")

@@ -208,18 +208,47 @@ public enum DiffParser {
 /// The Changes tab: what git says changed in the repo since the task's `base_commit`, never what
 /// the agent reported. Anything else that touched the worktree meanwhile shows here too, and the
 /// labels say so.
+public struct GitFailure: Error, Equatable, Sendable {
+    public let query: String
+    public let detail: String
+}
+
 public struct GitChanges: Equatable, Sendable {
     public var files: [FileChange]
     public var diffs: [DiffFile]
     public var commitsSinceBase: Int?
     public var branch: String?
     public var labels: [String]
+    /// True only when every query of the comparison against `base_commit` (untracked listing
+    /// included) succeeded. When
+    /// false, `files` holds untracked files at most, and nothing may be said about tracked ones.
+    public var comparedWithBase: Bool
+    public var failures: [GitFailure]
+
+    public init(files: [FileChange], diffs: [DiffFile], commitsSinceBase: Int?, branch: String?, labels: [String], comparedWithBase: Bool, failures: [GitFailure] = []) {
+        self.files = files
+        self.diffs = diffs
+        self.commitsSinceBase = commitsSinceBase
+        self.branch = branch
+        self.labels = labels
+        self.comparedWithBase = comparedWithBase
+        self.failures = failures
+    }
 
     public var totalAdded: Int { files.compactMap(\.added).reduce(0, +) }
     public var totalRemoved: Int { files.compactMap(\.removed).reduce(0, +) }
 
-    /// The banner line for the finished view, from git alone.
+    /// The banner line for the finished view, from git alone. It never says "no files changed"
+    /// unless the comparison against the baseline actually ran.
     public var summaryLine: String {
+        guard comparedWithBase else {
+            let untracked = files.filter(\.isUntracked).count
+            var line = "Tracked changes could not be compared with the task's baseline"
+            if let failure = failures.first { line += " (git \(failure.query): \(failure.detail))" }
+            line += "."
+            if untracked > 0 { line += " \(untracked) untracked file\(untracked == 1 ? "" : "s") listed below." }
+            return line
+        }
         let count = files.count
         var line = count == 0 ? "No files changed" : "\(count) file\(count == 1 ? "" : "s") changed, +\(totalAdded) −\(totalRemoved)"
         if let commits = commitsSinceBase {
@@ -267,36 +296,60 @@ public struct GitInspector: Sendable {
         ["-C", repo, "-c", "core.quotepath=off", "--no-pager"] + rest
     }
 
-    func run(_ repo: String, _ rest: [String]) async -> Data? {
-        let result = await runner.run(executable: git, arguments: Self.argv(repo: repo, rest), environment: environment, currentDirectory: nil, timeout: 20)
-        guard case .success(let output) = result, output.exitCode == 0, !output.timedOut else { return nil }
-        return output.stdout
+    /// stdout, or a one-line reason the query failed (non-zero exit, timeout, git missing).
+    func run(_ repo: String, _ rest: [String]) async -> Result<Data, GitFailure> {
+        let what = rest.first ?? "git"
+        switch await runner.run(executable: git, arguments: Self.argv(repo: repo, rest), environment: environment, currentDirectory: nil, timeout: 20) {
+        case .failure(let error):
+            return .failure(GitFailure(query: what, detail: error.message))
+        case .success(let output) where output.timedOut:
+            return .failure(GitFailure(query: what, detail: "timed out"))
+        case .success(let output) where output.exitCode != 0:
+            let detail = output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            return .failure(GitFailure(query: what, detail: detail.isEmpty ? "exit \(output.exitCode)" : String(detail.prefix(300))))
+        case .success(let output):
+            return .success(output.stdout)
+        }
     }
 
     public func changes(repo: String, baseCommit: String?, startDirty: Bool?) async -> GitChanges {
         let labels = GitChanges.labels(baseCommit: baseCommit, startDirty: startDirty)
-        let branch = await run(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).map { String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) }
-        let untrackedData = await run(repo, ["ls-files", "--others", "--exclude-standard", "-z"]) ?? Data()
-        let untracked = untrackedData.split(separator: 0).map { String(decoding: $0, as: UTF8.self) }.filter { !$0.isEmpty }
+        var failures: [GitFailure] = []
+        func take(_ result: Result<Data, GitFailure>) -> Data? {
+            switch result {
+            case .success(let data): return data
+            case .failure(let failure): failures.append(failure); return nil
+            }
+        }
+        let branch = take(await run(repo, ["rev-parse", "--abbrev-ref", "HEAD"])).map { String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) }
+        let untrackedResult = take(await run(repo, ["ls-files", "--others", "--exclude-standard", "-z"]))
+        let untracked = (untrackedResult ?? Data()).split(separator: 0).map { String(decoding: $0, as: UTF8.self) }.filter { !$0.isEmpty }
 
         var files: [FileChange] = []
         var diffs: [DiffFile] = []
         var commits: Int?
+        var compared = false
         if let base = baseCommit, GitChanges.isSafeCommit(base) {
-            let common = ["--no-color", "--no-ext-diff", "--find-renames", base, "--"]
-            let numstat = DiffParser.parseNumstat(await run(repo, ["diff", "--numstat", "-z"] + common) ?? Data())
-            for entry in DiffParser.parseNameStatus(await run(repo, ["diff", "--name-status", "-z"] + common) ?? Data()) {
-                let counts = numstat[entry.path]
-                files.append(FileChange(status: entry.status, path: entry.path, oldPath: entry.oldPath, added: counts?.added ?? nil, removed: counts?.removed ?? nil))
-            }
-            if let patch = await run(repo, ["diff", "--unified=3"] + common) {
+            // Prefixes pinned: a user's diff.mnemonicPrefix / diff.noprefix would otherwise change
+            // what the parser sees and detach each patch from its file.
+            let common = ["--no-color", "--no-ext-diff", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/", base, "--"]
+            let numstatData = take(await run(repo, ["diff", "--numstat", "-z"] + common))
+            let statusData = take(await run(repo, ["diff", "--name-status", "-z"] + common))
+            let patch = take(await run(repo, ["diff", "--unified=3"] + common))
+            if let numstatData, let statusData, let patch, untrackedResult != nil {
+                compared = true
+                let numstat = DiffParser.parseNumstat(numstatData)
+                for entry in DiffParser.parseNameStatus(statusData) {
+                    let counts = numstat[entry.path]
+                    files.append(FileChange(status: entry.status, path: entry.path, oldPath: entry.oldPath, added: counts?.added ?? nil, removed: counts?.removed ?? nil))
+                }
                 diffs = DiffParser.parse(String(decoding: patch, as: UTF8.self))
             }
-            commits = await run(repo, ["rev-list", "--count", "\(base)..HEAD"]).flatMap { Int(String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) }
+            commits = take(await run(repo, ["rev-list", "--count", "\(base)..HEAD"])).flatMap { Int(String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) }
         }
         for path in untracked where !files.contains(where: { $0.path == path }) {
             files.append(FileChange(status: "?", path: path, oldPath: nil, added: nil, removed: nil))
         }
-        return GitChanges(files: files, diffs: diffs, commitsSinceBase: commits, branch: branch, labels: labels)
+        return GitChanges(files: files, diffs: diffs, commitsSinceBase: commits, branch: branch, labels: labels, comparedWithBase: compared, failures: failures)
     }
 }

@@ -90,6 +90,7 @@ final class DiffParserTests: XCTestCase {
 
     func testLabels() {
         XCTAssertEqual(GitChanges.labels(baseCommit: "abc", startDirty: false).count, 1)
+        XCTAssertTrue(GitChanges(files: [], diffs: [], commitsSinceBase: 0, branch: nil, labels: [], comparedWithBase: true).summaryLine.hasPrefix("No files changed"))
         XCTAssertTrue(GitChanges.labels(baseCommit: nil, startDirty: nil).contains { $0.contains("No baseline commit") })
         XCTAssertTrue(GitChanges.labels(baseCommit: "abc", startDirty: true).contains { $0.contains("already had uncommitted changes") })
         XCTAssertTrue(GitChanges.labels(baseCommit: "abc", startDirty: nil).contains { $0.contains("unknown") })
@@ -138,6 +139,47 @@ final class GitInspectorTests: XCTestCase {
         XCTAssertTrue(changes.summaryLine.contains("Nothing committed"), changes.summaryLine)
     }
 
+    func makeRepo() throws -> (URL, String) {
+        let repo = try makeTempDir("pbm-git")
+        try git(repo, "init", "-q", "-b", "main")
+        try "a\n".write(to: repo.appendingPathComponent("f.txt"), atomically: true, encoding: .utf8)
+        try git(repo, "add", ".")
+        try git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base")
+        let base = try String(decoding: ProcessRunner.runBlocking(executable: "/usr/bin/git", arguments: ["-C", repo.path, "rev-parse", "HEAD"], environment: [:], currentDirectory: nil, timeout: 10).get().stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return (repo, base)
+    }
+
+    func testAFailedComparisonNeverReadsAsNoChanges() async throws {
+        let (repo, _) = try makeRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try "b\n".write(to: repo.appendingPathComponent("f.txt"), atomically: true, encoding: .utf8)
+        let inspector = GitInspector(environment: ["PATH": "/usr/bin:/bin", "HOME": repo.path, "GIT_CONFIG_NOSYSTEM": "1"])
+        // A well-formed id that is not in this repo (another clone, or gc'd).
+        let changes = await inspector.changes(repo: repo.path, baseCommit: "0123456789abcdef0123456789abcdef01234567", startDirty: false)
+        XCTAssertFalse(changes.comparedWithBase)
+        XCTAssertFalse(changes.failures.isEmpty)
+        XCTAssertFalse(changes.summaryLine.contains("No files changed"), changes.summaryLine)
+        XCTAssertTrue(changes.summaryLine.contains("could not be compared"), changes.summaryLine)
+
+        let gone = await inspector.changes(repo: repo.appendingPathComponent("missing").path, baseCommit: "0123456789abcdef", startDirty: false)
+        XCTAssertFalse(gone.comparedWithBase)
+        XCTAssertFalse(gone.summaryLine.contains("No files changed"), gone.summaryLine)
+    }
+
+    func testUserDiffPrefixSettingsDoNotDetachPatchesFromFiles() async throws {
+        let (repo, base) = try makeRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try git(repo, "config", "diff.mnemonicPrefix", "true")
+        try "b\n".write(to: repo.appendingPathComponent("f.txt"), atomically: true, encoding: .utf8)
+        let changes = await GitInspector(environment: ["PATH": "/usr/bin:/bin", "HOME": repo.path, "GIT_CONFIG_NOSYSTEM": "1"]).changes(repo: repo.path, baseCommit: base, startDirty: false)
+        XCTAssertTrue(changes.comparedWithBase)
+        XCTAssertEqual(changes.files.map(\.path), ["f.txt"])
+        XCTAssertEqual(changes.diffs.map(\.path), ["f.txt"], "the patch belongs to the listed file")
+        try git(repo, "config", "diff.noprefix", "true")
+        let noPrefix = await GitInspector(environment: ["PATH": "/usr/bin:/bin", "HOME": repo.path, "GIT_CONFIG_NOSYSTEM": "1"]).changes(repo: repo.path, baseCommit: base, startDirty: false)
+        XCTAssertEqual(noPrefix.diffs.map(\.path), ["f.txt"])
+    }
+
     func testNoBaselineStillListsUntracked() async throws {
         let repo = try makeTempDir("pbm-git")
         defer { try? FileManager.default.removeItem(at: repo) }
@@ -146,6 +188,8 @@ final class GitInspectorTests: XCTestCase {
         let changes = await GitInspector(environment: ["PATH": "/usr/bin:/bin", "HOME": repo.path]).changes(repo: repo.path, baseCommit: nil, startDirty: nil)
         XCTAssertEqual(changes.files.map(\.path), ["n.txt"])
         XCTAssertNil(changes.commitsSinceBase)
+        XCTAssertFalse(changes.comparedWithBase)
+        XCTAssertFalse(changes.summaryLine.contains("No files changed"), "without a baseline tracked files were never compared")
         XCTAssertTrue(changes.labels.contains { $0.contains("No baseline commit") })
     }
 

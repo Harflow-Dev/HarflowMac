@@ -23,7 +23,8 @@ struct MenuBarView: View {
 
     var body: some View {
         let sections = Lineage.sections(model.tasks)
-        let running = model.tasks.filter { $0.status.isRunning && $0.isRoot }
+        // Every running task, not just roots: a root can finish before the sub-task it started.
+        let running = model.tasks.filter { $0.status.isRunning }.sorted { ($0.isRoot ? 0 : 1) < ($1.isRoot ? 0 : 1) }
         VStack(alignment: .leading, spacing: 0) {
             Text("Polybridge — \(model.runningCount) running").font(.system(size: 13, weight: .semibold)).padding(12)
             Divider()

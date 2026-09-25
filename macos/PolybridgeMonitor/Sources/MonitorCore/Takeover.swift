@@ -64,8 +64,9 @@ public enum TerminalAppHandoff {
     cmd=(${(0)"$(<$here/argv)"})
     rm -f -- $here/meta $here/argv $here/takeover.command
     rmdir -- $here 2>/dev/null
+    # Terminal.app's own environment, not the app's, reaches this script: drop every PB_* name.
+    unset -m 'PB_*'
     export PB_OPEN_MONITOR=0
-    unset PB_TASK_ID PB_ROOT_TASK_ID PB_DEPTH
     if (( ${#meta} != 3 || ${#cmd} == 0 )); then
       print -u2 "polybridge: the takeover hand-off files are incomplete"; exit 1
     fi

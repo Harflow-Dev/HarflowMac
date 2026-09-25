@@ -27,7 +27,11 @@ struct InspectorView: View {
                 }
                 section("Files changed") {
                     if let changes {
-                        if changes.files.isEmpty { Text("None").font(.system(size: 12)).foregroundStyle(.secondary) }
+                        if !changes.comparedWithBase {
+                            Text("Not compared with the baseline").font(.system(size: 12)).foregroundStyle(Color.failedRed)
+                        } else if changes.files.isEmpty {
+                            Text("None").font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
                         ForEach(changes.files.prefix(12)) { file in
                             HStack(spacing: 6) {
                                 Text(file.isUntracked ? "A" : file.status).font(.system(size: 10, weight: .bold, design: .monospaced)).frame(width: 12)
@@ -93,7 +97,7 @@ struct InspectorView: View {
                     let left = maxDepth - task.depth
                     limit("Depth", "\(task.depth) of \(maxDepth)", left > 0 ? "This task can start \(left) more level\(left == 1 ? "" : "s") of sub-tasks." : "This task cannot start sub-tasks of its own.")
                 }
-                limit("Cancels with parent", "yes", "Cancelling the parent stops this task too (cascade cancel).")
+                limit("Cancels with parent", "attempted", "Cancelling the parent also tries to stop this task (best-effort cascade); the cancel result says what did not stop.")
             }
         }
     }

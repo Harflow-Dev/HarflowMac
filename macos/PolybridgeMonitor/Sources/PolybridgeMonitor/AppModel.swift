@@ -45,6 +45,7 @@ final class AppModel: ObservableObject {
     private var eventStores: [String: EventStore] = [:]
     private var refreshing = false
     private var refreshAgain = false
+    private var lastRefresh = Date.distantPast
     var openWindowAction: (() -> Void)?
 
     private init() {}
@@ -62,7 +63,7 @@ final class AppModel: ObservableObject {
     private func discoverEnvironment() async {
         let runner = ProcessRunner()
         let base = ProcessInfo.processInfo.environment
-        if case .success(let output) = await runner.run(executable: LaunchEnvironment.loginPathArgv[0], arguments: Array(LaunchEnvironment.loginPathArgv.dropFirst()), environment: base.filter { !$0.key.hasPrefix("PB_") }, currentDirectory: home, timeout: 8) {
+        if case .success(let output) = await runner.run(executable: LaunchEnvironment.loginPathArgv[0], arguments: Array(LaunchEnvironment.loginPathArgv.dropFirst()), environment: LaunchEnvironment.build(base: base, loginPath: nil, toolDirectory: nil), currentDirectory: home, timeout: 8) {
             loginPath = LaunchEnvironment.parseLoginPath(output.stdout)
         }
         for uv in ToolLocator.uvCandidates(home: home) where FileManager.default.isExecutableFile(atPath: uv) {
@@ -101,16 +102,18 @@ final class AppModel: ObservableObject {
 
     private func startWatching() {
         let watcher = DirectoryWatcher(path: tasksDirectory) { [weak self] names in
-            guard names.contains(where: { $0.hasSuffix(".meta.json") }) else { return }
+            guard names.contains(where: RefreshTrigger.isRelevant) else { return }
             Task { @MainActor in self?.scheduleRefresh() }
         }
         watcher.start()
         self.watcher = watcher
-        // A dead owner writes nothing, and the tasks folder may not exist yet: a slow safety poll.
+        // A dead owner writes nothing, and the tasks folder may not exist yet: a 10 s safety poll
+        // while that matters, and an unconditional reconcile every minute regardless.
         pollTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                if self.tasks.contains(where: { $0.status.isRunning }) || self.listError != nil || !self.watcherActive {
+                let due = Date().timeIntervalSince(self.lastRefresh) >= RefreshTrigger.reconcileInterval
+                if due || self.tasks.contains(where: { $0.status.isRunning }) || self.listError != nil || !self.watcherActive {
                     await self.refresh()
                 }
             }
@@ -148,6 +151,10 @@ final class AppModel: ObservableObject {
                 let previous = tasks
                 tasks = listed
                 listError = nil
+                lastRefresh = Date()
+                // A task that left the listing (retention) must not live on in the detail cache.
+                let listedIDs = Set(listed.map(\.taskID))
+                snapshots = snapshots.filter { listedIDs.contains($0.key) }
                 if hasListed { notifyFinished(Lineage.finishedRoots(previous: previous, current: listed)) }
                 hasListed = true
                 loadTitles()
@@ -179,12 +186,26 @@ final class AppModel: ObservableObject {
         titles[taskID] ?? "Task \(taskID.prefix(8))"
     }
 
+    /// Every running task in the subtrees of `ids` (members of a group, say), the tasks included.
+    func runningInSubtrees(of ids: [String]) -> [String] {
+        var result: [String] = []
+        var frontier = ids
+        var seen = Set<String>()
+        while let id = frontier.popLast() {
+            guard seen.insert(id).inserted else { continue }
+            if task(id)?.status.isRunning == true { result.append(id) }
+            frontier.append(contentsOf: Lineage.children(of: id, in: tasks).map(\.taskID))
+        }
+        return result
+    }
+
     func task(_ id: String) -> TaskInfo? {
         tasks.first { $0.taskID == id }
     }
 
     /// The fullest view of a task: its snapshot if fetched, else its listing entry.
     func detail(_ id: String) -> TaskInfo? {
+        if hasListed, task(id) == nil { return nil }
         if let snapshot = snapshots[id], let listed = task(id), listed.status != snapshot.status {
             return listed
         }
@@ -193,8 +214,11 @@ final class AppModel: ObservableObject {
 
     func refreshSnapshot(_ id: String) async {
         guard case .success(let client) = ctl() else { return }
-        if case .success(let info) = await client.status(id) {
+        switch await client.status(id) {
+        case .success(let info):
             snapshots[id] = info
+        case .failure(let error):
+            if error.refusalCode == "unknown_task" { snapshots[id] = nil }
         }
     }
 
@@ -247,7 +271,7 @@ final class AppModel: ObservableObject {
     func cancel(_ taskID: String) {
         perform(taskID) { client in
             switch await client.cancel(taskID) {
-            case .success(let result): return "Cancel sent · status \(result["status"]?.stringValue ?? "unknown")"
+            case .success(let result): return CascadeSummary.describe(result)
             case .failure(let error): return error.message
             }
         }
@@ -341,10 +365,18 @@ final class AppModel: ObservableObject {
                     self.messages[taskID] = nil
                 case .failure(let error):
                     // Without the attach the session is not reserved, so a resume elsewhere could
-                    // write the same conversation. End the terminal rather than risk two writers.
+                    // write the same conversation. End the terminal rather than risk two writers,
+                    // and say it closed only once its exit is confirmed.
                     session.attachError = error.message
-                    session.terminate()
-                    self.messages[taskID] = "The terminal was closed because the takeover could not be attached: \(error.message)"
+                    self.messages[taskID] = "The takeover could not be attached (\(error.message)); ending the terminal…"
+                    session.terminate { [weak self] outcome in
+                        switch outcome {
+                        case .exited, .alreadyGone:
+                            self?.messages[taskID] = "The terminal was closed because the takeover could not be attached: \(error.message)"
+                        case .survived:
+                            self?.messages[taskID] = "The takeover could not be attached and the terminal's process would not exit — end it yourself (pid \(pid)). \(error.message)"
+                        }
+                    }
                 }
             }
         }

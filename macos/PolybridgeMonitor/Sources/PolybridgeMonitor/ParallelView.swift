@@ -23,7 +23,7 @@ struct ParallelView: View {
                 }
                 Spacer()
                 Button("View prompt") { showPrompt.toggle() }
-                if members.contains(where: { $0.status.isRunning }) {
+                if group?.anyRunning == true {
                     Button("Cancel all", role: .destructive) { confirmCancelAll = true }
                 }
             }
@@ -53,7 +53,8 @@ struct ParallelView: View {
             .padding(10)
         }
         .confirmationDialog("Cancel every running task in this group?", isPresented: $confirmCancelAll, titleVisibility: .visible) {
-            Button("Cancel all", role: .destructive) { model.cancelAll(members.filter { $0.status.isRunning }.map(\.taskID)) }
+            // A settled member can still have live sub-tasks; cancel every running task in the group's trees.
+            Button("Cancel all", role: .destructive) { model.cancelAll(model.runningInSubtrees(of: members.map(\.taskID))) }
         }
     }
 }
