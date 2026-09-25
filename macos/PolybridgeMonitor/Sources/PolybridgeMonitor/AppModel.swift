@@ -371,10 +371,10 @@ final class AppModel: ObservableObject {
                     self.messages[taskID] = "The takeover could not be attached (\(error.message)); ending the terminal…"
                     session.terminate { [weak self] outcome in
                         switch outcome {
-                        case .exited, .alreadyGone:
+                        case .stopped, .alreadyGone:
                             self?.messages[taskID] = "The terminal was closed because the takeover could not be attached: \(error.message)"
-                        case .survived:
-                            self?.messages[taskID] = "The takeover could not be attached and the terminal's process would not exit — end it yourself (pid \(pid)). \(error.message)"
+                        case .survived(let pids):
+                            self?.messages[taskID] = "The takeover could not be attached and these processes would not exit — end them yourself: \(pids.map(String.init).joined(separator: ", ")). \(error.message)"
                         }
                     }
                 }

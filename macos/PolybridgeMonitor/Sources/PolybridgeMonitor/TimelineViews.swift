@@ -213,7 +213,7 @@ struct ChangesPane: View {
                     HStack(alignment: .top) {
                         Banner(icon: changes.comparedWithBase ? "checkmark.seal" : "exclamationmark.triangle",
                                title: changes.comparedWithBase ? "Checked against git" : "Could not check against git",
-                               text: ([changes.summaryLine] + changes.labels + changes.failures.dropFirst().map { "git \($0.query): \($0.detail)" }).joined(separator: "\n"),
+                               text: ([changes.summaryLine] + changes.labels + (changes.comparedWithBase ? changes.failures : Array(changes.failures.dropFirst())).map { "git \($0.query): \($0.detail)" }).joined(separator: "\n"),
                                tint: changes.comparedWithBase ? .accentLink : .failedRed)
                         Button("Refresh", action: reload)
                     }

@@ -20,7 +20,7 @@ final class TerminalSession: ObservableObject, Identifiable {
     let startedAt = Date()
     @Published private(set) var pid: pid_t?
     @Published private(set) var ended = false
-    @Published private(set) var exitCode: Int32?
+    @Published private(set) var exitStatus: WaitStatus?
     @Published var attached = false
     @Published var attachError: String?
     @Published private(set) var size = "—"
@@ -54,8 +54,9 @@ final class TerminalSession: ObservableObject, Identifiable {
             currentDirectory: command.currentDirectory
         )
         let child = view.process.shellPid
-        if child > 0 {
+        if child > 0, let found = ProcessTable.lookup(child)?.identity {
             pid = child
+            identity = found
             onStarted?(child)
         } else {
             ended = true
@@ -63,43 +64,51 @@ final class TerminalSession: ObservableObject, Identifiable {
         }
     }
 
-    /// Ends only the process this session started, by its own pid, and reports once it is known
-    /// to be gone. SwiftTerm's `terminate()` alone sends one SIGTERM and stops watching, so the
-    /// exit is confirmed (and escalated to SIGKILL) by `ChildReaper`.
+    /// Ends the process this session started — and its process group — and calls back once none of
+    /// them is alive. Never uses SwiftTerm's `terminate()`, which signals the pid unchecked; see
+    /// `ChildReaper`. A second request while one is in flight joins it.
     func terminate(completion: ((ChildReaper.Outcome) -> Void)? = nil) {
-        guard !ended, let pid else {
+        guard !ended, let identity else {
             completion?(.alreadyGone)
             return
         }
+        if let completion { terminationWaiters.append(completion) }
         guard !terminating else { return }
         terminating = true
-        view.terminate()
         DispatchQueue.global(qos: .userInitiated).async {
-            let outcome = ChildReaper.terminate(pid: pid)
+            let outcome = ChildReaper.terminate(identity)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self.terminating = false
                     switch outcome {
-                    case .exited(let status):
-                        self.processEnded((status & 0x7f) == 0 ? (status >> 8) & 0xff : nil)
-                    case .alreadyGone:
-                        self.processEnded(self.exitCode)
-                    case .survived:
-                        self.attachError = (self.attachError.map { $0 + "\n" } ?? "") + "The terminal's process \(pid) did not exit even after SIGKILL."
+                    case .stopped, .alreadyGone:
+                        self.markEnded()
+                    case .survived(let pids):
+                        self.attachError = (self.attachError.map { $0 + "\n" } ?? "") + "These processes did not exit even after SIGKILL: \(pids.map(String.init).joined(separator: ", "))."
                     }
-                    completion?(outcome)
+                    let waiters = self.terminationWaiters
+                    self.terminationWaiters = []
+                    waiters.forEach { $0(outcome) }
                 }
             }
         }
     }
 
     @Published private(set) var terminating = false
+    private var terminationWaiters: [(ChildReaper.Outcome) -> Void] = []
+    /// (pid, start time) of the child, read right after spawn — what every signal is checked against.
+    private(set) var identity: ProcessIdentity?
 
-    fileprivate func processEnded(_ code: Int32?) {
+    private func markEnded() {
         guard !ended else { return }
         ended = true
-        exitCode = code
         onEnded?()
+    }
+
+    /// From SwiftTerm's exit monitor, with the raw `waitpid` status.
+    fileprivate func processExited(rawStatus: Int32?) {
+        if let rawStatus { exitStatus = WaitStatus(raw: rawStatus) }
+        markEnded()
     }
 
     fileprivate func resized(cols: Int, rows: Int) {
@@ -107,7 +116,7 @@ final class TerminalSession: ObservableObject, Identifiable {
     }
 
     var statusLine: String {
-        if ended { return "Session ended" + (exitCode.map { " · exit \($0)" } ?? "") }
+        if ended { return "Session ended" + (exitStatus.map { " · \($0.label)" } ?? "") }
         return "\(backend.isEmpty ? "shell" : backend) · interactive, runs under your own permissions"
     }
 
@@ -125,7 +134,7 @@ final class TerminalSession: ObservableObject, Identifiable {
         func processTerminated(source: TerminalView, exitCode: Int32?) {
             let session = self.session
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { session?.processEnded(exitCode) }
+                MainActor.assumeIsolated { session?.processExited(rawStatus: exitCode) }
             }
         }
     }
@@ -172,8 +181,13 @@ struct TerminalPane: View {
                 Text("zsh · \(session.size)").monospacedDigit()
                 if let pid = session.pid { Text("pid \(pid)").monospacedDigit() }
                 if case .takeover = session.kind {
-                    Text(session.attached ? "session reserved" : (session.attachError == nil ? "attaching…" : "not attached"))
-                        .foregroundStyle(session.attached ? Color.doneGreen : Color.failedRed)
+                    // Once the process is gone polybridge releases the reservation; never claim it then.
+                    if session.ended {
+                        Text(session.attached ? "ended · reservation released" : "ended").foregroundStyle(.secondary)
+                    } else {
+                        Text(session.attached ? "session reserved" : (session.attachError == nil ? "attaching…" : "not attached"))
+                            .foregroundStyle(session.attached ? Color.doneGreen : Color.failedRed)
+                    }
                 }
                 Spacer()
                 if session.ended {

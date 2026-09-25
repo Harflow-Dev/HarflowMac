@@ -46,6 +46,9 @@ struct TaskDetailContent: View {
     @State private var tab: TaskTab = .timeline
     @State private var changes: GitChanges?
     @State private var changesError: String?
+    /// Bumped per git request; only the latest request may publish (an older, slower one — say
+    /// from before the task settled — must not overwrite a newer answer).
+    @State private var changesGeneration = 0
     @State private var confirmTakeover: AppModel.Destination?
     @State private var confirmCancel = false
 
@@ -107,14 +110,19 @@ struct TaskDetailContent: View {
     /// "no baseline was recorded".
     private func loadChanges(_ task: TaskInfo) async {
         guard !task.repoPath.isEmpty else { return }
+        changesGeneration += 1
+        let generation = changesGeneration
         if model.snapshots[taskID] == nil { await model.refreshSnapshot(taskID) }
+        guard generation == changesGeneration, !Task.isCancelled else { return }
         guard let snapshot = model.snapshots[taskID] else {
             changesError = "The task's baseline could not be read (polybridge-ctl status failed), so its changes are not shown."
             return
         }
-        changesError = nil
         let inspector = GitInspector(environment: model.environment())
-        changes = await inspector.changes(repo: task.repoPath, baseCommit: snapshot.baseCommit, startDirty: snapshot.startDirty)
+        let result = await inspector.changes(repo: task.repoPath, baseCommit: snapshot.baseCommit, startDirty: snapshot.startDirty)
+        guard generation == changesGeneration, !Task.isCancelled else { return }
+        changesError = nil
+        changes = result
     }
 
     private func takeoverTitle(_ task: TaskInfo) -> String {

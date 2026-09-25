@@ -2,38 +2,72 @@ import XCTest
 @testable import MonitorCore
 
 final class ChildReaperTests: XCTestCase {
-    func spawn(_ script: String) throws -> pid_t {
+    var spawned: [pid_t] = []
+
+    override func tearDown() {
+        // Reap what the tests started (by pid, our own children only).
+        for pid in spawned {
+            kill(pid, SIGKILL)
+            var status: Int32 = 0
+            waitpid(pid, &status, 0)
+        }
+        spawned = []
+    }
+
+    /// A child in its own process group, like a pty session leader.
+    func spawn(_ script: String) throws -> ProcessIdentity {
         var pid: pid_t = 0
+        var attrs: posix_spawnattr_t?
+        posix_spawnattr_init(&attrs)
+        defer { posix_spawnattr_destroy(&attrs) }
+        posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP))
+        posix_spawnattr_setpgroup(&attrs, 0)
         let args = ["/bin/sh", "-c", script]
         var argv: [UnsafeMutablePointer<CChar>?] = args.map { strdup($0) } + [nil]
         defer { argv.forEach { free($0) } }
-        XCTAssertEqual(posix_spawn(&pid, "/bin/sh", nil, nil, &argv, environ), 0)
-        return pid
+        XCTAssertEqual(posix_spawn(&pid, "/bin/sh", nil, &attrs, &argv, environ), 0)
+        spawned.append(pid)
+        usleep(300_000)
+        return try XCTUnwrap(ProcessTable.lookup(pid)?.identity)
     }
 
-    func testEscalatesPastAChildThatIgnoresSIGTERM() throws {
-        let pid = try spawn("trap '' TERM HUP; while :; do sleep 1; done")
-        usleep(200_000)
-        let started = Date()
-        let outcome = ChildReaper.terminate(pid: pid, grace: 0.5)
-        guard case .exited(let status) = outcome else { return XCTFail("\(outcome)") }
-        XCTAssertEqual(status & 0x7f, SIGKILL, "it took SIGKILL")
-        XCTAssertLessThan(Date().timeIntervalSince(started), 5)
-        XCTAssertEqual(kill(pid, 0), -1, "reaped: the pid no longer names our child")
+    func testEscalatesPastALeaderThatIgnoresSIGTERM() throws {
+        let leader = try spawn("trap '' TERM HUP; while :; do sleep 1; done")
+        XCTAssertEqual(ChildReaper.terminate(leader, grace: 0.5), .stopped)
+        XCTAssertFalse(ProcessTable.isLive(leader))
     }
 
-    func testAPoliteChildStopsOnSIGTERM() throws {
-        let pid = try spawn("exec sleep 30")
-        let outcome = ChildReaper.terminate(pid: pid, grace: 3)
-        guard case .exited(let status) = outcome else { return XCTFail("\(outcome)") }
-        XCTAssertNotEqual(status & 0x7f, SIGKILL)
+    func testAGroupMemberThatOutlivesItsLeaderIsStoppedToo() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let pidFile = dir.appendingPathComponent("member.pid").path
+        // The leader dies on SIGTERM; the member it started ignores TERM/HUP.
+        let leader = try spawn("sh -c 'trap \"\" TERM HUP; echo $$ > \(pidFile); while :; do sleep 1; done' & wait")
+        let memberPid = try XCTUnwrap(pid_t(String(contentsOfFile: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
+        let member = try XCTUnwrap(ProcessTable.lookup(memberPid)?.identity)
+        XCTAssertEqual(ProcessTable.group(leader.pid).map(\.identity.pid).contains(memberPid), true)
+        XCTAssertEqual(ChildReaper.terminate(leader, grace: 0.5), .stopped)
+        XCTAssertFalse(ProcessTable.isLive(member), "the member took SIGKILL")
     }
 
-    func testAnAlreadyReapedChildIsNeverSignalled() throws {
-        let pid = try spawn("exit 0")
-        var status: Int32 = 0
-        waitpid(pid, &status, 0)
-        XCTAssertEqual(ChildReaper.terminate(pid: pid), .alreadyGone)
+    func testAPidWhoseStartTimeNoLongerMatchesIsNeverSignalled() throws {
+        let live = try spawn("exec sleep 30")
+        let stale = ProcessIdentity(pid: live.pid, startSeconds: live.startSeconds - 100, startMicros: 0)
+        XCTAssertEqual(ChildReaper.terminate(stale, grace: 0.2), .alreadyGone)
+        XCTAssertTrue(ProcessTable.isLive(live), "a reused pid is someone else's process")
+    }
+
+    func testAnExitedChildIsAlreadyGone() throws {
+        let child = try spawn("exit 0")
+        XCTAssertFalse(ProcessTable.isLive(child), "a zombie has exited")
+        XCTAssertEqual(ChildReaper.terminate(child), .alreadyGone)
+    }
+
+    func testWaitStatusDecoding() {
+        XCTAssertEqual(WaitStatus(raw: 256), .exited(1))
+        XCTAssertEqual(WaitStatus(raw: 0), .exited(0))
+        XCTAssertEqual(WaitStatus(raw: 9), .signalled(9))
+        XCTAssertEqual(WaitStatus(raw: 256).label, "exit 1")
     }
 }
 
