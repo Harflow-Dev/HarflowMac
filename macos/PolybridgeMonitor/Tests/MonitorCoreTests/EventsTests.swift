@@ -129,6 +129,41 @@ final class LineTailTests: XCTestCase {
         XCTAssertTrue(reset, "another inode")
     }
 
+    func testSameInodeTruncateAndRegrowIsDetected() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("t.events.jsonl").path
+        FileManager.default.createFile(atPath: path, contents: Data("first-a\nfirst-b\n".utf8))
+        var tail = LineTail()
+        XCTAssertEqual(tail.read(path: path)?.lines, ["first-a", "first-b"])
+        // Same inode: truncate in place, then write more than was there before.
+        let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: path))
+        try handle.truncate(atOffset: 0)
+        try handle.write(contentsOf: Data("second-a\nsecond-b\nsecond-c\n".utf8))
+        try handle.close()
+        let step = try XCTUnwrap(tail.read(path: path))
+        XCTAssertTrue(step.reset, "the bytes before the offset changed")
+        XCTAssertEqual(step.lines, ["second-a", "second-b", "second-c"])
+    }
+
+    func testPlainAppendsAreNotMistakenForARewrite() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("t.events.jsonl").path
+        FileManager.default.createFile(atPath: path, contents: Data("one\n".utf8))
+        var tail = LineTail()
+        _ = tail.read(path: path)
+        for n in 2...40 {
+            let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: path))
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data("line-\(n)\n".utf8))
+            try handle.close()
+            let step = try XCTUnwrap(tail.read(path: path))
+            XCTAssertFalse(step.reset)
+            XCTAssertEqual(step.lines, ["line-\(n)"])
+        }
+    }
+
     func testOversizedLineDoesNotWedge() {
         var tail = LineTail(maxChunk: 4)
         _ = tail.prepare(size: 10, fileID: 1)
