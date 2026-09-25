@@ -252,6 +252,37 @@ public enum ChildReaper {
     }
 }
 
+/// Taking ownership of a child the terminal just forked: its identity (pid + start time) is what
+/// every later signal and the takeover attach depend on. If it cannot be read, the child is not
+/// left running unattached — a take-over CLI that nobody reserved would be a second writer to the
+/// session — it is killed, with its process group, by the pid the fork returned.
+public enum ChildAdoption {
+    public enum Failure: Error, Equatable, Sendable {
+        /// Identity unreadable; the child and its group were sent SIGKILL.
+        case killed(pid_t)
+    }
+
+    /// `lookup` is retried a few times (a transient table read). The pid is this process's own
+    /// fork from moments earlier and not yet reaped by us, so signalling it is signalling our
+    /// child; the forkpty child is its own session and group leader, hence `-pid` too.
+    public static func adopt(
+        _ pid: pid_t,
+        attempts: Int = 3,
+        lookup: (pid_t) -> ProcessTable.Lookup = { ProcessTable.system.lookup($0) },
+        send: (pid_t, Int32) -> Void = { _ = kill($0, $1) }
+    ) -> Result<ProcessIdentity, Failure> {
+        for attempt in 0..<max(1, attempts) {
+            if case .entry(let entry) = lookup(pid), entry.identity.pid == pid, !entry.zombie {
+                return .success(entry.identity)
+            }
+            if attempt + 1 < attempts { usleep(20_000) }
+        }
+        send(-pid, SIGKILL)
+        send(pid, SIGKILL)
+        return .failure(.killed(pid))
+    }
+}
+
 /// A raw `waitpid` status — what SwiftTerm hands `processTerminated` — decoded.
 public enum WaitStatus: Equatable, Sendable {
     case exited(Int32)

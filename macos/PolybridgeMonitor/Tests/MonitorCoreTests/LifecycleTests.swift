@@ -199,6 +199,41 @@ final class ChildReaperDecisionTests: XCTestCase {
     }
 }
 
+final class ChildAdoptionTests: XCTestCase {
+    func testAnUnidentifiableChildIsKilledWithItsGroupNotLeftRunning() {
+        var sent: [(pid_t, Int32)] = []
+        let result = ChildAdoption.adopt(4321, attempts: 2, lookup: { _ in .unreadable }, send: { sent.append(($0, $1)) })
+        XCTAssertEqual(result, .failure(.killed(4321)))
+        XCTAssertTrue(sent.contains { $0 == (-4321, SIGKILL) })
+        XCTAssertTrue(sent.contains { $0 == (4321, SIGKILL) })
+    }
+
+    func testAnIdentifiedChildIsAdoptedAndNothingIsSignalled() {
+        let identity = ProcessIdentity(pid: 4321, startSeconds: 5, startMicros: 0)
+        var sent: [(pid_t, Int32)] = []
+        let result = ChildAdoption.adopt(4321, lookup: { _ in .entry(FakeTable.entry(identity, pgid: 4321)) }, send: { sent.append(($0, $1)) })
+        XCTAssertEqual(result, .success(identity))
+        XCTAssertTrue(sent.isEmpty)
+    }
+
+    func testARealChildIsReallyStoppedWhenItsLookupFails() throws {
+        var pid: pid_t = 0
+        var attrs: posix_spawnattr_t?
+        posix_spawnattr_init(&attrs)
+        defer { posix_spawnattr_destroy(&attrs) }
+        posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP))
+        posix_spawnattr_setpgroup(&attrs, 0)
+        let args = ["/bin/sh", "-c", "trap '' TERM HUP; while :; do sleep 1; done"]
+        var argv: [UnsafeMutablePointer<CChar>?] = args.map { strdup($0) } + [nil]
+        defer { argv.forEach { free($0) } }
+        XCTAssertEqual(posix_spawn(&pid, "/bin/sh", nil, &attrs, &argv, environ), 0)
+        _ = ChildAdoption.adopt(pid, attempts: 1, lookup: { _ in .unreadable })
+        var status: Int32 = 0
+        XCTAssertEqual(waitpid(pid, &status, 0), pid)
+        XCTAssertEqual(WaitStatus(raw: status), .signalled(SIGKILL))
+    }
+}
+
 final class RefreshTriggerTests: XCTestCase {
     func testPhaseFilesAndRecordsTriggerARefresh() {
         XCTAssertTrue(RefreshTrigger.isRelevant("abc.meta.json"))

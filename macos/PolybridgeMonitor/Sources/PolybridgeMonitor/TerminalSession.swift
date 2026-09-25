@@ -54,13 +54,21 @@ final class TerminalSession: ObservableObject, Identifiable {
             currentDirectory: command.currentDirectory
         )
         let child = view.process.shellPid
-        if child > 0, let found = ProcessTable.lookup(child)?.identity {
+        guard child > 0 else {
+            ended = true
+            attachError = "The terminal process could not be started."
+            return
+        }
+        switch ChildAdoption.adopt(child) {
+        case .success(let found):
             pid = child
             identity = found
             onStarted?(child)
-        } else {
+        case .failure:
+            // Never attached, never reserved: it must not keep running (see ChildAdoption).
+            pid = child
             ended = true
-            attachError = "The terminal process could not be started."
+            attachError = "The terminal's process \(child) could not be identified, so it was stopped rather than left running without a reservation."
         }
     }
 
