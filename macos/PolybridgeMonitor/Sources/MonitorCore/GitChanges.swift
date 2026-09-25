@@ -291,15 +291,61 @@ public struct GitInspector: Sendable {
         self.runner = runner
     }
 
-    /// The fixed argv for each question, `-C <repo>` first. Never through a shell.
-    public static func argv(repo: String, _ rest: [String]) -> [String] {
-        ["-C", repo, "-c", "core.quotepath=off", "--no-pager"] + rest
+    /// Settings that stop these read-only questions from running anything a repository configured.
+    /// A task that can write the repo can plant commands in `.git/config`: `core.fsmonitor` runs on
+    /// every index refresh (diff and ls-files), `diff.external` / `diff.<d>.command` on a diff
+    /// (also off via `--no-ext-diff`), `diff.<d>.textconv` (also off via `--no-textconv`), and
+    /// `filter.<d>.clean`/`process` whenever git re-reads a worktree file. Hooks do not fire for
+    /// these commands, but `core.hooksPath` is pinned too so no future call can pick one up.
+    static let hardening = [
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+        "-c", "diff.external=",
+        "-c", "core.quotepath=off",
+        "--no-pager",
+    ]
+
+    /// The fixed argv for each question: `-C <repo>`, the hardening, per-repo driver overrides,
+    /// then the command. Never through a shell.
+    public static func argv(repo: String, overrides: [String] = [], _ rest: [String]) -> [String] {
+        ["-C", repo] + hardening + overrides.flatMap { ["-c", $0] } + rest
+    }
+
+    /// `-c` values that disable every diff/filter driver the *repository* defines (local or
+    /// worktree scope, includes resolved), from `git config --show-scope -z --get-regexp`. An empty
+    /// command is no command to git. The user's own global/system drivers (git-lfs, say) are left
+    /// alone: the repository cannot write those, and disabling them would misreport LFS files.
+    static func driverOverrides(_ listing: Data) -> [String] {
+        let fields = listing.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
+        var filters: [String] = [], diffs: [String] = []
+        var index = 0
+        while index + 1 < fields.count {
+            let scope = fields[index]
+            let key = fields[index + 1].split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
+            index += 2
+            guard scope != "global", scope != "system" else { continue }
+            let lower = key.lowercased()
+            for (prefix, list) in [("filter.", 0), ("diff.", 1)] where lower.hasPrefix(prefix) {
+                // `filter.<name>.<var>`: the name is everything between the first and last dot.
+                guard let lastDot = key.lastIndex(of: "."), lastDot > key.index(key.startIndex, offsetBy: prefix.count) else { continue }
+                let name = String(key[key.index(key.startIndex, offsetBy: prefix.count)..<lastDot])
+                if list == 0 { if !filters.contains(name) { filters.append(name) } } else if !diffs.contains(name) { diffs.append(name) }
+            }
+        }
+        return filters.flatMap { ["filter.\($0).clean=", "filter.\($0).smudge=", "filter.\($0).process=", "filter.\($0).required=false"] }
+            + diffs.flatMap { ["diff.\($0).textconv=", "diff.\($0).command="] }
     }
 
     /// stdout, or a one-line reason the query failed (non-zero exit, timeout, git missing).
-    func run(_ repo: String, _ rest: [String]) async -> Result<Data, GitFailure> {
+    func run(_ repo: String, overrides: [String] = [], _ rest: [String], allowExit1Empty: Bool = false) async -> Result<Data, GitFailure> {
         let what = rest.first ?? "git"
-        switch await runner.run(executable: git, arguments: Self.argv(repo: repo, rest), environment: environment, currentDirectory: nil, timeout: 20) {
+        // No optional index writes: these are questions, not maintenance.
+        var env = environment
+        env["GIT_OPTIONAL_LOCKS"] = "0"
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        switch await runner.run(executable: git, arguments: Self.argv(repo: repo, overrides: overrides, rest), environment: env, currentDirectory: nil, timeout: 20) {
+        case .success(let output) where allowExit1Empty && output.exitCode == 1 && output.stdout.isEmpty && !output.timedOut:
+            return .success(Data())
         case .failure(let error):
             return .failure(GitFailure(query: what, detail: error.message))
         case .success(let output) where output.timedOut:
@@ -321,21 +367,25 @@ public struct GitInspector: Sendable {
             case .failure(let failure): failures.append(failure); return nil
             }
         }
+        // Read which drivers the repository defines before any command that could run one. If
+        // that cannot be read, nothing that diffs is run at all (fail closed).
+        let listing = take(await run(repo, ["config", "--show-scope", "-z", "--get-regexp", "^(filter|diff)\\."], allowExit1Empty: true))
+        let overrides = listing.map(Self.driverOverrides)
         let branch = take(await run(repo, ["rev-parse", "--abbrev-ref", "HEAD"])).map { String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) }
-        let untrackedResult = take(await run(repo, ["ls-files", "--others", "--exclude-standard", "-z"]))
+        let untrackedResult = overrides == nil ? nil : take(await run(repo, overrides: overrides ?? [], ["ls-files", "--others", "--exclude-standard", "-z"]))
         let untracked = (untrackedResult ?? Data()).split(separator: 0).map { String(decoding: $0, as: UTF8.self) }.filter { !$0.isEmpty }
 
         var files: [FileChange] = []
         var diffs: [DiffFile] = []
         var commits: Int?
         var compared = false
-        if let base = baseCommit, GitChanges.isSafeCommit(base) {
+        if let base = baseCommit, GitChanges.isSafeCommit(base), let overrides {
             // Prefixes pinned: a user's diff.mnemonicPrefix / diff.noprefix would otherwise change
             // what the parser sees and detach each patch from its file.
-            let common = ["--no-color", "--no-ext-diff", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/", base, "--"]
-            let numstatData = take(await run(repo, ["diff", "--numstat", "-z"] + common))
-            let statusData = take(await run(repo, ["diff", "--name-status", "-z"] + common))
-            let patch = take(await run(repo, ["diff", "--unified=3"] + common))
+            let common = ["--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/", base, "--"]
+            let numstatData = take(await run(repo, overrides: overrides, ["diff", "--numstat", "-z"] + common))
+            let statusData = take(await run(repo, overrides: overrides, ["diff", "--name-status", "-z"] + common))
+            let patch = take(await run(repo, overrides: overrides, ["diff", "--unified=3"] + common))
             if let numstatData, let statusData, let patch, untrackedResult != nil {
                 compared = true
                 let numstat = DiffParser.parseNumstat(numstatData)
@@ -345,7 +395,7 @@ public struct GitInspector: Sendable {
                 }
                 diffs = DiffParser.parse(String(decoding: patch, as: UTF8.self))
             }
-            commits = take(await run(repo, ["rev-list", "--count", "\(base)..HEAD"])).flatMap { Int(String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) }
+            commits = take(await run(repo, overrides: overrides, ["rev-list", "--count", "\(base)..HEAD"])).flatMap { Int(String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) }
         }
         for path in untracked where !files.contains(where: { $0.path == path }) {
             files.append(FileChange(status: "?", path: path, oldPath: nil, added: nil, removed: nil))
