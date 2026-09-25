@@ -1,5 +1,4 @@
 import Foundation
-import XCTest
 @testable import MonitorCore
 
 /// A temp directory per test, removed afterwards.
@@ -39,7 +38,9 @@ final class RecordingRunner: ProcessRunning, @unchecked Sendable {
         lock.withLock { _calls }
     }
 
-    func run(executable: String, arguments: [String], environment: [String: String], currentDirectory: String?, timeout: Double) async -> Result<ProcessOutput, ToolError> {
+    func run(
+        executable: String, arguments: [String], environment: [String: String], currentDirectory: String?, timeout: Double
+    ) async -> Result<ProcessOutput, ToolError> {
         let call = Call(executable: executable, arguments: arguments, environment: environment)
         lock.withLock { _calls.append(call) }
         return .success(answer(call))
@@ -47,3 +48,15 @@ final class RecordingRunner: ProcessRunning, @unchecked Sendable {
 }
 
 func json(_ text: String) -> Data { Data(text.utf8) }
+
+/// Polls `condition` every 50 ms until it becomes true or `timeout` elapses, instead of a fixed
+/// sleep. Returns whether the condition was ever observed true, rather than just waiting.
+@MainActor
+func waitUntil(timeout: TimeInterval = 5, condition: @MainActor () -> Bool) async -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(50))
+    }
+    return condition()
+}

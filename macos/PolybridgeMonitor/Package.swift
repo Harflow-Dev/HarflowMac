@@ -8,17 +8,19 @@ let package = Package(
         .executable(name: "PolybridgeMonitor", targets: ["PolybridgeMonitor"]),
     ],
     dependencies: [
-        // Pinned to a released tag; the only dependency the app takes.
+        // Decoding, tailing, lineage, git parsing and process/env building live in their own
+        // package, with their own tests.
+        .package(path: "../PbCore/MonitorCore"),
+        // Pinned to a released tag.
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.20.0"),
     ],
     targets: [
-        // Everything testable: decoding, tailing, lineage, git parsing, process/env building.
-        // Foundation only, so the unit tests never need a window server.
-        .target(name: "MonitorCore"),
         .executableTarget(
             name: "PolybridgeMonitor",
-            dependencies: ["MonitorCore", .product(name: "SwiftTerm", package: "SwiftTerm")]
+            dependencies: [
+                .product(name: "MonitorCore", package: "MonitorCore"),
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
+            ]
         ),
-        .testTarget(name: "MonitorCoreTests", dependencies: ["MonitorCore"]),
     ]
 )
