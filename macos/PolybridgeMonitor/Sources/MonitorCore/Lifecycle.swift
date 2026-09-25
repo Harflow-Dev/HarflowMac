@@ -135,6 +135,15 @@ public enum ChildReaper {
         var known = Set<ProcessIdentity>()
         var groupOpen = true
         var lastScanFailed = false
+        /// A group scan failed at some point, so members may exist that were never seen. Cleared
+        /// only by a complete scan that re-establishes continuity (they are then admitted) or that
+        /// proves no process in the original group id is alive.
+        var coverageGap = false
+        /// Set when continuity was lost during a coverage gap: the processes then in the group id
+        /// can be neither proven ours nor proven not ours. Never signalled; the result cannot be
+        /// `.stopped` until a complete scan shows the group id empty (or taken by a new leader).
+        var unproven: [pid_t] = []
+        var awaitingProof = false
 
         func liveness(_ identity: ProcessIdentity) -> ProcessTable.Liveness { ProcessTable.liveness(identity, in: table) }
 
@@ -148,23 +157,47 @@ public enum ChildReaper {
         }
 
         func rescan() {
+            if awaitingProof {
+                guard let members = table.group(leader.pid) else { lastScanFailed = true; return }
+                lastScanFailed = false
+                let live = members.filter { !$0.zombie }
+                // A pid cannot be reused while it is a live group id, so a different process
+                // leading the id means the original group emptied first.
+                if live.isEmpty || live.contains(where: { $0.identity.pid == leader.pid && $0.identity != leader }) {
+                    awaitingProof = false
+                    unproven = []
+                } else {
+                    unproven = live.map(\.identity.pid).sorted()
+                }
+                return
+            }
             guard groupOpen else { lastScanFailed = false; return }
             guard let held = leaderHoldsPid(), let members = table.group(leader.pid) else {
                 lastScanFailed = true
+                coverageGap = true
                 return
             }
             lastScanFailed = false
             if let head = members.first(where: { $0.identity.pid == leader.pid }), head.identity != leader {
-                groupOpen = false // another process now leads this group id
+                groupOpen = false // another process now leads this group id: the original is gone
+                coverageGap = false
                 return
             }
             let memberIDs = Set(members.map(\.identity))
             let continuous = held || known.contains { memberIDs.contains($0) && liveness($0) == .live }
             guard continuous else {
-                groupOpen = false // the original group emptied; anything later is not ours
+                groupOpen = false // the original group emptied, or we lost track of it
+                let live = members.filter { !$0.zombie }
+                if coverageGap && !live.isEmpty {
+                    // Seen for the first time after a gap, with nothing tying them to us.
+                    awaitingProof = true
+                    unproven = live.map(\.identity.pid).sorted()
+                }
+                coverageGap = false
                 return
             }
             for member in members where !member.zombie { known.insert(member.identity) }
+            coverageGap = false
         }
 
         func signal(_ sig: Int32) {
@@ -172,7 +205,7 @@ public enum ChildReaper {
         }
 
         func settled() -> Bool {
-            !lastScanFailed && known.allSatisfy { liveness($0) == .gone }
+            !lastScanFailed && !coverageGap && !awaitingProof && known.allSatisfy { liveness($0) == .gone }
         }
 
         func wait(_ seconds: TimeInterval) -> Bool {
@@ -211,6 +244,9 @@ public enum ChildReaper {
 
         let alive = known.filter { liveness($0) == .live }.map(\.pid).sorted()
         if !alive.isEmpty { return .survived(alive) }
+        if awaitingProof {
+            return .unconfirmed(pids: unproven, reason: "processes appeared in the terminal's process group after a scan that could not be read; they cannot be shown to be its own, so they were not signalled")
+        }
         let unknown = known.filter { liveness($0) == .undecidable }.map(\.pid).sorted()
         return .unconfirmed(pids: unknown, reason: "the process table could not be read")
     }

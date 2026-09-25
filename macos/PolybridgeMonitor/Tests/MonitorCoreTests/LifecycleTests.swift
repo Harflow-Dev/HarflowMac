@@ -146,6 +146,39 @@ final class ChildReaperDecisionTests: XCTestCase {
         XCTAssertEqual(table.signals.filter { $0.0 == 500 }.map(\.1), [SIGHUP, SIGTERM], "nothing after the pid was reused")
     }
 
+    /// The first group read fails, so only the leader is known; SIGTERM kills it; a later scan
+    /// finds a member with the leader gone. Nothing proves that member is not ours, so the result
+    /// can never be .stopped while it is alive.
+    func testAMemberFoundAfterAnUnreadableScanIsNeverReadAsStopped() {
+        let table = FakeTable()
+        table.lookups[leader.pid] = .entry(FakeTable.entry(leader, pgid: 500))
+        table.lookups[member.pid] = .entry(FakeTable.entry(member, pgid: 500))
+        table.groupAnswer = nil
+        table.onSignal = { pid, sig in
+            if pid == 500, sig == SIGTERM {
+                table.lookups[500] = .absent
+                table.groupAnswer = [FakeTable.entry(self.member, pgid: 500)]
+            }
+        }
+        let outcome = ChildReaper.terminate(leader, grace: 0.2, killWait: 0.2, table: table, send: table.send)
+        guard case .unconfirmed(let pids, _) = outcome else { return XCTFail("\(outcome)") }
+        XCTAssertEqual(pids, [501])
+        XCTAssertFalse(table.signals.contains { $0.0 == 501 }, "an unproven member is reported, not signalled")
+    }
+
+    func testAfterAnUnreadableScanAnEmptyCompleteScanIsProof() {
+        let table = FakeTable()
+        table.lookups[leader.pid] = .entry(FakeTable.entry(leader, pgid: 500))
+        table.groupAnswer = nil
+        table.onSignal = { pid, sig in
+            if pid == 500, sig == SIGTERM {
+                table.lookups[500] = .absent
+                table.groupAnswer = []
+            }
+        }
+        XCTAssertEqual(ChildReaper.terminate(leader, grace: 0.2, killWait: 0.2, table: table, send: table.send), .stopped)
+    }
+
     func testAnOrphanedGroupWhoseLeaderExitedIsCleanedUpWhileContinuous() {
         let table = FakeTable()
         table.lookups[leader.pid] = .entry(FakeTable.entry(leader, pgid: 500))
