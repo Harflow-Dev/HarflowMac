@@ -53,7 +53,8 @@ final class ChildReaperTests: XCTestCase {
     func testAPidWhoseStartTimeNoLongerMatchesIsNeverSignalled() throws {
         let live = try spawn("exec sleep 30")
         let stale = ProcessIdentity(pid: live.pid, startSeconds: live.startSeconds - 100, startMicros: 0)
-        XCTAssertEqual(ChildReaper.terminate(stale, grace: 0.2), .alreadyGone)
+        // Our process is gone and its pid now leads someone else's group: reported, not signalled.
+        guard case .unconfirmed = ChildReaper.terminate(stale, grace: 0.2) else { return XCTFail() }
         XCTAssertTrue(ProcessTable.isLive(live), "a reused pid is someone else's process")
     }
 
@@ -68,6 +69,100 @@ final class ChildReaperTests: XCTestCase {
         XCTAssertEqual(WaitStatus(raw: 0), .exited(0))
         XCTAssertEqual(WaitStatus(raw: 9), .signalled(9))
         XCTAssertEqual(WaitStatus(raw: 256).label, "exit 1")
+    }
+}
+
+/// A scripted process table: each `lookup`/`group` answer can change per call, and signals are
+/// only recorded — nothing real is touched.
+final class FakeTable: ProcessTableReading, @unchecked Sendable {
+    var lookups: [pid_t: ProcessTable.Lookup] = [:]
+    var groupAnswer: [ProcessTable.Entry]? = []
+    var onSignal: ((pid_t, Int32) -> Void)?
+    private(set) var signals: [(pid_t, Int32)] = []
+
+    func lookup(_ pid: pid_t) -> ProcessTable.Lookup { lookups[pid] ?? .absent }
+    func group(_ pgid: pid_t) -> [ProcessTable.Entry]? { groupAnswer }
+
+    func send(_ pid: pid_t, _ sig: Int32) {
+        signals.append((pid, sig))
+        onSignal?(pid, sig)
+    }
+
+    static func entry(_ identity: ProcessIdentity, pgid: pid_t, zombie: Bool = false) -> ProcessTable.Entry {
+        ProcessTable.Entry(identity: identity, pgid: pgid, zombie: zombie)
+    }
+}
+
+final class ChildReaperDecisionTests: XCTestCase {
+    let leader = ProcessIdentity(pid: 500, startSeconds: 1000, startMicros: 1)
+    let member = ProcessIdentity(pid: 501, startSeconds: 1001, startMicros: 0)
+
+    func testAnUnreadableTableIsNeverReportedAsStopped() {
+        let table = FakeTable()
+        table.lookups[leader.pid] = .entry(FakeTable.entry(leader, pgid: 500))
+        table.groupAnswer = [FakeTable.entry(leader, pgid: 500)]
+        // The leader dies on SIGTERM, and from then on the table cannot be read.
+        table.onSignal = { pid, sig in
+            if sig == SIGTERM { table.lookups[pid] = .unreadable; table.groupAnswer = nil }
+        }
+        let outcome = ChildReaper.terminate(leader, grace: 0.2, killWait: 0.2, table: table, send: table.send)
+        guard case .unconfirmed = outcome else { return XCTFail("\(outcome)") }
+    }
+
+    func testAGroupReadFailureIsNotAnEmptyGroup() {
+        let table = FakeTable()
+        table.lookups[leader.pid] = .entry(FakeTable.entry(leader, pgid: 500))
+        table.groupAnswer = nil
+        table.onSignal = { pid, sig in if sig == SIGTERM { table.lookups[pid] = .absent } }
+        let outcome = ChildReaper.terminate(leader, grace: 0.2, killWait: 0.2, table: table, send: table.send)
+        guard case .unconfirmed = outcome else { return XCTFail("\(outcome)") }
+    }
+
+    func testALeaderAlreadyGoneLeavesItsGroupUnconfirmedAndUnsignalled() {
+        let table = FakeTable()
+        table.groupAnswer = [FakeTable.entry(member, pgid: 500)]
+        table.lookups[member.pid] = .entry(FakeTable.entry(member, pgid: 500))
+        let outcome = ChildReaper.terminate(leader, grace: 0.1, killWait: 0.1, table: table, send: table.send)
+        XCTAssertEqual(outcome, .unconfirmed(pids: [501], reason: "the terminal's process had already exited; what is left in its process group cannot be shown to be its own, so it was not signalled"))
+        XCTAssertTrue(table.signals.isEmpty)
+    }
+
+    func testAReplacementGroupIsNeverAdopted() {
+        let table = FakeTable()
+        let stranger = ProcessIdentity(pid: 500, startSeconds: 9999, startMicros: 0)
+        let strangerMember = ProcessIdentity(pid: 777, startSeconds: 9999, startMicros: 5)
+        table.lookups[leader.pid] = .entry(FakeTable.entry(leader, pgid: 500))
+        table.groupAnswer = [FakeTable.entry(leader, pgid: 500)]
+        // The leader exits on SIGTERM and its pid — and so the group id — is reused at once.
+        table.onSignal = { pid, sig in
+            guard pid == 500, sig == SIGTERM else { return }
+            table.lookups[500] = .entry(FakeTable.entry(stranger, pgid: 500))
+            table.lookups[777] = .entry(FakeTable.entry(strangerMember, pgid: 500))
+            table.groupAnswer = [FakeTable.entry(stranger, pgid: 500), FakeTable.entry(strangerMember, pgid: 500)]
+        }
+        let outcome = ChildReaper.terminate(leader, grace: 0.2, killWait: 0.2, table: table, send: table.send)
+        XCTAssertEqual(outcome, .stopped)
+        XCTAssertFalse(table.signals.contains { $0.0 == 777 }, "the replacement group's member was never signalled")
+        XCTAssertEqual(table.signals.filter { $0.0 == 500 }.map(\.1), [SIGHUP, SIGTERM], "nothing after the pid was reused")
+    }
+
+    func testAnOrphanedGroupWhoseLeaderExitedIsCleanedUpWhileContinuous() {
+        let table = FakeTable()
+        table.lookups[leader.pid] = .entry(FakeTable.entry(leader, pgid: 500))
+        table.lookups[member.pid] = .entry(FakeTable.entry(member, pgid: 500))
+        table.groupAnswer = [FakeTable.entry(leader, pgid: 500), FakeTable.entry(member, pgid: 500)]
+        table.onSignal = { pid, sig in
+            if pid == 500, sig == SIGTERM { // leader exits and is reaped; member ignores TERM
+                table.lookups[500] = .absent
+                table.groupAnswer = [FakeTable.entry(self.member, pgid: 500)]
+            }
+            if pid == 501, sig == SIGKILL {
+                table.lookups[501] = .absent
+                table.groupAnswer = []
+            }
+        }
+        XCTAssertEqual(ChildReaper.terminate(leader, grace: 0.2, killWait: 0.5, table: table, send: table.send), .stopped)
+        XCTAssertTrue(table.signals.contains { $0 == (501, SIGKILL) })
     }
 }
 

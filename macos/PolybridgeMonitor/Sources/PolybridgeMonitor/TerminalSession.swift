@@ -66,14 +66,19 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     /// Ends the process this session started — and its process group — and calls back once none of
     /// them is alive. Never uses SwiftTerm's `terminate()`, which signals the pid unchecked; see
-    /// `ChildReaper`. A second request while one is in flight joins it.
+    /// `ChildReaper`. A request while one is in flight joins it — checked before `ended`, since the
+    /// leader can exit (setting `ended`) while its group is still being cleaned up. It also runs
+    /// after the leader has exited, because the group may outlive it.
     func terminate(completion: ((ChildReaper.Outcome) -> Void)? = nil) {
-        guard !ended, let identity else {
+        if terminating {
+            if let completion { terminationWaiters.append(completion) }
+            return
+        }
+        guard let identity else {
             completion?(.alreadyGone)
             return
         }
         if let completion { terminationWaiters.append(completion) }
-        guard !terminating else { return }
         terminating = true
         DispatchQueue.global(qos: .userInitiated).async {
             let outcome = ChildReaper.terminate(identity)
@@ -85,6 +90,8 @@ final class TerminalSession: ObservableObject, Identifiable {
                         self.markEnded()
                     case .survived(let pids):
                         self.attachError = (self.attachError.map { $0 + "\n" } ?? "") + "These processes did not exit even after SIGKILL: \(pids.map(String.init).joined(separator: ", "))."
+                    case .unconfirmed(let pids, let reason):
+                        self.attachError = (self.attachError.map { $0 + "\n" } ?? "") + "Could not confirm the terminal's processes stopped (\(reason))" + (pids.isEmpty ? "." : ": \(pids.map(String.init).joined(separator: ", ")).")
                     }
                     let waiters = self.terminationWaiters
                     self.terminationWaiters = []

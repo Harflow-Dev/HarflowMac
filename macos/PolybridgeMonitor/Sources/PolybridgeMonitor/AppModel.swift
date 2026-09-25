@@ -375,6 +375,8 @@ final class AppModel: ObservableObject {
                             self?.messages[taskID] = "The terminal was closed because the takeover could not be attached: \(error.message)"
                         case .survived(let pids):
                             self?.messages[taskID] = "The takeover could not be attached and these processes would not exit — end them yourself: \(pids.map(String.init).joined(separator: ", ")). \(error.message)"
+                        case .unconfirmed(let pids, let reason):
+                            self?.messages[taskID] = "The takeover could not be attached, and the terminal could not be confirmed closed (\(reason))" + (pids.isEmpty ? "" : " — check: \(pids.map(String.init).joined(separator: ", "))") + ". \(error.message)"
                         }
                     }
                 }

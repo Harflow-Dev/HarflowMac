@@ -9,103 +9,210 @@ public struct ProcessIdentity: Equatable, Hashable, Sendable {
     public let startMicros: Int32
 }
 
+/// Reads of the kernel process table. A failed read is `unreadable`, never "absent": missing
+/// evidence is not evidence of death (polybridge's own identity checks keep an `undecidable`
+/// verdict for the same reason).
+public protocol ProcessTableReading: Sendable {
+    func lookup(_ pid: pid_t) -> ProcessTable.Lookup
+    /// Every process whose group is `pgid`, or nil when the table could not be read.
+    func group(_ pgid: pid_t) -> [ProcessTable.Entry]?
+}
+
 public enum ProcessTable {
     public struct Entry: Equatable, Sendable {
         public let identity: ProcessIdentity
         public let pgid: pid_t
         public let zombie: Bool
+
+        public init(identity: ProcessIdentity, pgid: pid_t, zombie: Bool) {
+            self.identity = identity
+            self.pgid = pgid
+            self.zombie = zombie
+        }
     }
 
-    static func entry(_ info: kinfo_proc) -> Entry {
+    public enum Lookup: Equatable, Sendable {
+        case entry(Entry)
+        case absent
+        case unreadable
+    }
+
+    public enum Liveness: Equatable, Sendable { case live, gone, undecidable }
+
+    public static let system: ProcessTableReading = SystemProcessTable()
+
+    public static func lookup(_ pid: pid_t) -> Entry? {
+        if case .entry(let entry) = system.lookup(pid) { return entry }
+        return nil
+    }
+
+    public static func group(_ pgid: pid_t) -> [Entry] { system.group(pgid) ?? [] }
+
+    /// Alive and still the same process (a zombie has exited; a different start time is a reuse).
+    public static func isLive(_ identity: ProcessIdentity) -> Bool { liveness(identity, in: system) == .live }
+
+    public static func liveness(_ identity: ProcessIdentity, in table: ProcessTableReading) -> Liveness {
+        switch table.lookup(identity.pid) {
+        case .entry(let entry): return entry.identity == identity && !entry.zombie ? .live : .gone
+        case .absent: return .gone
+        case .unreadable: return .undecidable
+        }
+    }
+}
+
+struct SystemProcessTable: ProcessTableReading {
+    static func entry(_ info: kinfo_proc) -> ProcessTable.Entry {
         let start = info.kp_proc.p_un.__p_starttime
-        return Entry(
+        return ProcessTable.Entry(
             identity: ProcessIdentity(pid: info.kp_proc.p_pid, startSeconds: start.tv_sec, startMicros: start.tv_usec),
             pgid: info.kp_eproc.e_pgid,
             zombie: info.kp_proc.p_stat == SZOMB
         )
     }
 
-    public static func lookup(_ pid: pid_t) -> Entry? {
-        guard pid > 0 else { return nil }
+    func lookup(_ pid: pid_t) -> ProcessTable.Lookup {
+        guard pid > 0 else { return .absent }
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
-        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size >= MemoryLayout<kinfo_proc>.stride else { return nil }
-        return entry(info)
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return .unreadable }
+        if size == 0 { return .absent }
+        guard size >= MemoryLayout<kinfo_proc>.stride else { return .unreadable }
+        return .entry(Self.entry(info))
     }
 
-    /// Every process whose process group is `pgid`.
-    public static func group(_ pgid: pid_t) -> [Entry] {
+    func group(_ pgid: pid_t) -> [ProcessTable.Entry]? {
         guard pgid > 0 else { return [] }
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PGRP, pgid]
-        var size = 0
-        guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return [] }
         let stride = MemoryLayout<kinfo_proc>.stride
-        var buffer = [kinfo_proc](repeating: kinfo_proc(), count: size / stride + 8)
-        size = buffer.count * stride
-        guard sysctl(&mib, 4, &buffer, &size, nil, 0) == 0 else { return [] }
-        return buffer.prefix(size / stride).map(entry).filter { $0.pgid == pgid }
-    }
-
-    /// Alive and still the same process (a zombie has exited; a different start time is a reuse).
-    public static func isLive(_ identity: ProcessIdentity) -> Bool {
-        guard let entry = lookup(identity.pid) else { return false }
-        return entry.identity == identity && !entry.zombie
+        // The group can grow between sizing and reading (ENOMEM): size again, a few times.
+        for _ in 0..<5 {
+            var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PGRP, pgid]
+            var size = 0
+            guard sysctl(&mib, 4, nil, &size, nil, 0) == 0 else { return nil }
+            if size == 0 { return [] }
+            var buffer = [kinfo_proc](repeating: kinfo_proc(), count: size / stride + 16)
+            size = buffer.count * stride
+            if sysctl(&mib, 4, &buffer, &size, nil, 0) == 0 {
+                return buffer.prefix(size / stride).map(Self.entry).filter { $0.pgid == pgid }
+            }
+            guard errno == ENOMEM else { return nil }
+        }
+        return nil
     }
 }
 
 /// Ending a terminal's child — and its process group — and knowing that it ended.
 ///
 /// SwiftTerm's own `terminate()` sends one unchecked SIGTERM to a pid it may already have reaped,
-/// and stops watching. A take-over child that outlives an attach refusal would be a second,
-/// unreserved writer to the session, so this never calls it. Instead: every signal goes to a
-/// process whose (pid, start time) was just re-read and still matches, so a reused pid is never
-/// signalled; the whole group is covered (a launcher can exit on SIGTERM while the agent it started
-/// ignores it); and success means none of them is alive any more. Reaping is left to SwiftTerm's
-/// own exit monitor; a zombie counts as gone. Blocking — call off the main thread.
+/// and stops watching; a take-over child that outlives an attach refusal would be a second,
+/// unreserved writer to the session. So this never calls it, and:
+/// - every signal goes to a process whose (pid, start time) was just re-read and still matches;
+/// - the leader's whole group is covered, but a group member is admitted only while the group is
+///   provably still the original one — the leader still holds its pid (alive or a zombie), or a
+///   member already known to be ours is still in it. Once that continuity breaks, or another
+///   process leads the group id, nothing new is admitted: a reused group id is someone else's;
+/// - a table read that fails is never taken as death: the result is `.unconfirmed`, not `.stopped`.
+/// Reaping is left to SwiftTerm's own exit monitor. Blocking — call off the main thread.
 public enum ChildReaper {
     public enum Outcome: Equatable, Sendable {
-        /// The leader and every group member seen are gone.
+        /// Every process of the group that was provably ours is gone.
         case stopped
-        /// The leader was already gone (or never matched) before anything was signalled.
+        /// The leader was already gone and nothing was left in its group.
         case alreadyGone
-        /// Still alive after SIGKILL and the final wait — reported, never hidden.
+        /// Still alive after SIGKILL and the final wait.
         case survived([pid_t])
+        /// Could not be established either way — never reported as stopped.
+        case unconfirmed(pids: [pid_t], reason: String)
     }
 
-    public static func terminate(_ leader: ProcessIdentity, grace: TimeInterval = 3, killWait: TimeInterval = 3) -> Outcome {
-        var targets = Set<ProcessIdentity>()
-        func rescan() {
-            if ProcessTable.isLive(leader) { targets.insert(leader) }
-            // The pty child is its own session and group leader, so the group id is its pid. The
-            // group is re-read on every pass, so a member forked meanwhile is covered too.
-            for member in ProcessTable.group(leader.pid) where !member.zombie { targets.insert(member.identity) }
-        }
-        func live() -> [ProcessIdentity] { targets.filter(ProcessTable.isLive) }
-        func signal(_ sig: Int32) {
-            for target in live() { _ = kill(target.pid, sig) }
+    public static func terminate(
+        _ leader: ProcessIdentity,
+        grace: TimeInterval = 3,
+        killWait: TimeInterval = 3,
+        table: ProcessTableReading = ProcessTable.system,
+        send: (pid_t, Int32) -> Void = { _ = kill($0, $1) }
+    ) -> Outcome {
+        var known = Set<ProcessIdentity>()
+        var groupOpen = true
+        var lastScanFailed = false
+
+        func liveness(_ identity: ProcessIdentity) -> ProcessTable.Liveness { ProcessTable.liveness(identity, in: table) }
+
+        /// nil: unreadable. true: the leader's pid is still held by the leader (alive or zombie).
+        func leaderHoldsPid() -> Bool? {
+            switch table.lookup(leader.pid) {
+            case .entry(let entry): return entry.identity == leader
+            case .absent: return false
+            case .unreadable: return nil
+            }
         }
 
-        guard ProcessTable.isLive(leader) else { return .alreadyGone }
+        func rescan() {
+            guard groupOpen else { lastScanFailed = false; return }
+            guard let held = leaderHoldsPid(), let members = table.group(leader.pid) else {
+                lastScanFailed = true
+                return
+            }
+            lastScanFailed = false
+            if let head = members.first(where: { $0.identity.pid == leader.pid }), head.identity != leader {
+                groupOpen = false // another process now leads this group id
+                return
+            }
+            let memberIDs = Set(members.map(\.identity))
+            let continuous = held || known.contains { memberIDs.contains($0) && liveness($0) == .live }
+            guard continuous else {
+                groupOpen = false // the original group emptied; anything later is not ours
+                return
+            }
+            for member in members where !member.zombie { known.insert(member.identity) }
+        }
+
+        func signal(_ sig: Int32) {
+            for target in known where liveness(target) == .live { send(target.pid, sig) }
+        }
+
+        func settled() -> Bool {
+            !lastScanFailed && known.allSatisfy { liveness($0) == .gone }
+        }
+
+        func wait(_ seconds: TimeInterval) -> Bool {
+            let deadline = Date().addingTimeInterval(seconds)
+            repeat {
+                rescan()
+                if settled() { return true }
+                usleep(50_000)
+            } while Date() < deadline
+            rescan()
+            return settled()
+        }
+
+        switch leaderHoldsPid() {
+        case .none:
+            return .unconfirmed(pids: [leader.pid], reason: "the process table could not be read")
+        case .some(false):
+            // The leader is gone and reaped, so nothing ties the group id to it any more.
+            guard let members = table.group(leader.pid) else {
+                return .unconfirmed(pids: [], reason: "the process table could not be read")
+            }
+            let left = members.filter { !$0.zombie }.map(\.identity.pid).sorted()
+            return left.isEmpty ? .alreadyGone : .unconfirmed(pids: left, reason: "the terminal's process had already exited; what is left in its process group cannot be shown to be its own, so it was not signalled")
+        case .some(true):
+            known.insert(leader)
+        }
+
         rescan()
+        if settled() { return liveness(leader) == .gone && known.count == 1 ? .alreadyGone : .stopped }
         signal(SIGHUP)
         signal(SIGTERM)
-        if wait(for: grace, rescan: rescan, live: live) { return .stopped }
+        if wait(grace) { return .stopped }
         rescan()
         signal(SIGKILL)
-        if wait(for: killWait, rescan: rescan, live: live) { return .stopped }
-        return .survived(live().map(\.pid).sorted())
-    }
+        if wait(killWait) { return .stopped }
 
-    private static func wait(for seconds: TimeInterval, rescan: () -> Void, live: () -> [ProcessIdentity]) -> Bool {
-        let deadline = Date().addingTimeInterval(seconds)
-        repeat {
-            rescan()
-            if live().isEmpty { return true }
-            usleep(50_000)
-        } while Date() < deadline
-        rescan()
-        return live().isEmpty
+        let alive = known.filter { liveness($0) == .live }.map(\.pid).sorted()
+        if !alive.isEmpty { return .survived(alive) }
+        let unknown = known.filter { liveness($0) == .undecidable }.map(\.pid).sorted()
+        return .unconfirmed(pids: unknown, reason: "the process table could not be read")
     }
 }
 
