@@ -191,6 +191,8 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([done])
         await waitUntil { harness.sut.task != nil }
+        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2).
+        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.finalAnswer == "from the task listing")
 
         // when — a snapshot with its own summary becomes available

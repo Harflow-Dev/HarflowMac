@@ -49,6 +49,8 @@ struct ToolRow: View {
                         }
                     } else if model.live {
                         ProgressView().controlSize(.mini)
+                    } else {
+                        Text("no result").font(.pb(.caption)).foregroundStyle(.secondary)
                     }
                 }
             }

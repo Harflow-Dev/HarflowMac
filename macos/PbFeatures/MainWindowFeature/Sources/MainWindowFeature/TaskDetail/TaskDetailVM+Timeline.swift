@@ -11,6 +11,12 @@
 //  newest, with a turn separator ahead of every follow-up. Raw Events and the events-path label stay
 //  scoped to the conversation's CURRENT member only — a per-process debug view, not a merged one.
 //
+//  Monitor piece 8, Codex review round 2, finding 2: this reads each member's own ALREADY-BUILT
+//  `itemsByMember` (the repository's incremental `TimelineBuilder` snapshot, kept current by
+//  `TaskDetailVM.acquireMemberLease`'s `itemsPublisher` subscription) via
+//  `ConversationTimeline.rows(itemMembers:)` — never `ConversationMember`/`rows(members:)`, which
+//  would rebuild every member's whole timeline from raw events on every single publication.
+//
 
 import Foundation
 import MonitorCore
@@ -25,9 +31,9 @@ extension TaskDetailVM {
         let allChildren = allConversationChildren()
         let start = members.first?.startedAt
         let conversationTimelineMembers = members.map {
-            ConversationMember(task: $0, events: eventsByMember[$0.taskID] ?? [])
+            ConversationItemMember(task: $0, items: itemsByMember[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
         }
-        let rows = ConversationTimeline.rows(members: conversationTimelineMembers)
+        let rows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
         let subTaskStrip: SubTaskStripModel? = allChildren.isEmpty ? nil : SubTaskStripModel(
             children: allChildren.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             start: start,

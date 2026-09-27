@@ -68,6 +68,10 @@ extension TaskDetailVMTests {
         given(useCase).prompt(for: .value(id)).willProduce { _ in Timeline.prompt(in: box.value) }
         given(useCase).eventsPath(for: .value(id)).willReturn("/tmp/\(id).events.jsonl")
         given(useCase).events(for: .value(id)).willProduce { _ in box.value }
+        // The Timeline reads `items(for:)`, not `events(for:)` (Monitor piece 8, Codex review round
+        // 2, finding 2) — derived from the same box so these tests' existing event fixtures still
+        // drive the Timeline exactly as before.
+        given(useCase).items(for: .value(id)).willProduce { _ in Timeline.items(from: box.value) }
         given(useCase).eventsAvailability(for: .value(id)).willReturn(.available)
         given(useCase).eventsAvailabilityPublisher(for: .value(id)).willReturn(Empty().eraseToAnyPublisher())
         given(useCase).itemsPublisher(for: .value(id)).willReturn(Empty().eraseToAnyPublisher())
@@ -579,6 +583,9 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([taskA, taskB])
+        await waitUntil { harness.sut.task != nil }
+        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2).
+        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // then

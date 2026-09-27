@@ -52,8 +52,17 @@ struct TimelineRow: View {
                     .font(.pb(.secondary))
                     .foregroundStyle(.secondary)
             }
-        case .text(let text):
-            MarkdownText(text: text)
+        case .text(let text, let streaming):
+            VStack(alignment: .leading, spacing: 2) {
+                MarkdownText(text: text)
+                if streaming {
+                    if model.live {
+                        StreamingCaret()
+                    } else {
+                        Text("(incomplete)").font(.pb(.caption)).foregroundStyle(.secondary)
+                    }
+                }
+            }
         case .tool(let call, let result):
             ToolRow(model: ToolRowModel(call: call, result: result, live: model.live))
         case .message(let text, let source):
@@ -77,6 +86,26 @@ struct TimelineRow: View {
                 .font(.pb(.body, weight: .medium))
                 .foregroundStyle(color)
         }
+    }
+}
+
+// MARK: - StreamingCaret
+
+/// A subtle blinking caret shown after an in-progress streamed assistant reply, only while its turn
+/// is actually running (Review round 1, item 6).
+struct StreamingCaret: View {
+    @State private var visible = true
+
+    var body: some View {
+        Text("▍")
+            .font(.pb(.body, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .opacity(visible ? 1 : 0.2)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                    visible.toggle()
+                }
+            }
     }
 }
 

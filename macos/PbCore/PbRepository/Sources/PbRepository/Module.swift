@@ -18,7 +18,7 @@ public final class Module: PbModule {
         let settings = SettingsRepositoryImpl()
         let toolEnvironment = ToolEnvironmentRepositoryImpl(settings: settings)
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
-        let eventStream = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot)
+        let eventStream = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler)
         let finishNotifier = FinishNotifierImpl(settings: settings)
         let taskList = TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment,

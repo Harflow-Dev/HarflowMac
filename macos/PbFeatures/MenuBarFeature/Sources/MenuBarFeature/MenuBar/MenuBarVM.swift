@@ -339,7 +339,7 @@ final class MenuBarVM: MenuBarViewModel {
     private func updateActivityLine(_ taskID: String, items: [TimelineItem]) {
         if let current = useCase.current(taskID), case .tool(let call, _) = current.body {
             activityLines[taskID] = ("\(call.tool) \(call.headline)", true)
-        } else if let last = items.last, case .text(let text) = last.body {
+        } else if let last = items.last, case .text(let text, _) = last.body {
             activityLines[taskID] = (text, false)
         } else {
             activityLines[taskID] = nil

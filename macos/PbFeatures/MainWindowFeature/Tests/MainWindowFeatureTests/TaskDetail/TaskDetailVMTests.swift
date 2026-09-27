@@ -59,6 +59,7 @@ import Testing
         let ancestorsBox: Box<[TaskInfo]>
         let refreshSnapshotEffect: Box<(() -> Void)?>
         let childrenBox: Box<[TaskInfo]>
+        let itemsOverride: Box<[TimelineItem]?>
     }
 
     /// The fixtures `makeSUT` builds before wiring up `useCase`'s stubs — split out purely to keep
@@ -86,6 +87,12 @@ import Testing
         // a test that needs to observe/react to a call installs a closure here instead of calling
         // `given(...)` again.
         let refreshSnapshotEffect = Box<(() -> Void)?>(nil)
+        // Defaults to a real rebuild of `eventsBox` (matching what the real repository's own
+        // `TimelineBuilder` would settle on for the same events), same FIFO reason as above — a test
+        // proving the Timeline is built from `items(for:)`/`itemsPublisher(for:)` and NOT from
+        // `Timeline.items(from: events(for:))` (Monitor piece 8, Codex review round 2, finding 2)
+        // sets this to something deliberately different from `eventsBox`'s own content.
+        let itemsOverride = Box<[TimelineItem]?>(nil)
     }
 
     @discardableResult
@@ -131,7 +138,9 @@ import Testing
             callOrder.value.append("acquireEventLease")
             return lease
         }
-        given(useCase).items(for: .value(taskID)).willReturn([])
+        given(useCase).items(for: .value(taskID)).willProduce { _ in
+            fixtures.itemsOverride.value ?? Timeline.items(from: fixtures.eventsBox.value)
+        }
         given(useCase).events(for: .value(taskID)).willProduce { _ in fixtures.eventsBox.value }
         given(useCase).eventsAvailability(for: .value(taskID)).willProduce { _ in fixtures.eventsAvailabilityBox.value }
         given(useCase).eventsPath(for: .value(taskID)).willReturn("/tmp/\(taskID).events.jsonl")
@@ -175,7 +184,8 @@ import Testing
             eventsBox: fixtures.eventsBox, eventsAvailabilityBox: fixtures.eventsAvailabilityBox,
             ancestorsBox: fixtures.ancestorsBox,
             refreshSnapshotEffect: fixtures.refreshSnapshotEffect,
-            childrenBox: fixtures.childrenBox
+            childrenBox: fixtures.childrenBox,
+            itemsOverride: fixtures.itemsOverride
         )
     }
     

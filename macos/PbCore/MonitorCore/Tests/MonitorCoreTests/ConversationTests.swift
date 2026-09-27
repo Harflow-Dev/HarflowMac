@@ -420,6 +420,53 @@ struct ConversationTests {
         #expect(messages.map(\.text) == ["one more thing"], "the duplicate initial prompt is dropped, the injected message stays")
     }
 
+    // MARK: - rows(itemMembers:) matches rows(members:) (Codex review round 2, finding 2)
+
+    @Test
+    func givenAlreadyBuiltItemsPerMember_whenComparedToTheEventsBasedRows_thenTheyAreIdentical() {
+        // given — a representative multi-turn conversation: an unresolved tool in an older, already-
+        // terminal turn (must read `live == false`) while the newest turn (with its own `.started`
+        // row that must be dropped, and a duplicate live-input initial message that must also be
+        // dropped) is still running (must read `live == true`), plus duplicate seq/call ids across
+        // members (row identity must still be globally unique) — every behavior
+        // `rows(members:)`'s own tests above pin, in one conversation.
+        let oldEvents: [TaskEvent] = [
+            TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"fix the bug"}"#)!,
+            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"x","command":"x"}"#)!
+        ]
+        let newEvents: [TaskEvent] = [
+            TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"also add a test"}"#)!,
+            TaskEvent(line: #"{"v":1,"seq":1,"kind":"user_message","text":"also add a test","source":"initial"}"#)!,
+            TaskEvent(line: #"{"v":1,"seq":2,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"y","command":"y"}"#)!
+        ]
+        let members = [
+            ConversationMember(task: task("a", status: "cancelled", minute: 0), events: oldEvents),
+            ConversationMember(task: task("b", status: "running", parentTaskID: "a", minute: 1), events: newEvents)
+        ]
+        let itemMembers = members.map {
+            ConversationItemMember(task: $0.task, items: Timeline.items(from: $0.events), prompt: Timeline.prompt(in: $0.events))
+        }
+
+        // when
+        let eventsBasedRows = ConversationTimeline.rows(members: members)
+        let itemsBasedRows = ConversationTimeline.rows(itemMembers: itemMembers)
+
+        // then — byte-for-byte identical: same separators, same dropped rows, same per-turn `live`,
+        // same globally-unique ids.
+        #expect(itemsBasedRows == eventsBasedRows)
+        // Sanity-check the fixture actually exercises what it claims to, so this test cannot pass
+        // vacuously (e.g. both sides empty).
+        #expect(eventsBasedRows.count == 4, "separator + old turn's tool call + new turn's tool call, minus the dropped started/message rows")
+        #expect(Set(eventsBasedRows.map(\.id)).count == eventsBasedRows.count)
+        let oldToolLive = eventsBasedRows.first { $0.taskID == "a" }?.live
+        let newToolLive = eventsBasedRows.first { row in
+            guard row.taskID == "b", case .item(let item) = row.kind, case .tool = item.body else { return false }
+            return true
+        }?.live
+        #expect(oldToolLive == false)
+        #expect(newToolLive == true)
+    }
+
     // MARK: - Deterministic survivor rule (Codex review round 1, finding 3)
 
     @Test

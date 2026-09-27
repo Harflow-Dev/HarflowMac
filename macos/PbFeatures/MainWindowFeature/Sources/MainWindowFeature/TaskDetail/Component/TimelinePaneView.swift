@@ -28,6 +28,19 @@ struct TimelinePaneModel {
 
     @MainActor
     static let empty = TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil)
+
+    /// Row count alone misses a streamed reply growing inside the *last* row without adding a new
+    /// one (Review round 1, item 5) — combined with that row's own content length, growth of
+    /// either kind re-triggers Follow live's scroll. Row identity itself (`row.id`) stays stable
+    /// across a growing stream: only the text inside an existing row changes, never its id. A pure
+    /// function, so it is directly testable without a SwiftUI rendering harness (the same reasoning
+    /// as `ParallelColumnModel.visibleItems`).
+    static func scrollTrigger(for rows: [ConversationTimelineRow]) -> String {
+        guard let last = rows.last else { return "0" }
+        var length = 0
+        if case .item(let item) = last.kind, case .text(let text, _) = item.body { length = text.count }
+        return "\(rows.count)|\(last.id)|\(length)"
+    }
 }
 
 // MARK: - TimelinePaneView
@@ -61,7 +74,7 @@ struct TimelinePaneView: View {
                     }
                     .padding(14)
                 }
-                .onChange(of: model.rows.count) { _, _ in
+                .onChange(of: TimelinePaneModel.scrollTrigger(for: model.rows)) { _, _ in
                     if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
                 }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }

@@ -13,7 +13,10 @@ func eventLine(_ seq: Int, _ kind: String, _ fields: String = "") -> String {
 struct EventDecodingTests {
     /// Every kind in `events.EVENT_KINDS` (src/polybridge/events.py). If that set grows, this
     /// list and `TaskEvent.Kind` grow with it — the frozen v1 contract.
-    let v1Kinds = ["task_started", "assistant_text", "tool_call", "tool_result", "user_message", "usage", "notice", "task_finished", "undelivered"]
+    let v1Kinds = [
+        "task_started", "assistant_text", "assistant_delta", "tool_call", "tool_result",
+        "user_message", "usage", "notice", "task_finished", "undelivered"
+    ]
 
     @Test
     func givenEveryV1Kind_whenDecoded_thenEachHasItsOwnCase() {
@@ -66,6 +69,36 @@ struct EventDecodingTests {
             5, "task_finished", #""status": "completed", "exit_code": 0, "summary": "ok", "observed": true"#
         )))
         #expect(finished.kind == .taskFinished(status: "completed", exitCode: 0, summary: "ok", observed: true))
+    }
+
+    // MARK: - assistant_delta / block-indexed assistant_text (Monitor piece 8)
+
+    @Test
+    func givenAnAssistantDeltaWithMessageIDAndBlockIndex_whenDecoded_thenBothAreExtracted() throws {
+        // given / when
+        let delta = try #require(TaskEvent(line: eventLine(
+            0, "assistant_delta", #""message_id": "msg_1", "block_index": 2, "text": "ALPHA""#
+        )))
+        // then
+        #expect(delta.kind == .assistantDelta(.init(messageID: "msg_1", blockIndex: 2, text: "ALPHA")))
+    }
+
+    @Test
+    func givenAnAssistantDeltaWithNoMessageID_whenDecoded_thenItStillDecodesWithNilIdentity() throws {
+        // given / when — a backend whose stream never disclosed a message/block id.
+        let delta = try #require(TaskEvent(line: eventLine(0, "assistant_delta", #""text": "chunk""#)))
+        // then
+        #expect(delta.kind == .assistantDelta(.init(messageID: nil, blockIndex: nil, text: "chunk")))
+    }
+
+    @Test
+    func givenAnAssistantTextWithMessageIDAndBlockIndex_whenDecoded_thenBothAreExtracted() throws {
+        // given / when
+        let text = try #require(TaskEvent(line: eventLine(
+            0, "assistant_text", #""message_id": "msg_1", "block_index": 1, "text": "OMEGA""#
+        )))
+        // then
+        #expect(text.kind == .assistantText(text: "OMEGA", messageID: "msg_1", blockIndex: 1))
     }
 
     @Test
@@ -173,6 +206,141 @@ struct EventDecodingTests {
         let items = Timeline.items(from: events)
         // then
         #expect(Timeline.current(in: items)?.isRunningTool == true)
+    }
+}
+
+// MARK: - Streaming timeline accumulation (Monitor piece 8)
+
+@Suite
+struct StreamingTimelineTests {
+    private func delta(_ seq: Int, messageID: String? = "msg_1", blockIndex: Int? = 0, _ text: String) -> String {
+        var fields = #""text": "\#(text)""#
+        if let messageID { fields += #", "message_id": "\#(messageID)""# }
+        if let blockIndex { fields += #", "block_index": \#(blockIndex)"# }
+        return eventLine(seq, "assistant_delta", fields)
+    }
+
+    private func finalText(_ seq: Int, messageID: String? = "msg_1", blockIndex: Int? = 0, _ text: String) -> String {
+        var fields = #""text": "\#(text)""#
+        if let messageID { fields += #", "message_id": "\#(messageID)""# }
+        if let blockIndex { fields += #", "block_index": \#(blockIndex)"# }
+        return eventLine(seq, "assistant_text", fields)
+    }
+
+    @Test
+    func givenChunksForTheSameBlock_whenBuildingTheTimeline_thenTheyAccumulateIntoOneInProgressItem() throws {
+        // given
+        let events = [delta(0, "AL"), delta(1, "PHA")].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        // then — one item, in place at the position of the first chunk, still marked streaming.
+        #expect(items.count == 1)
+        guard case .text(let text, let streaming) = items[0].body else { Issue.record("expected .text"); return }
+        #expect(text == "ALPHA")
+        #expect(streaming)
+    }
+
+    @Test
+    func givenAFinalAssistantTextForTheSameBlock_whenBuildingTheTimeline_thenItReplacesTheInProgressItemInPlace() throws {
+        // given — a tool call arrives between the deltas and the final text, so replacement must
+        // still find the original item by (message_id, block_index), not by array position.
+        let events = [
+            delta(0, "AL"),
+            eventLine(1, "tool_call", #""call_id": "c1", "tool": "Bash", "category": "shell", "input_preview": "{}""#),
+            delta(2, "PHA"),
+            finalText(3, "ALPHA")
+        ].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        // then — no duplicate: still one text item, now final (not streaming), in its original slot.
+        #expect(items.count == 2)
+        guard case .text(let text, let streaming) = items[0].body else { Issue.record("expected .text at index 0"); return }
+        #expect(text == "ALPHA")
+        #expect(!streaming)
+        guard case .tool = items[1].body else { Issue.record("expected .tool at index 1"); return }
+    }
+
+    @Test
+    func givenTwoTextBlocksAroundAToolCall_whenBuildingTheTimeline_thenTheyStaySeparateAndOrdered() throws {
+        // given — mirrors the real fixture (tests/fixtures/claude_partial_multiblock.jsonl): a text
+        // block, then a tool call, then a second text block in the SAME message.
+        let events = [
+            delta(0, blockIndex: 1, "AL"), delta(1, blockIndex: 1, "PHA"),
+            finalText(2, blockIndex: 1, "ALPHA"),
+            eventLine(3, "tool_call", #""call_id": "c1", "tool": "Bash", "category": "shell", "input_preview": "{}""#),
+            eventLine(4, "tool_result", #""call_id": "c1", "ok": true, "output_tail": "hi""#),
+            delta(5, blockIndex: 3, "OME"), delta(6, blockIndex: 3, "GA"),
+            finalText(7, blockIndex: 3, "OMEGA")
+        ].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        // then — three items, in order, each block's text final and un-duplicated.
+        #expect(items.count == 3)
+        guard case .text(let first, false) = items[0].body else { Issue.record("expected first text"); return }
+        #expect(first == "ALPHA")
+        guard case .tool = items[1].body else { Issue.record("expected the tool call"); return }
+        guard case .text(let second, false) = items[2].body else { Issue.record("expected second text"); return }
+        #expect(second == "OMEGA")
+    }
+
+    @Test
+    func givenDeltasWithNoMessageID_whenBuildingTheTimeline_thenEachIsItsOwnStandaloneIncompleteItem() throws {
+        // given — Review round 1, item 2: an id-less delta is never merged into anything.
+        let events = [
+            delta(0, messageID: nil, blockIndex: nil, "one"),
+            delta(1, messageID: nil, blockIndex: nil, "two")
+        ].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        // then — two separate items, not one accumulated "onetwo".
+        #expect(items.count == 2)
+        guard case .text(let first, true) = items[0].body else { Issue.record("expected streaming text"); return }
+        #expect(first == "one")
+        guard case .text(let second, true) = items[1].body else { Issue.record("expected streaming text"); return }
+        #expect(second == "two")
+    }
+
+    @Test
+    func givenADeltaStreamWithNoFinalMessage_whenBuildingTheTimeline_thenWhatArrivedShowsMarkedIncomplete() throws {
+        // given — the task ended (or was cancelled) mid-message: deltas arrived, no final assistant_text.
+        let events = [delta(0, "Look"), delta(1, "ing…")].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        // then
+        #expect(items.count == 1)
+        guard case .text(let text, let streaming) = items[0].body else { Issue.record("expected .text"); return }
+        #expect(text == "Looking…")
+        #expect(streaming, "an unterminated stream stays marked incomplete")
+    }
+
+    @Test
+    func givenAFinalTextWithNoPrecedingDeltas_whenBuildingTheTimeline_thenItAppearsAsAnOrdinaryCompleteItem() throws {
+        // given — a backend with no partial stream (codex/opencode/vibe), or claude without
+        // `--include-partial-messages`: the final text carries no matching in-progress item.
+        let events = [finalText(0, messageID: nil, blockIndex: nil, "Done.")].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        // then
+        #expect(items.count == 1)
+        guard case .text(let text, let streaming) = items[0].body else { Issue.record("expected .text"); return }
+        #expect(text == "Done.")
+        #expect(!streaming)
+    }
+
+    @Test
+    func givenAFiveThousandChunkStream_whenBuildingTheTimeline_thenItCompletesWellUnderASecond() {
+        // given — accumulation must be an O(1) dictionary lookup per delta, never a rescan of
+        // `items`, or a long stream turns quadratic.
+        let events = (0 ..< 5000).map { delta($0, "x") }.compactMap(TaskEvent.init(line:))
+        // when
+        let start = Date()
+        let items = Timeline.items(from: events)
+        let elapsed = Date().timeIntervalSince(start)
+        // then
+        #expect(items.count == 1)
+        guard case .text(let text, true) = items[0].body else { Issue.record("expected one streaming item"); return }
+        #expect(text.count == 5000)
+        #expect(elapsed < 1.0, "took \(elapsed)s for 5,000 chunks")
     }
 }
 

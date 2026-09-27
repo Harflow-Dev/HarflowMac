@@ -38,6 +38,8 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
+        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2).
+        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesAvailability == .loading)
 
         // when
@@ -67,6 +69,9 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
+        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2).
+        await waitUntil { harness.sut.task != nil }
+        harness.sut.didSelectTab(.summary)
 
         // then
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
@@ -81,6 +86,8 @@ extension TaskDetailVMTests {
         harness.eventsBox.value = [editCall("c1", path: "/repo/a.swift", seq: 0), okResult("c1", seq: 1)]
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.task != nil }
+        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // when — a second call arrives; `itemsPublisher` firing is what makes the VM re-read events
@@ -100,6 +107,8 @@ extension TaskDetailVMTests {
         harness.eventsBox.value = [editCall("c1", path: "/repo/a.swift", seq: 0), okResult("c1", seq: 1)]
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.task != nil }
+        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // when — the underlying log was replaced (a reset); the VM's own `events(for:)` read now
@@ -120,6 +129,11 @@ extension TaskDetailVMTests {
         harness.eventsBox.value = [editCall("c1", path: "/repo/a.swift", seq: 0), okResult("c1", seq: 1)]
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.task != nil }
+        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2);
+        // `tab` itself survives a disappear/reappear cycle (it is not part of the teardown), so the
+        // second `didAppear()` below recomputes Summary without needing to select the tab again.
+        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // when
