@@ -123,4 +123,19 @@ struct LineageTests {
         #expect(Lineage.finishedRoots(previous: before, current: after).map(\.taskID) == ["a"])
         #expect(Lineage.finishedRoots(previous: [], current: after).isEmpty, "a first listing notifies nothing")
     }
+
+    @Test
+    func givenRunningAndFinishedMembers_whenOrderingParallelColumns_thenRunningComeFirstAndEachGroupIsNewestFirst() {
+        // given
+        let members = [
+            task("oldDone", status: "completed", group: "g", minute: 1),
+            task("oldRun", status: "running", group: "g", minute: 2),
+            task("newDone", status: "failed", group: "g", minute: 3),
+            task("newRun", status: "running", group: "g", minute: 4)
+        ]
+        // when
+        let ordered = Lineage.parallelColumnOrder(members).map(\.taskID)
+        // then
+        #expect(ordered == ["newRun", "oldRun", "newDone", "oldDone"])
+    }
 }

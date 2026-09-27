@@ -26,9 +26,9 @@ extension SidebarVMTests {
         BackendCatalog(entries: entries.map { BackendCatalogEntry(backend: $0.0, installed: $0.1) }, state: state)
     }
 
-    @Test func givenACatalogAndHistoryOnlyBackends_whenComputed_thenTabsAreAllPlusRegistryOrderPlusAlphabeticalHistoryOnly() async {
-        // given — Review round 1 item 5: registry order from the catalog, then history-only names
-        // sorted alphabetically, with "All" always first.
+    @Test func givenEqualUsage_whenComputed_thenTiesKeepRegistryOrderThenAlphabeticalHistoryOnly() async {
+        // given — "All" first, then most-used; equal counts keep registry order from the catalog,
+        // then history-only names alphabetically, and an unused backend comes last.
         let harness = makeSUT(catalog: catalog([("claude", true), ("codex", false)]))
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
@@ -43,7 +43,29 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { sut.backendTabs.count == 5 }
-        #expect(sut.backendTabs.map(\.id) == ["all", "claude", "codex", "alpha", "zeta"])
+        #expect(sut.backendTabs.map(\.id) == ["all", "claude", "alpha", "zeta", "codex"])
+    }
+
+    @Test func givenDifferentUsage_whenComputed_thenTabsAreOrderedByMostUsed() async {
+        // given
+        let harness = makeSUT(catalog: catalog([("claude", true), ("codex", true), ("opencode", true), ("vibe", true)]))
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        sut.didAppear()
+
+        // when — vibe 3, codex 2, claude 1, opencode 0
+        tasksSubject.send([
+            task(id: "v1", backend: "vibe", status: "completed"),
+            task(id: "v2", backend: "vibe", status: "completed"),
+            task(id: "v3", backend: "vibe", status: "completed"),
+            task(id: "x1", backend: "codex", status: "completed"),
+            task(id: "x2", backend: "codex", status: "completed"),
+            task(id: "c1", backend: "claude", status: "completed")
+        ])
+
+        // then
+        await waitUntil { sut.backendTabs.map(\.id).dropFirst().first == "vibe" }
+        #expect(sut.backendTabs.map(\.id) == ["all", "vibe", "codex", "claude", "opencode"])
     }
 
     @Test func givenABackendReportedNotInstalled_whenTabsComputed_thenItIsMarkedNotFound() async {

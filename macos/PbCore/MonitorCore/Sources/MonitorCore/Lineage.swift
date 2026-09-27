@@ -153,6 +153,16 @@ public enum Lineage {
         return current.filter { $0.isRoot && $0.status.isTerminal && wasRunning.contains($0.taskID) }
     }
 
+    /// Left-to-right order for a Parallel group's columns: running members first, then finished
+    /// ones, each newest first — so what is still working sits on the left and what is done drifts
+    /// to the right.
+    public static func parallelColumnOrder(_ members: [TaskInfo]) -> [TaskInfo] {
+        members.sorted { lhs, rhs in
+            if lhs.status.isRunning != rhs.status.isRunning { return lhs.status.isRunning }
+            return startedDescending(lhs, rhs)
+        }
+    }
+
     static func startedAscending(_ a: TaskInfo, _ b: TaskInfo) -> Bool {
         let left = a.startedAt ?? .distantPast, right = b.startedAt ?? .distantPast
         return left == right ? a.taskID < b.taskID : left < right

@@ -246,7 +246,7 @@ final class ParallelVM: ParallelViewModel {
     /// rather than a value cached at the last `tasksPublisher` emission, so a busy/outcome/snapshot-
     /// only update still reflects the task's current fields (F4-40).
     private func recompute() {
-        let members = memberIDs.compactMap { useCase.task($0) }
+        let members = Lineage.parallelColumnOrder(memberIDs.compactMap { useCase.task($0) })
         columns = members.map(makeColumnModel)
         
         let footerTasks = memberIDs.compactMap { latestSnapshots[$0] ?? useCase.task($0) }
