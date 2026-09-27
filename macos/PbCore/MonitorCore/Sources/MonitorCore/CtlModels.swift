@@ -53,6 +53,9 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
 
     public var id: String { taskID }
     public let taskID: String
+    /// Parsed once here: the listing is sorted by start time on every sidebar update, and parsing
+    /// inside each comparison pinned the main thread on a large history.
+    public let startedAt: Date?
 
     public init?(_ value: JSONValue) {
         guard let object = value.objectValue, let id = object["task_id"]?.stringValue, !id.isEmpty else {
@@ -60,6 +63,7 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
         }
         raw = object
         taskID = id
+        startedAt = object["started_at"]?.stringValue.flatMap(ISODate.parse)
     }
 
     private func string(_ key: String) -> String? { raw[key]?.stringValue }
@@ -70,7 +74,6 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     public var status: TaskStatus { TaskStatus(string("status") ?? "unknown") }
     public var freedom: String? { string("freedom") }
     public var startedAtRaw: String? { string("started_at") }
-    public var startedAt: Date? { startedAtRaw.flatMap(ISODate.parse) }
     public var durationSeconds: Double? { raw["duration_seconds"]?.doubleValue }
     public var parentTaskID: String? { string("parent_task_id") }
     public var spawnedBy: String? { string("spawned_by") }
@@ -144,14 +147,25 @@ public struct BackendAvailability: Equatable, Sendable {
 }
 
 public enum ISODate {
+    // Built once: creating a formatter costs far more than parsing with one, and a large listing
+    // parses a start time per task (this once froze the sidebar). `ISO8601DateFormatter` is
+    // thread-safe, so sharing them is fine.
+    private nonisolated(unsafe) static let withFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private nonisolated(unsafe) static let plain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     /// Python's `datetime.isoformat()` with and without fractional seconds, and with a `+00:00`
     /// offset (which `ISO8601DateFormatter` accepts).
     public static func parse(_ text: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = withFraction.date(from: text) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
         if let date = plain.date(from: text) { return date }
         // Python writes microseconds (6 digits); the formatter only takes up to 3 on some systems.
         if let dot = text.firstIndex(of: "."), let zoneStart = text[dot...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" }) {

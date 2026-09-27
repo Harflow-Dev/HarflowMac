@@ -451,4 +451,22 @@ struct ConversationTests {
         #expect(Lineage.oldestSurvivor(among: ["b", "c"], in: tasks) == nil)
         #expect(Lineage.oldestSurvivor(among: [], in: tasks) == nil)
     }
+
+    // MARK: - Performance
+
+    @Test
+    func givenALargeListing_whenSectioned_thenItStaysFastEnoughForTheMainThread() {
+        // given — the sidebar sections the whole listing on every update; a slow date parse inside
+        // the start-time sort once pinned the main thread with a few hundred tasks.
+        let tasks = (0 ..< 2000).map { index in
+            task("t\(index)", status: index % 7 == 0 ? "running" : "completed",
+                 parentTaskID: index % 3 == 0 && index > 0 ? "t\(index - 1)" : nil, minute: index % 60)
+        }
+        let start = Date()
+        // when
+        let sections = Lineage.conversationSections(tasks)
+        // then
+        #expect(!sections.recent.isEmpty)
+        #expect(Date().timeIntervalSince(start) < 1.0)
+    }
 }
