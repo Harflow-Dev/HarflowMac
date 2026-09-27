@@ -485,6 +485,38 @@ import Testing
         #expect(sut.runningRows.first?.activityIsMonospaced == false)
     }
     
+    @Test func givenTextFollowedByANonTextItem_whenNoToolIsRunning_thenTheActivityLineKeepsTheLastText() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let useCase = harness.useCase
+        let tasksSubject = harness.tasksSubject
+        sut.didAppear()
+        tasksSubject.send([task(id: "abc123", status: "running")])
+        await waitUntil { sut.runningRows.count == 1 }
+
+        let items = PassthroughSubject<[TimelineItem], Never>()
+        let lease = MockEventStreamLease()
+        given(lease).release().willReturn()
+        given(useCase).acquireEventLease(.value("abc123")).willReturn(lease)
+        given(useCase).itemsPublisher(.value("abc123")).willReturn(items.eraseToAnyPublisher())
+        given(useCase).current(.value("abc123")).willReturn(nil)
+
+        // when — a notice lands after the text, and nothing is running
+        sut.didAppearRunningRow("abc123")
+        let events = [
+            TaskEvent(line: #"{"v": 1, "seq": 0, "task_id": "t1", "kind": "assistant_text", "text": "Looking at the tokenizer next."}"#)!,
+            TaskEvent(line: #"{"v": 1, "seq": 1, "task_id": "t1", "kind": "notice", "text": "rate limited, retrying"}"#)!
+        ]
+        let timeline = Timeline.items(from: events)
+        #expect(timeline.count == 2, "the notice must be its own trailing item for this test to mean anything")
+        items.send(timeline)
+
+        // then
+        await waitUntil { sut.runningRows.first?.activityLine != nil }
+        #expect(sut.runningRows.first?.activityLine == "Looking at the tokenizer next.")
+    }
+
     // MARK: - Teardown (judgement call, see MenuBarVM's header comment)
     
     @Test func givenDidDisappear_whenCalled_thenPerRowLeasesReleaseButCoreDataStaysLive() async {
