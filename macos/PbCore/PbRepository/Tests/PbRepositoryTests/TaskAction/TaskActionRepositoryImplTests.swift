@@ -307,8 +307,9 @@ import Testing
         let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"brandnew"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let taskListRepository = MockTaskListRepository()
-        var refreshed = false
-        given(taskListRepository).refresh().willProduce { refreshed = true }
+        let refreshed = LockedBox(false)
+        given(taskListRepository).refreshAndWait().willProduce { refreshed.mutate { $0 = true }; return .success(()) }
+        given(taskListRepository).refresh().willReturn()
         let sut = TaskActionRepositoryImpl(
             toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: MockTaskSnapshotRepository()
         )
@@ -316,9 +317,12 @@ import Testing
         // when
         let id = try await sut.run(RunRequest(backend: "claude", repo: "/tmp", prompt: "hi"))
 
-        // then
+        // then — a waiting refresh, never the fire-and-forget one: with a pass already in flight,
+        // `refresh()` returns before the new task is listed.
         #expect(id == "brandnew")
-        #expect(refreshed)
+        #expect(refreshed.value)
+        verify(taskListRepository).refreshAndWait().called(1)
+        verify(taskListRepository).refresh().called(0)
         #expect(sut.outcome("brandnew") == nil)
     }
 

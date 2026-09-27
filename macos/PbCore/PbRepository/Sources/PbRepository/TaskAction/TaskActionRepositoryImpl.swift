@@ -165,7 +165,10 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
         case .success(let client):
             switch await client.run(request) {
             case .success(let id):
-                await taskListRepository.refresh()
+                // `refreshAndWait`, not `refresh`: with a pass already in flight `refresh()` only
+                // arms another and returns at once, so the caller could route to an id the published
+                // listing doesn't hold yet (macos/AGENTS.md, decision 12).
+                _ = await taskListRepository.refreshAndWait()
                 return id
             case .failure(let error):
                 throw error
