@@ -25,9 +25,14 @@ struct TimelinePaneModel {
     let start: Date?
     let emptyText: String?
     let subTaskStrip: SubTaskStripModel?
+    /// Shimmer instead of `rows`/`emptyText` (Monitor piece 11, Plan review round 1 item 4): true
+    /// only while no member has any REAL event content yet (`rows` holds nothing but synthetic turn
+    /// separators, if that) and at least one member's own event stream is still `.loading` — never
+    /// once real content exists, and never for `.unavailable` (that keeps today's honest message).
+    let isLoading: Bool
 
     @MainActor
-    static let empty = TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil)
+    static let empty = TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
 
     /// Row count alone misses a streamed reply growing inside the *last* row without adding a new
     /// one (Review round 1, item 5) — combined with that row's own content length, growth of
@@ -58,26 +63,32 @@ struct TimelinePaneView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        if let emptyText = model.emptyText {
-                            Text(emptyText).font(.pb(.body)).foregroundStyle(.secondary)
-                        }
-                        ForEach(model.rows) { row in
-                            rowView(row).id(row.id)
-                        }
-                        if let subTaskStrip = model.subTaskStrip {
-                            SubTaskStripView(model: subTaskStrip)
-                        }
-                        Color.clear.frame(height: 1).id("bottom")
-                    }
+            if model.isLoading {
+                SkeletonRows(count: 5, showsBadge: false)
                     .padding(14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            if let emptyText = model.emptyText {
+                                Text(emptyText).font(.pb(.body)).foregroundStyle(.secondary)
+                            }
+                            ForEach(model.rows) { row in
+                                rowView(row).id(row.id)
+                            }
+                            if let subTaskStrip = model.subTaskStrip {
+                                SubTaskStripView(model: subTaskStrip)
+                            }
+                            Color.clear.frame(height: 1).id("bottom")
+                        }
+                        .padding(14)
+                    }
+                    .onChange(of: TimelinePaneModel.scrollTrigger(for: model.rows)) { _, _ in
+                        if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+                    }
+                    .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
-                .onChange(of: TimelinePaneModel.scrollTrigger(for: model.rows)) { _, _ in
-                    if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
-                }
-                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             }
         }
     }
@@ -184,9 +195,14 @@ struct SubTaskStripView: View {
             ),
             ConversationTimelineRow(id: "t#2", taskID: "t", timestamp: start, kind: .item(PreviewFixtures.finishedItem()), live: false)
         ],
-        start: start, emptyText: nil, subTaskStrip: nil
+        start: start, emptyText: nil, subTaskStrip: nil, isLoading: false
     ))
     .frame(width: 500, height: 400)
+}
+
+#Preview("Loading") {
+    TimelinePaneView(model: TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
+        .frame(width: 500, height: 400)
 }
 
 #Preview("With a follow-up turn") {
@@ -203,7 +219,7 @@ struct SubTaskStripView: View {
             ),
             ConversationTimelineRow(id: "t2#1", taskID: "t2", timestamp: start.addingTimeInterval(60), kind: .item(PreviewFixtures.finishedItem()), live: false)
         ],
-        start: start, emptyText: nil, subTaskStrip: nil
+        start: start, emptyText: nil, subTaskStrip: nil, isLoading: false
     ))
     .frame(width: 500, height: 400)
 }

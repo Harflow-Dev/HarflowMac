@@ -26,9 +26,10 @@ extension TaskDetailVM {
     /// Rebuilds the Timeline tab's model: the concatenated conversation rows, whether the task is
     /// live (per-turn — a running spinner never appears on an older, already-terminal turn even
     /// while the newest one runs), and the sub-task strip (children of ANY member, Design point 3).
-    func recomputeTimeline(task: TaskInfo) {
+    /// `allChildren` is `recompute()`'s own `allConversationChildren()` result (Monitor piece 11) —
+    /// shared with `recomputeInspector`'s subtask count instead of each recomputing it separately.
+    func recomputeTimeline(task: TaskInfo, allChildren: [TaskInfo]) {
         let members = conversationMembers
-        let allChildren = allConversationChildren()
         let start = members.first?.startedAt
         let conversationTimelineMembers = members.map {
             ConversationItemMember(task: $0, items: itemsByMember[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
@@ -40,6 +41,11 @@ extension TaskDetailVM {
             onSelectTask: { [weak self] id in self?.didTapTask(id) }
         )
         let itemCount = rows.filter { if case .item = $0.kind { return true }; return false }.count
+        // Plan review round 1, item 4: a shimmer only while no member has any REAL content yet
+        // (ignoring synthetic separator rows — `itemCount`, not `rows.count`) AND at least one
+        // member's own event stream is still `.loading` — never once real content exists, and never
+        // for `.unavailable` (that keeps today's honest empty-log message).
+        let isLoading = itemCount == 0 && members.contains { (eventsAvailabilityByMember[$0.taskID] ?? .loading) == .loading }
         timelineModel = TimelinePaneModel(
             stepCountText: "\(itemCount) steps",
             rows: rows,
@@ -47,7 +53,8 @@ extension TaskDetailVM {
             emptyText: rows.isEmpty
             ? (task.status.isRunning ? "Waiting for the first event…" : "This task's event log is empty or was not found.")
             : nil,
-            subTaskStrip: subTaskStrip
+            subTaskStrip: subTaskStrip,
+            isLoading: isLoading
         )
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
         promptText = useCase.prompt(for: members[0].taskID)

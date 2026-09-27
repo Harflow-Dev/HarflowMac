@@ -17,7 +17,7 @@ import Testing
 @MainActor
 extension TaskDetailVMTests {
 
-    private func conversationTask(
+    func conversationTask(
         _ id: String, status: String = "completed", parentTaskID: String? = nil, spawnedBy: String? = nil,
         rootTaskID: String? = nil, sessionID: String? = "sess-1234567890", liveInput: Bool = false, minute: Int = 0
     ) -> TaskInfo {
@@ -33,7 +33,7 @@ extension TaskDetailVMTests {
         return TaskInfo(.object(object))!
     }
 
-    private struct ConversationSUT {
+    struct ConversationSUT {
         let sut: TaskDetailVM
         let useCase: MockTaskDetailUseCase
         let routing: MockTaskDetailRouting
@@ -41,6 +41,11 @@ extension TaskDetailVMTests {
         let membersBox: Box<[TaskInfo]>
         let eventsBox: [String: Box<[TaskEvent]>]
         let childrenBox: [String: Box<[TaskInfo]>]
+        /// Counts `children(ofEach:)` calls (Codex review round 1, finding 1) — a plain call-count
+        /// verify is unreliable across this harness's OWN setup-time recomputes (`Just` publishers
+        /// each fire once on subscription), so a test measures a DELTA across one deliberate
+        /// recompute instead, the same pattern `TaskDetailVMTests.swift`'s `recomputeCountEffect` uses.
+        let childrenOfEachCallCount: Box<Int>
         /// Overridable per test (a Box, never a second `given(...)`, since Mockable's FIFO matching
         /// means a later `.value`/`.any` stub for the same member does not reliably win — see this
         /// file's header note). Defaults to "no earlier-turn child is ever outside scope".
@@ -88,7 +93,7 @@ extension TaskDetailVMTests {
     /// from the start — pass every member a test will EVER push through `membersBox`, including ones
     /// not yet in `initialMembers`, since a test adding a brand-new follow-up mid-run needs that
     /// member's stubs to already exist before it ever appears.
-    private func makeConversationSUT(openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil) -> ConversationSUT {
+    func makeConversationSUT(openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
@@ -140,11 +145,20 @@ extension TaskDetailVMTests {
             eventsBoxes[member.taskID] = stubs.events
             childrenBoxes[member.taskID] = stubs.children
         }
+        // One shared `LineageIndex`-style answer for every member's own children in one call
+        // (Codex review round 1, finding 1) — reads the SAME per-member boxes `children(of:)` above
+        // does, so a test setting `childrenBox["x"]?.value` still drives both.
+        let childrenOfEachCallCount = Box<Int>(0)
+        given(useCase).children(ofEach: .any).willProduce { ids in
+            childrenOfEachCallCount.value += 1
+            return Dictionary(ids.map { ($0, childrenBoxes[$0]?.value ?? []) }, uniquingKeysWith: { first, _ in first })
+        }
 
         let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing)
         return ConversationSUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, membersBox: membersBox,
-            eventsBox: eventsBoxes, childrenBox: childrenBoxes, cancelScopeBox: cancelScopeBox, ancestorsBox: ancestorsBox
+            eventsBox: eventsBoxes, childrenBox: childrenBoxes, childrenOfEachCallCount: childrenOfEachCallCount,
+            cancelScopeBox: cancelScopeBox, ancestorsBox: ancestorsBox
         )
     }
 
@@ -483,51 +497,6 @@ extension TaskDetailVMTests {
         // whole conversation it used to belong to.
         await waitUntil { harness.sut.task?.taskID == "b" }
         #expect(harness.sut.conversationMembers.map(\.taskID) == ["b"])
-    }
-
-    // MARK: - Leases: one per member, acquired/released, a new member is picked up
-
-    @Test func givenAConversationOfTwo_whenAppearing_thenEachMemberGetsItsOwnLeaseAndDisappearReleasesBoth() async {
-        // given
-        let taskA = conversationTask("a", status: "completed", minute: 0)
-        let taskB = conversationTask("b", status: "completed", parentTaskID: "a", minute: 1)
-        let harness = makeConversationSUT(openedAs: "a", initialMembers: [taskA, taskB])
-
-        // when
-        harness.sut.didAppear()
-        harness.tasksSubject.send([taskA, taskB])
-        await waitUntil { harness.sut.task != nil }
-
-        // then
-        verify(harness.useCase).acquireEventLease(.value("a")).called(1)
-        verify(harness.useCase).acquireEventLease(.value("b")).called(1)
-
-        // when
-        harness.sut.didDisappear()
-
-        // then — both leases release (idempotent `release()` stub tolerates either order).
-        verify(harness.useCase).acquireEventLease(.value("a")).called(1)
-        verify(harness.useCase).acquireEventLease(.value("b")).called(1)
-    }
-
-    @Test func givenAFollowUpArrivesAfterAppear_whenTheListingUpdates_thenTheNewMemberGetsItsOwnLeaseImmediately() async {
-        // given — starts as a single-member conversation, "a"; "b" (its future follow-up) is
-        // pre-stubbed but not yet a member, so its lease truly is acquired only once it appears.
-        let taskA = conversationTask("a", status: "completed", minute: 0)
-        let taskB = conversationTask("b", status: "running", parentTaskID: "a", minute: 1)
-        let harness = makeConversationSUT(openedAs: "a", initialMembers: [taskA], stubbedMembers: [taskA, taskB])
-        harness.sut.didAppear()
-        harness.tasksSubject.send([taskA])
-        await waitUntil { harness.sut.task != nil }
-        verify(harness.useCase).acquireEventLease(.value("b")).called(0)
-
-        // when — "b" appears as a follow-up (a resume of "a").
-        harness.membersBox.value = [taskA, taskB]
-        harness.tasksSubject.send([taskA, taskB])
-
-        // then
-        await waitUntil { harness.sut.task?.taskID == "b" }
-        verify(harness.useCase).acquireEventLease(.value("b")).called(1)
     }
 
     // MARK: - Timeline concatenation order and turn separators

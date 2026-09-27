@@ -22,6 +22,7 @@ final class SidebarViewModelMock: SidebarViewModel {
     var recentRows: [TaskRowModel]
     var listErrorMessage: String?
     var emptyStateMessage: String?
+    var showsLoadingSkeleton: Bool
     var isConnected: Bool
     var connectionLine: String
     var backendTabs: [BackendTab]
@@ -54,6 +55,7 @@ final class SidebarViewModelMock: SidebarViewModel {
         ],
         listErrorMessage: String? = nil,
         emptyStateMessage: String? = nil,
+        showsLoadingSkeleton: Bool = false,
         isConnected: Bool = true,
         connectionLine: String = "connected · polybridge-ctl",
         backendTabs: [BackendTab] = [.all, BackendTab(id: "claude", isNotFound: false), BackendTab(id: "codex", isNotFound: false)],
@@ -69,6 +71,7 @@ final class SidebarViewModelMock: SidebarViewModel {
         self.recentRows = recentRows
         self.listErrorMessage = listErrorMessage
         self.emptyStateMessage = emptyStateMessage
+        self.showsLoadingSkeleton = showsLoadingSkeleton
         self.isConnected = isConnected
         self.connectionLine = connectionLine
         self.backendTabs = backendTabs

@@ -124,6 +124,17 @@ final class SidebarVM: SidebarViewModel {
     /// recompute it), so it cannot be `private(set)` — `private` is file-scoped in Swift, same
     /// reasoning as `installBannerModel` just below.
     var emptyStateMessage: String?
+    /// A shimmer placeholder instead of an empty list (Plan review round 1 item 4) — true only
+    /// before the first listing arrives, with no error and no install banner already occupying the
+    /// space (see `computeShowsLoadingSkeleton()`). Starts `true`: before ANY publisher has fired at
+    /// all (the gap between `didAppear()` and the first `recompute()`), the list is otherwise blank
+    /// with no message at all — exactly the stall this shimmer replaces.
+    ///
+    /// Not `private(set)`: `SidebarVM+InstallBanner.swift`'s `recomputeInstallBanner()` writes this
+    /// too (Codex review round 1, finding 3) — a banner appearing or clearing before the first
+    /// listing arrives must recompute it there too, same reasoning as `emptyStateMessage` above.
+    /// `private` is file-scoped in Swift.
+    var showsLoadingSkeleton = true
     private(set) var isConnected = false
     private(set) var connectionLine: String
     /// "All" plus every backend polybridge reports (registry order), plus any backend seen only in
@@ -163,6 +174,15 @@ final class SidebarVM: SidebarViewModel {
     // `SidebarVM+Retention.swift` (Review round 1, item 4's "retention while open"), so — same
     // reasoning as the install-banner properties above — they cannot be `private`.
     @ObservationIgnored var latestTasks: [TaskInfo] = []
+    /// Built together with `latestTasks` — never separately, and never lazily inside `recompute()`
+    /// (Plan review round 1, item 1): `tryApplyPendingReveal()` and the ←/→ keyboard paths
+    /// (`didPressCollapse()`/`didPressExpand()`/`hasChildren(_:)`) run OUTSIDE `recompute()` too (the
+    /// `tasksPublisher` sink calls `tryApplyPendingReveal()` before `recompute()`), so both need an
+    /// index that already matches the current `latestTasks` rather than one `recompute()` would
+    /// build later. `recompute()`/`normalized(_:)`/`migrateCollapsedIDsForRetention()` all reuse this
+    /// same instance instead of each rebuilding the whole conversation tree from `latestTasks`
+    /// (measured: 0.36s/recompute on the claude tab of a 532-task real listing before this fix).
+    @ObservationIgnored var conversationIndex = ConversationIndex([])
     @ObservationIgnored var latestListError: ToolError?
     @ObservationIgnored private var latestHasListed = false
     @ObservationIgnored private var latestCatalog: BackendCatalog
@@ -314,9 +334,20 @@ final class SidebarVM: SidebarViewModel {
 
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)
+            // Deliberately NOT `.removeDuplicates()` (Codex review round 1, finding 2): the listing
+            // is republished with byte-identical content while a task runs (≥1/s), and that repeat
+            // publication is what refreshes every row's relative `Format.age`/running clock — a task
+            // still running now genuinely reads differently a minute later even though nothing in
+            // `tasks` itself changed. Deduping this stream froze that text at whatever it was the
+            // last time the array's CONTENT changed. `recompute()` is cheap now (Monitor piece 11),
+            // so there is no cost reason to suppress a same-content republish either.
             .sink { [weak self] tasks in
                 guard let self else { return }
                 latestTasks = tasks
+                // Built together with `latestTasks`, before anything below reads it (Plan review
+                // round 1, item 1) — `tryApplyPendingReveal()` runs before `recompute()` and must see
+                // an index that already matches this listing.
+                conversationIndex = ConversationIndex(tasks)
                 // A reveal that arrived before its task was listed retries here on every listing.
                 tryApplyPendingReveal()
                 recompute()
@@ -325,6 +356,7 @@ final class SidebarVM: SidebarViewModel {
 
         useCase.listErrorPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] error in
                 guard let self else { return }
                 latestListError = error
@@ -339,6 +371,7 @@ final class SidebarVM: SidebarViewModel {
 
         useCase.hasListedPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] hasListed in
                 guard let self else { return }
                 latestHasListed = hasListed
@@ -348,11 +381,13 @@ final class SidebarVM: SidebarViewModel {
 
         useCase.titlesPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] _ in self?.recompute() }
             .store(in: &cancellables)
 
         useCase.backendCatalogPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] catalog in
                 guard let self else { return }
                 latestCatalog = catalog
@@ -398,21 +433,26 @@ final class SidebarVM: SidebarViewModel {
                 || task.taskID.lowercased().contains(query)
                 || task.repoPath.lowercased().contains(query))
         }
-        let sections = Lineage.conversationSections(latestTasks, matches: matches)
+        // `conversationIndex` was built together with `latestTasks` (Plan review round 1, item 1),
+        // so every conversation-lineage query below reuses it instead of rebuilding the whole
+        // conversation tree from scratch — the fix for the 0.36s/recompute cost `forcedExpandedIDs`
+        // used to have on a 532-task real listing (O(n²) over the number of matching tasks, each
+        // rebuild an O(n) tree construction).
+        let sections = conversationIndex.sections(matches: matches)
         // Retention membership is recorded from the UNFILTERED tree (Codex review round 2, finding
         // 3), never `sections` above: an active search/backend filter can hide a whole conversation
         // — and any follow-up it gets while hidden — from `sections.running`/`sections.recent`
         // entirely (`keep(tree)`), so recording only from the filtered tree would forget that
         // conversation's membership for as long as the filter stays active, and a prune during that
         // window could never hand off once the filter clears.
-        recordMembership(Lineage.conversationSections(latestTasks))
+        recordMembership(conversationIndex.sections())
 
         // Filter forces ancestors of an actual match expanded, for *display only* — this never
         // touches `collapsedTaskIDs`, so clearing the filter restores exactly what the person had
         // collapsed (Design point 5's "Filter" rule).
         let forcedExpandedIDs: Set<String> = isFilterActive
             ? Set(latestTasks.filter(matches).flatMap { task in
-                Lineage.conversationAncestors(of: task.taskID, in: latestTasks).map(\.id)
+                conversationIndex.ancestors(ofConversationContaining: task.taskID).map(\.id)
             })
             : []
 
@@ -427,6 +467,20 @@ final class SidebarVM: SidebarViewModel {
         selection = normalized(selection)
 
         emptyStateMessage = computeEmptyStateMessage()
+        showsLoadingSkeleton = computeShowsLoadingSkeleton()
+    }
+
+    /// Plan review round 1, item 4 / Codex review round 1, finding 3: a shimmer instead of an empty
+    /// list, but only before anything else already occupies that space — same precedence order
+    /// `computeEmptyStateMessage()` uses for its own first guard.
+    ///
+    /// Not `private`: `SidebarVM+InstallBanner.swift`'s `recomputeInstallBanner()` calls this too,
+    /// same reasoning as `computeEmptyStateMessage()` above — an install banner can appear or clear
+    /// before the first listing arrives (via `installStatePublisher()`/etc., none of which call
+    /// `recompute()`), and `showsLoadingSkeleton` must not go stale until some unrelated event
+    /// happens to recompute it.
+    func computeShowsLoadingSkeleton() -> Bool {
+        !latestHasListed && latestListError == nil && installBannerModel == nil
     }
 
     // MARK: - Backend tabs (Monitor piece 6)
@@ -492,67 +546,6 @@ final class SidebarVM: SidebarViewModel {
         return "No \(selectedBackend) tasks yet."
     }
 
-    /// Flattens one conversation tree into rows, hiding the descendants of a collapsed node (unless
-    /// `forcedExpandedIDs` overrides it for the current filter) — a node's own row is always kept,
-    /// only its subtree can be hidden. Status/age/meta come from the conversation's CURRENT member;
-    /// title from its FIRST (Design point 2). Row `id` is the conversation id (its first member),
-    /// so a click already selects the whole conversation with no separate normalisation needed.
-    private func flattenedRows(_ root: ConversationNode, forcedExpandedIDs: Set<String>) -> [TaskRowModel] {
-        var rows: [TaskRowModel] = []
-        var hiddenBelowIndent: Int?
-        for entry in root.flattenedWithGuides() {
-            if let hiddenBelowIndent, entry.indent > hiddenBelowIndent { continue }
-            hiddenBelowIndent = nil
-
-            let node = entry.node
-            let conversation = node.conversation
-            let current = conversation.current
-            let hasChildren = !node.children.isEmpty
-            let isCollapsed = collapsedTaskIDs.contains(conversation.id) && !forcedExpandedIDs.contains(conversation.id)
-            rows.append(TaskRowModel(
-                id: conversation.id,
-                backend: current.backend,
-                title: useCase.title(conversation.first.taskID),
-                statusLabel: current.status.label,
-                statusColor: StatusColor.of(current.status),
-                ageText: Format.age(current.startedAt),
-                indent: entry.indent,
-                metaText: metaText(for: node, isCollapsed: isCollapsed),
-                isRunning: current.status.isRunning,
-                startedAt: current.startedAt,
-                durationSeconds: current.durationSeconds,
-                hasChildren: hasChildren,
-                isExpanded: !isCollapsed,
-                guides: entry.guides
-            ))
-            if hasChildren, isCollapsed { hiddenBelowIndent = entry.indent }
-        }
-        return rows
-    }
-
-    /// Expanded: today's "repo · N sub-tasks · freedom" line. Collapsed (Design point 4): the
-    /// subtree summary, "N sub-tasks, M running" with "M running" omitted when nothing underneath
-    /// is running — a running descendant still counts even though its own row is hidden.
-    private func metaText(for node: ConversationNode, isCollapsed: Bool) -> String {
-        let current = node.conversation.current
-        var parts = [Format.repo(current.repoPath)]
-        if node.descendantCount > 0 {
-            parts.append(isCollapsed ? collapsedSummary(for: node) : "\(node.descendantCount) sub-task\(node.descendantCount == 1 ? "" : "s")")
-        }
-        if let freedom = current.freedom { parts.append(freedom) }
-        return parts.joined(separator: " · ")
-    }
-
-    private func collapsedSummary(for node: ConversationNode) -> String {
-        let base = "\(node.descendantCount) sub-task\(node.descendantCount == 1 ? "" : "s")"
-        let running = runningDescendantCount(node)
-        return running > 0 ? "\(base), \(running) running" : base
-    }
-
-    private func runningDescendantCount(_ node: ConversationNode) -> Int {
-        node.children.reduce(0) { $0 + ($1.conversation.current.status.isRunning ? 1 : 0) + runningDescendantCount($1) }
-    }
-
     // MARK: - Reveal (settled plan, Design point 5)
 
     private func handleReveal(_ reveal: PendingReveal) {
@@ -569,7 +562,7 @@ final class SidebarVM: SidebarViewModel {
     private func tryApplyPendingReveal() -> Bool {
         guard let reveal = pendingRevealToApply else { return false }
         guard latestTasks.contains(where: { $0.taskID == reveal.taskID }) else { return false }
-        for ancestor in Lineage.conversationAncestors(of: reveal.taskID, in: latestTasks) { collapsedTaskIDs.remove(ancestor.id) }
+        for ancestor in conversationIndex.ancestors(ofConversationContaining: reveal.taskID) { collapsedTaskIDs.remove(ancestor.id) }
         pendingRevealToApply = nil
         routing.consumeReveal(requestID: reveal.requestID)
         return true
@@ -582,7 +575,7 @@ final class SidebarVM: SidebarViewModel {
         if !collapsedTaskIDs.contains(id), hasChildren(id) {
             collapsedTaskIDs.insert(id)
             recompute()
-        } else if let parentID = Lineage.conversationAncestors(of: id, in: latestTasks).last?.id {
+        } else if let parentID = conversationIndex.ancestors(ofConversationContaining: id).last?.id {
             routing.select(.task(parentID))
         }
     }
@@ -594,6 +587,6 @@ final class SidebarVM: SidebarViewModel {
     }
 
     private func hasChildren(_ id: String) -> Bool {
-        !Lineage.conversationChildren(of: id, in: latestTasks).isEmpty
+        !conversationIndex.children(of: id).isEmpty
     }
 }

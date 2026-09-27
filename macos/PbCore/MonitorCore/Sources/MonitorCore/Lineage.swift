@@ -56,6 +56,92 @@ public struct SidebarSections: Equatable, Sendable {
     public init() {}
 }
 
+/// A one-shot index over `[TaskInfo]`'s task-level lineage — built ONCE from a listing and reused
+/// for every `ancestors`/`children`/`siblings`/`cancelScope` query one recompute needs (Monitor
+/// piece 11 / Plan review round 1, item 2), instead of `Lineage.ancestors(of:in:)`/`children(of:in:)`/
+/// `siblings(of:in:)`/`cancelScope(of:in:)` each rebuilding their own map from `tasks` on every call.
+/// `TaskDetailVM.recompute()` calls several of these per conversation member per publication; this
+/// lets a caller build the shared maps once and reuse them across that whole recompute.
+///
+/// `ancestors`/`children`/`siblings` are built over the SAME `spawned_by` parent map
+/// `Lineage.parentMap(_:)` computes (known ids only, cycle-broken). `cancelScope` deliberately uses
+/// a SEPARATE, unfiltered `spawned_by` child map (Review round 2's exact match of `tasks.py`'s
+/// cascade): it never drops a link just because its spawner is missing from `tasks`, and needs no
+/// cycle-break since its own frontier walk already guards against revisiting a target. Semantics
+/// preserved exactly — each query returns exactly what the pre-piece-11 per-call `Lineage` statics
+/// did.
+public struct LineageIndex: Sendable {
+    private let byID: [String: TaskInfo]
+    private let parent: [String: String]
+    private let childrenByParent: [String: [TaskInfo]]
+    private let spawnedByChildren: [String: [String]]
+    private let byRootTaskID: [String: [String]]
+
+    public init(_ tasks: [TaskInfo]) {
+        byID = Dictionary(tasks.map { ($0.taskID, $0) }, uniquingKeysWith: { first, _ in first })
+        let parent = Lineage.parentMap(tasks)
+        self.parent = parent
+
+        var childrenByParent: [String: [TaskInfo]] = [:]
+        for (child, parentID) in parent {
+            if let task = byID[child] { childrenByParent[parentID, default: []].append(task) }
+        }
+        for key in childrenByParent.keys { childrenByParent[key]?.sort(by: Lineage.startedAscending) }
+        self.childrenByParent = childrenByParent
+
+        var spawnedByChildren: [String: [String]] = [:]
+        for task in tasks {
+            if let spawner = task.spawnedBy { spawnedByChildren[spawner, default: []].append(task.taskID) }
+        }
+        self.spawnedByChildren = spawnedByChildren
+
+        var byRootTaskID: [String: [String]] = [:]
+        for task in tasks {
+            if let root = task.rootTaskID { byRootTaskID[root, default: []].append(task.taskID) }
+        }
+        self.byRootTaskID = byRootTaskID
+    }
+
+    /// Root first, direct parent last — the breadcrumb above a sub-task.
+    public func ancestors(of taskID: String) -> [TaskInfo] {
+        var chain: [TaskInfo] = []
+        var cursor = parent[taskID]
+        while let id = cursor, let task = byID[id] {
+            chain.insert(task, at: 0)
+            cursor = parent[id]
+        }
+        return chain
+    }
+
+    public func children(of taskID: String) -> [TaskInfo] {
+        childrenByParent[taskID] ?? []
+    }
+
+    /// The current parent's other children (F4-38's lineage list) — every child of the nearest
+    /// ancestor, current task included, or none for a root task.
+    public func siblings(of taskID: String) -> [TaskInfo] {
+        guard let parentID = ancestors(of: taskID).last?.taskID else { return [] }
+        return children(of: parentID)
+    }
+
+    /// The exact scope `tasks.py`'s cancel cascade computes for `taskID` (`_cascade_targets`/
+    /// `lineage.lineage_closure`, ~tasks.py:1817 — Review round 2): the task itself, every
+    /// descendant reachable by following `spawned_by`, and every task whose `root_task_id` names it
+    /// directly (not transitively expanded further — matching the backend exactly).
+    public func cancelScope(of taskID: String) -> Set<String> {
+        var targets: Set<String> = [taskID]
+        var frontier = [taskID]
+        while let current = frontier.popLast() {
+            for child in spawnedByChildren[current] ?? [] where !targets.contains(child) {
+                targets.insert(child)
+                frontier.append(child)
+            }
+        }
+        for id in byRootTaskID[taskID] ?? [] { targets.insert(id) }
+        return targets
+    }
+}
+
 public enum Lineage {
     /// The parent a task is drawn under: its `spawned_by`, when that task is known and the link
     /// is not a cycle. A parent removed by retention makes the child a root.
@@ -123,22 +209,24 @@ public enum Lineage {
         return sections
     }
 
-    /// Root first, direct parent last — the breadcrumb above a sub-task.
+    /// Root first, direct parent last — the breadcrumb above a sub-task. A thin wrapper over a
+    /// fresh `LineageIndex` (Monitor piece 11) — same behaviour/complexity as before for a single
+    /// call; a caller making several of these queries over the same listing builds one
+    /// `LineageIndex` instead and reuses it.
     public static func ancestors(of taskID: String, in tasks: [TaskInfo]) -> [TaskInfo] {
-        let parent = parentMap(tasks)
-        let byID = Dictionary(tasks.map { ($0.taskID, $0) }, uniquingKeysWith: { first, _ in first })
-        var chain: [TaskInfo] = []
-        var cursor = parent[taskID]
-        while let id = cursor, let task = byID[id] {
-            chain.insert(task, at: 0)
-            cursor = parent[id]
-        }
-        return chain
+        LineageIndex(tasks).ancestors(of: taskID)
     }
 
+    /// A thin wrapper over a fresh `LineageIndex` — see `ancestors(of:in:)`'s doc.
     public static func children(of taskID: String, in tasks: [TaskInfo]) -> [TaskInfo] {
-        let parent = parentMap(tasks)
-        return tasks.filter { parent[$0.taskID] == taskID }.sorted(by: startedAscending)
+        LineageIndex(tasks).children(of: taskID)
+    }
+
+    /// The current parent's other children (F4-38's lineage list) — every child of the nearest
+    /// ancestor, current task included, or none for a root task. A thin wrapper over a fresh
+    /// `LineageIndex` — see `ancestors(of:in:)`'s doc.
+    public static func siblings(of taskID: String, in tasks: [TaskInfo]) -> [TaskInfo] {
+        LineageIndex(tasks).siblings(of: taskID)
     }
 
     public static func members(ofGroup name: String, in tasks: [TaskInfo]) -> [TaskInfo] {

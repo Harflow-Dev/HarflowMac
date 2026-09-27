@@ -89,6 +89,72 @@ extension TaskDetailVMTests {
         #expect(texts == ["PUBLISHED VIA ITEMS PUBLISHER"])
     }
 
+    // MARK: - Timeline loading shimmer (Monitor piece 11, Plan review round 1 item 4)
+
+    @Test
+    func givenNoRealContentYetAndAvailabilityStillLoading_whenBuiltTheTimeline_thenIsLoadingIsTrue() async {
+        // given — no items published yet, and the event stream hasn't reported `.available`/
+        // `.unavailable` either.
+        let harness = makeSUT()
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        harness.eventsAvailabilityBox.value = .loading
+        harness.itemsOverride.value = []
+
+        // when
+        harness.sut.didAppear()
+        harness.tasksSubject.send([running])
+
+        // then
+        await waitUntil { harness.sut.task != nil }
+        #expect(harness.sut.timelineModel.isLoading)
+        #expect(harness.sut.timelineModel.rows.isEmpty)
+    }
+
+    @Test
+    func givenRealContentArrives_whenAvailabilityIsStillLoading_thenIsLoadingClears() async {
+        // given — once a member has real event content, the shimmer must give way to it even if the
+        // stream technically hasn't settled to `.available` yet (a running task's own log is still
+        // being tailed).
+        let harness = makeSUT()
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        harness.eventsAvailabilityBox.value = .loading
+        harness.itemsOverride.value = []
+        harness.sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.timelineModel.isLoading }
+
+        // when
+        harness.itemsSubject.send(Timeline.items(from: [
+            TaskEvent(line: #"{"v":1,"seq":0,"kind":"assistant_text","text":"hello"}"#)!
+        ]))
+
+        // then
+        await waitUntil { !harness.sut.timelineModel.rows.isEmpty }
+        #expect(!harness.sut.timelineModel.isLoading)
+    }
+
+    @Test
+    func givenNoRealContentAndAvailabilityUnavailable_whenBuiltTheTimeline_thenIsLoadingStaysFalse() async {
+        // given — Plan review round 1, item 4: never shimmer for `.unavailable`; the honest
+        // "event log is empty or was not found" message keeps showing instead.
+        let harness = makeSUT()
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        harness.eventsAvailabilityBox.value = .unavailable
+        harness.itemsOverride.value = []
+
+        // when
+        harness.sut.didAppear()
+        harness.tasksSubject.send([running])
+
+        // then
+        await waitUntil { harness.sut.task != nil }
+        #expect(!harness.sut.timelineModel.isLoading)
+        #expect(harness.sut.timelineModel.emptyText != nil)
+    }
+
     // MARK: - Summary recomputes only while shown (Monitor piece 8, Codex review round 2, finding 2)
 
     @Test

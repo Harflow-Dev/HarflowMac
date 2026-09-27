@@ -90,6 +90,131 @@ public struct ConversationSections: Equatable, Sendable {
     public init() {}
 }
 
+/// A one-shot index over `[TaskInfo]`'s conversations (`Lineage.conversations(_:)`'s grouping) and
+/// the parent/child map used to place them in the sidebar's tree — built ONCE from a listing and
+/// reused for every conversation-lineage query one recompute needs (Monitor piece 11 / Plan review
+/// round 1, item 1), instead of each of `Lineage.conversationSections(_:matches:)`/
+/// `conversationAncestors(of:in:)`/`conversationChildren(of:in:)`/`conversationID(of:in:)`/
+/// `conversation(containing:in:)` rebuilding the whole conversation tree from scratch on every call.
+/// Measured: `SidebarVM`'s per-matching-task `forcedExpandedIDs` loop cost 0.36s/recompute on a
+/// 532-task real listing with a backend tab selected (113 matches) — O(n²) over the number of
+/// matching tasks, each rebuild being an O(n) tree construction. Those four `Lineage` statics above
+/// become thin wrappers over a fresh one-shot `ConversationIndex` — unchanged behaviour/complexity
+/// for a single call — while `SidebarVM` builds one per `recompute()` and reuses it.
+///
+/// A conversation's parent is the spawned_by of its FIRST member only, mapped to that spawner's own
+/// conversation — never any other member's `spawned_by`, which is exactly what keeps a branching
+/// resume from looping (e.g. A spawns X, X resumes A as B: B's own `spawned_by` == X is simply never
+/// consulted, so conversation(A,B) cannot end up parented under X even though X is correctly
+/// attached as ITS child). A defensive cycle-break — the same shape as `Lineage.parentMap`'s — still
+/// runs afterwards, since disk is not trusted.
+public struct ConversationIndex: Sendable {
+    private let byID: [String: Conversation]
+    private let memberToConversationID: [String: String]
+    private let parent: [String: String]
+    private let children: [String: [String]]
+
+    public init(_ tasks: [TaskInfo]) {
+        let convs = Lineage.conversations(tasks)
+        var byID: [String: Conversation] = [:]
+        var memberToConversationID: [String: String] = [:]
+        for conv in convs {
+            byID[conv.id] = conv
+            for member in conv.members where memberToConversationID[member.taskID] == nil {
+                memberToConversationID[member.taskID] = conv.id
+            }
+        }
+        self.byID = byID
+        self.memberToConversationID = memberToConversationID
+
+        var parent: [String: String] = [:]
+        for conv in convs {
+            guard let spawner = conv.first.spawnedBy,
+                  let spawnerConv = memberToConversationID[spawner],
+                  spawnerConv != conv.id else { continue }
+            parent[conv.id] = spawnerConv
+        }
+        for conv in convs {
+            var seen: Set<String> = [conv.id]
+            var cursor = parent[conv.id]
+            while let current = cursor {
+                if seen.contains(current) {
+                    parent[conv.id] = nil
+                    break
+                }
+                seen.insert(current)
+                cursor = parent[current]
+            }
+        }
+        self.parent = parent
+        var children: [String: [String]] = [:]
+        for (child, parentID) in parent { children[parentID, default: []].append(child) }
+        self.children = children
+    }
+
+    /// The id of the conversation `taskID` belongs to (its earliest member) — falls back to `taskID`
+    /// itself when it is not present in the indexed listing at all.
+    public func conversationID(of taskID: String) -> String {
+        memberToConversationID[taskID] ?? taskID
+    }
+
+    /// The whole conversation `taskID` belongs to, resolved from any of its members.
+    public func conversation(containing taskID: String) -> Conversation? {
+        memberToConversationID[taskID].flatMap { byID[$0] }
+    }
+
+    /// Root-first ancestor conversations above the one containing `taskID`.
+    public func ancestors(ofConversationContaining taskID: String) -> [Conversation] {
+        let id = conversationID(of: taskID)
+        var chain: [Conversation] = []
+        var cursor = parent[id]
+        while let current = cursor, let conv = byID[current] {
+            chain.insert(conv, at: 0)
+            cursor = parent[current]
+        }
+        return chain
+    }
+
+    /// `conversationID`'s own children in the sidebar's tree.
+    public func children(of conversationID: String) -> [Conversation] {
+        (children[conversationID] ?? []).compactMap { byID[$0] }
+    }
+
+    /// Build the sidebar's Running/Recent trees from the indexed conversations. `matches` is the
+    /// search/backend filter — a conversation is kept when any of its members, or any node beneath
+    /// it, matches.
+    ///
+    /// `.group` is checked here, and only here (Codex review round 1, finding 1) — exactly where
+    /// the old task-level `Lineage.sections(_:matches:)` checked it too: a ROOT (no parent)
+    /// conversation whose FIRST member carries a `.group` is a Parallel column, not a Running/Recent
+    /// entry, and is skipped entirely (Parallel's own listing, `Lineage.sections(_:matches:).parallel`,
+    /// shows it and its own children unchanged); a NON-root grouped conversation still nests
+    /// wherever its real spawner placed it, same as any other descendant.
+    public func sections(matches: (TaskInfo) -> Bool = { _ in true }) -> ConversationSections {
+        func node(_ id: String) -> ConversationNode {
+            let conv = byID[id]!
+            let kids = (children[id] ?? [])
+                .compactMap { byID[$0] }
+                .sorted { Lineage.startedAscending($0.first, $1.first) }
+                .map { node($0.id) }
+            return ConversationNode(conversation: conv, children: kids)
+        }
+        func keep(_ node: ConversationNode) -> Bool {
+            node.conversation.members.contains(where: matches) || node.children.contains(where: keep)
+        }
+
+        var sections = ConversationSections()
+        for (id, conv) in byID where parent[id] == nil && conv.first.group == nil {
+            let tree = node(conv.id)
+            guard keep(tree) else { continue }
+            if tree.anyRunning { sections.running.append(tree) } else { sections.recent.append(tree) }
+        }
+        sections.running.sort { Lineage.startedDescending($0.conversation.current, $1.conversation.current) }
+        sections.recent.sort { Lineage.startedDescending($0.conversation.current, $1.conversation.current) }
+        return sections
+    }
+}
+
 extension Lineage {
     /// The `parent_task_id` parent a task is a follow-up to: present only when that parent is known
     /// and the link is not a cycle — the same defences as `parentMap`, since disk is not trusted.
@@ -139,141 +264,53 @@ extension Lineage {
     /// The id of the conversation `taskID` belongs to (its earliest member) — used to normalise a
     /// selection made on any member back to the row that represents its whole conversation (Review
     /// round 1, item 5's selection normalisation). Falls back to `taskID` itself when it is not
-    /// present in `tasks` at all, so a stale/unknown id still normalises to something stable.
+    /// present in `tasks` at all, so a stale/unknown id still normalises to something stable. A thin
+    /// wrapper over a fresh `ConversationIndex` — see `conversationSections(_:matches:)`'s doc.
     public static func conversationID(of taskID: String, in tasks: [TaskInfo]) -> String {
-        conversations(tasks).first { conv in conv.members.contains { $0.taskID == taskID } }?.id ?? taskID
+        ConversationIndex(tasks).conversationID(of: taskID)
     }
 
     /// The whole conversation `taskID` belongs to, resolved from any of its members (settled
-    /// Design point 6: "TaskDetailVM for any member id resolves the whole conversation").
+    /// Design point 6: "TaskDetailVM for any member id resolves the whole conversation"). A thin
+    /// wrapper over a fresh `ConversationIndex` — see `conversationSections(_:matches:)`'s doc.
     public static func conversation(containing taskID: String, in tasks: [TaskInfo]) -> Conversation? {
-        conversations(tasks).first { conv in conv.members.contains { $0.taskID == taskID } }
-    }
-
-    /// Conversations plus the parent/child map used to place them in the sidebar's tree, computed
-    /// once and shared by `conversationSections(_:matches:)`, `conversationAncestors(of:in:)` and
-    /// `conversationChildren(of:in:)`.
-    ///
-    /// Grouped tasks (Parallel members) are NOT filtered out here (Codex review round 1, finding 1)
-    /// — mirroring the pre-piece-7 task-level tree exactly (`sections(_:matches:)`/`TaskNode`, which
-    /// never filtered `parentMap`/`childIDs` by `group` at all): a grouped task spawned by an
-    /// UNGROUPED conversation still nests under it, so a finished conversation with a still-running
-    /// grouped child stays in Running, and the old tree's shape (child nested under its real
-    /// spawner) is preserved. `.group` only matters at the ROOT decision in
-    /// `conversationSections(_:matches:)` — exactly where the old code's `if let group = task.group`
-    /// branch lived, deciding a ROOT's placement, never a descendant's.
-    ///
-    /// A conversation's parent is the spawned_by of its FIRST member only, mapped to that spawner's
-    /// own conversation — never any other member's `spawned_by`, which is exactly what keeps a
-    /// branching resume from looping (e.g. A spawns X, X resumes A as B: B's own `spawned_by` == X
-    /// is simply never consulted, so conversation(A,B) cannot end up parented under X even though X
-    /// is correctly attached as ITS child). A defensive cycle-break — the same shape as
-    /// `parentMap`'s — still runs afterwards, since disk is not trusted.
-    private static func conversationTreeMaps(_ tasks: [TaskInfo]) -> (byID: [String: Conversation], parent: [String: String], children: [String: [String]]) {
-        let convs = conversations(tasks)
-        let byID = Dictionary(uniqueKeysWithValues: convs.map { ($0.id, $0) })
-        var taskToConv: [String: String] = [:]
-        for conv in convs {
-            for member in conv.members where taskToConv[member.taskID] == nil { taskToConv[member.taskID] = conv.id }
-        }
-
-        var parent: [String: String] = [:]
-        for conv in convs {
-            guard let spawner = conv.first.spawnedBy, let spawnerConv = taskToConv[spawner], spawnerConv != conv.id else { continue }
-            parent[conv.id] = spawnerConv
-        }
-        for conv in convs {
-            var seen: Set<String> = [conv.id]
-            var cursor = parent[conv.id]
-            while let current = cursor {
-                if seen.contains(current) {
-                    parent[conv.id] = nil
-                    break
-                }
-                seen.insert(current)
-                cursor = parent[current]
-            }
-        }
-        var children: [String: [String]] = [:]
-        for (child, parentID) in parent { children[parentID, default: []].append(child) }
-        return (byID, parent, children)
+        ConversationIndex(tasks).conversation(containing: taskID)
     }
 
     /// Build the sidebar's Running/Recent trees from conversations (piece 7). `matches` is the
     /// search/backend filter — a conversation is kept when any of its members, or any node beneath
     /// it, matches.
     ///
-    /// `.group` is checked here, and only here (Codex review round 1, finding 1) — exactly where
-    /// the old task-level `sections(_:matches:)` checked it too: a ROOT (no parent) conversation
-    /// whose FIRST member carries a `.group` is a Parallel column, not a Running/Recent entry, and
-    /// is skipped entirely (Parallel's own listing, `sections(_:matches:).parallel`, shows it and
-    /// its own children unchanged); a NON-root grouped conversation still nests wherever its real
-    /// spawner placed it, same as any other descendant.
+    /// A thin wrapper over a fresh, one-shot `ConversationIndex` (Monitor piece 11) — same
+    /// behaviour and complexity as before for a single call. `SidebarVM` builds one `ConversationIndex`
+    /// per `recompute()` instead and calls `sections(matches:)` on it directly, so its own several
+    /// conversation-lineage queries per recompute share one build rather than each rebuilding the
+    /// whole conversation tree from scratch (measured: 0.36s/recompute on a 532-task real listing
+    /// with a backend tab selected, O(n²) over the number of matching tasks).
     public static func conversationSections(_ tasks: [TaskInfo], matches: (TaskInfo) -> Bool = { _ in true }) -> ConversationSections {
-        let (byID, parent, children) = conversationTreeMaps(tasks)
-
-        func node(_ id: String) -> ConversationNode {
-            let conv = byID[id]!
-            let kids = (children[id] ?? [])
-                .compactMap { byID[$0] }
-                .sorted { startedAscending($0.first, $1.first) }
-                .map { node($0.id) }
-            return ConversationNode(conversation: conv, children: kids)
-        }
-        func keep(_ node: ConversationNode) -> Bool {
-            node.conversation.members.contains(where: matches) || node.children.contains(where: keep)
-        }
-
-        var sections = ConversationSections()
-        for (id, conv) in byID where parent[id] == nil && conv.first.group == nil {
-            let tree = node(conv.id)
-            guard keep(tree) else { continue }
-            if tree.anyRunning { sections.running.append(tree) } else { sections.recent.append(tree) }
-        }
-        sections.running.sort { startedDescending($0.conversation.current, $1.conversation.current) }
-        sections.recent.sort { startedDescending($0.conversation.current, $1.conversation.current) }
-        return sections
+        ConversationIndex(tasks).sections(matches: matches)
     }
 
     /// Root-first ancestor conversations above the one containing `taskID` — the conversation
-    /// analogue of `ancestors(of:in:)`, used by the sidebar's collapse/reveal (piece 7).
+    /// analogue of `ancestors(of:in:)`, used by the sidebar's collapse/reveal (piece 7). A thin
+    /// wrapper over a fresh `ConversationIndex` — see `conversationSections(_:matches:)`'s doc.
     public static func conversationAncestors(of taskID: String, in tasks: [TaskInfo]) -> [Conversation] {
-        let (byID, parent, _) = conversationTreeMaps(tasks)
-        let id = conversationID(of: taskID, in: tasks)
-        var chain: [Conversation] = []
-        var cursor = parent[id]
-        while let current = cursor, let conv = byID[current] {
-            chain.insert(conv, at: 0)
-            cursor = parent[current]
-        }
-        return chain
+        ConversationIndex(tasks).ancestors(ofConversationContaining: taskID)
     }
 
-    /// The conversation `conversationID`'s own children in the sidebar's tree (piece 7).
+    /// The conversation `conversationID`'s own children in the sidebar's tree (piece 7). A thin
+    /// wrapper over a fresh `ConversationIndex` — see `conversationSections(_:matches:)`'s doc.
     public static func conversationChildren(of conversationID: String, in tasks: [TaskInfo]) -> [Conversation] {
-        let (byID, _, children) = conversationTreeMaps(tasks)
-        return (children[conversationID] ?? []).compactMap { byID[$0] }
+        ConversationIndex(tasks).children(of: conversationID)
     }
 
     /// The exact scope `tasks.py`'s cancel cascade computes for `taskID` (`_cascade_targets`/
     /// `lineage.lineage_closure`, ~tasks.py:1817 — Review round 2): the task itself, every
     /// descendant reachable by following `spawned_by`, and every task whose `root_task_id` names it
-    /// directly (not transitively expanded further — matching the backend exactly).
+    /// directly (not transitively expanded further — matching the backend exactly). A thin wrapper
+    /// over a fresh `LineageIndex` (Monitor piece 11) — see `Lineage.ancestors(of:in:)`'s doc.
     public static func cancelScope(of taskID: String, in tasks: [TaskInfo]) -> Set<String> {
-        var childrenOf: [String: [String]] = [:]
-        for task in tasks {
-            if let spawner = task.spawnedBy { childrenOf[spawner, default: []].append(task.taskID) }
-        }
-        var targets: Set<String> = [taskID]
-        var frontier = [taskID]
-        while let current = frontier.popLast() {
-            for child in childrenOf[current] ?? [] where !targets.contains(child) {
-                targets.insert(child)
-                frontier.append(child)
-            }
-        }
-        for task in tasks where task.rootTaskID == taskID { targets.insert(task.taskID) }
-        return targets
+        LineageIndex(tasks).cancelScope(of: taskID)
     }
 
     /// The deterministic survivor rule for "retention while open" (Review round 1, item 4 / Codex

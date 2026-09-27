@@ -132,6 +132,7 @@ extension TaskDetailVMTests {
         given(useCase).ancestors(of: .any).willReturn([])
         given(useCase).conversationMembers(of: .any).willReturn([running])
         given(useCase).children(of: .any).willReturn([])
+        given(useCase).children(ofEach: .any).willReturn([:])
         given(useCase).siblings(of: .any).willReturn([])
         given(useCase).snapshot(.any).willReturn(nil)
         let lease = MockEventStreamLease()

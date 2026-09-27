@@ -246,6 +246,9 @@ final class MenuBarVM: MenuBarViewModel {
 
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)
+            // Deliberately NOT `.removeDuplicates()` (Codex review round 1, finding 2 — see
+            // `SidebarVM`'s identical note): a byte-identical republish while a task runs is what
+            // refreshes its relative age/running clock; deduping this stream would freeze that text.
             .sink { [weak self] tasks in
                 guard let self else { return }
                 latestTasks = tasks
@@ -255,6 +258,7 @@ final class MenuBarVM: MenuBarViewModel {
 
         useCase.listErrorPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] error in
                 guard let self else { return }
                 latestListError = error
@@ -269,15 +273,17 @@ final class MenuBarVM: MenuBarViewModel {
 
         useCase.hasListedPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] hasListed in
                 guard let self else { return }
                 latestHasListed = hasListed
                 recompute()
             }
             .store(in: &cancellables)
-        
+
         useCase.titlesPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] _ in self?.recompute() }
             .store(in: &cancellables)
         

@@ -60,6 +60,7 @@ import Testing
         let refreshSnapshotEffect: Box<(() -> Void)?>
         let childrenBox: Box<[TaskInfo]>
         let itemsOverride: Box<[TimelineItem]?>
+        let recomputeCountEffect: Box<(() -> Void)?>
     }
 
     /// The fixtures `makeSUT` builds before wiring up `useCase`'s stubs — split out purely to keep
@@ -93,6 +94,12 @@ import Testing
         // `Timeline.items(from: events(for:))` (Monitor piece 8, Codex review round 2, finding 2)
         // sets this to something deliberately different from `eventsBox`'s own content.
         let itemsOverride = Box<[TimelineItem]?>(nil)
+        /// A hook run on every `useCase.title(_:)` call — `recompute()`'s own unconditional
+        /// `title = useCase.title(firstMember.taskID)` line, so a test counting invocations of this
+        /// hook is counting `recompute()` calls (Monitor piece 11's snapshot-publication dedup test).
+        /// Same FIFO reason as `refreshSnapshotEffect` above for why this is a hook installed here
+        /// rather than a re-stubbed `given(...)` call in the test itself.
+        let recomputeCountEffect = Box<(() -> Void)?>(nil)
     }
 
     @discardableResult
@@ -111,9 +118,17 @@ import Testing
 
         given(useCase).detail(.value(taskID)).willProduce { _ in fixtures.detailBox.value }
         given(useCase).task(.any).willProduce { id in id == taskID ? fixtures.detailBox.value : nil }
-        given(useCase).title(.any).willProduce { id in "Task \(id.prefix(8))" }
+        given(useCase).title(.any).willProduce { id in
+            fixtures.recomputeCountEffect.value?()
+            return "Task \(id.prefix(8))"
+        }
         given(useCase).ancestors(of: .any).willProduce { _ in fixtures.ancestorsBox.value }
         given(useCase).children(of: .value(taskID)).willProduce { _ in fixtures.childrenBox.value }
+        // Default: single-member scenario, so every requested id (there is only ever the one) maps
+        // to the same `childrenBox` `children(of:)` already answers with.
+        given(useCase).children(ofEach: .any).willProduce { ids in
+            Dictionary(ids.map { ($0, fixtures.childrenBox.value) }, uniquingKeysWith: { first, _ in first })
+        }
         given(useCase).siblings(of: .value(taskID)).willReturn([])
         // Default: a single-member conversation of exactly the fixed `taskID` — the same task every
         // existing (pre-piece-7) test already sets up via `detailBox`, so every property that now
@@ -185,10 +200,68 @@ import Testing
             ancestorsBox: fixtures.ancestorsBox,
             refreshSnapshotEffect: fixtures.refreshSnapshotEffect,
             childrenBox: fixtures.childrenBox,
-            itemsOverride: fixtures.itemsOverride
+            itemsOverride: fixtures.itemsOverride,
+            recomputeCountEffect: fixtures.recomputeCountEffect
         )
     }
     
+    // MARK: - Snapshot publication dedup (Monitor piece 11, Plan review round 1 item 3)
+
+    @Test
+    func givenASnapshotsPublicationThatDoesNotTouchAnyMember_whenPublished_thenNoRecomputeHappens() async {
+        // given — `snapshotsPublisher()` covers every task in the system; an update naming some
+        // OTHER task must never trigger a recompute of a screen showing this one. The count is
+        // installed from the start and the assertion is a DELTA (Monitor piece 11): `didAppear()`/
+        // `tasksSubject.send(...)` themselves schedule their own recomputes (including the shared
+        // `outcomesPublisher` `CurrentValueSubject`'s initial replay), so an absolute "count == 0"
+        // taken right after `sut.task != nil` becomes true would measure that startup noise, not
+        // whether the snapshot publish itself triggered anything.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        let recomputeCount = Box<Int>(0)
+        harness.recomputeCountEffect.value = { recomputeCount.value += 1 }
+        sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { sut.task != nil }
+        // Let every still-pending scheduled recompute from setup actually run before taking the
+        // baseline.
+        await waitUntil(timeout: 0.2) { false }
+        let baseline = recomputeCount.value
+
+        // when — an unrelated task's snapshot changes.
+        harness.snapshotsSubject.send(["some-other-task": task(id: "some-other-task")])
+
+        // then — no recompute follows within a generous window (this `waitUntil` always runs its
+        // full timeout here, since the condition it polls for must never become true).
+        await waitUntil(timeout: 0.3) { recomputeCount.value > baseline }
+        #expect(recomputeCount.value == baseline)
+    }
+
+    @Test
+    func givenASnapshotsPublicationThatTouchesTheCurrentMember_whenPublished_thenARecomputeFollows() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        let recomputeCount = Box<Int>(0)
+        harness.recomputeCountEffect.value = { recomputeCount.value += 1 }
+        sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { sut.task != nil }
+        await waitUntil(timeout: 0.2) { false }
+        let baseline = recomputeCount.value
+
+        // when — THIS conversation's own member gets a fresh snapshot entry.
+        harness.snapshotsSubject.send(["abc12345": task(id: "abc12345", resumeCommand: "cd /repo && claude --resume abc12345")])
+
+        // then
+        await waitUntil { recomputeCount.value > baseline }
+        #expect(recomputeCount.value > baseline)
+    }
+
     // MARK: - MS-DETAIL-1: loading vs. removed
     
     @Test func givenATaskNotYetListed_whenShown_thenLoadingIsDistinctFromRemoved() async {

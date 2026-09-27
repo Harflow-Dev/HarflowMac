@@ -29,6 +29,11 @@ protocol TaskDetailUseCase: Sendable {
     func title(_ id: String) -> String
     func ancestors(of id: String) -> [TaskInfo]
     func children(of id: String) -> [TaskInfo]
+    /// Every id's own children, from ONE `MonitorCore.LineageIndex` built over the whole listing
+    /// (Codex review round 1, finding 1) — used wherever a single recompute needs each conversation
+    /// member's children (`TaskDetailVM.allConversationChildren()`), instead of calling
+    /// `children(of:)` once per member and rebuilding the shared index that many times.
+    func children(ofEach ids: [String]) -> [String: [TaskInfo]]
     func siblings(of id: String) -> [TaskInfo]
     /// The whole conversation `id` belongs to (any member resolves it — Monitor piece 7, settled
     /// Design point 6), oldest to newest. A task with no follow-up is its own single-member
@@ -252,11 +257,13 @@ final class TaskDetailVM: TaskDetailViewModel {
 
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] _ in self?.recomputeMembersAndLeases() }
             .store(in: &cancellables)
 
         useCase.hasListedPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] value in
                 guard let self else { return }
                 hasListed = value
@@ -266,6 +273,7 @@ final class TaskDetailVM: TaskDetailViewModel {
 
         useCase.titlesPublisher()
             .receive(on: DispatchQueue.main)
+            .removeDuplicates()
             .sink { [weak self] _ in self?.recompute() }
             .store(in: &cancellables)
 
@@ -273,6 +281,15 @@ final class TaskDetailVM: TaskDetailViewModel {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snapshots in
                 guard let self else { return }
+                // Plan review round 1, item 3: ignore a publication that doesn't touch any member of
+                // THIS conversation — `snapshots` covers every task in the system, so it changes on
+                // essentially every publish; a plain `.removeDuplicates()` on the whole dictionary
+                // would almost never fire and buys nothing. Before membership is known at all
+                // (`conversationMembers` still empty — e.g. a snapshot arriving ahead of the
+                // listing), every publication still applies, so a real change is never dropped.
+                let touchesConversation = conversationMembers.isEmpty
+                    || conversationMembers.contains { latestSnapshots[$0.taskID] != snapshots[$0.taskID] }
+                guard touchesConversation else { return }
                 latestSnapshots = snapshots
                 recompute()
             }
@@ -452,17 +469,26 @@ final class TaskDetailVM: TaskDetailViewModel {
         + "running — resuming it now puts two writers on one conversation; prefer Take over."
         : "Copies a command that resumes this session in your own terminal."
 
-        recomputeTimeline(task: detail)
-        recomputeInspector(task: detail, ancestors: currentTaskAncestors)
+        // Computed once and shared by `recomputeTimeline`/`recomputeInspector` (Monitor piece 11):
+        // both used to call `useCase.children(of:)` once per member independently — the same
+        // per-member lineage query, just consumed two different ways (a flattened list vs. a count).
+        let allChildren = allConversationChildren()
+        recomputeTimeline(task: detail, allChildren: allChildren)
+        recomputeInspector(task: detail, ancestors: currentTaskAncestors, allChildren: allChildren)
         recomputeMessageBox(task: detail)
         if tab == .summary { recomputeSummary(task: detail) }
     }
 
     /// Every child any conversation member has started via `spawned_by` (Design point 3) — shared by
     /// the Timeline's sub-task strip (`+Timeline.swift`) and the cancel dialog's "not cancelled by
-    /// this" listing (`+Actions.swift`'s `didTapCancel()`).
+    /// this" listing (`+Actions.swift`'s `didTapCancel()`). One `useCase.children(ofEach:)` call
+    /// (Codex review round 1, finding 1) instead of one `children(of:)` call per member — each of
+    /// which rebuilt the whole shared `LineageIndex` from scratch. The lookup preserves
+    /// `conversationMembers`' own order (a dictionary has none), matching `flatMap`'s old behaviour
+    /// exactly.
     func allConversationChildren() -> [TaskInfo] {
-        conversationMembers.flatMap { useCase.children(of: $0.taskID) }
+        let childrenByMember = useCase.children(ofEach: conversationMembers.map(\.taskID))
+        return conversationMembers.flatMap { childrenByMember[$0.taskID] ?? [] }
     }
 
     /// "Now" (the current running tool), lineage, and the raw-snapshot "Details"/enforcement.
@@ -472,8 +498,11 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// conversation's node"); "Now" reads the current member alone, since only it can be running.
     /// `ancestors` and `siblings` are both about the CURRENT task's own position (Codex review
     /// round 1, finding 4) — never the conversation's first member, whose own ancestors do not
-    /// necessarily reach the current task at all.
-    func recomputeInspector(task: TaskInfo, ancestors: [TaskInfo]) {
+    /// necessarily reach the current task at all. `allChildren` is `recompute()`'s own
+    /// `allConversationChildren()` result, passed in rather than recomputed here (Monitor piece 11):
+    /// this used to make its OWN separate `useCase.children(of:)` call per member just to count them,
+    /// duplicating `recomputeTimeline`'s identical per-member query.
+    func recomputeInspector(task: TaskInfo, ancestors: [TaskInfo], allChildren: [TaskInfo]) {
         let siblings = useCase.siblings(of: currentTaskID)
         let snapshot = useCase.snapshot(currentTaskID)
         let activity = conversationMembers.reduce(ActivityCounts()) { acc, member in
@@ -484,7 +513,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             result.commands += memberActivity.commands
             return result
         }
-        let subtaskCount = conversationMembers.reduce(0) { $0 + useCase.children(of: $1.taskID).count }
+        let subtaskCount = allChildren.count
         inspectorModel = InspectorModel(
             task: task,
             current: useCase.current(for: currentTaskID),

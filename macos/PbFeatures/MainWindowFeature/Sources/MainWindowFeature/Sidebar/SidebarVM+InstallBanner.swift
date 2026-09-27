@@ -111,6 +111,11 @@ extension SidebarVM {
         // some unrelated event (a new listing, a search keystroke) happened to recompute it (Code
         // review round 1, finding 4).
         emptyStateMessage = computeEmptyStateMessage()
+        // Same reasoning, for the loading skeleton (Monitor piece 11, Codex review round 1, finding
+        // 3): a banner arriving before the first listing must not leave the skeleton showing
+        // alongside it — `showsLoadingSkeleton` is otherwise only recomputed inside `recompute()`,
+        // which none of this file's own three subscriptions call.
+        showsLoadingSkeleton = computeShowsLoadingSkeleton()
     }
 
     private static func runningTitle(_ stage: InstallStage) -> String {

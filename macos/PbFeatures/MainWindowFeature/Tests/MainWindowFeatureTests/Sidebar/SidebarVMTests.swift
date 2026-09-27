@@ -249,7 +249,74 @@ import Testing
         #expect(sut.installBannerModel?.primaryTitle == "Install polybridge")
         verify(useCase).installNeed(for: .value(error)).called(1)
     }
-    
+
+    // MARK: - Loading skeleton (Monitor piece 11, Plan review round 1 item 4)
+
+    @Test func givenNoListingHasArrivedYet_whenAppeared_thenTheLoadingSkeletonShows() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+
+        // when
+        sut.didAppear()
+
+        // then — before `hasListedPublisher()`'s first value, this is the shimmer's whole reason to
+        // exist: an empty list with no error and no install banner is otherwise indistinguishable
+        // from "no tasks yet".
+        #expect(sut.showsLoadingSkeleton)
+        #expect(sut.emptyStateMessage == nil, "the empty-state message never shows while the skeleton does")
+    }
+
+    @Test func givenTheFirstListingArrives_whenObserved_thenTheLoadingSkeletonClears() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        #expect(sut.showsLoadingSkeleton)
+
+        // when
+        harness.hasListedSubject.send(true)
+        harness.listErrorSubject.send(nil)
+        harness.tasksSubject.send([])
+
+        // then
+        await waitUntil { !sut.showsLoadingSkeleton }
+        #expect(sut.emptyStateMessage != nil, "now that hasListed is true, the ordinary empty state takes over")
+    }
+
+    @Test func givenAListErrorArrivesBeforeAnyListing_whenObserved_thenTheLoadingSkeletonNeverShows() async {
+        // given — the error/banner UI gates first (`computeEmptyStateMessage()`'s own precedence);
+        // the skeleton must never draw over it.
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+
+        // when
+        harness.listErrorSubject.send(ToolError.notFound(tool: "polybridge-ctl", searched: []))
+
+        // then
+        await waitUntil { sut.listErrorMessage != nil }
+        #expect(!sut.showsLoadingSkeleton)
+    }
+
+    @Test func givenAnInstallBannerArrivesBeforeAnyListing_whenObserved_thenTheLoadingSkeletonNeverShows() async {
+        // given — Codex review round 1, finding 3: `showsLoadingSkeleton` was only ever recomputed
+        // inside `recompute()`, so a banner arriving via `installStatePublisher()` (none of
+        // `subscribeToInstallState()`'s three subscriptions call `recompute()` themselves) before the
+        // first listing left the skeleton rendering alongside the banner instead of yielding to it.
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        #expect(sut.showsLoadingSkeleton)
+
+        // when — the install banner appears, with no listing published at all yet.
+        harness.installStateSubject.send(.needsGit)
+
+        // then
+        await waitUntil { sut.installBannerModel != nil }
+        #expect(!sut.showsLoadingSkeleton)
+    }
+
     // MARK: - Row metadata (F4-43)
 
     @Test func givenASubTask_whenBuildingItsRow_thenMetaTextHasIndentAndSubTaskCountAndFreedom() async {
@@ -290,7 +357,29 @@ import Testing
         #expect(sut.runningRows.first?.isRunning == true)
         #expect(abs((sut.runningRows.first?.startedAt ?? .distantPast).timeIntervalSince(start)) < 1)
     }
-    
+
+    @Test func givenTwoIdenticalListings_whenTheClockAdvancesPastAThreshold_thenAgeTextUpdates() async {
+        // given — Codex review round 1, finding 2: the tasks stream must NOT `.removeDuplicates()`,
+        // or a byte-identical republish (the ordinary case while nothing about the task itself has
+        // changed) would never recompute `ageText`, freezing it at whatever it read the last time
+        // the array's own CONTENT changed.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let startedAt = Date().addingTimeInterval(-59.8)
+        let completed = task(id: "t1", status: "completed", startedAt: startedAt)
+        sut.didAppear()
+        harness.tasksSubject.send([completed])
+        await waitUntil { sut.recentRows.first?.ageText == "now" }
+
+        // when — wait past the 60s boundary, then re-publish the SAME array (identical content).
+        await waitUntil(timeout: 2) { Date().timeIntervalSince(startedAt) >= 60.1 }
+        harness.tasksSubject.send([completed])
+
+        // then
+        await waitUntil { sut.recentRows.first?.ageText == "1m" }
+        #expect(sut.recentRows.first?.ageText == "1m")
+    }
+
     // MARK: - Selection (SidebarRouting doubles as the read side)
     
     @Test func givenARowTapped_whenSelected_thenRoutingSelectIsCalled() {
@@ -449,4 +538,36 @@ import Testing
         verify(routing).select(.value(nil)).called(1)
     }
 
+    // MARK: - Perf (Monitor piece 11)
+
+    @Test func givenA2000TaskListingWithABackendFilterActive_whenRecomputed_thenItStaysWellUnderASecond() async {
+        // given — the exact shape measured at 0.36s/recompute on the real 532-task listing with a
+        // backend tab selected (113 matches): `forcedExpandedIDs` used to rebuild the whole
+        // conversation tree once per MATCHING task. `ConversationIndexTests` already proves the
+        // underlying `ConversationIndex` fix in isolation; this proves it through the real VM path
+        // (`recompute()` building one index per publication and reusing it — Plan review round 1,
+        // item 1), at roughly 4x the real listing's size for headroom.
+        let harness = makeSUT()
+        let sut = harness.sut
+        var tasks: [TaskInfo] = []
+        for index in 0 ..< 2000 {
+            tasks.append(task(
+                id: "t\(index)", backend: index % 2 == 0 ? "claude" : "codex", status: index % 7 == 0 ? "running" : "completed",
+                startedAt: .now.addingTimeInterval(-Double(index)),
+                spawnedBy: index % 5 == 0 && index > 0 ? "t\(index - 1)" : nil,
+                parentTaskID: index % 3 == 0 && index > 0 ? "t\(index - 1)" : nil
+            ))
+        }
+        sut.didAppear()
+
+        // when
+        let start = Date()
+        harness.tasksSubject.send(tasks)
+        sut.didSelectBackendFilter("claude")
+        await waitUntil { !sut.runningRows.isEmpty || !sut.recentRows.isEmpty }
+        let elapsed = Date().timeIntervalSince(start)
+
+        // then
+        #expect(elapsed < 1.0, "recompute() at 4x the real listing's size should stay well under a second with one shared index per publication (\(elapsed)s)")
+    }
 }

@@ -53,13 +53,19 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func title(_ id: String) -> String { taskListRepository.title(id) }
     func ancestors(of id: String) -> [TaskInfo] { Lineage.ancestors(of: id, in: taskListRepository.tasks) }
     func children(of id: String) -> [TaskInfo] { Lineage.children(of: id, in: taskListRepository.tasks) }
-    /// The current parent's other children (F4-38's lineage list) — every child of the nearest
-    /// ancestor, current task included, or none for a root task.
-    func siblings(of id: String) -> [TaskInfo] {
-        let tasks = taskListRepository.tasks
-        guard let parent = Lineage.ancestors(of: id, in: tasks).last else { return [] }
-        return Lineage.children(of: parent.taskID, in: tasks)
+    /// One shared `LineageIndex` answering every id's children (Codex review round 1, finding 1) —
+    /// `TaskDetailVM.allConversationChildren()`'s own need, several members queried in one recompute,
+    /// instead of `children(of:)` once per member each rebuilding the index from scratch.
+    func children(ofEach ids: [String]) -> [String: [TaskInfo]] {
+        let index = LineageIndex(taskListRepository.tasks)
+        return Dictionary(ids.map { ($0, index.children(of: $0)) }, uniquingKeysWith: { first, _ in first })
     }
+
+    /// The current parent's other children (F4-38's lineage list) — every child of the nearest
+    /// ancestor, current task included, or none for a root task. `Lineage.siblings(of:in:)` builds
+    /// one `LineageIndex` and reads ancestors/children off it, rather than this call rebuilding the
+    /// index twice over (Monitor piece 11).
+    func siblings(of id: String) -> [TaskInfo] { Lineage.siblings(of: id, in: taskListRepository.tasks) }
 
     func conversationMembers(of id: String) -> [TaskInfo] {
         Lineage.conversation(containing: id, in: taskListRepository.tasks)?.members ?? []

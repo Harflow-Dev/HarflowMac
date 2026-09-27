@@ -176,7 +176,7 @@ struct SummaryPaneView: View {
         switch model.editedFilesAvailability {
         case .loading:
             group("Files the agent edited", isExpanded: $editedFilesExpanded) {
-                ProgressView().controlSize(.small)
+                SkeletonRows(count: 3, showsBadge: false)
             }
         case .unavailable:
             group("Files the agent edited", isExpanded: $editedFilesExpanded) {

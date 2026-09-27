@@ -36,11 +36,11 @@ extension SidebarVM {
     func normalized(_ destination: MonitorDestination?) -> MonitorDestination? {
         guard case .task(let id) = destination else { return destination }
         if latestTasks.contains(where: { $0.taskID == id }) {
-            return .task(Lineage.conversationID(of: id, in: latestTasks))
+            return .task(conversationIndex.conversationID(of: id))
         }
         if let siblings = lastKnownSiblingsByMember[id],
            let survivor = Lineage.oldestSurvivor(among: siblings, in: latestTasks) {
-            return .task(Lineage.conversationID(of: survivor, in: latestTasks))
+            return .task(conversationIndex.conversationID(of: survivor))
         }
         return .task(id)
     }
@@ -72,7 +72,7 @@ extension SidebarVM {
         for oldID in Array(collapsedTaskIDs) where !latestTasks.contains(where: { $0.taskID == oldID }) {
             guard let siblings = lastKnownSiblingsByMember[oldID],
                   let survivor = Lineage.oldestSurvivor(among: siblings, in: latestTasks) else { continue }
-            let newID = Lineage.conversationID(of: survivor, in: latestTasks)
+            let newID = conversationIndex.conversationID(of: survivor)
             guard newID != oldID else { continue }
             collapsedTaskIDs.remove(oldID)
             collapsedTaskIDs.insert(newID)

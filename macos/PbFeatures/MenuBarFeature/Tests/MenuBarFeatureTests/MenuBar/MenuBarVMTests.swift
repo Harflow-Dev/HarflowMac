@@ -232,6 +232,28 @@ import Testing
         #expect(sut.recentTasks.first?.title == "Task a")
     }
 
+    @Test func givenTwoIdenticalListings_whenTheClockAdvancesPastAThreshold_thenAgeTextUpdates() async {
+        // given — Codex review round 1, finding 2: the tasks stream must NOT `.removeDuplicates()`,
+        // or a byte-identical republish would never recompute `ageText`, freezing it at whatever it
+        // read the last time the array's own CONTENT changed.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        sut.didAppear()
+        let startedAt = Date().addingTimeInterval(-59.8)
+        let completed = task(id: "t1", status: "completed", startedAt: startedAt)
+        tasksSubject.send([completed])
+        await waitUntil { sut.recentTasks.first?.ageText == "now" }
+
+        // when — wait past the 60s boundary, then re-publish the SAME array (identical content).
+        await waitUntil(timeout: 2) { Date().timeIntervalSince(startedAt) >= 60.1 }
+        tasksSubject.send([completed])
+
+        // then
+        await waitUntil { sut.recentTasks.first?.ageText == "1m" }
+        #expect(sut.recentTasks.first?.ageText == "1m")
+    }
+
     @Test func givenTheRunningCountFromTheUseCase_whenTasksUpdate_thenItIsRepublished() async {
         // given — F4-26: every running task counts, sub-tasks included; the VM reads the count
         // straight from the use case rather than recomputing it, so this proves it stays wired.

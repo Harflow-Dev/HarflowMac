@@ -27,6 +27,10 @@ protocol SidebarViewModel: ViewModel {
     /// The list body's empty-state message, or `nil` when there's real content to show (Monitor
     /// piece 6's precedence rules — see `SidebarVM.computeEmptyStateMessage()`).
     var emptyStateMessage: String? { get }
+    /// A shimmer placeholder instead of an empty list (Monitor piece 11, Plan review round 1 item
+    /// 4): true only before the first listing arrives (`hasListed == false`) with no error and no
+    /// install banner already occupying the space — see `SidebarVM.recompute()`.
+    var showsLoadingSkeleton: Bool { get }
     var isConnected: Bool { get }
     var connectionLine: String { get }
     var backendTabs: [BackendTab] { get }
@@ -118,26 +122,30 @@ struct SidebarView<VM: SidebarViewModel>: View {
                         Text(error).font(.pb(.secondary)).foregroundStyle(Color.failedRed).textSelection(.enabled)
                     }
                 }
-                if !viewModel.runningRows.isEmpty {
-                    Section { rows(viewModel.runningRows) } header: { SectionLabel(text: "Running \(rootCount(viewModel.runningRows))") }
-                }
-                if !viewModel.parallelGroups.isEmpty {
-                    Section {
-                        ForEach(viewModel.parallelGroups) { group in
-                            GroupRow(group: group).tag(MonitorDestination.group(group.name))
-                        }
-                    } header: { SectionLabel(text: "Parallel runs \(viewModel.parallelGroups.count)") }
-                }
-                if !viewModel.recentRows.isEmpty {
-                    Section { rows(viewModel.recentRows) } header: { SectionLabel(text: "Recent") }
-                }
-                if let message = viewModel.emptyStateMessage {
-                    Text(message)
-                        .font(.pb(.body))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if viewModel.showsLoadingSkeleton {
+                    Section { SkeletonRows() }
+                } else {
+                    if !viewModel.runningRows.isEmpty {
+                        Section { rows(viewModel.runningRows) } header: { SectionLabel(text: "Running \(rootCount(viewModel.runningRows))") }
+                    }
+                    if !viewModel.parallelGroups.isEmpty {
+                        Section {
+                            ForEach(viewModel.parallelGroups) { group in
+                                GroupRow(group: group).tag(MonitorDestination.group(group.name))
+                            }
+                        } header: { SectionLabel(text: "Parallel runs \(viewModel.parallelGroups.count)") }
+                    }
+                    if !viewModel.recentRows.isEmpty {
+                        Section { rows(viewModel.recentRows) } header: { SectionLabel(text: "Recent") }
+                    }
+                    if let message = viewModel.emptyStateMessage {
+                        Text(message)
+                            .font(.pb(.body))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
             .listStyle(.sidebar)
@@ -186,6 +194,11 @@ struct SidebarView<VM: SidebarViewModel>: View {
         primaryTitle: "Install polybridge"
     )))
     .frame(width: 280, height: 600)
+}
+
+#Preview("Loading") {
+    SidebarView(SidebarViewModelMock(runningRows: [], recentRows: [], showsLoadingSkeleton: true))
+        .frame(width: 280, height: 600)
 }
 
 /// A three-level tree, expanded — Monitor piece 4.

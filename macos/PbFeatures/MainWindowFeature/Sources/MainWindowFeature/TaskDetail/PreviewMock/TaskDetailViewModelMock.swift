@@ -44,7 +44,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
             id: "abc12345#1", taskID: "abc12345", timestamp: .now.addingTimeInterval(-15),
             kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: true
         )],
-        start: .now.addingTimeInterval(-30), emptyText: nil, subTaskStrip: nil
+        start: .now.addingTimeInterval(-30), emptyText: nil, subTaskStrip: nil, isLoading: false
     )
     var summaryModel = SummaryPaneModel.empty
     var promptText = "Fix the flaky login test."

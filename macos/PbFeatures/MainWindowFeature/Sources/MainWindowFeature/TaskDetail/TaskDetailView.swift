@@ -117,20 +117,45 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     InspectorView(model: viewModel.inspectorModel)
                         .frame(width: 280)
                 }
-            } else {
+            } else if viewModel.hasListed {
                 VStack(spacing: 8) {
                     Text("Task \(viewModel.taskID)").font(.pb(.headline, weight: .bold))
-                    Text(viewModel.hasListed ? "This task is not in polybridge's records (it may have been removed by retention)." : "Loading…")
+                    Text("This task is not in polybridge's records (it may have been removed by retention).")
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                loadingSkeleton
             }
         }
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
         .publishViewEvent(from: viewModel, to: viewEvent)
     }
-    
+
+    /// Shown while the task isn't known yet (Plan review round 1, item 4) — replaces the old bare
+    /// "Loading…" text. Never shown once `hasListed` is true: at that point either the task exists
+    /// (the header/tabs render instead) or it genuinely is not in polybridge's records, and that
+    /// message stays exactly as it was.
+    private var loadingSkeleton: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                // `Color.primary.opacity(0.1)`, not `.neutralFill` — matches `SkeletonBlock`/
+                // `SkeletonRows` (PbUI's own placeholders were invisible against `.neutralFill`).
+                Circle().fill(Color.primary.opacity(0.1)).frame(width: 26, height: 26).shimmering()
+                VStack(alignment: .leading, spacing: 6) {
+                    SkeletonBlock(width: 220, height: 18)
+                    SkeletonBlock(width: 140, height: 12)
+                }
+            }
+            Divider()
+            SkeletonRows(count: 5)
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
     // MARK: Header
     
     @ViewBuilder
