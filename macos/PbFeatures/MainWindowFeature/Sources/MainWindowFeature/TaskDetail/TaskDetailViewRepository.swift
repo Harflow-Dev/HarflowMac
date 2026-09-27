@@ -60,7 +60,14 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         guard let parent = Lineage.ancestors(of: id, in: tasks).last else { return [] }
         return Lineage.children(of: parent.taskID, in: tasks)
     }
-    
+
+    func conversationMembers(of id: String) -> [TaskInfo] {
+        Lineage.conversation(containing: id, in: taskListRepository.tasks)?.members ?? []
+    }
+
+    func cancelScope(of id: String) -> Set<String> { Lineage.cancelScope(of: id, in: taskListRepository.tasks) }
+    func oldestSurvivor(among candidates: Set<String>) -> String? { Lineage.oldestSurvivor(among: candidates, in: taskListRepository.tasks) }
+
     func snapshot(_ id: String) -> TaskInfo? { taskSnapshotRepository.snapshot(id) }
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never> { taskSnapshotRepository.snapshotsPublisher() }
     func refreshSnapshot(_ id: String) async { await taskSnapshotRepository.refresh(id) }

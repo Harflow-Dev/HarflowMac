@@ -173,10 +173,10 @@ extension TaskDetailVMTests {
         #expect(OutcomeColor.of(harness.sut.outcomeMessage!) == .failedRed)
         
         // when — a non-refusal outcome
-        harness.outcomesSubject.send(["abc12345": "Continued as task def456."])
-        
+        harness.outcomesSubject.send(["abc12345": "Follow-up sent — the reply will appear below."])
+
         // then
-        await waitUntil { harness.sut.outcomeMessage == "Continued as task def456." }
+        await waitUntil { harness.sut.outcomeMessage == "Follow-up sent — the reply will appear below." }
         #expect(OutcomeColor.of(harness.sut.outcomeMessage!) == .secondary)
     }
     
@@ -223,31 +223,32 @@ extension TaskDetailVMTests {
         #expect(harness.sut.inspectorModel?.hasSnapshot == true)
     }
     
-    // MARK: - Item t: resume routes even after the VM is released
-    
-    @Test func givenResumeSucceeds_whenTheVMIsReleasedBeforeItCompletes_thenRoutingStillFiresOnTheNewTask() async {
-        // given
+    // MARK: - Item t: resume still completes even after the VM is released
+
+    @Test func givenResumeSucceeds_whenTheVMIsReleasedBeforeItCompletes_thenTheDispatchStillCompletes() async {
+        // given — Monitor piece 7, Design point 7: Continue no longer navigates, so this no longer
+        // checks routing; it still must check that releasing the VM right after submit does not
+        // cancel the in-flight resume (`submitMessage`'s resume branch captures `useCase` strongly,
+        // never `self`).
         weak var weakSUT: TaskDetailVM?
-        var capturedRouting: MockTaskDetailRouting!
+        var capturedUseCase: MockTaskDetailUseCase!
         do {
             let harness = makeSUT()
             weakSUT = harness.sut
-            capturedRouting = harness.routing
+            capturedUseCase = harness.useCase
             let done = task(status: "completed")
             harness.detailBox.value = done
             harness.sut.didAppear()
             harness.tasksSubject.send([done])
             await waitUntil { harness.sut.task != nil }
-            
-            // when — submit while the VM is still alive; `submitMessage`'s resume branch captures
-            // `useCase`/`routing` strongly, never `self`, so releasing the VM right after must not
-            // stop the in-flight resume from routing.
+
+            // when — submit while the VM is still alive.
             #expect(harness.sut.submitMessage("follow up"))
         }
-        
-        // then — nothing above kept `sut` alive
+
+        // then — nothing above kept `sut` alive, yet the resume dispatch still completes.
         #expect(weakSUT == nil)
-        await verify(capturedRouting).selectTask(.value("newTaskID")).calledEventually(1, before: .seconds(1))
+        await verify(capturedUseCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(1))
     }
     
     // MARK: - Item u: sub-task strip and "Open parent" routing

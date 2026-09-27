@@ -159,7 +159,10 @@ final class SidebarVM: SidebarViewModel {
     @ObservationIgnored private let routing: any SidebarRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
-    @ObservationIgnored private var latestTasks: [TaskInfo] = []
+    // `latestTasks`/`collapsedTaskIDs`/`lastKnownSiblingsByMember` are also read/written from
+    // `SidebarVM+Retention.swift` (Review round 1, item 4's "retention while open"), so — same
+    // reasoning as the install-banner properties above — they cannot be `private`.
+    @ObservationIgnored var latestTasks: [TaskInfo] = []
     @ObservationIgnored var latestListError: ToolError?
     @ObservationIgnored private var latestHasListed = false
     @ObservationIgnored private var latestCatalog: BackendCatalog
@@ -170,10 +173,16 @@ final class SidebarVM: SidebarViewModel {
     /// Tasks the person has collapsed in the sidebar's tree — expanded by default (Design point 3).
     /// Lives for the app's lifetime (this VM is cached across window close/reopen); never mutated by
     /// an ordinary `recompute()` — only `didToggleExpansion(taskID:)` and an applied reveal touch it.
-    @ObservationIgnored private var collapsedTaskIDs: Set<String> = []
+    @ObservationIgnored var collapsedTaskIDs: Set<String> = []
     /// A reveal that could not be applied yet because its task was not in `latestTasks` — retried on
     /// every `tasksPublisher` emission until it lands, or replaced by a fresher one.
     @ObservationIgnored private var pendingRevealToApply: PendingReveal?
+    /// Every member id ever seen, mapped to its whole conversation's member set as of the last time
+    /// that conversation was resolvable directly (Review round 1, item 4 — "retention while open").
+    /// Never cleared; only overwritten per member on each recompute. Read when an id is no longer in
+    /// `latestTasks` at all (its own record was pruned) to find a still-present sibling and resolve
+    /// — and carry collapse state — through the conversation it now identifies.
+    @ObservationIgnored var lastKnownSiblingsByMember: [String: Set<String>] = [:]
 
     // MARK: - Init
 
@@ -198,7 +207,7 @@ final class SidebarVM: SidebarViewModel {
         // everything else) is otherwise never picked up until the *next* external change — the
         // cached `MainWindowCoordinator`/`SidebarVM` survive a window close/reopen, so this is a
         // real, reachable gap, not a hypothetical one.
-        selection = routing.selection
+        selection = normalized(routing.selection)
         // Same reasoning for a reveal requested while this screen was unsubscribed: the coordinator
         // still holds it (Design point 5), so pick it up here rather than only via `revealPublisher()`.
         if let reveal = routing.pendingReveal { handleReveal(reveal) }
@@ -353,7 +362,10 @@ final class SidebarVM: SidebarViewModel {
 
         routing.selectionPublisher()
             .receive(on: DispatchQueue.main)
-            .weakAssign(to: \.selection, on: self)
+            .sink { [weak self] destination in
+                guard let self else { return }
+                selection = normalized(destination)
+            }
             .store(in: &cancellables)
 
         routing.revealPublisher()
@@ -363,14 +375,18 @@ final class SidebarVM: SidebarViewModel {
     }
     
     /// Recomputes every derived list from `latestTasks`/`latestListError`/`latestHasListed`, the
-    /// current search query and backend filter — mirrors the old `SidebarView.body`'s inline
-    /// `Lineage.sections`/filtering exactly, plus the tree's collapse state (Design points 1-5).
-    /// Never mutates `collapsedTaskIDs` itself — an ordinary recompute (a new listing, a search
-    /// keystroke) must never re-expand a row the person collapsed.
+    /// current search query and backend filter — Running/Recent are built from conversations (piece
+    /// 7); Parallel groups stay task-level, unchanged (Review round 1, item 3). Never mutates
+    /// `collapsedTaskIDs` itself — an ordinary recompute (a new listing, a search keystroke) must
+    /// never re-expand a row the person collapsed.
     private func recompute() {
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
         recomputeBackendTabs()
+        // Before this listing's own membership overwrites the remembered map: if a conversation's
+        // own collapsed id just vanished (retention pruned its first member), move the collapse to
+        // whichever surviving sibling now identifies it.
+        migrateCollapsedIDsForRetention()
 
         let query = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
         let backend = selectedBackend
@@ -382,18 +398,33 @@ final class SidebarVM: SidebarViewModel {
                 || task.taskID.lowercased().contains(query)
                 || task.repoPath.lowercased().contains(query))
         }
-        let sections = Lineage.sections(latestTasks, matches: matches)
+        let sections = Lineage.conversationSections(latestTasks, matches: matches)
+        // Retention membership is recorded from the UNFILTERED tree (Codex review round 2, finding
+        // 3), never `sections` above: an active search/backend filter can hide a whole conversation
+        // — and any follow-up it gets while hidden — from `sections.running`/`sections.recent`
+        // entirely (`keep(tree)`), so recording only from the filtered tree would forget that
+        // conversation's membership for as long as the filter stays active, and a prune during that
+        // window could never hand off once the filter clears.
+        recordMembership(Lineage.conversationSections(latestTasks))
 
         // Filter forces ancestors of an actual match expanded, for *display only* — this never
         // touches `collapsedTaskIDs`, so clearing the filter restores exactly what the person had
         // collapsed (Design point 5's "Filter" rule).
         let forcedExpandedIDs: Set<String> = isFilterActive
-            ? Set(latestTasks.filter(matches).flatMap { task in Lineage.ancestors(of: task.taskID, in: latestTasks).map(\.taskID) })
+            ? Set(latestTasks.filter(matches).flatMap { task in
+                Lineage.conversationAncestors(of: task.taskID, in: latestTasks).map(\.id)
+            })
             : []
 
         runningRows = sections.running.flatMap { flattenedRows($0, forcedExpandedIDs: forcedExpandedIDs) }
         recentRows = sections.recent.flatMap { flattenedRows($0, forcedExpandedIDs: forcedExpandedIDs) }
-        parallelGroups = sections.parallel
+        parallelGroups = Lineage.sections(latestTasks, matches: matches).parallel
+
+        // Retention while open (Review round 1, item 4): re-normalising the CURRENT selection on
+        // every recompute (not just on a fresh `selectionPublisher()` event) is what lets the
+        // highlighted row follow a conversation whose own id just changed underneath an unchanged
+        // selection — idempotent for the ordinary case, where the id has not moved.
+        selection = normalized(selection)
 
         emptyStateMessage = computeEmptyStateMessage()
     }
@@ -450,10 +481,12 @@ final class SidebarVM: SidebarViewModel {
         return "No \(selectedBackend) tasks yet."
     }
 
-    /// Flattens one tree into rows, hiding the descendants of a collapsed node (unless
+    /// Flattens one conversation tree into rows, hiding the descendants of a collapsed node (unless
     /// `forcedExpandedIDs` overrides it for the current filter) — a node's own row is always kept,
-    /// only its subtree can be hidden.
-    private func flattenedRows(_ root: TaskNode, forcedExpandedIDs: Set<String>) -> [TaskRowModel] {
+    /// only its subtree can be hidden. Status/age/meta come from the conversation's CURRENT member;
+    /// title from its FIRST (Design point 2). Row `id` is the conversation id (its first member),
+    /// so a click already selects the whole conversation with no separate normalisation needed.
+    private func flattenedRows(_ root: ConversationNode, forcedExpandedIDs: Set<String>) -> [TaskRowModel] {
         var rows: [TaskRowModel] = []
         var hiddenBelowIndent: Int?
         for entry in root.flattenedWithGuides() {
@@ -461,21 +494,22 @@ final class SidebarVM: SidebarViewModel {
             hiddenBelowIndent = nil
 
             let node = entry.node
-            let task = node.task
+            let conversation = node.conversation
+            let current = conversation.current
             let hasChildren = !node.children.isEmpty
-            let isCollapsed = collapsedTaskIDs.contains(task.taskID) && !forcedExpandedIDs.contains(task.taskID)
+            let isCollapsed = collapsedTaskIDs.contains(conversation.id) && !forcedExpandedIDs.contains(conversation.id)
             rows.append(TaskRowModel(
-                id: task.taskID,
-                backend: task.backend,
-                title: useCase.title(task.taskID),
-                statusLabel: task.status.label,
-                statusColor: StatusColor.of(task.status),
-                ageText: Format.age(task.startedAt),
+                id: conversation.id,
+                backend: current.backend,
+                title: useCase.title(conversation.first.taskID),
+                statusLabel: current.status.label,
+                statusColor: StatusColor.of(current.status),
+                ageText: Format.age(current.startedAt),
                 indent: entry.indent,
                 metaText: metaText(for: node, isCollapsed: isCollapsed),
-                isRunning: task.status.isRunning,
-                startedAt: task.startedAt,
-                durationSeconds: task.durationSeconds,
+                isRunning: current.status.isRunning,
+                startedAt: current.startedAt,
+                durationSeconds: current.durationSeconds,
                 hasChildren: hasChildren,
                 isExpanded: !isCollapsed,
                 guides: entry.guides
@@ -488,23 +522,24 @@ final class SidebarVM: SidebarViewModel {
     /// Expanded: today's "repo · N sub-tasks · freedom" line. Collapsed (Design point 4): the
     /// subtree summary, "N sub-tasks, M running" with "M running" omitted when nothing underneath
     /// is running — a running descendant still counts even though its own row is hidden.
-    private func metaText(for node: TaskNode, isCollapsed: Bool) -> String {
-        var parts = [Format.repo(node.task.repoPath)]
+    private func metaText(for node: ConversationNode, isCollapsed: Bool) -> String {
+        let current = node.conversation.current
+        var parts = [Format.repo(current.repoPath)]
         if node.descendantCount > 0 {
             parts.append(isCollapsed ? collapsedSummary(for: node) : "\(node.descendantCount) sub-task\(node.descendantCount == 1 ? "" : "s")")
         }
-        if let freedom = node.task.freedom { parts.append(freedom) }
+        if let freedom = current.freedom { parts.append(freedom) }
         return parts.joined(separator: " · ")
     }
 
-    private func collapsedSummary(for node: TaskNode) -> String {
+    private func collapsedSummary(for node: ConversationNode) -> String {
         let base = "\(node.descendantCount) sub-task\(node.descendantCount == 1 ? "" : "s")"
         let running = runningDescendantCount(node)
         return running > 0 ? "\(base), \(running) running" : base
     }
 
-    private func runningDescendantCount(_ node: TaskNode) -> Int {
-        node.children.reduce(0) { $0 + ($1.task.status.isRunning ? 1 : 0) + runningDescendantCount($1) }
+    private func runningDescendantCount(_ node: ConversationNode) -> Int {
+        node.children.reduce(0) { $0 + ($1.conversation.current.status.isRunning ? 1 : 0) + runningDescendantCount($1) }
     }
 
     // MARK: - Reveal (settled plan, Design point 5)
@@ -514,16 +549,16 @@ final class SidebarVM: SidebarViewModel {
         if tryApplyPendingReveal() { recompute() }
     }
 
-    /// Expands `pendingRevealToApply`'s ancestors and consumes it, when its task is already listed.
-    /// Leaves it stored (to retry on the next listing) when the task isn't known yet — Design point
-    /// 5's "a reveal for a task not yet listed stays pending until data arrives". Returns whether it
-    /// applied, so a caller that hasn't already scheduled a `recompute()` (unlike the
-    /// `tasksPublisher` sink, which always recomputes anyway) knows whether it needs to.
+    /// Expands `pendingRevealToApply`'s conversation ancestors and consumes it, when its task is
+    /// already listed. Leaves it stored (to retry on the next listing) when the task isn't known yet
+    /// — Design point 5's "a reveal for a task not yet listed stays pending until data arrives".
+    /// Returns whether it applied, so a caller that hasn't already scheduled a `recompute()` (unlike
+    /// the `tasksPublisher` sink, which always recomputes anyway) knows whether it needs to.
     @discardableResult
     private func tryApplyPendingReveal() -> Bool {
         guard let reveal = pendingRevealToApply else { return false }
         guard latestTasks.contains(where: { $0.taskID == reveal.taskID }) else { return false }
-        for ancestor in Lineage.ancestors(of: reveal.taskID, in: latestTasks) { collapsedTaskIDs.remove(ancestor.taskID) }
+        for ancestor in Lineage.conversationAncestors(of: reveal.taskID, in: latestTasks) { collapsedTaskIDs.remove(ancestor.id) }
         pendingRevealToApply = nil
         routing.consumeReveal(requestID: reveal.requestID)
         return true
@@ -536,7 +571,7 @@ final class SidebarVM: SidebarViewModel {
         if !collapsedTaskIDs.contains(id), hasChildren(id) {
             collapsedTaskIDs.insert(id)
             recompute()
-        } else if let parentID = Lineage.ancestors(of: id, in: latestTasks).last?.taskID {
+        } else if let parentID = Lineage.conversationAncestors(of: id, in: latestTasks).last?.id {
             routing.select(.task(parentID))
         }
     }
@@ -548,6 +583,6 @@ final class SidebarVM: SidebarViewModel {
     }
 
     private func hasChildren(_ id: String) -> Bool {
-        !Lineage.children(of: id, in: latestTasks).isEmpty
+        !Lineage.conversationChildren(of: id, in: latestTasks).isEmpty
     }
 }

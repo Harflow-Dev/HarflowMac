@@ -55,6 +55,48 @@ no embedded terminal anywhere in this package (piece 1 of the Monitor architectu
   closed) is not lost.
 - `Component/TimelineRow.swift` and `Component/ToolRow.swift` (root-level, not under `Parallel/`) are
   shared Model+View pairs Parallel and TaskDetail's own `TimelinePaneView` both use.
+- **Conversations (Monitor piece 7).** A follow-up sent to a finished task continues the same
+  conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
+  (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from
+  `spawned_by`, "who called `start_task`") into a `Conversation`/`ConversationNode` tree, built and
+  guarded the same way `TaskNode`/`Lineage.sections(_:matches:)` are (shared guide computation via
+  `TreeGuides`) — Parallel groups stay on the task-level `Lineage.sections(_:).parallel`, unaffected.
+  `SidebarVM`'s rows, collapse set and reveal all key off the conversation id (its first, earliest
+  member); any member id a selection carries (a URL, notification, breadcrumb, or Parallel "open
+  task") is normalised to that id via `Lineage.conversationID(of:in:)` before it reaches the row
+  binding or the reveal/ancestor walk. `TaskDetailVM` resolves the whole conversation from whatever
+  member id it was built with (`TaskDetailUseCase.conversationMembers(of:)`), holds one
+  `EventStreamRepository` lease per member (Parallel's own pattern), and every derived property
+  reflects the **current** (newest) member except title/breadcrumbs/lineage, which come from the
+  **first**. The Timeline concatenates each member's own paired events
+  (`MonitorCore.ConversationTimeline.rows(members:)` — pairing stays scoped per member, since call
+  ids and `seq` both restart per task) with a turn separator ahead of every follow-up; a row's `live`
+  flag is per-turn, so an unresolved tool call in an older, already-terminal turn never shows a
+  spinner even while the newest turn runs. The Summary tab's "Files the agent edited" merges every
+  member's own `EditedFiles.build(from:repoPath:)` result (`EditedFiles.build(fromMembers:repoPath:)`)
+  and aggregates their `EventAvailability` (`SummaryPaneModel.aggregateAvailability(_:)`) rather than
+  reading one task's stream. Every action (send/cancel/take over/copy resume command/continue)
+  targets the conversation's current member (`TaskDetailVM.currentTaskID`), never the VM's own fixed
+  `taskID`. Continue (`submitMessage`'s resume branch) no longer navigates on success — the
+  conversation stays selected, and the new turn appears once `tasksPublisher` picks up the new member
+  — so `TaskActionRepository.resume`'s `onResumed` closure is a no-op from this call site now.
+  **Cancel scope honesty** (Review round 1 item 5 / round 2): the cancel confirmation
+  (`TaskDetailVM+Actions.swift`'s `didTapCancel()`) describes the REAL scope of cancelling the
+  current task — `TaskDetailUseCase.cancelScope(of:)` (`MonitorCore.Lineage.cancelScope(of:in:)`,
+  which matches `tasks.py`'s cascade exactly: `spawned_by` descendants plus any task whose
+  `root_task_id` names it) — and names any still-running child an EARLIER turn started that this
+  scope does not reach ("Still running from earlier turns (not cancelled by this): …"), computed by
+  `allConversationChildren()` (children of every member) filtered against that scope.
+  **Retention while open** (Review round 1 item 4, first half — no union-find): `TaskDetailVM`
+  remembers `lastKnownMemberIDsOldestFirst` from every successful direct resolution; when its own
+  `taskID` stops resolving (its record was pruned), it retries through the oldest still-present
+  remembered member instead of reporting the conversation gone. `SidebarVM` keeps the analogous
+  `lastKnownSiblingsByMember` map (`SidebarVM+Retention.swift`) — a plain `[memberID: Set<memberID>]`
+  snapshot of each conversation's membership, not a persistent union-find — so `normalized(_:)` can
+  resolve a since-pruned id through a surviving sibling, `recompute()` re-normalises the CURRENT
+  selection every pass (so the highlighted row follows a conversation whose id just shifted with no
+  new selection event), and `migrateCollapsedIDsForRetention()` carries a collapsed entry from an
+  old id to its conversation's new one.
 - Parallel acquires one `EventStreamRepository` lease per group member in `didAppear`/on membership
   change, and releases every lease in `didDisappear` — the one screen in this package with more than
   one concurrent lease per VM instance.

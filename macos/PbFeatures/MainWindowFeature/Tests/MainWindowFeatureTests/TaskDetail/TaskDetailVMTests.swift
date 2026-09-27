@@ -108,6 +108,18 @@ import Testing
         given(useCase).ancestors(of: .any).willProduce { _ in fixtures.ancestorsBox.value }
         given(useCase).children(of: .value(taskID)).willProduce { _ in fixtures.childrenBox.value }
         given(useCase).siblings(of: .value(taskID)).willReturn([])
+        // Default: a single-member conversation of exactly the fixed `taskID` — the same task every
+        // existing (pre-piece-7) test already sets up via `detailBox`, so every property that now
+        // resolves through `conversationMembers` reduces to the old single-task behaviour unless a
+        // test overrides this stub for its own multi-member scenario.
+        given(useCase).conversationMembers(of: .value(taskID)).willProduce { _ in fixtures.detailBox.value.map { [$0] } ?? [] }
+        // Default: no earlier-turn child is ever outside scope — a singleton conversation's cancel
+        // scope is just the task itself, unless a test overrides this for its own scenario.
+        given(useCase).cancelScope(of: .any).willProduce { [$0] }
+        // Default: no survivor — `recomputeMembersAndLeases()` calls this whenever conversation
+        // resolution comes back empty (routinely, at VM init before the first listing arrives), so
+        // every test needs SOME stub here even when it never exercises retention itself.
+        given(useCase).oldestSurvivor(among: .any).willReturn(nil)
 
         given(useCase).snapshot(.value(taskID)).willProduce { _ in fixtures.snapshotBox.value }
         given(useCase).refreshSnapshot(.value(taskID)).willProduce { _ in fixtures.refreshSnapshotEffect.value?() }

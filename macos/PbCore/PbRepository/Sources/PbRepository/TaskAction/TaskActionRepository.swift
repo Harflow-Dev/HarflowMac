@@ -57,14 +57,16 @@ public protocol TaskActionRepository: Sendable {
     /// - Throws: the `ToolError` behind a locator failure or the command's own refusal.
     @discardableResult
     func send(_ taskID: String, text: String) async throws -> Bool
-    /// Writes "Continued as task <8>." (or the error message) as the outcome, then rethrows on
-    /// failure. The caller (a Phase 4 UseCase) routes to the new id through `Routing`; this
-    /// repository never sets a selection itself (F7) — it calls `onResumed` instead.
+    /// Writes "Follow-up sent — the reply will appear below." (or the error message) as the outcome,
+    /// then rethrows on failure. `ctl resume` still creates a new task id under the hood (the agent
+    /// session literally continues as a new process), but the Monitor shows it as the SAME
+    /// conversation continuing (Monitor piece 7) — so the caller no longer routes anywhere on
+    /// success; `onResumed` exists only so a caller can react to the new id if it ever needs to
+    /// (e.g. for its own bookkeeping), never to navigate.
     ///
     /// `onResumed` fires exactly once, synchronously, right after `ctl resume` returns a new id —
-    /// **before** `endBusy`, the outcome write, and both refreshes (`AppModel.swift:291-299`: the
-    /// original set the selection immediately inside the work closure, ahead of all of that). It
-    /// never fires on a busy-rejection or a failure.
+    /// **before** `endBusy`, the outcome write, and both refreshes.
+    /// It never fires on a busy-rejection or a failure.
     /// - Returns: the new task id on success; `nil` if `taskID` was already busy (in which case
     ///   nothing was written and nothing is thrown). Failure is signalled only by throwing, never by
     ///   `nil` — so `nil` unambiguously means "rejected because busy."

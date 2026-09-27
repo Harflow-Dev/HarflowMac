@@ -95,7 +95,7 @@ private func previewStack() -> some View {
         )) { _ in true }
         MessageBoxView(model: MessageBoxModel(
             canSend: false, canContinue: true, isBusy: false, label: "Continue this task",
-            hint: "Resumes the session with this message", placeholder: "Continue this task…",
+            hint: "Continues the same agent session; the reply appears below as a new turn", placeholder: "Send a follow-up — it continues this conversation",
             buttonLabel: "Continue"
         )) { _ in true }
         MessageBoxView(model: .disabled) { _ in true }

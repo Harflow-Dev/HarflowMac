@@ -140,7 +140,7 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
             switch result {
             case .success(let id):
                 newID = id
-                message = "Continued as task \(id.prefix(8))."
+                message = "Follow-up sent — the reply will appear below."
                 // Fires before `endBusy`/the outcome write/both refreshes — see the protocol doc.
                 await onResumed(id)
             case .failure(let error):

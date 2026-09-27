@@ -168,8 +168,10 @@ import Testing
         #expect(sut.busy.contains("t1") == false)
     }
 
-    @Test func givenResumeSucceeds_whenObserved_thenTheOutcomeNamesTheNewTaskAndReturnsItsID() async throws {
-        // given
+    @Test func givenResumeSucceeds_whenObserved_thenTheOutcomeSaysTheReplyAppearsBelowAndReturnsItsID() async throws {
+        // given — Monitor piece 7: the outcome no longer names a "new task" (the Monitor shows the
+        // conversation continuing, not a new row appearing) even though `ctl resume` still creates a
+        // new task id under the hood, which `onResumed` still reports.
         let toolEnvironment = MockToolEnvironmentRepository()
         let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"newtask123"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
@@ -181,7 +183,7 @@ import Testing
 
         // then — F7: the repository returns the id; it never sets a selection itself.
         #expect(newID == "newtask123")
-        #expect(sut.outcome("t1") == "Continued as task newtask1.")
+        #expect(sut.outcome("t1") == "Follow-up sent — the reply will appear below.")
         #expect(resumedID.value == "newtask123")
     }
 

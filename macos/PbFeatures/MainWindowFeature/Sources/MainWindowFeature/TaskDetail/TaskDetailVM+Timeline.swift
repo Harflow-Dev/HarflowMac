@@ -6,34 +6,47 @@
 //  `latestItems` (`Timeline.items(from:)` already drops `.unknown` — MS-DETAIL-6), so they can only
 //  ever appear in `rawEvents` (all decoded events, `TaskDetailVM.didAppear`/`itemsPublisher` sink).
 //
+//  Monitor piece 7: the Timeline concatenates every conversation member's own paired events
+//  (`MonitorCore.ConversationTimeline`, task-scoped pairing per Review round 1, item 1), oldest to
+//  newest, with a turn separator ahead of every follow-up. Raw Events and the events-path label stay
+//  scoped to the conversation's CURRENT member only — a per-process debug view, not a merged one.
+//
 
 import Foundation
 import MonitorCore
 
 extension TaskDetailVM {
-    
-    /// Rebuilds the Timeline tab's model: step count, the raw items, whether the task is live (for a
-    /// running tool's spinner), and the sub-task strip (only when the task has children).
+
+    /// Rebuilds the Timeline tab's model: the concatenated conversation rows, whether the task is
+    /// live (per-turn — a running spinner never appears on an older, already-terminal turn even
+    /// while the newest one runs), and the sub-task strip (children of ANY member, Design point 3).
     func recomputeTimeline(task: TaskInfo) {
-        let children = useCase.children(of: taskID)
-        let start = task.startedAt ?? latestItems.first?.at
-        let live = task.status.isRunning
-        let subTaskStrip: SubTaskStripModel? = children.isEmpty ? nil : SubTaskStripModel(
-            children: children.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
+        let members = conversationMembers
+        let allChildren = allConversationChildren()
+        let start = members.first?.startedAt
+        let conversationTimelineMembers = members.map {
+            ConversationMember(task: $0, events: eventsByMember[$0.taskID] ?? [])
+        }
+        let rows = ConversationTimeline.rows(members: conversationTimelineMembers)
+        let subTaskStrip: SubTaskStripModel? = allChildren.isEmpty ? nil : SubTaskStripModel(
+            children: allChildren.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             start: start,
             onSelectTask: { [weak self] id in self?.didTapTask(id) }
         )
+        let itemCount = rows.filter { if case .item = $0.kind { return true }; return false }.count
         timelineModel = TimelinePaneModel(
-            stepCountText: "\(latestItems.count) steps",
-            items: latestItems,
+            stepCountText: "\(itemCount) steps",
+            rows: rows,
             start: start,
-            live: live,
-            emptyText: latestItems.isEmpty
+            emptyText: rows.isEmpty
             ? (task.status.isRunning ? "Waiting for the first event…" : "This task's event log is empty or was not found.")
             : nil,
             subTaskStrip: subTaskStrip
         )
-        promptText = useCase.prompt(for: taskID)
+        // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
+        promptText = useCase.prompt(for: members[0].taskID)
         ?? "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
+        rawEventsPath = useCase.eventsPath(for: currentTaskID)
+        rawEvents = eventsByMember[currentTaskID] ?? []
     }
 }

@@ -14,7 +14,7 @@ import Testing
     // Not `private`: `SidebarVMTests+Tree.swift` uses it too, and `private` is file-scoped in Swift.
     func task(
         id: String, backend: String = "claude", status: String = "running", startedAt: Date? = .now,
-        group: String? = nil, spawnedBy: String? = nil, repoPath: String = "/tmp/repo", freedom: String? = nil,
+        group: String? = nil, spawnedBy: String? = nil, parentTaskID: String? = nil, repoPath: String = "/tmp/repo", freedom: String? = nil,
         durationSeconds: Double? = nil
     ) -> TaskInfo {
         var object: [String: JSONValue] = [
@@ -23,6 +23,7 @@ import Testing
         if let startedAt { object["started_at"] = .string(ISO8601DateFormatter().string(from: startedAt)) }
         if let group { object["group"] = .string(group) }
         if let spawnedBy { object["spawned_by"] = .string(spawnedBy) }
+        if let parentTaskID { object["parent_task_id"] = .string(parentTaskID) }
         if let freedom { object["freedom"] = .string(freedom) }
         if let durationSeconds { object["duration_seconds"] = .number(durationSeconds) }
         return TaskInfo(.object(object))!

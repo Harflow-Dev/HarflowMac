@@ -1,6 +1,22 @@
 import Foundation
 @testable import MonitorCore
 
+func task(
+    _ id: String, status: String = "completed", spawnedBy: String? = nil, parentTaskID: String? = nil, rootTaskID: String? = nil,
+    depth: Int? = nil, group: String? = nil, backend: String = "claude", minute: Int = 0
+) -> TaskInfo {
+    var object: [String: JSONValue] = [
+        "task_id": .string(id), "status": .string(status), "backend": .string(backend),
+        "depth": .number(Double(depth ?? (spawnedBy == nil ? 0 : 1))),
+        "started_at": .string(String(format: "2026-09-25T10:%02d:00+00:00", minute))
+    ]
+    if let spawnedBy { object["spawned_by"] = .string(spawnedBy) }
+    if let group { object["group"] = .string(group) }
+    if let parentTaskID { object["parent_task_id"] = .string(parentTaskID) }
+    if let rootTaskID { object["root_task_id"] = .string(rootTaskID) }
+    return TaskInfo(.object(object))!
+}
+
 /// A temp directory per test, removed afterwards.
 func makeTempDir(_ name: String = "pbm") throws -> URL {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-\(UUID().uuidString)", isDirectory: true)

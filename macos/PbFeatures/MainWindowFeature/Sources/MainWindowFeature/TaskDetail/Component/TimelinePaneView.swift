@@ -6,6 +6,12 @@
 //  defaults to on and stays local `@State` per the screen shape's own allowance — the VM never owns
 //  it. Reuses the package-root `TimelineRow`/`TimelineRowModel` shared with the Parallel screen.
 //
+//  Monitor piece 7: `rows` is the whole conversation's concatenated timeline
+//  (`MonitorCore.ConversationTimelineRow` — a globally unique id across every member, since
+//  `TimelineItem.id` alone restarts per member/task), with a turn separator ahead of every
+//  follow-up. Per-row `live` already reflects which turn is the current, running one (Review
+//  round 1, item 1), so no separate `live` flag is needed at the pane level any more.
+//
 
 import MonitorCore
 import PbUI
@@ -15,14 +21,13 @@ import SwiftUI
 
 struct TimelinePaneModel {
     let stepCountText: String
-    let items: [TimelineItem]
+    let rows: [ConversationTimelineRow]
     let start: Date?
-    let live: Bool
     let emptyText: String?
     let subTaskStrip: SubTaskStripModel?
-    
+
     @MainActor
-    static let empty = TimelinePaneModel(stepCountText: "0 steps", items: [], start: nil, live: false, emptyText: nil, subTaskStrip: nil)
+    static let empty = TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil)
 }
 
 // MARK: - TimelinePaneView
@@ -30,7 +35,7 @@ struct TimelinePaneModel {
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
     @State private var followLive = true
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -46,8 +51,8 @@ struct TimelinePaneView: View {
                         if let emptyText = model.emptyText {
                             Text(emptyText).font(.pb(.body)).foregroundStyle(.secondary)
                         }
-                        ForEach(model.items) { item in
-                            TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: model.live)).id(item.id)
+                        ForEach(model.rows) { row in
+                            rowView(row).id(row.id)
                         }
                         if let subTaskStrip = model.subTaskStrip {
                             SubTaskStripView(model: subTaskStrip)
@@ -56,12 +61,53 @@ struct TimelinePaneView: View {
                     }
                     .padding(14)
                 }
-                .onChange(of: model.items.count) { _, _ in
+                .onChange(of: model.rows.count) { _, _ in
                     if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
                 }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             }
         }
+    }
+
+    @ViewBuilder
+    private func rowView(_ row: ConversationTimelineRow) -> some View {
+        switch row.kind {
+        case .separator(let text):
+            TurnSeparatorRow(text: text, timestamp: row.timestamp)
+        case .item(let item):
+            TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live))
+        }
+    }
+}
+
+// MARK: - TurnSeparatorRow
+
+/// A follow-up's own prompt and time, ahead of its turn (settled Design point 6): "You · 14:02 —
+/// <message>".
+struct TurnSeparatorRow: View {
+    let text: String
+    let timestamp: Date?
+
+    static func label(text: String, timestamp: Date?) -> String {
+        "You" + (timestamp.map { " · \(Format.time($0))" } ?? "") + " — " + text
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("You" + (timestamp.map { " · \(Format.time($0))" } ?? ""))
+                    .font(.pb(.secondary, weight: .semibold))
+                    .foregroundStyle(Color.accentLink)
+                Text(text).font(.pb(.body)).textSelection(.enabled)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color.runningBG.opacity(0.6)))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Self.label(text: text, timestamp: timestamp))
+        }
+        .padding(.vertical, 6)
     }
 }
 
@@ -119,8 +165,32 @@ struct SubTaskStripView: View {
     let start = Date.now.addingTimeInterval(-30)
     TimelinePaneView(model: TimelinePaneModel(
         stepCountText: "2 steps",
-        items: [PreviewFixtures.textItem("Looked at the failing test."), PreviewFixtures.finishedItem()],
-        start: start, live: false, emptyText: nil, subTaskStrip: nil
+        rows: [
+            ConversationTimelineRow(
+                id: "t#1", taskID: "t", timestamp: start, kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
+            ),
+            ConversationTimelineRow(id: "t#2", taskID: "t", timestamp: start, kind: .item(PreviewFixtures.finishedItem()), live: false)
+        ],
+        start: start, emptyText: nil, subTaskStrip: nil
+    ))
+    .frame(width: 500, height: 400)
+}
+
+#Preview("With a follow-up turn") {
+    let start = Date.now.addingTimeInterval(-90)
+    TimelinePaneView(model: TimelinePaneModel(
+        stepCountText: "2 steps",
+        rows: [
+            ConversationTimelineRow(
+                id: "t1#1", taskID: "t1", timestamp: start, kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
+            ),
+            ConversationTimelineRow(
+                id: "sep:t2", taskID: "t2", timestamp: start.addingTimeInterval(60),
+                kind: .separator(text: "Also add a test for the edge case"), live: false
+            ),
+            ConversationTimelineRow(id: "t2#1", taskID: "t2", timestamp: start.addingTimeInterval(60), kind: .item(PreviewFixtures.finishedItem()), live: false)
+        ],
+        start: start, emptyText: nil, subTaskStrip: nil
     ))
     .frame(width: 500, height: 400)
 }

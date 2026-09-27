@@ -69,6 +69,23 @@ public enum EditedFiles {
         return order.map { EditedFile(path: $0, status: latest[$0]?.status ?? .unconfirmed) }
     }
 
+    /// The conversation-level version of `build(from:repoPath:)` (Monitor piece 7): pairing stays
+    /// scoped to each member's OWN events (Review round 1, item 1 — call ids restart per task, so
+    /// pairing them across members would risk a coincidental collision), and only the merged
+    /// per-path status crosses turns — a path edited again in a later turn shows that later status,
+    /// oldest to newest.
+    public static func build(fromMembers memberEventsOldestFirst: [[TaskEvent]], repoPath: String) -> [EditedFile] {
+        var order: [String] = []
+        var latest: [String: EditedFileStatus] = [:]
+        for events in memberEventsOldestFirst {
+            for file in build(from: events, repoPath: repoPath) {
+                if latest[file.path] == nil { order.append(file.path) }
+                latest[file.path] = file.status
+            }
+        }
+        return order.map { EditedFile(path: $0, status: latest[$0] ?? .unconfirmed) }
+    }
+
     private static func relativized(_ path: String, repoPath: String) -> String {
         guard !repoPath.isEmpty else { return path }
         let prefix = repoPath.hasSuffix("/") ? repoPath : repoPath + "/"

@@ -130,6 +130,7 @@ extension TaskDetailVMTests {
         given(useCase).detail(.any).willReturn(running)
         given(useCase).title(.any).willReturn("Task abc12345")
         given(useCase).ancestors(of: .any).willReturn([])
+        given(useCase).conversationMembers(of: .any).willReturn([running])
         given(useCase).children(of: .any).willReturn([])
         given(useCase).siblings(of: .any).willReturn([])
         given(useCase).snapshot(.any).willReturn(nil)

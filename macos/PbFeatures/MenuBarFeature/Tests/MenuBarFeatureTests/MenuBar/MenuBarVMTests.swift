@@ -14,7 +14,7 @@ import Testing
     
     private func task(
         id: String, backend: String = "claude", status: String = "running", startedAt: Date? = .now,
-        group: String? = nil, spawnedBy: String? = nil
+        group: String? = nil, spawnedBy: String? = nil, parentTaskID: String? = nil
     ) -> TaskInfo {
         var object: [String: JSONValue] = [
             "task_id": .string(id), "backend": .string(backend), "status": .string(status)
@@ -22,6 +22,7 @@ import Testing
         if let startedAt { object["started_at"] = .string(ISO8601DateFormatter().string(from: startedAt)) }
         if let group { object["group"] = .string(group) }
         if let spawnedBy { object["spawned_by"] = .string(spawnedBy) }
+        if let parentTaskID { object["parent_task_id"] = .string(parentTaskID) }
         return TaskInfo(.object(object))!
     }
     
@@ -209,7 +210,28 @@ import Testing
         #expect(sut.recentTasks.count == 6)
         #expect(sut.recentGroups.count == 3)
     }
-    
+
+    // MARK: - Monitor piece 7: recent shows conversations, not raw tasks
+
+    @Test func givenAResumedRootTask_whenListed_thenRecentShowsOneConversationEntryNamedByTheFirst() async {
+        // given — before piece 7, "a" and "b" would each be their own recent entry.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        sut.didAppear()
+
+        // when
+        tasksSubject.send([
+            task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100)),
+            task(id: "b", status: "completed", startedAt: .now, parentTaskID: "a")
+        ])
+
+        // then
+        await waitUntil { !sut.recentTasks.isEmpty }
+        #expect(sut.recentTasks.map(\.id) == ["a"])
+        #expect(sut.recentTasks.first?.title == "Task a")
+    }
+
     @Test func givenTheRunningCountFromTheUseCase_whenTasksUpdate_thenItIsRepublished() async {
         // given — F4-26: every running task counts, sub-tasks included; the VM reads the count
         // straight from the use case rather than recomputing it, so this proves it stays wired.

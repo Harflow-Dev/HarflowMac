@@ -18,20 +18,7 @@ public struct TaskNode: Equatable, Identifiable, Sendable {
     /// followed by this row's own connector (`.branch`/`.last`) — empty for a root row (depth 0),
     /// which draws no connector of its own. Pure over `children`; no view code.
     public func flattenedWithGuides(depth: Int = 0) -> [(node: TaskNode, indent: Int, guides: [TreeGuide])] {
-        Self.guidedRows(self, depth: depth, ancestorGuides: [], isLastChild: nil)
-    }
-
-    private static func guidedRows(
-        _ node: TaskNode, depth: Int, ancestorGuides: [TreeGuide], isLastChild: Bool?
-    ) -> [(node: TaskNode, indent: Int, guides: [TreeGuide])] {
-        let guides = isLastChild.map { ancestorGuides + [$0 ? .last : .branch] } ?? []
-        var rows: [(node: TaskNode, indent: Int, guides: [TreeGuide])] = [(node, depth, guides)]
-        let descendantGuides = isLastChild.map { ancestorGuides + [$0 ? .blank : .continuation] } ?? []
-        let lastIndex = node.children.count - 1
-        for (index, child) in node.children.enumerated() {
-            rows += guidedRows(child, depth: depth + 1, ancestorGuides: descendantGuides, isLastChild: index == lastIndex)
-        }
-        return rows
+        TreeGuides.flattenedWithGuides(self, depth: depth, children: { $0.children })
     }
 }
 

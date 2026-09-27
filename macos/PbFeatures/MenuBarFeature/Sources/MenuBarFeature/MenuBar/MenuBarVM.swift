@@ -316,16 +316,20 @@ final class MenuBarVM: MenuBarViewModel {
             )
         }
         
-        let sections = Lineage.sections(latestTasks)
-        recentGroups = Array(sections.parallel.prefix(3))
-        recentTasks = sections.recent.prefix(6).map { node in
-            TaskRowModel(
+        // Parallel groups stay task-level (Review round 1, item 3); Recent shows conversations —
+        // one entry per resume chain (Monitor piece 7), named by its first member, statused by its
+        // current, so a follow-up sent to a finished task does not also leave its old row behind.
+        recentGroups = Array(Lineage.sections(latestTasks).parallel.prefix(3))
+        let conversations = Lineage.conversationSections(latestTasks).recent
+        recentTasks = conversations.prefix(6).map { node in
+            let current = node.conversation.current
+            return TaskRowModel(
                 id: node.id,
-                backend: node.task.backend,
-                title: useCase.title(node.id),
-                statusLabel: node.task.status.label,
-                statusColor: StatusColor.of(node.task.status),
-                ageText: Format.age(node.task.startedAt)
+                backend: current.backend,
+                title: useCase.title(node.conversation.first.taskID),
+                statusLabel: current.status.label,
+                statusColor: StatusColor.of(current.status),
+                ageText: Format.age(current.startedAt)
             )
         }
     }

@@ -24,6 +24,10 @@ struct SummaryPaneModel {
 
     let editedFilesAvailability: EventAvailability
     let editedFiles: [EditedFile]
+    /// A note shown alongside the (possibly partial) edited-files list — e.g. when a conversation's
+    /// earlier turns' logs are not all loaded yet (Monitor piece 7, Review round 1 item 6). `nil`
+    /// when everything known is complete.
+    let editedFilesNote: String?
 
     let numTurns: Int?
     let inputTokens: Int?
@@ -37,9 +41,21 @@ struct SummaryPaneModel {
 
     static let empty = SummaryPaneModel(
         finalAnswer: nil, finalAnswerPlaceholder: "No answer yet.", refusalLines: [],
-        editedFilesAvailability: .loading, editedFiles: [], numTurns: nil, inputTokens: nil,
+        editedFilesAvailability: .loading, editedFiles: [], editedFilesNote: nil, numTurns: nil, inputTokens: nil,
         outputTokens: nil, costUSD: nil, enforcementLines: []
     )
+
+    /// Combines every conversation member's own `eventsAvailability` into one overall state plus an
+    /// optional note (Monitor piece 7, Review round 1 item 6): complete only once every member is
+    /// `.available`; when some but not all are, the KNOWN part still shows, with a note saying
+    /// earlier turns aren't all in yet; `.loading` while nothing is known yet; `.unavailable` only
+    /// once every member has settled and none could be read at all.
+    static func aggregateAvailability(_ availabilities: [EventAvailability]) -> (EventAvailability, note: String?) {
+        if availabilities.allSatisfy({ $0 == .available }) { return (.available, nil) }
+        if availabilities.contains(.available) { return (.available, "Edit history for earlier turns isn't available.") }
+        if availabilities.contains(.loading) { return (.loading, nil) }
+        return (.unavailable, nil)
+    }
 
     /// The token keys differ by backend — claude/codex report `input_tokens`/`output_tokens`,
     /// opencode reports `input`/`output` — so this falls back **by key**, never by backend name
@@ -63,7 +79,9 @@ struct SummaryPaneModel {
     /// 9), so it is testable without a VM harness. `summary` is passed in already resolved (the
     /// VM's own snapshot-preferring rule — `summary` is a snapshot-only field, nil on a bare
     /// listing) rather than read off `task` here, so this stays a pure function of its arguments.
-    static func build(task: TaskInfo, summary: String?, events: [TaskEvent], eventsAvailability: EventAvailability) -> SummaryPaneModel {
+    static func build(
+        task: TaskInfo, summary: String?, events: [TaskEvent], eventsAvailability: EventAvailability, editedFilesNote: String? = nil
+    ) -> SummaryPaneModel {
         let hasSummary = summary?.isEmpty == false
         let (inputTokens, outputTokens) = tokens(from: task.raw["usage"]?.objectValue)
         return SummaryPaneModel(
@@ -72,6 +90,29 @@ struct SummaryPaneModel {
             refusalLines: task.permissionDenials.map(denialLine) + task.notices,
             editedFilesAvailability: eventsAvailability,
             editedFiles: EditedFiles.build(from: events, repoPath: task.repoPath),
+            editedFilesNote: editedFilesNote,
+            numTurns: task.numTurns, inputTokens: inputTokens, outputTokens: outputTokens, costUSD: task.totalCostUSD,
+            enforcementLines: EnforcementText.lines(task.enforcement)
+        )
+    }
+
+    /// The conversation-level version of `build(task:summary:events:eventsAvailability:)` (Monitor
+    /// piece 7): "Files the agent edited" pairs each member's own events independently
+    /// (`EditedFiles.build(fromMembers:repoPath:)`, Review round 1 item 1), and availability is
+    /// aggregated across every member's own lease (item 6).
+    static func build(
+        task: TaskInfo, summary: String?, memberEventsOldestFirst: [[TaskEvent]], memberAvailabilities: [EventAvailability]
+    ) -> SummaryPaneModel {
+        let hasSummary = summary?.isEmpty == false
+        let (inputTokens, outputTokens) = tokens(from: task.raw["usage"]?.objectValue)
+        let (availability, note) = aggregateAvailability(memberAvailabilities)
+        return SummaryPaneModel(
+            finalAnswer: hasSummary ? summary : nil,
+            finalAnswerPlaceholder: task.status.isRunning ? "No answer yet." : "No final answer.",
+            refusalLines: task.permissionDenials.map(denialLine) + task.notices,
+            editedFilesAvailability: availability,
+            editedFiles: EditedFiles.build(fromMembers: memberEventsOldestFirst, repoPath: task.repoPath),
+            editedFilesNote: note,
             numTurns: task.numTurns, inputTokens: inputTokens, outputTokens: outputTokens, costUSD: task.totalCostUSD,
             enforcementLines: EnforcementText.lines(task.enforcement)
         )
@@ -148,6 +189,9 @@ struct SummaryPaneView: View {
                         Text("As reported by the agent's own edit tools — not a git diff; changes made by shell commands aren't listed.")
                             .font(.pb(.caption))
                             .foregroundStyle(.secondary)
+                        if let note = model.editedFilesNote {
+                            Text(note).font(.pb(.caption)).foregroundStyle(.secondary)
+                        }
                         VStack(spacing: 0) {
                             ForEach(model.editedFiles) { file in
                                 HStack(spacing: 6) {

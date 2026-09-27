@@ -56,6 +56,9 @@ protocol TaskDetailViewModel: ViewModel {
     /// snapshot — `nil` hides the "Copy resume command" button entirely.
     var resumeCommand: String? { get }
     var copyResumeCommandHelp: String { get }
+    /// "N turns" once this conversation has more than one member (Monitor piece 7) — `nil` for a
+    /// plain, never-followed-up task.
+    var turnsText: String? { get }
 
     var tab: TaskTab { get }
     var tabs: [TaskTab] { get }
@@ -184,6 +187,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             Text(task.backend).font(.pb(.secondary, weight: .medium))
                             if let effort = task.reasoningEffort { Text("effort \(effort)").font(.pb(.secondary)).foregroundStyle(.secondary) }
                             FreedomBadge(freedom: task.freedom)
+                            if let turnsText = viewModel.turnsText { Text(turnsText).font(.pb(.secondary)).foregroundStyle(.secondary) }
                             Text(Format.repo(task.repoPath)).font(.pb(.secondary)).foregroundStyle(.secondary).lineLimit(1)
                             if task.depth > 0 { Text("depth \(task.depth)").font(.pb(.secondary)).foregroundStyle(.secondary) }
                             if let session = task.sessionID {

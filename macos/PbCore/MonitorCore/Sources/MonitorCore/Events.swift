@@ -211,3 +211,82 @@ extension TaskEvent.ToolCall {
         return inputPreview
     }
 }
+
+// MARK: - ConversationTimeline (Monitor piece 7)
+
+/// One conversation member's own event log, for `ConversationTimeline.rows(members:)`.
+public struct ConversationMember: Sendable {
+    public let task: TaskInfo
+    public let events: [TaskEvent]
+
+    public init(task: TaskInfo, events: [TaskEvent]) {
+        self.task = task
+        self.events = events
+    }
+}
+
+/// One row of a conversation's concatenated timeline: either a member's own paired `TimelineItem`
+/// or a synthetic turn separator ahead of a follow-up.
+public struct ConversationTimelineRow: Equatable, Identifiable, Sendable {
+    public enum Kind: Equatable, Sendable {
+        /// A follow-up's own prompt and time, shown as "You · HH:MM — <message>" ahead of its turn.
+        case separator(text: String)
+        case item(TimelineItem)
+    }
+
+    /// Globally unique across the whole concatenation — never just `TimelineItem.id` (an `Int`
+    /// `seq`), which restarts at every member (Review round 1, item 1's task-scoped identity).
+    public let id: String
+    public let taskID: String
+    public let timestamp: Date?
+    public let kind: Kind
+    /// Whether this row belongs to the conversation's own current, still-running turn — never true
+    /// for an older (necessarily terminal) member's row, even while the newest turn runs (Review
+    /// round 1, item 1: "an unfinished tool in an old turn shows 'no result', never a spinner").
+    public let live: Bool
+
+    public init(id: String, taskID: String, timestamp: Date?, kind: Kind, live: Bool) {
+        self.id = id
+        self.taskID = taskID
+        self.timestamp = timestamp
+        self.kind = kind
+        self.live = live
+    }
+}
+
+public enum ConversationTimeline {
+    /// `members` ordered oldest to newest, each with its own raw events. Every member's own events
+    /// are paired independently (`Timeline.items(from:)` is already scoped to one event stream —
+    /// call ids and `seq` both restart per task), then concatenated in order with a turn separator
+    /// ahead of every follow-up (every member after the first) carrying that member's own prompt and
+    /// start time (Review round 1, item 6). A live-input `user_message(source: "initial")` that
+    /// duplicates the separator's own text is dropped so it is not shown twice, as is a follow-up's own
+    /// `task_started` row; any other message
+    /// (e.g. one injected mid-run) still shows.
+    public static func rows(members: [ConversationMember]) -> [ConversationTimelineRow] {
+        var rows: [ConversationTimelineRow] = []
+        for (index, member) in members.enumerated() {
+            let isCurrentTurn = index == members.count - 1
+            let live = isCurrentTurn && member.task.status.isRunning
+            let prompt = Timeline.prompt(in: member.events)
+            if index > 0 {
+                rows.append(ConversationTimelineRow(
+                    id: "sep:\(member.task.taskID)", taskID: member.task.taskID, timestamp: member.task.startedAt,
+                    kind: .separator(text: prompt ?? ""), live: false
+                ))
+            }
+            for item in Timeline.items(from: member.events) {
+                if index > 0, case .message(let text, let source) = item.body, source == "initial", text == prompt {
+                    continue
+                }
+                // A follow-up's own "started" row would repeat what its separator already says.
+                if index > 0, case .started = item.body { continue }
+                rows.append(ConversationTimelineRow(
+                    id: "\(member.task.taskID)#\(item.id)", taskID: member.task.taskID, timestamp: item.at,
+                    kind: .item(item), live: live
+                ))
+            }
+        }
+        return rows
+    }
+}

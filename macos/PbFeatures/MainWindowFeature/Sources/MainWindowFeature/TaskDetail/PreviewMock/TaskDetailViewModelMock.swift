@@ -33,13 +33,18 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var canCancel = true
     var resumeCommand: String? = "cd /Users/example/repo && claude --resume abc12345"
     var copyResumeCommandHelp = "Copies a command that resumes this session in your own terminal."
+    var turnsText: String?
 
     var tab: TaskTab = .timeline
     var tabs: [TaskTab] = [.timeline, .summary, .prompt, .raw]
 
     var timelineModel = TimelinePaneModel(
-        stepCountText: "1 step", items: [PreviewFixtures.textItem("Looked at the failing test.")],
-        start: .now.addingTimeInterval(-30), live: true, emptyText: nil, subTaskStrip: nil
+        stepCountText: "1 step",
+        rows: [ConversationTimelineRow(
+            id: "abc12345#1", taskID: "abc12345", timestamp: .now.addingTimeInterval(-15),
+            kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: true
+        )],
+        start: .now.addingTimeInterval(-30), emptyText: nil, subTaskStrip: nil
     )
     var summaryModel = SummaryPaneModel.empty
     var promptText = "Fix the flaky login test."

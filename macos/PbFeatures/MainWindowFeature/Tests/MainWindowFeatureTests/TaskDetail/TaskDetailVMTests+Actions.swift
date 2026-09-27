@@ -142,8 +142,10 @@ extension TaskDetailVMTests {
         await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(1))
     }
     
-    @Test func givenAnEligibleResume_whenItSucceeds_thenItRoutesToTheNewTask() async {
-        // given — a terminal task with a session: Continue (resume) is eligible.
+    @Test func givenAnEligibleResume_whenItSucceeds_thenItDispatchesButDoesNotNavigate() async {
+        // given — a terminal task with a session: Continue (resume) is eligible. Monitor piece 7,
+        // Design point 7: Continue no longer navigates — the conversation stays selected, and the
+        // new turn appears once the listing refreshes and this VM's own membership recomputes.
         let harness = makeSUT()
         let sut = harness.sut
         let useCase = harness.useCase
@@ -155,14 +157,15 @@ extension TaskDetailVMTests {
         sut.didAppear()
         tasksSubject.send([done])
         await waitUntil { sut.task != nil }
-        
+
         // when
         let cleared = sut.submitMessage("follow up")
-        
+
         // then
         #expect(cleared)
         await verify(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(1))
-        await verify(routing).selectTask(.value("newTaskID")).calledEventually(1, before: .seconds(1))
+        try? await Task.sleep(for: .milliseconds(50))
+        verify(routing).selectTask(.any).called(0)
     }
     
     @Test func givenABlankOrIneligibleSubmit_whenSubmitted_thenTheTextIsKept() async {
@@ -239,7 +242,7 @@ extension TaskDetailVMTests {
         await waitUntil { !sut.rawEvents.isEmpty }
         #expect(sut.rawEvents.count == 1)
         #expect(sut.rawEvents.first?.isUnknown == true)
-        #expect(sut.timelineModel.items.isEmpty)
+        #expect(sut.timelineModel.rows.isEmpty)
     }
     
     // MARK: - Copy resume command (Monitor piece 3/3)

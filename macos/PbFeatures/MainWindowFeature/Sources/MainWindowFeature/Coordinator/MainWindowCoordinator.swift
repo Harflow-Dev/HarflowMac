@@ -8,6 +8,7 @@ import Combine
 import Foundation
 import MonitorCore
 import PbCommon
+import PbRepository
 import PbUI
 import PbUtilities
 import SwiftEnvironment
@@ -96,6 +97,9 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// survives even while the sidebar is unsubscribed (window closed).
     @ObservationIgnored private(set) var pendingReveal: PendingReveal?
     @ObservationIgnored private let revealSubject = PassthroughSubject<PendingReveal, Never>()
+    /// Read only to normalise `buildTaskDetailView(id:)`'s `.id()` key (Monitor piece 7, Review
+    /// round 1 item 4) — never to drive any other coordinator behaviour.
+    @ObservationIgnored @GlobalEnvironment(\.taskListRepository) private var taskListRepository
 
     // MARK: - Init
 
@@ -177,16 +181,24 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         return ParallelView(vm).id(name).eraseToAnyView()
     }
     
-    /// A fresh VM every call, keyed by `id` exactly like `buildParallelView(name:)` above: `.id(id)`
+    /// A fresh VM every call, keyed by `id` exactly like `buildParallelView(name:)` above: `.id()`
     /// wraps the whole `TaskDetailView(vm)` value here, at the call site — never inside
     /// `TaskDetailView.body`, which owns no `@State` of its own (its `.id()` need is satisfied by
     /// this call site resetting the VM itself, not by an inner `.id()` the way the old
     /// `TaskDetailView`'s `EventScope` needed one). See `buildParallelView(name:)`'s header comment
     /// and the phase-4 brief's binding Lesson for why the placement matters.
+    ///
+    /// The `.id()` key is `id` normalised to its conversation's first member (Monitor piece 7,
+    /// Review round 1 item 4), never the raw `id` this was called with: `id` may be any member (a
+    /// URL/notification/breadcrumb can carry a non-first one), and two different members of the
+    /// SAME conversation must keep the identical VM instance — its own tab selection and message
+    /// draft — rather than rebuilding on every such navigation. `TaskDetailVM` itself is still built
+    /// with the raw `id`; it resolves the whole conversation from whichever member it is given.
     public func buildTaskDetailView(id: String) -> AnyView {
         let useCase = TaskDetailViewRepository()
         let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self)
-        return TaskDetailView(vm).id(id).eraseToAnyView()
+        let conversationID = Lineage.conversationID(of: id, in: taskListRepository.tasks)
+        return TaskDetailView(vm).id(conversationID).eraseToAnyView()
     }
     
     // MARK: - ViewCoordinator

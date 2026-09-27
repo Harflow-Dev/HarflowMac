@@ -7,6 +7,11 @@
 //  git flow (`TaskDetailVM+Changes.swift`, removed) needed both because it awaited a network-ish
 //  process each time; this is a pure, synchronous rebuild from data the VM already holds.
 //
+//  Monitor piece 7: the final answer, refusals and usage stay the CURRENT member's own (Design
+//  point 6); "Files the agent edited" is built across every member's own events
+//  (`SummaryPaneModel.build(task:summary:memberEventsOldestFirst:memberAvailabilities:)`), pairing
+//  each member's calls/results independently (Review round 1, item 1).
+//
 
 import Foundation
 import MonitorCore
@@ -17,7 +22,12 @@ extension TaskDetailVM {
         // `summary` is a snapshot-only field (nil on a bare listing), so the freshest snapshot
         // wins over whatever `task` itself resolved to — the same precedence the git-backed
         // Changes pane used before it.
-        let summary = useCase.snapshot(taskID)?.summary ?? task.summary
-        summaryModel = SummaryPaneModel.build(task: task, summary: summary, events: rawEvents, eventsAvailability: latestEventsAvailability)
+        let summary = useCase.snapshot(currentTaskID)?.summary ?? task.summary
+        let members = conversationMembers
+        let memberEvents = members.map { eventsByMember[$0.taskID] ?? [] }
+        let memberAvailabilities = members.map { eventsAvailabilityByMember[$0.taskID] ?? .loading }
+        summaryModel = SummaryPaneModel.build(
+            task: task, summary: summary, memberEventsOldestFirst: memberEvents, memberAvailabilities: memberAvailabilities
+        )
     }
 }
