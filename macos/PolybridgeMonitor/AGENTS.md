@@ -29,11 +29,20 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
   The opener is registered by `MainWindowSceneRoot.onAppear` (the main window's scene root) and, as a
   second route, by `MenuBarLabelView.onAppear` via `MenuBarCoordinator.registerWindowOpener`. A Dock
   click with no visible main window reopens it through `AppDelegate.applicationShouldHandleReopen`.
-  `handle(url:)` (`polybridge-monitor://task/<id>`): an invalid URL is ignored; a valid one selects the
-  task, fires a fire-and-forget `TaskListRepository.refresh()`, and brings the window forward only when
-  `SettingsRepository.openWindowOnStart` is on. A notification click instead calls `handle(path:)`
-  for `.task` then `.openWindow` directly, which always brings the window forward (F4-32) — the
-  toggle applies only to a URL launch, never to a notification.
+  `handle(url:)` (`polybridge-monitor://task/<id>`, revised piece 10 — "a task starting doesn't
+  close/reopen an open window"): an invalid URL is ignored. A valid one, when the main window is
+  already visible (`isMainWindowVisible`, same identifier-prefix/visible/not-miniaturized rule as
+  `mainWindows()` above, plus `NSApp.isHidden` so ⌘H counts as not visible), only fires a
+  fire-and-forget `TaskListRepository.refresh()` — no selection change, no sidebar reveal, no
+  activation, no window re-order, regardless of the toggle. The first batch of URLs within 2 s of a
+  launch AppKit did not report as a plain one (`launchIsDefaultUserInfoKey` not `true`;
+  `AppDelegate.application(_:open:)` decides, from its own launch clock) goes through
+  `LaunchURLHandling.handleLaunchURL(_:)` instead, which always selects — the window then is the one
+  SwiftUI opened by itself; later batches take the visibility rule. Only when the window is *not*
+  visible does it fall back to the previous behaviour: select the task (+ reveal, via
+  `handle(path:)`), refresh, and bring the window forward only when `SettingsRepository.openWindowOnStart` is on. A
+  notification click instead calls `handle(path:)` for `.task` then `.openWindow` directly, which
+  always brings the window forward (F4-32) regardless of visibility or the toggle.
 - `AppDelegate` stays **not** globally `@MainActor` (its `NSApplicationDelegate` methods aren't
   isolated by the SDK, and `UNUserNotificationCenterDelegate`'s can be invoked off the main thread) —
   every access to main-actor state is wrapped in `MainActor.assumeIsolated` or lives behind a

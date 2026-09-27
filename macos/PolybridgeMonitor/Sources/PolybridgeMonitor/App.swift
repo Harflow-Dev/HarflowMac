@@ -66,9 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     
     private var launchedAt = Date()
     private var launchedByURL = false
+    private var hasHandledURLs = false
+    /// `false` only when AppKit says the launch was not a plain one (it came to open something);
+    /// a missing key keeps the time rule alone.
+    private var launchWasDefault: Bool?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         launchedAt = now()
+        launchWasDefault = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool
         if isRunningAsApp() { setNotificationDelegate(self) }
         // MS-LIST-1/F4-01: discovery → first list → watcher start, exactly once — implemented and
         // tested by `PbRepository.TaskListRepositoryImpl.start()`. The app shell's own job is only to
@@ -86,9 +91,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     
     func application(_ application: NSApplication, open urls: [URL]) {
-        if now().timeIntervalSince(launchedAt) < 2 { launchedByURL = true }
+        let withinLaunchWindow = now().timeIntervalSince(launchedAt) < 2
+        if withinLaunchWindow { launchedByURL = true }
+        // Only the first batch of a launch that came to open something is the one that launched the
+        // app; a task starting a second later — or just after a launch by hand — finds a window the
+        // user may already be looking at, and must leave it alone.
+        let isLaunchBatch = withinLaunchWindow && !hasHandledURLs && launchWasDefault != true
+        hasHandledURLs = true
         MainActor.assumeIsolated {
-            for url in urls { coordinator?.handle(url: url) }
+            for url in urls {
+                if isLaunchBatch, let launchHandler = coordinator as? LaunchURLHandling {
+                    launchHandler.handleLaunchURL(url)
+                } else {
+                    coordinator?.handle(url: url)
+                }
+            }
         }
     }
     
