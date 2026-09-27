@@ -53,7 +53,12 @@ final class StubProcessRunner: ProcessRunning, @unchecked Sendable {
     ) async -> Result<ProcessOutput, ToolError> {
         let call = Call(executable: executable, arguments: arguments)
         record(call)
-        return answer(call)
+        // Off the cooperative pool, exactly like `ProcessRunner`: a test that gates `answer` with a
+        // blocking `AsyncGate` must not hold a pool thread, or a narrow pool (a 3-core CI runner)
+        // deadlocks the whole parallel test run.
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async { continuation.resume(returning: self.answer(call)) }
+        }
     }
 
     private func record(_ call: Call) {
