@@ -17,8 +17,8 @@ public struct GroupRow: View {
                 ForEach(group.members.prefix(3)) { BackendBadge(backend: $0.task.backend, size: 16) }
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(group.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                Text("\(group.doneCount) of \(group.total) done").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(group.name).font(.pb(.body, weight: .medium)).lineLimit(1)
+                Text("\(group.doneCount) of \(group.total) done").font(.pb(.caption)).foregroundStyle(.secondary)
             }
             Spacer()
             if group.anyRunning { Circle().fill(Color.runningFG).frame(width: 6, height: 6) }

@@ -70,6 +70,13 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
         return stream.$items.eraseToAnyPublisher()
     }
 
+    public func eventsAvailability(for taskID: String) -> EventAvailability { stream(taskID)?.eventsAvailability ?? .loading }
+
+    public func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never> {
+        guard let stream = stream(taskID) else { return Just(.loading).eraseToAnyPublisher() }
+        return stream.$eventsAvailability.eraseToAnyPublisher()
+    }
+
     public func current(for taskID: String) -> TimelineItem? { Timeline.current(in: items(for: taskID)) }
     public func activity(for taskID: String) -> ActivityCounts { Timeline.activity(from: events(for: taskID)) }
     public func prompt(for taskID: String) -> String? { Timeline.prompt(in: events(for: taskID)) }
@@ -90,6 +97,7 @@ private final class TaskStream: @unchecked Sendable {
     let path: String
     @Subjected var events: [TaskEvent] = []
     @Subjected var items: [TimelineItem] = []
+    @Subjected var eventsAvailability: EventAvailability = .loading
     var refCount = 0
     private var tailer: EventFileTailer?
 
@@ -99,7 +107,7 @@ private final class TaskStream: @unchecked Sendable {
     }
 
     func start() {
-        let tailer = EventFileTailer(path: path) { [weak self] newEvents, reset in
+        let tailer = EventFileTailer(path: path) { [weak self] newEvents, reset, availability in
             guard let self else { return }
             // One assignment per callback: subscribers receive on main asynchronously, so a separate
             // `events = []` would be delivered, and could render, as a transient empty timeline.
@@ -108,6 +116,7 @@ private final class TaskStream: @unchecked Sendable {
             next.append(contentsOf: newEvents)
             events = next
             items = Timeline.items(from: next)
+            eventsAvailability = availability
         }
         tailer.start()
         self.tailer = tailer

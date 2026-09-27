@@ -10,8 +10,8 @@ import SwiftEnvironment
 /// `AppModel.perform`/`cancel`/`cancelAll`/`send`/`resume`/`startHeadless`
 /// (`AppModel.swift:253-320`). Both `busy` and the outcome line are keyed by task id and outlive the
 /// VM that started the action, because a write can legitimately land after that VM is gone (a
-/// resume moves the selection away from the task that is being resumed; an attach-failure outcome
-/// arrives after `ChildReaper` finishes).
+/// resume moves the selection away from the task that is being resumed; a Terminal.app hand-off
+/// outcome arrives asynchronously, after `TakeoverService`'s own dispatch completes).
 ///
 /// `cancel`/`send`/`resume` are `async throws` (decision 3): each writes its outcome line itself —
 /// exactly like `AppModel.perform` — *before* it throws, so the text survives regardless of who is
@@ -24,10 +24,10 @@ import SwiftEnvironment
 /// `resume` returns `nil`. Both are unambiguous once genuine failures throw instead of returning a
 /// sentinel: `false`/`nil` now means exactly one thing.
 ///
-/// `run`, `takeover` and `takeoverAttach` are the three genuinely raw operations: `run`'s error goes
-/// to the caller (the New Session sheet), never the outcome line (F4-17), and `takeover`/
-/// `takeoverAttach` touch neither busy nor outcome at all — that is `PbTerminal.TakeoverService`'s
-/// job, in Phase 3b.
+/// `run` and `takeover` are the two genuinely raw operations: `run`'s error goes to the caller (the
+/// New Session sheet), never the outcome line (F4-17), and `takeover` touches neither busy nor
+/// outcome at all — that is `TakeoverService`'s job. `takeover-attach` itself is invoked by the
+/// Terminal.app hand-off script directly (`polybridge-ctl takeover-attach`), never by this app.
 @Mockable
 public protocol TaskActionRepository: Sendable {
 
@@ -77,14 +77,8 @@ public protocol TaskActionRepository: Sendable {
     func run(_ request: RunRequest) async throws -> String
 
     /// Raw passthrough to `ctl takeover` — touches neither busy nor outcome. Takes the `CtlClient`
-    /// the caller already located (`AppModel.swift:325-362`: the grant and the attach both used the
-    /// one client captured at the start of `takeover(_:to:)`) rather than re-locating one, so a
-    /// second, independent locate can never disagree with the first between the grant and the
-    /// attach.
+    /// the caller already located, so `TakeoverService` never has to re-locate one.
     func takeover(_ taskID: String, using client: CtlClient) async throws -> TakeoverGrant
-    /// Raw passthrough to `ctl takeover-attach` — touches neither busy nor outcome. See
-    /// `takeover(_:using:)` for why the client is passed in rather than re-located.
-    func takeoverAttach(_ taskID: String, pid: Int32, using client: CtlClient) async throws
 }
 
 // MARK: - NullTaskActionRepository
@@ -107,7 +101,6 @@ public struct NullTaskActionRepository: TaskActionRepository {
 
     public func run(_: RunRequest) async throws -> String { throw ToolError.notFound(tool: "polybridge-ctl", searched: []) }
     public func takeover(_: String, using _: CtlClient) async throws -> TakeoverGrant { throw ToolError.notFound(tool: "polybridge-ctl", searched: []) }
-    public func takeoverAttach(_: String, pid _: Int32, using _: CtlClient) async throws { throw ToolError.notFound(tool: "polybridge-ctl", searched: []) }
 }
 
 // MARK: - GlobalValues

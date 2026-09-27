@@ -30,7 +30,10 @@ protocol MenuBarViewModel: ViewModel {
     var runningCount: Int { get }
     var openWindowOnStart: Bool { get }
     var notifyOnFinish: Bool { get }
-    
+    /// The install/update banner, or `nil` when nothing needs surfacing — shown where the red list
+    /// error shows today (settled plan, section 5).
+    var installBannerModel: InstallBanner.Model? { get }
+
     func didAppear()
     func didDisappear()
     func didAppearRunningRow(_ taskID: String)
@@ -42,6 +45,9 @@ protocol MenuBarViewModel: ViewModel {
     func didToggleOpenWindowOnStart(_ isOn: Bool)
     func didToggleNotifyOnFinish(_ isOn: Bool)
     func didCaptureWindowOpener(_ opener: @escaping () -> Void)
+    func didTapInstallBannerPrimary()
+    func didTapInstallBannerSecondary()
+    func didTapInstallBannerDismiss()
 }
 
 // MARK: - MenuBarView
@@ -67,20 +73,27 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Polybridge — \(viewModel.runningCount) running").font(.system(size: 13, weight: .semibold)).padding(12)
+            Text("Polybridge — \(viewModel.runningCount) running").font(.pb(.headline, weight: .semibold)).padding(12)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    if let listErrorMessage = viewModel.listErrorMessage {
-                        Text(listErrorMessage).font(.system(size: 11)).foregroundStyle(Color.failedRed)
+                    if let bannerModel = viewModel.installBannerModel {
+                        InstallBanner(
+                            model: bannerModel,
+                            onPrimary: { viewModel.didTapInstallBannerPrimary() },
+                            onSecondary: { viewModel.didTapInstallBannerSecondary() },
+                            onDismiss: { viewModel.didTapInstallBannerDismiss() }
+                        )
+                    } else if let listErrorMessage = viewModel.listErrorMessage {
+                        Text(listErrorMessage).font(.pb(.secondary)).foregroundStyle(Color.failedRed)
                     }
                     ForEach(viewModel.runningRows) { row in
                         MenuBarRunningRowView(model: row) { viewModel.didSelectRunningTask(row.id) }
                             .onAppear { viewModel.didAppearRunningRow(row.id) }
                             .onDisappear { viewModel.didDisappearRunningRow(row.id) }
                     }
-                    if viewModel.runningRows.isEmpty, viewModel.listErrorMessage == nil {
-                        Text("Nothing running.").font(.system(size: 12)).foregroundStyle(.secondary)
+                    if viewModel.runningRows.isEmpty, viewModel.listErrorMessage == nil, viewModel.installBannerModel == nil {
+                        Text("Nothing running.").font(.pb(.body)).foregroundStyle(.secondary)
                     }
                     if !viewModel.recentGroups.isEmpty || !viewModel.recentTasks.isEmpty {
                         SectionLabel(text: "Recent").padding(.top, 6)
@@ -110,14 +123,14 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
                     isOn: Binding(get: { viewModel.notifyOnFinish }, set: { viewModel.didToggleNotifyOnFinish($0) })
                 )
             }
-            .font(.system(size: 12))
+            .font(.pb(.body))
             .padding(12)
             Divider()
             HStack {
                 Circle().fill(viewModel.isConnected ? Color.doneGreen : Color.failedRed).frame(width: 7, height: 7)
-                Text(viewModel.connectionLine).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(viewModel.connectionLine).font(.pb(.secondary)).foregroundStyle(.secondary)
                 Spacer()
-                Button("Quit") { NSApp.terminate(nil) }.buttonStyle(.borderless).font(.system(size: 11))
+                Button("Quit") { NSApp.terminate(nil) }.buttonStyle(.borderless).font(.pb(.secondary))
             }
             .padding(12)
         }
@@ -131,5 +144,13 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
 #if DEBUG
 #Preview {
     MenuBarView(MenuBarViewModelMock())
+}
+
+#Preview("install banner") {
+    MenuBarView(MenuBarViewModelMock(installBannerModel: .init(
+        title: "polybridge isn't installed",
+        detail: "polybridge-ctl wasn't found in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin.",
+        primaryTitle: "Install polybridge"
+    )))
 }
 #endif

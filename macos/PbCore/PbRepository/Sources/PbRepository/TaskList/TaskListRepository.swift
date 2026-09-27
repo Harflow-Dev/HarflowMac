@@ -30,6 +30,11 @@ public protocol TaskListRepository: Sendable {
     /// concurrently (MS-LIST-4).
     func refresh() async
 
+    /// Like `refresh()`, but waits for — and reports the result of — a pass that starts **after**
+    /// this call, rather than firing-and-forgetting. Used by the install operation's completion
+    /// barrier, so a validated install only reports success once the listing has actually refreshed.
+    func refreshAndWait() async -> Result<Void, ToolError>
+
     /// Called by the Settings screen after `SettingsRepository.setToolDirectory` — triggers a
     /// refresh only; the login-PATH/`uv` probes never rerun (F4-05).
     func settingsChanged()
@@ -60,6 +65,7 @@ public struct NullTaskListRepository: TaskListRepository {
     public func titlesPublisher() -> AnyPublisher<[String: String], Never> { Just([:]).eraseToAnyPublisher() }
     public func start() {}
     public func refresh() async {}
+    public func refreshAndWait() async -> Result<Void, ToolError> { .success(()) }
     public func settingsChanged() {}
     public func title(_ taskID: String) -> String { "Task \(taskID.prefix(8))" }
     public func task(_: String) -> TaskInfo? { nil }

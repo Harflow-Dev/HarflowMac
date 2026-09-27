@@ -6,6 +6,7 @@ import MonitorCore
 import PbCommon
 import PbRepository
 import PbTestUtilities
+import PbUI
 import Testing
 
 @MainActor
@@ -44,12 +45,12 @@ import Testing
     /// FIFO stub queue does not reliably swap a member's answer for the very next call when a
     /// second `given(...).willReturn(...)` is registered after the first has already been read
     /// (see the note in `GeneralSettingsVMTests`, `SettingsFeature`). Mutating a box sidesteps it.
-    private final class Box<Value> {
+    final class Box<Value> {
         var value: Value
         init(_ value: Value) { self.value = value }
     }
     
-    private struct SUT {
+    struct SUT {
         let sut: MenuBarVM
         let useCase: MockMenuBarUseCase
         let routing: MockMenuBarRouting
@@ -59,13 +60,20 @@ import Testing
         let runningCountBox: Box<Int>
         let titlesSubject: PassthroughSubject<[String: String], Never>
         let titleBox: Box<(String) -> String>
+        let installStateSubject: PassthroughSubject<InstallState, Never>
+        let lastCheckMessageSubject: PassthroughSubject<String?, Never>
+        let installAnywayBlockedMessageSubject: PassthroughSubject<String?, Never>
+        let installStateBox: Box<InstallState>
+        let installNeedBox: Box<InstallNeed?>
+        let installDestinationBox: Box<String?>
     }
-    
-    private func makeSUT(
+
+    func makeSUT(
         connectionLine: String = "connecting…",
         runningCount: Int = 0,
         openWindowOnStart: Bool = true,
-        notifyOnFinish: Bool = true
+        notifyOnFinish: Bool = true,
+        installState: InstallState = .idle
     ) -> SUT {
         let useCase = MockMenuBarUseCase()
         let routing = MockMenuBarRouting()
@@ -80,7 +88,13 @@ import Testing
         // gotcha documented elsewhere in this repo), so a test that needs the title to change
         // between two reads mutates this box instead of calling `given` again.
         let titleBox = Box<(String) -> String>({ "Task \($0.prefix(8))" })
-        
+        let installStateSubject = PassthroughSubject<InstallState, Never>()
+        let lastCheckMessageSubject = PassthroughSubject<String?, Never>()
+        let installAnywayBlockedMessageSubject = PassthroughSubject<String?, Never>()
+        let installStateBox = Box<InstallState>(installState)
+        let installNeedBox = Box<InstallNeed?>(nil)
+        let installDestinationBox = Box<String?>(nil)
+
         given(useCase).connectionLine.willReturn(connectionLine)
         given(useCase).runningCount.willProduce { runningCountBox.value }
         given(useCase).openWindowOnStart.willReturn(openWindowOnStart)
@@ -97,11 +111,29 @@ import Testing
         given(routing).select(.any).willReturn()
         given(routing).openWindow().willReturn()
         given(routing).registerWindowOpener(.any).willReturn()
-        
+
+        given(useCase).installState.willProduce { installStateBox.value }
+        given(useCase).installStatePublisher().willReturn(installStateSubject.eraseToAnyPublisher())
+        given(useCase).lastCheckMessage.willReturn(nil)
+        given(useCase).lastCheckMessagePublisher().willReturn(lastCheckMessageSubject.eraseToAnyPublisher())
+        given(useCase).installAnywayBlockedMessage.willReturn(nil)
+        given(useCase).installAnywayBlockedMessagePublisher().willReturn(installAnywayBlockedMessageSubject.eraseToAnyPublisher())
+        given(useCase).installNeed(for: .any).willProduce { _ in installNeedBox.value }
+        given(useCase).installDestination().willProduce { installDestinationBox.value }
+        given(useCase).install().willReturn()
+        given(useCase).installUvThenPolybridge().willReturn()
+        given(useCase).retry().willReturn()
+        given(useCase).checkAgain().willReturn()
+        given(useCase).installAnyway().willReturn(true)
+        given(useCase).reset().willReturn()
+
         let sut = MenuBarVM(useCase: useCase, routing: routing)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
-            hasListedSubject: hasListedSubject, runningCountBox: runningCountBox, titlesSubject: titlesSubject, titleBox: titleBox
+            hasListedSubject: hasListedSubject, runningCountBox: runningCountBox, titlesSubject: titlesSubject, titleBox: titleBox,
+            installStateSubject: installStateSubject, lastCheckMessageSubject: lastCheckMessageSubject,
+            installAnywayBlockedMessageSubject: installAnywayBlockedMessageSubject, installStateBox: installStateBox,
+            installNeedBox: installNeedBox, installDestinationBox: installDestinationBox
         )
     }
     
@@ -214,7 +246,7 @@ import Testing
         #expect(sut.listErrorMessage == nil)
     }
     
-    @Test func givenAListError_whenObserved_thenTheMessageShowsAndIsConnectedIsFalse() async {
+    @Test func givenAListErrorThatIsNotAnInstallNeed_whenObserved_thenTheMessageShowsAndIsConnectedIsFalse() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -222,15 +254,42 @@ import Testing
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
         hasListedSubject.send(true)
-        let failure = ToolError.notFound(tool: "polybridge-ctl", searched: ["/usr/local/bin"])
-        
+        let failure = ToolError.refused(code: "denied", message: "polybridge-ctl refused the request.")
+
         // when
         listErrorSubject.send(failure)
-        
+
         // then
         await waitUntil { sut.listErrorMessage != nil }
         #expect(sut.listErrorMessage == failure.message)
         #expect(sut.isConnected == false)
+        #expect(sut.installBannerModel == nil)
+    }
+
+    // Moved from a `.message`-forwarding assertion (settled plan, section 7): a `notFound` error
+    // for `polybridge-ctl`/`polybridge-setup` is an install need, so it now shows the banner instead
+    // of the plain red `listErrorMessage`.
+    @Test func givenAListErrorThatIsAnInstallNeed_whenObserved_thenTheBannerShowsInsteadOfTheRedText() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let listErrorSubject = harness.listErrorSubject
+        let hasListedSubject = harness.hasListedSubject
+        harness.installNeedBox.value = .missing
+        sut.didAppear()
+        hasListedSubject.send(true)
+        let failure = ToolError.notFound(tool: "polybridge-ctl", searched: ["/usr/local/bin"])
+
+        // when
+        listErrorSubject.send(failure)
+
+        // then
+        await waitUntil { sut.installBannerModel != nil }
+        #expect(sut.listErrorMessage == nil)
+        #expect(sut.isConnected == false)
+        #expect(sut.installBannerModel?.title == "polybridge isn't installed")
+        #expect(sut.installBannerModel?.detail == failure.message)
+        #expect(sut.installBannerModel?.primaryTitle == "Install polybridge")
     }
     
     // MARK: - Selection

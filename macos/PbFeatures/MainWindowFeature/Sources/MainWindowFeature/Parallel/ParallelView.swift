@@ -9,6 +9,7 @@
 //
 
 import PbCommon
+import PbUI
 import SwiftUI
 
 // MARK: - ParallelViewModel
@@ -55,8 +56,8 @@ struct ParallelView<VM: ParallelViewModel>: View {
         VStack(spacing: 0) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(viewModel.groupName).font(.system(size: 16, weight: .semibold))
-                    Text(viewModel.headerSubtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(viewModel.groupName).font(.pb(.title, weight: .semibold))
+                    Text(viewModel.headerSubtitle).font(.pb(.secondary)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("View prompt") { viewModel.didTapViewPrompt() }
@@ -81,7 +82,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
             }
             Divider()
             HStack {
-                Text(viewModel.footerText).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(viewModel.footerText).font(.pb(.secondary)).foregroundStyle(.secondary)
                 Spacer()
             }
             .padding(10)

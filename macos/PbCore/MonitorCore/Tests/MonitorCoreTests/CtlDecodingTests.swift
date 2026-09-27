@@ -45,10 +45,10 @@ struct CtlDecodingTests {
     func givenAStatusDocument_whenDecoded_thenSnapshotFieldsAreRead() {
         // given
         let result = decode("""
-        {"v": 1, "task": {"task_id": "t", "status": "completed", "summary": "**done**", "exit_code": 0,
-          "base_commit": "abc123", "start_dirty": false, "events_log": "/h/.polybridge/tasks/t.events.jsonl",
+        {"v": 2, "task": {"task_id": "t", "status": "completed", "summary": "**done**", "exit_code": 0,
+          "events_log": "/h/.polybridge/tasks/t.events.jsonl",
           "enforcement": {"commit_push_blocked": false, "direct_commit_commands_denied": true},
-          "spawned_by": "p", "depth": 1}}
+          "spawned_by": "p", "depth": 1, "resume_command": "cd /r && claude --resume s"}}
         """, command: "status")
         // when
         guard case .success(.task(let task)) = result else { Issue.record("expected .task, got \(result)"); return }
@@ -56,16 +56,40 @@ struct CtlDecodingTests {
         #expect(task.status == .completed)
         #expect(task.summary == "**done**")
         #expect(task.exitCode == 0)
-        #expect(task.baseCommit == "abc123")
-        #expect(task.startDirty == false)
         #expect(task.enforcement?["direct_commit_commands_denied"] == .bool(true))
         #expect(!task.isRoot)
+        #expect(task.resumeCommand == "cd /r && claude --resume s")
+    }
+
+    @Test
+    func givenAResumeCommand_whenDecoded_thenNullAndEmptyAndWrongTypeAllReadAsNil() {
+        // given / when / then — a null and an empty string both mean "nothing to offer", and a
+        // non-string value (an older/corrupt document) must not crash the decode.
+        guard case .success(.task(let withNull)) = decode(
+            #"{"v": 2, "task": {"task_id": "t", "resume_command": null}}"#, command: "status"
+        ) else { Issue.record("expected .task"); return }
+        #expect(withNull.resumeCommand == nil)
+
+        guard case .success(.task(let withEmpty)) = decode(
+            #"{"v": 2, "task": {"task_id": "t", "resume_command": ""}}"#, command: "status"
+        ) else { Issue.record("expected .task"); return }
+        #expect(withEmpty.resumeCommand == nil)
+
+        guard case .success(.task(let withWrongType)) = decode(
+            #"{"v": 2, "task": {"task_id": "t", "resume_command": 7}}"#, command: "status"
+        ) else { Issue.record("expected .task"); return }
+        #expect(withWrongType.resumeCommand == nil)
+
+        guard case .success(.task(let absent)) = decode(
+            #"{"v": 2, "task": {"task_id": "t"}}"#, command: "status"
+        ) else { Issue.record("expected .task"); return }
+        #expect(absent.resumeCommand == nil)
     }
 
     @Test
     func givenAnErrorDocument_whenDecoded_thenItIsARefusalWithItsCode() {
         // given
-        let result = decode(#"{"v": 1, "error": {"code": "descendants_not_stopped", "message": "task x survived"}}"#, exit: 1, command: "takeover")
+        let result = decode(#"{"v": 2, "error": {"code": "descendants_not_stopped", "message": "task x survived"}}"#, exit: 1, command: "takeover")
         // when
         #expect(result == .success(.error(code: "descendants_not_stopped", message: "task x survived")))
         let failure = result.requiringSuccess()
@@ -94,7 +118,7 @@ struct CtlDecodingTests {
     @Test
     func givenAnUnknownOutcomeDocument_whenDecoded_thenItIsNotASuccess() {
         // given
-        let result = decode(#"{"v": 1, "unknown": {"message": "check polybridge-ctl list"}}"#, exit: 3, command: "run")
+        let result = decode(#"{"v": 2, "unknown": {"message": "check polybridge-ctl list"}}"#, exit: 3, command: "run")
         // when
         guard case .failure(.unknownOutcome(let message)) = result.requiringSuccess() else { Issue.record("expected .unknownOutcome"); return }
         // then
@@ -103,12 +127,22 @@ struct CtlDecodingTests {
 
     @Test
     func givenAnUnsupportedSchemaVersion_whenDecoded_thenItIsRefused() {
-        // given / when
-        guard case .failure(.unsupportedVersion(_, let v)) = decode(#"{"v": 2, "tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
+        // given / when — v3 is genuinely outside `ctlContractVersions` ({1, 2}).
+        guard case .failure(.unsupportedVersion(_, let v)) = decode(#"{"v": 3, "tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
         // then
-        #expect(v == "2")
+        #expect(v == "3")
+        #expect(ToolError.unsupportedVersion(tool: "polybridge-ctl", version: "3").message.contains("understands versions 1 or 2"))
         guard case .failure(.unsupportedVersion(_, let none)) = decode(#"{"tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
         #expect(none == "none")
+    }
+
+    @Test
+    func givenEitherCtlContractVersion_whenDecoded_thenBothAreAccepted() {
+        // given / when / then — v2 added `resume_command` (Monitor piece 3/3); v1 records simply
+        // have none, so both stay readable.
+        #expect(ctlContractVersions == [1, 2])
+        guard case .success(.tasks) = decode(#"{"v": 1, "tasks": []}"#) else { Issue.record("v1 should decode"); return }
+        guard case .success(.tasks) = decode(#"{"v": 2, "tasks": []}"#) else { Issue.record("v2 should decode"); return }
     }
 
     @Test
@@ -187,11 +221,11 @@ struct CtlClientTests {
             switch call.arguments.first {
             case "takeover":
                 ProcessOutput(
-                    exitCode: 0, stdout: json(#"{"v":1,"result":{"argv":["/c","--resume","s"],"cwd":"/r","session_id":"s","note":"n"}}"#),
+                    exitCode: 0, stdout: json(#"{"v":2,"result":{"argv":["/c","--resume","s"],"cwd":"/r","session_id":"s","note":"n"}}"#),
                     stderr: ""
                 )
-            case "run", "resume": ProcessOutput(exitCode: 0, stdout: json(#"{"v":1,"result":{"task_id":"new1"}}"#), stderr: "")
-            default: ProcessOutput(exitCode: 0, stdout: json(#"{"v":1,"result":{"status":"queued"}}"#), stderr: "")
+            case "run", "resume": ProcessOutput(exitCode: 0, stdout: json(#"{"v":2,"result":{"task_id":"new1"}}"#), stderr: "")
+            default: ProcessOutput(exitCode: 0, stdout: json(#"{"v":2,"result":{"status":"queued"}}"#), stderr: "")
             }
         }
         let client = CtlClient(executable: "/fake/polybridge-ctl", environment: ["PB_OPEN_MONITOR": "0"], runner: runner)
@@ -199,7 +233,6 @@ struct CtlClientTests {
         _ = await client.send("t1", text: "hi")
         _ = await client.cancel("t1")
         let grant = await client.takeover("t1")
-        _ = await client.takeoverAttach("t1", pid: 99)
         let started = await client.run(RunRequest(backend: "codex", repo: "/r", prompt: "p"))
         let resumed = await client.resume("t1", text: "more")
         // then
@@ -210,7 +243,6 @@ struct CtlClientTests {
             ["send", "--json", "--", "t1", "hi"],
             ["cancel", "--json", "--", "t1"],
             ["takeover", "--json", "--", "t1"],
-            ["takeover-attach", "--pid=99", "--json", "--", "t1"],
             ["run", "--backend=codex", "--repo=/r", "--prompt=p", "--json"],
             ["resume", "--json", "--", "t1", "more"]
         ])
@@ -222,9 +254,9 @@ struct CtlClientTests {
         // given
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
-        // Echoes its argv back inside a v1 list document, and proves PB_OPEN_MONITOR arrived.
+        // Echoes its argv back inside a v2 list document, and proves PB_OPEN_MONITOR arrived.
         let ctl = try writeFakeTool(dir, name: "polybridge-ctl", body: """
-        printf '{"v":1,"tasks":[{"task_id":"t-%s","backend":"%s","status":"running"}]}\\n' "$#" "$PB_OPEN_MONITOR"
+        printf '{"v":2,"tasks":[{"task_id":"t-%s","backend":"%s","status":"running"}]}\\n' "$#" "$PB_OPEN_MONITOR"
         """)
         let env = LaunchEnvironment.build(base: ["PATH": "/usr/bin:/bin", "PB_TASK_ID": "leak"], loginPath: nil, toolDirectory: dir.path)
         // when

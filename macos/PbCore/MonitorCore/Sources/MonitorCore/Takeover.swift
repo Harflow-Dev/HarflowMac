@@ -1,50 +1,5 @@
 import Foundation
 
-/// A process for the embedded terminal: an executable and an argv array. There is deliberately no
-/// way to build one from a string.
-public struct TerminalCommand: Equatable, Sendable {
-    public let executable: String
-    public let arguments: [String]
-    public let currentDirectory: String
-    public let environment: [String: String]
-}
-
-/// The plan's fixed wrapper: `/bin/zsh -l -c 'exec "$@"' polybridge-takeover <argv…>`.
-///
-/// - zsh, always, even when the login shell is fish: a POSIX-ish `exec "$@"` is the whole script;
-/// - `-l` gives the login PATH, so an agent CLI installed under the user's shell setup is found;
-/// - the argv rides as positional parameters (`$@`) after `$0`, so it is never shell text;
-/// - `exec` replaces zsh with the CLI in the same pid, the pid `takeover-attach` records.
-public enum TakeoverWrapper {
-    public static let shell = "/bin/zsh"
-    public static let script = "exec \"$@\""
-    public static let scriptName = "polybridge-takeover"
-
-    public enum BuildError: Error, Equatable { case emptyArgv, relativeDirectory }
-
-    public static func arguments(for argv: [String]) throws -> [String] {
-        guard !argv.isEmpty, !argv[0].isEmpty else { throw BuildError.emptyArgv }
-        return ["-l", "-c", script, scriptName] + argv
-    }
-
-    public static func command(argv: [String], cwd: String, environment: [String: String]) throws -> TerminalCommand {
-        guard cwd.hasPrefix("/") else { throw BuildError.relativeDirectory }
-        return TerminalCommand(executable: shell, arguments: try arguments(for: argv), currentDirectory: cwd, environment: terminalEnvironment(environment))
-    }
-
-    /// The launch environment plus what a terminal needs. `PB_*` is already stripped and
-    /// `PB_OPEN_MONITOR=0` set by `LaunchEnvironment`; re-asserted here since this runs a person's
-    /// interactive session.
-    public static func terminalEnvironment(_ base: [String: String]) -> [String: String] {
-        var env = base.filter { !$0.key.hasPrefix("PB_") }
-        env["TERM"] = "xterm-256color"
-        env["COLORTERM"] = "truecolor"
-        if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
-        env["PB_OPEN_MONITOR"] = "0"
-        return env
-    }
-}
-
 /// "Open in Terminal.app": Terminal.app can only be handed a file to run, so the handover is a
 /// fixed script plus NUL-separated data files in a private directory. The script's text never
 /// contains the argv, the task id or any path from polybridge — it reads them as data — so nothing
@@ -134,15 +89,5 @@ public enum MonitorURL {
         func alnum(_ s: Unicode.Scalar) -> Bool { s.isASCII && (CharacterSet.alphanumerics.contains(s)) }
         guard alnum(first) else { return false }
         return value.unicodeScalars.allSatisfy { alnum($0) || $0 == "_" || $0 == "-" }
-    }
-}
-
-/// A New session → Interactive terminal: the backend's own CLI, by name, started in the repo
-/// through the same wrapper. The login PATH finds it; nothing about the backend is assumed beyond
-/// the CLI being named after it.
-public enum InteractiveSession {
-    public static func command(backend: String, repo: String, environment: [String: String]) throws -> TerminalCommand {
-        guard backend.range(of: "^[a-z][a-z0-9-]*$", options: .regularExpression) != nil else { throw TakeoverWrapper.BuildError.emptyArgv }
-        return try TakeoverWrapper.command(argv: [backend], cwd: repo, environment: environment)
     }
 }

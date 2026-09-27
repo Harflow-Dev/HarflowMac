@@ -10,7 +10,7 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
 - Swift 6 language mode (tools 6.2 default) since Phase 5 — see the root AGENTS.md's "Language
   modes" section for what changed and why.
 - `AppModulesRegistry.allModules` lists every application module, lowest layer first: `PbRepository`,
-  `PbTerminal`, then `SettingsFeature`/`MenuBarFeature`/`MainWindowFeature`. `PbUtilities`/`PbCommon`/
+  then `SettingsFeature`/`MenuBarFeature`/`MainWindowFeature`. `PbUtilities`/`PbCommon`/
   `PbUI`/`MonitorCore` have no `Module` of their own. `PolybridgeMonitorApp.init()` runs
   `ApplicationModules(modules: AppModulesRegistry.allModules).initialize()` synchronously — its three
   phases (`modulesWillInitialize`/`initializeModule`/`modulesDidInitialize`, in that order across
@@ -22,13 +22,15 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
   start in ("connecting…"), and a URL/notification arriving before any scene has rendered still works
   (`mainWindowCoordinator`/`menuBarCoordinator`/`settingsCoordinator` are `lazy var`s on
   `AppCoordinator`, so the first access — from wherever it comes — builds them).
-- `AppCoordinator.handle(path:)` for `MonitorDestination`: `.task`/`.group`/`.interactive`/
-  `.newSession` delegate to `mainWindowCoordinator.handle(path:)` (which owns `selection`/
-  `isNewSessionPresented`); `.openWindow` goes through `WindowPresenting`
-  (`NSApp.activate(ignoringOtherApps: true)`, then the opener `MenuBarLabelView.onAppear` captured
-  via `MenuBarCoordinator.registerWindowOpener`). `handle(url:)` (`polybridge-monitor://task/<id>`):
-  an invalid URL is ignored; a valid one selects the task, fires a fire-and-forget
-  `TaskListRepository.refresh()`, and brings the window forward only when
+- `AppCoordinator.handle(path:)` for `MonitorDestination`: `.task`/`.group` delegate
+  to `mainWindowCoordinator.handle(path:)` (which owns `selection`/`isNewSessionPresented`);
+  `.newSession` first brings the window forward, then delegates the same way; `.openWindow` goes
+  through `WindowPresenting` (`NSApp.activate(ignoringOtherApps: true)`, then the registered opener).
+  The opener is registered by `MainWindowSceneRoot.onAppear` (the main window's scene root) and, as a
+  second route, by `MenuBarLabelView.onAppear` via `MenuBarCoordinator.registerWindowOpener`. A Dock
+  click with no visible main window reopens it through `AppDelegate.applicationShouldHandleReopen`.
+  `handle(url:)` (`polybridge-monitor://task/<id>`): an invalid URL is ignored; a valid one selects the
+  task, fires a fire-and-forget `TaskListRepository.refresh()`, and brings the window forward only when
   `SettingsRepository.openWindowOnStart` is on. A notification click instead calls `handle(path:)`
   for `.task` then `.openWindow` directly, which always brings the window forward (F4-32) — the
   toggle applies only to a URL launch, never to a notification.
@@ -47,7 +49,7 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
 - There is no `AppModel` and no `TransitionalAppCoordinator` any more — both were deleted in Phase 5
   once `AppCoordinator` existed to replace them. If you find a reference to either outside a
   historical comment citing the pre-refactor `AppModel.swift:<line>`, it is stale.
-- Depends on `MonitorCore`, `PbRepository`, `PbTerminal`, `PbUtilities`, `PbCommon`,
+- Depends on `MonitorCore`, `PbRepository`, `PbUtilities`, `PbCommon`,
   `SettingsFeature`, `MenuBarFeature`, `MainWindowFeature`, and (remote) SwiftEnvironment 4.1.8. Does
   **not** depend on `PbUI` — nothing in this target imports it (every UI component this app renders
   comes from a feature package).

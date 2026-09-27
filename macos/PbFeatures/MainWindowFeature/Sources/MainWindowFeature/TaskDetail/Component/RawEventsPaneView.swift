@@ -7,6 +7,7 @@
 //
 
 import MonitorCore
+import PbUI
 import SwiftUI
 
 struct RawEventsPaneView: View {
@@ -18,7 +19,7 @@ struct RawEventsPaneView: View {
             LazyVStack(alignment: .leading, spacing: 2) {
                 ForEach(events) { event in
                     Text(event.rawLine)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.pb(.caption, design: .monospaced))
                         .foregroundStyle(event.isUnknown ? .secondary : .primary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -27,7 +28,7 @@ struct RawEventsPaneView: View {
             .padding(10)
         }
         .overlay(alignment: .topTrailing) {
-            Text(path).font(.system(size: 10)).foregroundStyle(.secondary).padding(6).textSelection(.enabled)
+            Text(path).font(.pb(.caption)).foregroundStyle(.secondary).padding(6).textSelection(.enabled)
         }
     }
 }

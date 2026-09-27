@@ -12,7 +12,7 @@ import Testing
         let sut = ToolEnvironmentRepositoryImpl(home: "/Users/fixture", baseEnvironment: [:], runner: runner, settings: settings)
 
         // when
-        await sut.discoverEnvironment()
+        _ = await sut.discoverEnvironment()
 
         // then
         let loginProbe = runner.calls.first { $0.executable == LaunchEnvironment.loginPathArgv[0] }
@@ -36,7 +36,7 @@ import Testing
         let sut = ToolEnvironmentRepositoryImpl(home: home, baseEnvironment: [:], runner: runner, settings: settings)
 
         // when
-        await sut.discoverEnvironment()
+        _ = await sut.discoverEnvironment()
 
         // then
         #expect(sut.locator.uvToolBin == "/tool/bin")
@@ -64,7 +64,7 @@ import Testing
         let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
         let runner = StubProcessRunner(output: stdout("/usr/bin\n"))
         let sut = ToolEnvironmentRepositoryImpl(home: "/Users/fixture", baseEnvironment: [:], runner: runner, settings: settings)
-        await sut.discoverEnvironment()
+        _ = await sut.discoverEnvironment()
         let callsAfterDiscovery = runner.calls.count
 
         // when

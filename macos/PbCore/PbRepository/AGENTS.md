@@ -15,7 +15,7 @@ Root AGENTS.md applies (`../../AGENTS.md`). Read this module's `README.md` befor
   no property to resolve lazily — the earlier instance is just a parameter).
 - `@GlobalEntry` defaults are hand-written trivial "Null*" structs, not the `@Dummyable` macro:
   several MonitorCore value types the protocols return (`TaskInfo`, `ToolError`, `CtlClient`,
-  `TakeoverGrant`, `GitChanges`, …) have no zero-argument initializer and are not themselves
+  `TakeoverGrant`, …) have no zero-argument initializer and are not themselves
   `@Dummyable`, so macro-synthesized dummies were not a safe bet for every protocol here. A
   hand-written default that returns empty collections / `.notFound` failures / `Empty` publishers is
   simpler to reason about and does not depend on Dummyable's type coverage. `Dummyable` is therefore

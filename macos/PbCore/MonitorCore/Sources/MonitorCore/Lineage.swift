@@ -12,6 +12,41 @@ public struct TaskNode: Equatable, Identifiable, Sendable {
     public func flattened(depth: Int = 0) -> [(node: TaskNode, indent: Int)] {
         [(self, depth)] + children.flatMap { $0.flattened(depth: depth + 1) }
     }
+
+    /// `flattened(depth:)` plus per-row tree guides for the sidebar's collapsible tree: one
+    /// `TreeGuide` per ancestor level (root ancestor first, a continuation line or a blank column),
+    /// followed by this row's own connector (`.branch`/`.last`) — empty for a root row (depth 0),
+    /// which draws no connector of its own. Pure over `children`; no view code.
+    public func flattenedWithGuides(depth: Int = 0) -> [(node: TaskNode, indent: Int, guides: [TreeGuide])] {
+        Self.guidedRows(self, depth: depth, ancestorGuides: [], isLastChild: nil)
+    }
+
+    private static func guidedRows(
+        _ node: TaskNode, depth: Int, ancestorGuides: [TreeGuide], isLastChild: Bool?
+    ) -> [(node: TaskNode, indent: Int, guides: [TreeGuide])] {
+        let guides = isLastChild.map { ancestorGuides + [$0 ? .last : .branch] } ?? []
+        var rows: [(node: TaskNode, indent: Int, guides: [TreeGuide])] = [(node, depth, guides)]
+        let descendantGuides = isLastChild.map { ancestorGuides + [$0 ? .blank : .continuation] } ?? []
+        let lastIndex = node.children.count - 1
+        for (index, child) in node.children.enumerated() {
+            rows += guidedRows(child, depth: depth + 1, ancestorGuides: descendantGuides, isLastChild: index == lastIndex)
+        }
+        return rows
+    }
+}
+
+/// One column in a sidebar row's tree-guide gutter: an ancestor-level continuation line, a blank
+/// column (no later sibling at that level), or this row's own connector glyph.
+public enum TreeGuide: Equatable, Sendable {
+    /// An ancestor column: a later sibling exists at that level, so the vertical line continues
+    /// through it.
+    case continuation
+    /// An ancestor column: no later sibling at that level, so nothing draws.
+    case blank
+    /// This row's own connector: a later sibling follows among this row's own siblings (├).
+    case branch
+    /// This row's own connector: this row is the last child among its own siblings (└).
+    case last
 }
 
 /// Tasks sharing a `group` label: the columns of the Parallel view. Only the group's top-level

@@ -55,35 +55,49 @@ import Testing
         let (sut, fakeMainWindow, _, _) = makeSUT()
         var openerCallCount = 0
         sut.registerWindowOpener { openerCallCount += 1 }
-        
+
         // when
         sut.handle(path: MonitorDestination.task("abc123"))
         // then
         #expect(fakeMainWindow.selection == .task("abc123"))
-        
+
         // when
         sut.handle(path: MonitorDestination.group("release"))
         // then
         #expect(fakeMainWindow.selection == .group("release"))
-        
-        // when
-        let sessionID = UUID()
-        sut.handle(path: MonitorDestination.interactive(sessionID))
-        // then
-        #expect(fakeMainWindow.selection == .interactive(sessionID))
-        
-        // when
+
+        // when — decision 5: `.newSession` also brings the window forward, so the opener now fires
+        // here too, not only on `.openWindow`.
         sut.handle(path: MonitorDestination.newSession)
         // then
         #expect(fakeMainWindow.isNewSessionPresented)
-        
+        #expect(openerCallCount == 1)
+
         // when — `.openWindow` never reaches `MainWindowCoordinator` at all; it is handled by
         // `AppCoordinator` itself via `WindowPresenting`.
         sut.handle(path: MonitorDestination.openWindow)
         // then
-        #expect(openerCallCount == 1)
+        #expect(openerCallCount == 2)
         #expect(!fakeMainWindow.handledDestinations.contains(.openWindow))
-        #expect(fakeMainWindow.handledDestinations == [.task("abc123"), .group("release"), .interactive(sessionID), .newSession])
+        #expect(fakeMainWindow.handledDestinations == [.task("abc123"), .group("release"), .newSession])
+    }
+
+    @Test func givenNewSessionDestination_whenHandled_thenActivateRunsBeforeTheOpenerWhichRunsBeforeForwarding() {
+        // given — a shared event log proves the full ordering (F4-24 plus decision 5's ordering),
+        // not just the end state: `activate` (via `activateApp`), then the captured opener, then the
+        // forward to `MainWindowCoordinator` (via `FakeMainWindowNavigationCoordinator.onHandle`).
+        let log = LockedBox<[String]>([])
+        let (sut, fakeMainWindow, _, _) = makeSUT(activateLog: log)
+        sut.registerWindowOpener { log.value.append("opener") }
+        fakeMainWindow.onHandle = { destination in
+            if destination.pathId == MonitorDestination.newSession.pathId { log.value.append("newSession") }
+        }
+
+        // when
+        sut.handle(path: MonitorDestination.newSession)
+
+        // then
+        #expect(log.value == ["activate", "opener", "newSession"])
     }
     
     @Test func givenAPathThatIsNotAMonitorDestination_whenHandled_thenNothingHappens() {
@@ -99,9 +113,11 @@ import Testing
     }
     
     // MARK: - showWindow ordering (F4-24)
-    
+
     @Test func givenShowWindow_whenCalled_thenActivateRunsBeforeTheCapturedOpener() {
-        // given
+        // given — `registerWindowOpener` is called directly on `AppCoordinator`, exactly as the
+        // scene-root adapter (`MainWindowSceneRoot`, decision 3) does; never through
+        // `MenuBarCoordinator`. This proves `showWindow()` works from that path alone.
         let activateLog = LockedBox<[String]>([])
         let (sut, _, _, _) = makeSUT(activateLog: activateLog)
         sut.registerWindowOpener { activateLog.value.append("opener") }
@@ -168,6 +184,18 @@ import Testing
         #expect(handled)
         #expect(fakeMainWindow.selection == .task("abc123"))
         #expect(activateLog.value == ["activate"])
+    }
+
+    @Test func givenAValidURL_whenHandled_thenItGoesThroughTheMainWindowsHandlePathSoTheSidebarRevealsIt() {
+        // given — a direct `selection` write would skip the reveal request that `handle(path:)`
+        // makes, leaving a task opened by URL hidden inside a collapsed parent.
+        let (sut, fakeMainWindow, _, _) = makeSUT(openWindowOnStart: false)
+
+        // when
+        sut.handle(url: URL(string: "polybridge-monitor://task/abc123")!)
+
+        // then
+        #expect(fakeMainWindow.handledDestinations == [.task("abc123")])
     }
 }
 

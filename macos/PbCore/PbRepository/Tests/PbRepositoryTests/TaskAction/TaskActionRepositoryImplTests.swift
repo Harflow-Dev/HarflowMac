@@ -115,7 +115,7 @@ import Testing
     @Test func givenAnAcceptedAction_whenItCompletes_thenItReturnsTrueAndBusyIsClearedThenOutcomeThenListThenSnapshotRefresh() async throws {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let taskListRepository = MockTaskListRepository()
         let snapshotRepository = MockTaskSnapshotRepository()
@@ -140,7 +140,7 @@ import Testing
     @Test func givenCancelSucceeds_whenObserved_thenTheOutcomeIsTheCascadeSummaryAndItReturnsTrue() async throws {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{"status":"cancelled"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"status":"cancelled"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
@@ -156,7 +156,7 @@ import Testing
         // given — the command itself refusing (not a locator failure) must also throw, after the
         // outcome is written.
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"error":{"code":"session_busy","message":"another run has it"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"error":{"code":"session_busy","message":"another run has it"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
@@ -171,7 +171,7 @@ import Testing
     @Test func givenResumeSucceeds_whenObserved_thenTheOutcomeNamesTheNewTaskAndReturnsItsID() async throws {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{"task_id":"newtask123"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"newtask123"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
@@ -191,7 +191,7 @@ import Testing
     @Test func givenResumeSucceeds_whenObserved_thenOnResumedFiresBeforeEndBusyAndBeforeBothRefreshes() async throws {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{"task_id":"newtask123"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"newtask123"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let taskListRepository = MockTaskListRepository()
         let snapshotRepository = MockTaskSnapshotRepository()
@@ -217,7 +217,7 @@ import Testing
         // given — the original awaited `MainActor.run { selection = … }` before releasing busy, so
         // routing that has to hop actors must finish first, not merely be started.
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{"task_id":"newtask123"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"newtask123"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let taskListRepository = MockTaskListRepository()
         let snapshotRepository = MockTaskSnapshotRepository()
@@ -241,7 +241,7 @@ import Testing
         // given — decision 3: resume's own refusal is a genuine failure now, so it throws (nil is
         // reserved for "rejected because busy").
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"error":{"code":"no_session","message":"none"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"error":{"code":"no_session","message":"none"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
@@ -259,7 +259,7 @@ import Testing
     @Test func givenCancelAll_whenOneMemberIsAlreadyBusy_thenOnlyThatMemberIsSkipped() async {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{"status":"cancelled"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"status":"cancelled"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
         sut.tryBeginBusy("busy-one")
@@ -278,11 +278,11 @@ import Testing
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).ctl().willProduce { () -> Result<CtlClient, ToolError> in
             let runner = StubProcessRunner { call in
-                guard let taskID = call.arguments.last else { return .success(stdout(#"{"v":1,"result":{"status":"cancelled"}}"#)) }
+                guard let taskID = call.arguments.last else { return .success(stdout(#"{"v":2,"result":{"status":"cancelled"}}"#)) }
                 if taskID == "refused-one" {
-                    return .success(stdout(#"{"v":1,"error":{"code":"session_busy","message":"nope"}}"#))
+                    return .success(stdout(#"{"v":2,"error":{"code":"session_busy","message":"nope"}}"#))
                 }
-                return .success(stdout(#"{"v":1,"result":{"status":"cancelled"}}"#))
+                return .success(stdout(#"{"v":2,"result":{"status":"cancelled"}}"#))
             }
             return .success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner))
         }
@@ -302,7 +302,7 @@ import Testing
     @Test func givenRunSucceeds_whenObserved_thenItRefreshesTheListingBeforeReturningTheID() async throws {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{"task_id":"brandnew"}}"#))
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"brandnew"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let taskListRepository = MockTaskListRepository()
         var refreshed = false
@@ -332,13 +332,12 @@ import Testing
         }
     }
 
-    // MARK: takeover / takeoverAttach (raw — touch neither busy nor outcome)
+    // MARK: takeover (raw — touches neither busy nor outcome)
 
     @Test func givenTakeoverSucceeds_whenObserved_thenBusyAndOutcomeAreUntouched() async throws {
         // given — `takeover(_:using:)` takes the caller's already-located client directly, so this
-        // never goes through `toolEnvironment.ctl()` at all (item 2: the grant and the attach must
-        // agree on one client, never each re-locating their own).
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"result":{"argv":["claude"],"cwd":"/tmp"}}"#))
+        // never goes through `toolEnvironment.ctl()` at all.
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"argv":["claude"],"cwd":"/tmp"}}"#))
         let client = CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
         let sut = makeSUT()
 
@@ -351,16 +350,16 @@ import Testing
         #expect(sut.outcome("t1") == nil)
     }
 
-    @Test func givenTakeoverAttachFails_whenObserved_thenTheErrorIsThrownAndNeitherBusyNorOutcomeChange() async {
-        // given — the failure now comes from the passed-in client's own `takeoverAttach` call, not
-        // from a locator (`takeoverAttach(_:pid:using:)` no longer locates anything itself).
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"error":{"code":"session_busy","message":"already taken"}}"#))
+    @Test func givenTakeoverFails_whenObserved_thenTheErrorIsThrownAndNeitherBusyNorOutcomeChange() async {
+        // given — the failure comes from the passed-in client's own `takeover` call, not from a
+        // locator (`takeover(_:using:)` never locates anything itself).
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"error":{"code":"session_busy","message":"already taken"}}"#))
         let client = CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
         let sut = makeSUT()
 
         // when / then
         await #expect(throws: (any Error).self) {
-            try await sut.takeoverAttach("t1", pid: 123, using: client)
+            _ = try await sut.takeover("t1", using: client)
         }
         #expect(sut.busy.contains("t1") == false)
         #expect(sut.outcome("t1") == nil)
@@ -378,5 +377,22 @@ import Testing
 
         // then
         #expect(ids.allSatisfy { sut.outcome($0) == "done \($0)" })
+    }
+
+    // MARK: - Outcome replay (piece 3: a copy outcome must survive leaving the task)
+
+    @Test func givenAnOutcomeWasSetEarlier_whenANewSubscriberArrives_thenItReceivesTheStoredOutcome() {
+        // given — the outcome is stored before anyone is listening (the detail screen was closed).
+        let sut = makeSUT()
+        sut.setOutcome("t1", "Copied resume command.")
+
+        // when — a fresh subscriber (a new detail VM) subscribes afterwards
+        var received: [[String: String]] = []
+        let cancellable = sut.outcomesPublisher().sink { received.append($0) }
+        cancellable.cancel()
+
+        // then — it is replayed immediately, with nothing re-sent
+        #expect(received.last?["t1"] == "Copied resume command.")
+        #expect(sut.outcome("t1") == "Copied resume command.")
     }
 }

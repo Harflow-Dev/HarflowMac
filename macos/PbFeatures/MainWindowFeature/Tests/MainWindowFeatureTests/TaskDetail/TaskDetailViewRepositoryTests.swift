@@ -4,7 +4,6 @@ import Foundation
 import Mockable
 import MonitorCore
 import PbRepository
-import PbTerminal
 import PbTestUtilities
 import Testing
 
@@ -96,46 +95,33 @@ private final class LockedBox<Value>: @unchecked Sendable {
         #expect(resumedID.value == "def456")
     }
     
+    @Test func givenSetOutcome_whenCalled_thenItForwardsToTaskActionRepository() {
+        // given — Monitor piece 3/3: "Copy resume command" records through this same durable
+        // channel Cancel/Send/Resume already use.
+        let actions = MockTaskActionRepository()
+        given(actions).setOutcome(.value("abc123"), .value("Copied resume command.")).willReturn()
+        let sut = TaskDetailViewRepository(taskActionRepository: actions)
+
+        // when
+        sut.setOutcome("abc123", "Copied resume command.")
+
+        // then
+        verify(actions).setOutcome(.value("abc123"), .value("Copied resume command.")).called(1)
+    }
+
     @Test func givenBeginTakeover_whenCalled_thenItForwardsToTakeoverService() {
         // given
         let takeover = MockTakeoverService()
-        var capturedTaskID: String?
-        var capturedDestination: TakeoverDestination?
-        given(takeover)
-            .beginTakeover(taskID: .any, destination: .any)
-            .willProduce { taskID, destination in
-                capturedTaskID = taskID
-                capturedDestination = destination
-            }
+        given(takeover).beginTakeover(taskID: .value("abc123")).willReturn()
         let sut = TaskDetailViewRepository(takeoverService: takeover)
-        
+
         // when
-        sut.beginTakeover(taskID: "abc123", destination: .terminalApp)
-        
+        sut.beginTakeover(taskID: "abc123")
+
         // then
-        #expect(capturedTaskID == "abc123")
-        if case .terminalApp = capturedDestination {} else { Issue.record("expected .terminalApp, got \(String(describing: capturedDestination))") }
+        verify(takeover).beginTakeover(taskID: .value("abc123")).called(1)
     }
-    
-    @Test func givenSessionQueries_whenCalled_thenTheyForwardToTheSessionRegistry() throws {
-        // given
-        let registry = MockTerminalSessionRegistry()
-        given(registry).session(forTask: .value("abc123")).willReturn(nil)
-        given(registry).remove(.any).willReturn()
-        let sut = TaskDetailViewRepository(terminalSessionRegistry: registry)
-        let session = TerminalSession(
-            kind: .interactive, title: "claude", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        
-        // when
-        sut.removeSession(session)
-        
-        // then
-        #expect(sut.session(forTask: "abc123") == nil)
-        verify(registry).remove(.any).called(1)
-    }
-    
+
     @Test func givenEventStreamQueries_whenCalled_thenTheyForwardToEventStreamRepository() {
         // given
         let events = MockEventStreamRepository()
@@ -149,10 +135,10 @@ private final class LockedBox<Value>: @unchecked Sendable {
         given(events).current(for: .value("abc123")).willReturn(nil)
         given(events).prompt(for: .value("abc123")).willReturn("Fix the bug")
         let sut = TaskDetailViewRepository(eventStreamRepository: events)
-        
+
         // when
         let acquired = sut.acquireEventLease("abc123")
-        
+
         // then
         #expect(acquired.taskID == "abc123")
         #expect(sut.items(for: "abc123").isEmpty)
@@ -161,7 +147,22 @@ private final class LockedBox<Value>: @unchecked Sendable {
         #expect(sut.current(for: "abc123") == nil)
         #expect(sut.prompt(for: "abc123") == "Fix the bug")
     }
-    
+
+    @Test func givenEventsAvailabilityQueries_whenCalled_thenTheyForwardToEventStreamRepository() {
+        // given
+        let events = MockEventStreamRepository()
+        given(events).eventsAvailability(for: .value("abc123")).willReturn(.available)
+        given(events).eventsAvailabilityPublisher(for: .value("abc123")).willReturn(Just(EventAvailability.available).eraseToAnyPublisher())
+        let sut = TaskDetailViewRepository(eventStreamRepository: events)
+
+        // when / then
+        #expect(sut.eventsAvailability(for: "abc123") == .available)
+        verify(events).eventsAvailability(for: .value("abc123")).called(1)
+        verify(events).eventsAvailabilityPublisher(for: .value("abc123")).called(0)
+        _ = sut.eventsAvailabilityPublisher(for: "abc123")
+        verify(events).eventsAvailabilityPublisher(for: .value("abc123")).called(1)
+    }
+
     @Test func givenEventsPath_whenComputed_thenItUsesTheToolEnvironmentsTasksDirectory() {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
@@ -173,52 +174,6 @@ private final class LockedBox<Value>: @unchecked Sendable {
         
         // then
         #expect(path == "/tmp/pb-tasks/abc12345.events.jsonl")
-    }
-    
-    @Test func givenGitChanges_whenAsked_thenItForwardsToGitChangesRepositoryWithTheResolvedEnvironment() async {
-        // given
-        let git = MockGitChangesRepository()
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).environment(toolDirectory: .any).willReturn(["PATH": "/usr/bin"])
-        let expected = GitChanges(files: [], diffs: [], commitsSinceBase: nil, branch: "main", labels: [], comparedWithBase: true)
-        given(git)
-            .changes(
-                repo: .value("/repo"), baseCommit: .value("abc"), startDirty: .value(false), environment: .value(["PATH": "/usr/bin"])
-            )
-            .willReturn(expected)
-        let sut = TaskDetailViewRepository(gitChangesRepository: git, toolEnvironmentRepository: toolEnvironment)
-        
-        // when
-        let result = await sut.gitChanges(repo: "/repo", baseCommit: "abc", startDirty: false)
-        
-        // then
-        #expect(result == expected)
-    }
-    
-    @Test func givenPreviewFile_whenAsked_thenItForwardsToFilePreviewRepository() async {
-        // given
-        let preview = MockFilePreviewRepository()
-        given(preview).preview(repo: .value("/repo"), path: .value("a.txt")).willReturn(.text("hello"))
-        let sut = TaskDetailViewRepository(filePreviewRepository: preview)
-        
-        // when
-        let result = await sut.previewFile(repo: "/repo", path: "a.txt")
-        
-        // then
-        #expect(result == .text("hello"))
-    }
-    
-    @Test func givenSchedule_whenCalled_thenItForwardsToScheduling() {
-        // given
-        let scheduling = MockScheduling()
-        given(scheduling).schedule(after: .value(10), execute: .any).willReturn(AnyCancellable {})
-        let sut = TaskDetailViewRepository(scheduling: scheduling)
-        
-        // when
-        _ = sut.schedule(after: 10) {}
-        
-        // then
-        verify(scheduling).schedule(after: .value(10), execute: .any).called(1)
     }
     
     // MARK: - Fixtures

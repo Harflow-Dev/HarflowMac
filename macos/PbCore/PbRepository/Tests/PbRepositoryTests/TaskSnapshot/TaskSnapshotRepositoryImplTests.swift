@@ -17,7 +17,7 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":1,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
@@ -40,7 +40,7 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":1,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
@@ -51,7 +51,7 @@ import Testing
         // when — an unknown_task refusal supersedes the seeded snapshot.
         resultBox.mutate { $0 = .success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":1,"error":{"code":"unknown_task","message":"gone"}}"#))
+            runner: StubProcessRunner(output: stdout(#"{"v":2,"error":{"code":"unknown_task","message":"gone"}}"#))
         )) }
         await sut.refresh("task-1")
 
@@ -69,7 +69,7 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":1,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
@@ -80,7 +80,7 @@ import Testing
         // when: a later refresh fails with something other than unknown_task.
         resultBox.mutate { $0 = .success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":1,"error":{"code":"session_busy","message":"busy"}}"#))
+            runner: StubProcessRunner(output: stdout(#"{"v":2,"error":{"code":"session_busy","message":"busy"}}"#))
         )) }
         await sut.refresh("task-1")
 
@@ -95,14 +95,14 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":1,"task":{"task_id":"a","status":"running","backend":"claude"}}"#))
+                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"a","status":"running","backend":"claude"}}"#))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
         await sut.refresh("a")
         resultBox.mutate { $0 = .success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":1,"task":{"task_id":"b","status":"running","backend":"claude"}}"#))
+            runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"b","status":"running","backend":"claude"}}"#))
         )) }
         await sut.refresh("b")
 
@@ -120,7 +120,7 @@ import Testing
         let toolEnvironment = MockToolEnvironmentRepository()
         let runner = StubProcessRunner { call in
             let id = call.arguments.last ?? ""
-            return .success(stdout(#"{"v":1,"task":{"task_id":"\#(id)","status":"running","backend":"claude"}}"#))
+            return .success(stdout(#"{"v":2,"task":{"task_id":"\#(id)","status":"running","backend":"claude"}}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)

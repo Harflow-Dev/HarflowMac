@@ -87,7 +87,7 @@ import Testing
         
         // then — both share the coordinator's one lazily-built `MenuBarVM` (see `sharedVM()`);
         // producing both views must not crash or double-construct in a way that throws.
-        _ = sut.buildMenuBarLabelView()
+        _ = sut.buildMenuBarLabelView(icon: nil)
         _ = sut.buildMenuBarContentView()
     }
 }

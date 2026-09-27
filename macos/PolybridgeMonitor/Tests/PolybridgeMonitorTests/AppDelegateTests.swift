@@ -276,15 +276,133 @@ import Testing
     }
     
     // MARK: - Foreground notifications show banner + sound
-    
+
     @Test func givenAForegroundNotification_whenPresented_thenItShowsBannerAndSound() {
         // given
         let (sut, _, _, _) = makeSUT()
-        
+
         // when
         let options = sut.foregroundPresentationOptions()
-        
+
         // then
         #expect(options == [.banner, .sound])
     }
+
+    // MARK: - Decision 3: applicationShouldHandleReopen
+
+    //
+    // Decided from the `mainWindows()` seam alone, never from `hasVisibleWindows` — that flag is
+    // `true` whenever *any* window (Settings, the menu-bar panel) is on screen, which says nothing
+    // about the main window. `VisibilityFakeWindow` stands in for a real `NSWindow` because
+    // `isVisible`/`isMiniaturized` are not reliably drivable on a real, never-ordered-front window in
+    // a headless test run.
+
+    @Test func givenNoMainWindow_whenReopenIsRequested_thenItOpensTheWindowOnceAndReturnsTrue() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        sut.mainWindows = { [] }
+        let (coordinator, handledPaths) = Self.makeReopenCoordinator()
+        sut.coordinator = coordinator
+
+        // when
+        let result = sut.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false)
+
+        // then
+        #expect(result)
+        #expect(handledPaths.value == [MonitorDestination.openWindow.pathId])
+    }
+
+    @Test func givenAVisibleMainWindow_whenReopenIsRequested_thenNothingExtraHappensAndItReturnsTrue() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let window = VisibilityFakeWindow(isVisible: true, isMiniaturized: false)
+        sut.mainWindows = { [window] }
+        let coordinator = MockCoordinator()
+        given(coordinator).handle(path: .any).willReturn()
+        sut.coordinator = coordinator
+
+        // when
+        let result = sut.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: true)
+
+        // then
+        #expect(result)
+        verify(coordinator).handle(path: .any).called(0)
+    }
+
+    @Test func givenOnlyASettingsWindowIsVisible_whenReopenIsRequested_thenTheFlagIsIgnoredAndTheWindowOpens() {
+        // given — `hasVisibleWindows` is `true` (Settings is open), but `mainWindows()` is empty:
+        // the flag alone would say "do nothing", which is exactly the case this seam avoids.
+        let (sut, _, _, _) = makeSUT()
+        sut.mainWindows = { [] }
+        let (coordinator, handledPaths) = Self.makeReopenCoordinator()
+        sut.coordinator = coordinator
+
+        // when
+        let result = sut.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: true)
+
+        // then
+        #expect(result)
+        #expect(handledPaths.value == [MonitorDestination.openWindow.pathId])
+    }
+
+    @Test func givenAMiniaturizedMainWindow_whenReopenIsRequested_thenItOpensTheWindow() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let window = VisibilityFakeWindow(isVisible: true, isMiniaturized: true)
+        sut.mainWindows = { [window] }
+        let (coordinator, handledPaths) = Self.makeReopenCoordinator()
+        sut.coordinator = coordinator
+
+        // when
+        let result = sut.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: true)
+
+        // then
+        #expect(result)
+        #expect(handledPaths.value == [MonitorDestination.openWindow.pathId])
+    }
+
+    @Test func givenAnOrderedOutMainWindow_whenReopenIsRequested_thenItOpensTheWindow() {
+        // given — visible == false (ordered out), not miniaturized.
+        let (sut, _, _, _) = makeSUT()
+        let window = VisibilityFakeWindow(isVisible: false, isMiniaturized: false)
+        sut.mainWindows = { [window] }
+        let (coordinator, handledPaths) = Self.makeReopenCoordinator()
+        sut.coordinator = coordinator
+
+        // when
+        let result = sut.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false)
+
+        // then
+        #expect(result)
+        #expect(handledPaths.value == [MonitorDestination.openWindow.pathId])
+    }
+
+    // MARK: - Reopen test support
+
+    private static func makeReopenCoordinator() -> (MockCoordinator, LockedBox<[String]>) {
+        let coordinator = MockCoordinator()
+        let handledPaths = LockedBox<[String]>([])
+        given(coordinator).handle(path: .any).willProduce { path in
+            if let destination = path as? MonitorDestination { handledPaths.value.append(destination.pathId) }
+        }
+        return (coordinator, handledPaths)
+    }
+}
+
+/// A test double standing in for a real `NSWindow` — `isVisible`/`isMiniaturized` on a genuine
+/// `NSWindow` that has never been ordered front are not reliably drivable in a headless test run, so
+/// this overrides both directly instead.
+private final class VisibilityFakeWindow: NSWindow {
+    private let visibleOverride: Bool
+    private let miniaturizedOverride: Bool
+
+    init(isVisible: Bool, isMiniaturized: Bool) {
+        self.visibleOverride = isVisible
+        self.miniaturizedOverride = isMiniaturized
+        super.init(contentRect: .zero, styleMask: [], backing: .buffered, defer: false)
+        identifier = NSUserInterfaceItemIdentifier("main")
+    }
+
+    override var isVisible: Bool { visibleOverride }
+    override var isMiniaturized: Bool { miniaturizedOverride }
 }

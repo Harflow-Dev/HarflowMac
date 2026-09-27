@@ -8,7 +8,6 @@ import Combine
 import Foundation
 import MonitorCore
 import PbCommon
-import PbTerminal
 import PbUI
 import PbUtilities
 import SwiftEnvironment
@@ -20,21 +19,21 @@ import SwiftUI
 /// (this package) is generic over this protocol, never the concrete `MainWindowCoordinator` —
 /// `selection` and `isNewSessionPresented` are the single source of truth the settled plan's
 /// window/navigation seam formalises; the app target's root `AppCoordinator` (Phase 5) delegates
-/// `.task`/`.group`/`.interactive`/`.newSession` straight onto `handle(path:)` for the
-/// URL/notification/Cmd-N paths it owns (see that file's header).
+/// `.task`/`.group`/`.newSession` straight onto `handle(path:)` for the URL/notification/Cmd-N
+/// paths it owns (see that file's header).
 @MainActor
 public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
-    /// The currently selected task/group/interactive-session destination, or `nil`. Never set to
+    /// The currently selected task/group destination, or `nil`. Never set to
     /// `.newSession`/`.openWindow` — those are handled separately (`isNewSessionPresented`, and the
     /// parent's own window-opening seam) — see `MainWindowCoordinator.handle(path:)`.
     var selection: MonitorDestination? { get set }
     func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never>
-    
+
     /// Whether the New Session sheet is presented.
     var isNewSessionPresented: Bool { get set }
     func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never>
-    
-    /// Builds the sidebar (task list, search/filter, parallel runs, interactive sessions).
+
+    /// Builds the sidebar (task list, search/filter, parallel runs).
     func buildSidebarView() -> AnyView
     /// Builds the New Session sheet's content.
     func buildNewSessionView() -> AnyView
@@ -42,89 +41,103 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     func buildParallelView(name: String) -> AnyView
     /// Builds the task detail screen for `id`.
     func buildTaskDetailView(id: String) -> AnyView
-    /// Builds the interactive-terminal screen for the session with `id`. A missing or closed
-    /// session shows the closed-terminal state.
-    func buildInteractiveView(id: UUID) -> AnyView
 }
+
+// MARK: - PasteboardWriting
+
+/// Seam over `NSPasteboard` (Monitor piece 3/3's "Copy resume command") so a test can verify a
+/// copy without touching the real system clipboard — the same reason `chooseDirectory()` below
+/// keeps `NSOpenPanel` out of the VM layer, just for the pasteboard instead of a panel.
+@MainActor
+public protocol PasteboardWriting {
+    func clearContents() -> Int
+    func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool
+}
+
+extension NSPasteboard: PasteboardWriting {}
 
 // MARK: - MainWindowCoordinator
 
 /// The main window's coordinator: builds the Sidebar and New Session screens and owns the
 /// navigation state above. `handle(path:)` applies its own destinations (`task`/`group`/
-/// `interactive`/`newSession`) and bubbles anything else (`openWindow`, or a destination outside
+/// `newSession`) and bubbles anything else (`openWindow`, or a destination outside
 /// `MonitorDestination` entirely) to its parent.
 @MainActor
 @Observable
 public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
-    
+
     // MARK: - Public Properties
-    
+
     public let parent: any Coordinator
     public var path: [PathDestination] { [] }
-    
+
     public var selection: MonitorDestination? {
         didSet {
             guard selection != oldValue else { return }
             selectionSubject.send(selection)
         }
     }
-    
+
     public var isNewSessionPresented = false {
         didSet {
             guard isNewSessionPresented != oldValue else { return }
             isNewSessionPresentedSubject.send(isNewSessionPresented)
         }
     }
-    
+
     // MARK: - Private Properties
-    
+
     @ObservationIgnored private let selectionSubject = PassthroughSubject<MonitorDestination?, Never>()
     @ObservationIgnored private let isNewSessionPresentedSubject = PassthroughSubject<Bool, Never>()
     @ObservationIgnored private var sidebarVM: SidebarVM?
-    @ObservationIgnored @GlobalEnvironment(\.terminalSessionRegistry) private var terminalSessionRegistry
-    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
-    
+    @ObservationIgnored private let pasteboard: any PasteboardWriting
+    /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
+    /// "coordinator owns the pending reveal") — set on every navigation request for a task, so it
+    /// survives even while the sidebar is unsubscribed (window closed).
+    @ObservationIgnored private(set) var pendingReveal: PendingReveal?
+    @ObservationIgnored private let revealSubject = PassthroughSubject<PendingReveal, Never>()
+
     // MARK: - Init
-    
-    public init(parent: any Coordinator, terminalSessionRegistry: (any TerminalSessionRegistry)? = nil) {
+
+    public init(parent: any Coordinator, pasteboard: any PasteboardWriting = NSPasteboard.general) {
         self.parent = parent
-        if let terminalSessionRegistry { self.terminalSessionRegistry = terminalSessionRegistry }
-        subscribeToEndedSessions()
+        self.pasteboard = pasteboard
     }
-    
-    /// Owns the "remove an ended interactive session unless it is selected" rule (settled plan's
-    /// window/navigation seam; F4-21/F4-22), moved here from the app target's `AppModel` now that
-    /// `selection` lives on this coordinator instead. The registry only publishes when a session
-    /// ends — it never reads the selection itself. Takeover sessions are untouched: only
-    /// `.interactive` ones are ever auto-removed.
-    private func subscribeToEndedSessions() {
-        terminalSessionRegistry.endedSessionsPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] session in
-                guard let self, case .interactive = session.kind else { return }
-                if case .interactive(let id) = selection, id == session.id { return }
-                terminalSessionRegistry.remove(session)
-            }
-            .store(in: &cancellables)
-    }
-    
+
     // MARK: - Public Methods
-    
+
     public func handle(path: any PathDestination) {
         guard let destination = path as? MonitorDestination else {
             parent.handle(path: path)
             return
         }
         switch destination {
-        case .task, .group, .interactive: selection = destination
+        case .task(let id):
+            selection = destination
+            // Covers the URL/notification/menu-bar reveal triggers — `MenuBarCoordinator.select(_:)`
+            // and the app target's URL/notification handling both bubble here (see this package's
+            // `AGENTS.md`).
+            requestReveal(taskID: id)
+        case .group: selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)
         }
     }
-    
+
     public func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never> { selectionSubject.eraseToAnyPublisher() }
     public func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never> { isNewSessionPresentedSubject.eraseToAnyPublisher() }
-    
+
+    // MARK: - Pending reveal (settled plan, Design point 5)
+
+    /// Records a fresh reveal request for `taskID` — a new `requestID` every time, repeats included,
+    /// since `selection`'s own `didSet` drops a repeated assignment and would otherwise silently
+    /// swallow navigating twice to the same already-selected, hidden task.
+    private func requestReveal(taskID: String) {
+        let reveal = PendingReveal(taskID: taskID, requestID: UUID())
+        pendingReveal = reveal
+        revealSubject.send(reveal)
+    }
+
     public func buildSidebarView() -> AnyView {
         SidebarView(sharedSidebarVM()).eraseToAnyView()
     }
@@ -176,16 +189,6 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         return TaskDetailView(vm).id(id).eraseToAnyView()
     }
     
-    /// A fresh VM every call, keyed by `id` exactly like the two builders above. `InteractiveView`
-    /// constructs `TaskDetail/Component/TerminalPaneView.swift` directly (same module) once its own
-    /// `InteractiveVM` resolves a live session — this coordinator no longer exposes a standalone
-    /// `buildTerminalPane` now that the app target's old `InteractiveView` (its only caller) is gone.
-    public func buildInteractiveView(id: UUID) -> AnyView {
-        let useCase = InteractiveViewRepository()
-        let vm = InteractiveVM(sessionID: id, useCase: useCase, routing: self)
-        return InteractiveView(vm).id(id).eraseToAnyView()
-    }
-    
     // MARK: - ViewCoordinator
     
     /// The main window's whole `NavigationSplitView`, per this dispatch's own instruction — not just
@@ -208,12 +211,23 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 // MARK: - SidebarRouting
 
 extension MainWindowCoordinator: SidebarRouting {
+    /// The sidebar's own click — deliberately does **not** call `requestReveal(taskID:)`: Design
+    /// point 5 excludes the sidebar's own selection from the reveal triggers (a click can only
+    /// select a row that is already visible).
     public func select(_ destination: MonitorDestination?) {
         selection = destination
     }
-    
+
     public func openNewSession() {
         isNewSessionPresented = true
+    }
+
+    func revealPublisher() -> AnyPublisher<PendingReveal, Never> { revealSubject.eraseToAnyPublisher() }
+
+    /// A no-op once `requestID` has already been superseded by a later reveal (or already consumed).
+    func consumeReveal(requestID: UUID) {
+        guard pendingReveal?.requestID == requestID else { return }
+        pendingReveal = nil
     }
 }
 
@@ -236,12 +250,7 @@ extension MainWindowCoordinator: NewSessionRouting {
         selection = .task(taskID)
         isNewSessionPresented = false
     }
-    
-    public func didStartInteractive(sessionID: UUID) {
-        selection = .interactive(sessionID)
-        isNewSessionPresented = false
-    }
-    
+
     public func dismiss() {
         isNewSessionPresented = false
     }
@@ -250,18 +259,21 @@ extension MainWindowCoordinator: NewSessionRouting {
 // MARK: - ParallelRouting
 
 extension MainWindowCoordinator: ParallelRouting {
+    /// Shared with `TaskDetailRouting.selectTask(_:)` below (one implementation satisfies both
+    /// conformances) — covers the Parallel "open task" click, ancestor-breadcrumb taps, and "Open
+    /// parent", all of Design point 5's non-sidebar reveal triggers besides URL/notification/menu
+    /// bar (handled in `handle(path:)` above).
     public func selectTask(_ taskID: String) {
         selection = .task(taskID)
+        requestReveal(taskID: taskID)
     }
 }
 
 // MARK: - TaskDetailRouting
 
-extension MainWindowCoordinator: TaskDetailRouting {}
-
-// MARK: - InteractiveRouting
-
-/// `InteractiveRouting` declares no requirements (per this dispatch's own report): "Close" removes
-/// the session through `InteractiveUseCase` and never touches selection, exactly as the app target's
-/// old `AppModel.removeSession(_:)` never did either.
-extension MainWindowCoordinator: InteractiveRouting {}
+extension MainWindowCoordinator: TaskDetailRouting {
+    public func copyToPasteboard(_ text: String) -> Bool {
+        _ = pasteboard.clearContents()
+        return pasteboard.setString(text, forType: .string)
+    }
+}

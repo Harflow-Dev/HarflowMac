@@ -79,7 +79,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         started = true
         startLock.unlock()
         Task {
-            await toolEnvironment.discoverEnvironment()
+            _ = await toolEnvironment.discoverEnvironment()
             await refresh()
             startWatching()
         }
@@ -142,10 +142,39 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
     public func refresh() async {
         guard await refreshCoordinator.begin() else { return }
+        _ = await runRefreshLoop()
+    }
+
+    /// R2-3: unlike `refresh()`, this waits for — and returns — the result of a pass that starts
+    /// **after** this call, never a stale one already in flight when it was called. See
+    /// `RefreshCoordinator.registerWaiter(_:)` for the atomic register-and-arm this relies on.
+    public func refreshAndWait() async -> Result<Void, ToolError> {
+        // Even the caller that starts the loop is only a waiter on its first pass: the loop itself
+        // runs detached, so passes armed by later polls never hold this barrier open.
+        await withCheckedContinuation { continuation in
+            Task {
+                if await refreshCoordinator.registerWaiter(continuation) {
+                    _ = await runRefreshLoop()
+                }
+            }
+        }
+    }
+
+    /// Runs the coalescing loop to settling. Only ever called by whichever caller claimed the run
+    /// (`begin()` or `registerWaiter(_:)` returning "start it") — every other concurrent caller
+    /// either returns immediately (`refresh()`) or is resolved as a waiter by the pass it is owed.
+    /// Returns the loop's first pass's result.
+    private func runRefreshLoop() async -> Result<Void, ToolError> {
+        var firstResult: Result<Void, ToolError>?
         repeat {
-            await runOneRefresh()
-        } while await refreshCoordinator.consumeAgainAndDecideContinue()
+            let owed = await refreshCoordinator.beginPass()
+            let result = await runOneRefresh()
+            if firstResult == nil { firstResult = result }
+            let continueLoop = await refreshCoordinator.endPass(owed: owed, result: result)
+            if !continueLoop { break }
+        } while true
         restartWatcherIfInactive()
+        return firstResult ?? .success(())
     }
 
     /// A synchronous helper so the lock is never taken directly inside an `async` function body
@@ -156,7 +185,10 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         if watcher?.isActive != true { watcher?.start() }
     }
 
-    private func runOneRefresh() async {
+    /// Returns the outcome of this one pass — used by `refreshAndWait()`'s completion barrier, so a
+    /// caller waiting on it sees the same success/failure the listing itself just recorded.
+    @discardableResult
+    private func runOneRefresh() async -> Result<Void, ToolError> {
         let result: Result<[TaskInfo], ToolError> = switch toolEnvironment.ctl() {
         case .failure(let error): .failure(error)
         case .success(let client): await client.list()
@@ -177,8 +209,10 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             hasListedValue = true
             loadTitles()
             for id in eventStreamRepository.leasedTaskIDs { await snapshotRepository.refresh(id) }
+            return .success(())
         case .failure(let error):
             listErrorValue = error
+            return .failure(error)
         }
     }
 
@@ -258,26 +292,57 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
 /// The `refreshing`/`refreshAgain` coalescing pair from `AppModel.refresh` (`AppModel.swift:139-167`),
 /// as a private actor so the check-and-set is atomic without a manual lock (decision 12: async
-/// mutable state lives in a private actor).
+/// mutable state lives in a private actor). Extended for R2-3 (`refreshAndWait()`) with a second,
+/// waiter-based entry: `begin()` stays exactly `refresh()`'s original fire-and-forget coalescing
+/// (a coalesced caller just returns without waiting), while `registerWaiter(_:)` additionally
+/// registers a continuation so its caller is resolved once a **specific** pass — one that starts
+/// after its own registration — completes, without waiting for the whole coalescing chain to go
+/// idle. `beginPass()`/`endPass(owed:result:)` are what make that per-registration promise hold:
+/// each iteration only ever owes a result to whoever registered *before that iteration started*,
+/// never to someone who registers while it is running (they land in the next iteration's batch).
 private actor RefreshCoordinator {
     private var refreshing = false
     private var again = false
+    private var pendingWaiters: [CheckedContinuation<Result<Void, ToolError>, Never>] = []
 
     /// Returns `true` if the caller should run a refresh round now; `false` if one was already in
-    /// flight (in which case another pass is armed instead — MS-LIST-4).
+    /// flight (in which case another pass is armed instead — MS-LIST-4). Unchanged from before
+    /// `refreshAndWait()` existed: a coalesced `refresh()` caller never waits.
     func begin() -> Bool {
         if refreshing { again = true; return false }
         refreshing = true
         return true
     }
 
-    /// Called after one refresh round. Clears the "again" flag and reports whether the caller should
-    /// loop for one more round; ends the refreshing state when it will not.
-    func consumeAgainAndDecideContinue() -> Bool {
-        if again {
-            again = false
-            return true
+    /// `refreshAndWait()`'s entry: one atomic actor call that registers the waiter and arms a pass
+    /// for it — so no pass can complete in the gap between "a run is in flight" and "I'm registered
+    /// for the next one." Returns `true` when nothing was in flight, so the caller must start the
+    /// loop (whose first pass then owes this waiter its result).
+    func registerWaiter(_ continuation: CheckedContinuation<Result<Void, ToolError>, Never>) -> Bool {
+        pendingWaiters.append(continuation)
+        if refreshing {
+            again = true
+            return false
         }
+        refreshing = true
+        return true
+    }
+
+    /// One iteration boundary: hands back every waiter registered *before* this pass starts — it
+    /// now owes them its result — and clears `again`, so a fire-and-forget `begin()` call that
+    /// arrived before this point is also satisfied by this very pass.
+    func beginPass() -> [CheckedContinuation<Result<Void, ToolError>, Never>] {
+        again = false
+        let owed = pendingWaiters
+        pendingWaiters = []
+        return owed
+    }
+
+    /// Resolves everyone this pass owed, then reports whether another iteration is needed — true
+    /// when `again` was (re-)armed, or a new waiter registered, while this pass was running.
+    func endPass(owed: [CheckedContinuation<Result<Void, ToolError>, Never>], result: Result<Void, ToolError>) -> Bool {
+        for continuation in owed { continuation.resume(returning: result) }
+        if again || !pendingWaiters.isEmpty { return true }
         refreshing = false
         return false
     }

@@ -24,7 +24,8 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     var runningCount: Int
     var openWindowOnStart: Bool
     var notifyOnFinish: Bool
-    
+    var installBannerModel: InstallBanner.Model?
+
     init(
         runningRows: [MenuBarRunningRowModel] = [
             MenuBarRunningRowModel(
@@ -41,7 +42,8 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         connectionLine: String = "connected · polybridge-ctl",
         runningCount: Int = 1,
         openWindowOnStart: Bool = true,
-        notifyOnFinish: Bool = true
+        notifyOnFinish: Bool = true,
+        installBannerModel: InstallBanner.Model? = nil
     ) {
         self.runningRows = runningRows
         self.recentGroups = recentGroups
@@ -52,8 +54,9 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         self.runningCount = runningCount
         self.openWindowOnStart = openWindowOnStart
         self.notifyOnFinish = notifyOnFinish
+        self.installBannerModel = installBannerModel
     }
-    
+
     func didAppear() {}
     func didDisappear() {}
     func didAppearRunningRow(_: String) {}
@@ -65,6 +68,9 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     func didToggleOpenWindowOnStart(_ isOn: Bool) { openWindowOnStart = isOn }
     func didToggleNotifyOnFinish(_ isOn: Bool) { notifyOnFinish = isOn }
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
+    func didTapInstallBannerPrimary() {}
+    func didTapInstallBannerSecondary() {}
+    func didTapInstallBannerDismiss() {}
 }
 
 #endif

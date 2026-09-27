@@ -3,7 +3,6 @@ import Foundation
 import Mockable
 import MonitorCore
 import PbRepository
-import PbTerminal
 import Testing
 
 @MainActor
@@ -57,32 +56,5 @@ import Testing
         
         // then
         #expect(id == "new-id")
-    }
-    
-    @Test func givenStartInteractive_whenCalled_thenItForwardsToTheSessionRegistryWithTheResolvedEnvironment() throws {
-        // given
-        let registry = MockTerminalSessionRegistry()
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).environment(toolDirectory: .value(nil)).willReturn(["PATH": "/usr/bin"])
-        let session = TerminalSession(
-            kind: .interactive, title: "t", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        given(registry)
-            .startInteractive(
-                backend: .value("claude"), repo: .value("/tmp"), environment: .value(["PATH": "/usr/bin"])
-            )
-            .willReturn(.success(session))
-        let sut = NewSessionViewRepository(terminalSessionRegistry: registry, toolEnvironmentRepository: toolEnvironment)
-        
-        // when
-        let result = sut.startInteractive(backend: "claude", repo: "/tmp")
-        
-        // then
-        if case .success(let started) = result {
-            #expect(started === session)
-        } else {
-            Issue.record("expected success")
-        }
     }
 }

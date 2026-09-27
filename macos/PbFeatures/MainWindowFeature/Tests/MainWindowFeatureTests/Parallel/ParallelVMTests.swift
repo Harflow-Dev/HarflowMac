@@ -5,7 +5,6 @@ import Mockable
 import MonitorCore
 import PbCommon
 import PbRepository
-import PbTerminal
 import PbTestUtilities
 import Testing
 
@@ -46,10 +45,8 @@ import Testing
         let busySubject: PassthroughSubject<Set<String>, Never>
         let outcomesSubject: PassthroughSubject<[String: String], Never>
         let titlesSubject: PassthroughSubject<[String: String], Never>
-        let sessionsSubject: PassthroughSubject<[TerminalSession], Never>
         let tasksBox: Box<[String: TaskInfo]>
         let titlesBox: Box<[String: String]>
-        let sessionsBox: Box<[String: TerminalSession]>
         let leasesBox: Box<[String: MockEventStreamLease]>
         let releasedBox: Box<Set<String>>
         let runningInSubtreesBox: Box<[String]?>
@@ -63,10 +60,8 @@ import Testing
         let busySubject = PassthroughSubject<Set<String>, Never>()
         let outcomesSubject = PassthroughSubject<[String: String], Never>()
         let titlesSubject = PassthroughSubject<[String: String], Never>()
-        let sessionsSubject = PassthroughSubject<[TerminalSession], Never>()
         let tasksBox = Box<[String: TaskInfo]>([:])
         let titlesBox = Box<[String: String]>([:])
-        let sessionsBox = Box<[String: TerminalSession]>([:])
         let leasesBox = Box<[String: MockEventStreamLease]>([:])
         let releasedBox = Box<Set<String>>([])
         let runningInSubtreesBox = Box<[String]?>(nil)
@@ -76,10 +71,8 @@ import Testing
         given(useCase).busyPublisher().willReturn(busySubject.eraseToAnyPublisher())
         given(useCase).outcomesPublisher().willReturn(outcomesSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(titlesSubject.eraseToAnyPublisher())
-        given(useCase).sessionsPublisher().willReturn(sessionsSubject.eraseToAnyPublisher())
         given(useCase).task(.any).willProduce { tasksBox.value[$0] }
         given(useCase).title(.any).willProduce { titlesBox.value[$0] ?? "Task \($0.prefix(8))" }
-        given(useCase).session(forTask: .any).willProduce { sessionsBox.value[$0] }
         given(useCase).items(for: .any).willReturn([])
         given(useCase).itemsPublisher(for: .any).willReturn(Just([]).eraseToAnyPublisher())
         given(useCase).prompt(for: .any).willReturn(nil)
@@ -99,7 +92,7 @@ import Testing
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, snapshotsSubject: snapshotsSubject,
             busySubject: busySubject, outcomesSubject: outcomesSubject, titlesSubject: titlesSubject,
-            sessionsSubject: sessionsSubject, tasksBox: tasksBox, titlesBox: titlesBox, sessionsBox: sessionsBox,
+            tasksBox: tasksBox, titlesBox: titlesBox,
             leasesBox: leasesBox, releasedBox: releasedBox, runningInSubtreesBox: runningInSubtreesBox
         )
     }
@@ -162,35 +155,6 @@ import Testing
         // then
         await waitUntil { sut.columns.first?.title == "Fix the login bug" }
         #expect(sut.columns.first?.title == "Fix the login bug")
-    }
-    
-    @Test func givenALiveSessionStartsAfterTheTaskList_whenNoOtherEventFires_thenTheColumnStillRefreshes() async throws {
-        // given — Codex review finding: `isDrivenByUser` must refresh when a session starts/ends on
-        // its own, not only when an unrelated publisher happens to fire afterward.
-        let harness = makeSUT()
-        let sut = harness.sut
-        let tasksSubject = harness.tasksSubject
-        let sessionsSubject = harness.sessionsSubject
-        let tasksBox = harness.tasksBox
-        let sessionsBox = harness.sessionsBox
-        let task1 = task(id: "t1")
-        tasksBox.value["t1"] = task1
-        sut.didAppear()
-        tasksSubject.send([task1])
-        await waitUntil { sut.columns.count == 1 }
-        #expect(sut.columns.first?.isDrivenByUser == false)
-        
-        // when — no further `tasksSubject` emission, only a live session arriving.
-        let session = TerminalSession(
-            kind: .takeover(taskID: "t1"), title: "claude · repo", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        sessionsBox.value["t1"] = session
-        sessionsSubject.send([session])
-        
-        // then
-        await waitUntil { sut.columns.first?.isDrivenByUser == true }
-        #expect(sut.columns.first?.isDrivenByUser == true)
     }
     
     @Test func givenAnEmptyGroup_whenTasksPublish_thenIsEmptyIsSetAndNoColumnsAppear() async {
@@ -300,7 +264,8 @@ import Testing
         #expect(dialog.actions.first?.title == "Continue in terminal")
         #expect(
             dialog.description
-            == "The headless run is stopped first if it is still going. The terminal runs under your own default permissions, not read_only."
+            == "The headless run is stopped first if it is still going, then the same conversation opens in Terminal.app. It runs "
+            + "under your own default permissions, not read_only."
         )
         cancellable.cancel()
     }

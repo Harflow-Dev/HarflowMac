@@ -9,8 +9,8 @@
 //  (`GlobalValues.taskListRepository`/`settingsRepository`) instead of going through an `AppModel`
 //  façade, which no longer exists.
 //
-//  `handle(path:)` for `MonitorDestination`: `.task`/`.group`/`.interactive`/`.newSession` delegate
-//  to `MainWindowCoordinator` (which owns `selection`/`isNewSessionPresented`); `.openWindow` goes
+//  `handle(path:)` for `MonitorDestination`: `.task`/`.group`/`.newSession` delegate to
+//  `MainWindowCoordinator` (which owns `selection`/`isNewSessionPresented`); `.openWindow` goes
 //  through `WindowPresenting` — `NSApp.activate(ignoringOtherApps:)`, then the opener captured in
 //  `MenuBarLabelView.onAppear` via `MenuBarCoordinator.registerWindowOpener`. The directory-chooser
 //  panel already lives in `MainWindowCoordinator` (`NewSessionRouting.chooseDirectory`) — nothing
@@ -99,7 +99,9 @@ public final class AppCoordinator: ParentCoordinator, WindowPresenting {
     @discardableResult
     public func handle(url: URL) -> Bool {
         guard let id = MonitorURL.taskID(from: url) else { return false }
-        mainWindowNavigationCoordinator?.selection = .task(id)
+        // Through `handle(path:)`, not a direct `selection` write: that path also requests the
+        // sidebar reveal, so a task opened by URL is never left hidden inside a collapsed parent.
+        mainWindowCoordinator.handle(path: MonitorDestination.task(id))
         Task { await taskListRepositoryValue.refresh() }
         if settingsRepositoryValue.openWindowOnStart { showWindow() }
         return true
@@ -108,7 +110,13 @@ public final class AppCoordinator: ParentCoordinator, WindowPresenting {
     public func handle(path: any PathDestination) {
         guard let destination = path as? MonitorDestination else { return }
         switch destination {
-        case .task, .group, .interactive, .newSession:
+        case .task, .group:
+            mainWindowCoordinator.handle(path: destination)
+        case .newSession:
+            // Decision 5: ⌘N (or the File menu item) must bring the window forward before the New
+            // Session sheet is presented — `MainWindowCoordinator` only flips a `Bool` flag, which
+            // does nothing while the window is closed.
+            showWindow()
             mainWindowCoordinator.handle(path: destination)
         case .openWindow:
             showWindow()

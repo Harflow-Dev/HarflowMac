@@ -20,15 +20,15 @@ struct MenuBarRunningRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     BackendBadge(backend: model.backend, size: 18)
-                    Text(model.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Text(model.title).font(.pb(.body, weight: .medium)).lineLimit(1)
                     Spacer()
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(Format.clock(elapsed(at: context.date))).font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
+                        Text(Format.clock(elapsed(at: context.date))).font(.pb(.secondary)).monospacedDigit().foregroundStyle(.secondary)
                     }
                 }
                 if let activityLine = model.activityLine {
                     Text(activityLine)
-                        .font(model.activityIsMonospaced ? .system(size: 11, design: .monospaced) : .system(size: 11))
+                        .font(model.activityIsMonospaced ? .pb(.secondary, design: .monospaced) : .pb(.secondary))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(model.activityIsMonospaced ? .middle : .tail)

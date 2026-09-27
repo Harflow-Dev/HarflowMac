@@ -34,6 +34,13 @@ public protocol EventStreamRepository: Sendable {
     func eventsPublisher(for taskID: String) -> AnyPublisher<[TaskEvent], Never>
     func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never>
 
+    /// Whether the task's event log could actually be read the last time it was tailed — `.loading`
+    /// before any lease has been acquired or any read attempted. Lets a caller (the Summary tab's
+    /// "Files the agent edited" section) tell "nothing has happened yet" apart from "there is no log
+    /// to read at all", which an empty `events(for:)` cannot do on its own.
+    func eventsAvailability(for taskID: String) -> EventAvailability
+    func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never>
+
     /// The latest tool call still waiting for its result — `Timeline.current`.
     func current(for taskID: String) -> TimelineItem?
     func activity(for taskID: String) -> ActivityCounts
@@ -61,6 +68,11 @@ public struct NullEventStreamRepository: EventStreamRepository {
     public func items(for _: String) -> [TimelineItem] { [] }
     public func eventsPublisher(for _: String) -> AnyPublisher<[TaskEvent], Never> { Just([]).eraseToAnyPublisher() }
     public func itemsPublisher(for _: String) -> AnyPublisher<[TimelineItem], Never> { Just([]).eraseToAnyPublisher() }
+    public func eventsAvailability(for _: String) -> EventAvailability { .unavailable }
+    public func eventsAvailabilityPublisher(for _: String) -> AnyPublisher<EventAvailability, Never> {
+        Just(.unavailable).eraseToAnyPublisher()
+    }
+
     public func current(for _: String) -> TimelineItem? { nil }
     public func activity(for _: String) -> ActivityCounts { ActivityCounts() }
     public func prompt(for _: String) -> String? { nil }

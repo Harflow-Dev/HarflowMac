@@ -36,7 +36,6 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     func buildNewSessionView() -> AnyView { NewSessionView(NewSessionViewModelMock()).eraseToAnyView() }
     func buildParallelView(name: String) -> AnyView { Text("Parallel: \(name)").eraseToAnyView() }
     func buildTaskDetailView(id: String) -> AnyView { Text("Task: \(id)").eraseToAnyView() }
-    func buildInteractiveView(id: UUID) -> AnyView { Text("Interactive: \(id)").eraseToAnyView() }
     
     func start() -> AnyView { MainWindowNavigationView(self).eraseToAnyView() }
 }

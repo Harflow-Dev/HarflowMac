@@ -173,20 +173,13 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
         }
     }
 
-    // MARK: takeover (raw — touches neither busy nor outcome; PbTerminal.TakeoverService owns that)
+    // MARK: takeover (raw — touches neither busy nor outcome; TakeoverService owns that)
 
     /// Takes the caller's already-located `client` rather than re-locating one (see the protocol
     /// doc) — the grant and the later attach must agree on the same `CtlClient`.
     public func takeover(_ taskID: String, using client: CtlClient) async throws -> TakeoverGrant {
         switch await client.takeover(taskID) {
         case .success(let grant): return grant
-        case .failure(let error): throw error
-        }
-    }
-
-    public func takeoverAttach(_ taskID: String, pid: Int32, using client: CtlClient) async throws {
-        switch await client.takeoverAttach(taskID, pid: pid) {
-        case .success: return
         case .failure(let error): throw error
         }
     }

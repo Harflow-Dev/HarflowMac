@@ -14,7 +14,6 @@ excluded:
   - macos/PbFoundation/PbUI/.build
   - macos/PbCore/MonitorCore/.build
   - macos/PbCore/PbRepository/.build
-  - macos/PbCore/PbTerminal/.build
   - macos/PbFeatures/MainWindowFeature/.build
   - macos/PbFeatures/MenuBarFeature/.build
   - macos/PbFeatures/SettingsFeature/.build
@@ -86,6 +85,7 @@ identifier_name:
     - to
     - up
     - url
+    - uv
     - v
     - vm
     - x
@@ -100,3 +100,12 @@ type_name:
     error: 60
   excluded:
     - VM
+
+# === Custom Rules ===
+custom_rules:
+  no_literal_font_size:
+    name: "No literal font size"
+    regex: '\.system\s*\(\s*size\s*:'
+    included: '(^|/)macos/(PbFoundation/PbUI|PbFeatures/(MainWindowFeature|MenuBarFeature|SettingsFeature))/Sources/'
+    message: "Use Font.pb(_:weight:design:) from PbUI's type scale instead of a literal size."
+    severity: error

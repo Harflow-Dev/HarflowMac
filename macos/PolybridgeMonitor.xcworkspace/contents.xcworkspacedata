@@ -26,9 +26,6 @@
       <FileRef
          location = "group:PbCore/PbRepository">
       </FileRef>
-      <FileRef
-         location = "group:PbCore/PbTerminal">
-      </FileRef>
    </Group>
    <Group
       location = "container:"

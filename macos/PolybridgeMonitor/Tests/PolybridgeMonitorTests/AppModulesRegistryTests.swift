@@ -14,7 +14,6 @@ import MenuBarFeature
 import MonitorCore
 import PbCommon
 import PbRepository
-import PbTerminal
 import PbUtilities
 @testable import PolybridgeMonitor
 import SettingsFeature
@@ -24,29 +23,27 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct AppModulesRegistryTests {
-    
+
     @Test func givenAppModulesRegistry_whenInspected_thenModulesAreOrderedLowestLayerFirst() {
         // given / when
         let modules = AppModulesRegistry.allModules
-        
-        // then — PbRepository/PbTerminal (Core) before the three Feature modules (decision 13), and
-        // PbRepository before PbTerminal (PbTerminal reads repositories back out of `GlobalValues`).
-        #expect(modules.count == 5)
+
+        // then — PbRepository (Core) before the three Feature modules (decision 13).
+        #expect(modules.count == 4)
         #expect(modules[0] is PbRepository.Module)
-        #expect(modules[1] is PbTerminal.Module)
-        #expect(modules[2] is SettingsFeature.Module)
-        #expect(modules[3] is MenuBarFeature.Module)
-        #expect(modules[4] is MainWindowFeature.Module)
+        #expect(modules[1] is SettingsFeature.Module)
+        #expect(modules[2] is MenuBarFeature.Module)
+        #expect(modules[3] is MainWindowFeature.Module)
     }
-    
+
     @Test func givenAllModules_whenInitialized_thenGlobalValuesResolveToRealImplementations() {
         // given
         let snapshot = GlobalValuesSnapshot()
         defer { snapshot.restore() }
-        
+
         // when
         ApplicationModules(modules: AppModulesRegistry.allModules).initialize()
-        
+
         // then — every entry a module in this registry registers no longer resolves to its `Null*`/
         // `Dummy*` default. Reading each keeps the assertion honest about *which* value changed,
         // rather than asserting the type once and hoping every dependency followed.
@@ -55,11 +52,7 @@ struct AppModulesRegistryTests {
         #expect(!(GlobalValues.taskActionRepository is NullTaskActionRepository))
         #expect(!(GlobalValues.eventStreamRepository is NullEventStreamRepository))
         #expect(!(GlobalValues.taskSnapshotRepository is NullTaskSnapshotRepository))
-        // `NullTerminalSessionRegistry`/`NullTakeoverService` are `internal` to `PbTerminal` (not
-        // `public`), so they cannot be named from here — proven instead by `PbTerminal`'s own
-        // `ModuleTests`. The one thing owed here is that `PbTerminal.Module` actually ran, which the
-        // ordering assertion above and the downstream feature factories below already establish
-        // (`MainWindowFeature`'s `TerminalSessionRegistry` dependency would fail to resolve otherwise).
+        #expect(!(GlobalValues.takeoverService is NullTakeoverService))
         #expect(GlobalValues.settingsFeatureFactory is SettingsFeatureFactoryImpl)
         #expect(GlobalValues.menuBarFeatureFactory is MenuBarFeatureFactoryImpl)
         #expect(GlobalValues.mainWindowFeatureFactory is MainWindowFeatureFactoryImpl)
@@ -79,11 +72,8 @@ private struct GlobalValuesSnapshot {
     private let eventStreamRepository = GlobalValues.eventStreamRepository
     private let finishNotifier = GlobalValues.finishNotifier
     private let taskActionRepository = GlobalValues.taskActionRepository
-    private let gitChangesRepository = GlobalValues.gitChangesRepository
-    private let filePreviewRepository = GlobalValues.filePreviewRepository
     private let harnessRepository = GlobalValues.harnessRepository
     private let scheduling = GlobalValues.scheduling
-    private let terminalSessionRegistry = GlobalValues.terminalSessionRegistry
     private let takeoverService = GlobalValues.takeoverService
     private let settingsFeatureFactory = GlobalValues.settingsFeatureFactory
     private let menuBarFeatureFactory = GlobalValues.menuBarFeatureFactory
@@ -98,11 +88,8 @@ private struct GlobalValuesSnapshot {
             .environment(\.eventStreamRepository, eventStreamRepository)
             .environment(\.finishNotifier, finishNotifier)
             .environment(\.taskActionRepository, taskActionRepository)
-            .environment(\.gitChangesRepository, gitChangesRepository)
-            .environment(\.filePreviewRepository, filePreviewRepository)
             .environment(\.harnessRepository, harnessRepository)
             .environment(\.scheduling, scheduling)
-            .environment(\.terminalSessionRegistry, terminalSessionRegistry)
             .environment(\.takeoverService, takeoverService)
             .environment(\.settingsFeatureFactory, settingsFeatureFactory)
             .environment(\.menuBarFeatureFactory, menuBarFeatureFactory)

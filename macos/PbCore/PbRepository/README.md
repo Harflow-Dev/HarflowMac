@@ -14,12 +14,13 @@ context this package implements.
 | `SettingsRepository` | `UserDefaults`-backed `toolDirectory` / `openWindowOnStart` / `notifyOnFinish`, published live. |
 | `ToolEnvironmentRepository` | Login-PATH + `uv` discovery, `ctl()`/`setup()` client construction, the launch environment. |
 | `TaskSnapshotRepository` | Per-task `polybridge-ctl status` snapshots. |
-| `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task. |
+| `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task; also publishes each task's `EventAvailability` (`loading`/`available`/`unavailable`), so a caller never has to infer "the log couldn't be read" from an empty event list. |
 | `TaskListRepository` | `polybridge-ctl list`, refresh coalescing, titles, the FSEvents throttle, the safety poll, `detail()` precedence. |
 | `FinishNotifier` | User notifications for roots that finished since the last listing. |
-| `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover grant/attach passthrough. |
-| `GitChangesRepository` / `FilePreviewRepository` | Stateless wrappers over `GitInspector` and the untracked-file preview read. |
+| `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |
+| `TakeoverService` | Opens a task's session in Terminal.app — `ctl takeover` grant → hand-off files → `open -a Terminal`; the only take-over destination the Monitor offers. |
 | `HarnessRepository` | `polybridge-setup` status/install/remove. |
+| `InstallRepository` | The guarded "Install polybridge" pipeline (git → uv → polybridge → validate) and its state machine — see `Install/InstallCommands.swift`/`Install/InstallRepositoryImpl.swift`. |
 | `DirectoryWatcher` | FSEvents on the tasks folder, moved here in Swift 6 mode with a `@Sendable` handler. |
 
 Every protocol is `@Mockable`; every `@GlobalEntry` default is a hand-written `Null*` struct (see

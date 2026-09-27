@@ -66,8 +66,68 @@ import Testing
         let item = Timeline.items(from: [event])[0]
         given(eventStream).current(for: .value("abc123")).willReturn(item)
         let sut = MenuBarViewRepository(eventStreamRepository: eventStream)
-        
+
         // then
         #expect(sut.current("abc123") == item)
+    }
+
+    // MARK: - Install (settled plan, section 5)
+
+    @Test func givenInstallRepositoryValues_whenReadOrActed_thenTheyPassThrough() async {
+        // given
+        let install = MockInstallRepository()
+        given(install).state.willReturn(.needsUv)
+        given(install).lastCheckMessage.willReturn("checking")
+        given(install).installAnywayBlockedMessage.willReturn("blocked")
+        given(install).destination().willReturn("/Users/x/.local/bin")
+        given(install).statePublisher().willReturn(Just(InstallState.needsUv).eraseToAnyPublisher())
+        given(install).lastCheckMessagePublisher().willReturn(Just("checking").eraseToAnyPublisher())
+        given(install).installAnywayBlockedMessagePublisher().willReturn(Just("blocked").eraseToAnyPublisher())
+        given(install).install().willReturn()
+        given(install).installUvThenPolybridge().willReturn()
+        given(install).retry().willReturn()
+        given(install).checkAgain().willReturn()
+        given(install).installAnyway().willReturn(true)
+        given(install).reset().willReturn()
+        let sut = MenuBarViewRepository(installRepository: install)
+
+        // then — reads
+        #expect(sut.installState == .needsUv)
+        #expect(sut.lastCheckMessage == "checking")
+        #expect(sut.installAnywayBlockedMessage == "blocked")
+        #expect(sut.installDestination() == "/Users/x/.local/bin")
+
+        // when — actions
+        await sut.install()
+        await sut.installUvThenPolybridge()
+        await sut.retry()
+        await sut.checkAgain()
+        let allowed = await sut.installAnyway()
+        sut.reset()
+
+        // then
+        #expect(allowed)
+        verify(install).install().called(1)
+        verify(install).installUvThenPolybridge().called(1)
+        verify(install).retry().called(1)
+        verify(install).checkAgain().called(1)
+        verify(install).installAnyway().called(1)
+        verify(install).reset().called(1)
+    }
+
+    @Test func givenBothToolsMissing_whenInstallNeedIsComputed_thenTheClassifierSaysMissing() {
+        // given — `installNeed(for:)` locates both tools fresh through `ToolEnvironmentRepository`
+        // rather than trusting the error's own claim, then hands the classifier both presences.
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).locator.willReturn(
+            ToolLocator(overrideDirectory: nil, home: "/Users/x", uvToolBin: nil, isExecutable: { _ in false })
+        )
+        let sut = MenuBarViewRepository(toolEnvironmentRepository: toolEnvironment)
+
+        // when
+        let need = sut.installNeed(for: .notFound(tool: "polybridge-setup", searched: []))
+
+        // then
+        #expect(need == .missing)
     }
 }

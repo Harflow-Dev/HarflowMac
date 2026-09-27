@@ -4,14 +4,15 @@ import Foundation
 import Mockable
 import MonitorCore
 import PbCommon
-import PbTerminal
+import PbRepository
 import PbTestUtilities
 import Testing
 
 @MainActor
 @Suite struct SidebarVMTests {
     
-    private func task(
+    // Not `private`: `SidebarVMTests+Tree.swift` uses it too, and `private` is file-scoped in Swift.
+    func task(
         id: String, backend: String = "claude", status: String = "running", startedAt: Date? = .now,
         group: String? = nil, spawnedBy: String? = nil, repoPath: String = "/tmp/repo", freedom: String? = nil,
         durationSeconds: Double? = nil
@@ -27,70 +28,92 @@ import Testing
         return TaskInfo(.object(object))!
     }
     
-    /// Never `.start()`ed, so `.ended` stays `false` — a "live" session fixture with no real process.
-    private func session(kind: TerminalSession.Kind = .interactive, title: String = "claude · repo", backend: String = "claude") throws -> TerminalSession {
-        try TerminalSession(kind: kind, title: title, backend: backend, command: TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:]))
-    }
-    
     /// A plain mutable box read by a `willProduce` closure registered exactly once — `Mockable`'s
     /// FIFO stub queue does not reliably swap a member's answer for the very next call when a
     /// second `given(...).willReturn(...)` is registered after the first has already matched (see
     /// the Phase 3/4a reports). Mutating a box sidesteps it.
-    private final class Box<Value> {
+    final class Box<Value> {
         var value: Value
         init(_ value: Value) { self.value = value }
     }
     
-    private struct SUT {
+    struct SUT {
         let sut: SidebarVM
         let useCase: MockSidebarUseCase
         let routing: MockSidebarRouting
         let tasksSubject: PassthroughSubject<[TaskInfo], Never>
         let listErrorSubject: PassthroughSubject<ToolError?, Never>
         let hasListedSubject: PassthroughSubject<Bool, Never>
-        let sessionsSubject: PassthroughSubject<[TerminalSession], Never>
         let selectionSubject: PassthroughSubject<MonitorDestination?, Never>
-        let sessionsByTask: Box<[String: TerminalSession]>
-        let interactiveSessionsBox: Box<[TerminalSession]>
         let titlesSubject: PassthroughSubject<[String: String], Never>
         let titlesBox: Box<[String: String]>
         let routingSelectionBox: Box<MonitorDestination?>
+        let installStateSubject: PassthroughSubject<InstallState, Never>
+        let lastCheckMessageSubject: PassthroughSubject<String?, Never>
+        let installAnywayBlockedMessageSubject: PassthroughSubject<String?, Never>
+        let installStateBox: Box<InstallState>
+        let installNeedBox: Box<InstallNeed?>
+        let installDestinationBox: Box<String?>
+        let revealSubject: PassthroughSubject<PendingReveal, Never>
+        let pendingRevealBox: Box<PendingReveal?>
     }
-    
-    private func makeSUT(connectionLine: String = "connecting…") -> SUT {
+
+    func makeSUT(connectionLine: String = "connecting…", installState: InstallState = .idle) -> SUT {
         let useCase = MockSidebarUseCase()
         let routing = MockSidebarRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let listErrorSubject = PassthroughSubject<ToolError?, Never>()
         let hasListedSubject = PassthroughSubject<Bool, Never>()
-        let sessionsSubject = PassthroughSubject<[TerminalSession], Never>()
         let selectionSubject = PassthroughSubject<MonitorDestination?, Never>()
         let titlesSubject = PassthroughSubject<[String: String], Never>()
-        let sessionsByTask = Box<[String: TerminalSession]>([:])
-        let interactiveSessionsBox = Box<[TerminalSession]>([])
         let titlesBox = Box<[String: String]>([:])
         let routingSelectionBox = Box<MonitorDestination?>(nil)
-        
+        let installStateSubject = PassthroughSubject<InstallState, Never>()
+        let lastCheckMessageSubject = PassthroughSubject<String?, Never>()
+        let installAnywayBlockedMessageSubject = PassthroughSubject<String?, Never>()
+        let installStateBox = Box<InstallState>(installState)
+        let installNeedBox = Box<InstallNeed?>(nil)
+        let installDestinationBox = Box<String?>(nil)
+        let revealSubject = PassthroughSubject<PendingReveal, Never>()
+        let pendingRevealBox = Box<PendingReveal?>(nil)
+
         given(useCase).connectionLine.willReturn(connectionLine)
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
-        given(useCase).sessionsPublisher().willReturn(sessionsSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(titlesSubject.eraseToAnyPublisher())
         given(useCase).title(.any).willProduce { titlesBox.value[$0] ?? "Task \($0.prefix(8))" }
-        given(useCase).session(forTask: .any).willProduce { sessionsByTask.value[$0] }
-        given(useCase).interactiveSessions.willProduce { interactiveSessionsBox.value }
         given(routing).selection.willProduce { routingSelectionBox.value }
         given(routing).selectionPublisher().willReturn(selectionSubject.eraseToAnyPublisher())
         given(routing).select(.any).willReturn()
         given(routing).openNewSession().willReturn()
-        
+        given(routing).pendingReveal.willProduce { pendingRevealBox.value }
+        given(routing).revealPublisher().willReturn(revealSubject.eraseToAnyPublisher())
+        given(routing).consumeReveal(requestID: .any).willReturn()
+
+        given(useCase).installState.willProduce { installStateBox.value }
+        given(useCase).installStatePublisher().willReturn(installStateSubject.eraseToAnyPublisher())
+        given(useCase).lastCheckMessage.willReturn(nil)
+        given(useCase).lastCheckMessagePublisher().willReturn(lastCheckMessageSubject.eraseToAnyPublisher())
+        given(useCase).installAnywayBlockedMessage.willReturn(nil)
+        given(useCase).installAnywayBlockedMessagePublisher().willReturn(installAnywayBlockedMessageSubject.eraseToAnyPublisher())
+        given(useCase).installNeed(for: .any).willProduce { _ in installNeedBox.value }
+        given(useCase).installDestination().willProduce { installDestinationBox.value }
+        given(useCase).install().willReturn()
+        given(useCase).installUvThenPolybridge().willReturn()
+        given(useCase).retry().willReturn()
+        given(useCase).checkAgain().willReturn()
+        given(useCase).installAnyway().willReturn(true)
+        given(useCase).reset().willReturn()
+
         let sut = SidebarVM(useCase: useCase, routing: routing)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
-            hasListedSubject: hasListedSubject, sessionsSubject: sessionsSubject, selectionSubject: selectionSubject,
-            sessionsByTask: sessionsByTask, interactiveSessionsBox: interactiveSessionsBox, titlesSubject: titlesSubject,
-            titlesBox: titlesBox, routingSelectionBox: routingSelectionBox
+            hasListedSubject: hasListedSubject, selectionSubject: selectionSubject, titlesSubject: titlesSubject,
+            titlesBox: titlesBox, routingSelectionBox: routingSelectionBox, installStateSubject: installStateSubject,
+            lastCheckMessageSubject: lastCheckMessageSubject, installAnywayBlockedMessageSubject: installAnywayBlockedMessageSubject,
+            installStateBox: installStateBox, installNeedBox: installNeedBox, installDestinationBox: installDestinationBox,
+            revealSubject: revealSubject, pendingRevealBox: pendingRevealBox
         )
     }
     
@@ -165,62 +188,63 @@ import Testing
         #expect(sut.isEmptyState)
     }
     
-    @Test func givenAListError_whenListed_thenTheEmptyStateDoesNotShow() async {
-        // given
+    @Test func givenAListErrorThatIsNotAnInstallNeed_whenListed_thenTheEmptyStateDoesNotShowAndTheMessageForwards() async {
+        // given — a plain (non-install-need) error still takes the old red-text path.
         let harness = makeSUT()
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         let listErrorSubject = harness.listErrorSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
-        let error = ToolError.notFound(tool: "polybridge-ctl", searched: [])
-        
+        let error = ToolError.refused(code: "denied", message: "polybridge-ctl refused the request.")
+
         // when
         hasListedSubject.send(true)
         listErrorSubject.send(error)
         tasksSubject.send([])
-        
+
         // then
         await waitUntil { sut.listErrorMessage != nil }
         #expect(sut.isEmptyState == false)
         #expect(sut.listErrorMessage == error.message)
         #expect(sut.isConnected == false)
+        #expect(sut.installBannerModel == nil)
+    }
+
+    // Moved from a `.message`-forwarding assertion (settled plan, section 7): a `notFound` error
+    // for `polybridge-ctl`/`polybridge-setup` is an install need, so it now shows the banner instead
+    // of the plain red `listErrorMessage`, and the banner outranks the empty state exactly as the
+    // old error did.
+    @Test func givenAListErrorThatIsAnInstallNeed_whenListed_thenTheBannerShowsInsteadOfTheRedText() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let useCase = harness.useCase
+        let tasksSubject = harness.tasksSubject
+        let listErrorSubject = harness.listErrorSubject
+        let hasListedSubject = harness.hasListedSubject
+        harness.installNeedBox.value = .missing
+        sut.didAppear()
+        let error = ToolError.notFound(tool: "polybridge-ctl", searched: [])
+
+        // when
+        hasListedSubject.send(true)
+        listErrorSubject.send(error)
+        tasksSubject.send([])
+
+        // then
+        await waitUntil { sut.installBannerModel != nil }
+        #expect(sut.isEmptyState == false)
+        #expect(sut.isConnected == false)
+        #expect(sut.listErrorMessage == nil)
+        #expect(sut.installBannerModel?.title == "polybridge isn't installed")
+        #expect(sut.installBannerModel?.detail == error.message)
+        #expect(sut.installBannerModel?.primaryTitle == "Install polybridge")
+        verify(useCase).installNeed(for: .value(error)).called(1)
     }
     
     // MARK: - Row metadata (F4-43)
-    
-    @Test func givenALiveSessionForATask_whenRenderingItsRow_thenTheTerminalIconShows() async throws {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let tasksSubject = harness.tasksSubject
-        let sessionsByTask = harness.sessionsByTask
-        sessionsByTask.value["t1"] = try session()
-        sut.didAppear()
-        
-        // when
-        tasksSubject.send([task(id: "t1", status: "completed")])
-        
-        // then
-        await waitUntil { sut.recentRows.count == 1 }
-        #expect(sut.recentRows.first?.hasLiveSession == true)
-    }
-    
-    @Test func givenNoLiveSessionForATask_whenRenderingItsRow_thenTheTerminalIconDoesNotShow() async {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let tasksSubject = harness.tasksSubject
-        sut.didAppear()
-        
-        // when
-        tasksSubject.send([task(id: "t1", status: "completed")])
-        
-        // then
-        await waitUntil { sut.recentRows.count == 1 }
-        #expect(sut.recentRows.first?.hasLiveSession == false)
-    }
-    
+
     @Test func givenASubTask_whenBuildingItsRow_thenMetaTextHasIndentAndSubTaskCountAndFreedom() async {
         // given
         let harness = makeSUT()
@@ -258,27 +282,6 @@ import Testing
         await waitUntil { !sut.runningRows.isEmpty }
         #expect(sut.runningRows.first?.isRunning == true)
         #expect(abs((sut.runningRows.first?.startedAt ?? .distantPast).timeIntervalSince(start)) < 1)
-    }
-    
-    // MARK: - Interactive sessions (F4-43)
-    
-    @Test func givenInteractiveSessions_whenListed_thenTheyAppearAsRows() async throws {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let sessionsSubject = harness.sessionsSubject
-        let interactiveSessionsBox = harness.interactiveSessionsBox
-        let interactive = try session(title: "claude · ~/repo")
-        interactiveSessionsBox.value = [interactive]
-        sut.didAppear()
-        
-        // when
-        sessionsSubject.send([interactive])
-        
-        // then
-        await waitUntil { !sut.interactiveRows.isEmpty }
-        #expect(sut.interactiveRows.first?.id == interactive.id)
-        #expect(sut.interactiveRows.first?.title == "claude · ~/repo")
     }
     
     // MARK: - Selection (SidebarRouting doubles as the read side)
@@ -431,11 +434,12 @@ import Testing
         let harness = makeSUT()
         let sut = harness.sut
         let routing = harness.routing
-        
+
         // when
         sut.didSelect(nil)
-        
+
         // then
         verify(routing).select(.value(nil)).called(1)
     }
+
 }

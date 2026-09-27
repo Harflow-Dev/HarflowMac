@@ -76,11 +76,11 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
                     Button("Apply") { viewModel.didTapApply() }
                     Button("Search again") { viewModel.didTapSearchAgain() }
                 }
-                Text("Searched: " + viewModel.searchedDirectoriesText).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Searched: " + viewModel.searchedDirectoriesText).font(.pb(.secondary)).foregroundStyle(.secondary)
                 resolvedRow("polybridge-ctl", resolution: viewModel.ctlResolution)
                 resolvedRow("polybridge-setup", resolution: viewModel.setupResolution)
                 Text("Everything the app runs gets your login-shell PATH, no PB_* variables, and PB_OPEN_MONITOR=0.")
-                    .font(.system(size: 11))
+                    .font(.pb(.secondary))
                     .foregroundStyle(.secondary)
             }
             Section("Behaviour") {
@@ -106,9 +106,9 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
     private func resolvedRow(_ tool: String, resolution: ToolResolution) -> some View {
         switch resolution {
         case .found(let path):
-            Label("\(tool): \(path)", systemImage: "checkmark.circle").font(.system(size: 11)).foregroundStyle(Color.doneGreen)
+            Label("\(tool): \(path)", systemImage: "checkmark.circle").font(.pb(.secondary)).foregroundStyle(Color.doneGreen)
         case .notFound:
-            Label("\(tool): not found", systemImage: "xmark.circle").font(.system(size: 11)).foregroundStyle(Color.failedRed)
+            Label("\(tool): not found", systemImage: "xmark.circle").font(.pb(.secondary)).foregroundStyle(Color.failedRed)
         }
     }
 }

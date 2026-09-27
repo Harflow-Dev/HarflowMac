@@ -6,7 +6,7 @@
 //  `MainWindowFeatureFactory`/`Coordinator` protocols are), so — same reason
 //  `PbCommonTestMock.ViewChildCoordinatorMock` exists for the `ViewChildCoordinator` typealias — this
 //  is a small hand-written fake standing in for a real `MainWindowCoordinator` in `AppCoordinator`
-//  tests, without dragging in `PbTerminal`'s `TerminalSessionRegistry` wiring a real one needs.
+//  tests.
 //
 
 import Combine
@@ -30,7 +30,13 @@ final class FakeMainWindowNavigationCoordinator: MainWindowNavigationCoordinator
     /// assert both the resulting state *and* that delegation actually happened (rather than the
     /// state merely matching by coincidence).
     private(set) var handledDestinations: [MonitorDestination] = []
-    
+
+    /// Fired synchronously at the top of `handle(path:)`, before any state changes — lets a test
+    /// append to a shared event log (alongside `AppCoordinator`'s `activateApp`/window-opener log) to
+    /// prove cross-type ordering, e.g. "activate → opener → forwarded to `MainWindowCoordinator`" for
+    /// `.newSession` (decision 5).
+    var onHandle: ((MonitorDestination) -> Void)?
+
     init(parent: any Coordinator) {
         self.parent = parent
     }
@@ -41,14 +47,14 @@ final class FakeMainWindowNavigationCoordinator: MainWindowNavigationCoordinator
     func buildNewSessionView() -> AnyView { EmptyView().eraseToAnyView() }
     func buildParallelView(name: String) -> AnyView { EmptyView().eraseToAnyView() }
     func buildTaskDetailView(id: String) -> AnyView { EmptyView().eraseToAnyView() }
-    func buildInteractiveView(id: UUID) -> AnyView { EmptyView().eraseToAnyView() }
     func start() -> AnyView { EmptyView().eraseToAnyView() }
-    
+
     func handle(path: any PathDestination) {
         guard let destination = path as? MonitorDestination else { return }
+        onHandle?(destination)
         handledDestinations.append(destination)
         switch destination {
-        case .task, .group, .interactive: selection = destination
+        case .task, .group: selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)
         }

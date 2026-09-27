@@ -3,6 +3,7 @@
 //  MenuBarFeature
 //
 
+import AppKit
 import Foundation
 import PbCommon
 import PbUtilities
@@ -16,8 +17,11 @@ import SwiftUI
 /// `any ViewChildCoordinator` return to this protocol to reach them (see `App.swift`).
 @MainActor
 public protocol MenuBarNavigationCoordinator: ViewChildCoordinator {
-    /// Builds the always-on-screen status item label (icon + running count).
-    func buildMenuBarLabelView() -> AnyView
+    /// Builds the always-on-screen status item label (icon + running count). `icon` is the app
+    /// target's `menubarTemplate` image (decision 8), loaded once by `loadMenuBarIcon(from:)` and
+    /// passed down as a plain value; `nil` falls back to the SF Symbol `MenuBarLabelView` already
+    /// draws.
+    func buildMenuBarLabelView(icon: NSImage?) -> AnyView
     /// Builds the popover content shown when the status item is clicked.
     func buildMenuBarContentView() -> AnyView
 }
@@ -51,8 +55,8 @@ public final class MenuBarCoordinator: MenuBarNavigationCoordinator {
         parent.handle(path: path)
     }
     
-    public func buildMenuBarLabelView() -> AnyView {
-        MenuBarLabelView(sharedVM()).eraseToAnyView()
+    public func buildMenuBarLabelView(icon: NSImage?) -> AnyView {
+        MenuBarLabelView(sharedVM(), icon: icon).eraseToAnyView()
     }
     
     public func buildMenuBarContentView() -> AnyView {

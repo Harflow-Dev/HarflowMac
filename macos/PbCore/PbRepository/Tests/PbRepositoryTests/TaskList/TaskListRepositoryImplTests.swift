@@ -15,7 +15,7 @@ import Testing
             #"{"task_id":"\#($0)","status":"running","backend":"claude"}"#
         }
 .joined(separator: ",") + "]"
-        let stub = runner ?? StubProcessRunner(output: stdout(#"{"v":1,"tasks":\#(payload)}"#))
+        let stub = runner ?? StubProcessRunner(output: stdout(#"{"v":2,"tasks":\#(payload)}"#))
         return CtlClient(executable: "/bin/echo", environment: [:], runner: stub)
     }
 
@@ -51,7 +51,7 @@ import Testing
         given(snapshotRepository).snapshot(.any).willReturn(nil)
         given(eventStreamRepository).leasedTaskIDs.willReturn([])
         given(finishNotifier).notify(.any, titleFor: .any).willReturn()
-        given(toolEnvironment).discoverEnvironment().willReturn()
+        given(toolEnvironment).discoverEnvironment().willReturn(DiscoveryResult(loginPath: nil, uv: nil))
         return TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository,
             eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier, scheduler: scheduler
@@ -70,7 +70,7 @@ import Testing
         let runner = StubProcessRunner { _ in
             callCount.mutate { $0 += 1 }
             if callCount.value == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":1,"tasks":[]}"#))
+            return .success(stdout(#"{"v":2,"tasks":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -150,7 +150,7 @@ import Testing
         let listCallCount = LockedBox(0)
         let runner = StubProcessRunner { _ in
             listCallCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":1,"tasks":[]}"#))
+            return .success(stdout(#"{"v":2,"tasks":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(ctlClient(listing: [], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)

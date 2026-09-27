@@ -39,13 +39,13 @@ struct HarnessRowView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(row.displayName).font(.system(size: 13, weight: .medium))
-                    Text(row.stateLabel).font(.system(size: 11)).foregroundStyle(row.installed == true ? Color.doneGreen : .secondary)
+                    Text(row.displayName).font(.pb(.headline, weight: .medium))
+                    Text(row.stateLabel).font(.pb(.secondary)).foregroundStyle(row.installed == true ? Color.doneGreen : .secondary)
                     if let action = row.action { Chip(text: "last: \(action)") }
                 }
-                if let rowError = row.error { Text(rowError).font(.system(size: 11)).foregroundStyle(Color.failedRed) }
+                if let rowError = row.error { Text(rowError).font(.pb(.secondary)).foregroundStyle(Color.failedRed) }
                 ForEach(Array(row.notes.enumerated()), id: \.offset) { _, note in
-                    Text(note).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(note).font(.pb(.secondary)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer()

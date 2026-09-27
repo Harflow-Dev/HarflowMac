@@ -99,12 +99,21 @@ public struct LineTail: Equatable, Sendable {
     }
 }
 
+/// Whether a task's event log could actually be read the last time it was tailed — so an empty
+/// event list never has to stand for both "nothing has happened yet" and "there is no log to read
+/// at all". `.loading` until the first attempt settles one way or the other; a file that exists and
+/// opens (even empty, even `/dev/null`) is `.available`, one that cannot be opened at all — missing,
+/// or unreadable — is `.unavailable`.
+public enum EventAvailability: Equatable, Sendable {
+    case loading, available, unavailable
+}
+
 /// Watches one task's `events.jsonl`: a `DispatchSource` on the file descriptor wakes it on writes,
 /// and a 1 s poll covers the times there is no descriptor to watch (the file does not exist yet, or
 /// was replaced). Delivers decoded v1 events on the main queue; lines that are not v1 events are
 /// skipped, unknown kinds are delivered as `.unknown` for the caller to ignore.
 public final class EventFileTailer {
-    public typealias Handler = (_ events: [TaskEvent], _ reset: Bool) -> Void
+    public typealias Handler = (_ events: [TaskEvent], _ reset: Bool, _ availability: EventAvailability) -> Void
 
     public let path: String
     private let queue = DispatchQueue(label: "dev.polybridge.monitor.tail")
@@ -113,6 +122,9 @@ public final class EventFileTailer {
     private var poll: DispatchSourceTimer?
     private var handler: Handler?
     private var stopped = false
+    /// The last availability reported to `handler` — read only on `queue`, so a same-state drain
+    /// never re-notifies the caller.
+    private var availability: EventAvailability = .loading
 
     public init(path: String, handler: @escaping Handler) {
         self.path = path
@@ -173,9 +185,11 @@ public final class EventFileTailer {
         guard !stopped else { return }
         var collected: [TaskEvent] = []
         var reset = false
+        var opened = false
         // Bounded: a few chunks per wake-up, the poll picks up the rest.
         for _ in 0..<8 {
             guard let step = tail.read(path: path) else { break }
+            opened = true
             if step.reset {
                 reset = true
                 collected.removeAll()
@@ -183,7 +197,13 @@ public final class EventFileTailer {
             collected.append(contentsOf: step.lines.compactMap(TaskEvent.init(line:)))
             if !step.more { break }
         }
-        guard reset || !collected.isEmpty, let handler else { return }
-        DispatchQueue.main.async { handler(collected, reset) }
+        // `tail.read` returns nil for a file that cannot be opened at all (missing, or unreadable) —
+        // never for one that opened but was merely empty, which still counts as available.
+        let nextAvailability: EventAvailability = opened ? .available : .unavailable
+        let availabilityChanged = nextAvailability != availability
+        availability = nextAvailability
+        guard reset || !collected.isEmpty || availabilityChanged, let handler else { return }
+        let reportedAvailability = availability
+        DispatchQueue.main.async { handler(collected, reset, reportedAvailability) }
     }
 }

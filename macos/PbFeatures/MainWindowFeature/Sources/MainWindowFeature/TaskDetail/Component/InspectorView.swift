@@ -3,8 +3,10 @@
 //  MainWindowFeature
 //
 //  Ported from the app target's `InspectorView.swift`. "Now" reads the timeline's current running
-//  tool; "Files changed" reads the VM's git state; "Details"/"Enforcement" read the raw snapshot
-//  (falling back to the listing), exactly as before.
+//  tool; "Details"/"Enforcement" read the raw snapshot (falling back to the listing). "Files
+//  changed" (git) and the "Branch" row are gone (piece 2/3 of the Monitor architecture plan — see
+//  the Summary tab's "Files the agent edited" section instead); "Activity" and "Details" are now
+//  collapsible, expanded by default.
 //
 
 import MonitorCore
@@ -17,7 +19,6 @@ struct InspectorModel {
     let task: TaskInfo
     let current: TimelineItem?
     let stepCount: Int
-    let changes: GitChanges?
     let activity: ActivityCounts
     let subtaskCount: Int
     let ancestors: [SubTaskEntry]
@@ -26,17 +27,7 @@ struct InspectorModel {
     let hasSnapshot: Bool
     let notices: [String]
     let onSelectTask: (String) -> Void
-    
-    /// Files changed is capped at 12 (F4-41).
-    static func visibleFiles(_ files: [FileChange]) -> [FileChange] { Array(files.prefix(12)) }
-    
-    /// "Files changed" → "None" only once git actually compared against the baseline and found
-    /// nothing — never while `changes` hasn't loaded yet, nor when the comparison itself failed
-    /// (that shows "Not compared with the baseline" instead).
-    static func showsNoFilesChanged(_ changes: GitChanges?) -> Bool {
-        changes?.comparedWithBase == true && changes?.files.isEmpty == true
-    }
-    
+
     /// "Enforcement was not recorded for this task." only once a snapshot exists but carried no
     /// enforcement data — never while the snapshot itself hasn't loaded.
     static func showsEnforcementNotRecorded(detail: TaskInfo, hasSnapshot: Bool) -> Bool {
@@ -48,7 +39,9 @@ struct InspectorModel {
 
 struct InspectorView: View {
     let model: InspectorModel?
-    
+    @State private var activityExpanded = true
+    @State private var detailsExpanded = true
+
     var body: some View {
         ScrollView {
             if let model {
@@ -56,54 +49,32 @@ struct InspectorView: View {
                     if model.task.status.isRunning {
                         section("Now") {
                             if let current = model.current, case .tool(let call, _) = current.body {
-                                Text(call.tool).font(.system(size: 12, weight: .medium))
-                                Text(call.headline).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(3)
+                                Text(call.tool).font(.pb(.body, weight: .medium))
+                                Text(call.headline).font(.pb(.secondary, design: .monospaced)).foregroundStyle(.secondary).lineLimit(3)
                                 if let startedAt = current.at {
                                     TimelineView(.periodic(from: .now, by: 1)) { context in
                                         Text("\(Format.clock(context.date.timeIntervalSince(startedAt))) · step \(model.stepCount)")
-                                            .font(.system(size: 10))
+                                            .font(.pb(.caption))
                                             .monospacedDigit()
                                             .foregroundStyle(.secondary)
                                     }
                                 }
                             } else {
-                                Text("Thinking or writing").font(.system(size: 12)).foregroundStyle(.secondary)
+                                Text("Thinking or writing").font(.pb(.body)).foregroundStyle(.secondary)
                             }
                         }
                     }
-                    section("Files changed") {
-                        if let changes = model.changes {
-                            if !changes.comparedWithBase {
-                                Text("Not compared with the baseline").font(.system(size: 12)).foregroundStyle(Color.failedRed)
-                            } else if InspectorModel.showsNoFilesChanged(changes) {
-                                Text("None").font(.system(size: 12)).foregroundStyle(.secondary)
-                            }
-                            ForEach(InspectorModel.visibleFiles(changes.files)) { file in
-                                HStack(spacing: 6) {
-                                    Text(file.isUntracked ? "A" : file.status).font(.system(size: 10, weight: .bold, design: .monospaced)).frame(width: 12)
-                                    Text((file.path as NSString).lastPathComponent).font(.system(size: 11)).lineLimit(1)
-                                    Spacer()
-                                    if let added = file.added, let removed = file.removed {
-                                        Text("+\(added)−\(removed)").font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            Text("From git in the repo, not the agent's report").font(.system(size: 10)).foregroundStyle(.secondary)
-                        } else {
-                            ProgressView().controlSize(.small)
-                        }
-                    }
-                    section("Activity") {
+                    collapsibleSection("Activity", isExpanded: $activityExpanded) {
                         Text("\(model.activity.toolCalls) tool calls · \(model.activity.edits) edits · "
                              + "\(model.activity.commands) commands · \(model.subtaskCount) sub-tasks")
-                        .font(.system(size: 11))
+                        .font(.pb(.secondary))
                     }
                     if !model.task.isRoot { lineage(model) }
-                    section("Details") { details(model) }
+                    collapsibleSection("Details", isExpanded: $detailsExpanded) { details(model) }
                     if !model.notices.isEmpty {
                         section("Notices") {
                             ForEach(Array(model.notices.enumerated()), id: \.offset) { _, notice in
-                                Text(notice).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                Text(notice).font(.pb(.secondary)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
@@ -111,7 +82,7 @@ struct InspectorView: View {
                 .padding(14)
             }
         }
-        .background(Color(hex: 0xFBFBFC))
+        .background(Color.inspectorFill)
     }
     
     @ViewBuilder
@@ -119,6 +90,16 @@ struct InspectorView: View {
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel(text: title)
             content()
+        }
+    }
+
+    @ViewBuilder
+    private func collapsibleSection(_ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
+        DisclosureGroup(isExpanded: isExpanded) {
+            // macOS centres a DisclosureGroup's content unless it is given the full width.
+            content().padding(.top, 6).frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            SectionLabel(text: title)
         }
     }
     
@@ -163,9 +144,9 @@ struct InspectorView: View {
         } label: {
             HStack(spacing: 6) {
                 BackendBadge(backend: entry.task.backend, size: 16)
-                Text(entry.title).font(.system(size: 11, weight: current ? .semibold : .regular)).lineLimit(1)
+                Text(entry.title).font(.pb(.secondary, weight: current ? .semibold : .regular)).lineLimit(1)
                 Spacer()
-                Text("depth \(entry.task.depth)").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("depth \(entry.task.depth)").font(.pb(.caption)).foregroundStyle(.secondary)
             }
             .padding(.leading, CGFloat(indent) * 10)
         }
@@ -175,8 +156,8 @@ struct InspectorView: View {
     
     private func limit(_ name: String, _ value: String, _ note: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack { Text(name).font(.system(size: 11, weight: .medium)); Spacer(); Text(value).font(.system(size: 11)) }
-            Text(note).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack { Text(name).font(.pb(.secondary, weight: .medium)); Spacer(); Text(value).font(.pb(.secondary)) }
+            Text(note).font(.pb(.caption)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
     
@@ -187,7 +168,6 @@ struct InspectorView: View {
         detailRow("Task", task.taskID)
         detailRow("Backend", [task.backend, detail.model, detail.reasoningEffort.map { "effort \($0)" }].compactMap(\.self).joined(separator: " · "))
         detailRow("Freedom", task.freedom ?? "—")
-        if let branch = model.changes?.branch { detailRow("Branch", branch) }
         detailRow("Started", Format.time(task.startedAt) + (task.isRoot ? " · root task" : ""))
         if let maxDepth = task.maxDepth { detailRow("Depth", "\(task.depth) of \(maxDepth)") }
         if let parent = task.spawnedBy { detailRow("Parent", parent) }
@@ -198,17 +178,17 @@ struct InspectorView: View {
         if let detected = task.lineageDetected { detailRow("Caller found by", detected) }
         if let cost = detail.totalCostUSD { detailRow("Cost", String(format: "$%.4f", cost)) }
         ForEach(EnforcementText.lines(detail.enforcement), id: \.self) { line in
-            Text(line).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(line).font(.pb(.secondary)).foregroundStyle(.secondary)
         }
         if InspectorModel.showsEnforcementNotRecorded(detail: detail, hasSnapshot: model.hasSnapshot) {
-            Text("Enforcement was not recorded for this task.").font(.system(size: 11)).foregroundStyle(.secondary)
+            Text("Enforcement was not recorded for this task.").font(.pb(.secondary)).foregroundStyle(.secondary)
         }
     }
     
     private func detailRow(_ name: String, _ value: String) -> some View {
         HStack(alignment: .top) {
-            Text(name).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
-            Text(value).font(.system(size: 11)).textSelection(.enabled).lineLimit(3)
+            Text(name).font(.pb(.secondary)).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
+            Text(value).font(.pb(.secondary)).textSelection(.enabled).lineLimit(3)
         }
     }
 }

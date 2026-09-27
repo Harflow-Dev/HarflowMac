@@ -28,9 +28,9 @@ public final class Module: PbModule {
             scheduler: scheduler
         )
         let taskAction = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshot)
-        let gitChanges = GitChangesRepositoryImpl()
-        let filePreview = FilePreviewRepositoryImpl()
         let harness = HarnessRepositoryImpl(toolEnvironment: toolEnvironment)
+        let install = InstallRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, settings: settings)
+        let takeover = TakeoverServiceImpl(actions: taskAction, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshot)
 
         GlobalValues
             .environment(\.scheduling, scheduler)
@@ -41,8 +41,8 @@ public final class Module: PbModule {
             .environment(\.finishNotifier, finishNotifier)
             .environment(\.taskListRepository, taskList)
             .environment(\.taskActionRepository, taskAction)
-            .environment(\.gitChangesRepository, gitChanges)
-            .environment(\.filePreviewRepository, filePreview)
             .environment(\.harnessRepository, harness)
+            .environment(\.installRepository, install)
+            .environment(\.takeoverService, takeover)
     }
 }

@@ -12,7 +12,6 @@ let package = Package(
 
         .package(path: "../PbCore/MonitorCore"),
         .package(path: "../PbCore/PbRepository"),
-        .package(path: "../PbCore/PbTerminal"),
         .package(path: "../PbFoundation/PbUtilities"),
         .package(path: "../PbFoundation/PbCommon"),
         .package(path: "../PbFeatures/SettingsFeature"),
@@ -23,7 +22,7 @@ let package = Package(
 
         // `AppCoordinator`/`App.swift` read `GlobalValues` directly — every target declares every
         // product it imports, so this is declared here too, not only transitively through
-        // PbRepository/PbTerminal.
+        // PbRepository.
         .package(url: "https://github.com/hainayanda/SwiftEnvironment.git", exact: "4.1.8"),
         .package(url: "https://github.com/Kolos65/Mockable.git", exact: "0.6.2")
     ],
@@ -31,7 +30,7 @@ let package = Package(
         .executableTarget(
             name: "PolybridgeMonitor",
             dependencies: [
-                "MonitorCore", "PbRepository", "PbTerminal", "PbUtilities", "PbCommon", "SwiftEnvironment",
+                "MonitorCore", "PbRepository", "PbUtilities", "PbCommon", "SwiftEnvironment",
                 "SettingsFeature", "MenuBarFeature", "MainWindowFeature"
             ]
         ),
@@ -40,7 +39,7 @@ let package = Package(
         .testTarget(
             name: "PolybridgeMonitorTests",
             dependencies: [
-                "PolybridgeMonitor", "MonitorCore", "PbRepository", "PbTerminal", "PbUtilities", "PbCommon",
+                "PolybridgeMonitor", "MonitorCore", "PbRepository", "PbUtilities", "PbCommon",
                 "SettingsFeature", "MenuBarFeature", "MainWindowFeature", "SwiftEnvironment", "Mockable",
                 .product(name: "PbTestUtilities", package: "PbUtilities"),
                 .product(name: "PbCommonTestMock", package: "PbCommon")
@@ -50,10 +49,11 @@ let package = Package(
             ]
         )
     ]
-    // Phase 5: the app shell no longer holds `TerminalSession`/`TerminalHost` (moved to `PbTerminal`
-    // in Phase 3B, which stays `.v5` on its own) — that was the only thing in this target that failed
-    // to compile in Swift 6 mode (a `#SendingRisksDataRace` error on its `assumeIsolated` hop around
-    // the SwiftTerm delegate callback — decision 2's issue). With that code gone, this package builds
-    // and tests cleanly in Swift 6 mode (the tools-version default), so no `swiftLanguageModes`
-    // override is declared here any more.
+    // Phase 5: the app shell no longer holds `TerminalSession`/`TerminalHost` (moved to the
+    // `PbTerminal` package in Phase 3B, itself deleted once the Monitor's take-over flow moved to
+    // Terminal.app only) — that was the only thing in this target that failed to compile in Swift 6
+    // mode (a `#SendingRisksDataRace` error on its `assumeIsolated` hop around the SwiftTerm delegate
+    // callback — decision 2's issue). With that code gone, this package builds and tests cleanly in
+    // Swift 6 mode (the tools-version default), so no `swiftLanguageModes` override is declared here
+    // any more.
 )

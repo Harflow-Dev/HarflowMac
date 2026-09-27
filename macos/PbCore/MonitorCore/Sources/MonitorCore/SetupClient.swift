@@ -1,5 +1,11 @@
 import Foundation
 
+/// The one `"v"` this app understands for `polybridge-setup --json` — a contract separate from
+/// `polybridge-ctl`'s (`ctlContractVersions`, `CtlModels.swift`) and the event log's
+/// (`eventLogVersion`, `Events.swift`), so a shape change to one never silently widens what the
+/// app accepts from the others.
+public let setupContractVersion = 1
+
 /// One row of `polybridge-setup --json`: one MCP client (harness) that can launch polybridge.
 public struct HarnessRow: Equatable, Identifiable, Sendable {
     public var id: String { key }
@@ -62,7 +68,7 @@ public struct SetupDocument: Equatable, Sendable {
         guard let version = document["v"]?.intValue else {
             return .failure(.unsupportedVersion(tool: tool, version: document["v"]?.rendered() ?? "none"))
         }
-        guard version == supportedContractVersion else {
+        guard version == setupContractVersion else {
             return .failure(.unsupportedVersion(tool: tool, version: String(version)))
         }
         guard let rows = document["clients"]?.arrayValue else {

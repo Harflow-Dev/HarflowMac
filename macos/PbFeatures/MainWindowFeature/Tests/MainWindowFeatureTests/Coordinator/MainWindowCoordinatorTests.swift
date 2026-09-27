@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 @testable import MainWindowFeature
@@ -5,8 +6,6 @@ import Mockable
 import MonitorCore
 import PbCommon
 import PbCommonTestMock
-import PbTerminal
-import PbTestUtilities
 import Testing
 
 @MainActor
@@ -38,19 +37,6 @@ import Testing
         
         // then
         #expect(sut.selection == .group("release-notes"))
-    }
-    
-    @Test func givenAnInteractiveDestination_whenHandled_thenSelectionIsSet() {
-        // given
-        let parent = MockCoordinator()
-        let sut = MainWindowCoordinator(parent: parent)
-        let id = UUID()
-        
-        // when
-        sut.handle(path: MonitorDestination.interactive(id))
-        
-        // then
-        #expect(sut.selection == .interactive(id))
     }
     
     @Test func givenANewSessionDestination_whenHandled_thenTheSheetIsPresented() {
@@ -193,21 +179,6 @@ import Testing
         #expect(sut.isNewSessionPresented == false)
     }
     
-    @Test func givenDidStartInteractive_whenCalled_thenSelectionIsSetAndTheSheetDismisses() {
-        // given
-        let parent = MockCoordinator()
-        let sut = MainWindowCoordinator(parent: parent)
-        sut.isNewSessionPresented = true
-        let id = UUID()
-        
-        // when
-        sut.didStartInteractive(sessionID: id)
-        
-        // then
-        #expect(sut.selection == .interactive(id))
-        #expect(sut.isNewSessionPresented == false)
-    }
-    
     @Test func givenDismiss_whenCalled_thenTheSheetIsDismissedWithoutTouchingSelection() {
         // given
         let parent = MockCoordinator()
@@ -250,115 +221,11 @@ import Testing
         // given
         let parent = MockCoordinator()
         let sut = MainWindowCoordinator(parent: parent)
-        
+
         // then — must not crash.
         _ = sut.buildTaskDetailView(id: "abc123")
     }
-    
-    @Test func givenTheCoordinator_whenBuildingAnInteractiveView_thenAViewIsProduced() {
-        // given
-        let parent = MockCoordinator()
-        let sut = MainWindowCoordinator(parent: parent)
-        
-        // then — must not crash.
-        _ = sut.buildInteractiveView(id: UUID())
-    }
-    
-    // MARK: - Ended-session removal (moved here from the app target's `AppModel`, F4-21/F4-22)
-    
-    private final class Box<Value> {
-        var value: Value
-        init(_ value: Value) { self.value = value }
-    }
-    
-    @Test func givenAnEndedInteractiveSessionThatIsSelected_whenPublished_thenItIsNotRemoved() async throws {
-        // given
-        let parent = MockCoordinator()
-        let registry = MockTerminalSessionRegistry()
-        let endedSessions = PassthroughSubject<TerminalSession, Never>()
-        given(registry).endedSessionsPublisher().willReturn(endedSessions.eraseToAnyPublisher())
-        let removedIDs = Box<[UUID]>([])
-        given(registry).remove(.any).willProduce { removedIDs.value.append($0.id) }
-        let sut = MainWindowCoordinator(parent: parent, terminalSessionRegistry: registry)
-        let selected = TerminalSession(
-            kind: .interactive, title: "a", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        let other = TerminalSession(
-            kind: .interactive, title: "b", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        sut.selection = .interactive(selected.id)
-        
-        // when — the selected session ends first, then an unrelated one, proving the pipeline runs
-        // at all (a vacuous "removedIDs stayed empty" would also pass if the subscription never fired).
-        endedSessions.send(selected)
-        endedSessions.send(other)
-        
-        // then
-        await waitUntil { removedIDs.value.contains(other.id) }
-        #expect(removedIDs.value.contains(other.id))
-        #expect(!removedIDs.value.contains(selected.id))
-    }
-    
-    @Test func givenAnEndedInteractiveSessionThatIsNotSelected_whenPublished_thenItIsRemoved() async throws {
-        // given
-        let parent = MockCoordinator()
-        let registry = MockTerminalSessionRegistry()
-        let endedSessions = PassthroughSubject<TerminalSession, Never>()
-        given(registry).endedSessionsPublisher().willReturn(endedSessions.eraseToAnyPublisher())
-        let removedIDs = Box<[UUID]>([])
-        given(registry).remove(.any).willProduce { removedIDs.value.append($0.id) }
-        let sut = MainWindowCoordinator(parent: parent, terminalSessionRegistry: registry)
-        let session = TerminalSession(
-            kind: .interactive, title: "a", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        sut.selection = .task("unrelated-task")
-        
-        // when
-        endedSessions.send(session)
-        
-        // then
-        await waitUntil { removedIDs.value.contains(session.id) }
-        #expect(removedIDs.value.contains(session.id))
-    }
-    
-    @Test func givenAnEndedTakeoverSession_whenPublished_thenItIsNeverRemovedByThisSubscription() async throws {
-        // given — only `.interactive` sessions are ever auto-removed here; a take-over session's
-        // lifetime is `TakeoverService`'s concern.
-        let parent = MockCoordinator()
-        let registry = MockTerminalSessionRegistry()
-        let endedSessions = PassthroughSubject<TerminalSession, Never>()
-        given(registry).endedSessionsPublisher().willReturn(endedSessions.eraseToAnyPublisher())
-        let removedIDs = Box<[UUID]>([])
-        given(registry).remove(.any).willProduce { removedIDs.value.append($0.id) }
-        // Held for the test's duration: `subscribeToEndedSessions()`'s subscription lives in the
-        // coordinator's own `cancellables`, so an unretained instance is deallocated (and its
-        // subscription cancelled) the moment this statement finishes — a real bug hit while writing
-        // this test, not a style nit.
-        let sut = MainWindowCoordinator(parent: parent, terminalSessionRegistry: registry)
-        #expect(sut.selection == nil)
-        let takeover = TerminalSession(
-            kind: .takeover(taskID: "abc123"), title: "a", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        let interactive = TerminalSession(
-            kind: .interactive, title: "b", backend: "claude",
-            command: try TakeoverWrapper.command(argv: ["/bin/cat"], cwd: "/tmp", environment: [:])
-        )
-        
-        // when — the take-over session ends first, then an interactive one, proving the pipeline runs
-        // at all.
-        endedSessions.send(takeover)
-        endedSessions.send(interactive)
-        
-        // then
-        await waitUntil { removedIDs.value.contains(interactive.id) }
-        #expect(removedIDs.value.contains(interactive.id))
-        #expect(!removedIDs.value.contains(takeover.id))
-    }
-    
+
     // MARK: - ParallelRouting / TaskDetailRouting
     
     @Test func givenParallelSelectTask_whenCalled_thenSelectionIsSetToThatTask() {
@@ -380,11 +247,116 @@ import Testing
         let parent = MockCoordinator()
         let sut = MainWindowCoordinator(parent: parent)
         let routing: any TaskDetailRouting = sut
-        
+
         // when
         routing.selectTask("def456")
-        
+
         // then
         #expect(sut.selection == .task("def456"))
+    }
+
+    // MARK: - TaskDetailRouting.copyToPasteboard (Monitor piece 3/3, pasteboard seam)
+
+    @MainActor
+    final class FakePasteboard: PasteboardWriting {
+        /// Every call in order, so a test can tell clear-then-write from write-then-clear (which
+        /// would leave the real clipboard empty) and see the pasteboard type used.
+        private(set) var calls: [String] = []
+        var setStringResult = true
+
+        func clearContents() -> Int {
+            calls.append("clear")
+            return 0
+        }
+
+        func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool {
+            calls.append("set[\(dataType.rawValue)]:\(string)")
+            return setStringResult
+        }
+    }
+
+    @Test func givenCopyToPasteboardSucceeds_whenCalled_thenTheRealClipboardIsNeverTouched() {
+        // given — the injectable seam is what makes this test possible at all: a coordinator built
+        // with the default initializer would reach `NSPasteboard.general`.
+        let fake = FakePasteboard()
+        let parent = MockCoordinator()
+        let sut = MainWindowCoordinator(parent: parent, pasteboard: fake)
+        let routing: any TaskDetailRouting = sut
+
+        // when
+        let succeeded = routing.copyToPasteboard("cd /repo && claude --resume s")
+
+        // then
+        #expect(succeeded)
+        #expect(fake.calls == ["clear", "set[\(NSPasteboard.PasteboardType.string.rawValue)]:cd /repo && claude --resume s"])
+    }
+
+    @Test func givenCopyToPasteboardFails_whenCalled_thenFalseIsReturned() {
+        // given
+        let fake = FakePasteboard()
+        fake.setStringResult = false
+        let parent = MockCoordinator()
+        let sut = MainWindowCoordinator(parent: parent, pasteboard: fake)
+        let routing: any TaskDetailRouting = sut
+
+        // when
+        let succeeded = routing.copyToPasteboard("cd /repo && claude --resume s")
+
+        // then
+        #expect(!succeeded)
+    }
+
+    // MARK: - Pending reveal (piece 4), against the real coordinator
+
+    @Test func givenTwoNavigationRequestsForTheSameTask_whenHandled_thenEachGetsAFreshRequestAndOnlyTheLatestIsPending() {
+        // given
+        let parent = MockCoordinator()
+        let sut = MainWindowCoordinator(parent: parent)
+        var published: [PendingReveal] = []
+        let cancellable = sut.revealPublisher().sink { published.append($0) }
+
+        // when
+        sut.handle(path: MonitorDestination.task("child"))
+        let first = sut.pendingReveal
+        sut.handle(path: MonitorDestination.task("child"))
+        let second = sut.pendingReveal
+        cancellable.cancel()
+
+        // then — a repeat is a new request (so it reveals again), and both were published
+        #expect(first?.taskID == "child")
+        #expect(second?.taskID == "child")
+        #expect(first?.requestID != second?.requestID)
+        #expect(published.map(\.requestID) == [first?.requestID, second?.requestID].compactMap(\.self))
+    }
+
+    @Test func givenASupersededRequest_whenItIsConsumed_thenTheNewerRequestStaysPendingUntilItIsConsumed() {
+        // given
+        let parent = MockCoordinator()
+        let sut = MainWindowCoordinator(parent: parent)
+        sut.handle(path: MonitorDestination.task("a"))
+        let old = sut.pendingReveal!
+        sut.handle(path: MonitorDestination.task("b"))
+        let newer = sut.pendingReveal!
+
+        // when / then — consuming the stale id is a no-op...
+        sut.consumeReveal(requestID: old.requestID)
+        #expect(sut.pendingReveal?.requestID == newer.requestID)
+        // ...and the current one is consumed exactly once.
+        sut.consumeReveal(requestID: newer.requestID)
+        #expect(sut.pendingReveal == nil)
+    }
+
+    @Test func givenTheSidebarsOwnSelection_whenMade_thenNoRevealIsRequested() {
+        // given
+        let parent = MockCoordinator()
+        let sut = MainWindowCoordinator(parent: parent)
+        let routing: any SidebarRouting = sut
+
+        // when
+        routing.select(.task("row-the-user-clicked"))
+
+        // then
+        #expect(sut.pendingReveal == nil)
+        #expect(sut.selection == .task("row-the-user-clicked"))
     }
 }

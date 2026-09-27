@@ -34,7 +34,7 @@ struct TimelineRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Text(Format.offset(model.item.at, from: model.start))
-                .font(.system(size: 10, design: .monospaced))
+                .font(.pb(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
             rowBody
@@ -47,9 +47,9 @@ struct TimelineRow: View {
         switch model.item.body {
         case .started(let started):
             VStack(alignment: .leading, spacing: 2) {
-                Text("Started" + (started.spawnedBy != nil ? " by another task via polybridge" : " via polybridge")).font(.system(size: 12, weight: .medium))
+                Text("Started" + (started.spawnedBy != nil ? " by another task via polybridge" : " via polybridge")).font(.pb(.body, weight: .medium))
                 Text([started.backend, started.freedom, started.reasoningEffort.map { "effort \($0)" }].compactMap(\.self).joined(separator: " · "))
-                    .font(.system(size: 11))
+                    .font(.pb(.secondary))
                     .foregroundStyle(.secondary)
             }
         case .text(let text):
@@ -59,22 +59,22 @@ struct TimelineRow: View {
         case .message(let text, let source):
             VStack(alignment: .leading, spacing: 2) {
                 Text(source == "injected" ? "Message sent to the task" : (source == "initial" ? "Prompt" : "User message"))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.pb(.secondary, weight: .semibold))
                     .foregroundStyle(Color.accentLink)
-                Text(text).font(.system(size: 12)).lineLimit(source == "initial" ? 6 : nil).textSelection(.enabled)
+                Text(text).font(.pb(.body)).lineLimit(source == "initial" ? 6 : nil).textSelection(.enabled)
             }
             .padding(8)
             .background(RoundedRectangle(cornerRadius: 6).fill(Color.runningBG.opacity(0.6)))
         case .notice(let text):
-            Label(text, systemImage: "info.circle").font(.system(size: 11)).foregroundStyle(.secondary)
+            Label(text, systemImage: "info.circle").font(.pb(.secondary)).foregroundStyle(.secondary)
         case .undelivered(let text, let reason):
             Label("Not delivered: \(text ?? "message")" + (reason.map { " — \($0)" } ?? ""), systemImage: "exclamationmark.triangle")
-                .font(.system(size: 11))
+                .font(.pb(.secondary))
                 .foregroundStyle(Color.failedRed)
         case .finished(let status, let exitCode, _):
             let color = StatusColor.of(TaskStatus(status))
             Label("Finished: \(TaskStatus(status).label)" + (exitCode.map { " · exit \($0)" } ?? ""), systemImage: "flag.checkered")
-                .font(.system(size: 12, weight: .medium))
+                .font(.pb(.body, weight: .medium))
                 .foregroundStyle(color)
         }
     }

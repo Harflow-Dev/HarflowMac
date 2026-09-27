@@ -5,7 +5,6 @@ import Mockable
 import MonitorCore
 import PbCommon
 import PbRepository
-import PbTerminal
 import PbTestUtilities
 import PbUI
 import SwiftUI
@@ -125,7 +124,6 @@ extension TaskDetailVMTests {
         given(useCase).snapshotsPublisher().willReturn(PassthroughSubject<[String: TaskInfo], Never>().eraseToAnyPublisher())
         given(useCase).busyPublisher().willReturn(PassthroughSubject<Set<String>, Never>().eraseToAnyPublisher())
         given(useCase).outcomesPublisher().willReturn(PassthroughSubject<[String: String], Never>().eraseToAnyPublisher())
-        given(useCase).sessionsPublisher().willReturn(PassthroughSubject<[TerminalSession], Never>().eraseToAnyPublisher())
         given(useCase).itemsPublisher(for: .any).willReturn(PassthroughSubject<[TimelineItem], Never>().eraseToAnyPublisher())
         
         let running = task(status: "running", repoPath: "", liveInput: true)
@@ -135,13 +133,14 @@ extension TaskDetailVMTests {
         given(useCase).children(of: .any).willReturn([])
         given(useCase).siblings(of: .any).willReturn([])
         given(useCase).snapshot(.any).willReturn(nil)
-        given(useCase).session(forTask: .any).willReturn(nil)
         let lease = MockEventStreamLease()
         given(lease).taskID.willReturn("abc12345")
         given(lease).release().willReturn()
         given(useCase).acquireEventLease(.any).willReturn(lease)
         given(useCase).items(for: .any).willReturn([])
         given(useCase).events(for: .any).willReturn([])
+        given(useCase).eventsAvailability(for: .any).willReturn(.available)
+        given(useCase).eventsAvailabilityPublisher(for: .any).willReturn(PassthroughSubject<EventAvailability, Never>().eraseToAnyPublisher())
         given(useCase).eventsPath(for: .any).willReturn("/dev/null")
         given(useCase).activity(for: .any).willReturn(ActivityCounts())
         given(useCase).current(for: .any).willReturn(nil)
@@ -170,69 +169,6 @@ extension TaskDetailVMTests {
         
         // then
         #expect(harness.sut.tab == .timeline)
-    }
-    
-    // MARK: - Item f: the message box is hidden on the Terminal tab
-    
-    @Test func givenEveryTab_whenComputingShowsMessageBox_thenOnlyTheTerminalTabHidesIt() {
-        // given
-        let harness = makeSUT()
-        
-        // when / then
-        for tab: TaskTab in [.timeline, .changes, .prompt, .raw] {
-            harness.sut.didSelectTab(tab)
-            #expect(harness.sut.showsMessageBox, "\(tab)")
-        }
-        harness.sut.didSelectTab(.terminal)
-        #expect(!harness.sut.showsMessageBox)
-    }
-    
-    // MARK: - Item g: git waits for a status snapshot
-    
-    @Test func givenNoSnapshotYet_whenLoadingChanges_thenASnapshotIsRequestedBeforeGitIsAsked() async {
-        // given
-        let harness = makeSUT()
-        let running = task(status: "running")
-        harness.detailBox.value = running
-        harness.snapshotBox.value = nil
-        let populated = task(status: "running")
-        harness.refreshSnapshotEffect.value = { harness.snapshotBox.value = populated }
-        let expected = GitChanges(files: [], diffs: [], commitsSinceBase: nil, branch: "after-refresh", labels: [], comparedWithBase: true)
-        harness.gitChangesEffect.value = { expected }
-        
-        // when
-        harness.sut.didAppear()
-        harness.tasksSubject.send([running])
-        
-        // then — the snapshot the `guard let snapshot = useCase.snapshot(taskID) else { … }` branch
-        // needs only exists because `refreshSnapshot` populated it: `gitChanges` could not otherwise
-        // have been reached at all.
-        await waitUntil { harness.sut.changes?.branch == "after-refresh" }
-        #expect(harness.sut.changes?.branch == "after-refresh")
-        #expect(harness.sut.changesError == nil)
-        verify(harness.useCase).refreshSnapshot(.value("abc12345")).called(1)
-    }
-    
-    // MARK: - Item h: an empty repoPath skips git entirely
-    
-    @Test func givenAnEmptyRepoPath_whenTheTaskUpdates_thenGitIsNeverAskedOrPolled() async {
-        // given
-        let harness = makeSUT()
-        let noRepo = task(status: "running", repoPath: "")
-        
-        // when
-        harness.detailBox.value = noRepo
-        harness.sut.didAppear()
-        harness.tasksSubject.send([noRepo])
-        await waitUntil { harness.sut.task != nil }
-        // Positive setup first: the repo path really is empty, not a VM that never recomputed.
-        #expect(harness.sut.task?.repoPath.isEmpty == true)
-        
-        // then
-        #expect(harness.sut.changes == nil)
-        #expect(harness.sut.changesError == nil)
-        verify(harness.useCase).schedule(after: .any, execute: .any).called(0)
-        verify(harness.useCase).gitChanges(repo: .any, baseCommit: .any, startDirty: .any).called(0)
     }
     
 }

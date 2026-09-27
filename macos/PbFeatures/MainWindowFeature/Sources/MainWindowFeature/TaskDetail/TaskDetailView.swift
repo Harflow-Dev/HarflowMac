@@ -12,16 +12,14 @@
 import MonitorCore
 import PbCommon
 import PbRepository
-import PbTerminal
 import PbUI
 import SwiftUI
 
 // MARK: - TaskTab
 
-/// The detail pane's tabs. The Terminal tab exists only while there is a session (F4-37) and is
-/// inserted at index 2.
+/// The detail pane's tabs.
 enum TaskTab: String, CaseIterable, Identifiable {
-    case timeline = "Timeline", changes = "Changes", prompt = "Prompt", raw = "Raw events", terminal = "Terminal"
+    case timeline = "Timeline", summary = "Summary", prompt = "Prompt", raw = "Raw events"
     var id: String { rawValue }
 }
 
@@ -45,44 +43,39 @@ protocol TaskDetailViewModel: ViewModel {
     
     var title: String { get }
     var ancestorCrumbs: [AncestorCrumb] { get }
-    var isDrivenByUser: Bool { get }
     var isBusy: Bool { get }
     var outcomeMessage: String? { get }
     var takenOverBannerText: String? { get }
-    var drivingBannerText: String? { get }
     var spawnedByBannerText: String? { get }
     var canTakeover: Bool { get }
     var takeoverButtonLabel: String { get }
     var takeoverHelp: String { get }
     var openParentTaskID: String? { get }
     var canCancel: Bool { get }
-    
+    /// A ready-to-paste `cd <repo> && <argv>` command (Monitor piece 3/3), read from the task's
+    /// snapshot — `nil` hides the "Copy resume command" button entirely.
+    var resumeCommand: String? { get }
+    var copyResumeCommandHelp: String { get }
+
     var tab: TaskTab { get }
     var tabs: [TaskTab] { get }
-    var changesFileCount: Int { get }
-    /// The message box is hidden on the Terminal tab (`TaskDetailView.swift:116` pre-port).
-    var showsMessageBox: Bool { get }
-    
+
     var timelineModel: TimelinePaneModel { get }
-    var changesModel: ChangesPaneModel { get }
+    var summaryModel: SummaryPaneModel { get }
     var promptText: String { get }
     var rawEvents: [TaskEvent] { get }
     var rawEventsPath: String { get }
     var inspectorModel: InspectorModel? { get }
     var messageBoxModel: MessageBoxModel { get }
-    var terminalSession: TerminalSession? { get }
-    
+
     func didAppear()
     func didDisappear()
     func didSelectTab(_ tab: TaskTab)
     func didTapTask(_ taskID: String)
-    func didSelectTakeoverDestination(_ destination: TakeoverDestination)
+    func didTapTakeover()
     func didTapCancel()
+    func didTapCopyResumeCommand()
     @discardableResult func submitMessage(_ text: String) -> Bool
-    func didTapReloadChanges()
-    func didTapEndSession()
-    func didTapCloseSession()
-    func previewFile(path: String) async -> FilePreviewResult
 }
 
 // MARK: - TaskDetailView
@@ -115,10 +108,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                         tabBar
                         Divider()
                         content
-                        if viewModel.showsMessageBox {
-                            Divider()
-                            MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
-                        }
+                        MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
                     }
                     Divider()
                     InspectorView(model: viewModel.inspectorModel)
@@ -126,7 +116,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 }
             } else {
                 VStack(spacing: 8) {
-                    Text("Task \(viewModel.taskID)").font(.headline)
+                    Text("Task \(viewModel.taskID)").font(.pb(.headline, weight: .bold))
                     Text(viewModel.hasListed ? "This task is not in polybridge's records (it may have been removed by retention)." : "Loading…")
                         .foregroundStyle(.secondary)
                 }
@@ -153,35 +143,29 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     }
                     Text(viewModel.title).foregroundStyle(.secondary).lineLimit(1)
                 }
-                .font(.system(size: 11))
+                .font(.pb(.secondary))
             }
-            HStack(alignment: .center, spacing: 10) {
-                BackendBadge(backend: task.backend, size: 26)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(viewModel.title).font(.system(size: 16, weight: .semibold)).lineLimit(2).textSelection(.enabled)
-                    HStack(spacing: 6) {
-                        Text(task.backend).font(.system(size: 11, weight: .medium))
-                        if let effort = task.reasoningEffort { Text("effort \(effort)").font(.system(size: 11)).foregroundStyle(.secondary) }
-                        FreedomBadge(freedom: task.freedom)
-                        Text(Format.repo(task.repoPath)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                        if task.depth > 0 { Text("depth \(task.depth)").font(.system(size: 11)).foregroundStyle(.secondary) }
-                        if let session = task.sessionID {
-                            Text("session \(session.prefix(8))").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                        }
+            // One row when everything fits; at a narrow width the title keeps its own row and the
+            // status and actions move to a second row, rather than squeezing the title to nothing.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 10) {
+                    titleBlock(task)
+                    Spacer(minLength: 12)
+                    statusAndActions(task)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    titleBlock(task)
+                    HStack {
+                        Spacer(minLength: 0)
+                        statusAndActions(task)
                     }
                 }
-                Spacer()
-                StatusPill(task: task, drivenByUser: viewModel.isDrivenByUser)
-                actions
             }
             if let message = viewModel.outcomeMessage {
-                Text(message).font(.system(size: 11)).foregroundStyle(OutcomeColor.of(message)).textSelection(.enabled)
+                Text(message).font(.pb(.secondary)).foregroundStyle(OutcomeColor.of(message)).textSelection(.enabled)
             }
             if let text = viewModel.takenOverBannerText {
                 Banner(icon: "person.fill", title: "Taken over", text: text)
-            }
-            if let text = viewModel.drivingBannerText {
-                Banner(icon: "terminal", title: "You're driving", text: text, tint: Color(hex: 0x8A4B00))
             }
             if let text = viewModel.spawnedByBannerText {
                 Banner(icon: "arrow.turn.down.right", title: "Sub-task started by another agent", text: text)
@@ -191,21 +175,48 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     }
     
     @ViewBuilder
+    private func titleBlock(_ task: TaskInfo) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+                    BackendBadge(backend: task.backend, size: 26)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(viewModel.title).font(.pb(.title, weight: .semibold)).lineLimit(2).textSelection(.enabled)
+                        HStack(spacing: 6) {
+                            Text(task.backend).font(.pb(.secondary, weight: .medium))
+                            if let effort = task.reasoningEffort { Text("effort \(effort)").font(.pb(.secondary)).foregroundStyle(.secondary) }
+                            FreedomBadge(freedom: task.freedom)
+                            Text(Format.repo(task.repoPath)).font(.pb(.secondary)).foregroundStyle(.secondary).lineLimit(1)
+                            if task.depth > 0 { Text("depth \(task.depth)").font(.pb(.secondary)).foregroundStyle(.secondary) }
+                            if let session = task.sessionID {
+                                Text("session \(session.prefix(8))").font(.pb(.secondary, design: .monospaced)).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+        }
+    }
+
+    @ViewBuilder
+    private func statusAndActions(_ task: TaskInfo) -> some View {
+        HStack(spacing: 10) {
+            StatusPill(task: task).fixedSize()
+            actions
+        }
+    }
+
+    @ViewBuilder
     private var actions: some View {
         HStack(spacing: 6) {
             if viewModel.isBusy { ProgressView().controlSize(.small) }
-            if !viewModel.isDrivenByUser {
-                Menu {
-                    Button("In this window") { viewModel.didSelectTakeoverDestination(.embedded) }
-                    Button("In Terminal.app") { viewModel.didSelectTakeoverDestination(.terminalApp) }
-                } label: {
-                    Text(viewModel.takeoverButtonLabel)
-                } primaryAction: {
-                    viewModel.didSelectTakeoverDestination(.embedded)
-                }
-                .fixedSize()
+            Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
                 .disabled(!viewModel.canTakeover)
                 .help(viewModel.takeoverHelp)
+            if viewModel.resumeCommand != nil {
+                // Icon-only so the header still fits at the window's minimum width; the full name
+                // stays as the tooltip and the accessibility label.
+                Button { viewModel.didTapCopyResumeCommand() } label: {
+                    Label("Copy resume command", systemImage: "doc.on.doc").labelStyle(.iconOnly)
+                }
+                .help(viewModel.copyResumeCommandHelp)
+                .accessibilityLabel("Copy resume command")
             }
             if let parentID = viewModel.openParentTaskID {
                 Button("Open parent") { viewModel.didTapTask(parentID) }
@@ -214,6 +225,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 Button("Cancel", role: .destructive) { viewModel.didTapCancel() }.disabled(viewModel.isBusy)
             }
         }
+        // Buttons keep their full labels; the title and repo path truncate instead.
+        .fixedSize()
     }
     
     // MARK: Tabs
@@ -225,16 +238,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 Button {
                     viewModel.didSelectTab(item)
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(item.rawValue)
-                        if item == .changes, viewModel.changesFileCount > 0 {
-                            Text("\(viewModel.changesFileCount)")
-                                .font(.system(size: 10, weight: .semibold))
-                                .padding(.horizontal, 5)
-                                .background(Capsule().fill(Color.hairline))
-                        }
-                    }
-                    .font(.system(size: 12, weight: viewModel.tab == item ? .semibold : .regular))
+                    Text(item.rawValue)
+                    .font(.pb(.body, weight: viewModel.tab == item ? .semibold : .regular))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(RoundedRectangle(cornerRadius: 6).fill(viewModel.tab == item ? Color.selectedRow : .clear))
@@ -252,24 +257,18 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         switch viewModel.tab {
         case .timeline:
             TimelinePaneView(model: viewModel.timelineModel)
-        case .changes:
-            ChangesPaneView(model: viewModel.changesModel)
+        case .summary:
+            SummaryPaneView(model: viewModel.summaryModel)
         case .prompt:
             ScrollView {
                 Text(viewModel.promptText)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.pb(.body, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
             }
         case .raw:
             RawEventsPaneView(events: viewModel.rawEvents, path: viewModel.rawEventsPath)
-        case .terminal:
-            if let session = viewModel.terminalSession {
-                TerminalPaneView(session: session, onEndSession: { viewModel.didTapEndSession() }, onClose: { viewModel.didTapCloseSession() })
-            } else {
-                Text("No terminal").frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
         }
     }
 }

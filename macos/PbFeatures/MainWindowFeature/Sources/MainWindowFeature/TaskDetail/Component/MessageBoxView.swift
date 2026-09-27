@@ -8,6 +8,7 @@
 //  @State" allowance.
 //
 
+import PbUI
 import SwiftUI
 
 // MARK: - MessageBoxModel
@@ -32,49 +33,82 @@ struct MessageBoxModel {
 // MARK: - MessageBoxView
 
 /// "Message this task" while a live-input run is going; "Continue" (a resume) once it settled.
+/// Rendered as a raised composer card — a place to write, not a footer bar — with the hint and
+/// the ⌘↩ affordance surfaced underneath it as a caption line.
 struct MessageBoxView: View {
     let model: MessageBoxModel
     let onSubmit: (String) -> Bool
     @State private var text = ""
-    
+
+    private var isEnabled: Bool { model.canSend || model.canContinue }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(model.label).font(.system(size: 11, weight: .semibold))
-                Spacer()
-                Text(model.hint).font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            HStack(alignment: .bottom) {
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 TextField(model.placeholder, text: $text, axis: .vertical)
-                    .lineLimit(1 ... 4)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(!(model.canSend || model.canContinue))
+                    .lineLimit(2 ... 6)
+                    .textFieldStyle(.plain)
+                    .disabled(!isEnabled)
                     .onSubmit(submit)
-                Button(model.buttonLabel, action: submit)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!(model.canSend || model.canContinue) || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                HStack {
+                    Text(model.label).font(.pb(.secondary, weight: .semibold)).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(model.buttonLabel, action: submit)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .disabled(!isEnabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .textBackgroundColor)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isEnabled ? Color.accentColor.opacity(0.35) : Color.hairline, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
+
+            if !model.hint.isEmpty {
+                Text("\(model.hint) · ⌘↩ to send")
+                    .font(.pb(.caption))
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
     }
-    
+
     private func submit() {
         if onSubmit(text) { text = "" }
     }
 }
 
 #if DEBUG
-#Preview {
+@MainActor
+private func previewStack() -> some View {
     VStack(spacing: 20) {
         MessageBoxView(model: MessageBoxModel(
             canSend: true, canContinue: false, isBusy: false, label: "Message this task",
             hint: "Queued; folded into the current turn or sent after it", placeholder: "Message this task while it runs…",
             buttonLabel: "Send"
         )) { _ in true }
+        MessageBoxView(model: MessageBoxModel(
+            canSend: false, canContinue: true, isBusy: false, label: "Continue this task",
+            hint: "Resumes the session with this message", placeholder: "Continue this task…",
+            buttonLabel: "Continue"
+        )) { _ in true }
         MessageBoxView(model: .disabled) { _ in true }
     }
     .padding()
     .frame(width: 500)
+}
+
+#Preview("Light") {
+    previewStack().preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    previewStack().preferredColorScheme(.dark)
 }
 #endif

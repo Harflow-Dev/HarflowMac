@@ -8,6 +8,8 @@
 	<string>Polybridge Monitor</string>
 	<key>CFBundleExecutable</key>
 	<string>PolybridgeMonitor</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.polybridge.monitor</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -33,8 +35,6 @@
 	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
-	<key>LSUIElement</key>
-	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSSupportsAutomaticTermination</key>

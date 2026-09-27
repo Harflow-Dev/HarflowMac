@@ -1,8 +1,14 @@
 import Foundation
 
-/// The one `"v"` the app understands for `polybridge-ctl --json`, `polybridge-setup --json` and
-/// `events.jsonl`. Anything else is refused with a message, never guessed at.
-public let supportedContractVersion = 1
+/// The `"v"` values this app understands for `polybridge-ctl --json`. Anything else is refused
+/// with a message naming the tool and the versions understood, never guessed at. v2 added
+/// `resume_command` to `status`'s `task`/`list`'s `tasks[]` snapshot documents (Monitor piece 3/3);
+/// v1 is still accepted since it simply has no `resume_command`. `polybridge-setup --json` and
+/// `events.jsonl` are separate contracts with their own single-version constants — see
+/// `setupContractVersion` (`SetupClient.swift`) and `eventLogVersion` (`Events.swift`) — because a
+/// shape change to one of the three must never silently widen what the app accepts from the
+/// others.
+public let ctlContractVersions: Set<Int> = [1, 2]
 
 public enum TaskStatus: Equatable, Hashable, Sendable {
     case running, completed, failed, timedOut, cancelled
@@ -87,13 +93,16 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     public var model: String? { string("model") }
     public var reasoningEffort: String? { string("reasoning_effort") }
     public var enforcement: [String: JSONValue]? { raw["enforcement"]?.objectValue }
-    public var baseCommit: String? { string("base_commit") }
-    public var startDirty: Bool? { raw["start_dirty"]?.boolValue }
     public var eventsLog: String? { string("events_log") }
     public var note: String? { string("note") }
     public var totalCostUSD: Double? { raw["total_cost_usd"]?.doubleValue }
     public var numTurns: Int? { raw["num_turns"]?.intValue }
     public var permissionDenials: [JSONValue] { raw["permission_denials"]?.arrayValue ?? [] }
+    /// A ready-to-paste `cd <repo> && <argv>` command that resumes this task's session in a
+    /// POSIX shell, computed by `backends.resume_command` (Monitor piece 3/3). `nil` for any
+    /// non-string value and for an empty string alike — a null and an empty answer both mean
+    /// "nothing to offer", so a caller only needs to check for `nil`.
+    public var resumeCommand: String? { string("resume_command").flatMap { $0.isEmpty ? nil : $0 } }
 
     /// A root task: no detected caller. `depth` alone is not enough — a record written before
     /// lineage existed has depth 0 and no `spawned_by` either, which is also a root.
@@ -151,7 +160,9 @@ public enum ToolError: Error, Equatable, Sendable {
             return "`\(tool)` was not found (searched \(searched.joined(separator: ", "))). "
                 + "Install polybridge (`uv tool install . --force --no-cache` in the repo) or set its folder in Settings."
         case .unsupportedVersion(let tool, let version):
-            return "`\(tool)` answered with contract version \(version); this app understands version \(supportedContractVersion). "
+            let understood = Self.understoodVersions(forTool: tool)
+            let plural = understood.contains(" or ") || understood.contains(",")
+            return "`\(tool)` answered with contract version \(version); this app understands version\(plural ? "s" : "") \(understood). "
                 + "Update the app or polybridge so they match."
         case .unsupportedCommand(let tool, let command, _):
             return "The installed `\(tool)` has no `\(command)` command — it predates this app. "
@@ -174,6 +185,20 @@ public enum ToolError: Error, Equatable, Sendable {
     public var refusalCode: String? {
         if case .refused(let code, _) = self { return code }
         return nil
+    }
+
+    /// The versions understood for `tool`'s own contract, rendered for the unsupported-version
+    /// message ("1 or 2", "1", …). Each tool has exactly one contract, so its name is enough to
+    /// pick the right constant — see `ctlContractVersions`/`setupContractVersion`.
+    fileprivate static func understoodVersions(forTool tool: String) -> String {
+        switch tool {
+        case "polybridge-ctl":
+            return ctlContractVersions.sorted().map(String.init).joined(separator: " or ")
+        case "polybridge-setup":
+            return String(setupContractVersion)
+        default:
+            return String(eventLogVersion)
+        }
     }
 }
 
@@ -251,7 +276,7 @@ public enum CtlDocument: Equatable, Sendable {
         guard let version = document["v"] else {
             return .failure(.unsupportedVersion(tool: tool, version: "none"))
         }
-        guard version.intValue == supportedContractVersion else {
+        guard let versionInt = version.intValue, ctlContractVersions.contains(versionInt) else {
             return .failure(.unsupportedVersion(tool: tool, version: version.rendered()))
         }
         if let error = document["error"]?.objectValue {

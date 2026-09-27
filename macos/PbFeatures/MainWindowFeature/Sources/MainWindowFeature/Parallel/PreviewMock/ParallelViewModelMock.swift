@@ -57,13 +57,13 @@ final class ParallelViewModelMock: ParallelViewModel {
         return [
             ParallelColumnModel(
                 id: "abc123", task: running, title: "Fix the login bug", metaLine: "claude · effort low",
-                isDrivenByUser: false, isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+                isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
                 items: [PreviewFixtures.textItem("Looked at the failing test.")],
                 summary: nil, onTapTakeover: {}, onTapOpenTask: {}
             ),
             ParallelColumnModel(
                 id: "def456", task: done, title: "Refactor the parser", metaLine: "codex",
-                isDrivenByUser: false, isBusy: false, outcomeMessage: "Refused: read-only freedom.", showPrompt: false, prompt: nil,
+                isBusy: false, outcomeMessage: "Refused: read-only freedom.", showPrompt: false, prompt: nil,
                 items: [], summary: "Refactored the parser into smaller functions.", onTapTakeover: {}, onTapOpenTask: {}
             )
         ]

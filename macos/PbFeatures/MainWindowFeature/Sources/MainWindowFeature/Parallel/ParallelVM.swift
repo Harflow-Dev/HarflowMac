@@ -9,19 +9,17 @@ import Mockable
 import MonitorCore
 import PbCommon
 import PbRepository
-import PbTerminal
 import PbUI
 import PbUtilities
 
 // MARK: - ParallelUseCase
 
 /// The Parallel screen's data needs over `TaskListRepository`, `TaskSnapshotRepository`,
-/// `TaskActionRepository`, `EventStreamRepository`, `TerminalSessionRegistry` and
-/// `TakeoverService`.
+/// `TaskActionRepository`, `EventStreamRepository` and `TakeoverService`.
 @Mockable
 @MainActor
 protocol ParallelUseCase: Sendable {
-    
+
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never>
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never>
     func busyPublisher() -> AnyPublisher<Set<String>, Never>
@@ -30,17 +28,12 @@ protocol ParallelUseCase: Sendable {
     /// Codex review caught on `SidebarVM` in Phase 4b) — a column must refresh when one arrives even
     /// though the listing itself did not change.
     func titlesPublisher() -> AnyPublisher<[String: String], Never>
-    /// A live embedded session starting or ending must refresh `isDrivenByUser`, independent of any
-    /// other publisher.
-    func sessionsPublisher() -> AnyPublisher<[TerminalSession], Never>
-    
+
     /// The fresh listing entry for a member (F4-40: "using the fresh listing entry") — never a
     /// cached copy retained by this screen.
     func task(_ id: String) -> TaskInfo?
     func title(_ taskID: String) -> String
-    /// A live embedded session for `taskID`, if any (drives the "You're driving" pill).
-    func session(forTask taskID: String) -> TerminalSession?
-    
+
     /// Decision 6: one lease per member, acquired while its column is on screen.
     func acquireEventLease(_ taskID: String) -> any EventStreamLease
     func items(for taskID: String) -> [TimelineItem]
@@ -50,8 +43,8 @@ protocol ParallelUseCase: Sendable {
     func runningInSubtrees(of ids: [String]) -> [String]
     func cancelAll(_ ids: [String]) async
     
-    /// Embedded-only, per the phase-4 brief: dispatches into `TakeoverService` synchronously; the VM
-    /// routes to the task screen immediately after calling this.
+    /// Dispatches into `TakeoverService` synchronously; the VM routes to the task screen immediately
+    /// after calling this. Take over always opens Terminal.app.
     func beginTakeover(taskID: String)
 }
 
@@ -195,15 +188,9 @@ final class ParallelVM: ParallelViewModel {
             }
             .store(in: &cancellables)
         
-        // Titles and sessions load independently of the listing (Codex review finding): a column
-        // must refresh when either changes on its own, not only when an unrelated publisher happens
-        // to fire afterward.
+        // Titles load independently of the listing (Codex review finding): a column must refresh
+        // when it changes on its own, not only when an unrelated publisher happens to fire afterward.
         useCase.titlesPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.recompute() }
-            .store(in: &cancellables)
-        
-        useCase.sessionsPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.recompute() }
             .store(in: &cancellables)
@@ -271,14 +258,12 @@ final class ParallelVM: ParallelViewModel {
         let metaLine = [task.backend, task.reasoningEffort.map { "effort \($0)" }, task.sessionID.map { "session \($0.prefix(8))" }]
             .compactMap(\.self)
             .joined(separator: " · ")
-        let isDrivenByUser = useCase.session(forTask: taskID).map { !$0.ended } ?? false
-        
+
         return ParallelColumnModel(
             id: taskID,
             task: task,
             title: useCase.title(taskID),
             metaLine: metaLine,
-            isDrivenByUser: isDrivenByUser,
             isBusy: latestBusy.contains(taskID),
             outcomeMessage: latestOutcomes[taskID],
             showPrompt: showPrompt,
@@ -296,8 +281,8 @@ final class ParallelVM: ParallelViewModel {
         let isRunning = task.status.isRunning
         let title = isRunning ? "Take over this task?" : "Continue this session in a terminal?"
         let buttonTitle = isRunning ? "Stop it and take over" : "Continue in terminal"
-        let message = "The headless run is stopped first if it is still going. The terminal runs under your own default permissions, not "
-        + "\(task.freedom ?? "this task's freedom")."
+        let message = "The headless run is stopped first if it is still going, then the same conversation opens in Terminal.app. It runs "
+        + "under your own default permissions, not \(task.freedom ?? "this task's freedom")."
         publishDialog(title, description: message) {
             AlertAction(title: buttonTitle) { [weak self] in
                 guard let self else { return }

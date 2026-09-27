@@ -20,7 +20,6 @@ struct ParallelColumnModel: Identifiable {
     let task: TaskInfo
     let title: String
     let metaLine: String
-    let isDrivenByUser: Bool
     let isBusy: Bool
     let outcomeMessage: String?
     let showPrompt: Bool
@@ -51,28 +50,28 @@ struct ParallelColumnView: View {
             HStack(spacing: 8) {
                 BackendBadge(backend: model.task.backend, size: 22)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(model.title).font(.system(size: 12, weight: .semibold)).lineLimit(2)
-                    Text(model.metaLine).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(model.title).font(.pb(.body, weight: .semibold)).lineLimit(2)
+                    Text(model.metaLine).font(.pb(.caption)).foregroundStyle(.secondary)
                 }
                 Spacer()
-                StatusPill(task: model.task, drivenByUser: model.isDrivenByUser)
+                StatusPill(task: model.task)
             }
             HStack {
                 Button(model.task.status.isRunning ? "Take over" : "Continue in terminal") { model.onTapTakeover() }
                     .disabled(model.task.sessionID == nil || model.isBusy)
                 Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
             }
-            .font(.system(size: 11))
+            .font(.pb(.secondary))
             if let message = model.outcomeMessage {
-                Text(message).font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(message).font(.pb(.caption)).foregroundStyle(.secondary)
             }
             if model.showPrompt, let prompt = model.prompt {
                 Text(prompt)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.pb(.secondary, design: .monospaced))
                     .lineLimit(12)
                     .textSelection(.enabled)
                     .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(Color(hex: 0xF5F5F7)))
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.codeFill))
             }
             Divider()
             ScrollView {
@@ -81,7 +80,7 @@ struct ParallelColumnView: View {
                         TimelineRow(model: TimelineRowModel(item: item, start: model.task.startedAt, live: model.task.status.isRunning))
                     }
                     if model.items.count > shown.count {
-                        Button("Show all \(model.items.count) steps") { showAll = true }.buttonStyle(.link).font(.system(size: 11))
+                        Button("Show all \(model.items.count) steps") { showAll = true }.buttonStyle(.link).font(.pb(.secondary))
                     }
                     Divider()
                     if model.task.status.isTerminal {
@@ -89,11 +88,11 @@ struct ParallelColumnView: View {
                         if let summary = model.summary, !summary.isEmpty {
                             MarkdownText(text: summary)
                         } else {
-                            Text("No summary was reported.").font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text("No summary was reported.").font(.pb(.body)).foregroundStyle(.secondary)
                         }
                     } else {
                         Text("Still working… the final summary shows here when \(model.task.backend) finishes.")
-                            .font(.system(size: 12))
+                            .font(.pb(.body))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -112,7 +111,7 @@ struct ParallelColumnView: View {
     ]))!
     ParallelColumnView(model: ParallelColumnModel(
         id: "abc123", task: task, title: "Fix the login bug", metaLine: "claude · effort low",
-        isDrivenByUser: false, isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
         items: [PreviewFixtures.textItem("Looked at the failing test.")],
         summary: nil, onTapTakeover: {}, onTapOpenTask: {}
     ))

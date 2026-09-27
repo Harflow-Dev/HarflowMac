@@ -38,14 +38,14 @@ struct ToolRow: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: icon).frame(width: 14).foregroundStyle(.secondary)
-                    Text(model.call.tool).font(.system(size: 12, weight: .medium))
-                    Text(model.call.headline).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(model.call.tool).font(.pb(.body, weight: .medium))
+                    Text(model.call.headline).font(.pb(.secondary, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 4)
                     if let result = model.result {
                         if let code = result.exitCode {
-                            Text("exit \(code)").font(.system(size: 10)).foregroundStyle(code == 0 ? Color.doneGreen : Color.failedRed)
+                            Text("exit \(code)").font(.pb(.caption)).foregroundStyle(code == 0 ? Color.doneGreen : Color.failedRed)
                         } else if !result.ok {
-                            Text("failed").font(.system(size: 10)).foregroundStyle(Color.failedRed)
+                            Text("failed").font(.pb(.caption)).foregroundStyle(Color.failedRed)
                         }
                     } else if model.live {
                         ProgressView().controlSize(.mini)
@@ -59,14 +59,14 @@ struct ToolRow: View {
             if expanded || (model.result == nil && model.live && model.call.category == "shell") {
                 if let output = model.result?.outputTail, !output.isEmpty {
                     Text(output)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.pb(.caption, design: .monospaced))
                         .lineLimit(expanded ? nil : 6)
                         .textSelection(.enabled)
                         .padding(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Color(hex: 0xF5F5F7)))
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.codeFill))
                 } else if expanded {
-                    Text(model.call.inputPreview).font(.system(size: 10, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)
+                    Text(model.call.inputPreview).font(.pb(.caption, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)
                 }
             }
         }
@@ -102,10 +102,10 @@ struct EditPreview: View {
                 Text("+ " + line).foregroundStyle(Color.doneGreen)
             }
         }
-        .font(.system(size: 10, design: .monospaced))
+        .font(.pb(.caption, design: .monospaced))
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 4).fill(Color(hex: 0xF8F8FA)))
+        .background(RoundedRectangle(cornerRadius: 4).fill(Color.editPreviewFill))
     }
 }
 

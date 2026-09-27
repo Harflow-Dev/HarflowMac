@@ -15,7 +15,6 @@ let package = Package(
         .package(path: "../../PbFoundation/PbUI"),
         .package(path: "../../PbCore/MonitorCore"),
         .package(path: "../../PbCore/PbRepository"),
-        .package(path: "../../PbCore/PbTerminal"),
 
         // MARK: Remote Dependencies
 
@@ -26,7 +25,7 @@ let package = Package(
         .target(
             name: "MainWindowFeature",
             dependencies: [
-                "PbUtilities", "PbCommon", "PbUI", "MonitorCore", "PbRepository", "PbTerminal", "SwiftEnvironment", "Mockable"
+                "PbUtilities", "PbCommon", "PbUI", "MonitorCore", "PbRepository", "SwiftEnvironment", "Mockable"
             ],
             swiftSettings: [
                 .define("MOCKING", .when(configuration: .debug))
@@ -35,7 +34,7 @@ let package = Package(
         .testTarget(
             name: "MainWindowFeatureTests",
             dependencies: [
-                "MainWindowFeature", "PbUtilities", "PbCommon", "PbUI", "MonitorCore", "PbRepository", "PbTerminal", "SwiftEnvironment", "Mockable",
+                "MainWindowFeature", "PbUtilities", "PbCommon", "PbUI", "MonitorCore", "PbRepository", "SwiftEnvironment", "Mockable",
                 .product(name: "PbTestUtilities", package: "PbUtilities"),
                 .product(name: "PbCommonTestMock", package: "PbCommon")
             ],

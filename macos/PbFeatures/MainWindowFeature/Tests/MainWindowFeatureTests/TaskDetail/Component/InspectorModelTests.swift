@@ -2,66 +2,28 @@
 @testable import MonitorCore
 import Testing
 
-/// F4-41: files changed is capped at 12.
+/// Piece 2/3 of the Monitor architecture plan removed git from the Inspector entirely ("Files
+/// changed" and the "Branch" row) — `InspectorModel` no longer carries a `changes` field at all,
+/// so its remaining tests cover only the enforcement-not-recorded rule.
 @Suite struct InspectorModelTests {
-    
-    @Test func givenMoreThan12ChangedFiles_whenListed_thenOnlyTheFirst12Show() {
-        // given
-        let files = (0 ..< 15).map { FileChange(status: "M", path: "file\($0).swift", oldPath: nil, added: 1, removed: 0) }
-        
-        // when
-        let visible = InspectorModel.visibleFiles(files)
-        
-        // then
-        #expect(visible.count == 12)
-        #expect(visible.map(\.path) == files.prefix(12).map(\.path))
-    }
-    
-    @Test func givenFewerThan12ChangedFiles_whenListed_thenAllShow() {
-        // given
-        let files = (0 ..< 3).map { FileChange(status: "M", path: "file\($0).swift", oldPath: nil, added: 1, removed: 0) }
-        
-        // when
-        let visible = InspectorModel.visibleFiles(files)
-        
-        // then
-        #expect(visible.count == 3)
-    }
-    
-    // MARK: - Item k: "None" shows only once git actually compared and found nothing
-    
-    @Test func givenNoChangesYet_whenAskingIfNoFilesChangedShows_thenItDoesNot() {
-        // given / when / then — `changes` is nil (still loading): never "None".
-        #expect(!InspectorModel.showsNoFilesChanged(nil))
-    }
-    
-    @Test func givenTheComparisonFailed_whenAskingIfNoFilesChangedShows_thenItDoesNot() {
-        // given — not compared with the baseline: shows "Not compared…" instead, never "None".
-        let changes = GitChanges(files: [], diffs: [], commitsSinceBase: nil, branch: nil, labels: [], comparedWithBase: false)
-        
-        // when / then
-        #expect(!InspectorModel.showsNoFilesChanged(changes))
-    }
-    
-    @Test func givenAComparisonThatFoundNothing_whenAskingIfNoFilesChangedShows_thenItDoes() {
-        // given — compared, and genuinely nothing changed.
-        let changes = GitChanges(files: [], diffs: [], commitsSinceBase: nil, branch: nil, labels: [], comparedWithBase: true)
-        
-        // when / then
-        #expect(InspectorModel.showsNoFilesChanged(changes))
-    }
-    
-    @Test func givenAComparisonThatFoundFiles_whenAskingIfNoFilesChangedShows_thenItDoesNot() {
-        // given — compared, and files did change.
-        let changes = GitChanges(
-            files: [FileChange(status: "M", path: "a.swift", oldPath: nil, added: 1, removed: 0)],
-            diffs: [], commitsSinceBase: nil, branch: nil, labels: [], comparedWithBase: true
+
+    // MARK: - Piece 2/3: InspectorModel builds with no `changes` field at all
+
+    @Test func givenNoGitFieldAtAll_whenConstructed_thenTheModelStillBuildsWithEveryOtherField() {
+        // given / when
+        let task = TaskInfo(.object(["task_id": .string("abc123")]))!
+        let model = InspectorModel(
+            task: task, current: nil, stepCount: 3, activity: ActivityCounts(), subtaskCount: 1,
+            ancestors: [], siblings: [], detail: task, hasSnapshot: true, notices: ["a notice"], onSelectTask: { _ in }
         )
-        
-        // when / then
-        #expect(!InspectorModel.showsNoFilesChanged(changes))
+
+        // then
+        #expect(model.task.taskID == "abc123")
+        #expect(model.stepCount == 3)
+        #expect(model.subtaskCount == 1)
+        #expect(model.notices == ["a notice"])
     }
-    
+
     // MARK: - Item q: "Enforcement was not recorded" shows only when a snapshot exists
     
     @Test func givenNoSnapshotYet_whenAskingIfEnforcementNotRecordedShows_thenItDoesNotEvenWithoutEnforcement() {

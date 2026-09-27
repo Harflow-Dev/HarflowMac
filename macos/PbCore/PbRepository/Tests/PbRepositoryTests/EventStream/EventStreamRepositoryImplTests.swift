@@ -158,6 +158,58 @@ import Testing
         #expect(!sut.leasedTaskIDs.contains(taskID))
     }
 
+    @Test func givenNoLeaseHasEverBeenAcquired_whenAskedForAvailability_thenItReportsLoading() {
+        // given — no stream has ever been created for this id, so there is nothing to have
+        // resolved availability one way or the other yet.
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
+        let snapshotRepository = MockTaskSnapshotRepository()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository)
+
+        // when / then
+        #expect(sut.eventsAvailability(for: "never-leased") == .loading)
+    }
+
+    @Test func givenAnEventsFileOnDisk_whenLeased_thenAvailabilityBecomesAvailable() async {
+        // given
+        let (dir, taskID, tasksDir) = writeEventsFile(lines: [taskStartedLine()])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
+        let snapshotRepository = MockTaskSnapshotRepository()
+        given(snapshotRepository).refresh(.any).willReturn()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository)
+
+        // when
+        let lease = sut.acquire(taskID)
+
+        // then
+        await waitUntil(timeout: 5) { sut.eventsAvailability(for: taskID) == .available }
+        #expect(sut.eventsAvailability(for: taskID) == .available)
+        lease.release()
+    }
+
+    @Test func givenATaskIDWithNoEventsFileEverWritten_whenLeased_thenAvailabilityBecomesUnavailable() async {
+        // given — a well-formed but never-written path, so the tailer's reads all fail to open it.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let taskID = "evt-" + UUID().uuidString.prefix(8)
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
+        let snapshotRepository = MockTaskSnapshotRepository()
+        given(snapshotRepository).refresh(.any).willReturn()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository)
+
+        // when
+        let lease = sut.acquire(String(taskID))
+
+        // then
+        await waitUntil(timeout: 5) { sut.eventsAvailability(for: String(taskID)) == .unavailable }
+        #expect(sut.eventsAvailability(for: String(taskID)) == .unavailable)
+        lease.release()
+    }
+
     @Test func givenTwoLeases_whenOnlyOneIsReleased_thenTheTaskStaysLeased() async {
         // given
         let (dir, taskID, tasksDir) = writeEventsFile(lines: [taskStartedLine()])

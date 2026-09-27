@@ -1,69 +1,60 @@
 {
-  "originHash" : "101a961ba190a926b9e176edbfcc188bcc99b7bd008709d6e72d5fd6010cab63",
-  "pins" : [
+  "originHash": "101a961ba190a926b9e176edbfcc188bcc99b7bd008709d6e72d5fd6010cab63",
+  "pins": [
     {
-      "identity" : "dummyable",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/hainayanda/Dummyable.git",
-      "state" : {
-        "revision" : "b71972c9065ad11d5dd41cfb98c7d76576a49270",
-        "version" : "1.1.6"
+      "identity": "dummyable",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/hainayanda/Dummyable.git",
+      "state": {
+        "revision": "b71972c9065ad11d5dd41cfb98c7d76576a49270",
+        "version": "1.1.6"
       }
     },
     {
-      "identity" : "mockable",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Kolos65/Mockable.git",
-      "state" : {
-        "revision" : "bd20509c34ca3205003677747ad8dcb70d18b7ca",
-        "version" : "0.6.2"
+      "identity": "mockable",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/Kolos65/Mockable.git",
+      "state": {
+        "revision": "bd20509c34ca3205003677747ad8dcb70d18b7ca",
+        "version": "0.6.2"
       }
     },
     {
-      "identity" : "swift-argument-parser",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-argument-parser",
-      "state" : {
-        "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
-        "version" : "1.8.2"
+      "identity": "swift-argument-parser",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/apple/swift-argument-parser",
+      "state": {
+        "revision": "6a52f3251125d74daf04fcbd5e6f08a75d074382",
+        "version": "1.8.2"
       }
     },
     {
-      "identity" : "swift-syntax",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-syntax.git",
-      "state" : {
-        "revision" : "0687f71944021d616d34d922343dcef086855920",
-        "version" : "600.0.1"
+      "identity": "swift-syntax",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/swiftlang/swift-syntax.git",
+      "state": {
+        "revision": "0687f71944021d616d34d922343dcef086855920",
+        "version": "600.0.1"
       }
     },
     {
-      "identity" : "swiftenvironment",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/hainayanda/SwiftEnvironment.git",
-      "state" : {
-        "revision" : "96a8257ff4add48a8400a89873f42bfc824ae684",
-        "version" : "4.1.8"
+      "identity": "swiftenvironment",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/hainayanda/SwiftEnvironment.git",
+      "state": {
+        "revision": "96a8257ff4add48a8400a89873f42bfc824ae684",
+        "version": "4.1.8"
       }
     },
     {
-      "identity" : "swiftterm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/migueldeicaza/SwiftTerm",
-      "state" : {
-        "revision" : "5d14406844143538cd8f8851d2d8a67c1fe443e5",
-        "version" : "1.20.0"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
-        "version" : "1.13.1"
+      "identity": "xctest-dynamic-overlay",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/pointfreeco/xctest-dynamic-overlay",
+      "state": {
+        "revision": "d9308ad679143c26a30dec52daefe82f54af2b82",
+        "version": "1.13.1"
       }
     }
   ],
-  "version" : 3
+  "version": 3
 }

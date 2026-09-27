@@ -2,8 +2,8 @@
 //  TaskDetailVM+Actions.swift
 //  MainWindowFeature
 //
-//  Cancel and the message box's Send/Continue (`TaskDetailView.swift:95-99`, `MessageBox`,
-//  `AppModel.swift:254-256`).
+//  Cancel, Take over, and the message box's Send/Continue (`TaskDetailView.swift:95-99`,
+//  `MessageBox`, `AppModel.swift:254-256`).
 //
 
 import Foundation
@@ -11,7 +11,27 @@ import MonitorCore
 import PbCommon
 
 extension TaskDetailVM {
-    
+
+    /// Take over always opens Terminal.app — the Monitor's only take-over destination.
+    func didTapTakeover() {
+        guard let task else { return }
+        let isRunning = task.status.isRunning
+        let title = isRunning ? "Take over this task?" : "Continue this session in a terminal?"
+        let buttonTitle = isRunning ? "Stop it and take over" : "Continue in terminal"
+        var message = isRunning
+        ? "The headless run is stopped first (with any sub-tasks), then the same conversation opens in Terminal.app. "
+        : "The same conversation opens in Terminal.app. "
+        message += "It runs under your own default permissions, not this task's \(task.freedom ?? "freedom") level. "
+        + "While the terminal is open, polybridge refuses resumes of this session from anywhere else."
+        publishDialog(title, description: message) {
+            AlertAction(title: buttonTitle) { [weak self] in
+                guard let self else { return }
+                useCase.beginTakeover(taskID: taskID)
+            }
+            AlertAction(title: "Cancel", role: .cancel)
+        }
+    }
+
     func didTapCancel() {
         publishDialog("Cancel this task?", description: "polybridge stops the run and, best-effort, every live sub-task it started.") {
             AlertAction(title: "Cancel task and its sub-tasks", role: .destructive) { [taskID, useCase] in
@@ -19,7 +39,24 @@ extension TaskDetailVM {
             }
         }
     }
-    
+
+    /// Copies `resumeCommand` to the pasteboard through `routing`, then records the outcome
+    /// through `TaskActionRepository.setOutcome` (the durable channel Cancel/Send/Resume already
+    /// use) — never only this VM's `outcomeMessage`, which the next `recompute()` would overwrite.
+    func didTapCopyResumeCommand() {
+        guard let resumeCommand else { return }
+        let succeeded = routing.copyToPasteboard(resumeCommand)
+        let text = if !succeeded {
+            "Couldn't copy to the clipboard."
+        } else if task?.status.isRunning == true {
+            "Copied. This task is still running — resuming it now would put two writers "
+            + "on one conversation; prefer Take over."
+        } else {
+            "Copied resume command."
+        }
+        useCase.setOutcome(taskID, text)
+    }
+
     /// Send requires `liveInput && running && !takenOver`; Continue (resume) requires a terminal
     /// status plus a session (`TaskDetailView.swift:299-300`).
     func recomputeMessageBox(task: TaskInfo) {

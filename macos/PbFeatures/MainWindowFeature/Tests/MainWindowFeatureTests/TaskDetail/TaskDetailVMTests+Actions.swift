@@ -5,7 +5,6 @@ import Mockable
 import MonitorCore
 import PbCommon
 import PbRepository
-import PbTerminal
 import PbTestUtilities
 import PbUI
 import SwiftUI
@@ -243,41 +242,243 @@ extension TaskDetailVMTests {
         #expect(sut.timelineModel.items.isEmpty)
     }
     
-    // MARK: - Teardown (root AGENTS.md rule 7)
-    
-    @Test func givenDidDisappear_whenCalled_thenTheLeaseAndGitPollAreReleasedAndReappearingReacquiresThem() async {
+    // MARK: - Copy resume command (Monitor piece 3/3)
+
+    @Test func givenASnapshotWithNoResumeCommand_whenRenderingActions_thenTheButtonIsHidden() async {
+        // given — `resumeCommand` is read from the snapshot, not `detail(_:)`'s brief listing.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        harness.snapshotBox.value = running // no resume_command field
+        sut.didAppear()
+
+        // when
+        harness.tasksSubject.send([running])
+        await waitUntil { sut.task != nil }
+
+        // then
+        #expect(sut.resumeCommand == nil)
+    }
+
+    @Test func givenASnapshotWithAResumeCommand_whenRenderingActions_thenTheButtonIsShownWithTheExactString() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let running = task(status: "running")
+        let command = "cd /repo && claude --resume sess-1234567890"
+        harness.detailBox.value = running
+        harness.snapshotBox.value = task(status: "running", resumeCommand: command)
+        sut.didAppear()
+
+        // when
+        harness.tasksSubject.send([running])
+        await waitUntil { sut.resumeCommand != nil }
+
+        // then
+        #expect(sut.resumeCommand == command)
+    }
+
+    @Test func givenARunningTask_whenRenderingTheCopyResumeCommandHelp_thenItWarnsAboutTwoWriters() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        harness.snapshotBox.value = task(status: "running", resumeCommand: "cd /repo && claude --resume s")
+        sut.didAppear()
+
+        // when
+        harness.tasksSubject.send([running])
+        await waitUntil { sut.resumeCommand != nil }
+
+        // then
+        #expect(sut.copyResumeCommandHelp.contains("two writers on one conversation"))
+    }
+
+    @Test func givenAFinishedTask_whenRenderingTheCopyResumeCommandHelp_thenItHasNoWarning() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let done = task(status: "completed")
+        harness.detailBox.value = done
+        harness.snapshotBox.value = task(status: "completed", resumeCommand: "cd /repo && claude --resume s")
+        sut.didAppear()
+
+        // when
+        harness.tasksSubject.send([done])
+        await waitUntil { sut.resumeCommand != nil }
+
+        // then
+        #expect(sut.copyResumeCommandHelp == "Copies a command that resumes this session in your own terminal.")
+        #expect(!sut.copyResumeCommandHelp.contains("two writers"))
+    }
+
+    @Test func givenACopySucceedsOnAFinishedTask_whenTapped_thenTheOutcomeIsRecordedThroughSetOutcome() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
         let useCase = harness.useCase
+        let routing = harness.routing
+        let command = "cd /repo && claude --resume s"
+        let done = task(status: "completed")
+        harness.detailBox.value = done
+        harness.snapshotBox.value = task(status: "completed", resumeCommand: command)
+        given(routing).copyToPasteboard(.value(command)).willReturn(true)
+        sut.didAppear()
+        harness.tasksSubject.send([done])
+        await waitUntil { sut.resumeCommand != nil }
+
+        // when
+        sut.didTapCopyResumeCommand()
+
+        // then
+        await verify(routing).copyToPasteboard(.value(command)).calledEventually(1, before: .seconds(1))
+        await verify(useCase).setOutcome(.value("abc12345"), .value("Copied resume command.")).calledEventually(1, before: .seconds(1))
+    }
+
+    @Test func givenACopySucceedsOnARunningTask_whenTapped_thenTheOutcomeWarnsAboutTwoWriters() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let useCase = harness.useCase
+        let routing = harness.routing
+        let running = task(status: "running")
+        let command = "cd /repo && claude --resume s"
+        harness.detailBox.value = running
+        harness.snapshotBox.value = task(status: "running", resumeCommand: command)
+        given(routing).copyToPasteboard(.value(command)).willReturn(true)
+        sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { sut.resumeCommand != nil }
+
+        // when
+        sut.didTapCopyResumeCommand()
+
+        // then
+        let expected = "Copied. This task is still running — resuming it now would put two writers "
+        + "on one conversation; prefer Take over."
+        await verify(useCase).setOutcome(.value("abc12345"), .value(expected)).calledEventually(1, before: .seconds(1))
+    }
+
+    @Test func givenTheCopyFails_whenTapped_thenTheOutcomeSaysSo() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let useCase = harness.useCase
+        let routing = harness.routing
+        let command = "cd /repo && claude --resume s"
+        let done = task(status: "completed")
+        harness.detailBox.value = done
+        harness.snapshotBox.value = task(status: "completed", resumeCommand: command)
+        given(routing).copyToPasteboard(.value(command)).willReturn(false)
+        sut.didAppear()
+        harness.tasksSubject.send([done])
+        await waitUntil { sut.resumeCommand != nil }
+
+        // when
+        sut.didTapCopyResumeCommand()
+
+        // then
+        await verify(useCase).setOutcome(.value("abc12345"), .value("Couldn't copy to the clipboard.")).calledEventually(1, before: .seconds(1))
+    }
+
+    @Test func givenNoResumeCommand_whenTapped_thenNothingIsCopiedOrRecorded() async {
+        // given — the button is hidden in this state, but the action itself is defensive too.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let useCase = harness.useCase
+        let routing = harness.routing
+        let done = task(status: "completed")
+        harness.detailBox.value = done
+        harness.snapshotBox.value = done // no resume_command
+        sut.didAppear()
+        harness.tasksSubject.send([done])
+        await waitUntil { sut.task != nil }
+        #expect(sut.resumeCommand == nil)
+
+        // when
+        sut.didTapCopyResumeCommand()
+
+        // then
+        verify(routing).copyToPasteboard(.any).called(0)
+        verify(useCase).setOutcome(.any, .any).called(0)
+    }
+
+    @Test func givenACopyOutcome_whenTheSnapshotRecomputesOrTheScreenIsRevisited_thenItSurvives() async {
+        // given — `setOutcome` writes through `TaskActionRepository`'s durable channel; the VM only
+        // ever reflects it back via `outcomesPublisher()` (never storing it only in
+        // `outcomeMessage`), so a later recompute or a leave/revisit must not lose it. The
+        // repository echoing the write back through the same publisher it is a stand-in for here —
+        // re-stubbing `setOutcome` with a second matcher would be FIFO/unreliable (see this file's
+        // sibling suites' notes), so the publish is driven directly instead.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let useCase = harness.useCase
+        let routing = harness.routing
+        let command = "cd /repo && claude --resume s"
+        let done = task(status: "completed")
+        harness.detailBox.value = done
+        harness.snapshotBox.value = task(status: "completed", resumeCommand: command)
+        given(routing).copyToPasteboard(.value(command)).willReturn(true)
+        sut.didAppear()
+        harness.tasksSubject.send([done])
+        await waitUntil { sut.resumeCommand != nil }
+
+        // when — the copy calls the durable channel...
+        sut.didTapCopyResumeCommand()
+        await verify(useCase).setOutcome(.value("abc12345"), .value("Copied resume command.")).calledEventually(1, before: .seconds(1))
+        // ...which the repository echoes back through `outcomesPublisher()`.
+        harness.outcomesSubject.send(["abc12345": "Copied resume command."])
+        await waitUntil { sut.outcomeMessage == "Copied resume command." }
+
+        // then — an unrelated recompute (another listing push) does not clear it
+        harness.tasksSubject.send([done])
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(sut.outcomeMessage == "Copied resume command.")
+
+        // and — navigating away and back builds a *fresh* VM (the coordinator makes a new one per
+        // task), which must pick the stored outcome up from the repository's replay alone: nothing
+        // is re-sent here, so this fails if a new subscriber stopped receiving stored outcomes.
+        sut.didDisappear()
+        let fresh = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing)
+        fresh.didAppear()
+        harness.tasksSubject.send([done])
+        await waitUntil { fresh.outcomeMessage != nil }
+        #expect(fresh.outcomeMessage == "Copied resume command.")
+    }
+
+    // MARK: - Teardown (root AGENTS.md rule 7)
+    
+    @Test func givenDidDisappear_whenCalled_thenTheLeaseIsReleasedAndReappearingReacquiresIt() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let useCase = harness.useCase
+        let lease = harness.lease
         let tasksSubject = harness.tasksSubject
         let detailBox = harness.detailBox
         let snapshotBox = harness.snapshotBox
-        let scheduleBox = harness.scheduleBox
-        let cancelledSchedules = harness.cancelledSchedules
         let running = task(status: "running")
         detailBox.value = running
         snapshotBox.value = running
         sut.didAppear()
         tasksSubject.send([running])
-        await waitUntil { scheduleBox.value != nil }
-        let releasedBefore = cancelledSchedules.value
-        
+        await waitUntil { sut.task != nil }
+
         // when
         sut.didDisappear()
-        
+
         // then
-        #expect(cancelledSchedules.value > releasedBefore)
-        
+        verify(lease).release().called(1)
+
         // when — reappearing resubscribes and reacquires the lease
-        scheduleBox.value = nil
         sut.didAppear()
         tasksSubject.send([running])
-        
+
         // then
-        await waitUntil { scheduleBox.value != nil }
-        #expect(scheduleBox.value != nil)
+        await waitUntil { sut.task != nil }
         verify(useCase).acquireEventLease(.value("abc12345")).called(2)
     }
-    
+
 }

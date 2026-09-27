@@ -1,5 +1,13 @@
 import Foundation
 
+/// The one `"v"` this app understands for `events.jsonl` lines — a contract separate from
+/// `polybridge-ctl`'s (`ctlContractVersions`, `CtlModels.swift`) and `polybridge-setup`'s
+/// (`setupContractVersion`, `SetupClient.swift`), so a shape change to one never silently widens
+/// what the app accepts from the others. A line at any other version simply fails to decode
+/// (`TaskEvent.init?` returns nil), the same as any other malformed line — a new event kind, not a
+/// new log version, is how the log stays readable by an older app (see `EVENT_KINDS`).
+public let eventLogVersion = 1
+
 /// One line of `<task_id>.events.jsonl`, schema v1 (README "The normalized event log").
 /// The kind set mirrors `events.EVENT_KINDS`; anything else decodes as `.unknown` and is ignored.
 public struct TaskEvent: Equatable, Identifiable, Sendable {
@@ -64,7 +72,7 @@ public struct TaskEvent: Equatable, Identifiable, Sendable {
     /// nil for a line that is not a v1 event at all (not JSON, no `kind`, another `v`).
     public init?(line: String) {
         guard let object = JSONValue.parse(Data(line.utf8))?.objectValue,
-              object["v"]?.intValue == supportedContractVersion,
+              object["v"]?.intValue == eventLogVersion,
               let kindName = object["kind"]?.stringValue else { return nil }
         rawLine = line
         seq = object["seq"]?.intValue ?? -1
@@ -185,14 +193,6 @@ public enum Timeline {
     /// The latest tool call still waiting for its result — the inspector's "Now".
     public static func current(in items: [TimelineItem]) -> TimelineItem? {
         items.last(where: \.isRunningTool)
-    }
-
-    /// Shell commands with their exit codes, for the finished view.
-    public static func commands(in items: [TimelineItem]) -> [(command: String, exitCode: Int?, ok: Bool?)] {
-        items.compactMap { item in
-            guard case .tool(let call, let result) = item.body, call.category == "shell" else { return nil }
-            return (call.command ?? call.inputPreview, result?.exitCode, result?.ok)
-        }
     }
 
     public static func prompt(in events: [TaskEvent]) -> String? {

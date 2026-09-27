@@ -6,8 +6,7 @@ The status-bar item: `MenuBarLabel` (icon + running count, always alive) and the
 (`MenuBarView`), both driven by one shared `MenuBarVM` built by `MenuBarCoordinator`.
 
 - Swift 6 language mode (tools 6.2 default).
-- Depends on `PbUtilities`, `PbCommon`, `PbUI`, `MonitorCore`, `PbRepository`. Does not depend on
-  `PbTerminal` — the menu bar never touches a terminal session directly.
+- Depends on `PbUtilities`, `PbCommon`, `PbUI`, `MonitorCore`, `PbRepository`.
 - Running rows tail their task's events via `EventStreamRepository` leases, acquired per row on
   appear and released on disappear (or when the VM itself tears down) — never in `init`.
 - Roots come before sub-tasks; at most 3 recent groups and 6 recent roots. Ordering *within* the

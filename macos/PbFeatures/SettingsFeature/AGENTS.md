@@ -6,8 +6,7 @@ The Settings scene: General (tool directory + behaviour toggles) and Harnesses (
 install/remove). Built through `SettingsCoordinator`, wired into the app's `Settings` scene.
 
 - Swift 6 language mode (tools 6.2 default).
-- Depends on `PbUtilities`, `PbCommon`, `PbUI`, `MonitorCore`, `PbRepository`. Does not depend on
-  `PbTerminal` — neither screen touches a terminal session.
+- Depends on `PbUtilities`, `PbCommon`, `PbUI`, `MonitorCore`, `PbRepository`.
 - `GeneralSettingsVM` and `HarnessesVM` are independent VMs behind one coordinator; the coordinator
   builds both views for the tab container (`SettingsView`).
 - The Harnesses confirmation dialog is a `ViewModel.publishDialog`, not a bespoke

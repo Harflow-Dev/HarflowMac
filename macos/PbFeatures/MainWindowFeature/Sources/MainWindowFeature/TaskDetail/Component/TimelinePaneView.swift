@@ -34,9 +34,9 @@ struct TimelinePaneView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(model.stepCountText).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(model.stepCountText).font(.pb(.secondary)).foregroundStyle(.secondary)
                 Spacer()
-                Toggle("Follow live", isOn: $followLive).toggleStyle(.checkbox).font(.system(size: 11))
+                Toggle("Follow live", isOn: $followLive).toggleStyle(.checkbox).font(.pb(.secondary))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
@@ -44,7 +44,7 @@ struct TimelinePaneView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         if let emptyText = model.emptyText {
-                            Text(emptyText).font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text(emptyText).font(.pb(.body)).foregroundStyle(.secondary)
                         }
                         ForEach(model.items) { item in
                             TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: model.live)).id(item.id)
@@ -90,7 +90,7 @@ struct SubTaskStripView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Started \(model.children.count) sub-task\(model.children.count == 1 ? "" : "s") via polybridge").font(.system(size: 12, weight: .medium))
+            Text("Started \(model.children.count) sub-task\(model.children.count == 1 ? "" : "s") via polybridge").font(.pb(.body, weight: .medium))
             ForEach(model.children) { entry in
                 Button {
                     model.onSelectTask(entry.task.taskID)
@@ -104,7 +104,7 @@ struct SubTaskStripView: View {
                         Text(Format.offset(entry.task.startedAt, from: model.start)).monospacedDigit().foregroundStyle(.secondary)
                         Image(systemName: "chevron.right").foregroundStyle(.secondary)
                     }
-                    .font(.system(size: 11))
+                    .font(.pb(.secondary))
                     .padding(8)
                     .background(RoundedRectangle(cornerRadius: 6).stroke(Color.hairline))
                 }

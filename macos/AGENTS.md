@@ -64,27 +64,26 @@ a behaviour change. These are intentional deviations, not oversights.
 
 ## Language modes
 
-Every package targets tools 6.2 / macOS 14. Every package **except** `MonitorCore` and `PbTerminal`
-builds in Swift 6 mode, including the root `PolybridgeMonitor` package since Phase 5. **`MonitorCore`
-and `PbTerminal` use `swiftLanguageModes: [.v5]`** — their code (SwiftTerm delegate hops via
-`assumeIsolated`, tailing internals) does not compile under Swift 6's strict concurrency checking, and
-moving either is separate work, not part of this refactor. The root package held `.v5` transitionally
-through Phase 4 for the same reason (it held `TerminalSession`/`TerminalHost` directly, before Phase
-3B moved them into `PbTerminal`); once Phase 5's app shell (`App.swift`/`AppDelegate`/
-`AppCoordinator`/`AppModulesRegistry`) was the only code left in it, it built cleanly in Swift 6 mode
-with no source changes beyond the two isolation fixes any new Swift 6 code needs anywhere in this
-app: an `@MainActor`-isolated conformance clause (`@MainActor UNUserNotificationCenterDelegate`) for
-a delegate protocol whose requirements can be invoked off the main thread, and a `Task { @MainActor
-in }` hop instead of capturing `self` across an escaping closure boundary — see `App.swift`'s own
-header comments for exactly where and why.
+Every package targets tools 6.2 / macOS 14. Every package **except** `MonitorCore` builds in Swift 6
+mode, including the root `PolybridgeMonitor` package since Phase 5. **`MonitorCore` uses
+`swiftLanguageModes: [.v5]`** — its tailing/process-table internals do not compile under Swift 6's
+strict concurrency checking, and moving it is separate work, not part of this refactor. The root
+package held `.v5` transitionally through Phase 4 for a different reason (it held the embedded
+terminal's `TerminalSession`/`TerminalHost` directly, before Phase 3B moved them into the now-deleted
+`PbTerminal` package, itself removed once the Monitor's take-over flow moved to Terminal.app only);
+once Phase 5's app shell (`App.swift`/`AppDelegate`/`AppCoordinator`/`AppModulesRegistry`) was the
+only code left in it, it built cleanly in Swift 6 mode with no source changes beyond the two isolation
+fixes any new Swift 6 code needs anywhere in this app: an `@MainActor`-isolated conformance clause
+(`@MainActor UNUserNotificationCenterDelegate`) for a delegate protocol whose requirements can be
+invoked off the main thread, and a `Task { @MainActor in }` hop instead of capturing `self` across an
+escaping closure boundary — see `App.swift`'s own header comments for exactly where and why.
 
 ## Package graph
 
 `MonitorCore` is the bottom layer (dependency-free values and I/O) — any package may import it.
 Above it, dependencies point only downward: Foundation (`PbUtilities`/`PbCommon`/`PbUI`) ← Core
-(`MonitorCore`/`PbRepository`/`PbTerminal`) ← Features (`PbFeatures/*`) ← app
-(`PolybridgeMonitor`). Every target declares every product it imports — no `@_exported`
-re-exports, ever.
+(`MonitorCore`/`PbRepository`) ← Features (`PbFeatures/*`) ← app (`PolybridgeMonitor`). Every target
+declares every product it imports — no `@_exported` re-exports, ever.
 
 ## Before finishing a change
 

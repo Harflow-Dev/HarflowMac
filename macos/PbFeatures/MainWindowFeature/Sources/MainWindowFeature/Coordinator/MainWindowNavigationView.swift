@@ -4,10 +4,9 @@
 //
 //  The main window's `NavigationSplitView`, moved here from the app target's `MainView.swift` with
 //  no behaviour change: the sidebar and the detail pane come from the coordinator, the detail switch
-//  mirrors the old `switch model.selection` exactly (same empty-detail state, same closed-terminal
-//  fallback for a missing/closed interactive session — now `InteractiveView`'s own job), and the New
-//  Session sheet is bound to `isNewSessionPresented`. Generic over `MainWindowNavigationCoordinator`,
-//  never the concrete `MainWindowCoordinator`, so a preview (or a future test) can supply a stub.
+//  mirrors the old `switch model.selection` exactly (same empty-detail state), and the New Session
+//  sheet is bound to `isNewSessionPresented`. Generic over `MainWindowNavigationCoordinator`, never
+//  the concrete `MainWindowCoordinator`, so a preview (or a future test) can supply a stub.
 //
 //  `withPresentationContext()` (PbUI) is applied exactly once, here at the window root — moved out of
 //  `MainWindowCoordinator.buildParallelView(name:)`/`buildTaskDetailView(id:)`, which used to apply it
@@ -48,8 +47,6 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 coordinator.buildTaskDetailView(id: id)
             case .group(let name):
                 coordinator.buildParallelView(name: name)
-            case .interactive(let id):
-                coordinator.buildInteractiveView(id: id)
             case .newSession, .openWindow, nil:
                 emptyDetailView
             }
@@ -65,8 +62,9 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
     
     private var emptyDetailView: some View {
         VStack(spacing: 8) {
+            // swiftlint:disable:next no_literal_font_size - an icon, not text: the empty-state SF Symbol's fixed glyph size.
             Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 32)).foregroundStyle(.secondary)
-            Text("Select a task").font(.headline)
+            Text("Select a task").font(.pb(.headline, weight: .bold))
             Text("Tasks started through polybridge show up in the sidebar, live.").foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

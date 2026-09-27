@@ -92,9 +92,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
     
-    // A menu-bar app keeps running with its window closed.
+    // A regular Dock app that also has a menu bar item keeps running after its window closes.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
-    
+
+    /// Decision 3's reopen handling: decided from the `mainWindows()` seam, never from `hasVisibleWindows`
+    /// (that flag is `true` when only Settings or the menu-bar panel is open, which is not a main
+    /// window). If no main window is currently visible — none exist, one is miniaturized, or one is
+    /// merely ordered out — route `.openWindow` through the coordinator; opening twice is harmless,
+    /// since `openWindow(id:)` on a single `Window` only brings it forward. Always returns `true`.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        MainActor.assumeIsolated {
+            let hasVisibleMainWindow = mainWindows().contains { $0.isVisible && !$0.isMiniaturized }
+            if !hasVisibleMainWindow { coordinator?.handle(path: MonitorDestination.openWindow) }
+        }
+        return true
+    }
+
     /// Deliberately **not** `@MainActor` — see this type's own header for why a synchronous
     /// `@MainActor` witness of this specific method is a real (Codex-caught) runtime trap, not just a
     /// style choice. `completionHandler()` is called immediately, without waiting on the hop, exactly
@@ -136,29 +149,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func foregroundPresentationOptions() -> UNNotificationPresentationOptions { [.banner, .sound] }
 }
 
+/// Decision 8's menu-bar icon: an uncached `NSImage` carrying both the 1x and @2x
+/// `menubarTemplate*.png` representations bundled at `Resources/`, marked as a template image so
+/// AppKit tints it for light/dark mode and menu-bar highlighting. Returns `nil` when the bundle has
+/// no such resource (e.g. a test bundle with no `Resources/`), in which case callers fall back to the
+/// SF Symbol `MenuBarLabelView` already draws.
+func loadMenuBarIcon(from bundle: Bundle) -> NSImage? {
+    guard let image = bundle.image(forResource: "menubarTemplate") else { return nil }
+    image.isTemplate = true
+    return image
+}
+
 @main
 struct PolybridgeMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private let coordinator: AppCoordinator
-    
+    private let menuBarIcon: NSImage?
+
     init() {
         // Decision 13: modules register (lowest layer first), synchronously, before anything reads
         // `GlobalValues` — `AppCoordinator()` below resolves its feature factories and repositories
         // from `GlobalValues` in its own `init`, so it must run after this line, not before it.
         ApplicationModules(modules: AppModulesRegistry.allModules).initialize()
-        
+
         let coordinator = AppCoordinator()
         self.coordinator = coordinator
+        // Loaded once here, never inside `body` — `body` can be re-evaluated many times per process.
+        // Every stored property must be set before `self` is used at all (below), which is why this
+        // assignment comes before `delegate.coordinator = coordinator`.
+        self.menuBarIcon = loadMenuBarIcon(from: .main)
         delegate.coordinator = coordinator
     }
     
     var body: some Scene {
         Window("Polybridge Monitor", id: "main") {
-            coordinator.mainWindowCoordinator.start()
+            MainWindowSceneRoot(windowPresenting: coordinator) {
+                coordinator.mainWindowCoordinator.start()
+            }
         }
         .defaultSize(width: 1440, height: 900)
         .commands {
-            CommandGroup(after: .newItem) {
+            CommandGroup(replacing: .newItem) {
                 Button("New Session…") { coordinator.handle(path: MonitorDestination.newSession) }.keyboardShortcut("n")
             }
         }
@@ -169,7 +200,7 @@ struct PolybridgeMonitorApp: App {
         MenuBarExtra {
             coordinator.menuBarNavigationCoordinator?.buildMenuBarContentView() ?? EmptyView().eraseToAnyView()
         } label: {
-            coordinator.menuBarNavigationCoordinator?.buildMenuBarLabelView() ?? EmptyView().eraseToAnyView()
+            coordinator.menuBarNavigationCoordinator?.buildMenuBarLabelView(icon: menuBarIcon) ?? EmptyView().eraseToAnyView()
         }
         .menuBarExtraStyle(.window)
         

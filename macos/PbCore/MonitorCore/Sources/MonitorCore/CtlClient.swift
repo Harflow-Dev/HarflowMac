@@ -65,10 +65,6 @@ public struct CtlClient: Sendable {
         }
     }
 
-    public func takeoverAttach(_ taskID: String, pid: Int32) async -> Result<[String: JSONValue], ToolError> {
-        await result("takeover-attach", options: ["--pid=\(pid)"], positionals: [taskID])
-    }
-
     public func run(_ request: RunRequest) async -> Result<String, ToolError> {
         await result("run", options: request.arguments, timeout: Self.startTimeout).flatMap(Self.taskID)
     }

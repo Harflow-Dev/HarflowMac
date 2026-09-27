@@ -113,10 +113,66 @@ struct EventDecodingTests {
         #expect(activity.toolCalls == 3)
         #expect(activity.edits == 1)
         #expect(activity.commands == 1)
-        let commands = Timeline.commands(in: items)
-        #expect(commands.count == 1)
-        #expect(commands[0].command == "make test")
-        #expect(commands[0].exitCode == 0)
+    }
+
+    // MARK: - Consumers of the new codex `file_change` / vibe `effect` tool_result emission
+
+    // (Timeline/Parallel's success indicator, the Inspector's "Now" line, and activity counts are
+    // all generic over `tool_call`/`tool_result` — these pin that genericity against the exact
+    // shapes the two backends now emit, rather than assuming it).
+
+    @Test
+    func givenMultipleFileChangeEditsInOneCodexItem_whenBuildingTheTimeline_thenEachFileCountsOnceAndItsOwnResultFlipsIt() throws {
+        // given — shaped exactly as codex's `file_change` normalizer emits: one tool_call/tool_result
+        // pair per changed path, `call_id` = "<item id>:<path>".
+        let events = [
+            eventLine(0, "tool_call", #""call_id": "fc_1:a.swift", "tool": "file_change", "category": "edit", "input_preview": "{}", "path": "a.swift""#),
+            eventLine(1, "tool_call", #""call_id": "fc_1:b.swift", "tool": "file_change", "category": "edit", "input_preview": "{}", "path": "b.swift""#),
+            eventLine(2, "tool_result", #""call_id": "fc_1:a.swift", "ok": true, "output_tail": """#),
+            eventLine(3, "tool_result", #""call_id": "fc_1:b.swift", "ok": false, "output_tail": "failed""#)
+        ].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        let activity = Timeline.activity(from: events)
+        // then — each changed file is its own row, merged with its own result — the exact read a
+        // Timeline/Parallel row's success indicator makes.
+        #expect(items.count == 2)
+        guard case .tool(_, let resultA) = items[0].body, case .tool(_, let resultB) = items[1].body else {
+            Issue.record("expected two .tool items"); return
+        }
+        #expect(resultA?.ok == true)
+        #expect(resultB?.ok == false)
+        // then — activity counts once per changed file, never once per `file_change` item.
+        #expect(activity.toolCalls == 2)
+        #expect(activity.edits == 2)
+    }
+
+    @Test
+    func givenAToolResultWithNoPrecedingCall_whenComputingActivity_thenActivityCountsStayUnchanged() throws {
+        // given — an orphan result (or one whose call the Timeline has not seen yet)
+        let events = [
+            eventLine(0, "tool_result", #""call_id": "zzz", "ok": true, "output_tail": "orphan""#)
+        ].compactMap(TaskEvent.init(line:))
+        // when
+        let activity = Timeline.activity(from: events)
+        // then — `Timeline.activity` switches on `.toolCall` alone, so a result-only stream leaves
+        // every count at zero: results never move the Inspector's activity counts by themselves.
+        #expect(activity.toolCalls == 0)
+        #expect(activity.edits == 0)
+        #expect(activity.commands == 0)
+    }
+
+    @Test
+    func givenAVibeEffectShapedToolCallStillAwaitingItsResult_whenComputingCurrent_thenItIsTheInspectorsNow() throws {
+        // given — a vibe `effect` normalizes to a `tool_call` with no `tool_result` until its
+        // state settles; while that is true, it is the running tool the Inspector's "Now" shows.
+        let events = [
+            eventLine(0, "tool_call", #""call_id": "eff_1", "tool": "edit_file", "category": "edit", "input_preview": "{}", "path": "a.swift""#)
+        ].compactMap(TaskEvent.init(line:))
+        // when
+        let items = Timeline.items(from: events)
+        // then
+        #expect(Timeline.current(in: items)?.isRunningTool == true)
     }
 }
 
@@ -251,7 +307,7 @@ struct LineTailTests {
         let path = dir.appendingPathComponent("t.events.jsonl").path
         FileManager.default.createFile(atPath: path, contents: Data((eventLine(0, "task_started", #""prompt": "p""#) + "\n").utf8))
         var received: [Int] = []
-        let tailer = EventFileTailer(path: path) { events, _ in
+        let tailer = EventFileTailer(path: path) { events, _, _ in
             received += events.map(\.seq)
         }
         tailer.start()
@@ -267,5 +323,85 @@ struct LineTailTests {
         let sawSecond = await waitUntil { received == [0, 1, 2] }
         // then
         #expect(sawSecond, "received so far: \(received)")
+    }
+
+    // MARK: - EventAvailability (the Summary tab's "Files the agent edited" section needs to tell
+
+    // "nothing has happened yet" apart from "there is no log to read at all")
+
+    @Test @MainActor
+    func givenAFileThatNeverAppears_whenTailed_thenAvailabilityReportsUnavailable() async throws {
+        // given — a path in a real (removed) directory, so the tailer's very first read fails to open it.
+        let dir = try makeTempDir()
+        try FileManager.default.removeItem(at: dir)
+        let path = dir.appendingPathComponent("t.events.jsonl").path
+        var seen: [EventAvailability] = []
+        let tailer = EventFileTailer(path: path) { _, _, availability in seen.append(availability) }
+        // when
+        tailer.start()
+        defer { tailer.stop() }
+        // then
+        let sawUnavailable = await waitUntil { seen.last == .unavailable }
+        #expect(sawUnavailable, "seen so far: \(seen)")
+    }
+
+    @Test @MainActor
+    func givenAFileCreatedAfterTailingStarts_whenItAppears_thenAvailabilityMovesFromUnavailableToAvailable() async throws {
+        // given
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("t.events.jsonl").path
+        var seen: [EventAvailability] = []
+        let tailer = EventFileTailer(path: path) { _, _, availability in seen.append(availability) }
+        tailer.start()
+        defer { tailer.stop() }
+        let sawUnavailable = await waitUntil { seen.last == .unavailable }
+        #expect(sawUnavailable, "seen so far: \(seen)")
+        // when
+        FileManager.default.createFile(atPath: path, contents: Data((eventLine(0, "notice", #""text": "n""#) + "\n").utf8))
+        // then
+        let sawAvailable = await waitUntil { seen.last == .available }
+        #expect(sawAvailable, "seen so far: \(seen)")
+    }
+
+    @Test @MainActor
+    func givenAnUnreadableFile_whenTailed_thenAvailabilityReportsUnavailable() async throws {
+        // given — present on disk but with no read permission, so `open()` itself fails (EACCES),
+        // the same "could not open at all" path a missing file takes.
+        let dir = try makeTempDir()
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: dir.appendingPathComponent("t.events.jsonl").path)
+            try? FileManager.default.removeItem(at: dir)
+        }
+        let path = dir.appendingPathComponent("t.events.jsonl").path
+        FileManager.default.createFile(atPath: path, contents: Data("garbage".utf8), attributes: [.posixPermissions: 0o000])
+        var seen: [EventAvailability] = []
+        let tailer = EventFileTailer(path: path) { _, _, availability in seen.append(availability) }
+        // when
+        tailer.start()
+        defer { tailer.stop() }
+        // then
+        let sawUnavailable = await waitUntil { seen.last == .unavailable }
+        #expect(sawUnavailable, "seen so far: \(seen)")
+    }
+
+    @Test @MainActor
+    func givenAnAlreadyExistingFile_whenTailingStarts_thenTheFirstReportIsAvailableNotLoading() async throws {
+        // given — `.loading` is the tailer's initial in-memory state before any read has been
+        // attempted; the very first drain must resolve it one way or the other rather than leaving
+        // a caller to infer availability from an empty event list.
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("t.events.jsonl").path
+        FileManager.default.createFile(atPath: path, contents: Data((eventLine(0, "notice", #""text": "n""#) + "\n").utf8))
+        var seen: [EventAvailability] = []
+        let tailer = EventFileTailer(path: path) { _, _, availability in seen.append(availability) }
+        // when
+        tailer.start()
+        defer { tailer.stop() }
+        // then
+        let sawAvailable = await waitUntil { !seen.isEmpty }
+        #expect(sawAvailable, "seen so far: \(seen)")
+        #expect(seen.first == .available, "the first report must never be .loading: \(seen)")
     }
 }

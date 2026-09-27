@@ -9,6 +9,7 @@ import Foundation
 import MonitorCore
 import PbCommon
 import PbUI
+import SwiftUI
 
 // MARK: - SidebarViewModelMock
 
@@ -18,7 +19,6 @@ final class SidebarViewModelMock: SidebarViewModel {
     
     var runningRows: [TaskRowModel]
     var parallelGroups: [ParallelGroup]
-    var interactiveRows: [InteractiveSessionRowModel]
     var recentRows: [TaskRowModel]
     var listErrorMessage: String?
     var isEmptyState: Bool
@@ -28,21 +28,26 @@ final class SidebarViewModelMock: SidebarViewModel {
     var selectedBackend: String
     var searchQuery: String
     var selection: MonitorDestination?
-    
+    var installBannerModel: InstallBanner.Model?
+
     init(
         runningRows: [TaskRowModel] = [
             TaskRowModel(
                 id: "abc123", backend: "claude", title: "Fix the login bug", statusLabel: "Running", statusColor: .runningFG,
-                ageText: "", indent: 0, metaText: "~/repo · write_in_repo", hasLiveSession: true, isRunning: true,
-                startedAt: .now.addingTimeInterval(-42)
+                ageText: "", indent: 0, metaText: "~/repo · 1 sub-task · write_in_repo", isRunning: true,
+                startedAt: .now.addingTimeInterval(-42), hasChildren: true, isExpanded: true, guides: []
+            ),
+            TaskRowModel(
+                id: "abc123-child", backend: "codex", title: "Write the migration", statusLabel: "Running", statusColor: .runningFG,
+                ageText: "", indent: 1, metaText: "~/repo", isRunning: true, startedAt: .now.addingTimeInterval(-10),
+                hasChildren: false, isExpanded: true, guides: [.last]
             )
         ],
         parallelGroups: [ParallelGroup] = [],
-        interactiveRows: [InteractiveSessionRowModel] = [],
         recentRows: [TaskRowModel] = [
             TaskRowModel(
                 id: "def456", backend: "codex", title: "Refactor the parser", statusLabel: "Done", statusColor: .doneGreen,
-                ageText: "3h", indent: 0, metaText: "~/repo", hasLiveSession: false, isRunning: false, startedAt: nil
+                ageText: "3h", indent: 0, metaText: "~/repo", isRunning: false, startedAt: nil
             )
         ],
         listErrorMessage: String? = nil,
@@ -52,11 +57,11 @@ final class SidebarViewModelMock: SidebarViewModel {
         availableBackends: [String] = ["claude", "codex"],
         selectedBackend: String = "all",
         searchQuery: String = "",
-        selection: MonitorDestination? = nil
+        selection: MonitorDestination? = nil,
+        installBannerModel: InstallBanner.Model? = nil
     ) {
         self.runningRows = runningRows
         self.parallelGroups = parallelGroups
-        self.interactiveRows = interactiveRows
         self.recentRows = recentRows
         self.listErrorMessage = listErrorMessage
         self.isEmptyState = isEmptyState
@@ -66,14 +71,20 @@ final class SidebarViewModelMock: SidebarViewModel {
         self.selectedBackend = selectedBackend
         self.searchQuery = searchQuery
         self.selection = selection
+        self.installBannerModel = installBannerModel
     }
-    
+
     func didAppear() {}
     func didDisappear() {}
     func didChangeSearchQuery(_ text: String) { searchQuery = text }
     func didSelectBackendFilter(_ backend: String) { selectedBackend = backend }
     func didSelect(_ destination: MonitorDestination?) { selection = destination }
     func didTapNewSession() {}
+    func didTapInstallBannerPrimary() {}
+    func didTapInstallBannerSecondary() {}
+    func didTapInstallBannerDismiss() {}
+    func didToggleExpansion(taskID: String) {}
+    func didPressMoveCommand(_ direction: MoveCommandDirection) {}
 }
 
 #endif

@@ -7,54 +7,40 @@ import Combine
 import Foundation
 import MonitorCore
 import PbRepository
-import PbTerminal
 import SwiftEnvironment
 
 // MARK: - TaskDetailViewRepository
 
 /// Concrete `TaskDetailUseCase` backed by `TaskListRepository`, `TaskSnapshotRepository`,
-/// `TaskActionRepository`, `EventStreamRepository`, `TerminalSessionRegistry`, `TakeoverService`,
-/// `GitChangesRepository`, `ToolEnvironmentRepository`, `FilePreviewRepository` and `Scheduling`.
+/// `TaskActionRepository`, `EventStreamRepository`, `TakeoverService` and `ToolEnvironmentRepository`.
 @MainActor
 final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
-    
+
     // MARK: - Private Properties
-    
+
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.taskSnapshotRepository) private var taskSnapshotRepository
     @GlobalEnvironment(\.taskActionRepository) private var taskActionRepository
     @GlobalEnvironment(\.eventStreamRepository) private var eventStreamRepository
-    @GlobalEnvironment(\.terminalSessionRegistry) private var terminalSessionRegistry
     @GlobalEnvironment(\.takeoverService) private var takeoverService
-    @GlobalEnvironment(\.gitChangesRepository) private var gitChangesRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
-    @GlobalEnvironment(\.filePreviewRepository) private var filePreviewRepository
-    @GlobalEnvironment(\.scheduling) private var scheduling
-    
+
     // MARK: - Init
-    
+
     init(
         taskListRepository: (any TaskListRepository)? = nil,
         taskSnapshotRepository: (any TaskSnapshotRepository)? = nil,
         taskActionRepository: (any TaskActionRepository)? = nil,
         eventStreamRepository: (any EventStreamRepository)? = nil,
-        terminalSessionRegistry: (any TerminalSessionRegistry)? = nil,
         takeoverService: (any TakeoverService)? = nil,
-        gitChangesRepository: (any GitChangesRepository)? = nil,
-        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
-        filePreviewRepository: (any FilePreviewRepository)? = nil,
-        scheduling: (any Scheduling)? = nil
+        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskSnapshotRepository { self.taskSnapshotRepository = taskSnapshotRepository }
         if let taskActionRepository { self.taskActionRepository = taskActionRepository }
         if let eventStreamRepository { self.eventStreamRepository = eventStreamRepository }
-        if let terminalSessionRegistry { self.terminalSessionRegistry = terminalSessionRegistry }
         if let takeoverService { self.takeoverService = takeoverService }
-        if let gitChangesRepository { self.gitChangesRepository = gitChangesRepository }
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
-        if let filePreviewRepository { self.filePreviewRepository = filePreviewRepository }
-        if let scheduling { self.scheduling = scheduling }
     }
     
     // MARK: - TaskDetailUseCase Methods
@@ -88,17 +74,19 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         try await taskActionRepository.resume(id, text: text, onResumed: onResumed)
     }
     
-    func beginTakeover(taskID: String, destination: TakeoverDestination) { takeoverService.beginTakeover(taskID: taskID, destination: destination) }
-    
-    func sessionsPublisher() -> AnyPublisher<[TerminalSession], Never> { terminalSessionRegistry.sessionsPublisher() }
-    func session(forTask id: String) -> TerminalSession? { terminalSessionRegistry.session(forTask: id) }
-    func removeSession(_ session: TerminalSession) { terminalSessionRegistry.remove(session) }
-    
+    func beginTakeover(taskID: String) { takeoverService.beginTakeover(taskID: taskID) }
+    func setOutcome(_ id: String, _ text: String?) { taskActionRepository.setOutcome(id, text) }
+
     func acquireEventLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquire(id) }
     func events(for id: String) -> [TaskEvent] { eventStreamRepository.events(for: id) }
     func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never> { eventStreamRepository.eventsPublisher(for: id) }
     func items(for id: String) -> [TimelineItem] { eventStreamRepository.items(for: id) }
     func itemsPublisher(for id: String) -> AnyPublisher<[TimelineItem], Never> { eventStreamRepository.itemsPublisher(for: id) }
+    func eventsAvailability(for id: String) -> EventAvailability { eventStreamRepository.eventsAvailability(for: id) }
+    func eventsAvailabilityPublisher(for id: String) -> AnyPublisher<EventAvailability, Never> {
+        eventStreamRepository.eventsAvailabilityPublisher(for: id)
+    }
+
     func activity(for id: String) -> ActivityCounts { eventStreamRepository.activity(for: id) }
     func current(for id: String) -> TimelineItem? { eventStreamRepository.current(for: id) }
     func prompt(for id: String) -> String? { eventStreamRepository.prompt(for: id) }
@@ -108,18 +96,5 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     /// protocol for one read-only debug label.
     func eventsPath(for id: String) -> String {
         TaskTitle.eventsPath(tasksDirectory: toolEnvironmentRepository.tasksDirectory, taskID: id) ?? "/dev/null"
-    }
-    
-    func gitChanges(repo: String, baseCommit: String?, startDirty: Bool?) async -> GitChanges {
-        await gitChangesRepository.changes(repo: repo, baseCommit: baseCommit, startDirty: startDirty, environment: toolEnvironmentRepository.environment())
-    }
-    
-    @discardableResult
-    func schedule(after interval: TimeInterval, execute work: @escaping @Sendable () -> Void) -> AnyCancellable {
-        scheduling.schedule(after: interval, execute: work)
-    }
-    
-    func previewFile(repo: String, path: String) async -> FilePreviewResult {
-        await filePreviewRepository.preview(repo: repo, path: path)
     }
 }

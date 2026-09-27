@@ -41,8 +41,8 @@ struct ModuleTests {
         #expect(GlobalValues.finishNotifier is FinishNotifierImpl)
         #expect(GlobalValues.taskListRepository is TaskListRepositoryImpl)
         #expect(GlobalValues.taskActionRepository is TaskActionRepositoryImpl)
-        #expect(GlobalValues.gitChangesRepository is GitChangesRepositoryImpl)
-        #expect(GlobalValues.filePreviewRepository is FilePreviewRepositoryImpl)
         #expect(GlobalValues.harnessRepository is HarnessRepositoryImpl)
+        #expect(GlobalValues.installRepository is InstallRepositoryImpl)
+        #expect(GlobalValues.takeoverService is TakeoverServiceImpl)
     }
 }

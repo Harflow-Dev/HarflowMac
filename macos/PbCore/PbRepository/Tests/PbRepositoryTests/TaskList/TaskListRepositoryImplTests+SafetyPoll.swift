@@ -43,7 +43,7 @@ extension TaskListRepositoryImplTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":1,"tasks":[]}"# }
+        let (client, callCount) = countingCtl { #"{"v":2,"tasks":[]}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(dir.path)
         given(toolEnvironment).ctl().willReturn(.success(client))
@@ -76,7 +76,7 @@ extension TaskListRepositoryImplTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":1,"tasks":[{"task_id":"a","status":"running","backend":"claude"}]}"# }
+        let (client, callCount) = countingCtl { #"{"v":2,"tasks":[{"task_id":"a","status":"running","backend":"claude"}]}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(dir.path)
         given(toolEnvironment).ctl().willReturn(.success(client))
@@ -107,7 +107,7 @@ extension TaskListRepositoryImplTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":1,"error":{"code":"session_busy","message":"boom"}}"# }
+        let (client, callCount) = countingCtl { #"{"v":2,"error":{"code":"session_busy","message":"boom"}}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(dir.path)
         given(toolEnvironment).ctl().willReturn(.success(client))
@@ -136,7 +136,7 @@ extension TaskListRepositoryImplTests {
         let missingDir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-missing-\(UUID().uuidString)").path
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":1,"tasks":[]}"# }
+        let (client, callCount) = countingCtl { #"{"v":2,"tasks":[]}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(missingDir)
         given(toolEnvironment).ctl().willReturn(.success(client))
@@ -166,7 +166,7 @@ extension TaskListRepositoryImplTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":1,"tasks":[]}"# }
+        let (client, callCount) = countingCtl { #"{"v":2,"tasks":[]}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(dir.path)
         given(toolEnvironment).ctl().willReturn(.success(client))
@@ -280,7 +280,7 @@ extension TaskListRepositoryImplTests {
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir.path)
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":1,"tasks":\#(listingJSON)}"#))
+            runner: StubProcessRunner(output: stdout(#"{"v":2,"tasks":\#(listingJSON)}"#))
         )))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
@@ -422,7 +422,7 @@ extension TaskListRepositoryImplTests {
         #expect(notified.value.isEmpty)
 
         // when
-        let doneRunner = StubProcessRunner(output: stdout(#"{"v":1,"tasks":[{"task_id":"a","status":"completed","backend":"claude","depth":0}]}"#))
+        let doneRunner = StubProcessRunner(output: stdout(#"{"v":2,"tasks":[{"task_id":"a","status":"completed","backend":"claude","depth":0}]}"#))
         resultBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: doneRunner)) }
         await sut.refresh()
 
@@ -437,7 +437,7 @@ extension TaskListRepositoryImplTests {
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
         let runner = StubProcessRunner(output: stdout(
-            #"{"v":1,"tasks":[{"task_id":"root","status":"completed","backend":"claude","depth":0},"#
+            #"{"v":2,"tasks":[{"task_id":"root","status":"completed","backend":"claude","depth":0},"#
                 + #"{"task_id":"child","status":"running","backend":"claude","spawned_by":"root","depth":1}]}"#
         ))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
