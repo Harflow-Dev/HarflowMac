@@ -432,6 +432,24 @@ struct CtlClientTests {
     }
 
     @Test
+    func givenAChildStillRunning_whenItsExitStatusIsRead_thenItIsMinusOneRatherThanATrap() throws {
+        // given — the case a timeout can leave behind when neither signal could be sent
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        try process.run()
+        defer { process.terminate(); process.waitUntilExit() }
+        // when / then — reading `terminationStatus` here directly would raise
+        #expect(ProcessRunner.exitStatus(of: process) == -1)
+
+        let done = Process()
+        done.executableURL = URL(fileURLWithPath: "/usr/bin/false")
+        try done.run()
+        done.waitUntilExit()
+        #expect(ProcessRunner.exitStatus(of: done) == 1)
+    }
+
+    @Test
     func givenASlowProcess_whenItTimesOut_thenOnlyThatProcessIsKilled() throws {
         // given
         let dir = try makeTempDir()

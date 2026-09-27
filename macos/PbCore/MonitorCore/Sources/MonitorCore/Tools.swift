@@ -199,6 +199,13 @@ public struct ProcessRunner: ProcessRunning {
         let out = outData
         let err = String(decoding: errData, as: UTF8.self)
         lock.unlock()
-        return .success(ProcessOutput(exitCode: process.terminationStatus, stdout: out, stderr: err, timedOut: timedOut))
+        return .success(ProcessOutput(exitCode: Self.exitStatus(of: process), stdout: out, stderr: err, timedOut: timedOut))
+    }
+
+    /// `terminationStatus`, or -1 while the child is still running. A timed-out child can outlive
+    /// every wait (its identity check undecidable, so neither signal is sent), and Foundation raises
+    /// if the status is read before the process has exited.
+    static func exitStatus(of process: Process) -> Int32 {
+        process.isRunning ? -1 : process.terminationStatus
     }
 }
