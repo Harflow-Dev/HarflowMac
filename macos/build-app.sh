@@ -35,5 +35,18 @@ test -f "$app/Contents/Resources/menubarTemplate@2x.png" || { echo "Missing menu
 codesign --force --sign - --timestamp=none "$app"
 codesign --verify --strict "$app"
 
+# Best-effort: unregister this build copy from LaunchServices (Monitor piece 9) so
+# `polybridge-monitor://` task links resolve to an installed copy instead of quietly picking this
+# throwaway build copy back up. Never fails the build — this is convenience cleanup, not a
+# requirement — and it is fine whether or not the copy was registered in the first place.
+lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if "$lsregister" -u "$app" >/dev/null 2>&1; then
+    echo "Unregistered from LaunchServices: $app"
+else
+    echo "Could not unregister $app from LaunchServices (already unregistered, or lsregister unavailable) — continuing"
+fi
+
 echo "Built: $app"
 echo "Install: rm -rf ~/Applications/'Polybridge Monitor.app' && cp -R '$app' ~/Applications/"
+echo "Task links (polybridge-monitor://) resolve to an installed copy in ~/Applications; if none is"
+echo "installed there, the scheme simply has no handler until the app is opened once from there."

@@ -63,17 +63,119 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     
     var startTaskListing: () -> Void = { GlobalValues.taskListRepository.start() }
     var openWindowOnStart: () -> Bool = { GlobalValues.settingsRepository.openWindowOnStart }
-    
+
+    // MARK: - Single instance (Monitor piece 9) seams
+
+    /// A snapshot of every running application — the raw input to `SingleInstanceGuard`. Plain
+    /// (not `@MainActor`) like `isRunningAsApp`/`selfBundleIdentifier`/`selfBundleURL`/
+    /// `selfProcessIdentifier` below: these read process/bundle state, not AppKit UI state.
+    var runningApplications: () -> [RunningAppSnapshot] = {
+        NSWorkspace.shared.runningApplications.map(RunningAppSnapshot.init(runningApplication:))
+    }
+
+    var selfBundleIdentifier: () -> String? = { Bundle.main.bundleIdentifier }
+    var selfBundleURL: () -> URL? = { Bundle.main.bundleURL }
+    var selfProcessIdentifier: () -> pid_t = { ProcessInfo.processInfo.processIdentifier }
+
+    /// Forwards buffered `application(_:open:)` URLs to the already-running instance. The
+    /// `NSWorkspace.OpenConfiguration` is built by the caller (`forwardURLBatch`) so a test can
+    /// inspect its exact flags rather than only observing that *some* configuration was passed.
+    var forwardURLs: @MainActor (
+        [URL], URL, NSWorkspace.OpenConfiguration, @escaping @MainActor (Result<Void, Error>) -> Void
+    ) -> Void = { urls, bundleURL, configuration, completion in
+        NSWorkspace.shared.open(urls, withApplicationAt: bundleURL, configuration: configuration) { _, error in
+            Task { @MainActor in
+                if let error { completion(.failure(error)) } else { completion(.success(())) }
+            }
+        }
+    }
+
+    /// Asks the already-running instance to reopen (bring a window forward), for a plain
+    /// (no-URL) duplicate launch. Never `NSRunningApplication.activate` and never a bare `open` —
+    /// see the settled plan's review round 2.
+    var requestReopen: @MainActor (
+        URL, NSWorkspace.OpenConfiguration, @escaping @MainActor (Result<Void, Error>) -> Void
+    ) -> Void = { bundleURL, configuration, completion in
+        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { _, error in
+            Task { @MainActor in
+                if let error { completion(.failure(error)) } else { completion(.success(())) }
+            }
+        }
+    }
+
+    var terminateApp: @MainActor () -> Void = { NSApp.terminate(nil) }
+
+    /// Bridges the guard's decision into SwiftUI — see this type's own declaration for how
+    /// `PolybridgeMonitorApp.body` uses it. `@MainActor`-isolated for the same reason as
+    /// `coordinator` above: its default value construction runs on the main actor, and every
+    /// access to it below is already inside a `MainActor.assumeIsolated` block.
+    @MainActor let singleInstanceState = SingleInstanceState()
+
     private var launchedAt = Date()
     private var launchedByURL = false
     private var hasHandledURLs = false
     /// `false` only when AppKit says the launch was not a plain one (it came to open something);
     /// a missing key keeps the time rule alone.
     private var launchWasDefault: Bool?
-    
+
+    /// Set by `applicationWillFinishLaunching` when this launch is a duplicate; `nil` for the
+    /// normal, single-instance path. Every other single-instance seam (`application(_:open:)`,
+    /// `applicationDidFinishLaunching`, `applicationShouldHandleReopen`) branches on this.
+    private var duplicateOf: RunningAppSnapshot?
+    /// Counts in-flight forward/reopen requests. A duplicate terminates only once this reaches
+    /// zero — see `endOperationAndMaybeTerminate()`.
+    private var pendingOperations = 0
+    private var terminated = false
+
+    /// Best-effort single-instance guard (Monitor piece 9): if another non-terminated process
+    /// with this app's own bundle identifier is already running from a **different** bundle path,
+    /// this launch is a duplicate. `SingleInstanceGuard.findDuplicate` is the pure rule; this
+    /// method only wires it to real AppKit state and records the result for
+    /// `applicationDidFinishLaunching`, `application(_:open:)` and `applicationShouldHandleReopen`
+    /// to act on. Runs before `applicationDidFinishLaunching` and before AppKit delivers any
+    /// launch `application(_:open:)` batch, so every other single-instance branch below can rely
+    /// on `duplicateOf` already being decided.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        guard isRunningAsApp() else { return }
+        MainActor.assumeIsolated {
+            guard let duplicate = SingleInstanceGuard.findDuplicate(
+                among: runningApplications(),
+                selfBundleIdentifier: selfBundleIdentifier(),
+                selfBundleURL: selfBundleURL(),
+                selfProcessIdentifier: selfProcessIdentifier()
+            ) else { return }
+            duplicateOf = duplicate
+            singleInstanceState.isPrimaryInstance = false
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         launchedAt = now()
         launchWasDefault = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool
+
+        if let duplicate = duplicateOf {
+            // Best-effort duplicate shutdown (settled plan, section 3): skip task listing,
+            // notification-delegate registration, and the normal 0.8 s launch-hiding timer
+            // entirely — none of it matters for a process about to hand over and quit.
+            MainActor.assumeIsolated {
+                guard let existingBundleURL = duplicate.bundleURL else {
+                    terminateOnce()
+                    return
+                }
+                scheduleDeadlineTermination()
+                startHidingDuplicateWindows()
+                // One run-loop turn: give any `application(_:open:)` batch AppKit already queued a
+                // chance to land before deciding this was a plain (no-URL) launch.
+                scheduleAfter(0) { [self] in
+                    MainActor.assumeIsolated {
+                        guard !hasHandledURLs else { return }
+                        sendReopenRequest(to: existingBundleURL)
+                    }
+                }
+            }
+            return
+        }
+
         if isRunningAsApp() { setNotificationDelegate(self) }
         // MS-LIST-1/F4-01: discovery → first list → watcher start, exactly once — implemented and
         // tested by `PbRepository.TaskListRepositoryImpl.start()`. The app shell's own job is only to
@@ -89,7 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
         }
     }
-    
+
     func application(_ application: NSApplication, open urls: [URL]) {
         let withinLaunchWindow = now().timeIntervalSince(launchedAt) < 2
         if withinLaunchWindow { launchedByURL = true }
@@ -99,6 +201,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let isLaunchBatch = withinLaunchWindow && !hasHandledURLs && launchWasDefault != true
         hasHandledURLs = true
         MainActor.assumeIsolated {
+            // A duplicate never routes a URL to its own coordinator — however late it arrives, or
+            // however many batches AppKit delivers, each one is forwarded to the running instance
+            // instead. `forwardURLBatch` keeps `pendingOperations` above zero until this forward's
+            // own completion, so a batch arriving after a reopen was already sent still gets
+            // forwarded before the process quits.
+            if let duplicate = duplicateOf {
+                guard let existingBundleURL = duplicate.bundleURL else { return }
+                forwardURLBatch(urls, to: existingBundleURL)
+                return
+            }
             for url in urls {
                 if isLaunchBatch, let launchHandler = coordinator as? LaunchURLHandling {
                     launchHandler.handleLaunchURL(url)
@@ -119,6 +231,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// since `openWindow(id:)` on a single `Window` only brings it forward. Always returns `true`.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         MainActor.assumeIsolated {
+            // A duplicate never handles reopen locally — it has no coordinator worth reopening
+            // into, and is already on its way out.
+            guard duplicateOf == nil else { return }
             let hasVisibleMainWindow = mainWindows().contains { $0.isVisible && !$0.isMiniaturized }
             if !hasVisibleMainWindow { coordinator?.handle(path: MonitorDestination.openWindow) }
         }
@@ -164,6 +279,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// Pulled out of `userNotificationCenter(_:willPresent:withCompletionHandler:)` for the same
     /// reason as `handleNotificationClick(userInfo:)` above.
     func foregroundPresentationOptions() -> UNNotificationPresentationOptions { [.banner, .sound] }
+
+    // MARK: - Single instance (Monitor piece 9)
+
+    @MainActor
+    private func scheduleDeadlineTermination() {
+        // Bounded exit (settled plan, review round 2): terminates even if a forward/reopen
+        // completion never arrives. No retry loop — this fires exactly once, and `terminateOnce()`
+        // guards against a completion that arrives afterward terminating a second time.
+        scheduleAfter(3.0) { [self] in
+            MainActor.assumeIsolated { self.terminateOnce() }
+        }
+    }
+
+    /// Repeats on a short main-queue hop (rather than observing window-creation notifications) so
+    /// the whole mechanism stays expressible with the existing `scheduleAfter`/`mainWindows`/
+    /// `orderOutWindow` seams: a main window SwiftUI mounts *after* this method starts polling
+    /// still gets ordered out within one hop — a brief flash is accepted, per the settled plan.
+    /// Stops once `terminateOnce()` has fired, since the process is about to exit anyway.
+    @MainActor
+    private func startHidingDuplicateWindows() {
+        guard !terminated else { return }
+        mainWindows().forEach(orderOutWindow)
+        scheduleAfter(0.05) { [self] in
+            MainActor.assumeIsolated { self.startHidingDuplicateWindows() }
+        }
+    }
+
+    @MainActor
+    private func terminateOnce() {
+        guard !terminated else { return }
+        terminated = true
+        terminateApp()
+    }
+
+    /// `pendingOperations` counts every in-flight forward/reopen request. A duplicate terminates
+    /// only once it reaches zero — which is what lets a URL arriving after a reopen was already
+    /// sent (but before it completed) still get forwarded before the app quits, with no explicit
+    /// ordering logic: the late forward simply keeps the count above zero until it too completes.
+    @MainActor
+    private func beginOperation() { pendingOperations += 1 }
+
+    @MainActor
+    private func endOperationAndMaybeTerminate() {
+        pendingOperations -= 1
+        guard pendingOperations <= 0 else { return }
+        terminateOnce()
+    }
+
+    @MainActor
+    private func forwardURLBatch(_ urls: [URL], to existingBundleURL: URL) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.allowsRunningApplicationSubstitution = false
+        configuration.createsNewApplicationInstance = false
+        beginOperation()
+        forwardURLs(urls, existingBundleURL, configuration) { [self] _ in
+            // An error is still followed by termination (settled plan) — there is nothing more
+            // useful this process can do with a forward that failed.
+            endOperationAndMaybeTerminate()
+        }
+    }
+
+    @MainActor
+    private func sendReopenRequest(to existingBundleURL: URL) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.allowsRunningApplicationSubstitution = false
+        configuration.createsNewApplicationInstance = false
+        beginOperation()
+        requestReopen(existingBundleURL, configuration) { [self] _ in
+            endOperationAndMaybeTerminate()
+        }
+    }
+}
+
+/// Bridges `AppDelegate`'s single-instance decision into SwiftUI (Monitor piece 9):
+/// `PolybridgeMonitorApp.body` binds `MenuBarExtra(isInserted:)` to `isPrimaryInstance`, so a
+/// duplicate never shows the menu-bar item. Set to `false` in `applicationWillFinishLaunching`,
+/// which runs before any `Scene` body has ever rendered when it can — but if `MenuBarExtra` has
+/// already inserted by the time that runs, flipping the binding just removes it a moment later. A
+/// brief flash either way is accepted, per the settled plan.
+@MainActor
+@Observable
+final class SingleInstanceState {
+    var isPrimaryInstance = true
 }
 
 /// Decision 8's menu-bar icon: an uncached `NSImage` carrying both the 1x and @2x
@@ -214,7 +414,13 @@ struct PolybridgeMonitorApp: App {
         // Settings and the menu bar are built through their own feature coordinators
         // (SettingsFeature/MenuBarFeature) via `AppCoordinator`; nothing in the view layer reads an
         // `AppModel` — that type no longer exists.
-        MenuBarExtra {
+        //
+        // `isInserted` is bound to `SingleInstanceState.isPrimaryInstance` (Monitor piece 9): a
+        // duplicate instance never shows the menu-bar item.
+        MenuBarExtra(isInserted: Binding(
+            get: { delegate.singleInstanceState.isPrimaryInstance },
+            set: { delegate.singleInstanceState.isPrimaryInstance = $0 }
+        )) {
             coordinator.menuBarNavigationCoordinator?.buildMenuBarContentView() ?? EmptyView().eraseToAnyView()
         } label: {
             coordinator.menuBarNavigationCoordinator?.buildMenuBarLabelView(icon: menuBarIcon) ?? EmptyView().eraseToAnyView()

@@ -55,6 +55,35 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
   `UNUserNotificationCenterDelegate` methods for the same testability reason — `UNNotification`/
   `UNNotificationResponse` have no public initializer, so a test drives the plain-dictionary/no-input
   helpers directly instead.
+- **Single instance (Monitor piece 9, best-effort — not guaranteed).** Two bundle paths of the same
+  app (e.g. an installed `~/Applications/Polybridge Monitor.app` and a freshly built
+  `macos/build/Polybridge Monitor.app`) can otherwise both run at once, since macOS treats each
+  bundle path as its own app. `SingleInstanceGuard.findDuplicate` (`SingleInstanceGuard.swift`) is
+  the pure rule: another **non-terminated** process with this app's own bundle identifier, running
+  from a **different** bundle path, is a duplicate; a terminated match or a same-path match is not.
+  `AppDelegate.applicationWillFinishLaunching` runs it once, before any launch `application(_:open:)`
+  batch or `applicationDidFinishLaunching` — every other single-instance branch relies on that
+  ordering. A duplicate: skips task listing, notification-delegate registration, and the normal
+  0.8 s launch-hiding timer; flips `SingleInstanceState.isPrimaryInstance` to `false`, which
+  `PolybridgeMonitorApp.body` binds to `MenuBarExtra(isInserted:)` so the menu-bar item never shows
+  (a brief flash before removal is accepted if the scene already inserted); repeatedly orders out
+  any "main"-identified window on a short (`0.05 s`) `scheduleAfter` hop, since `Window` scenes have
+  no `isInserted` equivalent to gate; forwards every `application(_:open:)` URL batch — however late,
+  however many — to the running instance via `NSWorkspace.open(_:withApplicationAt:configuration:)`
+  (`activates = false`, `allowsRunningApplicationSubstitution = false`,
+  `createsNewApplicationInstance = false`); and, if no URL arrived within one run-loop turn of
+  `applicationDidFinishLaunching`, sends a **reopen** instead via
+  `NSWorkspace.openApplication(at:configuration:)` (`activates = true`, same substitution/new-instance
+  flags) — never a bare `NSRunningApplication.activate` or `open`. `applicationShouldHandleReopen`
+  never handles reopen locally for a duplicate. **Bounded exit:** `pendingOperations` counts every
+  in-flight forward/reopen request and terminates only once it reaches zero — which is what lets a
+  URL arriving after a reopen was already sent, but before it completed, still get forwarded before
+  the app quits — and a ~3 s deadline terminates unconditionally even if a completion never arrives;
+  `terminateOnce()` guards against terminating twice. Every AppKit touch point is one more injected
+  seam on `AppDelegate` (`runningApplications`, `selfBundleIdentifier`/`selfBundleURL`/
+  `selfProcessIdentifier`, `forwardURLs`, `requestReopen`, `terminateApp`), tested in
+  `AppDelegateSingleInstanceTests.swift` with no real timer, no real `NSWorkspace` call, and no real
+  running app.
 - There is no `AppModel` and no `TransitionalAppCoordinator` any more — both were deleted in Phase 5
   once `AppCoordinator` existed to replace them. If you find a reference to either outside a
   historical comment citing the pre-refactor `AppModel.swift:<line>`, it is stale.
