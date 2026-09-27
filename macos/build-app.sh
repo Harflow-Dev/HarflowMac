@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build "Polybridge Monitor.app" into macos/build/. Build only: it does not install, open, register
-# the URL scheme, or add a login item. To install, copy the printed .app into ~/Applications
+# the URL scheme, or add a login item. To install, copy the printed .app into /Applications
 # yourself (LaunchServices registers `polybridge-monitor://` when the app is first opened there).
 set -euo pipefail
 
@@ -47,6 +47,6 @@ else
 fi
 
 echo "Built: $app"
-echo "Install: rm -rf ~/Applications/'Polybridge Monitor.app' && cp -R '$app' ~/Applications/"
-echo "Task links (polybridge-monitor://) resolve to an installed copy in ~/Applications; if none is"
+echo "Install: rm -rf '/Applications/Polybridge Monitor.app' && cp -R '$app' /Applications/"
+echo "Task links (polybridge-monitor://) resolve to an installed copy in /Applications; if none is"
 echo "installed there, the scheme simply has no handler until the app is opened once from there."

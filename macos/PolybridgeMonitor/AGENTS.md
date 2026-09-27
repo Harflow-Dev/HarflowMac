@@ -56,7 +56,7 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
   `UNNotificationResponse` have no public initializer, so a test drives the plain-dictionary/no-input
   helpers directly instead.
 - **Single instance (Monitor piece 9, best-effort — not guaranteed).** Two bundle paths of the same
-  app (e.g. an installed `~/Applications/Polybridge Monitor.app` and a freshly built
+  app (e.g. an installed `/Applications/Polybridge Monitor.app` and a freshly built
   `macos/build/Polybridge Monitor.app`) can otherwise both run at once, since macOS treats each
   bundle path as its own app. `SingleInstanceGuard.findDuplicate` (`SingleInstanceGuard.swift`) is
   the pure rule: another **non-terminated** process with this app's own bundle identifier, running
