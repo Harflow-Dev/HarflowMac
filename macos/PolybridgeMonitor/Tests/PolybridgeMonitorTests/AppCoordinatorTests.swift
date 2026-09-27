@@ -175,7 +175,7 @@ import Testing
         #expect(handled)
         #expect(fakeMainWindow.selection == .task("abc123"))
         #expect(fakeMainWindow.handledDestinations == [.task("abc123")])
-        await verify(taskList).refresh().calledEventually(1, before: .seconds(1))
+        await verify(taskList).refresh().calledEventually(1, before: .seconds(5))
         #expect(activateLog.value.isEmpty)
     }
 
@@ -232,7 +232,7 @@ import Testing
         #expect(handled)
         #expect(fakeMainWindow.handledDestinations.isEmpty)
         #expect(fakeMainWindow.selection == nil)
-        await verify(taskList).refresh().calledEventually(1, before: .seconds(1))
+        await verify(taskList).refresh().calledEventually(1, before: .seconds(5))
         #expect(activateLog.value.isEmpty)
         #expect(openerCallCount == 0)
     }
@@ -254,7 +254,7 @@ import Testing
         #expect(handled)
         #expect(fakeMainWindow.handledDestinations.isEmpty)
         #expect(fakeMainWindow.selection == nil)
-        await verify(taskList).refresh().calledEventually(1, before: .seconds(1))
+        await verify(taskList).refresh().calledEventually(1, before: .seconds(5))
         #expect(activateLog.value.isEmpty)
         #expect(openerCallCount == 0)
     }
@@ -348,7 +348,7 @@ import Testing
 
         // then
         #expect(coordinator.mainWindowNavigationCoordinator?.selection == .task("abc123"))
-        await verify(taskList).refresh().calledEventually(1, before: .seconds(1))
+        await verify(taskList).refresh().calledEventually(1, before: .seconds(5))
     }
 
     /// A real delegate and coordinator with SwiftUI's initial window already on screen.

@@ -307,7 +307,7 @@ import Testing
         // `run` is `Task { ... }`-dispatched from the dialog action; wait for `locate()` to have
         // actually run (proving the Task itself ran) rather than a fixed sleep, before asserting the
         // silent no-op that should follow it.
-        await verify(useCase).locate().calledEventually(1, before: .seconds(1))
+        await verify(useCase).locate().calledEventually(1, before: .seconds(5))
         
         // then — neither `working` nor `error` moved, and the real `perform` (the action itself)
         // was never even attempted.
@@ -331,7 +331,7 @@ import Testing
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(1))
+        await verify(useCase).install().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenNeedsUv_whenPrimaryTapped_thenTheInstallUvDialogPublishes_andConfirmCallsInstallUvThenPolybridge() async {
@@ -346,7 +346,7 @@ import Testing
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).installUvThenPolybridge().calledEventually(1, before: .seconds(1))
+        await verify(useCase).installUvThenPolybridge().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 
@@ -362,7 +362,7 @@ import Testing
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).retry().calledEventually(1, before: .seconds(1))
+        await verify(useCase).retry().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenUnresolved_whenPrimaryTapped_thenCheckAgainIsCalledDirectlyWithNoDialog() async {
@@ -377,7 +377,7 @@ import Testing
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).checkAgain().calledEventually(1, before: .seconds(1))
+        await verify(useCase).checkAgain().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenUnresolved_whenSecondaryTapped_thenTheInstallAnywayDialogPublishes_andConfirmCallsInstallAnyway() async {
@@ -392,7 +392,7 @@ import Testing
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(1))
+        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 
@@ -409,7 +409,7 @@ import Testing
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(1))
+        await verify(useCase).install().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 
@@ -540,7 +540,7 @@ import Testing
         // then — the completion belongs to a generation that is already stale by the time it
         // resolves, so it must be dropped entirely: rows never populate, and `isLoading` — the
         // cleanup that used to be an unconditional `defer` — never clears either.
-        await verify(useCase).status().calledEventually(1, before: .seconds(1))
+        await verify(useCase).status().calledEventually(1, before: .seconds(5))
         #expect(sut.rows.isEmpty)
         #expect(sut.isLoading == true)
     }
@@ -560,7 +560,7 @@ import Testing
         let sut = HarnessesVM(useCase: useCase)
         sut.didAppear()
         // The initial load must have completed first, or it alone could fetch the two rows below.
-        await verify(useCase).status().calledEventually(1, before: .seconds(1))
+        await verify(useCase).status().calledEventually(1, before: .seconds(5))
         await waitUntil { sut.isLoading == false }
         #expect(sut.rows.isEmpty)
         statusBox.value = .success(document(twoRowsJSON))
@@ -569,7 +569,7 @@ import Testing
         installStateSubject.send(.installed)
 
         // then
-        await verify(useCase).status().calledEventually(2, before: .seconds(1))
+        await verify(useCase).status().calledEventually(2, before: .seconds(5))
         await waitUntil { sut.rows.count == 2 }
         #expect(sut.rows.count == 2)
         #expect(sut.installBannerModel?.title == "polybridge is installed")

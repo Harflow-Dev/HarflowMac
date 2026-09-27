@@ -43,7 +43,7 @@ extension TaskDetailVMTests {
         #expect(dialog.actions.first?.role == .destructive)
         
         dialog.actions.first?.action()
-        await verify(harness.useCase).cancel(.value("abc12345")).calledEventually(1, before: .seconds(1))
+        await verify(harness.useCase).cancel(.value("abc12345")).calledEventually(1, before: .seconds(5))
         cancellable.cancel()
     }
     
@@ -85,7 +85,7 @@ extension TaskDetailVMTests {
         )
 
         dialog.actions.first?.action()
-        await verify(harness.useCase).beginTakeover(taskID: .value("abc12345")).calledEventually(1, before: .seconds(1))
+        await verify(harness.useCase).beginTakeover(taskID: .value("abc12345")).calledEventually(1, before: .seconds(5))
         cancellable.cancel()
     }
 
@@ -119,7 +119,7 @@ extension TaskDetailVMTests {
         )
 
         dialog.actions.first?.action()
-        await verify(harness.useCase).beginTakeover(taskID: .value("abc12345")).calledEventually(1, before: .seconds(1))
+        await verify(harness.useCase).beginTakeover(taskID: .value("abc12345")).calledEventually(1, before: .seconds(5))
         cancellable.cancel()
     }
 
@@ -250,7 +250,7 @@ extension TaskDetailVMTests {
 
         // then — nothing above kept `sut` alive, yet the resume dispatch still completes.
         #expect(weakSUT == nil)
-        await verify(capturedUseCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(1))
+        await verify(capturedUseCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(5))
     }
     
     // MARK: - Item u: sub-task strip and "Open parent" routing

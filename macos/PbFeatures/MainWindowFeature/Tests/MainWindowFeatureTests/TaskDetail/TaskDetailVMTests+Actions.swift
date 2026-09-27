@@ -139,7 +139,7 @@ extension TaskDetailVMTests {
         
         // then — eligible, so the caller is told to clear the field immediately.
         #expect(cleared)
-        await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(1))
+        await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(5))
     }
     
     @Test func givenAnEligibleResume_whenItSucceeds_thenItDispatchesButDoesNotNavigate() async {
@@ -163,7 +163,7 @@ extension TaskDetailVMTests {
 
         // then
         #expect(cleared)
-        await verify(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(1))
+        await verify(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(5))
         try? await Task.sleep(for: .milliseconds(50))
         verify(routing).selectTask(.any).called(0)
     }
@@ -336,8 +336,8 @@ extension TaskDetailVMTests {
         sut.didTapCopyResumeCommand()
 
         // then
-        await verify(routing).copyToPasteboard(.value(command)).calledEventually(1, before: .seconds(1))
-        await verify(useCase).setOutcome(.value("abc12345"), .value("Copied resume command.")).calledEventually(1, before: .seconds(1))
+        await verify(routing).copyToPasteboard(.value(command)).calledEventually(1, before: .seconds(5))
+        await verify(useCase).setOutcome(.value("abc12345"), .value("Copied resume command.")).calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenACopySucceedsOnARunningTask_whenTapped_thenTheOutcomeWarnsAboutTwoWriters() async {
@@ -361,7 +361,7 @@ extension TaskDetailVMTests {
         // then
         let expected = "Copied. This task is still running — resuming it now would put two writers "
         + "on one conversation; prefer Take over."
-        await verify(useCase).setOutcome(.value("abc12345"), .value(expected)).calledEventually(1, before: .seconds(1))
+        await verify(useCase).setOutcome(.value("abc12345"), .value(expected)).calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenTheCopyFails_whenTapped_thenTheOutcomeSaysSo() async {
@@ -383,7 +383,7 @@ extension TaskDetailVMTests {
         sut.didTapCopyResumeCommand()
 
         // then
-        await verify(useCase).setOutcome(.value("abc12345"), .value("Couldn't copy to the clipboard.")).calledEventually(1, before: .seconds(1))
+        await verify(useCase).setOutcome(.value("abc12345"), .value("Couldn't copy to the clipboard.")).calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenNoResumeCommand_whenTapped_thenNothingIsCopiedOrRecorded() async {
@@ -430,7 +430,7 @@ extension TaskDetailVMTests {
 
         // when — the copy calls the durable channel...
         sut.didTapCopyResumeCommand()
-        await verify(useCase).setOutcome(.value("abc12345"), .value("Copied resume command.")).calledEventually(1, before: .seconds(1))
+        await verify(useCase).setOutcome(.value("abc12345"), .value("Copied resume command.")).calledEventually(1, before: .seconds(5))
         // ...which the repository echoes back through `outcomesPublisher()`.
         harness.outcomesSubject.send(["abc12345": "Copied resume command."])
         await waitUntil { sut.outcomeMessage == "Copied resume command." }

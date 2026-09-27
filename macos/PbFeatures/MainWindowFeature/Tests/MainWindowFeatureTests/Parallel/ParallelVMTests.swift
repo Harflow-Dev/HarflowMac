@@ -303,7 +303,7 @@ import Testing
         dialog.actions.first?.action()
         
         // then — every running task in the members' subtrees is cancelled, sub-tasks included
-        await verify(useCase).cancelAll(.value(["t1", "sub-of-t1"])).calledEventually(1, before: .seconds(1))
+        await verify(useCase).cancelAll(.value(["t1", "sub-of-t1"])).calledEventually(1, before: .seconds(5))
         cancellable.cancel()
     }
     

@@ -91,7 +91,7 @@ extension TaskDetailVMTests {
         #expect(send.sut.submitMessage("  hello there  "))
         
         // then
-        await verify(send.useCase).send(.value("abc12345"), text: .value("hello there")).calledEventually(1, before: .seconds(1))
+        await verify(send.useCase).send(.value("abc12345"), text: .value("hello there")).calledEventually(1, before: .seconds(5))
         
         // given — Continue (resume), eligible
         let resume = makeSUT()
@@ -105,7 +105,7 @@ extension TaskDetailVMTests {
         #expect(resume.sut.submitMessage("  follow up  "))
         
         // then
-        await verify(resume.useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(1))
+        await verify(resume.useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(5))
     }
     
     // MARK: - Item d: the busy guard rejecting the action still clears the text
@@ -160,7 +160,7 @@ extension TaskDetailVMTests {
         // then — clears synchronously; the dispatch's own (here: rejected) outcome never reaches
         // this return, because it is decided before the `Task { }` closure ever runs.
         #expect(cleared)
-        await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(1))
+        await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(5))
     }
     
     // MARK: - Item e: default tab

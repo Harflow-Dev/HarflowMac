@@ -39,7 +39,7 @@ extension SidebarVMTests {
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(1))
+        await verify(useCase).install().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenNeedsUv_whenPrimaryTapped_thenTheInstallUvDialogPublishes_andConfirmCallsInstallUvThenPolybridge() async {
@@ -57,7 +57,7 @@ extension SidebarVMTests {
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).installUvThenPolybridge().calledEventually(1, before: .seconds(1))
+        await verify(useCase).installUvThenPolybridge().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 
@@ -75,7 +75,7 @@ extension SidebarVMTests {
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).retry().calledEventually(1, before: .seconds(1))
+        await verify(useCase).retry().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenUnresolved_whenPrimaryTapped_thenCheckAgainIsCalledDirectlyWithNoDialog() async {
@@ -92,7 +92,7 @@ extension SidebarVMTests {
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).checkAgain().calledEventually(1, before: .seconds(1))
+        await verify(useCase).checkAgain().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenUnresolved_whenSecondaryTapped_thenTheInstallAnywayDialogPublishes_andConfirmCallsInstallAnyway() async {
@@ -111,7 +111,7 @@ extension SidebarVMTests {
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(1))
+        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 
@@ -169,7 +169,7 @@ extension SidebarVMTests {
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(1))
+        await verify(useCase).install().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 

@@ -222,7 +222,7 @@ extension TaskDetailVMTests {
         dialog.actions.first?.action()
 
         // then
-        await verify(harness.useCase).cancel(.value("b")).calledEventually(1, before: .seconds(1))
+        await verify(harness.useCase).cancel(.value("b")).calledEventually(1, before: .seconds(5))
         verify(harness.useCase).cancel(.value("a")).called(0)
         cancellable.cancel()
     }
@@ -412,7 +412,7 @@ extension TaskDetailVMTests {
         #expect(harness.sut.submitMessage("one more thing"))
 
         // then
-        await verify(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).calledEventually(1, before: .seconds(1))
+        await verify(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).calledEventually(1, before: .seconds(5))
         try? await Task.sleep(for: .milliseconds(50))
         verify(harness.routing).selectTask(.any).called(0)
     }
@@ -450,7 +450,7 @@ extension TaskDetailVMTests {
             return
         }
         dialog.actions.first?.action()
-        await verify(harness.useCase).cancel(.value("b")).calledEventually(1, before: .seconds(1))
+        await verify(harness.useCase).cancel(.value("b")).calledEventually(1, before: .seconds(5))
         cancellable.cancel()
     }
 

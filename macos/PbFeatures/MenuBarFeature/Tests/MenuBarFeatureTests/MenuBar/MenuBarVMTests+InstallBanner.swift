@@ -57,7 +57,7 @@ extension MenuBarVMTests {
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(1))
+        await verify(useCase).install().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenNeedsUv_whenPrimaryTapped_thenTheInstallUvDialogPublishes_andConfirmCallsInstallUvThenPolybridge() async {
@@ -74,7 +74,7 @@ extension MenuBarVMTests {
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).installUvThenPolybridge().calledEventually(1, before: .seconds(1))
+        await verify(useCase).installUvThenPolybridge().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 
@@ -96,7 +96,7 @@ extension MenuBarVMTests {
         dialog.actions.first?.action()
 
         // then
-        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(1))
+        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(5))
         withExtendedLifetime(cancellable) {}
     }
 

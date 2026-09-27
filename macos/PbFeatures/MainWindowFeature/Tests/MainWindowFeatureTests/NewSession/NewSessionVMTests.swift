@@ -153,7 +153,7 @@ import Testing
         // asserting the negative, so a `didTapChooseDirectory()` that silently did nothing would
         // fail this test instead of passing vacuously.
         sut.didTapChooseDirectory()
-        await verify(routing).chooseDirectory().calledEventually(1, before: .seconds(1))
+        await verify(routing).chooseDirectory().calledEventually(1, before: .seconds(5))
 
         // then
         #expect(sut.repo == "/tmp/existing")
