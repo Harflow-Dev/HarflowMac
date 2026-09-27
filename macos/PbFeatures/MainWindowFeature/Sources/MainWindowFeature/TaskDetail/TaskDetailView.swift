@@ -100,37 +100,52 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     }
     
     // MARK: - View Body
-    
+
+    /// Monitor piece 12, Design point 2: `DeferredContent` shows `loadingSkeleton` on the first
+    /// frame so picking a task changes the page instantly instead of freezing while the real
+    /// detail's SwiftUI layout builds. Lives INSIDE the coordinator's per-conversation `.id(...)`
+    /// (applied at `buildTaskDetailView(id:)`'s call site, wrapping this whole view) so a new
+    /// selection gets a fresh `DeferredContentState` and starts on the placeholder again, while
+    /// re-renders of the SAME selection never flash it a second time. `didAppear()`/`didDisappear()`
+    /// stay on `realContent`, not the placeholder, so leases start once the real screen actually
+    /// mounts — one committed frame after the selection, not on the very first frame.
     var body: some View {
-        Group {
-            if let task = viewModel.task {
-                HStack(spacing: 0) {
-                    VStack(spacing: 0) {
-                        header(task)
-                        Divider()
-                        tabBar
-                        Divider()
-                        content
-                        MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
-                    }
-                    Divider()
-                    InspectorView(model: viewModel.inspectorModel)
-                        .frame(width: 280)
-                }
-            } else if viewModel.hasListed {
-                VStack(spacing: 8) {
-                    Text("Task \(viewModel.taskID)").font(.pb(.headline, weight: .bold))
-                    Text("This task is not in polybridge's records (it may have been removed by retention).")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                loadingSkeleton
-            }
+        DeferredContent {
+            loadingSkeleton
+        } content: {
+            realContent
+                .onAppear { viewModel.didAppear() }
+                .onDisappear { viewModel.didDisappear() }
         }
-        .onAppear { viewModel.didAppear() }
-        .onDisappear { viewModel.didDisappear() }
         .publishViewEvent(from: viewModel, to: viewEvent)
+    }
+
+    @ViewBuilder
+    private var realContent: some View {
+        if let task = viewModel.task {
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    header(task)
+                    Divider()
+                    tabBar
+                    Divider()
+                    content
+                    MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
+                }
+                Divider()
+                InspectorView(model: viewModel.inspectorModel)
+                    .frame(width: 280)
+            }
+        } else if viewModel.hasListed {
+            VStack(spacing: 8) {
+                Text("Task \(viewModel.taskID)").font(.pb(.headline, weight: .bold))
+                Text("This task is not in polybridge's records (it may have been removed by retention).")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            loadingSkeleton
+        }
     }
 
     /// Shown while the task isn't known yet (Plan review round 1, item 4) — replaces the old bare

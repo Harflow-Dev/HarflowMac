@@ -231,6 +231,12 @@ public struct FreedomBadge: View {
 }
 
 public enum Format {
+    /// Resolved once: `Format.repo(_:)` used to rebuild this from `ProcessInfo`'s whole environment
+    /// dictionary on every single call (Monitor piece 12 — measured at ~110 ms across 6 large tasks'
+    /// worth of rows). `HOME` never changes for the life of the process, so reading it once is
+    /// behaviour-identical and just skips the repeated environment rebuild.
+    private static let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
+
     public static func clock(_ seconds: TimeInterval?) -> String {
         guard let seconds, seconds.isFinite else { return "--:--" }
         let total = Int(seconds.rounded(.down))
@@ -258,8 +264,7 @@ public enum Format {
     }
 
     public static func repo(_ path: String) -> String {
-        let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+        path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 }
 

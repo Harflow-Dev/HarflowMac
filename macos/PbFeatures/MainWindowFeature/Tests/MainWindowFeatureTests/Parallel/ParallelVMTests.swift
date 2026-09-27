@@ -47,11 +47,13 @@ import Testing
         let titlesSubject: PassthroughSubject<[String: String], Never>
         let tasksBox: Box<[String: TaskInfo]>
         let titlesBox: Box<[String: String]>
+        let itemsBox: Box<[String: [TimelineItem]]>
+        let availabilityBox: Box<[String: EventAvailability]>
         let leasesBox: Box<[String: MockEventStreamLease]>
         let releasedBox: Box<Set<String>>
         let runningInSubtreesBox: Box<[String]?>
     }
-    
+
     private func makeSUT(groupName: String = "g1") -> SUT {
         let useCase = MockParallelUseCase()
         let routing = MockParallelRouting()
@@ -62,10 +64,12 @@ import Testing
         let titlesSubject = PassthroughSubject<[String: String], Never>()
         let tasksBox = Box<[String: TaskInfo]>([:])
         let titlesBox = Box<[String: String]>([:])
+        let itemsBox = Box<[String: [TimelineItem]]>([:])
+        let availabilityBox = Box<[String: EventAvailability]>([:])
         let leasesBox = Box<[String: MockEventStreamLease]>([:])
         let releasedBox = Box<Set<String>>([])
         let runningInSubtreesBox = Box<[String]?>(nil)
-        
+
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).snapshotsPublisher().willReturn(snapshotsSubject.eraseToAnyPublisher())
         given(useCase).busyPublisher().willReturn(busySubject.eraseToAnyPublisher())
@@ -73,9 +77,13 @@ import Testing
         given(useCase).titlesPublisher().willReturn(titlesSubject.eraseToAnyPublisher())
         given(useCase).task(.any).willProduce { tasksBox.value[$0] }
         given(useCase).title(.any).willProduce { titlesBox.value[$0] ?? "Task \($0.prefix(8))" }
-        given(useCase).items(for: .any).willReturn([])
-        given(useCase).itemsPublisher(for: .any).willReturn(Just([]).eraseToAnyPublisher())
+        given(useCase).items(for: .any).willProduce { itemsBox.value[$0] ?? [] }
+        given(useCase).itemsPublisher(for: .any).willProduce { id in Just(itemsBox.value[id] ?? []).eraseToAnyPublisher() }
         given(useCase).prompt(for: .any).willReturn(nil)
+        given(useCase).eventsAvailability(for: .any).willProduce { availabilityBox.value[$0] ?? .loading }
+        given(useCase).eventsAvailabilityPublisher(for: .any).willProduce { id in
+            Just(availabilityBox.value[id] ?? .loading).eraseToAnyPublisher()
+        }
         given(useCase).acquireEventLease(.any).willProduce { id in
             let lease = MockEventStreamLease()
             given(lease).taskID.willReturn(id)
@@ -87,12 +95,12 @@ import Testing
         given(useCase).cancelAll(.any).willReturn()
         given(useCase).beginTakeover(taskID: .any).willReturn()
         given(routing).selectTask(.any).willReturn()
-        
+
         let sut = ParallelVM(groupName: groupName, useCase: useCase, routing: routing)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, snapshotsSubject: snapshotsSubject,
             busySubject: busySubject, outcomesSubject: outcomesSubject, titlesSubject: titlesSubject,
-            tasksBox: tasksBox, titlesBox: titlesBox,
+            tasksBox: tasksBox, titlesBox: titlesBox, itemsBox: itemsBox, availabilityBox: availabilityBox,
             leasesBox: leasesBox, releasedBox: releasedBox, runningInSubtreesBox: runningInSubtreesBox
         )
     }
@@ -501,5 +509,89 @@ import Testing
         // then
         await waitUntil { sut.footerText != ParallelVM.fallbackFooter }
         #expect(sut.footerText.contains("Restrictions enforced by the OS sandbox"))
+    }
+
+    // MARK: - Column loading state (Monitor piece 12, Design point 4)
+
+    @Test func givenNoItemsAndLoadingAvailability_whenColumnBuilds_thenIsLoadingIsTrue() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        let tasksBox = harness.tasksBox
+        let availabilityBox = harness.availabilityBox
+        let task1 = task(id: "t1")
+        tasksBox.value["t1"] = task1
+        availabilityBox.value["t1"] = .loading
+        sut.didAppear()
+
+        // when
+        tasksSubject.send([task1])
+
+        // then
+        await waitUntil { sut.columns.count == 1 }
+        #expect(sut.columns.first?.isLoading == true)
+    }
+
+    @Test func givenNoItemsAndAvailableAvailability_whenColumnBuilds_thenIsLoadingIsFalse() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        let tasksBox = harness.tasksBox
+        let availabilityBox = harness.availabilityBox
+        let task1 = task(id: "t1")
+        tasksBox.value["t1"] = task1
+        availabilityBox.value["t1"] = .available
+        sut.didAppear()
+
+        // when
+        tasksSubject.send([task1])
+
+        // then — an available-but-empty log is a real empty state, never a skeleton.
+        await waitUntil { sut.columns.count == 1 }
+        #expect(sut.columns.first?.isLoading == false)
+    }
+
+    @Test func givenNoItemsAndUnavailableAvailability_whenColumnBuilds_thenIsLoadingIsFalse() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        let tasksBox = harness.tasksBox
+        let availabilityBox = harness.availabilityBox
+        let task1 = task(id: "t1")
+        tasksBox.value["t1"] = task1
+        availabilityBox.value["t1"] = .unavailable
+        sut.didAppear()
+
+        // when
+        tasksSubject.send([task1])
+
+        // then — an unreadable log keeps its own honest empty message, never a skeleton.
+        await waitUntil { sut.columns.count == 1 }
+        #expect(sut.columns.first?.isLoading == false)
+    }
+
+    @Test func givenItemsAlreadyPresentEvenWhileLoading_whenColumnBuilds_thenIsLoadingIsFalse() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        let tasksBox = harness.tasksBox
+        let itemsBox = harness.itemsBox
+        let availabilityBox = harness.availabilityBox
+        let task1 = task(id: "t1")
+        tasksBox.value["t1"] = task1
+        itemsBox.value["t1"] = [PreviewFixtures.textItem("already have something")]
+        availabilityBox.value["t1"] = .loading
+        sut.didAppear()
+
+        // when
+        tasksSubject.send([task1])
+
+        // then — real content already exists, so the shimmer never shows even while still `.loading`.
+        await waitUntil { sut.columns.count == 1 }
+        #expect(sut.columns.first?.isLoading == false)
     }
 }

@@ -55,6 +55,10 @@ final class ParallelViewRepository: ParallelUseCase, @unchecked Sendable {
     func items(for taskID: String) -> [TimelineItem] { eventStreamRepository.items(for: taskID) }
     func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never> { eventStreamRepository.itemsPublisher(for: taskID) }
     func prompt(for taskID: String) -> String? { eventStreamRepository.prompt(for: taskID) }
+    func eventsAvailability(for taskID: String) -> EventAvailability { eventStreamRepository.eventsAvailability(for: taskID) }
+    func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never> {
+        eventStreamRepository.eventsAvailabilityPublisher(for: taskID)
+    }
 
     func runningInSubtrees(of ids: [String]) -> [String] { taskListRepository.runningInSubtrees(of: ids) }
     func cancelAll(_ ids: [String]) async { await taskActionRepository.cancelAll(ids) }

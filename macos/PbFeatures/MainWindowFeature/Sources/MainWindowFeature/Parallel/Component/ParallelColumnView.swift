@@ -25,6 +25,10 @@ struct ParallelColumnModel: Identifiable {
     let showPrompt: Bool
     let prompt: String?
     let items: [TimelineItem]
+    /// True while this member has no timeline items yet AND its event stream is still `.loading`
+    /// (Monitor piece 12, Design point 4) — the column shows `SkeletonRows` instead of the empty
+    /// timeline while this holds.
+    let isLoading: Bool
     /// From the snapshot only — no fallback to `task.summary` (F4-40, a deliberate difference from
     /// `ChangesPane`).
     let summary: String?
@@ -74,29 +78,35 @@ struct ParallelColumnView: View {
                     .background(RoundedRectangle(cornerRadius: 4).fill(Color.codeFill))
             }
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(shown) { item in
-                        TimelineRow(model: TimelineRowModel(item: item, start: model.task.startedAt, live: model.task.status.isRunning))
-                    }
-                    if model.items.count > shown.count {
-                        Button("Show all \(model.items.count) steps") { showAll = true }.buttonStyle(.link).font(.pb(.secondary))
-                    }
-                    Divider()
-                    if model.task.status.isTerminal {
-                        SectionLabel(text: "Final summary")
-                        if let summary = model.summary, !summary.isEmpty {
-                            MarkdownText(text: summary)
-                        } else {
-                            Text("No summary was reported.").font(.pb(.body)).foregroundStyle(.secondary)
+            if model.isLoading {
+                SkeletonRows(count: 4, showsBadge: false)
+                    .padding(.top, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(shown) { item in
+                            TimelineRow(model: TimelineRowModel(item: item, start: model.task.startedAt, live: model.task.status.isRunning))
                         }
-                    } else {
-                        Text("Still working… the final summary shows here when \(model.task.backend) finishes.")
-                            .font(.pb(.body))
-                            .foregroundStyle(.secondary)
+                        if model.items.count > shown.count {
+                            Button("Show all \(model.items.count) steps") { showAll = true }.buttonStyle(.link).font(.pb(.secondary))
+                        }
+                        Divider()
+                        if model.task.status.isTerminal {
+                            SectionLabel(text: "Final summary")
+                            if let summary = model.summary, !summary.isEmpty {
+                                MarkdownText(text: summary)
+                            } else {
+                                Text("No summary was reported.").font(.pb(.body)).foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text("Still working… the final summary shows here when \(model.task.backend) finishes.")
+                                .font(.pb(.body))
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .padding(.bottom, 12)
                 }
-                .padding(.bottom, 12)
             }
         }
         .padding(12)
@@ -112,7 +122,21 @@ struct ParallelColumnView: View {
     ParallelColumnView(model: ParallelColumnModel(
         id: "abc123", task: task, title: "Fix the login bug", metaLine: "claude · effort low",
         isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        items: [PreviewFixtures.textItem("Looked at the failing test.")],
+        items: [PreviewFixtures.textItem("Looked at the failing test.")], isLoading: false,
+        summary: nil, onTapTakeover: {}, onTapOpenTask: {}
+    ))
+    .frame(width: 380, height: 500)
+}
+
+#Preview("Loading column") {
+    let task = TaskInfo(.object([
+        "task_id": .string("abc123"), "backend": .string("claude"), "status": .string("running"),
+        "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-2)))
+    ]))!
+    ParallelColumnView(model: ParallelColumnModel(
+        id: "abc123", task: task, title: "Fix the login bug", metaLine: "claude · effort low",
+        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+        items: [], isLoading: true,
         summary: nil, onTapTakeover: {}, onTapOpenTask: {}
     ))
     .frame(width: 380, height: 500)

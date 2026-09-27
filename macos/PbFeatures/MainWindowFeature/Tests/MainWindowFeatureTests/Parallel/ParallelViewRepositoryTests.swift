@@ -135,6 +135,22 @@ import Testing
         #expect(sut.prompt(for: "abc123") == "Fix the bug")
     }
     
+    @Test func givenEventsAvailabilityQueries_whenCalled_thenTheyForwardToEventStreamRepository() {
+        // given — Monitor piece 12, Design point 4: mirrors `TaskDetailViewRepositoryTests`'s
+        // identical case for `TaskDetailUseCase`.
+        let events = MockEventStreamRepository()
+        given(events).eventsAvailability(for: .value("abc123")).willReturn(.available)
+        given(events).eventsAvailabilityPublisher(for: .value("abc123")).willReturn(Just(EventAvailability.available).eraseToAnyPublisher())
+        let sut = ParallelViewRepository(eventStreamRepository: events)
+
+        // when / then
+        #expect(sut.eventsAvailability(for: "abc123") == .available)
+        verify(events).eventsAvailability(for: .value("abc123")).called(1)
+        verify(events).eventsAvailabilityPublisher(for: .value("abc123")).called(0)
+        _ = sut.eventsAvailabilityPublisher(for: "abc123")
+        verify(events).eventsAvailabilityPublisher(for: .value("abc123")).called(1)
+    }
+
     @Test func givenBeginTakeover_whenCalled_thenItForwardsToTheTakeoverService() {
         // given
         let takeover = MockTakeoverService()

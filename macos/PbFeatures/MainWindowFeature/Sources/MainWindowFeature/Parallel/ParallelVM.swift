@@ -39,7 +39,14 @@ protocol ParallelUseCase: Sendable {
     func items(for taskID: String) -> [TimelineItem]
     func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never>
     func prompt(for taskID: String) -> String?
-    
+    /// Whether the member's event log could actually be read the last time it was tailed (Monitor
+    /// piece 12, Design point 4) — mirrors `TaskDetailUseCase.eventsAvailability(for:)`/
+    /// `eventsAvailabilityPublisher(for:)`, backed by the same `EventStreamRepository`, so a column
+    /// can tell "nothing has happened yet" apart from "there is no log to read at all" and show a
+    /// skeleton only for the former.
+    func eventsAvailability(for taskID: String) -> EventAvailability
+    func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never>
+
     func runningInSubtrees(of ids: [String]) -> [String]
     func cancelAll(_ ids: [String]) async
     
@@ -60,11 +67,21 @@ protocol ParallelRouting: Sendable {
 
 // MARK: - ParallelLayout
 
-/// The column-width rule (F4-40): `max(360, 900 / memberCount)`. A pure function so it is testable
-/// without a SwiftUI rendering harness.
+/// The column-width rule (Monitor piece 12, Design point 3): columns fill the available width rather
+/// than a fixed 900pt budget, so there is no empty band on the right when the window is wide — with a
+/// 360pt floor, below which columns keep their old fixed width and the row scrolls horizontally
+/// instead of squeezing further. A pure function so it is testable without a SwiftUI rendering
+/// harness.
 enum ParallelLayout {
-    static func columnWidth(memberCount: Int) -> CGFloat {
-        max(360, 900 / CGFloat(max(1, memberCount)))
+    /// The width of the hairline `Divider` drawn after every column (`ParallelView`'s `ForEach`) —
+    /// subtracted from `availableWidth` before dividing, so `memberCount` columns plus their dividers
+    /// together account for the whole row rather than overflowing it by a few points.
+    static let dividerWidth: CGFloat = 1
+
+    static func columnWidth(memberCount: Int, availableWidth: CGFloat) -> CGFloat {
+        let count = max(1, memberCount)
+        let usableWidth = max(0, availableWidth - CGFloat(count) * dividerWidth)
+        return max(360, usableWidth / CGFloat(count))
     }
 }
 
@@ -95,8 +112,10 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private let routing: any ParallelRouting
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var itemCancellables: [String: AnyCancellable] = [:]
+    @ObservationIgnored private var availabilityCancellables: [String: AnyCancellable] = [:]
     @ObservationIgnored private var leases: [String: any EventStreamLease] = [:]
     @ObservationIgnored private var itemsByTask: [String: [TimelineItem]] = [:]
+    @ObservationIgnored private var availabilityByTask: [String: EventAvailability] = [:]
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored private var latestTasks: [TaskInfo] = []
     @ObservationIgnored private var latestSnapshots: [String: TaskInfo] = [:]
@@ -124,9 +143,11 @@ final class ParallelVM: ParallelViewModel {
     func didDisappear() {
         cancellables.removeAll()
         itemCancellables.removeAll()
+        availabilityCancellables.removeAll()
         for lease in leases.values { lease.release() }
         leases.removeAll()
         itemsByTask.removeAll()
+        availabilityByTask.removeAll()
         memberIDs.removeAll()
         didSubscribe = false
     }
@@ -221,10 +242,14 @@ final class ParallelVM: ParallelViewModel {
         recompute()
     }
     
+    /// Two independent subscriptions, deliberately not combined into one: a tailer can append new
+    /// items with no availability change (and vice versa) — see `TaskDetailVM.acquireMemberLease`'s
+    /// identical reasoning.
     private func acquireLease(_ taskID: String) {
         guard leases[taskID] == nil else { return }
         leases[taskID] = useCase.acquireEventLease(taskID)
         itemsByTask[taskID] = useCase.items(for: taskID)
+        availabilityByTask[taskID] = useCase.eventsAvailability(for: taskID)
         itemCancellables[taskID] = useCase.itemsPublisher(for: taskID)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] items in
@@ -232,14 +257,24 @@ final class ParallelVM: ParallelViewModel {
                 itemsByTask[taskID] = items
                 recompute()
             }
+        availabilityCancellables[taskID] = useCase.eventsAvailabilityPublisher(for: taskID)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] availability in
+                guard let self else { return }
+                availabilityByTask[taskID] = availability
+                recompute()
+            }
     }
-    
+
     private func releaseLease(_ taskID: String) {
         leases[taskID]?.release()
         leases[taskID] = nil
         itemCancellables[taskID]?.cancel()
         itemCancellables[taskID] = nil
+        availabilityCancellables[taskID]?.cancel()
+        availabilityCancellables[taskID] = nil
         itemsByTask[taskID] = nil
+        availabilityByTask[taskID] = nil
     }
     
     /// Rebuilds every column from the freshest available state — always re-reading `useCase.task(_:)`
@@ -258,6 +293,12 @@ final class ParallelVM: ParallelViewModel {
         let metaLine = [task.backend, task.reasoningEffort.map { "effort \($0)" }, task.sessionID.map { "session \($0.prefix(8))" }]
             .compactMap(\.self)
             .joined(separator: " · ")
+        let items = itemsByTask[taskID] ?? []
+        // Monitor piece 12, Design point 4: the same rule `TimelinePaneModel.isLoading` uses — a
+        // shimmer only while this member has no real content yet AND its own event stream is still
+        // `.loading`; never once items exist, and never for `.unavailable` (that keeps the column's
+        // honest empty state instead).
+        let isLoading = items.isEmpty && (availabilityByTask[taskID] ?? .loading) == .loading
 
         return ParallelColumnModel(
             id: taskID,
@@ -268,7 +309,8 @@ final class ParallelVM: ParallelViewModel {
             outcomeMessage: latestOutcomes[taskID],
             showPrompt: showPrompt,
             prompt: useCase.prompt(for: taskID),
-            items: itemsByTask[taskID] ?? [],
+            items: items,
+            isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
             summary: latestSnapshots[taskID]?.summary,
             onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: taskID) },
