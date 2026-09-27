@@ -215,6 +215,33 @@ extension SidebarVMTests {
         #expect(sut.installBannerModel?.primaryTitle == nil)
     }
 
+    @Test func givenASuccessBannerWithNoTasks_whenDismissed_thenTheEmptyStateMessageAppears() async {
+        // given — Code review round 1, finding 4: `emptyStateMessage` depends on `installBannerModel`
+        // (Review round 1 item 3's precedence gates on it), so a banner change — here, dismissal —
+        // must recompute it, not leave it stuck at whatever an earlier, unrelated recompute left.
+        let harness = makeSUT(installState: .installed)
+        let sut = harness.sut
+        let tasksSubject = harness.tasksSubject
+        let hasListedSubject = harness.hasListedSubject
+        let installStateSubject = harness.installStateSubject
+        sut.didAppear()
+        await waitUntil { sut.installBannerModel != nil }
+        hasListedSubject.send(true)
+        tasksSubject.send([])
+        await waitUntil { sut.isConnected }
+        #expect(sut.emptyStateMessage == nil, "the success banner still owns the space")
+
+        // when — dismissing resets the install state to `.idle` (mirroring what
+        // `InstallRepositoryImpl.reset()` really does), clearing the banner.
+        sut.didTapInstallBannerDismiss()
+        installStateSubject.send(.idle)
+
+        // then
+        await waitUntil { sut.emptyStateMessage != nil }
+        #expect(sut.installBannerModel == nil)
+        #expect(sut.emptyStateMessage == "No tasks yet. Tasks started through polybridge appear here.")
+    }
+
     @Test func givenInstalledWithACurrentListError_whenShown_thenTheErrorOutranksTheSuccessBanner() async {
         // given — R2-2: completion requires the barrier refresh to succeed, and any current tool
         // error afterward always outranks the success banner.

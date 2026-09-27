@@ -46,6 +46,8 @@ import Testing
         sut.orderOutWindow = { orderedOutWindows.value.append($0) }
         sut.setNotificationDelegate = { _ in }
         sut.startTaskListing = {}
+        sut.startBackendsCatalog = {}
+        sut.notifyBackendsAppActive = {}
         sut.openWindowOnStart = { true }
         
         return (sut, firedScheduled, orderedOutWindows, nowBox)
@@ -222,7 +224,39 @@ import Testing
         // then
         #expect(startCalls.value == 1)
     }
-    
+
+    // MARK: - Monitor piece 6: the backends catalog's own startup fetch and activation refresh
+
+    @Test func givenAppLaunch_whenStarting_thenTheBackendsCatalogStartsOnce() {
+        // given — same shape as `startTaskListing` above: the coalescing/discovery ordering itself is
+        // `PbRepository.BackendsRepositoryImpl.start()`'s own tested contract; this proves only that
+        // the app shell calls it once at launch.
+        let (sut, _, _, _) = makeSUT()
+        let startCalls = LockedBox(0)
+        sut.startBackendsCatalog = { startCalls.value += 1 }
+
+        // when
+        sut.applicationDidFinishLaunching(Notification(name: .init("launch")))
+
+        // then
+        #expect(startCalls.value == 1)
+    }
+
+    @Test func givenAppActivation_whenObserved_thenItForwardsToTheBackendsCatalog() {
+        // given — the 60 s bound is `BackendsRepositoryImpl`'s own concern; this only proves the app
+        // shell forwards every activation unconditionally.
+        let (sut, _, _, _) = makeSUT()
+        let activateCalls = LockedBox(0)
+        sut.notifyBackendsAppActive = { activateCalls.value += 1 }
+
+        // when
+        sut.applicationDidBecomeActive(Notification(name: .init("didBecomeActive")))
+        sut.applicationDidBecomeActive(Notification(name: .init("didBecomeActive")))
+
+        // then
+        #expect(activateCalls.value == 2)
+    }
+
     // MARK: - MS-APP-3: notification click
     
     //

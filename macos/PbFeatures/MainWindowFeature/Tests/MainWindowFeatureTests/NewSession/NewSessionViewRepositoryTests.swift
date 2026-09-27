@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 @testable import MainWindowFeature
 import Mockable
@@ -56,5 +57,29 @@ import Testing
         
         // then
         #expect(id == "new-id")
+    }
+
+    // MARK: - Backend catalog (Monitor piece 6)
+
+    @Test func givenBackendCatalogValues_whenReadOrSubscribed_thenTheyPassThroughToBackendsRepository() {
+        // given
+        let backends = MockBackendsRepository()
+        let catalog = BackendCatalog(entries: [BackendCatalogEntry(backend: "vibe", installed: true)], state: .available)
+        given(backends).catalog.willReturn(catalog)
+        let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
+        given(backends).catalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
+        let sut = NewSessionViewRepository(backendsRepository: backends)
+
+        // then
+        #expect(sut.backendCatalog == catalog)
+
+        var received: BackendCatalog?
+        let cancellable = sut.backendCatalogPublisher().sink { received = $0 }
+        let updated = BackendCatalog(entries: [], state: .loading)
+        catalogSubject.send(updated)
+
+        // then
+        #expect(received == updated)
+        cancellable.cancel()
     }
 }

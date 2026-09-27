@@ -53,6 +53,7 @@ struct AppModulesRegistryTests {
         #expect(!(GlobalValues.eventStreamRepository is NullEventStreamRepository))
         #expect(!(GlobalValues.taskSnapshotRepository is NullTaskSnapshotRepository))
         #expect(!(GlobalValues.takeoverService is NullTakeoverService))
+        #expect(!(GlobalValues.backendsRepository is NullBackendsRepository))
         #expect(GlobalValues.settingsFeatureFactory is SettingsFeatureFactoryImpl)
         #expect(GlobalValues.menuBarFeatureFactory is MenuBarFeatureFactoryImpl)
         #expect(GlobalValues.mainWindowFeatureFactory is MainWindowFeatureFactoryImpl)
@@ -75,6 +76,7 @@ private struct GlobalValuesSnapshot {
     private let harnessRepository = GlobalValues.harnessRepository
     private let scheduling = GlobalValues.scheduling
     private let takeoverService = GlobalValues.takeoverService
+    private let backendsRepository = GlobalValues.backendsRepository
     private let settingsFeatureFactory = GlobalValues.settingsFeatureFactory
     private let menuBarFeatureFactory = GlobalValues.menuBarFeatureFactory
     private let mainWindowFeatureFactory = GlobalValues.mainWindowFeatureFactory
@@ -91,6 +93,7 @@ private struct GlobalValuesSnapshot {
             .environment(\.harnessRepository, harnessRepository)
             .environment(\.scheduling, scheduling)
             .environment(\.takeoverService, takeoverService)
+            .environment(\.backendsRepository, backendsRepository)
             .environment(\.settingsFeatureFactory, settingsFeatureFactory)
             .environment(\.menuBarFeatureFactory, menuBarFeatureFactory)
             .environment(\.mainWindowFeatureFactory, mainWindowFeatureFactory)

@@ -48,6 +48,17 @@ public struct CtlClient: Sendable {
         }
     }
 
+    /// `polybridge-ctl backends --json` — the registered backends and whether each is on PATH, in
+    /// registry order. An older ctl without this command surfaces as `.unsupportedCommand`, which
+    /// `CtlDocument.decode` already classifies before this ever sees a `.error` document — the same
+    /// path `list()`/`status(_:)` rely on.
+    public func backends() async -> Result<[BackendAvailability], ToolError> {
+        await call("backends").requiringSuccess().flatMap { document in
+            if case .backends(let items) = document { return .success(items) }
+            return .failure(.unreadable(tool: "polybridge-ctl", exitCode: 0, stderr: "backends returned no array"))
+        }
+    }
+
     public func send(_ taskID: String, text: String) async -> Result<[String: JSONValue], ToolError> {
         await result("send", positionals: [taskID, text])
     }

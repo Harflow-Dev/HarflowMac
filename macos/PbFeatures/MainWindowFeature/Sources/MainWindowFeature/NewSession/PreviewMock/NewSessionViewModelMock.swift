@@ -19,8 +19,13 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     var message: String
     var errorText: String?
     var isStarting: Bool
+    var agentOptions: [BackendTab]
+    var agentNotFoundNote: String?
+    var agentListUnavailableNote: String?
 
-    var canStart: Bool { !isStarting && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var canStart: Bool {
+        !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     init(
         backend: String = "claude",
@@ -28,7 +33,10 @@ final class NewSessionViewModelMock: NewSessionViewModel {
         freedom: String = "read_only",
         message: String = "",
         errorText: String? = nil,
-        isStarting: Bool = false
+        isStarting: Bool = false,
+        agentOptions: [BackendTab] = ["claude", "codex", "opencode", "vibe"].map { BackendTab(id: $0, isNotFound: false) },
+        agentNotFoundNote: String? = nil,
+        agentListUnavailableNote: String? = nil
     ) {
         self.backend = backend
         self.repo = repo
@@ -36,6 +44,9 @@ final class NewSessionViewModelMock: NewSessionViewModel {
         self.message = message
         self.errorText = errorText
         self.isStarting = isStarting
+        self.agentOptions = agentOptions
+        self.agentNotFoundNote = agentNotFoundNote
+        self.agentListUnavailableNote = agentListUnavailableNote
     }
 
     func didAppear() {}

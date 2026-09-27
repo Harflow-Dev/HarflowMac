@@ -116,6 +116,33 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     }
 }
 
+/// One backend as `polybridge-ctl backends --json` reports it: its registered name, its binary, and
+/// whether that binary is on the login PATH the Monitor runs `polybridge-ctl` with. `installed` is
+/// `nil` — unknown — whenever the field is missing or not a bool, never silently `false`: a wrong
+/// or absent answer must never read as a confirmed "not found" (Code review round 1, finding 1).
+public struct BackendAvailability: Equatable, Sendable {
+    public let backend: String
+    public let binary: String
+    public let installed: Bool?
+
+    public init(backend: String, binary: String, installed: Bool?) {
+        self.backend = backend
+        self.binary = binary
+        self.installed = installed
+    }
+
+    public init?(_ value: JSONValue) {
+        guard let object = value.objectValue,
+              let backend = object["backend"]?.stringValue, !backend.isEmpty,
+              let binary = object["binary"]?.stringValue else { return nil }
+        self.backend = backend
+        self.binary = binary
+        // `.boolValue` itself already answers `nil` for a missing key or a non-bool value — no
+        // `?? false` fallback here, so either case reads as "unknown," never "confirmed absent."
+        installed = object["installed"]?.boolValue
+    }
+}
+
 public enum ISODate {
     /// Python's `datetime.isoformat()` with and without fractional seconds, and with a `+00:00`
     /// offset (which `ISO8601DateFormatter` accepts).
@@ -258,6 +285,7 @@ public enum TakeoverRefusal {
 public enum CtlDocument: Equatable, Sendable {
     case tasks([TaskInfo])
     case task(TaskInfo)
+    case backends([BackendAvailability])
     case result([String: JSONValue])
     case unknown([String: JSONValue])
     case error(code: String, message: String)
@@ -287,19 +315,43 @@ public enum CtlDocument: Equatable, Sendable {
             }
             return .success(.error(code: code, message: message))
         }
-        if let tasks = document["tasks"]?.arrayValue {
-            return .success(.tasks(tasks.compactMap(TaskInfo.init)))
-        }
-        if let task = document["task"], let info = TaskInfo(task) {
-            return .success(.task(info))
-        }
-        if let result = document["result"]?.objectValue {
-            return .success(.result(result))
-        }
-        if let unknown = document["unknown"]?.objectValue {
-            return .success(.unknown(unknown))
+        if let known = knownDocument(document) {
+            return .success(known)
         }
         return .failure(.unreadable(tool: tool, exitCode: exitCode, stderr: "unexpected document: \(JSONValue.object(document).rendered())"))
+    }
+
+    /// The document shapes that carry no error/version concerns of their own — pulled out of
+    /// `decode(stdout:stderr:exitCode:command:)` so that function's own branching (the parts that
+    /// actually need `tool`/`exitCode`/`command`) stays readable.
+    private static func knownDocument(_ document: [String: JSONValue]) -> CtlDocument? {
+        if let tasks = document["tasks"]?.arrayValue {
+            return .tasks(tasks.compactMap(TaskInfo.init))
+        }
+        if let task = document["task"], let info = TaskInfo(task) {
+            return .task(info)
+        }
+        if let backends = document["backends"]?.arrayValue {
+            // A malformed entry (missing `backend`/`binary`) makes the whole document malformed —
+            // never silently dropped via `compactMap`, which could otherwise clear New Session's
+            // selection or disable Start on a partial answer (Code review round 1, finding 1). A
+            // non-list `backends` value falls through this `if let` entirely and reaches the same
+            // "unexpected document" failure below.
+            var entries: [BackendAvailability] = []
+            entries.reserveCapacity(backends.count)
+            for item in backends {
+                guard let entry = BackendAvailability(item) else { return nil }
+                entries.append(entry)
+            }
+            return .backends(entries)
+        }
+        if let result = document["result"]?.objectValue {
+            return .result(result)
+        }
+        if let unknown = document["unknown"]?.objectValue {
+            return .unknown(unknown)
+        }
+        return nil
     }
 
     /// The document on stdout. polybridge prints exactly one; tolerate leading blank lines.

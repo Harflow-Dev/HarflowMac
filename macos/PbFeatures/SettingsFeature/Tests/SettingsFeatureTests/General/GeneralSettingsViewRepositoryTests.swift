@@ -12,9 +12,12 @@ import Testing
     private func makeSUT(
         settings: MockSettingsRepository = MockSettingsRepository(),
         toolEnvironment: MockToolEnvironmentRepository = MockToolEnvironmentRepository(),
-        taskList: MockTaskListRepository = MockTaskListRepository()
+        taskList: MockTaskListRepository = MockTaskListRepository(),
+        backends: MockBackendsRepository = MockBackendsRepository()
     ) -> GeneralSettingsViewRepository {
-        GeneralSettingsViewRepository(settingsRepository: settings, toolEnvironmentRepository: toolEnvironment, taskListRepository: taskList)
+        GeneralSettingsViewRepository(
+            settingsRepository: settings, toolEnvironmentRepository: toolEnvironment, taskListRepository: taskList, backendsRepository: backends
+        )
     }
     
     @Test func givenALocatedTool_whenResolved_thenItReturnsFound() {
@@ -49,16 +52,20 @@ import Testing
         // given
         let settings = MockSettingsRepository()
         let taskList = MockTaskListRepository()
+        let backends = MockBackendsRepository()
         given(settings).setToolDirectory(.value("/opt/homebrew/bin")).willReturn()
         given(taskList).settingsChanged().willReturn()
-        let sut = makeSUT(settings: settings, taskList: taskList)
-        
+        given(backends).settingsChanged().willReturn()
+        let sut = makeSUT(settings: settings, taskList: taskList, backends: backends)
+
         // when
         sut.setToolDirectory("/opt/homebrew/bin")
-        
-        // then — decision 11/F4-05: writes the setting, then refreshes the list only.
+
+        // then — decision 11/F4-05: writes the setting, then refreshes the list (and the backends
+        // catalog, Monitor piece 6) only.
         verify(settings).setToolDirectory(.value("/opt/homebrew/bin")).called(1)
         verify(taskList).settingsChanged().called(1)
+        verify(backends).settingsChanged().called(1)
     }
     
     @Test func givenTheRepositoryProperties_whenRead_thenTheyPassThroughToSettingsRepository() {

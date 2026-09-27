@@ -24,11 +24,15 @@ protocol SidebarViewModel: ViewModel {
     var parallelGroups: [ParallelGroup] { get }
     var recentRows: [TaskRowModel] { get }
     var listErrorMessage: String? { get }
-    var isEmptyState: Bool { get }
+    /// The list body's empty-state message, or `nil` when there's real content to show (Monitor
+    /// piece 6's precedence rules — see `SidebarVM.computeEmptyStateMessage()`).
+    var emptyStateMessage: String? { get }
     var isConnected: Bool { get }
     var connectionLine: String { get }
-    var availableBackends: [String] { get }
+    var backendTabs: [BackendTab] { get }
     var selectedBackend: String { get }
+    var focusedBackendTab: String { get }
+    var catalogUnavailableNote: String? { get }
     var searchQuery: String { get }
     var selection: MonitorDestination? { get }
     /// The install/update banner, or `nil` when nothing needs surfacing — shown in place of the
@@ -39,6 +43,8 @@ protocol SidebarViewModel: ViewModel {
     func didDisappear()
     func didChangeSearchQuery(_ text: String)
     func didSelectBackendFilter(_ backend: String)
+    func didPressBackendTabArrow(_ direction: MoveCommandDirection)
+    func didPressBackendTabConfirm()
     func didSelect(_ destination: MonitorDestination?)
     func didTapNewSession()
     func didTapInstallBannerPrimary()
@@ -83,12 +89,17 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 .controlSize(.large)
                 TextField("Search tasks", text: Binding(get: { viewModel.searchQuery }, set: { viewModel.didChangeSearchQuery($0) }))
                     .textFieldStyle(.roundedBorder)
-                Picker("Backend", selection: Binding(get: { viewModel.selectedBackend }, set: { viewModel.didSelectBackendFilter($0) })) {
-                    Text("All").tag("all")
-                    ForEach(viewModel.availableBackends, id: \.self) { Text($0).tag($0) }
+                BackendTabRow(
+                    tabs: viewModel.backendTabs,
+                    selectedID: viewModel.selectedBackend,
+                    focusedID: viewModel.focusedBackendTab,
+                    onSelect: { viewModel.didSelectBackendFilter($0) },
+                    onArrow: { viewModel.didPressBackendTabArrow($0) },
+                    onConfirm: { viewModel.didPressBackendTabConfirm() }
+                )
+                if let note = viewModel.catalogUnavailableNote {
+                    Text(note).font(.pb(.caption)).foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
             }
             .padding(10)
             
@@ -120,10 +131,13 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 if !viewModel.recentRows.isEmpty {
                     Section { rows(viewModel.recentRows) } header: { SectionLabel(text: "Recent") }
                 }
-                if viewModel.isEmptyState {
-                    Text("No tasks yet. Tasks started through polybridge appear here.")
+                if let message = viewModel.emptyStateMessage {
+                    Text(message)
                         .font(.pb(.body))
                         .foregroundStyle(.secondary)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .listStyle(.sidebar)

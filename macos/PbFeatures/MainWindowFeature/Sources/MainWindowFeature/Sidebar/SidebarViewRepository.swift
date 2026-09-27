@@ -20,17 +20,20 @@ final class SidebarViewRepository: SidebarUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
+    @GlobalEnvironment(\.backendsRepository) private var backendsRepository
 
     // MARK: - Init
 
     init(
         taskListRepository: (any TaskListRepository)? = nil,
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
-        installRepository: (any InstallRepository)? = nil
+        installRepository: (any InstallRepository)? = nil,
+        backendsRepository: (any BackendsRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
         if let installRepository { self.installRepository = installRepository }
+        if let backendsRepository { self.backendsRepository = backendsRepository }
     }
 
     // MARK: - SidebarUseCase Methods
@@ -46,6 +49,11 @@ final class SidebarViewRepository: SidebarUseCase, @unchecked Sendable {
     var connectionLine: String { taskListRepository.connectionLine }
 
     func title(_ taskID: String) -> String { taskListRepository.title(taskID) }
+
+    // MARK: Backend catalog (Monitor piece 6)
+
+    var backendCatalog: BackendCatalog { backendsRepository.catalog }
+    func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { backendsRepository.catalogPublisher() }
 
     // MARK: Install
 

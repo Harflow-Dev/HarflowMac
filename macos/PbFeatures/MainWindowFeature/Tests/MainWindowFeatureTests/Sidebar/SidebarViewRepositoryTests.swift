@@ -145,6 +145,31 @@ import Testing
         #expect(need == .incomplete)
     }
 
+    // MARK: - Backend catalog (Monitor piece 6)
+
+    @Test func givenBackendCatalogValues_whenReadOrSubscribed_thenTheyPassThroughToBackendsRepository() {
+        // given
+        let backends = MockBackendsRepository()
+        let catalog = BackendCatalog(entries: [BackendCatalogEntry(backend: "claude", installed: true)], state: .available)
+        given(backends).catalog.willReturn(catalog)
+        let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
+        given(backends).catalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
+        let sut = SidebarViewRepository(backendsRepository: backends)
+
+        // then — the synchronous snapshot passes through.
+        #expect(sut.backendCatalog == catalog)
+
+        // when — so does the publisher.
+        var received: BackendCatalog?
+        let cancellable = sut.backendCatalogPublisher().sink { received = $0 }
+        let updated = BackendCatalog(entries: [], state: .degraded)
+        catalogSubject.send(updated)
+
+        // then
+        #expect(received == updated)
+        cancellable.cancel()
+    }
+
     @Test func givenANonInstallToolError_whenInstallNeedIsComputed_thenItIsNil() {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()

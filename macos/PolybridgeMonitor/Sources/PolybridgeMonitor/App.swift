@@ -62,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     
     var startTaskListing: () -> Void = { GlobalValues.taskListRepository.start() }
+    var startBackendsCatalog: () -> Void = { GlobalValues.backendsRepository.start() }
+    var notifyBackendsAppActive: () -> Void = { GlobalValues.backendsRepository.appDidBecomeActive() }
     var openWindowOnStart: () -> Bool = { GlobalValues.settingsRepository.openWindowOnStart }
 
     // MARK: - Single instance (Monitor piece 9) seams
@@ -181,6 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // tested by `PbRepository.TaskListRepositoryImpl.start()`. The app shell's own job is only to
         // call it once at launch, proven by `AppDelegateTests`.
         startTaskListing()
+        // Monitor piece 6: the backends catalog's own startup fetch, exactly once — implemented and
+        // tested by `PbRepository.BackendsRepositoryImpl.start()`.
+        startBackendsCatalog()
         // SwiftUI opens the main window at launch. When the launch came from a task starting
         // (`open -g polybridge-monitor://task/<id>`) and the user asked not to have the window
         // come forward, put it away again; a launch by hand keeps it.
@@ -223,6 +228,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     
     // A regular Dock app that also has a menu bar item keeps running after its window closes.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Monitor piece 6's "app activation" refresh point (Review round 1 item 1): fires on every
+    /// activation, unconditionally — the 60 s bound lives in `BackendsRepositoryImpl` itself, not
+    /// here, so this stays a plain forwarding call with nothing to test beyond "it forwards."
+    func applicationDidBecomeActive(_ notification: Notification) {
+        notifyBackendsAppActive()
+    }
 
     /// Decision 3's reopen handling: decided from the `mainWindows()` seam, never from `hasVisibleWindows`
     /// (that flag is `true` when only Settings or the menu-bar panel is open, which is not a main

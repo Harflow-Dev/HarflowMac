@@ -105,6 +105,12 @@ extension SidebarVM {
                 installBannerModel = nil
             }
         }
+        // The empty-state message's own precedence gates on `installBannerModel == nil` (Review
+        // round 1 item 3), so a banner appearing or clearing must recompute it too — otherwise
+        // dismissing a success banner over an empty list left the empty-state text missing until
+        // some unrelated event (a new listing, a search keystroke) happened to recompute it (Code
+        // review round 1, finding 4).
+        emptyStateMessage = computeEmptyStateMessage()
     }
 
     private static func runningTitle(_ stage: InstallStage) -> String {

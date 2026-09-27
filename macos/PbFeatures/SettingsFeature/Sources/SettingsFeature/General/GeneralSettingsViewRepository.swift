@@ -20,17 +20,20 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Se
     @GlobalEnvironment(\.settingsRepository) private var settingsRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
-    
+    @GlobalEnvironment(\.backendsRepository) private var backendsRepository
+
     // MARK: - Init
-    
+
     init(
         settingsRepository: (any SettingsRepository)? = nil,
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
-        taskListRepository: (any TaskListRepository)? = nil
+        taskListRepository: (any TaskListRepository)? = nil,
+        backendsRepository: (any BackendsRepository)? = nil
     ) {
         if let settingsRepository { self.settingsRepository = settingsRepository }
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
         if let taskListRepository { self.taskListRepository = taskListRepository }
+        if let backendsRepository { self.backendsRepository = backendsRepository }
     }
     
     // MARK: - GeneralSettingsUseCase Properties
@@ -63,6 +66,7 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Se
     func setToolDirectory(_ value: String) {
         settingsRepository.setToolDirectory(value)
         taskListRepository.settingsChanged()
+        backendsRepository.settingsChanged()
     }
     
     func setOpenWindowOnStart(_ value: Bool) { settingsRepository.setOpenWindowOnStart(value) }

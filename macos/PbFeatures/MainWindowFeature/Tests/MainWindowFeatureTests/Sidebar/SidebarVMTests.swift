@@ -56,9 +56,11 @@ import Testing
         let installDestinationBox: Box<String?>
         let revealSubject: PassthroughSubject<PendingReveal, Never>
         let pendingRevealBox: Box<PendingReveal?>
+        let catalogSubject: PassthroughSubject<BackendCatalog, Never>
+        let catalogBox: Box<BackendCatalog>
     }
 
-    func makeSUT(connectionLine: String = "connecting…", installState: InstallState = .idle) -> SUT {
+    func makeSUT(connectionLine: String = "connecting…", installState: InstallState = .idle, catalog: BackendCatalog = .empty) -> SUT {
         let useCase = MockSidebarUseCase()
         let routing = MockSidebarRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
@@ -76,6 +78,8 @@ import Testing
         let installDestinationBox = Box<String?>(nil)
         let revealSubject = PassthroughSubject<PendingReveal, Never>()
         let pendingRevealBox = Box<PendingReveal?>(nil)
+        let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
+        let catalogBox = Box<BackendCatalog>(catalog)
 
         given(useCase).connectionLine.willReturn(connectionLine)
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
@@ -83,6 +87,8 @@ import Testing
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(titlesSubject.eraseToAnyPublisher())
         given(useCase).title(.any).willProduce { titlesBox.value[$0] ?? "Task \($0.prefix(8))" }
+        given(useCase).backendCatalog.willProduce { catalogBox.value }
+        given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(routing).selection.willProduce { routingSelectionBox.value }
         given(routing).selectionPublisher().willReturn(selectionSubject.eraseToAnyPublisher())
         given(routing).select(.any).willReturn()
@@ -113,7 +119,7 @@ import Testing
             titlesBox: titlesBox, routingSelectionBox: routingSelectionBox, installStateSubject: installStateSubject,
             lastCheckMessageSubject: lastCheckMessageSubject, installAnywayBlockedMessageSubject: installAnywayBlockedMessageSubject,
             installStateBox: installStateBox, installNeedBox: installNeedBox, installDestinationBox: installDestinationBox,
-            revealSubject: revealSubject, pendingRevealBox: pendingRevealBox
+            revealSubject: revealSubject, pendingRevealBox: pendingRevealBox, catalogSubject: catalogSubject, catalogBox: catalogBox
         )
     }
     
@@ -184,8 +190,8 @@ import Testing
         tasksSubject.send([])
         
         // then
-        await waitUntil { sut.isEmptyState }
-        #expect(sut.isEmptyState)
+        await waitUntil { sut.emptyStateMessage != nil }
+        #expect(sut.emptyStateMessage == "No tasks yet. Tasks started through polybridge appear here.")
     }
     
     @Test func givenAListErrorThatIsNotAnInstallNeed_whenListed_thenTheEmptyStateDoesNotShowAndTheMessageForwards() async {
@@ -205,7 +211,7 @@ import Testing
 
         // then
         await waitUntil { sut.listErrorMessage != nil }
-        #expect(sut.isEmptyState == false)
+        #expect(sut.emptyStateMessage == nil)
         #expect(sut.listErrorMessage == error.message)
         #expect(sut.isConnected == false)
         #expect(sut.installBannerModel == nil)
@@ -234,7 +240,7 @@ import Testing
 
         // then
         await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.isEmptyState == false)
+        #expect(sut.emptyStateMessage == nil)
         #expect(sut.isConnected == false)
         #expect(sut.listErrorMessage == nil)
         #expect(sut.installBannerModel?.title == "polybridge isn't installed")

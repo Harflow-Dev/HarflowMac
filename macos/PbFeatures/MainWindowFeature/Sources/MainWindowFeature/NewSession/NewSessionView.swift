@@ -16,7 +16,7 @@ import SwiftUI
 /// View model protocol for the New Session sheet.
 @MainActor
 protocol NewSessionViewModel: ViewModel {
-    
+
     var backend: String { get }
     var repo: String { get }
     var freedom: String { get }
@@ -24,6 +24,9 @@ protocol NewSessionViewModel: ViewModel {
     var errorText: String? { get }
     var isStarting: Bool { get }
     var canStart: Bool { get }
+    var agentOptions: [BackendTab] { get }
+    var agentNotFoundNote: String? { get }
+    var agentListUnavailableNote: String? { get }
 
     func didAppear()
     func didDisappear()
@@ -67,12 +70,19 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(text: "Agent")
                 Picker("Agent", selection: Binding(get: { viewModel.backend }, set: { viewModel.didChangeBackend($0) })) {
-                    ForEach(BackendStyle.known, id: \.self) { name in
-                        Text(name).tag(name)
+                    ForEach(viewModel.agentOptions) { option in
+                        Text(option.id)
+                            .tag(option.id)
+                            .accessibilityValue(option.isNotFound ? "not found on PATH" : "")
                     }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                if let note = viewModel.agentListUnavailableNote {
+                    Text(note).font(.pb(.caption)).foregroundStyle(.secondary)
+                } else if let note = viewModel.agentNotFoundNote {
+                    Text(note).font(.pb(.caption)).foregroundStyle(Color.warningFG)
+                }
             }
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(text: "Repository")

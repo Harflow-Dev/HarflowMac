@@ -21,11 +21,13 @@ final class SidebarViewModelMock: SidebarViewModel {
     var parallelGroups: [ParallelGroup]
     var recentRows: [TaskRowModel]
     var listErrorMessage: String?
-    var isEmptyState: Bool
+    var emptyStateMessage: String?
     var isConnected: Bool
     var connectionLine: String
-    var availableBackends: [String]
+    var backendTabs: [BackendTab]
     var selectedBackend: String
+    var focusedBackendTab: String
+    var catalogUnavailableNote: String?
     var searchQuery: String
     var selection: MonitorDestination?
     var installBannerModel: InstallBanner.Model?
@@ -51,11 +53,13 @@ final class SidebarViewModelMock: SidebarViewModel {
             )
         ],
         listErrorMessage: String? = nil,
-        isEmptyState: Bool = false,
+        emptyStateMessage: String? = nil,
         isConnected: Bool = true,
         connectionLine: String = "connected · polybridge-ctl",
-        availableBackends: [String] = ["claude", "codex"],
+        backendTabs: [BackendTab] = [.all, BackendTab(id: "claude", isNotFound: false), BackendTab(id: "codex", isNotFound: false)],
         selectedBackend: String = "all",
+        focusedBackendTab: String = "all",
+        catalogUnavailableNote: String? = nil,
         searchQuery: String = "",
         selection: MonitorDestination? = nil,
         installBannerModel: InstallBanner.Model? = nil
@@ -64,11 +68,13 @@ final class SidebarViewModelMock: SidebarViewModel {
         self.parallelGroups = parallelGroups
         self.recentRows = recentRows
         self.listErrorMessage = listErrorMessage
-        self.isEmptyState = isEmptyState
+        self.emptyStateMessage = emptyStateMessage
         self.isConnected = isConnected
         self.connectionLine = connectionLine
-        self.availableBackends = availableBackends
+        self.backendTabs = backendTabs
         self.selectedBackend = selectedBackend
+        self.focusedBackendTab = focusedBackendTab
+        self.catalogUnavailableNote = catalogUnavailableNote
         self.searchQuery = searchQuery
         self.selection = selection
         self.installBannerModel = installBannerModel
@@ -77,7 +83,9 @@ final class SidebarViewModelMock: SidebarViewModel {
     func didAppear() {}
     func didDisappear() {}
     func didChangeSearchQuery(_ text: String) { searchQuery = text }
-    func didSelectBackendFilter(_ backend: String) { selectedBackend = backend }
+    func didSelectBackendFilter(_ backend: String) { selectedBackend = backend; focusedBackendTab = backend }
+    func didPressBackendTabArrow(_ direction: MoveCommandDirection) {}
+    func didPressBackendTabConfirm() { didSelectBackendFilter(focusedBackendTab) }
     func didSelect(_ destination: MonitorDestination?) { selection = destination }
     func didTapNewSession() {}
     func didTapInstallBannerPrimary() {}

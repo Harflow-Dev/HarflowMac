@@ -31,6 +31,7 @@ public final class Module: PbModule {
         let harness = HarnessRepositoryImpl(toolEnvironment: toolEnvironment)
         let install = InstallRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, settings: settings)
         let takeover = TakeoverServiceImpl(actions: taskAction, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshot)
+        let backends = BackendsRepositoryImpl(toolEnvironment: toolEnvironment, installRepository: install, scheduler: scheduler)
 
         GlobalValues
             .environment(\.scheduling, scheduler)
@@ -44,5 +45,6 @@ public final class Module: PbModule {
             .environment(\.harnessRepository, harness)
             .environment(\.installRepository, install)
             .environment(\.takeoverService, takeover)
+            .environment(\.backendsRepository, backends)
     }
 }

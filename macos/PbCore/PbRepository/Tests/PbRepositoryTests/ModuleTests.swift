@@ -44,5 +44,6 @@ struct ModuleTests {
         #expect(GlobalValues.harnessRepository is HarnessRepositoryImpl)
         #expect(GlobalValues.installRepository is InstallRepositoryImpl)
         #expect(GlobalValues.takeoverService is TakeoverServiceImpl)
+        #expect(GlobalValues.backendsRepository is BackendsRepositoryImpl)
     }
 }

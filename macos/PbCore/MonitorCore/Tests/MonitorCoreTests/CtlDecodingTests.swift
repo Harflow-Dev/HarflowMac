@@ -183,6 +183,93 @@ struct CtlDecodingTests {
     }
 
     @Test
+    func givenABackendsDocument_whenDecoded_thenEveryEntryIsReadInOrderAndUnknownFieldsAreTolerated() {
+        // given — an extra, unrecognised field alongside the three this app reads (Monitor piece 6).
+        let result = decode(
+            #"{"v": 2, "backends": ["#
+                + #"{"backend": "claude", "binary": "claude", "installed": true, "future_field": "x"}, "#
+                + #"{"backend": "codex", "binary": "codex", "installed": false}]}"#,
+            command: "backends"
+        )
+        // when
+        guard case .success(.backends(let entries)) = result else { Issue.record("expected .backends, got \(result)"); return }
+        // then — registry order preserved, exactly as the JSON array listed them.
+        #expect(entries.map(\.backend) == ["claude", "codex"])
+        #expect(entries[0].binary == "claude")
+        #expect(entries[0].installed == true)
+        #expect(entries[1].installed == false)
+    }
+
+    @Test
+    func givenABackendsEntryMissingInstalled_whenDecoded_thenItReadsAsUnknownNeverNotInstalled() {
+        // given / when — Code review round 1, finding 1: a missing `installed` must never read as
+        // "confirmed not found."
+        guard let entry = BackendAvailability(.object(["backend": .string("vibe"), "binary": .string("vibe")])) else {
+            Issue.record("expected a decoded entry")
+            return
+        }
+        // then
+        #expect(entry.installed == nil)
+    }
+
+    @Test
+    func givenABackendsEntryWithANonBoolInstalled_whenDecoded_thenItAlsoReadsAsUnknown() {
+        // given / when — a wrong-typed value is exactly as unhelpful as a missing one.
+        guard let entry = BackendAvailability(.object(["backend": .string("vibe"), "binary": .string("vibe"), "installed": .string("yes")])) else {
+            Issue.record("expected a decoded entry")
+            return
+        }
+        // then
+        #expect(entry.installed == nil)
+    }
+
+    @Test
+    func givenABackendsEntryMissingBackend_whenDecoded_thenTheWholeDocumentIsMalformedNotJustThatEntry() {
+        // given — Code review round 1, finding 1: a malformed entry must never be silently dropped
+        // via `compactMap` (that could clear New Session's selection or disable Start on a partial
+        // answer) — it makes the whole document malformed, which the repository already treats as
+        // degraded.
+        let result = decode(
+            #"{"v": 2, "backends": ["#
+                + #"{"backend": "claude", "binary": "claude", "installed": true}, "#
+                + #"{"binary": "codex", "installed": false}]}"#,
+            command: "backends"
+        )
+        // when / then
+        guard case .failure(.unreadable) = result else { Issue.record("expected .unreadable, got \(result)"); return }
+    }
+
+    @Test
+    func givenANonListBackendsValue_whenDecoded_thenTheDocumentIsMalformed() {
+        // given / when — `backends` present but not an array at all.
+        let result = decode(#"{"v": 2, "backends": {"claude": true}}"#, command: "backends")
+        // then
+        guard case .failure(.unreadable) = result else { Issue.record("expected .unreadable, got \(result)"); return }
+    }
+
+    @Test
+    func givenAnOldCtlWithNoBackendsSubcommand_whenDecoded_thenTheMissingSubcommandIsRecognisedInJSONAndProseForm() {
+        // given / when — the new ctl's own JSON usage-error shape.
+        let jsonUsage = decode(
+            #"{"v": 2, "error": {"code": "usage", "message": "argument command: invalid choice: 'backends' (choose from list, status)"}}"#,
+            exit: 2, command: "backends"
+        )
+        guard case .failure(.unsupportedCommand(_, let command, _)) = jsonUsage else {
+            Issue.record("expected .unsupportedCommand, got \(jsonUsage)")
+            return
+        }
+        // then
+        #expect(command == "backends")
+
+        // ...and an older ctl that only writes prose to stderr, with no JSON at all.
+        let prose = decode("", stderr: "polybridge-ctl: error: argument command: invalid choice: 'backends'", exit: 2, command: "backends")
+        guard case .failure(let error) = prose, case .unsupportedCommand = error else {
+            Issue.record("expected .unsupportedCommand, got \(prose)")
+            return
+        }
+    }
+
+    @Test
     func givenTakeoverGrantJSON_whenDecoded_thenItRequiresAStringArgvAndCwd() {
         // given / when / then
         #expect(TakeoverGrant(["argv": .array([]), "cwd": .string("/r")]) == nil)
@@ -247,6 +334,29 @@ struct CtlClientTests {
             ["resume", "--json", "--", "t1", "more"]
         ])
         #expect(runner.calls.allSatisfy { $0.environment["PB_OPEN_MONITOR"] == "0" })
+    }
+
+    @Test
+    func givenABackendsCall_whenSent_thenItDecodesTheEntriesInOrder() async throws {
+        // given
+        let runner = RecordingRunner { _ in
+            ProcessOutput(
+                exitCode: 0,
+                stdout: json(
+                    #"{"v":2,"backends":["#
+                        + #"{"backend":"claude","binary":"claude","installed":true},"#
+                        + #"{"backend":"vibe","binary":"vibe","installed":false}]}"#
+                ),
+                stderr: ""
+            )
+        }
+        let client = CtlClient(executable: "/fake/polybridge-ctl", environment: [:], runner: runner)
+        // when
+        let entries = try await client.backends().get()
+        // then
+        #expect(entries.map(\.backend) == ["claude", "vibe"])
+        #expect(entries.map(\.installed) == [true, false])
+        #expect(runner.calls.map(\.arguments) == [["backends", "--json"]])
     }
 
     @Test
