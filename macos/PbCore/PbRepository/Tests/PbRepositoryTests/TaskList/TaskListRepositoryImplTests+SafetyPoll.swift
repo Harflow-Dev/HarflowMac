@@ -182,12 +182,17 @@ extension TaskListRepositoryImplTests {
         let callsAfterStart = callCount.value
 
         // when — really invoke the captured closure (not a no-op on `nil`).
+        let evaluationsBefore = sut.safetyPollEvaluationCount
         capturedPoll.value?()
-        // No condition holds, so nothing should happen — briefly give any (wrongly) triggered async
-        // work a chance to run before asserting the negative. This is not a wait on the mechanism
-        // under test (the 10 s/60 s timers are never real here); it only lets an already-dispatched
-        // `Task` finish, the same way other tests in this file settle a fire-and-forget `Task`.
-        try? await Task.sleep(for: .milliseconds(100))
+        // No condition holds, so nothing should happen. A fixed sleep here would race a slow CI
+        // runner — the poll's condition check and any resulting `refresh()` both run inside the
+        // `Task` the closure spawns, so a sleep short enough to be fast could elapse before that
+        // `Task` is even scheduled, silently passing without the guard ever being exercised. Instead
+        // wait for `safetyPollEvaluationCount` — incremented once the spawned `Task` finishes
+        // evaluating (and refreshing, if it decided to) — so the assertion below only runs once that
+        // work has genuinely completed, however long it took.
+        await waitUntil(timeout: 5) { sut.safetyPollEvaluationCount > evaluationsBefore }
+        #expect(sut.safetyPollEvaluationCount > evaluationsBefore)
 
         // then
         #expect(callCount.value == callsAfterStart)
@@ -248,8 +253,13 @@ extension TaskListRepositoryImplTests {
         #expect(sut.titles["t1"] == "first title")
 
         try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"second title"}"# + "\n").write(to: eventsFile, atomically: true, encoding: .utf8)
+        // A fixed sleep here would have the same flaw as the 500-title cap test: it would only prove
+        // "no overwrite happened within N ms," which a slow CI runner could pass despite a real bug.
+        // No wait is needed at all, deterministic or otherwise: `loadTitles()`'s missing-ids guard
+        // (`titlesValue[$0] == nil`) is evaluated synchronously, inline, before `refresh()` returns —
+        // "t1" already has a title from the pass above, so this second call decides, synchronously,
+        // not to spawn a background load for it at all. There is no pending async work left to race.
         await sut.refresh()
-        try? await Task.sleep(for: .milliseconds(200)) // give the off-main title load a chance to (wrongly) run
 
         // then
         #expect(sut.titles["t1"] == "first title")
@@ -284,12 +294,18 @@ extension TaskListRepositoryImplTests {
         )))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
-        // when
+        // when — wait for the title-loading pass to actually finish (`titleLoadPassCount` is
+        // incremented in `mergeTitles(_:)`, right after the merge lands, once per pass) rather than
+        // for `titles.count` to merely reach 500: on a slow CI runner, an uncapped implementation
+        // could still be mid-loop at the 150 ms mark used previously, having reached 500 without
+        // ever having attempted the forbidden 501st — that fixed wait could pass without the cap
+        // ever being exercised. Waiting for the pass's own completion signal instead means the
+        // assertion below only runs once the whole pass — capped or not — has truly finished.
         await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titles.count >= 500 }
-        try? await Task.sleep(for: .milliseconds(150)) // let a (wrongly) uncapped load finish loading the 501st
+        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 1 }
 
         // then — exactly 500, never all 501.
+        #expect(sut.titleLoadPassCount == 1)
         #expect(sut.titles.count == 500)
     }
 
@@ -468,7 +484,12 @@ extension TaskListRepositoryImplTests {
         sut.start()
         sut.start()
         await waitUntil { sut.hasListed }
-        try? await Task.sleep(for: .milliseconds(50))
+        // No further wait needed, fixed or otherwise: `start()`'s `started` guard is checked and set
+        // synchronously, under `startLock`, before either call returns — so by the time both calls
+        // above have returned, whether a second discovery Task was spawned is already decided. And
+        // `start()`'s own Task awaits `discoverEnvironment()` before calling `refresh()`, which is
+        // what eventually sets `hasListed` — so once `hasListed` is true, the one discovery call has
+        // already been recorded.
 
         // then
         verify(toolEnvironment).discoverEnvironment().called(1)

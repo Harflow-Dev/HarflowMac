@@ -18,6 +18,14 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     @Subjected private var hasListedValue = false
     @Subjected private var titlesValue: [String: String] = [:]
 
+    // Test seams (internal, not public API): each counts completed passes of an otherwise
+    // fire-and-forget background unit, so a test can await one deterministically instead of a fixed
+    // sleep that races a slow CI runner. See `mergeTitles(_:)` and `startWatching()`'s poll closure,
+    // their only writers.
+    @Subjected private(set) var titleLoadPassCount = 0
+    @Subjected private(set) var safetyPollEvaluationCount = 0
+
+    private let safetyPollCountLock = NSLock()
     private let titlesLock = NSLock()
     private let startLock = NSLock()
     private var started = false
@@ -100,6 +108,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
                 if due || self.tasksValue.contains(where: \.status.isRunning) || self.listErrorValue != nil || !self.watcherActive {
                     await self.refresh()
                 }
+                self.countSafetyPollEvaluation()
             }
         }
         // `watcher` and `pollToken` are set together, under the same lock that guards every other
@@ -242,6 +251,15 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         var current = titlesValue
         current.merge(found) { old, _ in old }
         titlesValue = current
+        titleLoadPassCount += 1
+    }
+
+    /// Overlapping poll `Task`s can finish together; `@Subjected` locks its getter and setter
+    /// separately, so the read-modify-write needs a lock of its own or a count is lost.
+    private func countSafetyPollEvaluation() {
+        safetyPollCountLock.lock()
+        defer { safetyPollCountLock.unlock() }
+        safetyPollEvaluationCount += 1
     }
 
     public func title(_ taskID: String) -> String {
