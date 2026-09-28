@@ -150,23 +150,26 @@ public struct ProcessRunner: ProcessRunning {
         process.standardOutput = outPipe
         process.standardError = errPipe
 
-        // Both pipes are drained concurrently: an unread pipe that fills blocks the child.
+        // Both pipes are drained concurrently: an unread pipe that fills blocks the child. Each on a
+        // thread of its own, not a GCD global-queue block: with the global queue's threads busy (a
+        // loaded 3-core CI runner running suites in parallel), a queued reader could start too late
+        // for the bounded drain below and the output was silently lost.
         let lock = NSLock()
         var outData = Data()
         var errData = Data()
         let group = DispatchGroup()
         group.enter()
         group.enter()
-        DispatchQueue.global().async {
+        Thread {
             let data = outPipe.fileHandleForReading.readDataToEndOfFile()
             lock.lock(); outData = data; lock.unlock()
             group.leave()
-        }
-        DispatchQueue.global().async {
+        }.start()
+        Thread {
             let data = errPipe.fileHandleForReading.readDataToEndOfFile()
             lock.lock(); errData = data; lock.unlock()
             group.leave()
-        }
+        }.start()
 
         let exited = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in exited.signal() }
