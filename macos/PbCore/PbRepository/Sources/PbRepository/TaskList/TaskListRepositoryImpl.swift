@@ -27,6 +27,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
     private let safetyPollCountLock = NSLock()
     private let titlesLock = NSLock()
+    private var failedTitleIDs: Set<String> = []
     private let startLock = NSLock()
     private var started = false
 
@@ -228,29 +229,52 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     // MARK: Titles (MS-LIST-5/F4-11)
 
     private func loadTitles() {
-        let missing = tasksValue.map(\.taskID).filter { titlesValue[$0] == nil }
+        let failed = failedTitleIDsSnapshot()
+        let untitled = tasksValue.map(\.taskID).filter { titlesValue[$0] == nil }
+        // Never-tried ids go first and earlier failures after them, so the capped pass can't keep
+        // re-reading the same unresolvable head while later tasks wait, yet a failure that was only
+        // transient is still retried whenever the cap leaves room.
+        let missing = untitled.filter { !failed.contains($0) } + untitled.filter { failed.contains($0) }
         guard !missing.isEmpty else { return }
+        let settled = Set(tasksValue.filter(\.status.isTerminal).map(\.taskID))
         let dir = toolEnvironment.tasksDirectory
         Task.detached(priority: .utility) { [weak self] in
             var found: [String: String] = [:]
+            var failedSettled: Set<String> = []
             for id in missing.prefix(500) {
                 guard let path = TaskTitle.eventsPath(tasksDirectory: dir, taskID: id),
                       let prompt = TaskTitle.firstPrompt(eventsPath: path),
-                      let title = TaskTitle.from(prompt: prompt) else { continue }
+                      let title = TaskTitle.from(prompt: prompt) else {
+                    if settled.contains(id) { failedSettled.insert(id) }
+                    continue
+                }
                 found[id] = title
             }
             guard let self else { return }
-            mergeTitles(found)
+            mergeTitles(found, failed: failedSettled)
         }
     }
 
+    private func failedTitleIDsSnapshot() -> Set<String> {
+        titlesLock.lock()
+        defer { titlesLock.unlock() }
+        return failedTitleIDs
+    }
+
     /// A synchronous helper so the lock is never taken directly inside an `async` context.
-    private func mergeTitles(_ found: [String: String]) {
+    ///
+    /// `failed` holds settled tasks whose title could not be read (a legacy task, a missing or
+    /// unreadable log, no `task_started`). Left at the head of every capped pass they would starve
+    /// every task after them (Codex PR review), so `loadTitles` queues them behind never-tried ids.
+    /// A running task is never marked — its first event may simply not be written yet.
+    private func mergeTitles(_ found: [String: String], failed: Set<String>) {
         titlesLock.lock()
         defer { titlesLock.unlock() }
         var current = titlesValue
         current.merge(found) { old, _ in old }
         titlesValue = current
+        failedTitleIDs.formUnion(failed)
+        failedTitleIDs.subtract(found.keys)
         titleLoadPassCount += 1
     }
 

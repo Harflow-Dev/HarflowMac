@@ -309,6 +309,50 @@ extension TaskListRepositoryImplTests {
         #expect(sut.titles.count == 500)
     }
 
+    @Test func givenAHeadOf500UnreadableSettledTitles_whenRefreshedAgain_thenLaterTasksStillGetTheirs() async {
+        // given — the first 500 listed tasks are settled and have no events file at all; after them,
+        // a settled task with a readable log and a running one whose log appears only later.
+        let tasksDir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tasksDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tasksDir) }
+        let unreadable = (0 ..< 500).map { "gone\(String(format: "%04d", $0))" }
+        func writePrompt(_ id: String) {
+            try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"prompt for \#(id)"}"# + "\n")
+                .write(to: tasksDir.appendingPathComponent("\(id).events.jsonl"), atomically: true, encoding: .utf8)
+        }
+        writePrompt("readable")
+        let entries = unreadable.map { #"{"task_id":"\#($0)","status":"completed","backend":"claude"}"# }
+            + [#"{"task_id":"readable","status":"completed","backend":"claude"}"#,
+               #"{"task_id":"fresh","status":"running","backend":"claude"}"#]
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).tasksDirectory.willReturn(tasksDir.path)
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(
+            executable: "/bin/echo", environment: [:],
+            runner: StubProcessRunner(output: stdout(#"{"v":2,"tasks":[\#(entries.joined(separator: ","))]}"#))
+        )))
+        let sut = makeSUT(toolEnvironment: toolEnvironment)
+        await sut.refresh()
+        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 1 }
+        #expect(sut.titles.isEmpty, "the capped first pass only reaches the 500 unreadable ones")
+
+        // when — the running task's log is written, and the listing refreshes
+        writePrompt("fresh")
+        await sut.refresh()
+        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 2 }
+
+        // then — never-tried ids come ahead of the earlier failures, so the pass reaches both
+        #expect(sut.titles["readable"] == "prompt for readable")
+        #expect(sut.titles["fresh"] == "prompt for fresh", "a running task stays retryable")
+
+        // when — one of the failures turns out to have been transient
+        writePrompt("gone0007")
+        await sut.refresh()
+        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 3 }
+
+        // then — failures are retried behind the queue, never dropped for good
+        #expect(sut.titles["gone0007"] == "prompt for gone0007")
+    }
+
     // MARK: MS-LIST-6 — detail() precedence (the C.8 fix)
 
     @Test func givenAListingAndASnapshotWithDifferentStatuses_whenAskedForDetail_thenTheListingStatusWins() async {
