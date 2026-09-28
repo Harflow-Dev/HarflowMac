@@ -138,4 +138,53 @@ struct LineageTests {
         // then
         #expect(ordered == ["newRun", "oldRun", "newDone", "oldDone"])
     }
+
+    // MARK: - Parallel groups by conversation (Monitor piece 13)
+
+    @Test
+    func givenAResumeChainInAGroup_whenSectioned_thenItBecomesOneConversationPerAgent() {
+        // given — agent A is resumed twice (t1 -> t2 -> t3, the newest turn still running); agent B
+        // is never resumed and separately spawned an unrelated, still-running sub-task.
+        let tasks = [
+            task("t1", status: "completed", group: "g", minute: 1),
+            task("t2", status: "completed", parentTaskID: "t1", group: "g", minute: 2),
+            task("t3", status: "running", parentTaskID: "t2", group: "g", minute: 3),
+            task("t4", status: "completed", group: "g", minute: 1),
+            task("t4-sub", status: "running", spawnedBy: "t4", group: "g", minute: 2)
+        ]
+        // when
+        let sections = Lineage.sections(tasks)
+        // then
+        #expect(sections.parallel.count == 1)
+        let group = sections.parallel[0]
+        #expect(group.conversations.count == 2, "one conversation per agent, not one per resume turn")
+        #expect(group.total == 2)
+        #expect(group.doneCount == 1, "agent A's newest turn is still running, so its conversation is not done")
+        #expect(group.anyRunning)
+
+        let conversationA = group.conversations.first { $0.first.taskID == "t1" }
+        #expect(conversationA?.members.map(\.taskID) == ["t1", "t2", "t3"])
+        #expect(conversationA?.current.taskID == "t3")
+
+        let conversationB = group.conversations.first { $0.first.taskID == "t4" }
+        #expect(conversationB?.members.map(\.taskID) == ["t4"])
+
+        // `t4-sub`'s inherited `group` label never makes it a conversation of its own or a member of
+        // one — it only ever shows up as `t4`'s own `TaskNode` child.
+        #expect(group.conversations.allSatisfy { conversation in !conversation.members.map(\.taskID).contains("t4-sub") })
+        #expect(group.members.first { $0.task.taskID == "t4" }?.children.map(\.id) == ["t4-sub"])
+    }
+
+    @Test
+    func givenRunningAndFinishedConversations_whenOrderingParallelColumns_thenRunningComesFirstAndEachIsNewestFirst() {
+        // given
+        let oldDone = Conversation(members: [task("oldDone", status: "completed", minute: 1)])
+        let oldRun = Conversation(members: [task("oldRun", status: "running", minute: 2)])
+        let newDone = Conversation(members: [task("newDone", status: "failed", minute: 3)])
+        let newRun = Conversation(members: [task("newRun", status: "running", minute: 4)])
+        // when
+        let ordered = Lineage.parallelColumnOrder([oldDone, oldRun, newDone, newRun]).map(\.id)
+        // then
+        #expect(ordered == ["newRun", "oldRun", "newDone", "oldDone"])
+    }
 }

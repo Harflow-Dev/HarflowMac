@@ -90,6 +90,15 @@ enum ParallelLayout {
 /// View model for the Parallel screen: one column per group member, ported from the old
 /// `ParallelView.swift`/`ParallelColumn` with no behaviour change. The column's outcome line is always
 /// secondary-coloured; only TaskDetail's header turns red for "Refused".
+///
+/// Monitor piece 13: a column is one agent CONVERSATION (a resume chain, `MonitorCore.Conversation`),
+/// not one task — a resumed member inherits its parent's `group`, so before this every resume turn
+/// was its own `TaskNode` group member and so its own column (an orchestrator resuming 2 agents ×
+/// 8 rounds showed as 16 columns). Membership/order come from `Lineage.sections(_:).parallel.first`'s
+/// `conversations` (built once per `tasksPublisher` emission); a lease is held for every member of
+/// every conversation — TaskDetail's own per-member-lease pattern — and every column is rebuilt from
+/// each member's freshest `useCase.task(_:)` on every recompute (F4-40), never a value cached at the
+/// last `tasksPublisher` emission.
 @Observable
 @MainActor
 final class ParallelVM: ParallelViewModel {
@@ -121,7 +130,14 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var latestSnapshots: [String: TaskInfo] = [:]
     @ObservationIgnored private var latestBusy: Set<String> = []
     @ObservationIgnored private var latestOutcomes: [String: String] = [:]
+    /// Every task id belonging to any of this group's conversations (Monitor piece 13) — the lease
+    /// diff set and cancel-all's target list. A superset of the old top-level-only `memberIDs`,
+    /// since it now also names each conversation's earlier, already-terminal turns.
     @ObservationIgnored private var memberIDs: [String] = []
+    /// This group's conversations as of the last `tasksPublisher` emission — membership and order
+    /// only. `recompute()` always re-reads each member's own `useCase.task(_:)` before building a
+    /// column (F4-40), never a `TaskInfo` cached here.
+    @ObservationIgnored private var conversations: [Conversation] = []
     
     // MARK: - Init
     
@@ -217,28 +233,34 @@ final class ParallelVM: ParallelViewModel {
             .store(in: &cancellables)
     }
     
-    /// Recomputes which tasks belong to this group (Lineage's own definition — a group's top-level
-    /// members) and diffs the member set against the currently-leased one, acquiring a lease for
-    /// every newly-seen member and releasing one for every member that dropped out.
+    /// Recomputes this group's conversations (Monitor piece 13 — `ParallelGroup.conversations`, one
+    /// per agent) and diffs the FLATTENED member set against the currently-leased one, acquiring a
+    /// lease for every newly-seen member and releasing one for every member that dropped out —
+    /// TaskDetail's own `recomputeMembersAndLeases` pattern, extended across every member of every
+    /// conversation rather than one task per column.
     private func recomputeMembersAndLeases() {
         let group = Lineage.sections(latestTasks).parallel.first { $0.name == groupName }
-        let members = group?.members.map(\.task) ?? []
-        let newIDs = members.map(\.taskID)
+        let groupConversations = group?.conversations ?? []
+        let newIDs = groupConversations.flatMap { $0.members.map(\.taskID) }
         let newIDSet = Set(newIDs)
         let oldIDSet = Set(memberIDs)
-        
+
         for id in newIDSet.subtracting(oldIDSet) { acquireLease(id) }
         for id in oldIDSet.subtracting(newIDSet) { releaseLease(id) }
         memberIDs = newIDs
-        
+        conversations = groupConversations
+
         canCancelAll = group?.anyRunning == true
-        isEmpty = members.isEmpty
-        
-        let freedoms = Set(members.compactMap(\.freedom)).sorted().joined(separator: ", ")
-        let repos = Set(members.map { Format.repo($0.repoPath) }).sorted().joined(separator: ", ")
-        headerSubtitle = "\(members.count) agents · \(freedoms) · \(repos)"
+        isEmpty = groupConversations.isEmpty
+
+        // Freedom/repo diversity is read from each conversation's FIRST member (its starting
+        // configuration) — one entry per agent, not one per turn.
+        let firstMembers = groupConversations.map(\.first)
+        let freedoms = Set(firstMembers.compactMap(\.freedom)).sorted().joined(separator: ", ")
+        let repos = Set(firstMembers.map { Format.repo($0.repoPath) }).sorted().joined(separator: ", ")
+        headerSubtitle = "\(groupConversations.count) agents · \(freedoms) · \(repos)"
         + (group?.startedAt.map { " · started \(Format.time($0))" } ?? "")
-        
+
         recompute()
     }
     
@@ -278,43 +300,59 @@ final class ParallelVM: ParallelViewModel {
     }
     
     /// Rebuilds every column from the freshest available state — always re-reading `useCase.task(_:)`
-    /// rather than a value cached at the last `tasksPublisher` emission, so a busy/outcome/snapshot-
-    /// only update still reflects the task's current fields (F4-40).
+    /// for each member rather than a `TaskInfo` cached at the last `tasksPublisher` emission, so a
+    /// busy/outcome/snapshot-only update still reflects a member's current fields (F4-40). Only the
+    /// membership/order skeleton (`conversations`) is held between `tasksPublisher` emissions.
     private func recompute() {
-        let members = Lineage.parallelColumnOrder(memberIDs.compactMap { useCase.task($0) })
-        columns = members.map(makeColumnModel)
-        
-        let footerTasks = memberIDs.compactMap { latestSnapshots[$0] ?? useCase.task($0) }
+        let freshened = conversations.map { conversation in
+            Conversation(members: conversation.members.map { useCase.task($0.taskID) ?? $0 })
+        }
+        let ordered = Lineage.parallelColumnOrder(freshened)
+        columns = ordered.map(makeColumnModel)
+
+        let footerTasks = ordered.map { latestSnapshots[$0.current.taskID] ?? $0.current }
         footerText = EnforcementText.common(footerTasks) ?? Self.fallbackFooter
     }
-    
-    private func makeColumnModel(for task: TaskInfo) -> ParallelColumnModel {
-        let taskID = task.taskID
-        let metaLine = [task.backend, task.reasoningEffort.map { "effort \($0)" }, task.sessionID.map { "session \($0.prefix(8))" }]
+
+    /// Monitor piece 13: a column reflects a whole conversation. `task`/status pill/take-over/open
+    /// all act on the CURRENT (newest) member; `title` names the conversation from its FIRST member
+    /// — the same current-vs-first split `TaskDetailVM.recompute()` uses.
+    private func makeColumnModel(for conversation: Conversation) -> ParallelColumnModel {
+        let current = conversation.current
+        let currentID = current.taskID
+        let firstID = conversation.first.taskID
+        var metaLine = [current.backend, current.reasoningEffort.map { "effort \($0)" }, current.sessionID.map { "session \($0.prefix(8))" }]
             .compactMap(\.self)
             .joined(separator: " · ")
-        let items = itemsByTask[taskID] ?? []
-        // Monitor piece 12, Design point 4: the same rule `TimelinePaneModel.isLoading` uses — a
-        // shimmer only while this member has no real content yet AND its own event stream is still
-        // `.loading`; never once items exist, and never for `.unavailable` (that keeps the column's
-        // honest empty state instead).
-        let isLoading = items.isEmpty && (availabilityByTask[taskID] ?? .loading) == .loading
+        if conversation.members.count > 1 { metaLine += " · \(conversation.members.count) turns" }
+
+        let itemMembers = conversation.members.map {
+            ConversationItemMember(task: $0, items: itemsByTask[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
+        }
+        let rows = ConversationTimeline.rows(itemMembers: itemMembers)
+        // Monitor piece 12, Design point 4's rule, extended across every member (piece 13): a
+        // shimmer only while NO member has any real content yet AND at least one member's own event
+        // stream is still `.loading`; never once any member has items, and never for `.unavailable`
+        // (that keeps the column's honest empty state instead).
+        let isLoading = conversation.members.allSatisfy { (itemsByTask[$0.taskID] ?? []).isEmpty }
+            && conversation.members.contains { (availabilityByTask[$0.taskID] ?? .loading) == .loading }
 
         return ParallelColumnModel(
-            id: taskID,
-            task: task,
-            title: useCase.title(taskID),
+            id: conversation.id,
+            task: current,
+            title: useCase.title(firstID),
             metaLine: metaLine,
-            isBusy: latestBusy.contains(taskID),
-            outcomeMessage: latestOutcomes[taskID],
+            isBusy: latestBusy.contains(currentID),
+            outcomeMessage: latestOutcomes[currentID],
             showPrompt: showPrompt,
-            prompt: useCase.prompt(for: taskID),
-            items: items,
+            prompt: useCase.prompt(for: firstID),
+            rows: rows,
             isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
-            summary: latestSnapshots[taskID]?.summary,
-            onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: taskID) },
-            onTapOpenTask: { [weak self] in self?.routing.selectTask(taskID) }
+            summary: latestSnapshots[currentID]?.summary,
+            onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: currentID) },
+            onTapOpenTask: { [weak self] in self?.routing.selectTask(currentID) },
+            start: conversation.first.startedAt
         )
     }
     

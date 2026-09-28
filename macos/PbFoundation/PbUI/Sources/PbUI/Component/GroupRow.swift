@@ -14,7 +14,7 @@ public struct GroupRow: View {
     public var body: some View {
         HStack(spacing: 6) {
             HStack(spacing: -4) {
-                ForEach(group.members.prefix(3)) { BackendBadge(backend: $0.task.backend, size: 16) }
+                ForEach(group.conversations.prefix(3)) { BackendBadge(backend: $0.first.backend, size: 16) }
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(group.name).font(.pb(.body, weight: .medium)).lineLimit(1)

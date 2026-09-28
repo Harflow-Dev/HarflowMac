@@ -6,7 +6,7 @@ import Testing
 /// (Review round 1, item 5): a growing stream must re-trigger the scroll even when it only grows
 /// the LAST row's own text, never adding a new row — pulled out as a static function so it is
 /// directly testable without a SwiftUI rendering harness, the same reasoning as
-/// `ParallelColumnModel.visibleItems`.
+/// `ParallelColumnModel.visibleRows`.
 @Suite struct TimelinePaneModelTests {
     private func textRow(_ id: String, _ text: String, streaming: Bool = false) -> ConversationTimelineRow {
         ConversationTimelineRow(

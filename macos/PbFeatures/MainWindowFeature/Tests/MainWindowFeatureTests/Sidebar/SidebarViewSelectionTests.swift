@@ -23,7 +23,7 @@ import Testing
     // MARK: - Helpers
 
     private func makeSUT() async -> (vm: SidebarViewModelMock, outline: NSOutlineView, window: NSWindow)? {
-        let vm = SidebarViewModelMock(parallelGroups: [ParallelGroup(name: "release", members: [])])
+        let vm = SidebarViewModelMock(parallelGroups: [ParallelGroup(name: "release", members: [], conversations: [])])
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 280, height: 800), styleMask: [.titled], backing: .buffered, defer: false)
         let host = NSHostingView(rootView: SidebarView(vm).frame(width: 280, height: 800))
         window.contentView = host

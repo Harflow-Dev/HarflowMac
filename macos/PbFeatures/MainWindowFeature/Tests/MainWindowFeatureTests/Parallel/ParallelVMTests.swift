@@ -11,10 +11,10 @@ import Testing
 @MainActor
 @Suite struct ParallelVMTests {
     
-    private func task(
+    func task(
         id: String, backend: String = "claude", status: String = "running", startedAt: Date? = .now,
         group: String? = "g1", freedom: String? = nil, sessionID: String? = "sess-1234567890",
-        summary: String? = nil, enforcement: [String: JSONValue]? = nil
+        summary: String? = nil, enforcement: [String: JSONValue]? = nil, parentTaskID: String? = nil
     ) -> TaskInfo {
         var object: [String: JSONValue] = [
             "task_id": .string(id), "backend": .string(backend), "status": .string(status)
@@ -25,18 +25,19 @@ import Testing
         if let sessionID { object["session_id"] = .string(sessionID) }
         if let summary { object["summary"] = .string(summary) }
         if let enforcement { object["enforcement"] = .object(enforcement) }
+        if let parentTaskID { object["parent_task_id"] = .string(parentTaskID) }
         return TaskInfo(.object(object))!
     }
     
     /// A plain mutable box read by a `willProduce` closure registered exactly once — `Mockable`'s
     /// FIFO stub queue does not reliably swap a member's answer for the very next call (see the
     /// Phase 3/4a/4b reports). Mutating a box sidesteps it.
-    private final class Box<Value> {
+    final class Box<Value> {
         var value: Value
         init(_ value: Value) { self.value = value }
     }
     
-    private struct SUT {
+    struct SUT {
         let sut: ParallelVM
         let useCase: MockParallelUseCase
         let routing: MockParallelRouting
@@ -54,7 +55,7 @@ import Testing
         let runningInSubtreesBox: Box<[String]?>
     }
 
-    private func makeSUT(groupName: String = "g1") -> SUT {
+    func makeSUT(groupName: String = "g1") -> SUT {
         let useCase = MockParallelUseCase()
         let routing = MockParallelRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()

@@ -42,10 +42,23 @@ public struct ParallelGroup: Equatable, Identifiable, Sendable {
     public var id: String { "group:\(name)" }
     public let name: String
     public let members: [TaskNode]
+    /// One per agent conversation (a resume chain, Monitor piece 7) among this group's top-level
+    /// members, oldest conversation first — built from `members.map(\.task)` via
+    /// `Lineage.conversations(_:)` (Monitor piece 13). A resumed member inherits its parent's
+    /// `group`, so before this every resume turn was its own `TaskNode` member and so its own
+    /// Parallel column; grouping by conversation collapses a chain of resumes back into the single
+    /// column its agent actually is. `members` itself is unchanged (task-level trees, still used for
+    /// `anyRunning`'s subtree check below) — a `spawned_by` sub-task of a member never enters
+    /// `conversations`, only the group's own top-level members do.
+    public let conversations: [Conversation]
 
-    public var total: Int { members.count }
-    public var doneCount: Int { members.filter { $0.task.status.isTerminal }.count }
-    public var anyRunning: Bool { members.contains(where: \.anyRunning) }
+    public var total: Int { conversations.count }
+    public var doneCount: Int { conversations.filter { $0.current.status.isTerminal }.count }
+    /// True while any conversation's current (newest) member is still running, or any member's own
+    /// `spawned_by` subtree runs (a sub-task an earlier, already-terminal turn started).
+    public var anyRunning: Bool {
+        conversations.contains { $0.current.status.isRunning } || members.contains(where: \.anyRunning)
+    }
     public var startedAt: Date? { members.compactMap(\.task.startedAt).min() }
 }
 
@@ -204,7 +217,10 @@ public enum Lineage {
         sections.running.sort { startedDescending($0.task, $1.task) }
         sections.recent.sort { startedDescending($0.task, $1.task) }
         sections.parallel = groups.map { name, members in
-            ParallelGroup(name: name, members: members.sorted { startedAscending($0.task, $1.task) })
+            let sortedMembers = members.sorted { startedAscending($0.task, $1.task) }
+            let groupConversations = conversations(sortedMembers.map(\.task))
+                .sorted { startedAscending($0.first, $1.first) }
+            return ParallelGroup(name: name, members: sortedMembers, conversations: groupConversations)
         }.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
         return sections
     }
@@ -248,6 +264,17 @@ public enum Lineage {
         members.sorted { lhs, rhs in
             if lhs.status.isRunning != rhs.status.isRunning { return lhs.status.isRunning }
             return startedDescending(lhs, rhs)
+        }
+    }
+
+    /// The conversation-level twin of `parallelColumnOrder(_: [TaskInfo])` (Monitor piece 13):
+    /// orders by each conversation's CURRENT (newest) member — running first, then newest
+    /// `current.startedAt` first — since a conversation's placement as a column is governed by its
+    /// current turn alone, exactly like a plain task's own placement above.
+    public static func parallelColumnOrder(_ conversations: [Conversation]) -> [Conversation] {
+        conversations.sorted { lhs, rhs in
+            if lhs.current.status.isRunning != rhs.current.status.isRunning { return lhs.current.status.isRunning }
+            return startedDescending(lhs.current, rhs.current)
         }
     }
 

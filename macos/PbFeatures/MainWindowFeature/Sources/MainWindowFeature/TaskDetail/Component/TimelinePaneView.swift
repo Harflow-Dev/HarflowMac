@@ -104,37 +104,6 @@ struct TimelinePaneView: View {
     }
 }
 
-// MARK: - TurnSeparatorRow
-
-/// A follow-up's own prompt and time, ahead of its turn (settled Design point 6): "You · 14:02 —
-/// <message>".
-struct TurnSeparatorRow: View {
-    let text: String
-    let timestamp: Date?
-
-    static func label(text: String, timestamp: Date?) -> String {
-        "You" + (timestamp.map { " · \(Format.time($0))" } ?? "") + " — " + text
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Divider()
-            VStack(alignment: .leading, spacing: 2) {
-                Text("You" + (timestamp.map { " · \(Format.time($0))" } ?? ""))
-                    .font(.pb(.secondary, weight: .semibold))
-                    .foregroundStyle(Color.accentLink)
-                Text(text).font(.pb(.body)).textSelection(.enabled)
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color.runningBG.opacity(0.6)))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(Self.label(text: text, timestamp: timestamp))
-        }
-        .padding(.vertical, 6)
-    }
-}
-
 // MARK: - SubTaskEntry
 
 /// A child task plus its already-resolved title (`AppModel.title(_:)`'s fallback rule), so this

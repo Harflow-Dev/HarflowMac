@@ -6,6 +6,11 @@
 //  plus two action closures the VM supplies; the "show all" expansion is local `@State`, allowed
 //  per the root AGENTS.md's Component Models section ("components may hold local @State").
 //
+//  Monitor piece 13: a column is one agent CONVERSATION (a resume chain), not one task — `rows` is
+//  the whole conversation's concatenated timeline (`MonitorCore.ConversationTimeline`, the same
+//  shape TaskDetail's own `TimelinePaneView` renders), with a turn separator ahead of every
+//  follow-up and each row's own `live` flag already scoped to its own turn.
+//
 
 import MonitorCore
 import PbUI
@@ -13,8 +18,9 @@ import SwiftUI
 
 // MARK: - ParallelColumnModel
 
-/// Presentation data for one Parallel column: the member's fresh listing entry, everything today's
-/// outcome line/busy state/event stream say about it, and the two actions its buttons perform.
+/// Presentation data for one Parallel column: the conversation's fresh CURRENT member (status pill,
+/// take-over, buttons all act on it), everything today's outcome line/busy state/event stream say
+/// about it, and the two actions its buttons perform.
 struct ParallelColumnModel: Identifiable {
     let id: String
     let task: TaskInfo
@@ -24,21 +30,32 @@ struct ParallelColumnModel: Identifiable {
     let outcomeMessage: String?
     let showPrompt: Bool
     let prompt: String?
-    let items: [TimelineItem]
-    /// True while this member has no timeline items yet AND its event stream is still `.loading`
-    /// (Monitor piece 12, Design point 4) — the column shows `SkeletonRows` instead of the empty
+    let rows: [ConversationTimelineRow]
+    /// True while NO member of this conversation has any timeline item yet AND at least one
+    /// member's own event stream is still `.loading` (Monitor piece 12, Design point 4, extended
+    /// across every member for piece 13) — the column shows `SkeletonRows` instead of the empty
     /// timeline while this holds.
     let isLoading: Bool
-    /// From the snapshot only — no fallback to `task.summary` (F4-40, a deliberate difference from
-    /// `ChangesPane`).
+    /// From the current member's snapshot only — no fallback to `task.summary` (F4-40, a deliberate
+    /// difference from `ChangesPane`).
     let summary: String?
     let onTapTakeover: () -> Void
     let onTapOpenTask: () -> Void
-    
-    /// The last 6 items, or all of them once "Show all" has been tapped. A pure function so it is
-    /// directly testable without a SwiftUI rendering harness.
-    static func visibleItems(_ items: [TimelineItem], showAll: Bool) -> [TimelineItem] {
-        showAll ? items : Array(items.suffix(6))
+    /// When the conversation's FIRST turn started — every row's elapsed time counts from here, as
+    /// TaskDetail's Timeline does; the current turn's own start would clamp earlier turns to 0.
+    var start: Date?
+
+    /// The last 6 rows, or all of them once "Show all" has been tapped. A pure function so it is
+    /// directly testable without a SwiftUI rendering harness. Counting rows (separators included)
+    /// rather than items keeps the newest turn separator in view naturally, without a special case.
+    static func visibleRows(_ rows: [ConversationTimelineRow], showAll: Bool) -> [ConversationTimelineRow] {
+        showAll ? rows : Array(rows.suffix(6))
+    }
+
+    /// The real step count behind `rows` — every `.item` row, separators excluded — for the "Show
+    /// all N steps" label, matching `TimelinePaneModel`'s own `stepCountText` convention.
+    static func itemCount(_ rows: [ConversationTimelineRow]) -> Int {
+        rows.filter { if case .item = $0.kind { return true }; return false }.count
     }
 }
 
@@ -47,9 +64,9 @@ struct ParallelColumnModel: Identifiable {
 struct ParallelColumnView: View {
     let model: ParallelColumnModel
     @State private var showAll = false
-    
+
     var body: some View {
-        let shown = ParallelColumnModel.visibleItems(model.items, showAll: showAll)
+        let shown = ParallelColumnModel.visibleRows(model.rows, showAll: showAll)
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 BackendBadge(backend: model.task.backend, size: 22)
@@ -85,11 +102,13 @@ struct ParallelColumnView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(shown) { item in
-                            TimelineRow(model: TimelineRowModel(item: item, start: model.task.startedAt, live: model.task.status.isRunning))
+                        ForEach(shown) { row in
+                            rowView(row)
                         }
-                        if model.items.count > shown.count {
-                            Button("Show all \(model.items.count) steps") { showAll = true }.buttonStyle(.link).font(.pb(.secondary))
+                        if model.rows.count > shown.count {
+                            Button("Show all \(ParallelColumnModel.itemCount(model.rows)) steps") { showAll = true }
+                                .buttonStyle(.link)
+.font(.pb(.secondary))
                         }
                         Divider()
                         if model.task.status.isTerminal {
@@ -111,6 +130,16 @@ struct ParallelColumnView: View {
         }
         .padding(12)
     }
+
+    @ViewBuilder
+    private func rowView(_ row: ConversationTimelineRow) -> some View {
+        switch row.kind {
+        case .separator(let text):
+            TurnSeparatorRow(text: text, timestamp: row.timestamp)
+        case .item(let item):
+            TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live))
+        }
+    }
 }
 
 #if DEBUG
@@ -122,7 +151,13 @@ struct ParallelColumnView: View {
     ParallelColumnView(model: ParallelColumnModel(
         id: "abc123", task: task, title: "Fix the login bug", metaLine: "claude · effort low",
         isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        items: [PreviewFixtures.textItem("Looked at the failing test.")], isLoading: false,
+        rows: [
+            ConversationTimelineRow(
+                id: "abc123#1", taskID: "abc123", timestamp: .now,
+                kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: true
+            )
+        ],
+        isLoading: false,
         summary: nil, onTapTakeover: {}, onTapOpenTask: {}
     ))
     .frame(width: 380, height: 500)
@@ -136,7 +171,32 @@ struct ParallelColumnView: View {
     ParallelColumnView(model: ParallelColumnModel(
         id: "abc123", task: task, title: "Fix the login bug", metaLine: "claude · effort low",
         isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        items: [], isLoading: true,
+        rows: [], isLoading: true,
+        summary: nil, onTapTakeover: {}, onTapOpenTask: {}
+    ))
+    .frame(width: 380, height: 500)
+}
+
+#Preview("With a follow-up turn") {
+    let task = TaskInfo(.object([
+        "task_id": .string("t2"), "backend": .string("claude"), "status": .string("running"),
+        "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-90)))
+    ]))!
+    ParallelColumnView(model: ParallelColumnModel(
+        id: "t1", task: task, title: "Fix the login bug", metaLine: "claude · effort low · 2 turns",
+        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+        rows: [
+            ConversationTimelineRow(
+                id: "t1#1", taskID: "t1", timestamp: .now.addingTimeInterval(-90),
+                kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
+            ),
+            ConversationTimelineRow(
+                id: "sep:t2", taskID: "t2", timestamp: .now,
+                kind: .separator(text: "Also add a test for the edge case"), live: false
+            ),
+            ConversationTimelineRow(id: "t2#1", taskID: "t2", timestamp: .now, kind: .item(PreviewFixtures.finishedItem()), live: true)
+        ],
+        isLoading: false,
         summary: nil, onTapTakeover: {}, onTapOpenTask: {}
     ))
     .frame(width: 380, height: 500)
