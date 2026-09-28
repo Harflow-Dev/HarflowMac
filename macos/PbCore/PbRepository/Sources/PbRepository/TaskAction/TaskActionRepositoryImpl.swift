@@ -158,6 +158,8 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
 
     // MARK: run (F4-17 — refreshes before returning; errors go to the caller, never the outcome line)
 
+    static let postRunListAttempts = 3
+
     public func run(_ request: RunRequest) async throws -> String {
         switch toolEnvironment.ctl() {
         case .failure(let error):
@@ -167,9 +169,21 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
             case .success(let id):
                 // `refreshAndWait`, not `refresh`: with a pass already in flight `refresh()` only
                 // arms another and returns at once, so the caller could route to an id the published
-                // listing doesn't hold yet (macos/AGENTS.md, decision 12).
-                _ = await taskListRepository.refreshAndWait()
-                return id
+                // listing doesn't hold yet (macos/AGENTS.md, decision 12). A failed listing is no
+                // barrier either: routing then shows the brand-new task as "not in polybridge's
+                // records" (Codex PR review). So retry a little, and past that tell the caller the
+                // task DID start — staying on the sheet with that said, rather than inviting a
+                // second start.
+                var lastError: ToolError?
+                for _ in 0 ..< Self.postRunListAttempts {
+                    switch await taskListRepository.refreshAndWait() {
+                    case .success: return id
+                    case .failure(let error): lastError = error
+                    }
+                }
+                throw ToolError.unknownOutcome(message: "Started task \(id.prefix(8)), but the task list could not be "
+                    + "refreshed\(lastError.map { " (\($0.message))" } ?? ""). It will appear once polybridge-ctl list "
+                    + "works again — don't start it a second time.")
             case .failure(let error):
                 throw error
             }

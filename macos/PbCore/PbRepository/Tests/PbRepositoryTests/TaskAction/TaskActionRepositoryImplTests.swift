@@ -326,6 +326,54 @@ import Testing
         #expect(sut.outcome("brandnew") == nil)
     }
 
+    @Test func givenTheListingFailsOnceAfterARun_whenObserved_thenItRetriesAndReturnsTheID() async throws {
+        // given
+        let toolEnvironment = MockToolEnvironmentRepository()
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"brandnew"}}"#))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let taskListRepository = MockTaskListRepository()
+        let attempts = LockedBox(0)
+        given(taskListRepository).refreshAndWait().willProduce {
+            attempts.mutate { $0 += 1 }
+            return attempts.value == 1 ? .failure(.timedOut(tool: "polybridge-ctl", seconds: 5)) : .success(())
+        }
+        let sut = TaskActionRepositoryImpl(
+            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: MockTaskSnapshotRepository()
+        )
+
+        // when
+        let id = try await sut.run(RunRequest(backend: "claude", repo: "/tmp", prompt: "hi"))
+
+        // then
+        #expect(id == "brandnew")
+        #expect(attempts.value == 2)
+    }
+
+    @Test func givenTheListingKeepsFailingAfterARun_whenObserved_thenItThrowsSayingTheTaskStarted() async {
+        // given — routing now would show the brand-new task as "not in polybridge's records"
+        let toolEnvironment = MockToolEnvironmentRepository()
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"task_id":"brandnew-1234"}}"#))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let taskListRepository = MockTaskListRepository()
+        given(taskListRepository).refreshAndWait().willReturn(.failure(.timedOut(tool: "polybridge-ctl", seconds: 5)))
+        let sut = TaskActionRepositoryImpl(
+            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: MockTaskSnapshotRepository()
+        )
+
+        // when
+        var thrown: ToolError?
+        do {
+            _ = try await sut.run(RunRequest(backend: "claude", repo: "/tmp", prompt: "hi"))
+        } catch {
+            thrown = error as? ToolError
+        }
+
+        // then — no id to route to, and the message says the task exists
+        verify(taskListRepository).refreshAndWait().called(.exactly(TaskActionRepositoryImpl.postRunListAttempts))
+        #expect(thrown?.message.contains("Started task brandnew") == true, "\(String(describing: thrown))")
+        #expect(thrown?.message.contains("don't start it a second time") == true)
+    }
+
     @Test func givenRunFails_whenObserved_thenTheErrorIsThrownNotWrittenToTheOutcomeLine() async {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
