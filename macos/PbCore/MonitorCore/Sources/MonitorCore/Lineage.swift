@@ -43,8 +43,8 @@ public struct ParallelGroup: Equatable, Identifiable, Sendable {
     public let name: String
     public let members: [TaskNode]
     /// One per agent conversation (a resume chain, Monitor piece 7) among this group's top-level
-    /// members, oldest conversation first — built from `members.map(\.task)` via
-    /// `Lineage.conversations(_:)` (Monitor piece 13). A resumed member inherits its parent's
+    /// members, oldest conversation first — built by `Lineage.conversations(_:)` over every task in
+    /// the group, keeping the conversations a top-level member starts (Monitor piece 13). A resumed member inherits its parent's
     /// `group`, so before this every resume turn was its own `TaskNode` member and so its own
     /// Parallel column; grouping by conversation collapses a chain of resumes back into the single
     /// column its agent actually is. `members` itself is unchanged (task-level trees, still used for
@@ -216,13 +216,42 @@ public enum Lineage {
         }
         sections.running.sort { startedDescending($0.task, $1.task) }
         sections.recent.sort { startedDescending($0.task, $1.task) }
-        sections.parallel = groups.map { name, members in
-            let sortedMembers = members.sorted { startedAscending($0.task, $1.task) }
-            let groupConversations = conversations(sortedMembers.map(\.task))
-                .sorted { startedAscending($0.first, $1.first) }
-            return ParallelGroup(name: name, members: sortedMembers, conversations: groupConversations)
-        }.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
+        sections.parallel = parallelGroups(groups, tasks: tasks, parent: parent, byID: byID, keep: { keep(node($0)) })
         return sections
+    }
+
+    /// The Parallel groups, each with its `conversations` (Monitor piece 13). Chains are formed over
+    /// EVERY task in the group, not just its top-level members: a follow-up dispatched by another
+    /// group member carries `spawned_by` too, so the task tree nests it under that caller, yet it is
+    /// still a turn of its own conversation (Codex PR review). Only a conversation a top-level task
+    /// starts becomes a column — which keeps a member's unrelated `spawned_by` sub-tasks out — and
+    /// that eligibility is decided before the search filter, so matching only a follow-up still
+    /// keeps its conversation; `keep` then decides visibility.
+    private static func parallelGroups(
+        _ groups: [String: [TaskNode]],
+        tasks: [TaskInfo],
+        parent: [String: String],
+        byID: [String: TaskInfo],
+        keep: (String) -> Bool
+    ) -> [ParallelGroup] {
+        var tasksByGroup: [String: [TaskInfo]] = [:]
+        var topLevelIDs: Set<String> = []
+        for task in tasks {
+            guard let group = task.group else { continue }
+            tasksByGroup[group, default: []].append(task)
+            if parent[task.taskID].flatMap({ byID[$0]?.group }) != group { topLevelIDs.insert(task.taskID) }
+        }
+        return groups.map { name, members in
+            let groupConversations = conversations(tasksByGroup[name] ?? [])
+                .filter { topLevelIDs.contains($0.first.taskID) }
+                .filter { $0.members.contains { keep($0.taskID) } }
+                .sorted { startedAscending($0.first, $1.first) }
+            return ParallelGroup(
+                name: name,
+                members: members.sorted { startedAscending($0.task, $1.task) },
+                conversations: groupConversations
+            )
+        }.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
     }
 
     /// Root first, direct parent last — the breadcrumb above a sub-task. A thin wrapper over a

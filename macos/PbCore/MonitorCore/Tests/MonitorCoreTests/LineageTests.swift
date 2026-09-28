@@ -176,6 +176,41 @@ struct LineageTests {
     }
 
     @Test
+    func givenAFollowUpDispatchedByAnotherGroupMember_whenGrouped_thenItJoinsItsOwnConversation() {
+        // given — `lead` (a group member) resumes agent `a1`: the new turn names `a1` as its
+        // `parent_task_id` AND `lead` as its `spawned_by`, so the task tree nests it under `lead`.
+        let tasks = [
+            task("lead", status: "running", group: "g", minute: 1),
+            task("a1", status: "completed", group: "g", minute: 2),
+            task("a2", status: "running", spawnedBy: "lead", parentTaskID: "a1", group: "g", minute: 5),
+            task("lead-sub", status: "completed", spawnedBy: "lead", group: "g", minute: 3)
+        ]
+        // when
+        let group = Lineage.sections(tasks).parallel[0]
+        // then
+        let agent = group.conversations.first { $0.first.taskID == "a1" }
+        #expect(agent?.members.map(\.taskID) == ["a1", "a2"])
+        #expect(agent?.current.taskID == "a2", "the running follow-up is the conversation's current turn")
+        #expect(group.conversations.map(\.first.taskID) == ["lead", "a1"], "an unrelated sub-task stays out")
+        #expect(group.doneCount == 0)
+    }
+
+    @Test
+    func givenASearchMatchingOnlyAFollowUp_whenGrouped_thenItsConversationStillCounts() {
+        // given
+        let tasks = [
+            task("a1", status: "completed", group: "g", minute: 1),
+            task("a2", status: "running", parentTaskID: "a1", group: "g", minute: 2),
+            task("b1", status: "completed", group: "g", minute: 1)
+        ]
+        // when
+        let group = Lineage.sections(tasks) { $0.taskID == "a2" }.parallel[0]
+        // then
+        #expect(group.conversations.map(\.first.taskID) == ["a1"], "the match keeps its whole conversation; b1 is filtered out")
+        #expect(group.total == 1)
+    }
+
+    @Test
     func givenRunningAndFinishedConversations_whenOrderingParallelColumns_thenRunningComesFirstAndEachIsNewestFirst() {
         // given
         let oldDone = Conversation(members: [task("oldDone", status: "completed", minute: 1)])
