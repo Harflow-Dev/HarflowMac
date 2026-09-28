@@ -24,6 +24,9 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     // their only writers.
     @Subjected private(set) var titleLoadPassCount = 0
     @Subjected private(set) var safetyPollEvaluationCount = 0
+    /// Calls that joined a pass already in flight instead of starting one — counted only after the
+    /// coordinator has registered them, so a test waiting on it knows they are queued.
+    @Subjected private(set) var coalescedCallCount = 0
 
     private let safetyPollCountLock = NSLock()
     private let titlesLock = NSLock()
@@ -151,7 +154,10 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     // MARK: Refresh (MS-LIST-4/F4-08/F4-09)
 
     public func refresh() async {
-        guard await refreshCoordinator.begin() else { return }
+        guard await refreshCoordinator.begin() else {
+            countCoalescedCall()
+            return
+        }
         _ = await runRefreshLoop()
     }
 
@@ -165,6 +171,8 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             Task {
                 if await refreshCoordinator.registerWaiter(continuation) {
                     _ = await runRefreshLoop()
+                } else {
+                    countCoalescedCall()
                 }
             }
         }
@@ -280,6 +288,12 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
     /// Overlapping poll `Task`s can finish together; `@Subjected` locks its getter and setter
     /// separately, so the read-modify-write needs a lock of its own or a count is lost.
+    private func countCoalescedCall() {
+        safetyPollCountLock.lock()
+        defer { safetyPollCountLock.unlock() }
+        coalescedCallCount += 1
+    }
+
     private func countSafetyPollEvaluation() {
         safetyPollCountLock.lock()
         defer { safetyPollCountLock.unlock() }

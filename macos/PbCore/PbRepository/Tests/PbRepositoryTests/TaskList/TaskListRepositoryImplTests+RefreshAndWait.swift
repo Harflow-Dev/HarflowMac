@@ -65,7 +65,7 @@ extension TaskListRepositoryImplTests {
         let firstCall = Task { await sut.refresh() }
         await waitUntil { passCount.value >= 1 }
         let waiterCall = Task { await sut.refreshAndWait() }
-        try? await Task.sleep(for: .milliseconds(50)) // let the waiter register before the gate opens
+        await waitUntil(timeout: 5) { sut.coalescedCallCount >= 1 } // registered behind pass 1
         gate.open()
         await firstCall.value
         let waiterResult = await waiterCall.value
@@ -139,7 +139,7 @@ extension TaskListRepositoryImplTests {
         let firstCall = Task { await sut.refresh() }
         await waitUntil { callCount.value >= 1 }
         let waiters = (0 ..< 5).map { _ in Task { await sut.refreshAndWait() } }
-        try? await Task.sleep(for: .milliseconds(50))
+        await waitUntil(timeout: 5) { sut.coalescedCallCount >= 5 }
         gate.open()
         await firstCall.value
         var successCount = 0
@@ -173,7 +173,7 @@ extension TaskListRepositoryImplTests {
         await waitUntil { callCount.value >= 1 }
         let plainRefresh = Task { await sut.refresh() }
         let waiter = Task { await sut.refreshAndWait() }
-        try? await Task.sleep(for: .milliseconds(50))
+        await waitUntil(timeout: 5) { sut.coalescedCallCount >= 2 } // both queued behind the first pass
         gate.open()
         await firstCall.value
         await plainRefresh.value

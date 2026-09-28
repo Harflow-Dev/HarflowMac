@@ -79,7 +79,7 @@ import Testing
         let firstRefresh = Task { await sut.refresh() }
         await waitUntil { callCount.value >= 1 }
         let secondRefresh = Task { await sut.refresh() }
-        try? await Task.sleep(for: .milliseconds(50)) // let the second call observe "in flight"
+        await waitUntil(timeout: 5) { sut.coalescedCallCount >= 1 } // the second call joined the in-flight pass
         gate.open()
         await firstRefresh.value
         await secondRefresh.value
