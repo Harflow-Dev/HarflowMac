@@ -17,11 +17,14 @@ public struct CtlClient: Sendable {
     // its handshake waits 30 s, then it may spend up to 15 s reaping the child and 5 s releasing
     // before it prints the structured "a task may already exist" answer (`detached.py`). Cut short,
     // that warning becomes a bare timeout and a retry can start the run twice (Codex PR review).
-    // `takeover` may cascade-cancel a live tree and hold for phase writes, so it gets well past
-    // ctl's 60 s settle window.
+    // `cancel` and `takeover` run a shielded cascade across a live tree — up to 5 rounds, each up to
+    // ~15 s before hand-off plus ~10 s per batch — then settle phase writes for up to 60 s, and
+    // takeover may also wait 30 s on session locks. Killing ctl inside that leaves some tasks
+    // stopped and later descendants abandoned behind a bare timeout (Codex PR review), so the
+    // bound sits above the whole path.
     static let quickTimeout = 30.0
     static let startTimeout = 75.0
-    static let takeoverTimeout = 120.0
+    static let takeoverTimeout = 300.0
 
     /// Options (always `--name=value`) go before `--json`; positionals after a `--`, so a message
     /// or id beginning with `-` can never be parsed as an option.

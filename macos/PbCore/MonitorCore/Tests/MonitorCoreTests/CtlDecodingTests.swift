@@ -554,4 +554,12 @@ struct SetupTests {
         // when / then — with a cushion for interpreter start-up and scheduling
         #expect(CtlClient.startTimeout >= ctlWorstCase + 15)
     }
+
+    @Test func givenCtlsCascadeBounds_whenCancellingOrTakingOver_thenTheAppWaitsLongerThanAllOfThem() {
+        // given — CASCADE_MAX_ROUNDS 5 × (~15 s to hand off + ~10 s per batch), then
+        // PHASE_WRITE_SETTLE_SECONDS 60, plus takeover's SESSION_LOCK_TIMEOUT_SECONDS 30
+        let ctlWorstCase = 5 * (15.0 + 10.0) + 60 + 30
+        // when / then
+        #expect(CtlClient.takeoverTimeout >= ctlWorstCase + 30)
+    }
 }

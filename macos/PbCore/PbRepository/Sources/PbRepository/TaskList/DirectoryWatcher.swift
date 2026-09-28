@@ -36,7 +36,14 @@ public final class DirectoryWatcher: @unchecked Sendable {
             nil, callback, &context, [path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.3, flags
         ) else { return }
         FSEventStreamSetDispatchQueue(created, queue)
-        FSEventStreamStart(created)
+        // A stream that failed to start must not count as active: `isActive` would then stay true
+        // for good, the safety poll would never retry, and new tasks would surface only on the
+        // 60 s reconcile (Codex PR review).
+        guard FSEventStreamStart(created) else {
+            FSEventStreamInvalidate(created)
+            FSEventStreamRelease(created)
+            return
+        }
         stream = created
     }
 
