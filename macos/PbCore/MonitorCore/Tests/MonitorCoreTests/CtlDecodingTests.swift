@@ -545,3 +545,13 @@ struct SetupTests {
         #expect(calls == "--uninstall --client=codex --json\n--client=codex --json\n")
     }
 }
+
+@Suite struct CtlStartTimeoutTests {
+    @Test func givenCtlsOwnDetachedStartBounds_whenStarting_thenTheAppWaitsLongerThanAllOfThem() {
+        // given — detached.py: HANDSHAKE_TIMEOUT_SECONDS 30 + REAP_GRACE_SECONDS 15 +
+        // RELEASE_RETRY_SECONDS 5, before ctl prints its structured "unknown" answer
+        let ctlWorstCase = 30.0 + 15.0 + 5.0
+        // when / then — with a cushion for interpreter start-up and scheduling
+        #expect(CtlClient.startTimeout >= ctlWorstCase + 15)
+    }
+}
