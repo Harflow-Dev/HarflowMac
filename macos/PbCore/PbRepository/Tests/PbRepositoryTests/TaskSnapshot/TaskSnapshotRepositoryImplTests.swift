@@ -2,6 +2,7 @@ import Foundation
 import Mockable
 import MonitorCore
 @testable import PbRepository
+import PbTestUtilities
 import Testing
 
 @Suite struct TaskSnapshotRepositoryImplTests {
@@ -134,5 +135,34 @@ import Testing
         // then
         #expect(sut.snapshots.count == ids.count)
         #expect(Set(ids).subtracting(sut.snapshots.keys).isEmpty)
+    }
+
+    @Test func givenAnOlderRefreshAnsweringLast_whenTwoRefreshesOverlap_thenTheNewerSnapshotStands() async {
+        // given — the first status call is held and answers `running`; the second, started after
+        // it, answers `completed` at once.
+        let toolEnvironment = MockToolEnvironmentRepository()
+        let gate = AsyncGate()
+        let calls = LockedBox(0)
+        let runner = StubProcessRunner { _ in
+            calls.mutate { $0 += 1 }
+            if calls.value == 1 {
+                gate.waitSync()
+                return .success(stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+            }
+            return .success(stdout(#"{"v":2,"task":{"task_id":"task-1","status":"completed","backend":"claude"}}"#))
+        }
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
+
+        // when
+        let older = Task { await sut.refresh("task-1") }
+        await waitUntil(timeout: 5) { calls.value >= 1 }
+        await sut.refresh("task-1")
+        #expect(sut.snapshot("task-1")?.status.isTerminal == true)
+        gate.open()
+        await older.value
+
+        // then — the late `running` answer belongs to a superseded refresh and is dropped
+        #expect(sut.snapshot("task-1")?.status.isTerminal == true)
     }
 }
