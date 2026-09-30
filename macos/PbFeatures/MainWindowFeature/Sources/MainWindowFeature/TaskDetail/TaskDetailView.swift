@@ -80,6 +80,9 @@ protocol TaskDetailViewModel: ViewModel {
     func didTapCopyResumeCommand()
     /// Copies the current run's task id, recording the outcome like "Copy resume command" does.
     func didTapCopyTaskID()
+    /// What the loading skeleton can already show — the conversation's title and repo name — when
+    /// the listing knows the task; `nil` before that. Read synchronously, so it needs no subscription.
+    var loadingHeader: TaskLoadingHeader? { get }
     /// Copies the task's repository path (the header's folder menu).
     func didTapCopyRepoPath()
     @discardableResult func submitMessage(_ text: String) -> Bool
@@ -167,27 +170,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }
     }
 
-    /// Shown while the task isn't known yet (Plan review round 1, item 4) — replaces the old bare
-    /// "Loading…" text. Never shown once `hasListed` is true: at that point either the task exists
-    /// (the header/tabs render instead) or it genuinely is not in polybridge's records, and that
-    /// message stays exactly as it was.
+    /// Shown while the task isn't known yet, and for the deferred first frame: the skeleton that
+    /// mirrors the loaded screen (see `TaskLoadingSkeleton`). Never shown once `hasListed` is true —
+    /// then either the task exists or it genuinely is not in polybridge's records.
     private var loadingSkeleton: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                // `Color.primary.opacity(0.1)`, not `.neutralFill` — matches `SkeletonBlock`/
-                // `SkeletonRows` (PbUI's own placeholders were invisible against `.neutralFill`).
-                Circle().fill(Color.primary.opacity(0.1)).frame(width: 26, height: 26).shimmering()
-                VStack(alignment: .leading, spacing: 6) {
-                    SkeletonBlock(width: 220, height: 18)
-                    SkeletonBlock(width: 140, height: 12)
-                }
-            }
-            Divider()
-            SkeletonRows(count: 5)
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        TaskLoadingSkeleton(header: viewModel.loadingHeader)
     }
 
     // MARK: Header

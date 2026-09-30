@@ -129,6 +129,27 @@ extension TaskDetailVMTests {
         await verify(harness.useCase).setOutcome(.value("abc12345"), .value("Couldn't copy to the clipboard.")).calledEventually(1, before: .seconds(5))
     }
 
+    @Test func givenATaskTheListingKnows_whenReadingTheLoadingHeader_thenItCarriesItsTitleAndRepoName() {
+        // given — no didAppear: the skeleton shows before the view subscribes.
+        let harness = makeSUT()
+        harness.detailBox.value = task(status: "running", repoPath: "/Users/example/Code/Carousell-iOS")
+
+        // when
+        let header = harness.sut.loadingHeader
+
+        // then
+        #expect(header == TaskLoadingHeader(title: "Task abc12345", repoName: "Carousell-iOS"))
+    }
+
+    @Test func givenATaskTheListingDoesNotKnowYet_whenReadingTheLoadingHeader_thenThereIsNone() {
+        // given
+        let harness = makeSUT()
+        harness.detailBox.value = nil
+
+        // when / then
+        #expect(harness.sut.loadingHeader == nil)
+    }
+
     @Test func givenTheTabs_whenListingThem_thenTheirLabelsAreActivitySummaryPrompt() {
         // given / when / then
         #expect(TaskTab.allCases.map(\.rawValue) == ["Activity", "Summary", "Prompt"])

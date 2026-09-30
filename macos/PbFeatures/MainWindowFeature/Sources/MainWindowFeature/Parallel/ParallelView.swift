@@ -170,7 +170,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
     private var columnPlaceholder: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Circle().fill(Color.primary.opacity(0.1)).frame(width: 22, height: 22).shimmering()
+                SkeletonBlock(width: 22, height: 22, cornerRadius: 11)
                 VStack(alignment: .leading, spacing: 4) {
                     SkeletonBlock(width: 160, height: 14)
                     SkeletonBlock(width: 100, height: 10)

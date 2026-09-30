@@ -72,6 +72,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     func didTapCopyResumeCommand() {}
     func didTapCopyTaskID() {}
     func didTapCopyRepoPath() {}
+    var loadingHeader: TaskLoadingHeader? = TaskLoadingHeader(title: "Fix the login bug", repoName: "repo")
     @discardableResult func submitMessage(_: String) -> Bool { true }
 
     /// A finished task: "Continue in terminal", the composer offering a follow-up, no cancel.

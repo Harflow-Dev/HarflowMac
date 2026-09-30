@@ -9,34 +9,71 @@
 //  shapes screens compose into a header/list/region skeleton.
 //
 
+import AppKit
 import SwiftUI
+
+// MARK: - Skeleton colours
+
+public extension Color {
+    /// A loading placeholder's fill: black at 6% in light mode, white at 7% in dark (the design's
+    /// shimmer artboards), so it reads on the window, sidebar and card backgrounds alike.
+    static let skeletonFill = Color(nsColor: NSColor(name: "skeletonFill") { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.07) : NSColor(white: 0, alpha: 0.06)
+    })
+
+    /// The sheen that sweeps across a placeholder: a white highlight, strong on light, faint on dark.
+    static let skeletonSheen = Color(nsColor: NSColor(name: "skeletonSheen") { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.08) : NSColor(white: 1, alpha: 0.75)
+    })
+}
 
 // MARK: - Shimmer
 
-/// A gentle brightness pulse for loading placeholders, applied via `.shimmering()`. Honours Reduce
-/// Motion: when that accessibility setting is on, the content renders as a static fill with no
-/// animation at all — the setting exists precisely to suppress this kind of movement, so a
-/// placeholder that ignored it would be actively hostile to the person who turned it on.
+/// The loading animation, applied via `.shimmering()`: a highlight sweeping left to right every
+/// 1.4 s. Under Reduce Motion there is no movement — the placeholder pulses its opacity slowly
+/// (1.6 s) instead, so it still reads as "loading" without anything travelling across the screen.
 private struct ShimmerModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isBright = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.shimmerReduceMotionOverride) private var reduceMotionOverride
+    private var reduceMotion: Bool { reduceMotionOverride ?? systemReduceMotion }
+    @State private var phase: CGFloat = -1
+    @State private var isDim = false
 
     func body(content: Content) -> some View {
-        content
-            .opacity(reduceMotion ? 1 : (isBright ? 1 : 0.55))
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                    isBright = true
+        if reduceMotion {
+            content
+                .opacity(isDim ? 0.55 : 1)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { isDim = true }
                 }
-            }
+        } else {
+            content
+                .overlay {
+                    GeometryReader { proxy in
+                        LinearGradient(colors: [.clear, .skeletonSheen, .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: proxy.size.width)
+                            .offset(x: phase * proxy.size.width)
+                    }
+                    .allowsHitTesting(false)
+                }
+                .clipped()
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) { phase = 1 }
+                }
+        }
     }
 }
 
+public extension EnvironmentValues {
+    /// Forces the shimmer's Reduce Motion behaviour on or off (`nil`: follow the system setting).
+    /// The system value is read-only, so this is how a preview shows the pulse.
+    @Entry var shimmerReduceMotionOverride: Bool?
+}
+
 public extension View {
-    /// Applies the Monitor's shimmering-loading animation to `self` — meant for a translucent-primary
-    /// placeholder shape (`SkeletonBlock`/`SkeletonRows`), but usable on any view. See
-    /// `ShimmerModifier`'s doc for the Reduce Motion behaviour.
+    /// Applies the Monitor's loading shimmer to `self` — meant for a `skeletonFill` placeholder
+    /// shape (`SkeletonBlock`/`SkeletonRows`), but usable on any view. See `ShimmerModifier` for the
+    /// Reduce Motion behaviour.
     func shimmering() -> some View {
         modifier(ShimmerModifier())
     }
@@ -44,15 +81,15 @@ public extension View {
 
 // MARK: - SkeletonBlock
 
-/// One placeholder bar — a line of text, a badge, a block of body copy — filled with
-/// `Color.primary` at 10% (visible on both the window and sidebar backgrounds, light and dark) and shimmering. `width: nil` (default) fills the available width, for a
-/// placeholder standing in for a variable-width region.
+/// One placeholder bar — a line of text, a button, a block of body copy — in `skeletonFill`, with
+/// the shimmer clipped to its own rounded shape. `width: nil` (default) fills the available width,
+/// for a placeholder standing in for a variable-width region.
 public struct SkeletonBlock: View {
     public var width: CGFloat?
     public var height: CGFloat
     public var cornerRadius: CGFloat
 
-    public init(width: CGFloat? = nil, height: CGFloat = 12, cornerRadius: CGFloat = 4) {
+    public init(width: CGFloat? = nil, height: CGFloat = 12, cornerRadius: CGFloat = 6) {
         self.width = width
         self.height = height
         self.cornerRadius = cornerRadius
@@ -60,9 +97,10 @@ public struct SkeletonBlock: View {
 
     public var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color.primary.opacity(0.1))
-            .frame(width: width, height: height)
+            .fill(Color.skeletonFill)
             .shimmering()
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .frame(width: width, height: height)
     }
 }
 
@@ -85,7 +123,7 @@ public struct SkeletonRows: View {
             ForEach(0 ..< count, id: \.self) { index in
                 HStack(spacing: 8) {
                     if showsBadge {
-                        Circle().fill(Color.primary.opacity(0.1)).frame(width: 20, height: 20).shimmering()
+                        SkeletonBlock(width: 20, height: 20, cornerRadius: 10)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         SkeletonBlock(width: index.isMultiple(of: 2) ? 190 : 140, height: 12)
@@ -100,12 +138,24 @@ public struct SkeletonRows: View {
 }
 
 #if DEBUG
-#Preview("SkeletonBlock") {
+#Preview("SkeletonBlock - light") {
     VStack(alignment: .leading, spacing: 8) {
         SkeletonBlock(width: 220, height: 16)
         SkeletonBlock(width: 140, height: 12)
     }
     .padding()
+    .background(Color.windowBG)
+    .preferredColorScheme(.light)
+}
+
+#Preview("SkeletonBlock - dark") {
+    VStack(alignment: .leading, spacing: 8) {
+        SkeletonBlock(width: 220, height: 16)
+        SkeletonBlock(width: 140, height: 12)
+    }
+    .padding()
+    .background(Color.windowBG)
+    .preferredColorScheme(.dark)
 }
 
 #Preview("SkeletonRows") {

@@ -12,6 +12,7 @@
 import Foundation
 import MonitorCore
 import PbCommon
+import PbUI
 
 extension TaskDetailVM {
 
@@ -122,6 +123,11 @@ extension TaskDetailVM {
     func didTapCopyTaskID() {
         let succeeded = routing.copyToPasteboard(currentTaskID)
         useCase.setOutcome(currentTaskID, succeeded ? "Copied task ID." : "Couldn't copy to the clipboard.")
+    }
+
+    var loadingHeader: TaskLoadingHeader? {
+        guard let first = useCase.conversationMembers(of: taskID).first ?? useCase.task(taskID) else { return nil }
+        return TaskLoadingHeader(title: useCase.title(first.taskID), repoName: Format.repoName(first.repoPath))
     }
 
     func didTapCopyRepoPath() {
