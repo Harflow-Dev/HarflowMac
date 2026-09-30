@@ -95,6 +95,40 @@ extension TaskDetailVMTests {
         await verify(harness.useCase).setOutcome(.value("abc12345"), .value("Couldn't copy to the clipboard.")).calledEventually(1, before: .seconds(5))
     }
 
+    @Test func givenATask_whenCopyingTheRepoPath_thenThePathIsCopiedAndTheOutcomeSaysSo() async {
+        // given
+        let harness = makeSUT()
+        let running = task(status: "running", repoPath: "/Users/example/Code/polybridge")
+        harness.detailBox.value = running
+        given(harness.routing).copyToPasteboard(.value("/Users/example/Code/polybridge")).willReturn(true)
+        harness.sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.task != nil }
+
+        // when
+        harness.sut.didTapCopyRepoPath()
+
+        // then
+        await verify(harness.useCase).setOutcome(.value("abc12345"), .value("Copied path.")).calledEventually(1, before: .seconds(5))
+    }
+
+    @Test func givenAFailedPasteboardWrite_whenCopyingTheRepoPath_thenTheOutcomeSaysSo() async {
+        // given
+        let harness = makeSUT()
+        let running = task(status: "running", repoPath: "/repo")
+        harness.detailBox.value = running
+        given(harness.routing).copyToPasteboard(.value("/repo")).willReturn(false)
+        harness.sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.task != nil }
+
+        // when
+        harness.sut.didTapCopyRepoPath()
+
+        // then
+        await verify(harness.useCase).setOutcome(.value("abc12345"), .value("Couldn't copy to the clipboard.")).calledEventually(1, before: .seconds(5))
+    }
+
     @Test func givenTheTabs_whenListingThem_thenTheirLabelsAreActivitySummaryPrompt() {
         // given / when / then
         #expect(TaskTab.allCases.map(\.rawValue) == ["Activity", "Summary", "Prompt"])

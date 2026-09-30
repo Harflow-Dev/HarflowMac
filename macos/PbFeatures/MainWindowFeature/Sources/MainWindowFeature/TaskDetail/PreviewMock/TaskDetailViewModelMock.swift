@@ -71,6 +71,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     func didTapCancel() {}
     func didTapCopyResumeCommand() {}
     func didTapCopyTaskID() {}
+    func didTapCopyRepoPath() {}
     @discardableResult func submitMessage(_: String) -> Bool { true }
 
     /// A finished task: "Continue in terminal", the composer offering a follow-up, no cancel.

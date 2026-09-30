@@ -80,6 +80,8 @@ protocol TaskDetailViewModel: ViewModel {
     func didTapCopyResumeCommand()
     /// Copies the current run's task id, recording the outcome like "Copy resume command" does.
     func didTapCopyTaskID()
+    /// Copies the task's repository path (the header's folder menu).
+    func didTapCopyRepoPath()
     @discardableResult func submitMessage(_ text: String) -> Bool
 }
 
@@ -96,6 +98,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @State var viewModel: VM
     @State private var isRawEventsPresented = false
     @AppStorage("monitor.inspectorVisible") private var isInspectorVisible = false
+    @Environment(\.openURL) private var openURL
     
     // MARK: - Init
     
@@ -261,7 +264,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1).truncationMode(.tail).help(viewModel.title)
             HStack(spacing: 6) {
-                Text(Format.repoName(task.repoPath))
+                repoMenu(task)
                 if let turnsText = viewModel.turnsText { Text("· \(turnsText)") }
             }
             .font(.pb(.secondary))
@@ -270,6 +273,23 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }
         // Capped so a long title truncates in the toolbar row instead of pushing the actions off it.
         .frame(maxWidth: 440, alignment: .leading)
+    }
+
+    /// The repository's name; clicking it offers to show the folder in Finder or copy its path.
+    /// The path is the task's own recorded working directory, not agent text, so it goes to the
+    /// system as a directory URL (Finder); toolbar items don't inherit the content's link rules.
+    private func repoMenu(_ task: TaskInfo) -> some View {
+        Menu {
+            Button("Open in Finder") { openURL(URL(fileURLWithPath: task.repoPath, isDirectory: true)) }
+            Button("Copy path") { viewModel.didTapCopyRepoPath() }
+        } label: {
+            Text(Format.repoName(task.repoPath))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(task.repoPath)
+        .accessibilityLabel("Repository \(Format.repoName(task.repoPath))")
     }
 
     @ViewBuilder

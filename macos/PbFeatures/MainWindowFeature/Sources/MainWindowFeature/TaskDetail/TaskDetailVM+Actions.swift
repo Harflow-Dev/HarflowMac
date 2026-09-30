@@ -124,6 +124,12 @@ extension TaskDetailVM {
         useCase.setOutcome(currentTaskID, succeeded ? "Copied task ID." : "Couldn't copy to the clipboard.")
     }
 
+    func didTapCopyRepoPath() {
+        guard let path = task?.repoPath, !path.isEmpty else { return }
+        let succeeded = routing.copyToPasteboard(path)
+        useCase.setOutcome(currentTaskID, succeeded ? "Copied path." : "Couldn't copy to the clipboard.")
+    }
+
     /// Send requires `liveInput && running && !takenOver`; Continue (resume) requires a terminal
     /// status plus a session (`TaskDetailView.swift:299-300`). When neither is eligible the
     /// composer is disabled with the copy of the specific `MessageBoxDisabledReason` (settled plan
