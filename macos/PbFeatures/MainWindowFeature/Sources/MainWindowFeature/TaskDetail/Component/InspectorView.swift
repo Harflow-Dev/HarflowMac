@@ -80,9 +80,13 @@ struct InspectorView: View {
             if let model {
                 VStack(alignment: .leading, spacing: 24) {
                     if model.task.status.isRunning { now(model) }
-                    section("Details") { basics(model) }
+                    // The design's order: Details, a hairline, then the copy buttons.
+                    VStack(alignment: .leading, spacing: 16) {
+                        section("Details") { basics(model) }
+                        Divider()
+                        actions(model)
+                    }
                     if !model.notices.isEmpty { notices(model) }
-                    actions(model)
                     section("Activity") {
                         Text("\(model.activity.toolCalls) tool calls · \(model.activity.edits) edits · "
                              + "\(model.activity.commands) commands · \(model.subtaskCount) sub-tasks")
@@ -126,6 +130,7 @@ struct InspectorView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 detailName("Agent")
+                Spacer(minLength: 8)
                 BackendLabel(backend: model.task.backend).font(.pb(.secondary))
             }
             detailRow("Access", model.task.freedom.map { AccessLabel.text(freedom: $0) } ?? "—")
@@ -136,14 +141,17 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func actions(_ model: InspectorModel) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 8) {
             if model.resumeCommand != nil {
-                Button("Copy resume command", action: model.onCopyResumeCommand)
+                Button(action: model.onCopyResumeCommand) {
+                    Label("Copy resume command", systemImage: "doc.on.doc").frame(maxWidth: .infinity)
+                }
             }
-            Button("Copy task ID", action: model.onCopyTaskID)
+            Button(action: model.onCopyTaskID) {
+                Text("Copy task ID").frame(maxWidth: .infinity)
+            }
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .buttonStyle(QuietButtonStyle(isFilled: false))
     }
 
     @ViewBuilder
@@ -276,7 +284,8 @@ struct InspectorView: View {
     private func detailRow(_ name: String, _ value: String) -> some View {
         HStack(alignment: .top) {
             detailName(name)
-            Text(value).font(.pb(.secondary)).textSelection(.enabled).lineLimit(3)
+            Spacer(minLength: 8)
+            Text(value).font(.pb(.secondary)).multilineTextAlignment(.trailing).textSelection(.enabled).lineLimit(3)
         }
     }
 }

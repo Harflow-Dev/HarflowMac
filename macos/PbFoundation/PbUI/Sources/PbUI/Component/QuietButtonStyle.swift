@@ -9,19 +9,24 @@ import SwiftUI
 public struct QuietButtonStyle: ButtonStyle {
     /// Shows the selected look — used for a toggle that is on (the inspector while it is open).
     public var isSelected: Bool
+    /// `false` draws only the hairline outline (the inspector's full-width copy buttons); the fill
+    /// still appears while pressed.
+    public var isFilled: Bool
 
-    public init(isSelected: Bool = false) {
+    public init(isSelected: Bool = false, isFilled: Bool = true) {
         self.isSelected = isSelected
+        self.isFilled = isFilled
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        QuietButtonBody(configuration: configuration, isSelected: isSelected)
+        QuietButtonBody(configuration: configuration, isSelected: isSelected, isFilled: isFilled)
     }
 }
 
 private struct QuietButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let isSelected: Bool
+    let isFilled: Bool
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
@@ -32,7 +37,7 @@ private struct QuietButtonBody: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: PbRadius.button)
-                    .fill(Color.pillFill.opacity(configuration.isPressed || isSelected ? 1 : 0.75))
+                    .fill(Color.pillFill.opacity(configuration.isPressed || isSelected ? 1 : (isFilled ? 0.75 : 0)))
             )
             .overlay(RoundedRectangle(cornerRadius: PbRadius.button).stroke(Color.cardBorder, lineWidth: 1))
             .brightness(configuration.isPressed ? -0.04 : 0)
@@ -47,6 +52,7 @@ private struct QuietButtonPreview: View {
             Button("Continue in terminal") {}.buttonStyle(QuietButtonStyle())
             Button("Take over") {}.buttonStyle(QuietButtonStyle()).disabled(true)
             Button {} label: { Image(systemName: "sidebar.right") }.buttonStyle(QuietButtonStyle(isSelected: true))
+            Button {} label: { Label("Copy", systemImage: "doc.on.doc").frame(width: 140) }.buttonStyle(QuietButtonStyle(isFilled: false))
         }
         .padding()
         .background(Color.windowBG)
