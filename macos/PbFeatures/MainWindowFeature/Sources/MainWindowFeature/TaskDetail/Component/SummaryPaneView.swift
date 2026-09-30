@@ -296,7 +296,7 @@ struct SummaryPaneView: View {
             ForEach(model.statTiles) { tile in
                 VStack(alignment: .leading, spacing: 3) {
                     Text(tile.title).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-                    Text(tile.value).font(.pb(.body, weight: .semibold, design: .monospaced))
+                    Text(tile.value).font(.pb(.body, weight: .semibold)).monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
@@ -399,7 +399,7 @@ struct SummaryPaneView: View {
         case .failed: ("✗", Color.failedRed)
         case .unconfirmed: ("?", Color.secondaryText)
         }
-        return Text(symbol).font(.pb(.caption, weight: .bold, design: .monospaced)).foregroundStyle(color).frame(width: 12)
+        return Text(symbol).font(.pb(.caption, weight: .bold)).foregroundStyle(color).frame(width: 12)
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {

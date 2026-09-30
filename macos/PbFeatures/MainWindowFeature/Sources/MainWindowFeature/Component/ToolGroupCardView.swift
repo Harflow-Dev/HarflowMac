@@ -54,7 +54,8 @@ struct ToolGroupCardView: View {
             Spacer(minLength: 8)
             if group.isRunning { ProgressView().controlSize(.mini) }
             Text(group.timeRangeText(start: start))
-                .font(.pb(.caption, design: .monospaced))
+                .font(.pb(.caption))
+                .monospacedDigit()
                 .foregroundStyle(Color.secondaryText)
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                 .font(.pb(.caption, weight: .semibold))
@@ -80,7 +81,7 @@ struct FilePillsView: View {
 
     private func pill(_ text: String) -> some View {
         Text(text)
-            .font(.pb(.caption, design: .monospaced))
+            .font(.pb(.caption))
             .foregroundStyle(Color.secondaryText)
             .lineLimit(1)
             .padding(.horizontal, 8)
