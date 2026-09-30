@@ -295,18 +295,12 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         ToolbarSpacer(.flexible)
         ToolbarItem(placement: .primaryAction) { statusLabel(task) }
             .sharedBackgroundVisibility(.hidden)
-        // A toolbar draws a plain button bezel-less until hover; glassProminent keeps it a filled
-        // button with its own insets, as in the design.
+        // The design's quiet buttons, each on the bare toolbar (no glass capsules): the primary
+        // action and the inspector toggle draw their own QuietButtonStyle background, the "…" menu
+        // is a plain icon.
+        ToolbarItem(placement: .primaryAction) { takeoverButton }
+            .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .primaryAction) {
-            Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
-                .buttonStyle(.glassProminent)
-                .disabled(!viewModel.canTakeover)
-                .help(viewModel.takeoverHelp)
-        }
-        .sharedBackgroundVisibility(.hidden)
-        // Plain Labels and no button styling of our own: the toolbar draws these as native icon
-        // buttons inside one glass group (a circled "…" doubled up with the capsule).
-        ToolbarItemGroup(placement: .primaryAction) {
             Menu {
                 moreMenuItems
             } label: {
@@ -314,13 +308,10 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
             .menuIndicator(.hidden)
             .help("More actions")
-            Button {
-                isInspectorVisible.toggle()
-            } label: {
-                Label(inspectorToggleText, systemImage: "sidebar.right")
-            }
-            .help(inspectorToggleText)
         }
+        .sharedBackgroundVisibility(.hidden)
+        ToolbarItem(placement: .primaryAction) { inspectorToggle }
+            .sharedBackgroundVisibility(.hidden)
     }
 
     private var inspectorToggleText: String {
@@ -336,7 +327,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     private var takeoverButton: some View {
         Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(QuietButtonStyle())
             .disabled(!viewModel.canTakeover)
             .help(viewModel.takeoverHelp)
     }
@@ -345,9 +336,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         Button {
             isInspectorVisible.toggle()
         } label: {
-            Image(systemName: "sidebar.right").frame(width: 24, height: 24).contentShape(Rectangle())
+            Image(systemName: "sidebar.right")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(QuietButtonStyle(isSelected: isInspectorVisible))
         .help(inspectorToggleText)
         .accessibilityLabel(inspectorToggleText)
     }
