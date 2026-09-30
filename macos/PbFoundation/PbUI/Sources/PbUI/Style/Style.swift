@@ -263,8 +263,9 @@ public struct SectionLabel: View {
     }
 }
 
-/// Just enough Markdown for an agent's final summary: headings, bullets, fenced code, and inline
-/// emphasis/code/links via `AttributedString`. Anything else renders as plain text.
+/// Just enough Markdown for an agent's messages and summaries: headings, bullets, numbered items,
+/// quotes, horizontal rules, fenced code, pipe tables, and inline emphasis/code/links via
+/// `AttributedString`. Anything else renders as plain text.
 public struct MarkdownText: View {
     public let text: String
 
@@ -274,15 +275,40 @@ public struct MarkdownText: View {
 
     public enum Block: Hashable {
         case heading(String), bullet(String), code(String), paragraph(String)
+        /// A pipe table: the header row first, then the body rows (the `|---|` separator dropped).
+        case table([[String]])
+        /// A numbered item: its marker as written ("1." / "2)") and its text.
+        case numbered(String, String)
+        case quote(String)
+        case rule
     }
 
     public static func blocks(_ text: String) -> [Block] {
         var blocks: [Block] = []
         var paragraph: [String] = []
         var code: [String]?
+        var tableLines: [String] = []
+        func flushTable() {
+            guard !tableLines.isEmpty else { return }
+            // Only a header row followed by a `|---|` separator is a table; other pipe lines are prose.
+            // …and its separator must have exactly the header's column count, which fixes the width.
+            let header = tableCells(tableLines[0])
+            if tableLines.count >= 2, isTableSeparator(tableLines[1]), tableCells(tableLines[1]).count == header.count {
+                let body = tableLines.dropFirst(2).map { row -> [String] in
+                    let cells = tableCells(row)
+                    return (0 ..< header.count).map { $0 < cells.count ? cells[$0] : "" }
+                }
+                blocks.append(.table([header] + body))
+            } else {
+                // A malformed table keeps its layout as a code block rather than raw pipes in prose.
+                blocks.append(.code(tableLines.joined(separator: "\n")))
+            }
+            tableLines = []
+        }
         func flush() {
             if !paragraph.isEmpty { blocks.append(.paragraph(paragraph.joined(separator: "\n"))) }
             paragraph = []
+            flushTable()
         }
         for raw in text.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
@@ -298,12 +324,21 @@ public struct MarkdownText: View {
             }
             if code != nil { code?.append(raw); continue }
             if line.isEmpty { flush(); continue }
-            if line.hasPrefix("#") {
+            if line.hasPrefix("|"), line.hasSuffix("|"), line.count > 1 {
+                if !paragraph.isEmpty { blocks.append(.paragraph(paragraph.joined(separator: "\n"))); paragraph = [] }
+                tableLines.append(line)
+                continue
+            }
+            flushTable()
+            // A `---`/`===` line right under prose underlines it as a heading (setext), not a rule.
+            if !paragraph.isEmpty, isSetextUnderline(line) {
+                blocks.append(.heading(paragraph.joined(separator: " ")))
+                paragraph = []
+                continue
+            }
+            if let block = lineBlock(line) {
                 flush()
-                blocks.append(.heading(line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)))
-            } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                flush()
-                blocks.append(.bullet(String(line.dropFirst(2))))
+                blocks.append(block)
             } else {
                 paragraph.append(line)
             }
@@ -313,24 +348,132 @@ public struct MarkdownText: View {
         return blocks
     }
 
+    /// A line that is a block on its own (heading, rule, list item, quote), or nil for prose.
+    static func lineBlock(_ line: String) -> Block? {
+        if line.hasPrefix("#") { return .heading(line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)) }
+        if isRule(line) { return .rule }
+        if line.hasPrefix("- ") || line.hasPrefix("* ") { return .bullet(String(line.dropFirst(2))) }
+        if let (marker, rest) = numberedItem(line) { return .numbered(marker, rest) }
+        if line.hasPrefix(">") { return .quote(line.dropFirst().trimmingCharacters(in: .whitespaces)) }
+        return nil
+    }
+
+    static func isSetextUnderline(_ line: String) -> Bool {
+        guard let first = line.first, first == "-" || first == "=" else { return false }
+        return line.allSatisfy { $0 == first }
+    }
+
+    static func isRule(_ line: String) -> Bool {
+        guard line.count >= 3, let first = line.first, "-*_".contains(first) else { return false }
+        return line.allSatisfy { $0 == first }
+    }
+
+    /// "1. text" / "12) text" → ("1.", "text").
+    static func numberedItem(_ line: String) -> (String, String)? {
+        let digits = line.prefix(while: \.isNumber)
+        guard !digits.isEmpty, digits.count <= 3 else { return nil }
+        let rest = line.dropFirst(digits.count)
+        guard let delimiter = rest.first, delimiter == "." || delimiter == ")", rest.dropFirst().first == " " else { return nil }
+        return ("\(digits)\(delimiter)", rest.dropFirst(2).trimmingCharacters(in: .whitespaces))
+    }
+
+    static func isTableSeparator(_ line: String) -> Bool {
+        let cells = tableCells(line)
+        return !cells.isEmpty && cells.allSatisfy { cell in
+            !cell.isEmpty && cell.contains("-") && cell.allSatisfy { $0 == "-" || $0 == ":" }
+        }
+    }
+
+    /// Splits a table row on unescaped pipes; `\|` stays a literal pipe in the cell, code spans
+    /// included, as GFM tables specify.
+    static func tableCells(_ line: String) -> [String] {
+        var cells: [String] = []
+        var current = ""
+        var escaped = false
+        for character in line {
+            if escaped {
+                if character != "|" { current.append("\\") }
+                current.append(character)
+                escaped = false
+            } else if character == "\\" {
+                escaped = true
+            } else if character == "|" {
+                cells.append(current)
+                current = ""
+            } else {
+                current.append(character)
+            }
+        }
+        if escaped { current.append("\\") }
+        cells.append(current)
+        cells = cells.map { $0.trimmingCharacters(in: .whitespaces) }
+        if cells.first == "" { cells.removeFirst() }
+        if cells.last == "" { cells.removeLast() }
+        return cells
+    }
+
     public static func inline(_ text: String) -> AttributedString {
         (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
     }
+
+    /// `inline(_:)` with inline `code` set in `codeFont` on the code-block tint, so it reads as code
+    /// rather than as a stray font change mid-sentence.
+    public static func inline(_ text: String, codeFont: Font) -> AttributedString {
+        var result = inline(text)
+        for run in result.runs where run.inlinePresentationIntent?.contains(.code) == true {
+            result[run.range].font = codeFont
+            result[run.range].backgroundColor = .codeFill
+        }
+        return result
+    }
+
+    /// A block quote: a leading bar, secondary text.
+    public static func quote(_ content: some View) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            RoundedRectangle(cornerRadius: 1).fill(Color.secondaryText.opacity(0.4)).frame(width: 3)
+            content.foregroundStyle(Color.secondaryText)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// A pipe table as a grid: a semibold header row, then the body rows, with a hairline between rows.
+    public static func table(_ rows: [[String]], codeFont: Font) -> some View {
+        let columns = rows.first?.count ?? 0
+        return Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 6) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                GridRow {
+                    ForEach(0 ..< columns, id: \.self) { column in
+                        Text(inline(column < row.count ? row[column] : "", codeFont: codeFont))
+                            .fontWeight(index == 0 ? .semibold : nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if index < rows.count - 1 { Divider().gridCellUnsizedAxes(.horizontal) }
+            }
+        }
+    }
+
+    private static let codeFont = Font.pb(.secondary, design: .monospaced)
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(Self.blocks(text).enumerated()), id: \.offset) { _, block in
                 switch block {
-                case .heading(let value): Text(Self.inline(value)).font(.pb(.headline, weight: .semibold))
+                case .heading(let value): Text(Self.inline(value, codeFont: Self.codeFont)).font(.pb(.headline, weight: .semibold))
                 case .bullet(let value):
-                    HStack(alignment: .firstTextBaseline, spacing: 6) { Text("•"); Text(Self.inline(value)) }
+                    HStack(alignment: .firstTextBaseline, spacing: 6) { Text("•"); Text(Self.inline(value, codeFont: Self.codeFont)) }
                 case .code(let value):
                     Text(value)
                         .font(.pb(.secondary, design: .monospaced))
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 6).fill(Color.codeFill))
-                case .paragraph(let value): Text(Self.inline(value))
+                case .paragraph(let value): Text(Self.inline(value, codeFont: Self.codeFont))
+                case .table(let rows): Self.table(rows, codeFont: Self.codeFont)
+                case .numbered(let marker, let value):
+                    HStack(alignment: .firstTextBaseline, spacing: 6) { Text(marker).monospacedDigit(); Text(Self.inline(value, codeFont: Self.codeFont)) }
+                case .quote(let value): Self.quote(Text(Self.inline(value, codeFont: Self.codeFont)))
+                case .rule: Divider()
                 }
             }
         }
