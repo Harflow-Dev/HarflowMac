@@ -72,6 +72,18 @@ public final class ToolEnvironmentRepositoryImpl: ToolEnvironmentRepository, @un
         return firstResult ?? DiscoveryResult(loginPath: nil, uv: nil)
     }
 
+    /// Asks an interactive login zsh — the shell Terminal gives you — for its PATH.
+    static let interactivePathArgv = ["/bin/zsh", "-i", "-l", "-c", "printf %s \"$PATH\""]
+
+    /// `primary`'s directories in order, then any of `extra`'s it lacks; `nil` only when both are.
+    static func mergedPath(_ primary: String?, _ extra: String?) -> String? {
+        let first = primary?.split(separator: ":").map(String.init) ?? []
+        let second = extra?.split(separator: ":").map(String.init) ?? []
+        var seen: Set<String> = []
+        let merged = (first + second).filter { !$0.isEmpty && seen.insert($0).inserted }
+        return merged.isEmpty ? nil : merged.joined(separator: ":")
+    }
+
     /// F4-02/F4-03 combined into one coherent probe: the login-PATH probe (cwd = home, 8 s timeout,
     /// no tool-directory override), then the first `uv` candidate whose `uv tool dir --bin` exits 0.
     /// Timed-out probes are ignored; a run where no candidate succeeds publishes `uv: nil` — this
@@ -87,6 +99,19 @@ public final class ToolEnvironmentRepositoryImpl: ToolEnvironmentRepository, @un
             timeout: 8
         ), !output.timedOut {
             loginPath = LaunchEnvironment.parseLoginPath(output.stdout)
+        }
+        // A login shell reads ~/.zprofile but not ~/.zshrc, where tools like nvm (codex) and
+        // opencode commonly add themselves — so the Settings harness list said "not on PATH" for
+        // CLIs a Terminal finds. An interactive login shell's PATH fills those in; the same parser
+        // keeps only a PATH-shaped last line, and the same timeout bounds a slow or chatty .zshrc.
+        if case .success(let output) = await runner.run(
+            executable: Self.interactivePathArgv[0],
+            arguments: Array(Self.interactivePathArgv.dropFirst()),
+            environment: LaunchEnvironment.build(base: baseEnvironment, loginPath: nil, toolDirectory: nil),
+            currentDirectory: home,
+            timeout: 8
+        ), !output.timedOut {
+            loginPath = Self.mergedPath(loginPath, LaunchEnvironment.parseLoginPath(output.stdout))
         }
 
         var uv: UvResolution?

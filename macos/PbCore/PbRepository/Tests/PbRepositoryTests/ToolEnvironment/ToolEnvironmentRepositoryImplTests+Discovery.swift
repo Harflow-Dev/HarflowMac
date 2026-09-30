@@ -8,6 +8,50 @@ import Testing
 /// and ignores timed-out probes rather than treating them as answers.
 extension ToolEnvironmentRepositoryImplTests {
 
+    // MARK: Interactive shell PATH
+
+    @Test func givenAnInteractiveShellAddsDirectories_whenDiscovering_thenTheyFollowTheLoginPath() async {
+        // given — the login shell lacks what ~/.zshrc adds (nvm's node bin, ~/.opencode/bin).
+        let runner = StubProcessRunner { call in
+            if call.arguments.contains("-i") { return .success(stdout("/usr/bin:/nvm/bin:/home/.opencode/bin\n")) }
+            if call.executable == LaunchEnvironment.loginPathArgv[0] { return .success(stdout("/usr/bin:/home/.local/bin\n")) }
+            return .success(stdout(""))
+        }
+        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let sut = ToolEnvironmentRepositoryImpl(home: "/home", baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { _ in false })
+
+        // when
+        let result = await sut.discoverEnvironment()
+
+        // then
+        #expect(result.loginPath == "/usr/bin:/home/.local/bin:/nvm/bin:/home/.opencode/bin")
+    }
+
+    @Test func givenTheInteractiveProbeTimesOut_whenDiscovering_thenTheLoginPathStands() async {
+        // given
+        let runner = StubProcessRunner { call in
+            if call.arguments.contains("-i") { return .success(ProcessOutput(exitCode: 0, stdout: Data("/nvm/bin".utf8), stderr: "", timedOut: true)) }
+            if call.executable == LaunchEnvironment.loginPathArgv[0] { return .success(stdout("/usr/bin\n")) }
+            return .success(stdout(""))
+        }
+        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let sut = ToolEnvironmentRepositoryImpl(home: "/home", baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { _ in false })
+
+        // when
+        let result = await sut.discoverEnvironment()
+
+        // then
+        #expect(result.loginPath == "/usr/bin")
+    }
+
+    @Test func givenPaths_whenMerging_thenOrderIsKeptAndDuplicatesAndEmptiesDrop() {
+        // given / when / then
+        #expect(ToolEnvironmentRepositoryImpl.mergedPath("/a:/b", "/b:/c::/a") == "/a:/b:/c")
+        #expect(ToolEnvironmentRepositoryImpl.mergedPath(nil, "/c") == "/c")
+        #expect(ToolEnvironmentRepositoryImpl.mergedPath("/a", nil) == "/a")
+        #expect(ToolEnvironmentRepositoryImpl.mergedPath(nil, nil) == nil)
+    }
+
     // MARK: PATH candidate order and dedup
 
     @Test func givenBothAFixedCandidateAndADifferentLoginPathCandidateAreExecutable_whenDiscovering_thenTheFixedCandidateWinsFirst() async {
@@ -157,6 +201,8 @@ extension ToolEnvironmentRepositoryImplTests {
         let gate = AsyncGate()
         let passCount = LockedBox(0)
         let runner = StubProcessRunner { call in
+            // The interactive-shell PATH probe runs in every pass too; only the login probe counts one.
+            if call.arguments.contains("-i") { return .success(stdout("/usr/bin\n")) }
             if call.executable == LaunchEnvironment.loginPathArgv[0] {
                 let thisPass = passCount.value + 1
                 passCount.mutate { $0 = thisPass }
@@ -196,6 +242,8 @@ extension ToolEnvironmentRepositoryImplTests {
         let gate = AsyncGate()
         let passCount = LockedBox(0)
         let runner = StubProcessRunner { call in
+            // The interactive-shell PATH probe runs in every pass too; only the login probe counts one.
+            if call.arguments.contains("-i") { return .success(stdout("/usr/bin\n")) }
             if call.executable == LaunchEnvironment.loginPathArgv[0] {
                 let thisPass = passCount.value + 1
                 passCount.mutate { $0 = thisPass }
