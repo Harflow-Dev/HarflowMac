@@ -30,6 +30,11 @@ struct InspectorModel {
     let detail: TaskInfo
     let hasSnapshot: Bool
     let notices: [String]
+    /// What polybridge reports as enforced (`PbUI.EnforcementText.lines(_:)`, mapped in the VM from
+    /// the snapshot-or-listing `detail`) — moved here from the Summary tab (item 15). Empty when
+    /// nothing was reported; defaults so call sites that read a bare task (previews, older tests)
+    /// keep building.
+    var enforcementLines: [String] = []
     /// The parent task's title when one is recorded, else "Top-level task" (D17).
     let startedBy: String
     /// `nil` hides the "Copy resume command" button.
@@ -37,6 +42,13 @@ struct InspectorModel {
     let onCopyResumeCommand: () -> Void
     let onCopyTaskID: () -> Void
     let onSelectTask: (String) -> Void
+
+    /// "What was enforced" shows only once there are lines to list or a settled snapshot carried
+    /// none — never while the snapshot itself hasn't loaded (item 15 moved the section here from
+    /// the Summary tab).
+    var showsEnforcement: Bool {
+        !enforcementLines.isEmpty || InspectorModel.showsEnforcementNotRecorded(detail: detail, hasSnapshot: hasSnapshot)
+    }
 
     /// The "Started by" value: the parent's title when the task was started by another task.
     static func startedByText(parentTitle: String?) -> String {
@@ -139,6 +151,23 @@ struct InspectorView: View {
         VStack(alignment: .leading, spacing: 24) {
             section("Details") { details(model) }
             if !model.task.isRoot { lineage(model) }
+            if model.showsEnforcement { section("What was enforced") { enforcement(model) } }
+        }
+    }
+
+    /// "What was enforced" (Summary-tab item 15: the section moved here): the plain
+    /// `PbUI.EnforcementText` sentences, plus the not-recorded note once a snapshot settled
+    /// without any enforcement data.
+    private func enforcement(_ model: InspectorModel) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(model.enforcementLines, id: \.self) { line in
+                Text(line).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+            }
+            if InspectorModel.showsEnforcementNotRecorded(detail: model.detail, hasSnapshot: model.hasSnapshot) {
+                Text("Enforcement was not recorded for this task.")
+                    .font(.pb(.secondary))
+                    .foregroundStyle(Color.secondaryText)
+            }
         }
     }
 
@@ -238,12 +267,6 @@ struct InspectorView: View {
         if let session = task.sessionID { detailRow("Session", session) }
         if let detected = task.lineageDetected { detailRow("Caller found by", detected) }
         if let cost = detail.totalCostUSD { detailRow("Cost", String(format: "$%.4f", cost)) }
-        ForEach(EnforcementText.lines(detail.enforcement), id: \.self) { line in
-            Text(line).font(.pb(.secondary)).foregroundStyle(.secondary)
-        }
-        if InspectorModel.showsEnforcementNotRecorded(detail: detail, hasSnapshot: model.hasSnapshot) {
-            Text("Enforcement was not recorded for this task.").font(.pb(.secondary)).foregroundStyle(.secondary)
-        }
     }
     
     private func detailName(_ name: String) -> some View {
@@ -260,7 +283,7 @@ struct InspectorView: View {
 
 #if DEBUG
 @MainActor
-private func previewModel(status: String, isRoot: Bool) -> InspectorModel {
+private func previewModel(status: String, isRoot: Bool, enforcement: Bool = true) -> InspectorModel {
     let task = TaskDetailViewModelMock.sampleTask(status: status, spawnedBy: isRoot ? nil : "parent01")
     var activity = ActivityCounts()
     activity.toolCalls = 12
@@ -270,6 +293,9 @@ private func previewModel(status: String, isRoot: Bool) -> InspectorModel {
         task: task, current: nil, stepCount: 4,
         activity: activity, subtaskCount: 1,
         ancestors: [], siblings: [], detail: task, hasSnapshot: true, notices: ["Approaching the turn limit."],
+        enforcementLines: enforcement
+            ? ["Restrictions enforced by the OS sandbox", "Git commit and push blocked"]
+            : [],
         startedBy: InspectorModel.startedByText(parentTitle: isRoot ? nil : "Refactor the sidebar"),
         resumeCommand: "cd /repo && claude --resume abc", onCopyResumeCommand: {}, onCopyTaskID: {}, onSelectTask: { _ in }
     )
@@ -283,6 +309,18 @@ private func previewModel(status: String, isRoot: Bool) -> InspectorModel {
 
 #Preview("Sub-task - dark") {
     InspectorView(model: previewModel(status: "completed", isRoot: false))
+        .frame(width: 280, height: 560)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("No enforcement recorded - light") {
+    InspectorView(model: previewModel(status: "completed", isRoot: true, enforcement: false))
+        .frame(width: 280, height: 560)
+        .preferredColorScheme(.light)
+}
+
+#Preview("No enforcement recorded - dark") {
+    InspectorView(model: previewModel(status: "completed", isRoot: true, enforcement: false))
         .frame(width: 280, height: 560)
         .preferredColorScheme(.dark)
 }

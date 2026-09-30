@@ -8,6 +8,7 @@
 
 import Foundation
 import MonitorCore
+import PbUI
 
 extension TaskDetailVM {
 
@@ -24,6 +25,7 @@ extension TaskDetailVM {
     func recomputeInspector(task: TaskInfo, ancestors: [TaskInfo], allChildren: [TaskInfo]) {
         let siblings = useCase.siblings(of: currentTaskID)
         let snapshot = useCase.snapshot(currentTaskID)
+        let detail = snapshot ?? task
         let activity = conversationMembers.reduce(ActivityCounts()) { acc, member in
             let memberActivity = useCase.activity(for: member.taskID)
             var result = acc
@@ -41,9 +43,14 @@ extension TaskDetailVM {
             subtaskCount: subtaskCount,
             ancestors: ancestors.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             siblings: siblings.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
-            detail: snapshot ?? task,
+            detail: detail,
             hasSnapshot: snapshot != nil,
             notices: InspectorModel.distinctNotices(task.notices),
+            // Summary-tab item 15: "What was enforced" moved from the Summary tab to the
+            // Inspector's "Technical info" disclosure — mapped here (decision 9) from the same
+            // `PbUI.EnforcementText` source, read off the snapshot-or-listing `detail` exactly
+            // like the "not recorded" rule beside it.
+            enforcementLines: EnforcementText.lines(detail.enforcement),
             startedBy: startedByText(),
             resumeCommand: resumeCommand,
             onCopyResumeCommand: { [weak self] in self?.didTapCopyResumeCommand() },

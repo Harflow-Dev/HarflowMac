@@ -12,6 +12,9 @@
 //  (`SummaryPaneModel.build(task:summary:memberEventsOldestFirst:memberAvailabilities:)`), pairing
 //  each member's calls/results independently (Review round 1, item 1).
 //
+//  "What was enforced" no longer lives here (Summary-tab item 15): the Inspector's own model
+//  carries the enforcement lines now — see `TaskDetailVM+Inspector.swift`.
+//
 
 import Foundation
 import MonitorCore

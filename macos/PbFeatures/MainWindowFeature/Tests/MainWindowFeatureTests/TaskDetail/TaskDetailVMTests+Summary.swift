@@ -146,4 +146,25 @@ extension TaskDetailVMTests {
         await waitUntil { harness.sut.summaryModel.editedFiles.map(\.path) == ["b.swift"] }
         #expect(harness.sut.summaryModel.editedFiles == [EditedFile(path: "b.swift", status: .edited)])
     }
+
+    // MARK: - Enforcement no longer lives on the Summary tab (Summary item 15)
+
+    @Test func givenEnforcementData_whenTheSummaryIsRebuilt_thenTheModelCarriesNoEnforcementData() async {
+        // given — the task still reports enforcement; the Inspector's model owns it now.
+        let harness = makeSUT()
+        let running = task(status: "running", enforcement: ["os_enforced": .bool(true)])
+        harness.detailBox.value = running
+        harness.sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.task != nil }
+        harness.sut.didSelectTab(.summary)
+
+        // when / then
+        await waitUntil { harness.sut.summaryModel.hero != nil }
+        #expect(
+            Mirror(reflecting: harness.sut.summaryModel).children.contains {
+                $0.label?.localizedCaseInsensitiveContains("enforcement") == true
+            } == false
+        )
+    }
 }

@@ -144,15 +144,17 @@ import Testing
         ("completed", "Done in 21 min"), ("failed", "Failed after 21 min"),
         ("cancelled", "Cancelled after 21 min"), ("timed_out", "Timed out after 21 min")
     ])
-    func givenASettledTaskWithAnExitCode_whenBuilt_thenTheHeadlineCarriesTheDuration(status: String, headline: String) {
-        // given
+    func givenASettledTaskWithAnExitCode_whenBuilt_thenTheHeadlineCarriesTheDurationAndThereIsNoDurationTile(
+        status: String, headline: String
+    ) {
+        // given — duration alone must not produce a tile (item 9): the hero already says it twice.
         let fields: [String: JSONValue] = ["status": .string(status), "exit_code": .number(0), "duration_seconds": .number(1260)]
         // when
         let model = build(fields)
         // then
         #expect(model.hero?.headline == headline)
         #expect(model.hero?.isRunning == false)
-        #expect(model.statTiles.first == SummaryStatTile(title: "Duration", value: "21 min"))
+        #expect(model.statTiles.isEmpty)
     }
 
     @Test(arguments: [("completed", "Done"), ("failed", "Failed"), ("cancelled", "Cancelled"), ("timed_out", "Timed out")])
@@ -165,11 +167,10 @@ import Testing
         let model = build(fields)
         // then
         #expect(model.hero?.headline == headline)
-        #expect(model.durationSeconds == nil)
         #expect(!model.statTiles.contains { $0.title == "Duration" })
     }
 
-    @Test func givenARunningTask_whenBuilt_thenTheHeroIsRunningWithItsStartAndNoDurationTile() {
+    @Test func givenARunningTask_whenBuilt_thenTheHeroIsRunningWithItsStartAndNoTiles() {
         // given
         let started = "2026-01-01T00:00:00Z"
         let fields: [String: JSONValue] = ["status": .string("running"), "started_at": .string(started), "exit_code": .number(0)]
@@ -178,7 +179,6 @@ import Testing
         // then
         #expect(model.hero?.isRunning == true)
         #expect(model.hero?.startedAt != nil)
-        #expect(model.durationSeconds == nil)
         #expect(model.statTiles.isEmpty)
     }
 
@@ -207,7 +207,7 @@ import Testing
         #expect(SummaryPaneModel.durationText(3900) == "1 h 5 min")
     }
 
-    // MARK: - Stat tiles: each only when reported
+    // MARK: - Stat tiles (item 9/item 10): Tokens / Cost only, each only when reported
 
     @Test func givenNoMetricsAtAll_whenBuilt_thenThereAreNoTilesAndNoTurns() {
         // given / when
@@ -218,6 +218,15 @@ import Testing
         #expect(model.inputTokens == nil)
         #expect(model.outputTokens == nil)
         #expect(model.costUSD == nil)
+    }
+
+    @Test func givenADurationButNeitherTokensNorCost_whenBuilt_thenTheTileRowIsHidden() {
+        // given — the hero already reports the duration; without tokens or cost there is no row.
+        let fields: [String: JSONValue] = ["status": .string("completed"), "exit_code": .number(0), "duration_seconds": .number(1260)]
+        // when
+        let model = build(fields)
+        // then
+        #expect(model.statTiles.isEmpty)
     }
 
     @Test func givenTokensAndCostReported_whenBuilt_thenBothTilesAppear() {
@@ -233,6 +242,15 @@ import Testing
         #expect(tiles.first?.value == "48210 / 3150")
     }
 
+    @Test func givenTokensOnly_whenBuilt_thenOnlyTheTokensTileAppears() {
+        // given — no cost reported at all.
+        let fields: [String: JSONValue] = ["usage": .object(["input_tokens": .number(48210), "output_tokens": .number(3150)])]
+        // when
+        let tiles = build(fields).statTiles
+        // then
+        #expect(tiles == [SummaryStatTile(title: "Tokens (in / out)", value: "48210 / 3150")])
+    }
+
     @Test func givenOnlyOneTokenCountReported_whenBuilt_thenTheMissingSideIsADash() {
         // given / when
         let tiles = build(["usage": .object(["input_tokens": .number(7)])]).statTiles
@@ -240,7 +258,16 @@ import Testing
         #expect(tiles == [SummaryStatTile(title: "Tokens (in / out)", value: "7 / –")])
     }
 
-    @Test func givenOnlyTurnsReported_whenBuilt_thenNoTokenOrCostTileAppears() {
+    @Test func givenCostOnly_whenBuilt_thenOnlyTheCostTileAppears() {
+        // given — no usage reported at all.
+        let fields: [String: JSONValue] = ["total_cost_usd": .number(0.05)]
+        // when
+        let tiles = build(fields).statTiles
+        // then
+        #expect(tiles == [SummaryStatTile(title: "Cost", value: "$0.0500")])
+    }
+
+    @Test func givenOnlyTurnsReported_whenBuilt_thenNoTileRowAppears() {
         // given / when
         let model = build(["num_turns": .number(3)])
         // then
@@ -248,18 +275,29 @@ import Testing
         #expect(model.numTurns == 3)
     }
 
-    // MARK: - Edited file rows (D8)
+    // MARK: - Edited file rows (D8, item 13)
 
-    @Test func givenANestedPath_whenMappedToARow_thenItHasNameFolderAndFullPathLabel() {
+    @Test func givenANestedPath_whenMappedToARow_thenItShowsOnlyTheLastParentFolderButKeepsTheFullPath() {
         // given
         let file = EditedFile(path: "src/app/View.swift", status: .edited)
         // when
         let row = SummaryFileRow(file)
         // then
         #expect(row.name == "View.swift")
-        #expect(row.parentFolder == "src/app")
+        #expect(row.parentFolder == "app")
         #expect(row.fullPath == "src/app/View.swift")
         #expect(row.accessibilityLabel == "Edited src/app/View.swift")
+    }
+
+    @Test func givenADeeplyNestedPath_whenMappedToARow_thenTheFolderIsOnlyTheImmediateParent() {
+        // given — "TaskRow.swift" reads as being in "Component", not the whole tree.
+        let file = EditedFile(path: "macos/PbFeatures/MainWindowFeature/Sources/TaskDetail/Component/TaskRow.swift", status: .edited)
+        // when
+        let row = SummaryFileRow(file)
+        // then
+        #expect(row.name == "TaskRow.swift")
+        #expect(row.parentFolder == "Component")
+        #expect(row.fullPath == "macos/PbFeatures/MainWindowFeature/Sources/TaskDetail/Component/TaskRow.swift")
     }
 
     @Test func givenABarePath_whenMappedToARow_thenThereIsNoParentFolder() {
@@ -283,6 +321,42 @@ import Testing
         #expect(rows.map(\.accessibilityLabel) == [
             "Edited a/x.swift", "Edit failed a/y.swift", "Edit unconfirmed, no result recorded a/z.swift"
         ])
+    }
+
+    // MARK: - Edited file collapse (item 13)
+
+    private func rows(_ count: Int) -> [SummaryFileRow] {
+        (0 ..< count).map { SummaryFileRow(EditedFile(path: "src/Folder\($0)/File\($0).swift", status: .edited)) }
+    }
+
+    @Test func givenMoreThanEightFiles_whenNotShowingAll_thenOnlyTheFirstEightRowsShow() {
+        // given
+        let all = rows(12)
+        // when
+        let visible = SummaryPaneModel.visibleFileRows(all, showingAll: false)
+        // then
+        #expect(visible.rows.count == SummaryPaneModel.fileRowCollapseThreshold)
+        #expect(visible.rows == Array(all.prefix(8)))
+        #expect(visible.hiddenCount == 4)
+    }
+
+    @Test func givenMoreThanEightFiles_whenShowingAll_thenEveryRowShowsAndNothingHides() {
+        // given
+        let all = rows(12)
+        // when
+        let visible = SummaryPaneModel.visibleFileRows(all, showingAll: true)
+        // then
+        #expect(visible.rows == all)
+        #expect(visible.hiddenCount == 0)
+    }
+
+    @Test func givenAtMostEightFiles_whenNotShowingAll_thenEveryRowShowsAndNothingHides() {
+        // given — exactly the threshold, and one below it.
+        let eight = rows(8)
+        let seven = rows(7)
+        // when / then
+        #expect(SummaryPaneModel.visibleFileRows(eight, showingAll: false) == (eight, 0))
+        #expect(SummaryPaneModel.visibleFileRows(seven, showingAll: false) == (seven, 0))
     }
 
     // MARK: - Token key fallback (by key, never by backend name)
@@ -336,21 +410,14 @@ import Testing
         #expect(model.outputTokens == 2)
     }
 
-    // MARK: - What was enforced: presence/absence
+    // MARK: - What was enforced (item 15: moved to the Inspector; the Summary model carries none)
 
-    @Test func givenNoEnforcement_whenBuilt_thenEnforcementLinesIsEmpty() {
-        // given / when
-        let model = SummaryPaneModel.build(task: task(), summary: nil, events: [], eventsAvailability: .available)
-        // then
-        #expect(model.enforcementLines.isEmpty)
-    }
-
-    @Test func givenEnforcementData_whenBuilt_thenEnforcementLinesIsPopulated() {
-        // given
+    @Test func givenEnforcementData_whenBuilt_thenTheSummaryModelCarriesNoEnforcementData() {
+        // given — enforcement still arrives on the task; the Summary tab just ignores it now.
         let withEnforcement = task(["enforcement": .object(["os_enforced": .bool(true)])])
         // when
         let model = SummaryPaneModel.build(task: withEnforcement, summary: nil, events: [], eventsAvailability: .available)
         // then
-        #expect(!model.enforcementLines.isEmpty)
+        #expect(Mirror(reflecting: model).children.contains { $0.label?.localizedCaseInsensitiveContains("enforcement") == true } == false)
     }
 }
