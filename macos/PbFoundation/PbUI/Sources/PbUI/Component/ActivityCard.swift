@@ -13,7 +13,8 @@ public struct ActivityCard<Content: View>: View {
     public var body: some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.cardFill))
             .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(Color.cardBorder, lineWidth: 1))
     }

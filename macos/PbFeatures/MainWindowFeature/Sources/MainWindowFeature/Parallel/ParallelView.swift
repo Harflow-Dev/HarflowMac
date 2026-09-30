@@ -165,7 +165,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
             SkeletonRows(count: 4, showsBadge: false)
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(16)
     }
 }
 

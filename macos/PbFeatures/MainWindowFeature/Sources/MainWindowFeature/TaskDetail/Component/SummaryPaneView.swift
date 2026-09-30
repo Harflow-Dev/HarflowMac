@@ -237,7 +237,7 @@ struct SummaryPaneView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 28) {
                 if let hero = model.hero { heroSection(hero) }
 
                 if !model.statTiles.isEmpty { statTiles }
@@ -256,7 +256,7 @@ struct SummaryPaneView: View {
 
                 if !model.enforcementLines.isEmpty { enforcement }
             }
-            .padding(18)
+            .padding(24)
             .readingColumn()
         }
     }

@@ -47,6 +47,7 @@ public struct GroupRow: View {
             Spacer(minLength: 4)
             if group.anyRunning { ProgressView().controlSize(.mini) }
         }
+        .padding(.vertical, 6)
     }
 }
 

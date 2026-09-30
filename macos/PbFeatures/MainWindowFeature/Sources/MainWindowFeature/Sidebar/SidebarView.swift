@@ -110,7 +110,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
             .help("New session")
             .accessibilityLabel("New session")
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 8)
     }
@@ -147,7 +147,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .padding(.bottom, 6)
     }
 
@@ -227,8 +227,8 @@ struct SidebarView<VM: SidebarViewModel>: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Settings")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
     }
 }

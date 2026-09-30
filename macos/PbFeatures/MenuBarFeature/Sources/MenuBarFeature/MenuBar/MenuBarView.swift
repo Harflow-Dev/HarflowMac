@@ -76,7 +76,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             header
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 16) {
                     notices
                     ForEach(viewModel.runningRows) { row in
                         MenuBarRunningRowView(model: row) { viewModel.didSelectRunningTask(row.id) }
@@ -88,7 +88,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
                     }
                     recent
                 }
-                .padding(12)
+                .padding(16)
             }
             Divider()
             footer
@@ -119,7 +119,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             .help("New session")
             .accessibilityLabel("New session")
         }
-        .padding(12)
+        .padding(16)
     }
     
     @ViewBuilder
@@ -173,7 +173,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             .accessibilityLabel("Settings and quit")
         }
         .font(.pb(.body))
-        .padding(12)
+        .padding(16)
     }
 }
 

@@ -227,8 +227,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 .help("Show the notices in the inspector")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 24)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
 
     private var breadcrumbs: some View {
@@ -246,7 +247,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1).textSelection(.enabled)
             HStack(spacing: 6) {
                 Text(Format.repoName(task.repoPath))
@@ -312,7 +313,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         .pickerStyle(.segmented)
         .labelsHidden()
         .frame(maxWidth: 320)
-        .padding(.bottom, 8)
+        .padding(.top, 16)
+        .padding(.bottom, 16)
     }
 
     /// Content over the composer. Each tab centres its own content with `readingColumn()` inside its

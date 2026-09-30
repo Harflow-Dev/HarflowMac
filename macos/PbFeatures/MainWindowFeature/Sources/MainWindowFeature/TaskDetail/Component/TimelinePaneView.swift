@@ -86,12 +86,12 @@ struct TimelinePaneView: View {
                 Spacer()
                 Toggle("Follow live", isOn: $followLive).toggleStyle(.checkbox).font(.pb(.secondary))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 8)
             .readingColumn()
             if model.isLoading {
                 SkeletonRows(count: 5, showsBadge: false)
-                    .padding(16)
+                    .padding(24)
                     .readingColumn()
                     .frame(maxHeight: .infinity, alignment: .top)
             } else {
@@ -103,7 +103,7 @@ struct TimelinePaneView: View {
     private var feed: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 20) {
                     if let emptyText = model.emptyText {
                         Text(emptyText).font(.pb(.body)).foregroundStyle(Color.secondaryText)
                     }
@@ -118,7 +118,7 @@ struct TimelinePaneView: View {
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .padding(16)
+                .padding(24)
                 .readingColumn()
             }
             .onChange(of: model.updateToken) { _, _ in

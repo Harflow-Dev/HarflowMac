@@ -44,7 +44,7 @@ struct PromptBubbleView: View {
                 }
                 Text(text)
                     .font(.pb(.reading))
-                    .lineSpacing(3)
+                    .lineSpacing(6)
                     .lineLimit(isLong && !isExpanded ? Self.collapsedLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isLong {
@@ -53,8 +53,8 @@ struct PromptBubbleView: View {
                         .font(.pb(.secondary))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.promptBubble))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

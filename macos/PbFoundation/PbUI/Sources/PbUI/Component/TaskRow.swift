@@ -107,7 +107,7 @@ public struct TaskRow: View {
         HStack(spacing: 8) {
             TreeGutter(model: model, onToggleExpansion: onToggleExpansion)
             StatusIcon(status: model.status)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(model.title).font(.pb(.body, weight: .medium)).lineLimit(1)
                 Text(model.subtitle).font(.pb(.caption)).foregroundStyle(Color.secondaryText).lineLimit(1)
             }
@@ -126,6 +126,7 @@ public struct TaskRow: View {
                 Text(model.ageText).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             }
         }
+        .padding(.vertical, 6)
     }
 }
 

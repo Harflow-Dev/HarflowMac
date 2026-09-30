@@ -19,7 +19,7 @@ struct MenuBarRunningRowView: View {
     var body: some View {
         Button(action: onTap) {
             ActivityCard {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.mini).frame(width: 16, height: 16)
                         Text(model.title).font(.pb(.body, weight: .medium)).lineLimit(1)

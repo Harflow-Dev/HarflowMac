@@ -66,7 +66,7 @@ struct InspectorView: View {
     var body: some View {
         ScrollView {
             if let model {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 24) {
                     if model.task.status.isRunning { now(model) }
                     section("Details") { basics(model) }
                     if !model.notices.isEmpty { notices(model) }
@@ -83,7 +83,7 @@ struct InspectorView: View {
                         SectionLabel(text: "Technical info")
                     }
                 }
-                .padding(14)
+                .padding(20)
             }
         }
         .background(Color.inspectorFill)
@@ -111,7 +111,7 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func basics(_ model: InspectorModel) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 detailName("Agent")
                 BackendLabel(backend: model.task.backend).font(.pb(.secondary))
@@ -124,7 +124,7 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func actions(_ model: InspectorModel) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             if model.resumeCommand != nil {
                 Button("Copy resume command", action: model.onCopyResumeCommand)
             }
@@ -136,7 +136,7 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func technicalInfo(_ model: InspectorModel) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 24) {
             section("Details") { details(model) }
             if !model.task.isRoot { lineage(model) }
         }
@@ -158,14 +158,14 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: title)
             content()
         }
     }
 
     private func lineage(_ model: InspectorModel) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 24) {
             section("Lineage") {
                 ForEach(Array(model.ancestors.enumerated()), id: \.element.id) { index, ancestor in
                     lineageRow(ancestor, indent: index, currentTaskID: model.task.taskID, onSelectTask: model.onSelectTask)

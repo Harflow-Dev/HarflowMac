@@ -84,14 +84,14 @@ struct MessageBoxView: View {
     private var isEnabled: Bool { model.canSend || model.canContinue }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .bottom, spacing: 10) {
                 field
                 sendButton
             }
-            .padding(.leading, 14)
-            .padding(.trailing, 10)
-            .padding(.vertical, 10)
+            .padding(.leading, 16)
+            .padding(.trailing, 16)
+            .padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.composerFill))
             .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(isEnabled ? Color.liveDot.opacity(0.4) : Color.cardBorder, lineWidth: 1))
             .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
@@ -102,9 +102,9 @@ struct MessageBoxView: View {
                     .foregroundStyle(Color.secondaryText)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 16)
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
     }
 
     private var canSubmit: Bool {

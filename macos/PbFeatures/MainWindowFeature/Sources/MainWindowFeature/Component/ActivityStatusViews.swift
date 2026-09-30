@@ -60,8 +60,8 @@ struct ActivityNoticeView: View {
         }
         .font(.pb(.secondary, weight: isProminent ? .medium : .regular))
         .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: PbRadius.row).fill(Color.pillFill))
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

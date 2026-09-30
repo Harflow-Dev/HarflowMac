@@ -23,7 +23,7 @@ struct ReadingMarkdownView: View {
                 case .bullet(let value):
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("•")
-                        Text(MarkdownText.inline(value)).lineSpacing(4)
+                        Text(MarkdownText.inline(value)).lineSpacing(6)
                     }
                 case .code(let value):
                     Text(value)
@@ -32,7 +32,7 @@ struct ReadingMarkdownView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(Color.codeFill))
                 case .paragraph(let value):
-                    Text(MarkdownText.inline(value)).lineSpacing(4)
+                    Text(MarkdownText.inline(value)).lineSpacing(6)
                 }
             }
         }

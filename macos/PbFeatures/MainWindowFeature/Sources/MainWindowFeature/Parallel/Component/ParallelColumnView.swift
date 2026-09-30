@@ -106,7 +106,7 @@ struct ParallelColumnView: View {
                 feed(shown)
             }
         }
-        .padding(12)
+        .padding(16)
     }
 
     // MARK: Header
@@ -138,7 +138,7 @@ struct ParallelColumnView: View {
 
     private func feed(_ shown: [ActivityRow]) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 20) {
                 ForEach(shown) { row in
                     rowView(row)
                 }

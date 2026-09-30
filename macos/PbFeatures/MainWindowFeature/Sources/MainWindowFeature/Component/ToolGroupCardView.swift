@@ -20,7 +20,7 @@ struct ToolGroupCardView: View {
 
     var body: some View {
         ActivityCard {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 Button(action: onToggle) { header }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .combine)

@@ -28,7 +28,7 @@ struct TurnSeparatorRow: View {
 
     var body: some View {
         PromptBubbleView(text: text, caption: Self.caption(timestamp: timestamp))
-            .padding(.top, 6)
+            .padding(.top, 8)
     }
 }
 
