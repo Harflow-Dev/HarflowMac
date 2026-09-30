@@ -294,10 +294,27 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .primaryAction) { takeoverButton }
             .sharedBackgroundVisibility(.hidden)
+        // Plain Labels and no button styling of our own: the toolbar draws these as native icon
+        // buttons inside one glass group (a circled "…" doubled up with the capsule).
         ToolbarItemGroup(placement: .primaryAction) {
-            moreMenu
-            inspectorToggle
+            Menu {
+                moreMenuItems
+            } label: {
+                Label("More actions", systemImage: "ellipsis")
+            }
+            .menuIndicator(.hidden)
+            .help("More actions")
+            Button {
+                isInspectorVisible.toggle()
+            } label: {
+                Label(inspectorToggleText, systemImage: "sidebar.right")
+            }
+            .help(inspectorToggleText)
         }
+    }
+
+    private var inspectorToggleText: String {
+        isInspectorVisible ? "Hide inspector" : "Show inspector"
     }
 
     private func statusLabel(_ task: TaskInfo) -> some View {
@@ -321,23 +338,28 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             Image(systemName: "sidebar.right").frame(width: 24, height: 24).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
-        .help(isInspectorVisible ? "Hide inspector" : "Show inspector")
-        .accessibilityLabel(isInspectorVisible ? "Hide inspector" : "Show inspector")
+        .help(inspectorToggleText)
+        .accessibilityLabel(inspectorToggleText)
+    }
+
+    @ViewBuilder
+    private var moreMenuItems: some View {
+        if viewModel.canCancel {
+            Button("Cancel", role: .destructive) { viewModel.didTapCancel() }.disabled(viewModel.isBusy)
+        }
+        if viewModel.resumeCommand != nil {
+            Button("Copy resume command") { viewModel.didTapCopyResumeCommand() }
+        }
+        if let parentID = viewModel.openParentTaskID {
+            Button("Open parent") { viewModel.didTapTask(parentID) }
+        }
+        Divider()
+        Button("Raw events") { isRawEventsPresented = true }
     }
 
     private var moreMenu: some View {
         Menu {
-            if viewModel.canCancel {
-                Button("Cancel", role: .destructive) { viewModel.didTapCancel() }.disabled(viewModel.isBusy)
-            }
-            if viewModel.resumeCommand != nil {
-                Button("Copy resume command") { viewModel.didTapCopyResumeCommand() }
-            }
-            if let parentID = viewModel.openParentTaskID {
-                Button("Open parent") { viewModel.didTapTask(parentID) }
-            }
-            Divider()
-            Button("Raw events") { isRawEventsPresented = true }
+            moreMenuItems
         } label: {
             Image(systemName: "ellipsis.circle").frame(width: 24, height: 24).contentShape(Rectangle())
         }
