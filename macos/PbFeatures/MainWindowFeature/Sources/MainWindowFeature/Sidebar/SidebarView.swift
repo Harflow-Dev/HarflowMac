@@ -84,6 +84,17 @@ struct SidebarView<VM: SidebarViewModel>: View {
             list
             footer
         }
+        // New session lives in the sidebar column's toolbar, beside the show/hide-sidebar button.
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    viewModel.didTapNewSession()
+                } label: {
+                    Label("New session", systemImage: "plus")
+                }
+                .help("New session")
+            }
+        }
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
         .publishViewEvent(from: viewModel, to: viewEvent)
@@ -101,14 +112,6 @@ struct SidebarView<VM: SidebarViewModel>: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: PbRadius.row).fill(Color.pillFill))
-            Button {
-                viewModel.didTapNewSession()
-            } label: {
-                Image(systemName: "plus").frame(width: 28, height: 28).contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .help("New session")
-            .accessibilityLabel("New session")
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
