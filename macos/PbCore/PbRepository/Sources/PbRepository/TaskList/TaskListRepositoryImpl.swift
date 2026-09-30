@@ -220,6 +220,8 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             // A task that left the listing (retention) must not live on in the detail cache.
             let listedIDs = Set(listed.map(\.taskID))
             snapshotRepository.evict(keeping: listedIDs)
+            // Before notifications: their title closure must already see an explicit title.
+            seedExplicitTitles(from: listed)
             if hasListedValue {
                 let finished = Lineage.finishedRoots(previous: previous, current: listed)
                 finishNotifier.notify(finished) { [weak self] id in self?.title(id) ?? "Task \(id.prefix(8))" }
@@ -263,6 +265,25 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         }
     }
 
+    /// A task started with an explicit `title` carries it in the listing. It replaces any
+    /// prompt-derived entry for that id (unlike `mergeTitles`, where the existing value wins), and
+    /// being present before `loadTitles()` runs it also keeps those ids out of the event-log reads.
+    /// A synchronous helper so the lock is never taken directly inside an `async` context.
+    private func seedExplicitTitles(from listed: [TaskInfo]) {
+        var explicit: [String: String] = [:]
+        for task in listed {
+            guard let title = task.raw["title"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !title.isEmpty else { continue }
+            explicit[task.taskID] = title
+        }
+        guard !explicit.isEmpty else { return }
+        titlesLock.lock()
+        defer { titlesLock.unlock() }
+        var current = titlesValue
+        current.merge(explicit) { _, explicit in explicit }
+        if current != titlesValue { titlesValue = current }
+    }
+
     private func failedTitleIDsSnapshot() -> Set<String> {
         titlesLock.lock()
         defer { titlesLock.unlock() }
@@ -275,7 +296,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     /// unreadable log, no `task_started`). Left at the head of every capped pass they would starve
     /// every task after them (Codex PR review), so `loadTitles` queues them behind never-tried ids.
     /// A running task is never marked — its first event may simply not be written yet.
-    private func mergeTitles(_ found: [String: String], failed: Set<String>) {
+    func mergeTitles(_ found: [String: String], failed: Set<String>) {
         titlesLock.lock()
         defer { titlesLock.unlock() }
         var current = titlesValue
