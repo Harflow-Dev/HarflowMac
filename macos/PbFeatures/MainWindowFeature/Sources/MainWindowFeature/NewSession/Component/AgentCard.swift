@@ -45,13 +45,14 @@ struct AgentCard: View {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentLink)
                     }
                 }
-                if let helpText = model.helpText {
-                    Text(helpText)
-                        .font(.pb(.secondary))
-                        .foregroundStyle(Color.secondaryText)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                // Always two lines' worth of room, so every card in the grid is the same height
+                // however long (or absent) its help text is.
+                Text(model.helpText ?? " ")
+                    .font(.pb(.secondary))
+                    .foregroundStyle(Color.secondaryText)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2, reservesSpace: true)
+                    .accessibilityHidden(model.helpText == nil)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
