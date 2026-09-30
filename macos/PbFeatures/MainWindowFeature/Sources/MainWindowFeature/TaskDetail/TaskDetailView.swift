@@ -292,8 +292,15 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         ToolbarSpacer(.flexible)
         ToolbarItem(placement: .primaryAction) { statusLabel(task) }
             .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { takeoverButton }
-            .sharedBackgroundVisibility(.hidden)
+        // A toolbar draws a plain button bezel-less until hover; glassProminent keeps it a filled
+        // button with its own insets, as in the design.
+        ToolbarItem(placement: .primaryAction) {
+            Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
+                .buttonStyle(.glassProminent)
+                .disabled(!viewModel.canTakeover)
+                .help(viewModel.takeoverHelp)
+        }
+        .sharedBackgroundVisibility(.hidden)
         // Plain Labels and no button styling of our own: the toolbar draws these as native icon
         // buttons inside one glass group (a circled "…" doubled up with the capsule).
         ToolbarItemGroup(placement: .primaryAction) {
