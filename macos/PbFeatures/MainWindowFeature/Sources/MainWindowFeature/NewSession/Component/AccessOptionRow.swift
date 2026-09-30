@@ -32,7 +32,7 @@ struct AccessOptionRow: View {
         Button(action: onSelect) {
             HStack(alignment: .top, spacing: 12) {
                 radio
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(model.title).font(.pb(.body, weight: .semibold))
                         if model.isWarning {
@@ -49,7 +49,7 @@ struct AccessOptionRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 14)
             .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(model.isSelected ? Color.accentLink.opacity(0.1) : Color.cardFill))
             .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(model.isSelected ? Color.accentLink : Color.cardBorder, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: PbRadius.card))

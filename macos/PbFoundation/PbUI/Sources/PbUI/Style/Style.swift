@@ -100,14 +100,14 @@ public enum BackendStyle {
         }
     }
 
-    /// One line saying what the backend is good for, shown under its name on the New session
+    /// The product name shown under the backend name on the New session
     /// sheet; `nil` for a backend the app has never heard of, so its card shows the name only.
     public static func helpText(_ backend: String) -> String? {
         switch backend {
-        case "claude": "Claude Code — good at planning and driving multi-step work"
-        case "codex": "OpenAI Codex CLI — thorough, strong at reviews"
-        case "vibe": "Mistral Vibe with your configured model — fast implementer"
-        case "opencode": "opencode CLI — open-source agent, any provider"
+        case "claude": "Claude Code CLI"
+        case "codex": "OpenAI Codex CLI"
+        case "vibe": "Mistral Vibe CLI, using your configured model"
+        case "opencode": "opencode CLI"
         default: nil
         }
     }

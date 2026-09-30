@@ -48,6 +48,13 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     var showsEffort: Bool { backend != "vibe" }
     var showsModel: Bool { backend != "vibe" }
     var showsTurnLimit: Bool { true }
+    var modelUnavailableNote: String? {
+        backend == "vibe" ? "Vibe uses the model set in its own config (~/.vibe/config.toml)." : nil
+    }
+
+    var modelChoices: [ModelChoiceModel] {
+        [ModelChoiceModel(id: "", title: "Default"), ModelChoiceModel(id: "opus", title: "Opus"), ModelChoiceModel(id: "sonnet", title: "Sonnet")]
+    }
 
     var canStart: Bool {
         !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

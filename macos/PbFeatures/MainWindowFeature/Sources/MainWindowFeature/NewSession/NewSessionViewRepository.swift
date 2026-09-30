@@ -12,7 +12,7 @@ import SwiftEnvironment
 // MARK: - NewSessionViewRepository
 
 /// Concrete `NewSessionUseCase` backed by `TaskActionRepository`, `BackendsRepository` and
-/// `TaskListRepository` (for the "Recent" repositories).
+/// `TaskListRepository` (for the "Recent" repositories) and `ModelCatalogRepository`.
 @MainActor
 final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
 
@@ -21,17 +21,20 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.taskActionRepository) private var taskActionRepository
     @GlobalEnvironment(\.backendsRepository) private var backendsRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
+    @GlobalEnvironment(\.modelCatalogRepository) private var modelCatalogRepository
 
     // MARK: - Init
 
     init(
         taskActionRepository: (any TaskActionRepository)? = nil,
         backendsRepository: (any BackendsRepository)? = nil,
-        taskListRepository: (any TaskListRepository)? = nil
+        taskListRepository: (any TaskListRepository)? = nil,
+        modelCatalogRepository: (any ModelCatalogRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskActionRepository { self.taskActionRepository = taskActionRepository }
         if let backendsRepository { self.backendsRepository = backendsRepository }
+        if let modelCatalogRepository { self.modelCatalogRepository = modelCatalogRepository }
     }
 
     // MARK: - NewSessionUseCase Methods
@@ -57,4 +60,8 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
 
     var backendCatalog: BackendCatalog { backendsRepository.catalog }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { backendsRepository.catalogPublisher() }
+
+    // MARK: Model catalog
+
+    func models(for backend: String) async -> [ModelOption] { await modelCatalogRepository.models(for: backend) }
 }

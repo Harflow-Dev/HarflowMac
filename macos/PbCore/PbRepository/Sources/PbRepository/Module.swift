@@ -32,6 +32,7 @@ public final class Module: PbModule {
         let install = InstallRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, settings: settings)
         let takeover = TakeoverServiceImpl(actions: taskAction, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshot)
         let backends = BackendsRepositoryImpl(toolEnvironment: toolEnvironment, installRepository: install, scheduler: scheduler)
+        let modelCatalog = ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment)
 
         GlobalValues
             .environment(\.scheduling, scheduler)
@@ -46,5 +47,6 @@ public final class Module: PbModule {
             .environment(\.installRepository, install)
             .environment(\.takeoverService, takeover)
             .environment(\.backendsRepository, backends)
+            .environment(\.modelCatalogRepository, modelCatalog)
     }
 }

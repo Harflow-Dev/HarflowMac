@@ -20,6 +20,7 @@ import Testing
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn(tasks)
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
+        given(useCase).models(for: .any).willReturn([])
         let sut = NewSessionVM(useCase: useCase, routing: routing)
         return (sut, useCase, routing, catalogSubject)
     }
@@ -303,7 +304,7 @@ import Testing
         #expect(sut.agentCards.map(\.isSelected) == [true, false, false])
         #expect(sut.agentCards.map(\.isNotInstalled) == [false, true, false])
         #expect(sut.agentCards[2].accessibilityText == "Mystery")
-        #expect(sut.agentCards[0].accessibilityText == "Claude, Claude Code — good at planning and driving multi-step work")
+        #expect(sut.agentCards[0].accessibilityText == "Claude, Claude Code CLI")
     }
 
     // MARK: - Recent repositories

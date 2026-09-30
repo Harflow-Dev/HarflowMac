@@ -34,7 +34,7 @@ struct AgentCard: View {
 
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     BackendDot(backend: model.id)
                     Text(model.name).font(.pb(.body, weight: .semibold))
@@ -55,7 +55,7 @@ struct AgentCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 14)
             .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(model.isSelected ? Color.accentLink.opacity(0.1) : Color.cardFill))
             .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(model.isSelected ? Color.accentLink : Color.cardBorder, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: PbRadius.card))
@@ -103,7 +103,7 @@ struct AgentGrid: View {
     }
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: Self.columnCount), spacing: 8) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: Self.columnCount), spacing: 12) {
             ForEach(cards) { card in
                 AgentCard(model: card) { onSelect(card.id) }
                     .focusable(!card.isNotInstalled)

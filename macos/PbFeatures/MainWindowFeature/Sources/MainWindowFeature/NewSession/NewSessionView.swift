@@ -36,6 +36,10 @@ protocol NewSessionViewModel: ViewModel {
     var effortOptions: [String] { get }
     var showsEffort: Bool { get }
     var showsModel: Bool { get }
+    /// "Default" first, then the agent's known models.
+    var modelChoices: [ModelChoiceModel] { get }
+    /// Explains why there is no Model control; `nil` when there is one.
+    var modelUnavailableNote: String? { get }
     var showsTurnLimit: Bool { get }
     var agentNotFoundNote: String? { get }
     var agentListUnavailableNote: String? { get }
@@ -81,7 +85,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 32) {
                     header
                     taskSection
                     agentSection
@@ -90,8 +94,8 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                     advancedSection
                 }
                 .padding(.horizontal, 28)
-                .padding(.top, 24)
-                .padding(.bottom, 12)
+                .padding(.top, 32)
+                .padding(.bottom, 24)
             }
             if let errorText = viewModel.errorText {
                 Text(errorText)
@@ -100,12 +104,12 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 28)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 12)
             }
             footer
         }
         .frame(width: 600)
-        .frame(minHeight: 420, idealHeight: 780, maxHeight: 860)
+        .frame(minHeight: 420, idealHeight: 860, maxHeight: 920)
         .background(Color.windowBG)
         .onAppear {
             viewModel.didAppear()
@@ -118,7 +122,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     // MARK: - Sections
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             // swiftlint:disable:next no_literal_font_size - the design's 20 pt sheet title sits between the scale's title (18) and hero (22).
             Text("New session").font(.system(size: 20, weight: .semibold))
             Text("Start an agent on one of your repos. It runs in the background and shows up in the sidebar.")
@@ -128,10 +132,10 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var taskSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("What should it do?")
             promptEditor
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 Text("Name").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 TextField("Optional — shown in the sidebar, e.g. MT-2477 iOS review", text: binding(\.name, viewModel.didChangeName))
                     .textFieldStyle(.roundedBorder)
@@ -146,8 +150,8 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             .scrollContentBackground(.hidden)
             .focused($isPromptFocused)
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .frame(height: 104)
+            .padding(.vertical, 8)
+            .frame(height: 112)
             .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.composerFill))
             .overlay(alignment: .topLeading) {
                 if viewModel.message.isEmpty {
@@ -155,7 +159,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                         .font(.pb(.body))
                         .foregroundStyle(Color.secondaryText)
                         .padding(.horizontal, 13)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 8)
                         .allowsHitTesting(false)
                 }
             }
@@ -168,7 +172,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var agentSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Agent")
             AgentGrid(cards: viewModel.agentCards, onSelect: viewModel.didChangeBackend)
             if let note = viewModel.agentListUnavailableNote {
@@ -180,7 +184,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var repositorySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Repository")
             HStack(spacing: 8) {
                 HStack(spacing: 8) {
@@ -201,9 +205,9 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var accessSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("What can it change?")
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 ForEach(viewModel.accessOptions) { option in
                     AccessOptionRow(model: option) { viewModel.didChangeFreedom(option.id) }
                 }
@@ -217,7 +221,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var advancedSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 16) {
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { isAdvancedExpanded.toggle() }
             } label: {
@@ -239,7 +243,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var advancedFields: some View {
-        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 8) {
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 16) {
             if viewModel.showsEffort {
                 GridRow {
                     Text("Reasoning effort").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
@@ -254,9 +258,13 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             if viewModel.showsModel {
                 GridRow {
                     Text("Model").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
-                    TextField("Empty uses the agent's default", text: binding(\.model, viewModel.didChangeModel))
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Model")
+                    ModelCombo(text: viewModel.model, choices: viewModel.modelChoices, onChange: viewModel.didChangeModel)
+                }
+            }
+            if let note = viewModel.modelUnavailableNote {
+                GridRow {
+                    Text("Model").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                    Text(note).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 }
             }
             if viewModel.showsTurnLimit {
@@ -291,8 +299,8 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                     .disabled(!viewModel.canStart)
             }
             .padding(.horizontal, 28)
-            .padding(.top, 16)
-            .padding(.bottom, 22)
+            .padding(.top, 20)
+            .padding(.bottom, 24)
         }
     }
 

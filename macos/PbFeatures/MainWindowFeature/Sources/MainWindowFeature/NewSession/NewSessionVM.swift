@@ -34,6 +34,10 @@ protocol NewSessionUseCase: Sendable {
 
     var backendCatalog: BackendCatalog { get }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never>
+
+    /// The known models for `backend` (no "Default" entry); empty when there are none or discovery
+    /// failed. Never throws and never blocks the caller beyond the discovery itself.
+    func models(for backend: String) async -> [ModelOption]
 }
 
 // MARK: - NewSessionRouting
@@ -117,8 +121,19 @@ final class NewSessionVM: NewSessionViewModel {
 
     /// Vibe has no reasoning-effort setting; every other agent takes polybridge's vocabulary.
     var showsEffort: Bool { backend != "vibe" }
+    /// The Model combo's suggestions: "Default" (the agent's own model, an empty value) first, then
+    /// the agent's known models. Only "Default" until a discovery finishes or when there are none.
+    var modelChoices: [ModelChoiceModel] {
+        [ModelChoiceModel(id: "", title: "Default")] + modelOptions.map { ModelChoiceModel(id: $0.value, title: $0.label) }
+    }
+
     /// Vibe rejects a model outright: its model is chosen in its own config.
     var showsModel: Bool { backend != "vibe" }
+    /// Shown in place of the Model control for an agent that takes no model from polybridge (vibe).
+    var modelUnavailableNote: String? {
+        backend == "vibe" ? "Vibe uses the model set in its own config (~/.vibe/config.toml)." : nil
+    }
+
     /// Only agents polybridge can cap (claude, vibe); codex and opencode would reject the run.
     var showsTurnLimit: Bool { BackendStyle.supportsTurnLimit(backend) }
     var effortOptions: [String] { showsEffort ? Self.effortLevels : [] }
@@ -154,10 +169,12 @@ final class NewSessionVM: NewSessionViewModel {
     // MARK: - Private Properties
 
     private var recentRepoPaths: [String] = []
+    private var modelOptions: [ModelOption] = []
     @ObservationIgnored private let useCase: any NewSessionUseCase
     @ObservationIgnored private let routing: any NewSessionRouting
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
+    @ObservationIgnored private var modelsTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -173,17 +190,22 @@ final class NewSessionVM: NewSessionViewModel {
     func didAppear() {
         refreshRecentRepos()
         subscribeIfNeeded()
+        loadModels()
     }
 
     func didDisappear() {
         cancellables.removeAll()
         didSubscribe = false
+        modelsTask?.cancel()
+        modelsTask = nil
     }
 
     func didChangeBackend(_ value: String) {
+        let previous = backend
         backend = value
         if !effortOptions.contains(effort) { effort = "" }
         recomputeAgentNotFoundNote()
+        if value != previous { agentDidChange() }
     }
 
     func didChangeRepo(_ value: String) { repo = value }
@@ -254,6 +276,30 @@ final class NewSessionVM: NewSessionViewModel {
         )
     }
 
+    /// A model typed or picked for one agent means nothing to another, so it is cleared (like effort
+    /// for vibe), and the new agent's suggestions are requested.
+    private func agentDidChange() {
+        model = ""
+        modelOptions = []
+        loadModels()
+    }
+
+    /// Requests the current agent's model list without blocking the sheet; an answer that arrives
+    /// after the agent changed again is dropped.
+    private func loadModels() {
+        modelsTask?.cancel()
+        let requested = backend
+        guard showsModel else {
+            modelOptions = []
+            return
+        }
+        modelsTask = Task { [weak self, useCase] in
+            let options = await useCase.models(for: requested)
+            guard !Task.isCancelled, let self, backend == requested else { return }
+            modelOptions = options
+        }
+    }
+
     private func refreshRecentRepos() {
         var seen = Set<String>()
         recentRepoPaths = useCase.tasks
@@ -282,10 +328,12 @@ final class NewSessionVM: NewSessionViewModel {
         let (options, unavailableNote) = Self.computeAgentOptions(from: catalog)
         agentOptions = options
         agentListUnavailableNote = unavailableNote
+        let previous = backend
         if !options.contains(where: { $0.id == backend }) {
             backend = options.first?.id ?? ""
         }
         recomputeAgentNotFoundNote()
+        if backend != previous, didSubscribe { agentDidChange() }
     }
 
     private func recomputeAgentNotFoundNote() {

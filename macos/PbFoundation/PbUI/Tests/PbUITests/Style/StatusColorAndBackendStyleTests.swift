@@ -20,10 +20,10 @@ import Testing
     
     @Test func givenEachKnownBackend_whenReadingItsHelpText_thenReturnsItsOneLineDescription() {
         // given / when / then
-        #expect(BackendStyle.helpText("claude") == "Claude Code — good at planning and driving multi-step work")
-        #expect(BackendStyle.helpText("codex") == "OpenAI Codex CLI — thorough, strong at reviews")
-        #expect(BackendStyle.helpText("vibe") == "Mistral Vibe with your configured model — fast implementer")
-        #expect(BackendStyle.helpText("opencode") == "opencode CLI — open-source agent, any provider")
+        #expect(BackendStyle.helpText("claude") == "Claude Code CLI")
+        #expect(BackendStyle.helpText("codex") == "OpenAI Codex CLI")
+        #expect(BackendStyle.helpText("vibe") == "Mistral Vibe CLI, using your configured model")
+        #expect(BackendStyle.helpText("opencode") == "opencode CLI")
     }
 
     @Test func givenAnUnknownBackend_whenReadingItsHelpText_thenReturnsNil() {
