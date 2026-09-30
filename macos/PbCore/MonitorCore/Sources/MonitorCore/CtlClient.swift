@@ -138,14 +138,25 @@ public struct RunRequest: Equatable, Sendable {
     public var freedom: String?
     public var reasoningEffort: String?
     public var group: String?
+    /// Shown in the sidebar in place of a prompt-derived title (`ctl run --title`).
+    public var title: String?
+    /// The backend's own model name; `nil` or empty keeps the agent's default.
+    public var model: String?
+    public var maxTurns: Int?
 
-    public init(backend: String, repo: String, prompt: String, freedom: String? = nil, reasoningEffort: String? = nil, group: String? = nil) {
+    public init(
+        backend: String, repo: String, prompt: String, freedom: String? = nil, reasoningEffort: String? = nil, group: String? = nil,
+        title: String? = nil, model: String? = nil, maxTurns: Int? = nil
+    ) {
         self.backend = backend
         self.repo = repo
         self.prompt = prompt
         self.freedom = freedom
         self.reasoningEffort = reasoningEffort
         self.group = group
+        self.title = title
+        self.model = model
+        self.maxTurns = maxTurns
     }
 
     /// `--opt=value` form throughout, so a prompt starting with `-` can never be read as an option.
@@ -154,6 +165,9 @@ public struct RunRequest: Equatable, Sendable {
         if let freedom, !freedom.isEmpty { args.append("--freedom=\(freedom)") }
         if let reasoningEffort, !reasoningEffort.isEmpty { args.append("--reasoning-effort=\(reasoningEffort)") }
         if let group, !group.isEmpty { args.append("--group=\(group)") }
+        if let title, !title.isEmpty { args.append("--title=\(title)") }
+        if let model, !model.isEmpty { args.append("--model=\(model)") }
+        if let maxTurns { args.append("--max-turns=\(maxTurns)") }
         return args
     }
 }

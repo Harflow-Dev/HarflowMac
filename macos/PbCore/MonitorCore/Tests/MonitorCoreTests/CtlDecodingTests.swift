@@ -302,6 +302,22 @@ struct CtlClientTests {
     }
 
     @Test
+    func givenATitleModelAndTurnLimit_whenBuildingArguments_thenEachRidesInTheEqualsForm() {
+        // given
+        let request = RunRequest(backend: "codex", repo: "/r", prompt: "p", title: "--MT-2477", model: "gpt-6-astra", maxTurns: 40)
+        // when / then — a title starting with "-" still can't be read as an option.
+        #expect(request.arguments == ["--backend=codex", "--repo=/r", "--prompt=p", "--title=--MT-2477", "--model=gpt-6-astra", "--max-turns=40"])
+    }
+
+    @Test
+    func givenEmptyTitleAndModel_whenBuildingArguments_thenTheyAreLeftOut() {
+        // given
+        let request = RunRequest(backend: "claude", repo: "/r", prompt: "p", title: "", model: "")
+        // when / then
+        #expect(request.arguments == ["--backend=claude", "--repo=/r", "--prompt=p"])
+    }
+
+    @Test
     func givenEachClientCommand_whenSent_thenItProducesTheExpectedArgv() async throws {
         // given
         let runner = RecordingRunner { call in
