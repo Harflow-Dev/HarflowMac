@@ -176,11 +176,23 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// the navigation view already provides, which is harmless only by accident; moving it up here
     /// keeps every screen sharing the single environment/state the window root owns.
     public func buildParallelView(name: String) -> AnyView {
+        // A group of one agent is not a parallel run: it gets the ordinary task screen.
+        if let taskID = Self.soleConversationID(inGroup: name, tasks: taskListRepository.tasks) {
+            return buildTaskDetailView(id: taskID)
+        }
         let useCase = ParallelViewRepository()
         let vm = ParallelVM(groupName: name, useCase: useCase, routing: self)
         return ParallelView(vm).id(name).eraseToAnyView()
     }
     
+    /// The first task of the group's only agent conversation, or `nil` when the group has none or
+    /// several (then it is a real parallel run). Membership is read when the view is built.
+    nonisolated static func soleConversationID(inGroup name: String, tasks: [TaskInfo]) -> String? {
+        guard let group = Lineage.sections(tasks).parallel.first(where: { $0.name == name }),
+              group.conversations.count == 1 else { return nil }
+        return group.conversations[0].first.taskID
+    }
+
     /// A fresh VM every call, keyed by `id` exactly like `buildParallelView(name:)` above: `.id()`
     /// wraps the whole `TaskDetailView(vm)` value here, at the call site — never inside
     /// `TaskDetailView.body`, which owns no `@State` of its own (its `.id()` need is satisfied by
