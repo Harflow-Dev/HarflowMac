@@ -11,7 +11,8 @@ import SwiftEnvironment
 
 // MARK: - NewSessionViewRepository
 
-/// Concrete `NewSessionUseCase` backed by `TaskActionRepository` and `BackendsRepository`.
+/// Concrete `NewSessionUseCase` backed by `TaskActionRepository`, `BackendsRepository` and
+/// `TaskListRepository` (for the "Recent" repositories).
 @MainActor
 final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
 
@@ -19,10 +20,16 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
 
     @GlobalEnvironment(\.taskActionRepository) private var taskActionRepository
     @GlobalEnvironment(\.backendsRepository) private var backendsRepository
+    @GlobalEnvironment(\.taskListRepository) private var taskListRepository
 
     // MARK: - Init
 
-    init(taskActionRepository: (any TaskActionRepository)? = nil, backendsRepository: (any BackendsRepository)? = nil) {
+    init(
+        taskActionRepository: (any TaskActionRepository)? = nil,
+        backendsRepository: (any BackendsRepository)? = nil,
+        taskListRepository: (any TaskListRepository)? = nil
+    ) {
+        if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskActionRepository { self.taskActionRepository = taskActionRepository }
         if let backendsRepository { self.backendsRepository = backendsRepository }
     }
@@ -43,6 +50,8 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
     func run(_ request: RunRequest) async throws -> String {
         try await taskActionRepository.run(request)
     }
+
+    var tasks: [TaskInfo] { taskListRepository.tasks }
 
     // MARK: Backend catalog (Monitor piece 6)
 

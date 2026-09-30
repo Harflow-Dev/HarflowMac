@@ -18,6 +18,19 @@ import Testing
         #expect(BackendStyle.letter("something") == "S")
     }
     
+    @Test func givenEachKnownBackend_whenReadingItsHelpText_thenReturnsItsOneLineDescription() {
+        // given / when / then
+        #expect(BackendStyle.helpText("claude") == "Claude Code — good at planning and driving multi-step work")
+        #expect(BackendStyle.helpText("codex") == "OpenAI Codex CLI — thorough, strong at reviews")
+        #expect(BackendStyle.helpText("vibe") == "Mistral Vibe with your configured model — fast implementer")
+        #expect(BackendStyle.helpText("opencode") == "opencode CLI — open-source agent, any provider")
+    }
+
+    @Test func givenAnUnknownBackend_whenReadingItsHelpText_thenReturnsNil() {
+        // given / when / then
+        #expect(BackendStyle.helpText("mystery") == nil)
+    }
+
     @Test func givenTheKnownBackendsList_whenReadingIt_thenContainsExactlyTheFourSupportedBackends() {
         // given / when / then
         #expect(BackendStyle.known == ["claude", "codex", "opencode", "vibe"])
@@ -83,5 +96,14 @@ import Testing
     
     @Test func givenAnOtherStatus_whenReadingItsColor_thenReturnsSecondary() {
         #expect(StatusColor.of(.other("queued")) == .secondary)
+    }
+
+    @Test func givenEachBackend_whenAskingAboutATurnLimit_thenOnlyClaudeAndVibeSupportIt() {
+        // given / when / then — mirrors polybridge's supports_turn_cap per backend.
+        #expect(BackendStyle.supportsTurnLimit("claude"))
+        #expect(BackendStyle.supportsTurnLimit("vibe"))
+        #expect(!BackendStyle.supportsTurnLimit("codex"))
+        #expect(!BackendStyle.supportsTurnLimit("opencode"))
+        #expect(!BackendStyle.supportsTurnLimit("someday"))
     }
 }

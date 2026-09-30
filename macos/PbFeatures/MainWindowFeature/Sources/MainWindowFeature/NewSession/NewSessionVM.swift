@@ -27,6 +27,9 @@ protocol NewSessionUseCase: Sendable {
     /// returns (F4-17) — inherited unchanged from `TaskActionRepository.run`.
     func run(_ request: RunRequest) async throws -> String
 
+    /// The current task listing; the VM derives the "Recent" repositories from it.
+    var tasks: [TaskInfo] { get }
+
     // MARK: Backend catalog (Monitor piece 6)
 
     var backendCatalog: BackendCatalog { get }
@@ -71,6 +74,11 @@ final class NewSessionVM: NewSessionViewModel {
     private(set) var repo = ""
     private(set) var freedom = "read_only"
     private(set) var message = ""
+    private(set) var name = ""
+    private(set) var model = ""
+    private(set) var turnLimit = ""
+    /// The chosen reasoning effort; empty means the agent's default.
+    private(set) var effort = ""
     private(set) var errorText: String?
     private(set) var isStarting = false
     private(set) var agentOptions: [BackendTab] = []
@@ -82,12 +90,70 @@ final class NewSessionVM: NewSessionViewModel {
     /// than anything polybridge actually reported.
     private(set) var agentListUnavailableNote: String?
 
+    /// The agent options as selectable cards.
+    var agentCards: [AgentCardModel] {
+        agentOptions.map {
+            AgentCardModel(
+                id: $0.id, name: BackendStyle.displayName($0.id), helpText: BackendStyle.helpText($0.id),
+                isSelected: $0.id == backend, isNotInstalled: $0.isNotFound
+            )
+        }
+    }
+
+    /// Up to `Self.recentRepoLimit` distinct repositories from the task list, most recent first.
+    var recentRepos: [RecentRepoModel] {
+        recentRepoPaths.map { RecentRepoModel(path: $0, name: Format.repoName($0), isSelected: $0 == repo) }
+    }
+
+    /// The four `freedom` levels as radio rows, in increasing order of power.
+    var accessOptions: [AccessOptionModel] {
+        Self.freedomLevels.map { level in
+            AccessOptionModel(
+                id: level.id, title: AccessLabel.text(freedom: level.id), detail: level.detail,
+                isSelected: level.id == freedom, isWarning: level.id == "unrestricted"
+            )
+        }
+    }
+
+    /// Vibe has no reasoning-effort setting; every other agent takes polybridge's vocabulary.
+    var showsEffort: Bool { backend != "vibe" }
+    /// Vibe rejects a model outright: its model is chosen in its own config.
+    var showsModel: Bool { backend != "vibe" }
+    /// Only agents polybridge can cap (claude, vibe); codex and opencode would reject the run.
+    var showsTurnLimit: Bool { BackendStyle.supportsTurnLimit(backend) }
+    var effortOptions: [String] { showsEffort ? Self.effortLevels : [] }
+
     var canStart: Bool {
         !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && turnLimitError == nil
     }
+
+    /// The typed turn limit: blank means the agent's default; anything else must be a whole number
+    /// above zero, or the session would silently start without the cap the user asked for.
+    var parsedTurnLimit: Int? {
+        Int(turnLimit.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0 > 0 ? $0 : nil }
+    }
+
+    /// Why Start is held back by the Turn limit field, or `nil` when it is blank, valid or hidden.
+    var turnLimitError: String? {
+        guard showsTurnLimit, !turnLimit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, parsedTurnLimit == nil else { return nil }
+        return "Enter a whole number above 0, or leave it empty for the default."
+    }
+
+    // MARK: - Constants
+
+    static let recentRepoLimit = 5
+    static let effortLevels = ["low", "medium", "high", "xhigh"]
+    private static let freedomLevels: [(id: String, detail: String)] = [
+        ("read_only", "Reads the code and answers. Doesn't change any files. Good for questions and reviews."),
+        ("write_in_repo", "Edits files in the repo. Commits and pushes are blocked, so you review before anything leaves."),
+        ("publish", "Edits files and may also commit, push and open a PR, if your git and GitHub setup allow it."),
+        ("unrestricted", "No limits from polybridge. The agent can touch anything your user account can. Use sparingly.")
+    ]
 
     // MARK: - Private Properties
 
+    private var recentRepoPaths: [String] = []
     @ObservationIgnored private let useCase: any NewSessionUseCase
     @ObservationIgnored private let routing: any NewSessionRouting
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
@@ -99,11 +165,13 @@ final class NewSessionVM: NewSessionViewModel {
         self.useCase = useCase
         self.routing = routing
         applyCatalog(useCase.backendCatalog)
+        refreshRecentRepos()
     }
 
     // MARK: - NewSessionViewModel Methods
 
     func didAppear() {
+        refreshRecentRepos()
         subscribeIfNeeded()
     }
 
@@ -114,12 +182,18 @@ final class NewSessionVM: NewSessionViewModel {
 
     func didChangeBackend(_ value: String) {
         backend = value
+        if !effortOptions.contains(effort) { effort = "" }
         recomputeAgentNotFoundNote()
     }
 
     func didChangeRepo(_ value: String) { repo = value }
     func didChangeFreedom(_ value: String) { freedom = value }
     func didChangeMessage(_ value: String) { message = value }
+    func didChangeName(_ value: String) { name = value }
+    func didChangeModel(_ value: String) { model = value }
+    func didChangeTurnLimit(_ value: String) { turnLimit = value }
+    func didChangeEffort(_ value: String) { effort = effortOptions.contains(value) ? value : "" }
+    func didTapRecentRepo(_ path: String) { repo = path }
 
     func didTapChooseDirectory() {
         Task { [weak self] in
@@ -140,7 +214,7 @@ final class NewSessionVM: NewSessionViewModel {
         errorText = nil
 
         isStarting = true
-        let request = RunRequest(backend: backend, repo: path, prompt: message, freedom: freedom)
+        let request = makeRequest(repo: path)
         // Capture `useCase`/`routing` strongly before awaiting, so the run completes and routes to
         // the new task even if this VM is torn down first (the sheet was dismissed some other way
         // while the request was in flight) — decision 3/F4-17's "capture Routing strongly" rule.
@@ -162,6 +236,32 @@ final class NewSessionVM: NewSessionViewModel {
                 self?.errorText = (error as? ToolError)?.message ?? "\(error)"
             }
         }
+    }
+
+    // MARK: - Private Methods
+
+    /// Empty optional fields become `nil`, so they are never passed to `ctl run` (an invalid turn
+    /// limit never gets here: it holds `canStart` back).
+    private func makeRequest(repo path: String) -> RunRequest {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return RunRequest(
+            backend: backend, repo: path, prompt: message, freedom: freedom,
+            reasoningEffort: effortOptions.contains(effort) ? effort : nil,
+            title: trimmedName.isEmpty ? nil : trimmedName,
+            model: showsModel && !trimmedModel.isEmpty ? trimmedModel : nil,
+            maxTurns: showsTurnLimit ? parsedTurnLimit : nil
+        )
+    }
+
+    private func refreshRecentRepos() {
+        var seen = Set<String>()
+        recentRepoPaths = useCase.tasks
+            .sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
+            .map(\.repoPath)
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+            .prefix(Self.recentRepoLimit)
+            .map(\.self)
     }
 
     // MARK: - Private Methods (Monitor piece 6)

@@ -82,4 +82,17 @@ import Testing
         #expect(received == updated)
         cancellable.cancel()
     }
+
+    // MARK: - Task listing
+
+    @Test func givenTasksInTheListRepository_whenReadFromTheUseCase_thenTheyPassThrough() {
+        // given
+        let list = MockTaskListRepository()
+        let task = TaskInfo(.object(["task_id": .string("abc123"), "repo_path": .string("/tmp")]))!
+        given(list).tasks.willReturn([task])
+        let sut = NewSessionViewRepository(taskListRepository: list)
+
+        // then
+        #expect(sut.tasks == [task])
+    }
 }

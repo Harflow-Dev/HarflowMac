@@ -100,6 +100,25 @@ public enum BackendStyle {
         }
     }
 
+    /// One line saying what the backend is good for, shown under its name on the New session
+    /// sheet; `nil` for a backend the app has never heard of, so its card shows the name only.
+    public static func helpText(_ backend: String) -> String? {
+        switch backend {
+        case "claude": "Claude Code — good at planning and driving multi-step work"
+        case "codex": "OpenAI Codex CLI — thorough, strong at reviews"
+        case "vibe": "Mistral Vibe with your configured model — fast implementer"
+        case "opencode": "opencode CLI — open-source agent, any provider"
+        default: nil
+        }
+    }
+
+    /// Whether polybridge accepts a turn cap for `backend` — mirrors each backend's own
+    /// `supports_turn_cap` (claude and vibe; codex and opencode reject `--max-turns`). An unknown
+    /// backend gets no Turn limit field rather than one that fails at start.
+    public nonisolated static func supportsTurnLimit(_ backend: String) -> Bool {
+        backend == "claude" || backend == "vibe"
+    }
+
     /// The backends the New session sheet offers. Display list only: polybridge-ctl has no
     /// command that lists backends, and `run` validates the choice itself.
     public static let known = ["claude", "codex", "opencode", "vibe"]
