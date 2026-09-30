@@ -394,12 +394,10 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     // MARK: Tabs and content
 
     private var tabPicker: some View {
-        Picker("View", selection: Binding(get: { viewModel.tab }, set: { viewModel.didSelectTab($0) })) {
-            ForEach(viewModel.tabs) { item in Text(item.rawValue).tag(item) }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(maxWidth: 320)
+        SlidingSegmentedControl(
+            options: viewModel.tabs.map { ($0, $0.rawValue) },
+            selection: Binding(get: { viewModel.tab }, set: { viewModel.didSelectTab($0) })
+        )
         .padding(.top, 16)
         .padding(.bottom, 16)
     }

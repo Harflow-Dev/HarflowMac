@@ -55,6 +55,8 @@ public extension Color {
     static let promptBubble = Palette.promptBubble.color
     /// Fill of small pills (file names).
     static let pillFill = Palette.pillFill.color
+    /// The sliding segmented control's thumb, lifted off the `pillFill` track.
+    static let selectedSegment = Palette.selectedSegment.color
     /// Secondary text with a contrast guaranteed on every surface above.
     static let secondaryText = Palette.secondaryText.color
     /// The pulsing dot beside a live step.
@@ -118,6 +120,7 @@ enum Palette {
     static let composerFill = Entry("composerFill", light: 0xFFFFFF, dark: 0x252528)
     static let promptBubble = Entry("promptBubble", light: 0xEAF1FB, dark: 0x1F2A3A)
     static let pillFill = Entry("pillFill", light: 0xF0F0F2, dark: 0x2B2B2E)
+    static let selectedSegment = Entry("selectedSegment", light: 0xFFFFFF, dark: 0x4A4A4E)
     static let secondaryText = Entry("secondaryText", light: 0x6B6B73, dark: 0x9A9AA2)
     static let liveDot = Entry("liveDot", light: 0x2F7BF0, dark: 0x5B9CFF)
     static let dotClaude = Entry("dot.claude", light: 0xC8643C, dark: 0xE08A62)
@@ -131,7 +134,7 @@ enum Palette {
         neutralFill, neutralText, warningFG, warningBG, dangerFG, dangerBG, codeFill, editPreviewFill,
         inspectorFill, diffHunkFill, diffAddedFill, diffRemovedFill, claudeBG, claudeFG, codexBG, codexFG,
         opencodeBG, opencodeFG, vibeBG, vibeFG, otherBackendBG, otherBackendFG,
-        windowBG, sidebarBG, cardFill, cardBorder, composerFill, promptBubble, pillFill, secondaryText,
+        windowBG, sidebarBG, cardFill, cardBorder, composerFill, promptBubble, pillFill, selectedSegment, secondaryText,
         liveDot, dotClaude, dotCodex, dotVibe, dotOpencode, dotOther
     ]
 }
