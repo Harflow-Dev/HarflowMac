@@ -63,12 +63,10 @@ enum MainWindowConfigurator {
         return result
     }
 
-    /// Applies the full-screen fix and hides the title text drawn in the toolbar. The title itself
-    /// stays set, so the Window menu, Mission Control and VoiceOver still name the window.
+    /// Applies the full-screen fix to the main window.
     @MainActor
     static func configure(_ window: NSWindow) {
         window.collectionBehavior = fullScreenCollectionBehavior(window.collectionBehavior)
-        window.titleVisibility = .hidden
     }
 }
 

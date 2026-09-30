@@ -48,6 +48,13 @@ struct InspectorModel {
     static func showsEnforcementNotRecorded(detail: TaskInfo, hasSnapshot: Bool) -> Bool {
         detail.enforcement == nil && hasSnapshot
     }
+
+    /// `notices` with repeats removed, first occurrence kept — a resumed run often reports the same
+    /// environment warning once per turn.
+    static func distinctNotices(_ notices: [String]) -> [String] {
+        var seen: Set<String> = []
+        return notices.filter { seen.insert($0).inserted }
+    }
 }
 
 // MARK: - InspectorView
@@ -62,6 +69,7 @@ struct InspectorView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     if model.task.status.isRunning { now(model) }
                     section("Details") { basics(model) }
+                    if !model.notices.isEmpty { notices(model) }
                     actions(model)
                     section("Activity") {
                         Text("\(model.activity.toolCalls) tool calls · \(model.activity.edits) edits · "
@@ -131,12 +139,19 @@ struct InspectorView: View {
         VStack(alignment: .leading, spacing: 16) {
             section("Details") { details(model) }
             if !model.task.isRoot { lineage(model) }
-            if !model.notices.isEmpty {
-                section("Notices") {
-                    ForEach(Array(model.notices.enumerated()), id: \.offset) { _, notice in
-                        Text(notice).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).fixedSize(horizontal: false, vertical: true)
-                    }
+        }
+    }
+
+    /// Notices the run reported (environment warnings, dispatch notes). They live here rather than
+    /// above the activity; the header only shows a count that opens this panel.
+    private func notices(_ model: InspectorModel) -> some View {
+        section("Notices") {
+            ForEach(Array(model.notices.enumerated()), id: \.offset) { _, notice in
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(Color.warningFG)
+                    Text(notice).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

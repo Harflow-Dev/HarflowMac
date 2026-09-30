@@ -344,15 +344,12 @@ public struct Banner: View {
     public let title: String
     public let text: String
     public var tint: Color = .accentLink
-    /// Caps the body text's lines (full text in the tooltip); `nil` shows it all.
-    public var lineLimit: Int?
 
-    public init(icon: String, title: String, text: String, tint: Color = .accentLink, lineLimit: Int? = nil) {
+    public init(icon: String, title: String, text: String, tint: Color = .accentLink) {
         self.icon = icon
         self.title = title
         self.text = text
         self.tint = tint
-        self.lineLimit = lineLimit
     }
 
     public var body: some View {
@@ -360,12 +357,7 @@ public struct Banner: View {
             Image(systemName: icon).foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 2) {
                 if !title.isEmpty { Text(title).font(.pb(.body, weight: .semibold)) }
-                Text(text)
-                    .font(.pb(.body))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(lineLimit)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .help(lineLimit == nil ? "" : text)
+                Text(text).font(.pb(.body)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }

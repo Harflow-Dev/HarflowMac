@@ -143,6 +143,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     .transition(.move(edge: .trailing))
                 }
             }
+            // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
+            // change can land outside the tap's transaction and would then not animate.
+            .animation(.easeInOut(duration: 0.25), value: isInspectorVisible)
             .sheet(isPresented: $isRawEventsPresented) {
                 RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
             }
@@ -212,12 +215,16 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             if let text = viewModel.spawnedByBannerText {
                 Banner(icon: "arrow.turn.down.right", title: "Sub-task started by another agent", text: text)
             }
-            let notices = HeaderNotices(viewModel.inspectorModel?.notices ?? [])
-            ForEach(Array(notices.shown.enumerated()), id: \.offset) { _, notice in
-                Banner(icon: "exclamationmark.triangle", title: "", text: notice, tint: .warningFG, lineLimit: HeaderNotices.lineLimit)
-            }
-            if let moreText = notices.moreText {
-                Text(moreText).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+            if let noticeText = NoticeSummary.text(count: viewModel.inspectorModel?.notices.count ?? 0) {
+                Button {
+                    isInspectorVisible = true
+                } label: {
+                    Label(noticeText, systemImage: "exclamationmark.triangle")
+                        .font(.pb(.secondary))
+                        .foregroundStyle(Color.warningFG)
+                }
+                .buttonStyle(.borderless)
+                .help("Show the notices in the inspector")
             }
         }
         .padding(.horizontal, 16)
@@ -262,7 +269,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 .help(viewModel.takeoverHelp)
             moreMenu
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) { isInspectorVisible.toggle() }
+                isInspectorVisible.toggle()
             } label: {
                 Image(systemName: "sidebar.right").frame(width: 24, height: 24).contentShape(Rectangle())
             }
@@ -338,25 +345,12 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     }
 }
 
-// MARK: - HeaderNotices
+// MARK: - NoticeSummary
 
-/// The notices shown as banners under the header. They sit outside every scroll view, so both
-/// their count and each one's lines are capped — uncapped, a task with many or very long notices
-/// would force the whole window taller than the screen. Every notice stays in the inspector.
-struct HeaderNotices {
-    static let maxShown = 3
-    static let lineLimit = 3
-
-    let shown: [String]
-    let hiddenCount: Int
-
-    init(_ notices: [String]) {
-        self.shown = Array(notices.prefix(Self.maxShown))
-        self.hiddenCount = max(0, notices.count - Self.maxShown)
-    }
-
-    var moreText: String? {
-        hiddenCount > 0 ? "+\(hiddenCount) more notice\(hiddenCount == 1 ? "" : "s") in the inspector" : nil
+/// The header's one-line pointer to the inspector's Notices section.
+enum NoticeSummary {
+    static func text(count: Int) -> String? {
+        count > 0 ? "\(count) notice\(count == 1 ? "" : "s")" : nil
     }
 }
 

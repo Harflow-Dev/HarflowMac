@@ -55,6 +55,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             coordinator.buildNewSessionView()
         }
         .frame(minWidth: 1000, minHeight: 620)
+        .modifier(HiddenWindowTitle())
         .withPresentationContext()
     }
     
@@ -68,6 +69,21 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             Text("Tasks started through polybridge show up in the sidebar, live.").foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - HiddenWindowTitle
+
+/// Drops the window title SwiftUI draws in the toolbar — the task header already names what is on
+/// screen. The window keeps its title, so the Window menu and Mission Control still name it.
+/// `ToolbarDefaultItemKind.title` needs macOS 15; on macOS 14 the title stays.
+private struct HiddenWindowTitle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbar(removing: .title)
+        } else {
+            content
+        }
     }
 }
 

@@ -43,7 +43,7 @@ extension TaskDetailVM {
             siblings: siblings.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             detail: snapshot ?? task,
             hasSnapshot: snapshot != nil,
-            notices: task.notices,
+            notices: InspectorModel.distinctNotices(task.notices),
             startedBy: startedByText(),
             resumeCommand: resumeCommand,
             onCopyResumeCommand: { [weak self] in self?.didTapCopyResumeCommand() },
