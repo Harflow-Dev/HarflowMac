@@ -62,12 +62,20 @@ enum MainWindowConfigurator {
         result.insert(.fullScreenPrimary)
         return result
     }
+
+    /// Applies the full-screen fix and hides the title text drawn in the toolbar. The title itself
+    /// stays set, so the Window menu, Mission Control and VoiceOver still name the window.
+    @MainActor
+    static func configure(_ window: NSWindow) {
+        window.collectionBehavior = fullScreenCollectionBehavior(window.collectionBehavior)
+        window.titleVisibility = .hidden
+    }
 }
 
 // MARK: - MainWindowConfiguratorView
 
 /// An invisible `NSViewRepresentable` whose sole job is to reach the hosting `NSWindow` once it
-/// exists and apply `MainWindowConfigurator.fullScreenCollectionBehavior(_:)` to it, exactly once.
+/// exists and apply `MainWindowConfigurator.configure(_:)` to it, exactly once.
 struct MainWindowConfiguratorView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> ConfiguringNSView {
@@ -84,7 +92,7 @@ struct MainWindowConfiguratorView: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window, !didConfigure else { return }
-            window.collectionBehavior = MainWindowConfigurator.fullScreenCollectionBehavior(window.collectionBehavior)
+            MainWindowConfigurator.configure(window)
             didConfigure = true
         }
     }

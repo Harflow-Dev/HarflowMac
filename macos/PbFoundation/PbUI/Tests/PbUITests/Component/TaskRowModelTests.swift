@@ -110,4 +110,10 @@ import Testing
         #expect(GroupRow.progress(finished: 9, total: 4) == 1)
         #expect(GroupRow.progress(finished: 0, total: 0) == 0)
     }
+
+    @Test func givenAGroup_whenDecidingTheBar_thenItShowsOnlyWhileAnyMemberRuns() {
+        // given / when / then
+        #expect(GroupRow.showsProgress(anyRunning: true))
+        #expect(!GroupRow.showsProgress(anyRunning: false))
+    }
 }

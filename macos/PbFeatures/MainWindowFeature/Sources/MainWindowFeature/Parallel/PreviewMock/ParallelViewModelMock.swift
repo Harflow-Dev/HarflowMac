@@ -54,23 +54,25 @@ final class ParallelViewModelMock: ParallelViewModel {
         let done = TaskInfo(.object([
             "task_id": .string("def456"), "backend": .string("codex"), "status": .string("completed")
         ]))!
+        let sampleRows = [
+            ConversationTimelineRow(
+                id: "abc123#1", taskID: "abc123", timestamp: .now,
+                kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: true
+            )
+        ]
         return [
             ParallelColumnModel(
-                id: "abc123", task: running, title: "Fix the login bug", metaLine: "claude · effort low",
+                id: "abc123", task: running, title: "Fix the login bug", subtitle: "repo · Claude",
                 isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-                rows: [
-                    ConversationTimelineRow(
-                        id: "abc123#1", taskID: "abc123", timestamp: .now,
-                        kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: true
-                    )
-                ],
+                rows: sampleRows, activityRows: ActivityRowsBuilder.build(from: sampleRows), liveStep: nil,
                 isLoading: false,
                 summary: nil, onTapTakeover: {}, onTapOpenTask: {}
             ),
             ParallelColumnModel(
-                id: "def456", task: done, title: "Refactor the parser", metaLine: "codex",
+                id: "def456", task: done, title: "Refactor the parser", subtitle: "repo · Codex",
                 isBusy: false, outcomeMessage: "Refused: read-only freedom.", showPrompt: false, prompt: nil,
-                rows: [], isLoading: false, summary: "Refactored the parser into smaller functions.", onTapTakeover: {}, onTapOpenTask: {}
+                rows: [], activityRows: [], liveStep: nil, isLoading: false,
+                summary: "Refactored the parser into smaller functions.", onTapTakeover: {}, onTapOpenTask: {}
             )
         ]
     }

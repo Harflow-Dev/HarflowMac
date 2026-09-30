@@ -76,7 +76,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
             header
             Divider()
             if viewModel.isEmpty {
-                Text("No tasks in this group any more.").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text("No tasks in this group any more.").font(.pb(.body)).foregroundStyle(Color.secondaryText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 // Design point 3: columns fill the available width instead of a fixed 900pt budget —
                 // `GeometryReader` reads the row's actual width so `ParallelLayout.columnWidth(memberCount:availableWidth:)`
@@ -96,26 +96,28 @@ struct ParallelView<VM: ParallelViewModel>: View {
             }
             Divider()
             HStack {
-                Text(viewModel.footerText).font(.pb(.secondary)).foregroundStyle(.secondary)
+                Text(viewModel.footerText).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 Spacer()
             }
-            .padding(10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
     }
 
     private var header: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(viewModel.groupName).font(.pb(.title, weight: .semibold))
-                Text(viewModel.headerSubtitle).font(.pb(.secondary)).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(viewModel.groupName).font(.pb(.headline, weight: .semibold)).lineLimit(1)
+                Text(viewModel.headerSubtitle).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).lineLimit(1)
             }
-            Spacer()
+            Spacer(minLength: 12)
             Button("View prompt") { viewModel.didTapViewPrompt() }
             if viewModel.canCancelAll {
                 Button("Cancel all", role: .destructive) { viewModel.didTapCancelAll() }
             }
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     /// The deferred first frame: a header skeleton plus N column skeletons. N is whatever is cheaply
@@ -133,7 +135,8 @@ struct ParallelView<VM: ParallelViewModel>: View {
                 }
                 Spacer()
             }
-            .padding(14)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             Divider()
             GeometryReader { proxy in
                 ScrollView(.horizontal) {

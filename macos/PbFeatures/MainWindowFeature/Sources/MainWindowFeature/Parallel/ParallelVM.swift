@@ -321,10 +321,9 @@ final class ParallelVM: ParallelViewModel {
         let current = conversation.current
         let currentID = current.taskID
         let firstID = conversation.first.taskID
-        var metaLine = [current.backend, current.reasoningEffort.map { "effort \($0)" }, current.sessionID.map { "session \($0.prefix(8))" }]
-            .compactMap(\.self)
-            .joined(separator: " · ")
-        if conversation.members.count > 1 { metaLine += " · \(conversation.members.count) turns" }
+        let subtitle = ParallelColumnModel.subtitle(
+            repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count
+        )
 
         let itemMembers = conversation.members.map {
             ConversationItemMember(task: $0, items: itemsByTask[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
@@ -341,12 +340,14 @@ final class ParallelVM: ParallelViewModel {
             id: conversation.id,
             task: current,
             title: useCase.title(firstID),
-            metaLine: metaLine,
+            subtitle: subtitle,
             isBusy: latestBusy.contains(currentID),
             outcomeMessage: latestOutcomes[currentID],
             showPrompt: showPrompt,
             prompt: useCase.prompt(for: firstID),
             rows: rows,
+            activityRows: ActivityRowsBuilder.build(from: rows),
+            liveStep: LiveStep(rows: rows),
             isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
             summary: latestSnapshots[currentID]?.summary,

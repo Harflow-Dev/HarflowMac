@@ -88,10 +88,12 @@ struct TimelinePaneView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
+            .readingColumn()
             if model.isLoading {
                 SkeletonRows(count: 5, showsBadge: false)
                     .padding(16)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .readingColumn()
+                    .frame(maxHeight: .infinity, alignment: .top)
             } else {
                 feed
             }
@@ -117,6 +119,7 @@ struct TimelinePaneView: View {
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(16)
+                .readingColumn()
             }
             .onChange(of: model.updateToken) { _, _ in
                 if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
@@ -137,7 +140,7 @@ struct TimelinePaneView: View {
             case .separator(let text):
                 TurnSeparatorRow(text: text, timestamp: row.timestamp)
             case .item(let item):
-                TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live, style: .feed))
+                TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live))
             }
         }
     }

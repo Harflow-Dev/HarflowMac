@@ -257,7 +257,7 @@ struct SummaryPaneView: View {
                 if !model.enforcementLines.isEmpty { enforcement }
             }
             .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .readingColumn()
         }
     }
 

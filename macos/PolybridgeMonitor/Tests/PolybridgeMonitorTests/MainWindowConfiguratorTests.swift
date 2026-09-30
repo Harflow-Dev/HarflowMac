@@ -64,4 +64,19 @@ import Testing
         // then
         #expect(twice == once)
     }
+
+    @MainActor
+    @Test func givenAWindow_whenConfigured_thenItsTitleIsHiddenButStillSet() {
+        // given
+        let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true)
+        window.title = "Polybridge Monitor"
+
+        // when
+        MainWindowConfigurator.configure(window)
+
+        // then
+        #expect(window.titleVisibility == .hidden)
+        #expect(window.title == "Polybridge Monitor")
+        #expect(window.collectionBehavior.contains(.fullScreenPrimary))
+    }
 }

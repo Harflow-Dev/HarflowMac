@@ -62,7 +62,7 @@ struct ActivityNoticeView: View {
         .foregroundStyle(tint)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(Color.pillFill))
+        .background(RoundedRectangle(cornerRadius: PbRadius.row).fill(Color.pillFill))
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }

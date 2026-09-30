@@ -87,10 +87,7 @@ struct MessageBoxView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .bottom, spacing: 10) {
                 field
-                Button(model.buttonLabel, action: submit)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!isEnabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                sendButton
             }
             .padding(.leading, 14)
             .padding(.trailing, 10)
@@ -108,6 +105,28 @@ struct MessageBoxView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 16)
+    }
+
+    private var canSubmit: Bool {
+        isEnabled && !model.isBusy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// An up-arrow in a filled circle; `buttonLabel` ("Send"/"Continue") is its tooltip and
+    /// accessibility label.
+    private var sendButton: some View {
+        Button(action: submit) {
+            Image(systemName: "arrow.up")
+                .font(.pb(.body, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(canSubmit ? Color.accentColor : Color.secondaryText.opacity(0.35)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(.return, modifiers: .command)
+        .disabled(!canSubmit)
+        .help(model.buttonLabel)
+        .accessibilityLabel(model.buttonLabel)
     }
 
     @ViewBuilder

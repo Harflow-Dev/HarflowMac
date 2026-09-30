@@ -135,9 +135,12 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 }
                 .background(Color.windowBG)
                 if isInspectorVisible {
-                    Divider()
-                    InspectorView(model: viewModel.inspectorModel)
-                        .frame(width: 280)
+                    HStack(spacing: 0) {
+                        Divider()
+                        InspectorView(model: viewModel.inspectorModel)
+                            .frame(width: 280)
+                    }
+                    .transition(.move(edge: .trailing))
                 }
             }
             .sheet(isPresented: $isRawEventsPresented) {
@@ -209,8 +212,12 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             if let text = viewModel.spawnedByBannerText {
                 Banner(icon: "arrow.turn.down.right", title: "Sub-task started by another agent", text: text)
             }
-            ForEach(Array((viewModel.inspectorModel?.notices ?? []).enumerated()), id: \.offset) { _, notice in
-                Banner(icon: "exclamationmark.triangle", title: "", text: notice, tint: .warningFG)
+            let notices = HeaderNotices(viewModel.inspectorModel?.notices ?? [])
+            ForEach(Array(notices.shown.enumerated()), id: \.offset) { _, notice in
+                Banner(icon: "exclamationmark.triangle", title: "", text: notice, tint: .warningFG, lineLimit: HeaderNotices.lineLimit)
+            }
+            if let moreText = notices.moreText {
+                Text(moreText).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             }
         }
         .padding(.horizontal, 16)
@@ -255,7 +262,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 .help(viewModel.takeoverHelp)
             moreMenu
             Button {
-                isInspectorVisible.toggle()
+                withAnimation(.easeInOut(duration: 0.25)) { isInspectorVisible.toggle() }
             } label: {
                 Image(systemName: "sidebar.right").frame(width: 24, height: 24).contentShape(Rectangle())
             }
@@ -301,15 +308,14 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         .padding(.bottom, 8)
     }
 
-    /// The centred column (settled plan D13): content over the composer, at most 720 pt wide and
-    /// free to shrink with the window.
+    /// Content over the composer. Each tab centres its own content with `readingColumn()` inside its
+    /// scroll view (settled plan D13), so scrollbars sit at the pane's edge.
     private var column: some View {
         VStack(spacing: 0) {
             content
             MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
+                .readingColumn()
         }
-        .frame(maxWidth: 720)
-        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -326,8 +332,31 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
+                    .readingColumn()
             }
         }
+    }
+}
+
+// MARK: - HeaderNotices
+
+/// The notices shown as banners under the header. They sit outside every scroll view, so both
+/// their count and each one's lines are capped — uncapped, a task with many or very long notices
+/// would force the whole window taller than the screen. Every notice stays in the inspector.
+struct HeaderNotices {
+    static let maxShown = 3
+    static let lineLimit = 3
+
+    let shown: [String]
+    let hiddenCount: Int
+
+    init(_ notices: [String]) {
+        self.shown = Array(notices.prefix(Self.maxShown))
+        self.hiddenCount = max(0, notices.count - Self.maxShown)
+    }
+
+    var moreText: String? {
+        hiddenCount > 0 ? "+\(hiddenCount) more notice\(hiddenCount == 1 ? "" : "s") in the inspector" : nil
     }
 }
 
