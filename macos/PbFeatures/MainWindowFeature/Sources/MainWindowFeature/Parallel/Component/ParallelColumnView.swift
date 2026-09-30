@@ -86,6 +86,7 @@ struct ParallelColumnView: View {
     let model: ParallelColumnModel
     @State private var showAll = false
     @State private var expandedGroups: Set<String> = []
+    @State private var followLive = true
 
     var body: some View {
         let shown = ParallelColumnModel.visibleRows(model.activityRows, showAll: showAll)
@@ -126,8 +127,7 @@ struct ParallelColumnView: View {
             HStack(spacing: 10) {
                 if model.isBusy { ProgressView().controlSize(.small) }
                 Button(model.task.status.isRunning ? "Take over" : "Continue in terminal") { model.onTapTakeover() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(QuietButtonStyle())
                     .disabled(model.task.sessionID == nil || model.isBusy)
                 Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
             }
@@ -138,6 +138,30 @@ struct ParallelColumnView: View {
     // MARK: Feed
 
     private func feed(_ shown: [ActivityRow]) -> some View {
+        VStack(spacing: 8) {
+            // Same row as the task feed: step count, and a follow toggle that keeps the column at
+            // its newest step while the agent works.
+            HStack {
+                Text("\(ParallelColumnModel.itemCount(model.rows)) steps").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                Spacer()
+                Toggle("Follow live", isOn: $followLive).toggleStyle(.checkbox).font(.pb(.secondary))
+            }
+            ScrollViewReader { proxy in
+                scrollingFeed(shown)
+                    .onChange(of: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep)) { _, _ in
+                        if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
+                    }
+                    .onChange(of: followLive) { _, isOn in
+                        if isOn { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+                    }
+                    .onAppear { if followLive { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
+            }
+        }
+    }
+
+    private static let bottomID = "column-bottom"
+
+    private func scrollingFeed(_ shown: [ActivityRow]) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 ForEach(shown) { row in
@@ -153,6 +177,7 @@ struct ParallelColumnView: View {
                 }
                 Divider()
                 summary
+                Color.clear.frame(height: 1).id(Self.bottomID)
             }
             .padding(.bottom, 12)
         }
