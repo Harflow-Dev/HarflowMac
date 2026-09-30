@@ -113,51 +113,6 @@ extension SidebarVMTests {
         // then
         await waitUntil { sut.selectedBackend == "all" }
         #expect(sut.selectedBackend == "all")
-        #expect(sut.focusedBackendTab == "all")
-    }
-
-    // MARK: - Backend tab keyboard (Review round 1 item 4)
-
-    @Test func givenTheTabRow_whenArrowKeysArePressed_thenFocusCyclesBoundedByTheEnds() async {
-        // given
-        let harness = makeSUT(catalog: catalog([("claude", true), ("codex", true)]))
-        let sut = harness.sut
-        sut.didAppear()
-        await waitUntil { sut.backendTabs.count == 3 }
-        #expect(sut.focusedBackendTab == "all")
-
-        // when / then — right moves forward, right again at the end stays put.
-        sut.didPressBackendTabArrow(.right)
-        #expect(sut.focusedBackendTab == "claude")
-        sut.didPressBackendTabArrow(.right)
-        #expect(sut.focusedBackendTab == "codex")
-        sut.didPressBackendTabArrow(.right)
-        #expect(sut.focusedBackendTab == "codex")
-
-        // when / then — left moves back, left again at the start stays put.
-        sut.didPressBackendTabArrow(.left)
-        #expect(sut.focusedBackendTab == "claude")
-        sut.didPressBackendTabArrow(.left)
-        #expect(sut.focusedBackendTab == "all")
-        sut.didPressBackendTabArrow(.left)
-        #expect(sut.focusedBackendTab == "all")
-    }
-
-    @Test func givenAFocusedTab_whenConfirmed_thenItBecomesTheSelectedFilter() async {
-        // given
-        let harness = makeSUT(catalog: catalog([("claude", true)]))
-        let sut = harness.sut
-        sut.didAppear()
-        await waitUntil { sut.backendTabs.count == 2 }
-        sut.didPressBackendTabArrow(.right)
-        #expect(sut.focusedBackendTab == "claude")
-        #expect(sut.selectedBackend == "all")
-
-        // when
-        sut.didPressBackendTabConfirm()
-
-        // then
-        #expect(sut.selectedBackend == "claude")
     }
 
     // MARK: - Empty-state precedence (Monitor piece 6, Review round 1 item 3)

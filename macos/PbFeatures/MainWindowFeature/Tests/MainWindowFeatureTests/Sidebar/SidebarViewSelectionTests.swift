@@ -23,7 +23,7 @@ import Testing
     // MARK: - Helpers
 
     private func makeSUT() async -> (vm: SidebarViewModelMock, outline: NSOutlineView, window: NSWindow)? {
-        let vm = SidebarViewModelMock(parallelGroups: [ParallelGroup(name: "release", members: [], conversations: [])])
+        let vm = SidebarViewModelMock()
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 280, height: 800), styleMask: [.titled], backing: .buffered, defer: false)
         let host = NSHostingView(rootView: SidebarView(vm).frame(width: 280, height: 800))
         window.contentView = host
@@ -62,10 +62,10 @@ import Testing
         // when
         let selected = await selectEverySelectableRow(sut)
 
-        // then — the mock's default running tree ("abc123" expanded, with its child
-        // "abc123-child" visible), the group, and the recent row ("def456"), in sidebar order.
+        // then — the mock's default sections: the running tree ("abc123" expanded, with its child
+        // "abc123-child" visible), the inline parallel group, then the Today and Earlier rows.
         // Monitor piece 4: the tree's guide gutter and disclosure chevron must not make the
         // expanded child row itself unselectable.
-        #expect(selected == [.task("abc123"), .task("abc123-child"), .group("release"), .task("def456")])
+        #expect(selected == [.task("abc123"), .task("abc123-child"), .group("review-bot"), .task("def456"), .task("ghi789")])
     }
 }

@@ -22,27 +22,24 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     var isConnected: Bool
     var connectionLine: String
     var runningCount: Int
-    var openWindowOnStart: Bool
-    var notifyOnFinish: Bool
+    var headerSubline: String { isConnected ? "polybridge connected" : connectionLine }
     var installBannerModel: InstallBanner.Model?
 
     init(
         runningRows: [MenuBarRunningRowModel] = [
             MenuBarRunningRowModel(
-                id: "abc123", backend: "claude", title: "Fix the login bug", startedAt: .now.addingTimeInterval(-42),
+                id: "abc123", backend: "claude", title: "Fix the login bug", repoName: "polybridge", startedAt: .now.addingTimeInterval(-42),
                 durationSeconds: nil, activityLine: "grep -rn \"login\" .", activityIsMonospaced: true
             )
         ],
         recentGroups: [ParallelGroup] = [],
         recentTasks: [TaskRowModel] = [
-            TaskRowModel(id: "def456", backend: "codex", title: "Refactor the parser", statusLabel: "Done", statusColor: .doneGreen, ageText: "3h")
+            TaskRowModel(id: "def456", backend: "codex", title: "Refactor the parser", status: .completed, repoName: "repo", ageText: "3h")
         ],
         listErrorMessage: String? = nil,
         isConnected: Bool = true,
         connectionLine: String = "connected · polybridge-ctl",
         runningCount: Int = 1,
-        openWindowOnStart: Bool = true,
-        notifyOnFinish: Bool = true,
         installBannerModel: InstallBanner.Model? = nil
     ) {
         self.runningRows = runningRows
@@ -52,9 +49,45 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         self.isConnected = isConnected
         self.connectionLine = connectionLine
         self.runningCount = runningCount
-        self.openWindowOnStart = openWindowOnStart
-        self.notifyOnFinish = notifyOnFinish
         self.installBannerModel = installBannerModel
+    }
+
+    /// A populated popover: two running tasks, a parallel group and finished tasks of each outcome.
+    static var busy: MenuBarViewModelMock {
+        let members = [
+            TaskInfo(.object(["task_id": .string("g1"), "backend": .string("claude"), "status": .string("running"), "group": .string("release-notes")]))!,
+            TaskInfo(.object(["task_id": .string("g2"), "backend": .string("codex"), "status": .string("completed"), "group": .string("release-notes")]))!,
+            TaskInfo(.object(["task_id": .string("g3"), "backend": .string("vibe"), "status": .string("completed"), "group": .string("release-notes")]))!
+        ]
+        return MenuBarViewModelMock(
+            runningRows: [
+                MenuBarRunningRowModel(
+                    id: "abc123", backend: "claude", title: "Fix the login bug", repoName: "polybridge",
+                    startedAt: .now.addingTimeInterval(-42), durationSeconds: nil,
+                    activityLine: "grep -rn \"login\" .", activityIsMonospaced: true
+                ),
+                MenuBarRunningRowModel(
+                    id: "def456", backend: "codex", title: "Refactor the parser", repoName: "polybridge",
+                    startedAt: .now.addingTimeInterval(-10), durationSeconds: nil,
+                    activityLine: "Looking at the tokenizer next.", activityIsMonospaced: false
+                )
+            ],
+            recentGroups: Array(Lineage.sections(members).parallel.prefix(1)),
+            recentTasks: [
+                TaskRowModel(id: "t1", backend: "codex", title: "Draft release notes", status: .completed, repoName: "polybridge", ageText: "3h"),
+                TaskRowModel(id: "t2", backend: "vibe", title: "Bump dependencies", status: .failed, repoName: "app", ageText: "1d"),
+                TaskRowModel(id: "t3", backend: "opencode", title: "Try a spike", status: .cancelled, repoName: "app", ageText: "2d")
+            ],
+            runningCount: 2
+        )
+    }
+
+    static var installNeeded: MenuBarViewModelMock {
+        MenuBarViewModelMock(installBannerModel: .init(
+            title: "polybridge isn't installed",
+            detail: "polybridge-ctl wasn't found in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin.",
+            primaryTitle: "Install polybridge"
+        ))
     }
 
     func didAppear() {}
@@ -65,8 +98,7 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     func didSelectRecentTask(_: String) {}
     func didSelectGroup(_: String) {}
     func didTapOpenMonitor() {}
-    func didToggleOpenWindowOnStart(_ isOn: Bool) { openWindowOnStart = isOn }
-    func didToggleNotifyOnFinish(_ isOn: Bool) { notifyOnFinish = isOn }
+    func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapInstallBannerPrimary() {}
     func didTapInstallBannerSecondary() {}

@@ -168,7 +168,7 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
-        #expect(harness.sut.tab == .timeline, "the default tab — Summary has never been shown")
+        #expect(harness.sut.tab == .activity, "the default tab — Summary has never been shown")
         #expect(harness.sut.summaryModel.editedFiles.isEmpty)
 
         // when — an edit arrives while the Timeline tab (not Summary) is showing.

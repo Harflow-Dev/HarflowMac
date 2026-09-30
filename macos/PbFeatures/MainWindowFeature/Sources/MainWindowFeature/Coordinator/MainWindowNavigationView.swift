@@ -40,7 +40,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
     var body: some View {
         NavigationSplitView {
             coordinator.buildSidebarView()
-                .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
+                .navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
         } detail: {
             switch coordinator.selection {
             case .task(let id):

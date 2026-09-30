@@ -7,9 +7,12 @@ font and colour is byte-identical to what shipped before the move.
 
 ## What's here
 
-- **Style tokens & components** (`Style.swift`): the `Color(hex:)` palette, `BackendBadge`,
-  `FreedomBadge`, `StatusPill`, `Chip`, `SectionLabel`, `MarkdownText` (with its limited block
-  parser), `Banner`, `Format`, `StatusColor`, `BackendStyle`.
+- **Style tokens & components** (`Style.swift`, `Palette.swift`): the `Color(hex:)` palette, the
+  type scale (`PbTextStyle`), radii (`PbRadius`), `FreedomBadge`, `StatusPill`, `Chip`,
+  `SectionLabel`, `MarkdownText` (with its limited block parser), `Banner`, `Format`,
+  `StatusColor`, `BackendStyle`, `AccessLabel`.
+- **Backend and status components**: `BackendDot`, `BackendLabel`, `BackendDotStack`, `StatusIcon`,
+  `ActivityCard`, `TaskRow`/`TaskRowModel`, `GroupRow`.
 - **`EnforcementText`** — moved from `InspectorView.swift:~160-186`: plain sentences for
   `enforcement` claims that are explicitly `true`, plus the Parallel view's cross-task intersection.
 - **`GroupRow`** — moved from `SidebarView.swift:~145`: it took only a plain `ParallelGroup` value

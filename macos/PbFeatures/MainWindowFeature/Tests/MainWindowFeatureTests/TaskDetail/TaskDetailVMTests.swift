@@ -309,7 +309,7 @@ import Testing
         await waitUntil { sut.task != nil }
 
         // then
-        #expect(sut.tabs == [.timeline, .summary, .prompt, .raw])
+        #expect(sut.tabs == [.activity, .summary, .prompt])
     }
 
     // MARK: - Piece 2/3: no git use-case calls are ever made from the VM any more

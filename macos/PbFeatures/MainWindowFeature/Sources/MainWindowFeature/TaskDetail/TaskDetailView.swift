@@ -17,9 +17,9 @@ import SwiftUI
 
 // MARK: - TaskTab
 
-/// The detail pane's tabs.
+/// The detail pane's tabs. Raw events are not a tab: they open as a sheet from the "…" menu.
 enum TaskTab: String, CaseIterable, Identifiable {
-    case timeline = "Timeline", summary = "Summary", prompt = "Prompt", raw = "Raw events"
+    case activity = "Activity", summary = "Summary", prompt = "Prompt"
     var id: String { rawValue }
 }
 
@@ -78,6 +78,8 @@ protocol TaskDetailViewModel: ViewModel {
     func didTapTakeover()
     func didTapCancel()
     func didTapCopyResumeCommand()
+    /// Copies the current run's task id, recording the outcome like "Copy resume command" does.
+    func didTapCopyTaskID()
     @discardableResult func submitMessage(_ text: String) -> Bool
 }
 
@@ -92,6 +94,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    @State private var isRawEventsPresented = false
+    @AppStorage("monitor.inspectorVisible") private var isInspectorVisible = false
     
     // MARK: - Init
     
@@ -126,15 +130,18 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     header(task)
-                    Divider()
-                    tabBar
-                    Divider()
-                    content
-                    MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
+                    tabPicker
+                    column
                 }
-                Divider()
-                InspectorView(model: viewModel.inspectorModel)
-                    .frame(width: 280)
+                .background(Color.windowBG)
+                if isInspectorVisible {
+                    Divider()
+                    InspectorView(model: viewModel.inspectorModel)
+                        .frame(width: 280)
+                }
+            }
+            .sheet(isPresented: $isRawEventsPresented) {
+                RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
             }
         } else if viewModel.hasListed {
             VStack(spacing: 8) {
@@ -172,26 +179,15 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     }
 
     // MARK: Header
-    
+
     @ViewBuilder
     private func header(_ task: TaskInfo) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !viewModel.ancestorCrumbs.isEmpty {
-                HStack(spacing: 4) {
-                    ForEach(viewModel.ancestorCrumbs) { crumb in
-                        Button(crumb.title) { viewModel.didTapTask(crumb.id) }
-                            .buttonStyle(.link)
-                            .lineLimit(1)
-                        Text("›").foregroundStyle(.secondary)
-                    }
-                    Text(viewModel.title).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .font(.pb(.secondary))
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            if !viewModel.ancestorCrumbs.isEmpty { breadcrumbs }
             // One row when everything fits; at a narrow width the title keeps its own row and the
             // status and actions move to a second row, rather than squeezing the title to nothing.
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
                     titleBlock(task)
                     Spacer(minLength: 12)
                     statusAndActions(task)
@@ -213,93 +209,113 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             if let text = viewModel.spawnedByBannerText {
                 Banner(icon: "arrow.turn.down.right", title: "Sub-task started by another agent", text: text)
             }
+            ForEach(Array((viewModel.inspectorModel?.notices ?? []).enumerated()), id: \.offset) { _, notice in
+                Banner(icon: "exclamationmark.triangle", title: "", text: notice, tint: .warningFG)
+            }
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
-    
+
+    private var breadcrumbs: some View {
+        HStack(spacing: 4) {
+            ForEach(viewModel.ancestorCrumbs) { crumb in
+                Button(crumb.title) { viewModel.didTapTask(crumb.id) }
+                    .buttonStyle(.link)
+                    .lineLimit(1)
+                Text("›").foregroundStyle(Color.secondaryText)
+            }
+            Text(viewModel.title).foregroundStyle(Color.secondaryText).lineLimit(1)
+        }
+        .font(.pb(.secondary))
+    }
+
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-                    BackendBadge(backend: task.backend, size: 26)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(viewModel.title).font(.pb(.title, weight: .semibold)).lineLimit(2).textSelection(.enabled)
-                        HStack(spacing: 6) {
-                            Text(task.backend).font(.pb(.secondary, weight: .medium))
-                            if let effort = task.reasoningEffort { Text("effort \(effort)").font(.pb(.secondary)).foregroundStyle(.secondary) }
-                            FreedomBadge(freedom: task.freedom)
-                            if let turnsText = viewModel.turnsText { Text(turnsText).font(.pb(.secondary)).foregroundStyle(.secondary) }
-                            Text(Format.repo(task.repoPath)).font(.pb(.secondary)).foregroundStyle(.secondary).lineLimit(1)
-                            if task.depth > 0 { Text("depth \(task.depth)").font(.pb(.secondary)).foregroundStyle(.secondary) }
-                            if let session = task.sessionID {
-                                Text("session \(session.prefix(8))").font(.pb(.secondary, design: .monospaced)).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1).textSelection(.enabled)
+            HStack(spacing: 6) {
+                Text(Format.repoName(task.repoPath))
+                if let turnsText = viewModel.turnsText { Text("· \(turnsText)") }
+            }
+            .font(.pb(.secondary))
+            .foregroundStyle(Color.secondaryText)
+            .lineLimit(1)
         }
     }
 
     @ViewBuilder
     private func statusAndActions(_ task: TaskInfo) -> some View {
         HStack(spacing: 10) {
-            StatusPill(task: task).fixedSize()
-            actions
-        }
-    }
-
-    @ViewBuilder
-    private var actions: some View {
-        HStack(spacing: 6) {
+            TaskStatusLabel(task: task).fixedSize()
             if viewModel.isBusy { ProgressView().controlSize(.small) }
             Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
+                .buttonStyle(.borderedProminent)
                 .disabled(!viewModel.canTakeover)
                 .help(viewModel.takeoverHelp)
+            moreMenu
+            Button {
+                isInspectorVisible.toggle()
+            } label: {
+                Image(systemName: "sidebar.right").frame(width: 24, height: 24).contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help(isInspectorVisible ? "Hide inspector" : "Show inspector")
+            .accessibilityLabel(isInspectorVisible ? "Hide inspector" : "Show inspector")
+        }
+        .fixedSize()
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            if viewModel.canCancel {
+                Button("Cancel", role: .destructive) { viewModel.didTapCancel() }.disabled(viewModel.isBusy)
+            }
             if viewModel.resumeCommand != nil {
-                // Icon-only so the header still fits at the window's minimum width; the full name
-                // stays as the tooltip and the accessibility label.
-                Button { viewModel.didTapCopyResumeCommand() } label: {
-                    Label("Copy resume command", systemImage: "doc.on.doc").labelStyle(.iconOnly)
-                }
-                .help(viewModel.copyResumeCommandHelp)
-                .accessibilityLabel("Copy resume command")
+                Button("Copy resume command") { viewModel.didTapCopyResumeCommand() }
             }
             if let parentID = viewModel.openParentTaskID {
                 Button("Open parent") { viewModel.didTapTask(parentID) }
             }
-            if viewModel.canCancel {
-                Button("Cancel", role: .destructive) { viewModel.didTapCancel() }.disabled(viewModel.isBusy)
-            }
+            Divider()
+            Button("Raw events") { isRawEventsPresented = true }
+        } label: {
+            Image(systemName: "ellipsis.circle").frame(width: 24, height: 24).contentShape(Rectangle())
         }
-        // Buttons keep their full labels; the title and repo path truncate instead.
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .fixedSize()
+        .help("More actions")
+        .accessibilityLabel("More actions")
     }
-    
-    // MARK: Tabs
-    
-    @ViewBuilder
-    private var tabBar: some View {
-        HStack(spacing: 2) {
-            ForEach(viewModel.tabs) { item in
-                Button {
-                    viewModel.didSelectTab(item)
-                } label: {
-                    Text(item.rawValue)
-                    .font(.pb(.body, weight: viewModel.tab == item ? .semibold : .regular))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(viewModel.tab == item ? Color.selectedRow : .clear))
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
+
+    // MARK: Tabs and content
+
+    private var tabPicker: some View {
+        Picker("View", selection: Binding(get: { viewModel.tab }, set: { viewModel.didSelectTab($0) })) {
+            ForEach(viewModel.tabs) { item in Text(item.rawValue).tag(item) }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: 320)
+        .padding(.bottom, 8)
     }
-    
+
+    /// The centred column (settled plan D13): content over the composer, at most 720 pt wide and
+    /// free to shrink with the window.
+    private var column: some View {
+        VStack(spacing: 0) {
+            content
+            MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
+        }
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
+    }
+
     @ViewBuilder
     private var content: some View {
         switch viewModel.tab {
-        case .timeline:
+        case .activity:
             TimelinePaneView(model: viewModel.timelineModel)
         case .summary:
             SummaryPaneView(model: viewModel.summaryModel)
@@ -311,15 +327,29 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
             }
-        case .raw:
-            RawEventsPaneView(events: viewModel.rawEvents, path: viewModel.rawEventsPath)
         }
     }
 }
 
 #if DEBUG
-#Preview {
-    TaskDetailView(TaskDetailViewModelMock())
-        .frame(width: 1000, height: 620)
+@MainActor
+private func previewDetail(_ mock: TaskDetailViewModelMock = TaskDetailViewModelMock()) -> some View {
+    TaskDetailView(mock).frame(width: 1000, height: 620)
+}
+
+#Preview("Running - light") {
+    previewDetail().preferredColorScheme(.light)
+}
+
+#Preview("Running - dark") {
+    previewDetail().preferredColorScheme(.dark)
+}
+
+#Preview("Finished - light") {
+    previewDetail(.finished()).preferredColorScheme(.light)
+}
+
+#Preview("Finished - dark") {
+    previewDetail(.finished()).preferredColorScheme(.dark)
 }
 #endif

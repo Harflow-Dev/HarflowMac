@@ -2,56 +2,96 @@
 @testable import MonitorCore
 import Testing
 
-/// `TimelinePaneModel.scrollTrigger(for:)` is the pure function behind Follow live's scroll
-/// (Review round 1, item 5): a growing stream must re-trigger the scroll even when it only grows
-/// the LAST row's own text, never adding a new row — pulled out as a static function so it is
-/// directly testable without a SwiftUI rendering harness, the same reasoning as
-/// `ParallelColumnModel.visibleRows`.
+/// `ActivityUpdateToken` is the pure value behind Follow live's scroll: it must move when the feed
+/// grows or changes in place (Review round 1, item 5 — a stream growing inside the last row, plus a
+/// tool result landing inside a card), and is derived from the rows alone so a card being expanded
+/// or collapsed — view state — can never scroll the feed.
 @Suite struct TimelinePaneModelTests {
-    private func textRow(_ id: String, _ text: String, streaming: Bool = false) -> ConversationTimelineRow {
-        ConversationTimelineRow(
-            id: id, taskID: "t1", timestamp: nil,
-            kind: .item(TimelineItem(id: 0, at: nil, body: .text(text, streaming: streaming))), live: true
-        )
+    typealias Fixture = ActivityFixture
+
+    private func token(_ rows: [ConversationTimelineRow]) -> ActivityUpdateToken {
+        ActivityUpdateToken(rows: rows, liveStep: LiveStep(rows: rows))
     }
 
-    @Test func givenTheSameRowsTwice_whenComputingTheTrigger_thenItIsUnchanged() {
+    @Test func givenTheSameRowsTwice_whenComputingTheToken_thenItIsUnchanged() {
         // given
-        let rows = [textRow("t1#0", "hello")]
+        let rows = [Fixture.text(1, "hello"), Fixture.tool(2, path: "/a")]
         // when / then
-        #expect(TimelinePaneModel.scrollTrigger(for: rows) == TimelinePaneModel.scrollTrigger(for: rows))
+        #expect(token(rows) == token(rows))
     }
 
-    @Test func givenTheLastRowsTextGrows_whenComputingTheTrigger_thenItChangesWithNoNewRow() {
+    @Test func givenTheLastRowsTextGrows_whenComputingTheToken_thenItChangesWithNoNewRow() {
         // given — the same row id, only its text grew (an in-progress streamed reply).
-        let before = [textRow("t1#0", "Look")]
-        let after = [textRow("t1#0", "Looking at it")]
-        // when
-        let beforeTrigger = TimelinePaneModel.scrollTrigger(for: before)
-        let afterTrigger = TimelinePaneModel.scrollTrigger(for: after)
-        // then
-        #expect(beforeTrigger != afterTrigger)
+        let before = [Fixture.text(1, "Look", streaming: true)]
+        let after = [Fixture.text(1, "Looking at it", streaming: true)]
+        // when / then
+        #expect(token(before) != token(after))
+        #expect(token(before).rowCount == token(after).rowCount)
     }
 
-    @Test func givenANewRowIsAppended_whenComputingTheTrigger_thenItChanges() {
+    @Test func givenAStreamingReplyCompletes_whenComputingTheToken_thenItChanges() {
+        #expect(token([Fixture.text(1, "done", streaming: true)]) != token([Fixture.text(1, "done", streaming: false)]))
+    }
+
+    @Test func givenANewRowIsAppended_whenComputingTheToken_thenItChanges() {
         // given
-        let before = [textRow("t1#0", "hello")]
-        let after = before + [textRow("t1#1", "world")]
+        let before = [Fixture.text(1, "hello")]
         // when / then
-        #expect(TimelinePaneModel.scrollTrigger(for: before) != TimelinePaneModel.scrollTrigger(for: after))
+        #expect(token(before) != token(before + [Fixture.text(2, "world")]))
     }
 
-    @Test func givenNoRows_whenComputingTheTrigger_thenItIsStableAndNeverCrashes() {
-        // given / when / then
-        #expect(TimelinePaneModel.scrollTrigger(for: []) == TimelinePaneModel.scrollTrigger(for: []))
+    @Test func givenAGroupGrowsByOneCall_whenComputingTheToken_thenItChanges() {
+        // given — a new call folds into the existing card: no new feed row, but the feed changed.
+        let before = [Fixture.tool(1, path: "/a")]
+        let after = before + [Fixture.tool(2, path: "/b")]
+        // when
+        let beforeRows = ActivityRowsBuilder.build(from: before)
+        let afterRows = ActivityRowsBuilder.build(from: after)
+        // then
+        #expect(beforeRows.count == afterRows.count)
+        #expect(token(before) != token(after))
     }
 
-    @Test func givenTheLastRowIsASeparatorNotAText_whenComputingTheTrigger_thenItStillReflectsRowCount() {
-        // given — a turn separator ahead of a follow-up carries no `.text` body to measure.
-        let separator = ConversationTimelineRow(id: "sep:t2", taskID: "t2", timestamp: nil, kind: .separator(text: "next"), live: false)
-        let before = [textRow("t1#0", "hello")]
-        let after = before + [separator]
+    @Test func givenAPendingCallGetsItsResult_whenComputingTheToken_thenItChangesInPlace() {
+        // given
+        let before = [Fixture.tool(1, path: "/a", resolved: false)]
+        let after = [Fixture.tool(1, path: "/a", resolved: true)]
         // when / then
-        #expect(TimelinePaneModel.scrollTrigger(for: before) != TimelinePaneModel.scrollTrigger(for: after))
+        #expect(token(before) != token(after))
+    }
+
+    @Test func givenAResultFlipsFromOkToFailed_whenComputingTheToken_thenItChanges() {
+        #expect(token([Fixture.tool(1, path: "/a", ok: true)]) != token([Fixture.tool(1, path: "/a", ok: false)]))
+    }
+
+    @Test func givenTheLiveStepMoves_whenComputingTheToken_thenItChanges() {
+        // given
+        let first = [Fixture.tool(1, path: "/a", resolved: false)]
+        let second = [Fixture.tool(1, path: "/b", resolved: false)]
+        // when / then
+        #expect(token(first) != token(second))
+    }
+
+    @Test func givenNoRows_whenComputingTheToken_thenItIsStableAndNeverCrashes() {
+        #expect(token([]) == token([]))
+        #expect(token([]) == ActivityUpdateToken.empty)
+    }
+
+    @Test func givenTheLastRowIsASeparator_whenComputingTheToken_thenItStillReflectsRowCount() {
+        // given — a turn separator carries no `.text` body to measure.
+        let before = [Fixture.text(1, "hello")]
+        let after = before + [Fixture.separator("next", task: "t2")]
+        // when / then
+        #expect(token(before) != token(after))
+    }
+
+    @Test func givenAModelBuiltFromRows_whenExpansionWouldToggle_thenTheTokenIsUnaffected() {
+        // given — expansion is view state keyed by group id; the model (and so the token) never sees it.
+        let rows = [Fixture.tool(1, path: "/a"), Fixture.tool(2, path: "/b")]
+        let first = TimelinePaneModel(stepCountText: "2 steps", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
+        let second = TimelinePaneModel(stepCountText: "2 steps", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
+        // when / then
+        #expect(first.updateToken == second.updateToken)
+        #expect(first.activityRows.first?.id == second.activityRows.first?.id)
     }
 }

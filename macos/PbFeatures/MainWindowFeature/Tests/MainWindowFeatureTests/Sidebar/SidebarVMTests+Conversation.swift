@@ -55,7 +55,7 @@ extension SidebarVMTests {
         // then
         await waitUntil { !sut.runningRows.isEmpty }
         #expect(sut.runningRows.map(\.id) == ["a"])
-        #expect(sut.runningRows.first?.statusLabel == "Running", "status comes from the CURRENT member")
+        #expect(sut.runningRows.first?.status == .running, "status comes from the CURRENT member")
         #expect(sut.runningRows.first?.isRunning == true)
         #expect(sut.recentRows.isEmpty)
     }

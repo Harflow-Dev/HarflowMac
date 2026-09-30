@@ -2,47 +2,6 @@ import AppKit
 import MonitorCore
 import SwiftUI
 
-public extension Color {
-    init(hex: UInt32) {
-        self.init(.sRGB, red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255, opacity: 1)
-    }
-
-    /// An appearance-aware colour: `light` under Aqua, `dark` under Dark Aqua. A plain `Color(hex:)`
-    /// is fixed, so it stays light while `.primary` text around it turns white in dark mode.
-    init(light: UInt32, dark: UInt32) {
-        self.init(nsColor: NSColor(name: nil) { appearance in
-            let hex = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-            return NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
-        })
-    }
-
-    static let hairline = Palette.hairline.color
-    static let accentLink = Palette.accentLink.color
-    static let selectedRow = Palette.selectedRow.color
-    static let doneGreen = Palette.doneGreen.color
-    static let failedRed = Palette.failedRed.color
-    static let cancelledGray = Palette.cancelledGray.color
-    static let runningBG = Palette.runningBG.color
-    static let runningFG = Palette.runningFG.color
-    /// Neutral card/chip fill (the install banner, a default `Chip`).
-    static let neutralFill = Palette.neutralFill.color
-    /// Text on `neutralFill`.
-    static let neutralText = Palette.neutralText.color
-    /// Caution foreground ("write_in_repo", "You're driving", the terminal marker).
-    static let warningFG = Palette.warningFG.color
-    static let warningBG = Palette.warningBG.color
-    /// Danger foreground for the "publish"/"unrestricted" freedom chip.
-    static let dangerFG = Palette.dangerFG.color
-    static let dangerBG = Palette.dangerBG.color
-    /// Fill behind monospaced blocks: fenced code, tool output, prompts.
-    static let codeFill = Palette.codeFill.color
-    static let editPreviewFill = Palette.editPreviewFill.color
-    static let inspectorFill = Palette.inspectorFill.color
-    static let diffHunkFill = Palette.diffHunkFill.color
-    static let diffAddedFill = Palette.diffAddedFill.color
-    static let diffRemovedFill = Palette.diffRemovedFill.color
-}
-
 // MARK: - PbTextStyle
 
 /// The Monitor's shared type scale, at native Mac text sizes. Every label, row and pane picks one
@@ -55,10 +14,14 @@ public enum PbTextStyle: CaseIterable, Sendable {
     case secondary
     /// Standard body text at the macOS body size.
     case body
+    /// Long-form reading text: agent messages and results.
+    case reading
     /// Emphasised text: section and row titles.
     case headline
-    /// Largest text: page titles.
+    /// Page titles.
     case title
+    /// Largest text: the summary hero.
+    case hero
 
     /// The point size the style renders at.
     public var pointSize: CGFloat {
@@ -66,8 +29,10 @@ public enum PbTextStyle: CaseIterable, Sendable {
         case .caption: 11
         case .secondary: 12
         case .body: 13
+        case .reading: 14
         case .headline: 15
         case .title: 18
+        case .hero: 22
         }
     }
 }
@@ -80,62 +45,16 @@ extension Font {
     }
 }
 
-// MARK: - Palette
+// MARK: - PbRadius
 
-/// Every colour the Monitor defines, with its light and dark value. Light values are the app's
-/// original ones; dark values keep the same role with readable contrast on a dark window.
-enum Palette {
-    struct Entry {
-        let name: String
-        let light: UInt32
-        let dark: UInt32
-        let color: Color
-
-        init(_ name: String, light: UInt32, dark: UInt32) {
-            self.name = name
-            self.light = light
-            self.dark = dark
-            self.color = Color(light: light, dark: dark)
-        }
-    }
-
-    static let hairline = Entry("hairline", light: 0xE6E5EA, dark: 0x3A3A3C)
-    static let accentLink = Entry("accentLink", light: 0x0A63CE, dark: 0x5AA5FF)
-    static let selectedRow = Entry("selectedRow", light: 0xDAE4F3, dark: 0x2A3A52)
-    static let doneGreen = Entry("doneGreen", light: 0x1B7F3B, dark: 0x3FC06A)
-    static let failedRed = Entry("failedRed", light: 0xC4312B, dark: 0xFF8A80)
-    static let cancelledGray = Entry("cancelledGray", light: 0x6E6E76, dark: 0xA3A3AA)
-    static let runningBG = Entry("runningBG", light: 0xE7EFFA, dark: 0x1C2D44)
-    static let runningFG = Entry("runningFG", light: 0x0A55B0, dark: 0x6AAEFF)
-    static let neutralFill = Entry("neutralFill", light: 0xF2F2F5, dark: 0x3A3A3C)
-    static let neutralText = Entry("neutralText", light: 0x3A3A3C, dark: 0xD1D1D6)
-    static let warningFG = Entry("warningFG", light: 0x8A4B00, dark: 0xF5B35A)
-    static let warningBG = Entry("warningBG", light: 0xFDF0DC, dark: 0x4A3514)
-    static let dangerFG = Entry("dangerFG", light: 0x9B2A23, dark: 0xFF8A80)
-    static let dangerBG = Entry("dangerBG", light: 0xFBE4E2, dark: 0x4E2220)
-    static let codeFill = Entry("codeFill", light: 0xF5F5F7, dark: 0x2C2C2E)
-    static let editPreviewFill = Entry("editPreviewFill", light: 0xF8F8FA, dark: 0x262628)
-    static let inspectorFill = Entry("inspectorFill", light: 0xFBFBFC, dark: 0x1E1E20)
-    static let diffHunkFill = Entry("diffHunkFill", light: 0xF0F4FA, dark: 0x25303F)
-    static let diffAddedFill = Entry("diffAddedFill", light: 0xE6F4EA, dark: 0x1F3A27)
-    static let diffRemovedFill = Entry("diffRemovedFill", light: 0xFCE8E6, dark: 0x45211F)
-    static let claudeBG = Entry("claudeBG", light: 0xF6E3DA, dark: 0x4A2A1E)
-    static let claudeFG = Entry("claudeFG", light: 0xA64B28, dark: 0xF2A07E)
-    static let codexBG = Entry("codexBG", light: 0xE4E4E8, dark: 0x48484C)
-    static let codexFG = Entry("codexFG", light: 0x1D1D1F, dark: 0xE8E8ED)
-    static let opencodeBG = Entry("opencodeBG", light: 0xDDF0EE, dark: 0x16403C)
-    static let opencodeFG = Entry("opencodeFG", light: 0x0F6B64, dark: 0x5FD3C7)
-    static let vibeBG = Entry("vibeBG", light: 0xF1E6FA, dark: 0x3A2650)
-    static let vibeFG = Entry("vibeFG", light: 0x6B2FA0, dark: 0xC99BF0)
-    static let otherBackendBG = Entry("otherBackendBG", light: 0xEEEEF0, dark: 0x3A3A3C)
-    static let otherBackendFG = Entry("otherBackendFG", light: 0x3A3A3C, dark: 0xD1D1D6)
-
-    static let all: [Entry] = [
-        hairline, accentLink, selectedRow, doneGreen, failedRed, cancelledGray, runningBG, runningFG,
-        neutralFill, neutralText, warningFG, warningBG, dangerFG, dangerBG, codeFill, editPreviewFill,
-        inspectorFill, diffHunkFill, diffAddedFill, diffRemovedFill, claudeBG, claudeFG, codexBG, codexFG,
-        opencodeBG, opencodeFG, vibeBG, vibeFG, otherBackendBG, otherBackendFG
-    ]
+/// The Monitor's corner radii.
+public enum PbRadius {
+    /// Cards and bubbles.
+    public static let card: CGFloat = 10
+    /// List rows and selection highlights.
+    public static let row: CGFloat = 8
+    /// Buttons and fields.
+    public static let button: CGFloat = 7
 }
 
 /// Display styling only. Every fact about a backend comes from polybridge; this just picks colours
@@ -161,30 +80,29 @@ public enum BackendStyle {
         }
     }
 
+    /// The backend's identity dot colour; a neutral one for a backend the app has never heard of.
+    public static func dotColor(_ backend: String) -> Color {
+        dotEntry(backend).color
+    }
+
+    /// The backend's name as shown to people: the raw name with its first letter capitalised.
+    public static func displayName(_ backend: String) -> String {
+        backend.prefix(1).uppercased() + backend.dropFirst()
+    }
+
+    static func dotEntry(_ backend: String) -> Palette.Entry {
+        switch backend {
+        case "claude": Palette.dotClaude
+        case "codex": Palette.dotCodex
+        case "opencode": Palette.dotOpencode
+        case "vibe": Palette.dotVibe
+        default: Palette.dotOther
+        }
+    }
+
     /// The backends the New session sheet offers. Display list only: polybridge-ctl has no
     /// command that lists backends, and `run` validates the choice itself.
     public static let known = ["claude", "codex", "opencode", "vibe"]
-}
-
-public struct BackendBadge: View {
-    public let backend: String
-    public var size: CGFloat = 20
-
-    public init(backend: String, size: CGFloat = 20) {
-        self.backend = backend
-        self.size = size
-    }
-
-    public var body: some View {
-        let (backgroundColor, foregroundColor) = BackendStyle.colors(backend)
-        Text(BackendStyle.letter(backend))
-            // swiftlint:disable:next no_literal_font_size - the badge letter scales with the badge frame (size * 0.55), not with the text scale.
-            .font(.system(size: size * 0.55, weight: .semibold, design: .rounded))
-            .foregroundStyle(foregroundColor)
-            .frame(width: size, height: size)
-            .background(RoundedRectangle(cornerRadius: size * 0.28).fill(backgroundColor))
-            .help(backend)
-    }
 }
 
 public struct Chip: View {
@@ -266,6 +184,11 @@ public enum Format {
     public static func repo(_ path: String) -> String {
         path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
+
+    /// The repository's name: the last path component, ignoring trailing slashes ("/Users/me/Code/app" → "app").
+    public static func repoName(_ path: String) -> String {
+        (path as NSString).lastPathComponent
+    }
 }
 
 public struct StatusPill: View {
@@ -334,10 +257,9 @@ public struct SectionLabel: View {
     }
 
     public var body: some View {
-        Text(text.uppercased())
+        Text(text)
             .font(.pb(.caption, weight: .semibold))
             .foregroundStyle(.secondary)
-            .tracking(0.5)
     }
 }
 
@@ -446,10 +368,6 @@ public struct Banner: View {
 }
 
 #if DEBUG
-#Preview("BackendBadge") {
-    HStack { ForEach(BackendStyle.known, id: \.self) { BackendBadge(backend: $0) } }.padding()
-}
-
 #Preview("Chip & FreedomBadge") {
     HStack {
         Chip(text: "example")

@@ -35,6 +35,33 @@ import Testing
     }
 }
 
+@Suite struct BackendDotStyleTests {
+
+    @Test func givenEachKnownBackend_whenReadingItsDotEntry_thenItIsDistinctAndNotTheNeutralOne() {
+        // given
+        let entries = BackendStyle.known.map(BackendStyle.dotEntry)
+
+        // when
+        let names = Set(entries.map(\.name))
+
+        // then
+        #expect(names.count == BackendStyle.known.count)
+        #expect(!names.contains(Palette.dotOther.name))
+    }
+
+    @Test func givenAnUnknownBackend_whenReadingItsDotEntry_thenItIsTheNeutralDotOther() {
+        // given / when / then
+        #expect(BackendStyle.dotEntry("mystery").name == "dot.other")
+    }
+
+    @Test func givenABackend_whenReadingItsDisplayName_thenTheFirstLetterIsCapitalised() {
+        // given / when / then
+        #expect(BackendStyle.displayName("vibe") == "Vibe")
+        #expect(BackendStyle.displayName("mystery") == "Mystery")
+        #expect(BackendStyle.displayName("") == "")
+    }
+}
+
 @Suite struct StatusColorTests {
     
     @Test func givenRunning_whenReadingItsColor_thenReturnsRunningForeground() {

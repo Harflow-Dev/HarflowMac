@@ -39,7 +39,9 @@ import Testing
         let surfaces: [(String, Color)] = [
             ("neutralFill", .neutralFill), ("selectedRow", .selectedRow), ("codeFill", .codeFill),
             ("editPreviewFill", .editPreviewFill), ("inspectorFill", .inspectorFill), ("diffHunkFill", .diffHunkFill),
-            ("diffAddedFill", .diffAddedFill), ("diffRemovedFill", .diffRemovedFill), ("runningBG", .runningBG)
+            ("diffAddedFill", .diffAddedFill), ("diffRemovedFill", .diffRemovedFill), ("runningBG", .runningBG),
+            ("windowBG", .windowBG), ("cardFill", .cardFill), ("composerFill", .composerFill),
+            ("promptBubble", .promptBubble), ("pillFill", .pillFill), ("sidebarBG", .sidebarBG)
         ]
         for (name, surface) in surfaces {
             // given
@@ -50,6 +52,35 @@ import Testing
 
             // then
             #expect(ratio >= 4.5, "label on \(name) in \(appearance.rawValue): \(ratio)")
+        }
+    }
+
+    @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+    func givenSecondaryText_whenDrawnOnEachNewSurface_thenMeetsReadableContrast(appearance: NSAppearance.Name) {
+        let surfaces: [(String, Color)] = [
+            ("windowBG", .windowBG), ("sidebarBG", .sidebarBG), ("cardFill", .cardFill), ("composerFill", .composerFill),
+            ("promptBubble", .promptBubble), ("pillFill", .pillFill), ("inspectorFill", .inspectorFill)
+        ]
+        for (name, surface) in surfaces {
+            // given
+            let text = Resolved.hex(.secondaryText, in: appearance)
+
+            // when
+            let ratio = Contrast.ratio(text, Resolved.hex(surface, in: appearance))
+
+            // then
+            #expect(ratio >= 4.5, "secondaryText on \(name) in \(appearance.rawValue): \(ratio)")
+        }
+    }
+
+    @Test func givenEachBackendDot_whenResolvedInBothModes_thenLightAndDarkValuesDiffer() {
+        // given
+        let dots = [Palette.dotClaude, Palette.dotCodex, Palette.dotVibe, Palette.dotOpencode, Palette.dotOther]
+
+        // when / then
+        for dot in dots {
+            #expect(dot.light != dot.dark, "\(dot.name) has identical light and dark values")
+            #expect(Palette.all.contains { $0.name == dot.name }, "\(dot.name) missing from Palette.all")
         }
     }
 

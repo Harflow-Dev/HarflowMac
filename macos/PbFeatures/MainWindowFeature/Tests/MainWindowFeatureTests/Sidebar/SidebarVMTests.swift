@@ -319,7 +319,7 @@ import Testing
 
     // MARK: - Row metadata (F4-43)
 
-    @Test func givenASubTask_whenBuildingItsRow_thenMetaTextHasIndentAndSubTaskCountAndFreedom() async {
+    @Test func givenASubTask_whenBuildingItsRow_thenSubtitleHasRepoNameBackendAndSubTaskCountButNoFreedom() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -334,7 +334,7 @@ import Testing
         // then
         await waitUntil { sut.recentRows.count == 2 }
         let rootRow = sut.recentRows.first { $0.id == "root1" }
-        #expect(rootRow?.metaText == "/tmp/repo · 1 sub-task · write_in_repo")
+        #expect(rootRow?.subtitle == "repo · Claude · 1 sub-task")
         #expect(rootRow?.indent == 0)
         let childRow = sut.recentRows.first { $0.id == "sub1" }
         #expect(childRow?.indent == 1)

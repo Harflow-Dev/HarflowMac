@@ -2,15 +2,19 @@
 //  TimelinePaneView.swift
 //  MainWindowFeature
 //
-//  Ported from the app target's `TimelineViews.swift` (`TimelinePane`, `SubTaskStrip`). Follow-live
-//  defaults to on and stays local `@State` per the screen shape's own allowance — the VM never owns
-//  it. Reuses the package-root `TimelineRow`/`TimelineRowModel` shared with the Parallel screen.
+//  The Activity tab's feed. Follow-live defaults to on and stays local `@State` per the screen
+//  shape's own allowance — the VM never owns it, nor which tool cards are expanded (keyed by the
+//  card's stable group id). Plain rows render through the package-root `TimelineRow` shared with the
+//  Parallel screen; adjacent tool calls render as `ToolGroupCardView`s.
 //
 //  Monitor piece 7: `rows` is the whole conversation's concatenated timeline
 //  (`MonitorCore.ConversationTimelineRow` — a globally unique id across every member, since
 //  `TimelineItem.id` alone restarts per member/task), with a turn separator ahead of every
 //  follow-up. Per-row `live` already reflects which turn is the current, running one (Review
 //  round 1, item 1), so no separate `live` flag is needed at the pane level any more.
+//
+//  Redesign phase 6: `activityRows` is `rows` with tool calls folded into cards
+//  (`ActivityRowsBuilder`); `rows` stays the raw list the inspector's step count reads.
 //
 
 import MonitorCore
@@ -21,7 +25,10 @@ import SwiftUI
 
 struct TimelinePaneModel {
     let stepCountText: String
+    /// The raw rows, one per timeline item — what the inspector's step count reads.
     let rows: [ConversationTimelineRow]
+    /// What the feed renders: `rows` with adjacent tool calls folded into cards.
+    let activityRows: [ActivityRow]
     let start: Date?
     let emptyText: String?
     let subTaskStrip: SubTaskStripModel?
@@ -30,22 +37,39 @@ struct TimelinePaneModel {
     /// separators, if that) and at least one member's own event stream is still `.loading` — never
     /// once real content exists, and never for `.unavailable` (that keeps today's honest message).
     let isLoading: Bool
+    /// The "what is it doing now" line under the feed; `nil` unless a call is pending in a running turn.
+    let liveStep: LiveStep?
+    /// Changes when the feed grows or changes in place; Follow live scrolls on it.
+    let updateToken: ActivityUpdateToken
+
+    init(
+        stepCountText: String, rows: [ConversationTimelineRow], activityRows: [ActivityRow], start: Date?, emptyText: String?,
+        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken
+    ) {
+        self.stepCountText = stepCountText
+        self.rows = rows
+        self.activityRows = activityRows
+        self.start = start
+        self.emptyText = emptyText
+        self.subTaskStrip = subTaskStrip
+        self.isLoading = isLoading
+        self.liveStep = liveStep
+        self.updateToken = updateToken
+    }
+
+    /// Derives the feed rows, live step and update token from `rows` — for previews and tests; the
+    /// VM builds them itself in `recomputeTimeline`.
+    init(stepCountText: String, rows: [ConversationTimelineRow], start: Date?, emptyText: String?, subTaskStrip: SubTaskStripModel?, isLoading: Bool) {
+        let liveStep = LiveStep(rows: rows)
+        self.init(
+            stepCountText: stepCountText, rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), start: start,
+            emptyText: emptyText, subTaskStrip: subTaskStrip, isLoading: isLoading, liveStep: liveStep,
+            updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep)
+        )
+    }
 
     @MainActor
     static let empty = TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
-
-    /// Row count alone misses a streamed reply growing inside the *last* row without adding a new
-    /// one (Review round 1, item 5) — combined with that row's own content length, growth of
-    /// either kind re-triggers Follow live's scroll. Row identity itself (`row.id`) stays stable
-    /// across a growing stream: only the text inside an existing row changes, never its id. A pure
-    /// function, so it is directly testable without a SwiftUI rendering harness (the same reasoning
-    /// as `ParallelColumnModel.visibleItems`).
-    static func scrollTrigger(for rows: [ConversationTimelineRow]) -> String {
-        guard let last = rows.last else { return "0" }
-        var length = 0
-        if case .item(let item) = last.kind, case .text(let text, _) = item.body { length = text.count }
-        return "\(rows.count)|\(last.id)|\(length)"
-    }
 }
 
 // MARK: - TimelinePaneView
@@ -53,53 +77,68 @@ struct TimelinePaneModel {
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
     @State private var followLive = true
+    @State private var expandedGroups: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(model.stepCountText).font(.pb(.secondary)).foregroundStyle(.secondary)
+                Text(model.stepCountText).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 Spacer()
                 Toggle("Follow live", isOn: $followLive).toggleStyle(.checkbox).font(.pb(.secondary))
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
             .padding(.vertical, 6)
             if model.isLoading {
                 SkeletonRows(count: 5, showsBadge: false)
-                    .padding(14)
+                    .padding(16)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            if let emptyText = model.emptyText {
-                                Text(emptyText).font(.pb(.body)).foregroundStyle(.secondary)
-                            }
-                            ForEach(model.rows) { row in
-                                rowView(row).id(row.id)
-                            }
-                            if let subTaskStrip = model.subTaskStrip {
-                                SubTaskStripView(model: subTaskStrip)
-                            }
-                            Color.clear.frame(height: 1).id("bottom")
-                        }
-                        .padding(14)
-                    }
-                    .onChange(of: TimelinePaneModel.scrollTrigger(for: model.rows)) { _, _ in
-                        if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
-                    }
-                    .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
+                feed
             }
         }
     }
 
+    private var feed: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    if let emptyText = model.emptyText {
+                        Text(emptyText).font(.pb(.body)).foregroundStyle(Color.secondaryText)
+                    }
+                    ForEach(model.activityRows) { row in
+                        rowView(row).id(row.id)
+                    }
+                    if let subTaskStrip = model.subTaskStrip {
+                        SubTaskStripView(model: subTaskStrip)
+                    }
+                    if let liveStep = model.liveStep {
+                        LiveStepLineView(text: liveStep.text)
+                    }
+                    Color.clear.frame(height: 1).id("bottom")
+                }
+                .padding(16)
+            }
+            .onChange(of: model.updateToken) { _, _ in
+                if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            }
+            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+        }
+    }
+
     @ViewBuilder
-    private func rowView(_ row: ConversationTimelineRow) -> some View {
-        switch row.kind {
-        case .separator(let text):
-            TurnSeparatorRow(text: text, timestamp: row.timestamp)
-        case .item(let item):
-            TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live))
+    private func rowView(_ row: ActivityRow) -> some View {
+        switch row {
+        case .toolGroup(let group):
+            ToolGroupCardView(group: group, start: model.start, isExpanded: expandedGroups.contains(group.id)) {
+                if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
+            }
+        case .single(let row):
+            switch row.kind {
+            case .separator(let text):
+                TurnSeparatorRow(text: text, timestamp: row.timestamp)
+            case .item(let item):
+                TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live, style: .feed))
+            }
         }
     }
 }
@@ -126,70 +165,103 @@ struct SubTaskStripModel {
 
 struct SubTaskStripView: View {
     let model: SubTaskStripModel
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Started \(model.children.count) sub-task\(model.children.count == 1 ? "" : "s") via polybridge").font(.pb(.body, weight: .medium))
-            ForEach(model.children) { entry in
-                Button {
-                    model.onSelectTask(entry.task.taskID)
-                } label: {
-                    HStack(spacing: 8) {
-                        BackendBadge(backend: entry.task.backend, size: 18)
-                        Text(entry.title).lineLimit(1)
-                        FreedomBadge(freedom: entry.task.freedom)
-                        Spacer()
-                        Text(entry.task.status.label).foregroundStyle(StatusColor.of(entry.task.status))
-                        Text(Format.offset(entry.task.startedAt, from: model.start)).monospacedDigit().foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right").foregroundStyle(.secondary)
+        ActivityCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Started \(model.children.count) sub-task\(model.children.count == 1 ? "" : "s") via polybridge")
+                    .font(.pb(.body, weight: .medium))
+                ForEach(model.children) { entry in
+                    Button {
+                        model.onSelectTask(entry.task.taskID)
+                    } label: {
+                        HStack(spacing: 8) {
+                            StatusIcon(status: entry.task.status)
+                            BackendDot(backend: entry.task.backend)
+                            Text(entry.title).lineLimit(1)
+                            if let freedom = entry.task.freedom {
+                                Text(AccessLabel.text(freedom: freedom)).foregroundStyle(Color.secondaryText).lineLimit(1)
+                            }
+                            Spacer()
+                            Text(Format.offset(entry.task.startedAt, from: model.start))
+                                .monospacedDigit()
+                                .foregroundStyle(Color.secondaryText)
+                            Image(systemName: "chevron.right").foregroundStyle(Color.secondaryText)
+                        }
+                        .font(.pb(.secondary))
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: PbRadius.row).fill(Color.pillFill))
+                        .contentShape(Rectangle())
                     }
-                    .font(.pb(.secondary))
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 6).stroke(Color.hairline))
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 }
 
 #if DEBUG
-#Preview {
-    let start = Date.now.addingTimeInterval(-30)
-    TimelinePaneView(model: TimelinePaneModel(
-        stepCountText: "2 steps",
-        rows: [
-            ConversationTimelineRow(
-                id: "t#1", taskID: "t", timestamp: start, kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
-            ),
-            ConversationTimelineRow(id: "t#2", taskID: "t", timestamp: start, kind: .item(PreviewFixtures.finishedItem()), live: false)
-        ],
-        start: start, emptyText: nil, subTaskStrip: nil, isLoading: false
-    ))
-    .frame(width: 500, height: 400)
+@MainActor
+private func previewPane(_ model: TimelinePaneModel) -> some View {
+    TimelinePaneView(model: model)
+        .frame(width: 640, height: 620)
+        .background(Color.windowBG)
 }
 
-#Preview("Loading") {
-    TimelinePaneView(model: TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
-        .frame(width: 500, height: 400)
+private func previewChild(_ status: String, backend: String = "codex") -> SubTaskEntry {
+    let task = TaskInfo(.object([
+        "task_id": .string("child-\(status)"), "backend": .string(backend), "status": .string(status),
+        "freedom": .string("read_only"), "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-60)))
+    ]))!
+    return SubTaskEntry(task: task, title: "Review the keychain change")
 }
 
-#Preview("With a follow-up turn") {
-    let start = Date.now.addingTimeInterval(-90)
-    TimelinePaneView(model: TimelinePaneModel(
-        stepCountText: "2 steps",
-        rows: [
-            ConversationTimelineRow(
-                id: "t1#1", taskID: "t1", timestamp: start, kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
-            ),
-            ConversationTimelineRow(
-                id: "sep:t2", taskID: "t2", timestamp: start.addingTimeInterval(60),
-                kind: .separator(text: "Also add a test for the edge case"), live: false
-            ),
-            ConversationTimelineRow(id: "t2#1", taskID: "t2", timestamp: start.addingTimeInterval(60), kind: .item(PreviewFixtures.finishedItem()), live: false)
-        ],
-        start: start, emptyText: nil, subTaskStrip: nil, isLoading: false
-    ))
-    .frame(width: 500, height: 400)
+@MainActor
+private var runningModel: TimelinePaneModel {
+    TimelinePaneModel(
+        stepCountText: "12 steps", rows: PreviewFixtures.sampleRows(running: true), start: .now.addingTimeInterval(-90),
+        emptyText: nil,
+        subTaskStrip: SubTaskStripModel(
+            children: [previewChild("running"), previewChild("completed")], start: .now.addingTimeInterval(-90), onSelectTask: { _ in }
+        ),
+        isLoading: false
+    )
+}
+
+@MainActor
+private var finishedModel: TimelinePaneModel {
+    TimelinePaneModel(
+        stepCountText: "12 steps", rows: PreviewFixtures.sampleRows(running: false), start: .now.addingTimeInterval(-90),
+        emptyText: nil, subTaskStrip: nil, isLoading: false
+    )
+}
+
+@MainActor
+private var followUpModel: TimelinePaneModel {
+    let first = PreviewFixtures.sampleRows(taskID: "t1", running: false)
+    let follow = ConversationTimelineRow(
+        id: "sep:t2", taskID: "t2", timestamp: .now, kind: .separator(text: "Also add a test for the edge case"), live: false
+    )
+    let reply = PreviewFixtures.row(PreviewFixtures.textItem("Adding the regression test now.", seq: 1), taskID: "t2", live: true)
+    return TimelinePaneModel(
+        stepCountText: "13 steps", rows: first + [follow, reply], start: .now.addingTimeInterval(-90), emptyText: nil, subTaskStrip: nil, isLoading: false
+    )
+}
+
+#Preview("Running - light") { previewPane(runningModel).preferredColorScheme(.light) }
+#Preview("Running - dark") { previewPane(runningModel).preferredColorScheme(.dark) }
+#Preview("Finished - light") { previewPane(finishedModel).preferredColorScheme(.light) }
+#Preview("Finished - dark") { previewPane(finishedModel).preferredColorScheme(.dark) }
+#Preview("With a follow-up turn - light") { previewPane(followUpModel).preferredColorScheme(.light) }
+#Preview("With a follow-up turn - dark") { previewPane(followUpModel).preferredColorScheme(.dark) }
+
+#Preview("Loading - light") {
+    previewPane(TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
+        .preferredColorScheme(.light)
+}
+
+#Preview("Loading - dark") {
+    previewPane(TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
+        .preferredColorScheme(.dark)
 }
 #endif

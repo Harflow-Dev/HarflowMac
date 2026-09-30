@@ -2,10 +2,9 @@
 //  ToolRow.swift
 //  MainWindowFeature
 //
-//  A dumb Model + View pair for one tool-call row, shared by the Parallel screen and (eventually,
-//  Phase 4d) TaskDetail. Ported byte-for-byte from the app target's `TimelineViews.swift`
-//  (`ToolRow`/`EditPreview`) — the old copies stay there untouched for TaskDetail's own use until it
-//  migrates (this dispatch's own AGENTS.md / the phase-4 brief's scope line).
+//  A dumb Model + View pair for one tool-call row, shared by the Parallel screen and TaskDetail's
+//  Activity feed (inside a `ToolGroupCardView`, or on its own for an edit). Secondary text uses the
+//  palette's `secondaryText` so it stays readable on card and pill fills.
 //
 
 import MonitorCore
@@ -37,9 +36,13 @@ struct ToolRow: View {
                 expanded.toggle()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: icon).frame(width: 14).foregroundStyle(.secondary)
+                    Image(systemName: icon).frame(width: 14).foregroundStyle(Color.secondaryText)
                     Text(model.call.tool).font(.pb(.body, weight: .medium))
-                    Text(model.call.headline).font(.pb(.secondary, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(model.call.headline)
+                        .font(.pb(.secondary, design: .monospaced))
+                        .foregroundStyle(Color.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     Spacer(minLength: 4)
                     if let result = model.result {
                         if let code = result.exitCode {
@@ -50,7 +53,7 @@ struct ToolRow: View {
                     } else if model.live {
                         ProgressView().controlSize(.mini)
                     } else {
-                        Text("no result").font(.pb(.caption)).foregroundStyle(.secondary)
+                        Text("no result").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                     }
                 }
             }
@@ -66,9 +69,9 @@ struct ToolRow: View {
                         .textSelection(.enabled)
                         .padding(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.codeFill))
+                        .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(Color.codeFill))
                 } else if expanded {
-                    Text(model.call.inputPreview).font(.pb(.caption, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)
+                    Text(model.call.inputPreview).font(.pb(.caption, design: .monospaced)).textSelection(.enabled).foregroundStyle(Color.secondaryText)
                 }
             }
         }
@@ -107,17 +110,32 @@ struct EditPreview: View {
         .font(.pb(.caption, design: .monospaced))
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 4).fill(Color.editPreviewFill))
+        .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(Color.editPreviewFill))
     }
 }
 
 #if DEBUG
-#Preview {
-    let item = PreviewFixtures.toolItem()
-    if case .tool(let call, let result) = item.body {
-        ToolRow(model: ToolRowModel(call: call, result: result, live: false))
-            .padding()
-            .frame(width: 360)
+private struct ToolRowPreview: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            row(PreviewFixtures.toolItem(), live: false)
+            row(PreviewFixtures.toolItem(command: "swift test --filter LoginTests", pending: true), live: true)
+            row(PreviewFixtures.toolItem(outputTail: "error: build failed", exitCode: 1, ok: false), live: false)
+            row(PreviewFixtures.editItem(path: "/repo/A.swift", old: "let a = 1", new: "let a = 2", seq: 1), live: false)
+        }
+        .padding()
+        .frame(width: 420)
+        .background(Color.windowBG)
+    }
+
+    @ViewBuilder
+    private func row(_ item: TimelineItem, live: Bool) -> some View {
+        if case .tool(let call, let result) = item.body {
+            ToolRow(model: ToolRowModel(call: call, result: result, live: live))
+        }
     }
 }
+
+#Preview("Tool row - light") { ToolRowPreview().preferredColorScheme(.light) }
+#Preview("Tool row - dark") { ToolRowPreview().preferredColorScheme(.dark) }
 #endif

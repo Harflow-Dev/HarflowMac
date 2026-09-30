@@ -35,8 +35,8 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var copyResumeCommandHelp = "Copies a command that resumes this session in your own terminal."
     var turnsText: String?
 
-    var tab: TaskTab = .timeline
-    var tabs: [TaskTab] = [.timeline, .summary, .prompt, .raw]
+    var tab: TaskTab = .activity
+    var tabs: [TaskTab] = [.activity, .summary, .prompt]
 
     var timelineModel = TimelinePaneModel(
         stepCountText: "1 step",
@@ -53,7 +53,9 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var inspectorModel: InspectorModel? = InspectorModel(
         task: TaskDetailViewModelMock.sampleTask(), current: nil, stepCount: 1,
         activity: ActivityCounts(), subtaskCount: 0, ancestors: [], siblings: [],
-        detail: TaskDetailViewModelMock.sampleTask(), hasSnapshot: false, notices: [], onSelectTask: { _ in }
+        detail: TaskDetailViewModelMock.sampleTask(), hasSnapshot: false, notices: [],
+        startedBy: "Top-level task", resumeCommand: "cd /Users/example/repo && claude --resume abc12345",
+        onCopyResumeCommand: {}, onCopyTaskID: {}, onSelectTask: { _ in }
     )
     var messageBoxModel = MessageBoxModel(
         canSend: true, canContinue: false, isBusy: false, label: "Message this task",
@@ -68,14 +70,32 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     func didTapTakeover() {}
     func didTapCancel() {}
     func didTapCopyResumeCommand() {}
+    func didTapCopyTaskID() {}
     @discardableResult func submitMessage(_: String) -> Bool { true }
 
-    static func sampleTask() -> TaskInfo {
-        TaskInfo(.object([
-            "task_id": .string("abc12345"), "backend": .string("claude"), "status": .string("running"),
+    /// A finished task: "Continue in terminal", the composer offering a follow-up, no cancel.
+    static func finished() -> TaskDetailViewModelMock {
+        let mock = TaskDetailViewModelMock()
+        mock.task = sampleTask(status: "completed")
+        mock.takeoverButtonLabel = "Continue in terminal"
+        mock.canCancel = false
+        mock.messageBoxModel = MessageBoxModel(
+            canSend: false, canContinue: true, isBusy: false, label: "Continue this session",
+            hint: "Continues the same agent session; the reply appears below as a new turn",
+            placeholder: "Send a follow-up — it continues this conversation", buttonLabel: "Continue"
+        )
+        return mock
+    }
+
+    static func sampleTask(status: String = "running", takenOver: Bool = false, spawnedBy: String? = nil) -> TaskInfo {
+        var object: [String: JSONValue] = [
+            "task_id": .string("abc12345"), "backend": .string("claude"), "status": .string(status),
             "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-90))),
-            "repo_path": .string("/Users/example/repo")
-        ]))!
+            "repo_path": .string("/Users/example/repo"), "freedom": .string("write_in_repo"), "taken_over": .bool(takenOver)
+        ]
+        if status != "running" { object["duration_seconds"] = .number(84) }
+        if let spawnedBy { object["spawned_by"] = .string(spawnedBy) }
+        return TaskInfo(.object(object))!
     }
 }
 

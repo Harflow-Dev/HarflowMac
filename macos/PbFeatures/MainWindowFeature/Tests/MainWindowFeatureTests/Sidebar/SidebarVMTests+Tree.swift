@@ -55,7 +55,7 @@ extension SidebarVMTests {
         // then — the parent's own row stays, only the descendant hides
         #expect(sut.recentRows.map(\.id) == ["root"])
         #expect(sut.recentRows.first?.isExpanded == false)
-        #expect(sut.recentRows.first?.metaText == "/tmp/repo · 1 sub-task")
+        #expect(sut.recentRows.first?.subTaskSummary == "1 sub-task")
 
         // when — toggled back
         sut.didToggleExpansion(taskID: "root")
@@ -85,7 +85,7 @@ extension SidebarVMTests {
 
         // then
         #expect(sut.runningRows.map(\.id) == ["root"])
-        #expect(sut.runningRows.first?.metaText == "/tmp/repo · 3 sub-tasks, 1 running")
+        #expect(sut.runningRows.first?.subTaskSummary == "3 sub-tasks, 1 running")
     }
 
     @Test func givenACollapsedParentWithNoRunningDescendants_whenSummarized_thenTheRunningCountIsOmitted() async {
@@ -105,7 +105,7 @@ extension SidebarVMTests {
         sut.didToggleExpansion(taskID: "root")
 
         // then
-        #expect(sut.recentRows.first?.metaText == "/tmp/repo · 2 sub-tasks")
+        #expect(sut.recentRows.first?.subTaskSummary == "2 sub-tasks")
     }
 
     @Test func givenASelectedTask_whenTogglingAnUnrelatedExpansion_thenTheSelectionIsUnchanged() async {

@@ -27,17 +27,11 @@ protocol MenuBarUseCase: Sendable {
     /// their rows when this fires, and the menu bar must too, or a row can be stuck on a placeholder
     /// title after the real one loads.
     func titlesPublisher() -> AnyPublisher<[String: String], Never>
-    func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never>
-    func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never>
     
-    var openWindowOnStart: Bool { get }
-    var notifyOnFinish: Bool { get }
     var connectionLine: String { get }
     var runningCount: Int { get }
     
     func title(_ taskID: String) -> String
-    func setOpenWindowOnStart(_ value: Bool)
-    func setNotifyOnFinish(_ value: Bool)
     
     /// Decision 6: a lease acquired while a running row is on screen, released when it is not.
     func acquireEventLease(_ taskID: String) -> any EventStreamLease
@@ -109,8 +103,9 @@ final class MenuBarVM: MenuBarViewModel {
     private(set) var isConnected = false
     private(set) var connectionLine: String
     private(set) var runningCount: Int
-    private(set) var openWindowOnStart: Bool
-    private(set) var notifyOnFinish: Bool
+    /// The popover header's subline: "polybridge connected" while the list is healthy, else the
+    /// repository's own connection line (connecting / error wording). No per-backend health claims.
+    var headerSubline: String { isConnected ? "polybridge connected" : connectionLine }
     /// The install/update banner to show where the red list error shows today, or `nil` when
     /// nothing needs surfacing (settled plan, section 5's precedence rules).
     private(set) var installBannerModel: InstallBanner.Model?
@@ -139,8 +134,6 @@ final class MenuBarVM: MenuBarViewModel {
         self.routing = routing
         self.connectionLine = useCase.connectionLine
         self.runningCount = useCase.runningCount
-        self.openWindowOnStart = useCase.openWindowOnStart
-        self.notifyOnFinish = useCase.notifyOnFinish
         self.installState = useCase.installState
         self.lastCheckMessage = useCase.lastCheckMessage
         self.installAnywayBlockedMessage = useCase.installAnywayBlockedMessage
@@ -196,12 +189,8 @@ final class MenuBarVM: MenuBarViewModel {
         routing.openWindow()
     }
     
-    func didToggleOpenWindowOnStart(_ isOn: Bool) {
-        useCase.setOpenWindowOnStart(isOn)
-    }
-    
-    func didToggleNotifyOnFinish(_ isOn: Bool) {
-        useCase.setNotifyOnFinish(isOn)
+    func didTapNewSession() {
+        routing.select(.newSession)
     }
     
     func didCaptureWindowOpener(_ opener: @escaping () -> Void) {
@@ -286,16 +275,6 @@ final class MenuBarVM: MenuBarViewModel {
             .removeDuplicates()
             .sink { [weak self] _ in self?.recompute() }
             .store(in: &cancellables)
-        
-        useCase.openWindowOnStartPublisher()
-            .receive(on: DispatchQueue.main)
-            .weakAssign(to: \.openWindowOnStart, on: self)
-            .store(in: &cancellables)
-        
-        useCase.notifyOnFinishPublisher()
-            .receive(on: DispatchQueue.main)
-            .weakAssign(to: \.notifyOnFinish, on: self)
-            .store(in: &cancellables)
     }
     
     /// Recomputes every derived list from `latestTasks`/`latestListError`/`latestHasListed`. Mirrors
@@ -315,6 +294,7 @@ final class MenuBarVM: MenuBarViewModel {
                 id: task.taskID,
                 backend: task.backend,
                 title: useCase.title(task.taskID),
+                repoName: Format.repoName(task.repoPath),
                 startedAt: task.startedAt,
                 durationSeconds: task.durationSeconds,
                 activityLine: activity?.text,
@@ -333,8 +313,8 @@ final class MenuBarVM: MenuBarViewModel {
                 id: node.id,
                 backend: current.backend,
                 title: useCase.title(node.conversation.first.taskID),
-                statusLabel: current.status.label,
-                statusColor: StatusColor.of(current.status),
+                status: current.status,
+                repoName: Format.repoName(current.repoPath),
                 ageText: Format.age(current.startedAt)
             )
         }

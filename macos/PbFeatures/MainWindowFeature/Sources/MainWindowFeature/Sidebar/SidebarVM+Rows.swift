@@ -36,12 +36,11 @@ extension SidebarVM {
                 id: conversation.id,
                 backend: current.backend,
                 title: useCase.title(conversation.first.taskID),
-                statusLabel: current.status.label,
-                statusColor: StatusColor.of(current.status),
+                status: current.status,
+                repoName: Format.repoName(current.repoPath),
                 ageText: Format.age(current.startedAt),
                 indent: entry.indent,
-                metaText: metaText(for: node, isCollapsed: isCollapsed),
-                isRunning: current.status.isRunning,
+                subTaskSummary: subTaskSummary(for: node, isCollapsed: isCollapsed),
                 startedAt: current.startedAt,
                 durationSeconds: current.durationSeconds,
                 hasChildren: hasChildren,
@@ -53,17 +52,12 @@ extension SidebarVM {
         return rows
     }
 
-    /// Expanded: today's "repo · N sub-tasks · freedom" line. Collapsed (Design point 4): the
-    /// subtree summary, "N sub-tasks, M running" with "M running" omitted when nothing underneath
-    /// is running — a running descendant still counts even though its own row is hidden.
-    private func metaText(for node: ConversationNode, isCollapsed: Bool) -> String {
-        let current = node.conversation.current
-        var parts = [Format.repo(current.repoPath)]
-        if node.descendantCount > 0 {
-            parts.append(isCollapsed ? collapsedSummary(for: node) : "\(node.descendantCount) sub-task\(node.descendantCount == 1 ? "" : "s")")
-        }
-        if let freedom = current.freedom { parts.append(freedom) }
-        return parts.joined(separator: " · ")
+    /// Expanded: "N sub-tasks". Collapsed (Design point 4): the subtree summary, "N sub-tasks, M
+    /// running" with "M running" omitted when nothing underneath is running — a running descendant
+    /// still counts even though its own row is hidden. `nil` for a task with no sub-tasks.
+    private func subTaskSummary(for node: ConversationNode, isCollapsed: Bool) -> String? {
+        guard node.descendantCount > 0 else { return nil }
+        return isCollapsed ? collapsedSummary(for: node) : "\(node.descendantCount) sub-task\(node.descendantCount == 1 ? "" : "s")"
     }
 
     private func collapsedSummary(for node: ConversationNode) -> String {

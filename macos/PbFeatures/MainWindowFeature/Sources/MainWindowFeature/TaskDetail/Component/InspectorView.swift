@@ -5,8 +5,12 @@
 //  Ported from the app target's `InspectorView.swift`. "Now" reads the timeline's current running
 //  tool; "Details"/"Enforcement" read the raw snapshot (falling back to the listing). "Files
 //  changed" (git) and the "Branch" row are gone (piece 2/3 of the Monitor architecture plan — see
-//  the Summary tab's "Files the agent edited" section instead); "Activity" and "Details" are now
-//  collapsible, expanded by default.
+//  the Summary tab's "Files the agent edited" section instead).
+//
+//  Redesign phase 5 (settled plan D14/D17): the plain "Details" (Agent, Access, Started, Started
+//  by) and the copy buttons come first; everything the old panel showed — session, lineage, limits,
+//  enforcement, notices — sits in a collapsed "Technical info" disclosure. The whole inspector is
+//  hidden by default (`TaskDetailView` owns that toggle).
 //
 
 import MonitorCore
@@ -26,7 +30,18 @@ struct InspectorModel {
     let detail: TaskInfo
     let hasSnapshot: Bool
     let notices: [String]
+    /// The parent task's title when one is recorded, else "Top-level task" (D17).
+    let startedBy: String
+    /// `nil` hides the "Copy resume command" button.
+    let resumeCommand: String?
+    let onCopyResumeCommand: () -> Void
+    let onCopyTaskID: () -> Void
     let onSelectTask: (String) -> Void
+
+    /// The "Started by" value: the parent's title when the task was started by another task.
+    static func startedByText(parentTitle: String?) -> String {
+        parentTitle ?? "Top-level task"
+    }
 
     /// "Enforcement was not recorded for this task." only once a snapshot exists but carried no
     /// enforcement data — never while the snapshot itself hasn't loaded.
@@ -39,44 +54,25 @@ struct InspectorModel {
 
 struct InspectorView: View {
     let model: InspectorModel?
-    @State private var activityExpanded = true
-    @State private var detailsExpanded = true
+    @State private var technicalExpanded = false
 
     var body: some View {
         ScrollView {
             if let model {
                 VStack(alignment: .leading, spacing: 16) {
-                    if model.task.status.isRunning {
-                        section("Now") {
-                            if let current = model.current, case .tool(let call, _) = current.body {
-                                Text(call.tool).font(.pb(.body, weight: .medium))
-                                Text(call.headline).font(.pb(.secondary, design: .monospaced)).foregroundStyle(.secondary).lineLimit(3)
-                                if let startedAt = current.at {
-                                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                                        Text("\(Format.clock(context.date.timeIntervalSince(startedAt))) · step \(model.stepCount)")
-                                            .font(.pb(.caption))
-                                            .monospacedDigit()
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            } else {
-                                Text("Thinking or writing").font(.pb(.body)).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    collapsibleSection("Activity", isExpanded: $activityExpanded) {
+                    if model.task.status.isRunning { now(model) }
+                    section("Details") { basics(model) }
+                    actions(model)
+                    section("Activity") {
                         Text("\(model.activity.toolCalls) tool calls · \(model.activity.edits) edits · "
                              + "\(model.activity.commands) commands · \(model.subtaskCount) sub-tasks")
                         .font(.pb(.secondary))
                     }
-                    if !model.task.isRoot { lineage(model) }
-                    collapsibleSection("Details", isExpanded: $detailsExpanded) { details(model) }
-                    if !model.notices.isEmpty {
-                        section("Notices") {
-                            ForEach(Array(model.notices.enumerated()), id: \.offset) { _, notice in
-                                Text(notice).font(.pb(.secondary)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
+                    DisclosureGroup(isExpanded: $technicalExpanded) {
+                        // macOS centres a DisclosureGroup's content unless it is given the full width.
+                        technicalInfo(model).padding(.top, 8).frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        SectionLabel(text: "Technical info")
                     }
                 }
                 .padding(14)
@@ -84,7 +80,67 @@ struct InspectorView: View {
         }
         .background(Color.inspectorFill)
     }
-    
+
+    @ViewBuilder
+    private func now(_ model: InspectorModel) -> some View {
+        section("Now") {
+            if let current = model.current, case .tool(let call, _) = current.body {
+                Text(call.tool).font(.pb(.body, weight: .medium))
+                Text(call.headline).font(.pb(.secondary, design: .monospaced)).foregroundStyle(Color.secondaryText).lineLimit(3)
+                if let startedAt = current.at {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text("\(Format.clock(context.date.timeIntervalSince(startedAt))) · step \(model.stepCount)")
+                            .font(.pb(.caption))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.secondaryText)
+                    }
+                }
+            } else {
+                Text("Thinking or writing").font(.pb(.body)).foregroundStyle(Color.secondaryText)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func basics(_ model: InspectorModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top) {
+                detailName("Agent")
+                BackendLabel(backend: model.task.backend).font(.pb(.secondary))
+            }
+            detailRow("Access", model.task.freedom.map { AccessLabel.text(freedom: $0) } ?? "—")
+            detailRow("Started", Format.time(model.task.startedAt))
+            detailRow("Started by", model.startedBy)
+        }
+    }
+
+    @ViewBuilder
+    private func actions(_ model: InspectorModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if model.resumeCommand != nil {
+                Button("Copy resume command", action: model.onCopyResumeCommand)
+            }
+            Button("Copy task ID", action: model.onCopyTaskID)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+
+    @ViewBuilder
+    private func technicalInfo(_ model: InspectorModel) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            section("Details") { details(model) }
+            if !model.task.isRoot { lineage(model) }
+            if !model.notices.isEmpty {
+                section("Notices") {
+                    ForEach(Array(model.notices.enumerated()), id: \.offset) { _, notice in
+                        Text(notice).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -93,16 +149,6 @@ struct InspectorView: View {
         }
     }
 
-    @ViewBuilder
-    private func collapsibleSection(_ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
-        DisclosureGroup(isExpanded: isExpanded) {
-            // macOS centres a DisclosureGroup's content unless it is given the full width.
-            content().padding(.top, 6).frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            SectionLabel(text: title)
-        }
-    }
-    
     private func lineage(_ model: InspectorModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             section("Lineage") {
@@ -143,7 +189,7 @@ struct InspectorView: View {
             onSelectTask(entry.task.taskID)
         } label: {
             HStack(spacing: 6) {
-                BackendBadge(backend: entry.task.backend, size: 16)
+                BackendDot(backend: entry.task.backend)
                 Text(entry.title).font(.pb(.secondary, weight: current ? .semibold : .regular)).lineLimit(1)
                 Spacer()
                 Text("depth \(entry.task.depth)").font(.pb(.caption)).foregroundStyle(.secondary)
@@ -185,17 +231,52 @@ struct InspectorView: View {
         }
     }
     
+    private func detailName(_ name: String) -> some View {
+        Text(name).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).frame(width: 84, alignment: .leading)
+    }
+
     private func detailRow(_ name: String, _ value: String) -> some View {
         HStack(alignment: .top) {
-            Text(name).font(.pb(.secondary)).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
+            detailName(name)
             Text(value).font(.pb(.secondary)).textSelection(.enabled).lineLimit(3)
         }
     }
 }
 
 #if DEBUG
-#Preview {
-    InspectorView(model: nil)
-        .frame(width: 280, height: 500)
+@MainActor
+private func previewModel(status: String, isRoot: Bool) -> InspectorModel {
+    let task = TaskDetailViewModelMock.sampleTask(status: status, spawnedBy: isRoot ? nil : "parent01")
+    var activity = ActivityCounts()
+    activity.toolCalls = 12
+    activity.edits = 2
+    activity.commands = 3
+    return InspectorModel(
+        task: task, current: nil, stepCount: 4,
+        activity: activity, subtaskCount: 1,
+        ancestors: [], siblings: [], detail: task, hasSnapshot: true, notices: ["Approaching the turn limit."],
+        startedBy: InspectorModel.startedByText(parentTitle: isRoot ? nil : "Refactor the sidebar"),
+        resumeCommand: "cd /repo && claude --resume abc", onCopyResumeCommand: {}, onCopyTaskID: {}, onSelectTask: { _ in }
+    )
+}
+
+#Preview("Running - light") {
+    InspectorView(model: previewModel(status: "running", isRoot: true))
+        .frame(width: 280, height: 560)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Sub-task - dark") {
+    InspectorView(model: previewModel(status: "completed", isRoot: false))
+        .frame(width: 280, height: 560)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Empty - light") {
+    InspectorView(model: nil).frame(width: 280, height: 200).preferredColorScheme(.light)
+}
+
+#Preview("Empty - dark") {
+    InspectorView(model: nil).frame(width: 280, height: 200).preferredColorScheme(.dark)
 }
 #endif

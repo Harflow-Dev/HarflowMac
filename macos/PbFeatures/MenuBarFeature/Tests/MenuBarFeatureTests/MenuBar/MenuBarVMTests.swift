@@ -72,8 +72,6 @@ import Testing
     func makeSUT(
         connectionLine: String = "connecting…",
         runningCount: Int = 0,
-        openWindowOnStart: Bool = true,
-        notifyOnFinish: Bool = true,
         installState: InstallState = .idle
     ) -> SUT {
         let useCase = MockMenuBarUseCase()
@@ -82,8 +80,6 @@ import Testing
         let listErrorSubject = PassthroughSubject<ToolError?, Never>()
         let hasListedSubject = PassthroughSubject<Bool, Never>()
         let titlesSubject = PassthroughSubject<[String: String], Never>()
-        let openWindowSubject = PassthroughSubject<Bool, Never>()
-        let notifySubject = PassthroughSubject<Bool, Never>()
         let runningCountBox = Box(runningCount)
         // Re-stubbing `title(_:)` a second time after this is FIFO/unreliable (the same Mockable
         // gotcha documented elsewhere in this repo), so a test that needs the title to change
@@ -98,17 +94,11 @@ import Testing
 
         given(useCase).connectionLine.willReturn(connectionLine)
         given(useCase).runningCount.willProduce { runningCountBox.value }
-        given(useCase).openWindowOnStart.willReturn(openWindowOnStart)
-        given(useCase).notifyOnFinish.willReturn(notifyOnFinish)
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(titlesSubject.eraseToAnyPublisher())
-        given(useCase).openWindowOnStartPublisher().willReturn(openWindowSubject.eraseToAnyPublisher())
-        given(useCase).notifyOnFinishPublisher().willReturn(notifySubject.eraseToAnyPublisher())
         given(useCase).title(.any).willProduce { titleBox.value($0) }
-        given(useCase).setOpenWindowOnStart(.any).willReturn()
-        given(useCase).setNotifyOnFinish(.any).willReturn()
         given(routing).select(.any).willReturn()
         given(routing).openWindow().willReturn()
         given(routing).registerWindowOpener(.any).willReturn()
@@ -394,23 +384,6 @@ import Testing
         
         // then
         verify(routing).registerWindowOpener(.any).called(1)
-    }
-    
-    // MARK: - Settings toggles
-    
-    @Test func givenToggleActions_whenInvoked_thenTheyForwardToTheUseCase() {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let useCase = harness.useCase
-        
-        // when
-        sut.didToggleOpenWindowOnStart(false)
-        sut.didToggleNotifyOnFinish(false)
-        
-        // then
-        verify(useCase).setOpenWindowOnStart(.value(false)).called(1)
-        verify(useCase).setNotifyOnFinish(.value(false)).called(1)
     }
     
     // MARK: - Row leases (decision 6)

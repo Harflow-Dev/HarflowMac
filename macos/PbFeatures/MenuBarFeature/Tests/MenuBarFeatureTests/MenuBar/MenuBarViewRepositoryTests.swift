@@ -12,36 +12,15 @@ import Testing
     @Test func givenTheProperties_whenRead_thenTheyPassThroughToTheRepositories() {
         // given
         let taskList = MockTaskListRepository()
-        let settings = MockSettingsRepository()
         given(taskList).connectionLine.willReturn("connected")
         given(taskList).runningCount.willReturn(2)
-        given(settings).openWindowOnStart.willReturn(false)
-        given(settings).notifyOnFinish.willReturn(false)
         given(taskList).title(.value("abc123")).willReturn("Fix the bug")
-        let sut = MenuBarViewRepository(taskListRepository: taskList, settingsRepository: settings)
+        let sut = MenuBarViewRepository(taskListRepository: taskList)
         
         // then
         #expect(sut.connectionLine == "connected")
         #expect(sut.runningCount == 2)
-        #expect(sut.openWindowOnStart == false)
-        #expect(sut.notifyOnFinish == false)
         #expect(sut.title("abc123") == "Fix the bug")
-    }
-    
-    @Test func givenSetters_whenCalled_thenTheyForwardToSettingsRepository() {
-        // given
-        let settings = MockSettingsRepository()
-        given(settings).setOpenWindowOnStart(.value(false)).willReturn()
-        given(settings).setNotifyOnFinish(.value(false)).willReturn()
-        let sut = MenuBarViewRepository(settingsRepository: settings)
-        
-        // when
-        sut.setOpenWindowOnStart(false)
-        sut.setNotifyOnFinish(false)
-        
-        // then
-        verify(settings).setOpenWindowOnStart(.value(false)).called(1)
-        verify(settings).setNotifyOnFinish(.value(false)).called(1)
     }
     
     @Test func givenAcquireEventLease_whenCalled_thenItPassesThroughToEventStreamRepository() {

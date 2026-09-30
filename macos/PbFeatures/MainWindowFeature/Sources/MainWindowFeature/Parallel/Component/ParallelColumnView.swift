@@ -69,10 +69,10 @@ struct ParallelColumnView: View {
         let shown = ParallelColumnModel.visibleRows(model.rows, showAll: showAll)
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                BackendBadge(backend: model.task.backend, size: 22)
+                BackendDot(backend: model.task.backend, size: 10)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(model.title).font(.pb(.body, weight: .semibold)).lineLimit(2)
-                    Text(model.metaLine).font(.pb(.caption)).foregroundStyle(.secondary)
+                    Text(model.metaLine).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                 }
                 Spacer()
                 StatusPill(task: model.task)
@@ -84,15 +84,10 @@ struct ParallelColumnView: View {
             }
             .font(.pb(.secondary))
             if let message = model.outcomeMessage {
-                Text(message).font(.pb(.caption)).foregroundStyle(.secondary)
+                Text(message).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             }
             if model.showPrompt, let prompt = model.prompt {
-                Text(prompt)
-                    .font(.pb(.secondary, design: .monospaced))
-                    .lineLimit(12)
-                    .textSelection(.enabled)
-                    .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.codeFill))
+                PromptBubbleView(text: prompt)
             }
             Divider()
             if model.isLoading {
@@ -108,7 +103,7 @@ struct ParallelColumnView: View {
                         if model.rows.count > shown.count {
                             Button("Show all \(ParallelColumnModel.itemCount(model.rows)) steps") { showAll = true }
                                 .buttonStyle(.link)
-.font(.pb(.secondary))
+                                .font(.pb(.secondary))
                         }
                         Divider()
                         if model.task.status.isTerminal {
@@ -116,12 +111,12 @@ struct ParallelColumnView: View {
                             if let summary = model.summary, !summary.isEmpty {
                                 MarkdownText(text: summary)
                             } else {
-                                Text("No summary was reported.").font(.pb(.body)).foregroundStyle(.secondary)
+                                Text("No summary was reported.").font(.pb(.body)).foregroundStyle(Color.secondaryText)
                             }
                         } else {
                             Text("Still working… the final summary shows here when \(model.task.backend) finishes.")
                                 .font(.pb(.body))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.secondaryText)
                         }
                     }
                     .padding(.bottom, 12)
@@ -143,62 +138,71 @@ struct ParallelColumnView: View {
 }
 
 #if DEBUG
-#Preview {
-    let task = TaskInfo(.object([
-        "task_id": .string("abc123"), "backend": .string("claude"), "status": .string("running"),
-        "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-90)))
+private func previewTask(id: String, age: TimeInterval) -> TaskInfo {
+    TaskInfo(.object([
+        "task_id": .string(id), "backend": .string("claude"), "status": .string("running"),
+        "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-age)))
     ]))!
-    ParallelColumnView(model: ParallelColumnModel(
-        id: "abc123", task: task, title: "Fix the login bug", metaLine: "claude · effort low",
-        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        rows: [
-            ConversationTimelineRow(
-                id: "abc123#1", taskID: "abc123", timestamp: .now,
-                kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: true
-            )
-        ],
-        isLoading: false,
-        summary: nil, onTapTakeover: {}, onTapOpenTask: {}
-    ))
-    .frame(width: 380, height: 500)
 }
 
-#Preview("Loading column") {
-    let task = TaskInfo(.object([
-        "task_id": .string("abc123"), "backend": .string("claude"), "status": .string("running"),
-        "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-2)))
-    ]))!
-    ParallelColumnView(model: ParallelColumnModel(
-        id: "abc123", task: task, title: "Fix the login bug", metaLine: "claude · effort low",
-        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        rows: [], isLoading: true,
-        summary: nil, onTapTakeover: {}, onTapOpenTask: {}
-    ))
-    .frame(width: 380, height: 500)
+@MainActor
+private func previewColumn(_ model: ParallelColumnModel) -> some View {
+    ParallelColumnView(model: model)
+        .frame(width: 380, height: 560)
+        .background(Color.windowBG)
 }
 
-#Preview("With a follow-up turn") {
-    let task = TaskInfo(.object([
-        "task_id": .string("t2"), "backend": .string("claude"), "status": .string("running"),
-        "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-90)))
-    ]))!
-    ParallelColumnView(model: ParallelColumnModel(
-        id: "t1", task: task, title: "Fix the login bug", metaLine: "claude · effort low · 2 turns",
+@MainActor
+private func columnModel(
+    id: String = "abc123", task: TaskInfo, rows: [ConversationTimelineRow], isLoading: Bool = false, metaLine: String = "claude · effort low"
+) -> ParallelColumnModel {
+    ParallelColumnModel(
+        id: id, task: task, title: "Fix the login bug", metaLine: metaLine,
         isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        rows: [
-            ConversationTimelineRow(
-                id: "t1#1", taskID: "t1", timestamp: .now.addingTimeInterval(-90),
-                kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
-            ),
-            ConversationTimelineRow(
-                id: "sep:t2", taskID: "t2", timestamp: .now,
-                kind: .separator(text: "Also add a test for the edge case"), live: false
-            ),
-            ConversationTimelineRow(id: "t2#1", taskID: "t2", timestamp: .now, kind: .item(PreviewFixtures.finishedItem()), live: true)
-        ],
-        isLoading: false,
+        rows: rows, isLoading: isLoading,
         summary: nil, onTapTakeover: {}, onTapOpenTask: {}
-    ))
-    .frame(width: 380, height: 500)
+    )
+}
+
+private var followUpRows: [ConversationTimelineRow] {
+    [
+        ConversationTimelineRow(
+            id: "t1#1", taskID: "t1", timestamp: .now.addingTimeInterval(-90),
+            kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
+        ),
+        ConversationTimelineRow(
+            id: "sep:t2", taskID: "t2", timestamp: .now,
+            kind: .separator(text: "Also add a test for the edge case"), live: false
+        ),
+        ConversationTimelineRow(id: "t2#1", taskID: "t2", timestamp: .now, kind: .item(PreviewFixtures.finishedItem()), live: true)
+    ]
+}
+
+#Preview("Running - light") {
+    previewColumn(columnModel(task: previewTask(id: "abc123", age: 90), rows: PreviewFixtures.sampleRows(taskID: "abc123")))
+        .preferredColorScheme(.light)
+}
+
+#Preview("Running - dark") {
+    previewColumn(columnModel(task: previewTask(id: "abc123", age: 90), rows: PreviewFixtures.sampleRows(taskID: "abc123")))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Loading column - light") {
+    previewColumn(columnModel(task: previewTask(id: "abc123", age: 2), rows: [], isLoading: true)).preferredColorScheme(.light)
+}
+
+#Preview("Loading column - dark") {
+    previewColumn(columnModel(task: previewTask(id: "abc123", age: 2), rows: [], isLoading: true)).preferredColorScheme(.dark)
+}
+
+#Preview("With a follow-up turn - light") {
+    previewColumn(columnModel(id: "t1", task: previewTask(id: "t2", age: 90), rows: followUpRows, metaLine: "claude · effort low · 2 turns"))
+        .preferredColorScheme(.light)
+}
+
+#Preview("With a follow-up turn - dark") {
+    previewColumn(columnModel(id: "t1", task: previewTask(id: "t2", age: 90), rows: followUpRows, metaLine: "claude · effort low · 2 turns"))
+        .preferredColorScheme(.dark)
 }
 #endif

@@ -4,7 +4,7 @@ Root AGENTS.md applies (`../../AGENTS.md`).
 
 The main window's whole split view, including its own navigation view: Sidebar (task list,
 search/backend filter, parallel runs), New Session (start a headless task), Parallel (one column per
-group member), and TaskDetail (Timeline/Summary/Prompt/Raw Events tabs, the Inspector, the
+group member), and TaskDetail (Activity/Summary/Prompt tabs, a Raw events sheet, the Inspector, the
 MessageBox). `MainWindowCoordinator.start()` returns `MainWindowNavigationView` — the
 `NavigationSplitView` moved here from the app target's `MainView.swift` in Phase 4d part 2 — which is
 generic over the `MainWindowNavigationCoordinator` protocol, never the concrete coordinator. There is

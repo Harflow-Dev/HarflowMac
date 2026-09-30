@@ -117,8 +117,17 @@ extension TaskDetailVM {
         useCase.setOutcome(currentTaskID, text)
     }
 
+    /// Copies the current run's task id, recording the outcome through the same durable channel as
+    /// `didTapCopyResumeCommand()`.
+    func didTapCopyTaskID() {
+        let succeeded = routing.copyToPasteboard(currentTaskID)
+        useCase.setOutcome(currentTaskID, succeeded ? "Copied task ID." : "Couldn't copy to the clipboard.")
+    }
+
     /// Send requires `liveInput && running && !takenOver`; Continue (resume) requires a terminal
-    /// status plus a session (`TaskDetailView.swift:299-300`).
+    /// status plus a session (`TaskDetailView.swift:299-300`). When neither is eligible the
+    /// composer is disabled with the copy of the specific `MessageBoxDisabledReason` (settled plan
+    /// D7) — a taken-over running task no longer claims it "was not started with live input".
     func recomputeMessageBox(task: TaskInfo) {
         let canSend = task.liveInput && task.status.isRunning && !task.takenOver
         let canContinue = task.status.isTerminal && task.sessionID != nil
@@ -126,18 +135,18 @@ extension TaskDetailVM {
         let hint = canSend
         ? "Queued; folded into the current turn or sent after it"
         : (canContinue ? "Continues the same agent session; the reply appears below as a new turn" : "")
+        let disabledReason = MessageBoxDisabledReason.reason(for: task)
         let placeholder = if canSend {
             "Message this task while it runs…"
         } else if canContinue {
             "Send a follow-up — it continues this conversation"
-        } else if task.status.isRunning {
-            "This task was not started with live input, so it cannot take messages while it runs."
         } else {
-            "This task has no session to continue."
+            disabledReason.text
         }
         messageBoxModel = MessageBoxModel(
             canSend: canSend, canContinue: canContinue, isBusy: isBusy,
-            label: label, hint: hint, placeholder: placeholder, buttonLabel: canSend ? "Send" : "Continue"
+            label: label, hint: hint, placeholder: placeholder, buttonLabel: canSend ? "Send" : "Continue",
+            isLocked: !canSend && !canContinue && disabledReason.showsLock
         )
     }
 

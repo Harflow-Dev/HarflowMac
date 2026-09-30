@@ -14,7 +14,8 @@ import Testing
         let task = TaskInfo(.object(["task_id": .string("abc123")]))!
         let model = InspectorModel(
             task: task, current: nil, stepCount: 3, activity: ActivityCounts(), subtaskCount: 1,
-            ancestors: [], siblings: [], detail: task, hasSnapshot: true, notices: ["a notice"], onSelectTask: { _ in }
+            ancestors: [], siblings: [], detail: task, hasSnapshot: true, notices: ["a notice"],
+            startedBy: "Top-level task", resumeCommand: nil, onCopyResumeCommand: {}, onCopyTaskID: {}, onSelectTask: { _ in }
         )
 
         // then
@@ -22,6 +23,7 @@ import Testing
         #expect(model.stepCount == 3)
         #expect(model.subtaskCount == 1)
         #expect(model.notices == ["a notice"])
+        #expect(model.startedBy == "Top-level task")
     }
 
     // MARK: - Item q: "Enforcement was not recorded" shows only when a snapshot exists

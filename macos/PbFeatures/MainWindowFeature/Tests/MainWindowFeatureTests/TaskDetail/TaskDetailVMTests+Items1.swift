@@ -170,7 +170,7 @@ extension TaskDetailVMTests {
         let harness = makeSUT()
         
         // then
-        #expect(harness.sut.tab == .timeline)
+        #expect(harness.sut.tab == .activity)
     }
     
 }

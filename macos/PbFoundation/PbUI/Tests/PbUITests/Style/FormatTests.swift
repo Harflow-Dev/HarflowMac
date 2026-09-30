@@ -109,4 +109,22 @@ import Testing
         // when / then
         #expect(Format.repo(path) == path)
     }
+
+    // MARK: - repoName
+
+    @Test func givenAnAbsolutePath_whenFormattingRepoName_thenReturnsTheLastComponent() {
+        // given / when / then
+        #expect(Format.repoName("/Users/me/Code/polybridge") == "polybridge")
+    }
+
+    @Test func givenATrailingSlash_whenFormattingRepoName_thenIgnoresIt() {
+        // given / when / then
+        #expect(Format.repoName("/Users/me/Code/polybridge/") == "polybridge")
+    }
+
+    @Test func givenABareNameOrEmptyPath_whenFormattingRepoName_thenReturnsItAsIs() {
+        // given / when / then
+        #expect(Format.repoName("polybridge") == "polybridge")
+        #expect(Format.repoName("") == "")
+    }
 }

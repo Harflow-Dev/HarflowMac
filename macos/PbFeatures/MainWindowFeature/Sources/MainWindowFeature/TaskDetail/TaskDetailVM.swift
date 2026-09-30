@@ -118,7 +118,7 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     let taskID: String
     private(set) var task: TaskInfo?
-    private(set) var hasListed = false
+    var hasListed = false
 
     private(set) var title = ""
     private(set) var ancestorCrumbs: [AncestorCrumb] = []
@@ -140,15 +140,15 @@ final class TaskDetailVM: TaskDetailViewModel {
     // The properties below are written from the `+Timeline`/`+Summary`/`+Actions` extension files
     // (each in its own file, per the screen shape), so they cannot be `private(set)` — `private` is
     // file-scoped in Swift. They stay non-public (no external module can write them).
-    var tab: TaskTab = .timeline
-    var tabs: [TaskTab] = [.timeline, .summary, .prompt, .raw]
+    var tab: TaskTab = .activity
+    var tabs: [TaskTab] = [.activity, .summary, .prompt]
 
     var timelineModel = TimelinePaneModel.empty
     var summaryModel = SummaryPaneModel.empty
     var promptText = "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
     var rawEvents: [TaskEvent] = []
     var rawEventsPath = "/dev/null"
-    private(set) var inspectorModel: InspectorModel?
+    var inspectorModel: InspectorModel?
     var messageBoxModel = MessageBoxModel.disabled
 
     // MARK: - Internal Properties (shared across extensions)
@@ -251,69 +251,6 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - Internal Methods
 
-    func subscribeIfNeeded() {
-        guard !didSubscribe else { return }
-        didSubscribe = true
-
-        useCase.tasksPublisher()
-            .receive(on: DispatchQueue.main)
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.recomputeMembersAndLeases() }
-            .store(in: &cancellables)
-
-        useCase.hasListedPublisher()
-            .receive(on: DispatchQueue.main)
-            .removeDuplicates()
-            .sink { [weak self] value in
-                guard let self else { return }
-                hasListed = value
-                recompute()
-            }
-            .store(in: &cancellables)
-
-        useCase.titlesPublisher()
-            .receive(on: DispatchQueue.main)
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.recompute() }
-            .store(in: &cancellables)
-
-        useCase.snapshotsPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] snapshots in
-                guard let self else { return }
-                // Plan review round 1, item 3: ignore a publication that doesn't touch any member of
-                // THIS conversation — `snapshots` covers every task in the system, so it changes on
-                // essentially every publish; a plain `.removeDuplicates()` on the whole dictionary
-                // would almost never fire and buys nothing. Before membership is known at all
-                // (`conversationMembers` still empty — e.g. a snapshot arriving ahead of the
-                // listing), every publication still applies, so a real change is never dropped.
-                let touchesConversation = conversationMembers.isEmpty
-                    || conversationMembers.contains { latestSnapshots[$0.taskID] != snapshots[$0.taskID] }
-                guard touchesConversation else { return }
-                latestSnapshots = snapshots
-                recompute()
-            }
-            .store(in: &cancellables)
-
-        useCase.busyPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] busy in
-                guard let self else { return }
-                latestBusy = busy
-                recompute()
-            }
-            .store(in: &cancellables)
-
-        useCase.outcomesPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] outcomes in
-                guard let self else { return }
-                latestOutcomes = outcomes
-                recompute()
-            }
-            .store(in: &cancellables)
-    }
-
     /// Recomputes conversation membership (Design point 6) from `identityTaskID` — the conversation's
     /// own normalised identity, NOT the fixed `taskID` this VM was opened through (Codex review
     /// round 2, finding 2) — diffs it against the currently-leased member set — acquiring a lease
@@ -346,51 +283,6 @@ final class TaskDetailVM: TaskDetailViewModel {
         for id in newIDs.subtracting(oldIDs) { acquireMemberLease(id) }
         for id in oldIDs.subtracting(newIDs) { releaseMemberLease(id) }
         recompute()
-    }
-
-    /// Two INDEPENDENT subscriptions, deliberately not a `CombineLatest` of the two publishers: a
-    /// tailer can append new items with no availability change (and vice versa), and
-    /// `CombineLatest` would otherwise wait for both to have emitted at least once before ever
-    /// firing, silently dropping the first update whichever publisher fires alone.
-    private func acquireMemberLease(_ id: String) {
-        guard leases[id] == nil else { return }
-        leases[id] = useCase.acquireEventLease(id)
-        eventsByMember[id] = useCase.events(for: id)
-        itemsByMember[id] = useCase.items(for: id)
-        eventsAvailabilityByMember[id] = useCase.eventsAvailability(for: id)
-        var subscriptions: [AnyCancellable] = []
-        subscriptions.append(
-            useCase.itemsPublisher(for: id)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] items in
-                    guard let self else { return }
-                    // The Timeline reads `items` directly (Monitor piece 8, Codex review round 2,
-                    // finding 2) — never `Timeline.items(from:)` over the raw events below, which
-                    // stays only for Summary/EditedFiles's own, separately-gated recompute.
-                    itemsByMember[id] = items
-                    eventsByMember[id] = useCase.events(for: id)
-                    recompute()
-                }
-        )
-        subscriptions.append(
-            useCase.eventsAvailabilityPublisher(for: id)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] availability in
-                    guard let self else { return }
-                    eventsAvailabilityByMember[id] = availability
-                    recompute()
-                }
-        )
-        memberCancellables[id] = subscriptions
-    }
-
-    private func releaseMemberLease(_ id: String) {
-        leases[id]?.release()
-        leases[id] = nil
-        memberCancellables[id] = nil
-        eventsByMember[id] = nil
-        itemsByMember[id] = nil
-        eventsAvailabilityByMember[id] = nil
     }
 
     /// Rebuilds every piece of derived state from the freshest available data. Always re-reads
@@ -489,44 +381,6 @@ final class TaskDetailVM: TaskDetailViewModel {
     func allConversationChildren() -> [TaskInfo] {
         let childrenByMember = useCase.children(ofEach: conversationMembers.map(\.taskID))
         return conversationMembers.flatMap { childrenByMember[$0.taskID] ?? [] }
-    }
-
-    /// "Now" (the current running tool), lineage, and the raw-snapshot "Details"/enforcement.
-    /// Assembled here (not a dedicated `+Inspector` extension) because it aggregates data the other
-    /// extensions already computed plus core lineage. Activity and sub-task count are summed across
-    /// every conversation member (Design point 3: "children of any member hang under the
-    /// conversation's node"); "Now" reads the current member alone, since only it can be running.
-    /// `ancestors` and `siblings` are both about the CURRENT task's own position (Codex review
-    /// round 1, finding 4) — never the conversation's first member, whose own ancestors do not
-    /// necessarily reach the current task at all. `allChildren` is `recompute()`'s own
-    /// `allConversationChildren()` result, passed in rather than recomputed here (Monitor piece 11):
-    /// this used to make its OWN separate `useCase.children(of:)` call per member just to count them,
-    /// duplicating `recomputeTimeline`'s identical per-member query.
-    func recomputeInspector(task: TaskInfo, ancestors: [TaskInfo], allChildren: [TaskInfo]) {
-        let siblings = useCase.siblings(of: currentTaskID)
-        let snapshot = useCase.snapshot(currentTaskID)
-        let activity = conversationMembers.reduce(ActivityCounts()) { acc, member in
-            let memberActivity = useCase.activity(for: member.taskID)
-            var result = acc
-            result.toolCalls += memberActivity.toolCalls
-            result.edits += memberActivity.edits
-            result.commands += memberActivity.commands
-            return result
-        }
-        let subtaskCount = allChildren.count
-        inspectorModel = InspectorModel(
-            task: task,
-            current: useCase.current(for: currentTaskID),
-            stepCount: timelineModel.rows.filter { if case .item = $0.kind { return true }; return false }.count,
-            activity: activity,
-            subtaskCount: subtaskCount,
-            ancestors: ancestors.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
-            siblings: siblings.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
-            detail: snapshot ?? task,
-            hasSnapshot: snapshot != nil,
-            notices: task.notices,
-            onSelectTask: { [weak self] id in self?.didTapTask(id) }
-        )
     }
 
     private func resetForMissingTask() {

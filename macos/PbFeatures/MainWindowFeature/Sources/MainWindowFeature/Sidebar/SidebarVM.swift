@@ -112,9 +112,8 @@ final class SidebarVM: SidebarViewModel {
     
     // MARK: - SidebarViewModel Properties
     
-    private(set) var runningRows: [TaskRowModel] = []
-    private(set) var parallelGroups: [ParallelGroup] = []
-    private(set) var recentRows: [TaskRowModel] = []
+    /// Running / Today / Earlier, each holding whole root trees and parallel groups (settled plan D10).
+    private(set) var sections: [SidebarSection] = []
     private(set) var listErrorMessage: String?
     /// The precedence-ordered empty-state message for the list body, or `nil` when real content (or
     /// a connection/error/banner state that already owns the space) makes one unnecessary — see
@@ -139,15 +138,12 @@ final class SidebarVM: SidebarViewModel {
     private(set) var connectionLine: String
     /// "All" plus every backend polybridge reports (registry order), plus any backend seen only in
     /// task history (alphabetical) — Design point 3/Review round 1 item 5.
-    private(set) var backendTabs: [BackendTab] = [.all]
-    private(set) var selectedBackend = "all"
-    /// The tab keyboard focus ring currently sits on — independent of `selectedBackend`, since
-    /// arrowing through tabs must not filter the list until Space/Return confirms (Review round 1
-    /// item 4).
-    private(set) var focusedBackendTab = "all"
+    /// Written from `SidebarVM+Backends.swift` too, hence not `private(set)` (`private` is file-scoped).
+    var backendTabs: [BackendTab] = [.all]
+    var selectedBackend = "all"
     /// A quiet note shown near the tab row when the catalog is degraded with nothing carried over —
     /// "Backend list unavailable — update polybridge." (Review round 1 item 2). `nil` otherwise.
-    private(set) var catalogUnavailableNote: String?
+    var catalogUnavailableNote: String?
     private(set) var searchQuery = ""
     /// Stored (not computed) so `@Observable` tracks it: `routing.selection`'s own type is a
     /// protocol existential, invisible to Observation, so a plain forwarding computed property
@@ -185,7 +181,9 @@ final class SidebarVM: SidebarViewModel {
     @ObservationIgnored var conversationIndex = ConversationIndex([])
     @ObservationIgnored var latestListError: ToolError?
     @ObservationIgnored private var latestHasListed = false
-    @ObservationIgnored private var latestCatalog: BackendCatalog
+    @ObservationIgnored var latestCatalog: BackendCatalog
+    /// The clock Today/Earlier bucketing reads; tests replace it.
+    @ObservationIgnored var currentDate: () -> Date = { Date() }
     @ObservationIgnored var installState: InstallState = .idle
     @ObservationIgnored var lastCheckMessage: String?
     @ObservationIgnored var installAnywayBlockedMessage: String?
@@ -246,27 +244,7 @@ final class SidebarVM: SidebarViewModel {
 
     func didSelectBackendFilter(_ backend: String) {
         selectedBackend = backend
-        focusedBackendTab = backend
         recompute()
-    }
-
-    // MARK: - Backend tab row keyboard (Monitor piece 6, Review round 1 item 4)
-
-    /// ←/→ moves the tab-row's own focus ring, independent of `selectedBackend` — Space/Return
-    /// (`didPressBackendTabConfirm()`) is what actually filters. Scoped entirely to the tab row by
-    /// the view (`BackendTabRow`'s own `.focusable()`), never the task tree's ←/→ or the search
-    /// field.
-    func didPressBackendTabArrow(_ direction: MoveCommandDirection) {
-        guard let index = backendTabs.firstIndex(where: { $0.id == focusedBackendTab }) else { return }
-        switch direction {
-        case .left: focusedBackendTab = backendTabs[max(0, index - 1)].id
-        case .right: focusedBackendTab = backendTabs[min(backendTabs.count - 1, index + 1)].id
-        default: break
-        }
-    }
-
-    func didPressBackendTabConfirm() {
-        didSelectBackendFilter(focusedBackendTab)
     }
 
     func didSelect(_ destination: MonitorDestination?) {
@@ -438,10 +416,10 @@ final class SidebarVM: SidebarViewModel {
         // conversation tree from scratch — the fix for the 0.36s/recompute cost `forcedExpandedIDs`
         // used to have on a 532-task real listing (O(n²) over the number of matching tasks, each
         // rebuild an O(n) tree construction).
-        let sections = conversationIndex.sections(matches: matches)
+        let matched = conversationIndex.sections(matches: matches)
         // Retention membership is recorded from the UNFILTERED tree (Codex review round 2, finding
-        // 3), never `sections` above: an active search/backend filter can hide a whole conversation
-        // — and any follow-up it gets while hidden — from `sections.running`/`sections.recent`
+        // 3), never `matched` above: an active search/backend filter can hide a whole conversation
+        // — and any follow-up it gets while hidden — from `matched.running`/`matched.recent`
         // entirely (`keep(tree)`), so recording only from the filtered tree would forget that
         // conversation's membership for as long as the filter stays active, and a prune during that
         // window could never hand off once the filter clears.
@@ -456,9 +434,11 @@ final class SidebarVM: SidebarViewModel {
             })
             : []
 
-        runningRows = sections.running.flatMap { flattenedRows($0, forcedExpandedIDs: forcedExpandedIDs) }
-        recentRows = sections.recent.flatMap { flattenedRows($0, forcedExpandedIDs: forcedExpandedIDs) }
-        parallelGroups = Lineage.sections(latestTasks, matches: matches).parallel
+        sections = bucketedSections(
+            trees: matched.running + matched.recent,
+            groups: Lineage.sections(latestTasks, matches: matches).parallel,
+            forcedExpandedIDs: forcedExpandedIDs
+        )
 
         // Retention while open (Review round 1, item 4): re-normalising the CURRENT selection on
         // every recompute (not just on a fresh `selectionPublisher()` event) is what lets the
@@ -483,44 +463,6 @@ final class SidebarVM: SidebarViewModel {
         !latestHasListed && latestListError == nil && installBannerModel == nil
     }
 
-    // MARK: - Backend tabs (Monitor piece 6)
-
-    /// Tabs = "All" + every backend polybridge reports (registry order) + any backend seen only in
-    /// task history (alphabetical) — Design point 3/Review round 1 item 5. Also applies the
-    /// selection/focus fallback-to-"All" rule (a backend that disappears from both the catalog and
-    /// history) and the degraded-with-nothing-carried-over note.
-    private func recomputeBackendTabs() {
-        var seen = Set<String>()
-        var candidates: [BackendTab] = []
-        for entry in latestCatalog.entries {
-            guard seen.insert(entry.backend).inserted else { continue }
-            candidates.append(BackendTab(id: entry.backend, isNotFound: entry.installed == false))
-        }
-        let historyOnly = Set(latestTasks.map(\.backend)).subtracting(seen).sorted()
-        for backend in historyOnly {
-            candidates.append(BackendTab(id: backend, isNotFound: false))
-        }
-        // Most-used first (task count in the listing); ties keep the order above — registry order,
-        // then history-only names alphabetically.
-        var usage: [String: Int] = [:]
-        for task in latestTasks { usage[task.backend, default: 0] += 1 }
-        let ranked = candidates.enumerated()
-.sorted { lhs, rhs in
-            let left = usage[lhs.element.id] ?? 0, right = usage[rhs.element.id] ?? 0
-            return left == right ? lhs.offset < rhs.offset : left > right
-        }
-.map(\.element)
-        let tabs: [BackendTab] = [.all] + ranked
-        backendTabs = tabs
-
-        if !tabs.contains(where: { $0.id == selectedBackend }) { selectedBackend = "all" }
-        if !tabs.contains(where: { $0.id == focusedBackendTab }) { focusedBackendTab = selectedBackend }
-
-        catalogUnavailableNote = (latestCatalog.state == .degraded && latestCatalog.entries.isEmpty)
-            ? "Backend list unavailable — update polybridge."
-            : nil
-    }
-
     /// Empty-state precedence (Review round 1 item 3): the connection/loading/listing-error/banner
     /// UI gates first — the view shows that instead, so this is only reached once there's genuinely
     /// nothing else to show; any filtered content (running, parallel groups, or recent) suppresses
@@ -532,7 +474,7 @@ final class SidebarVM: SidebarViewModel {
     /// `installState`/`lastCheckMessage` etc. above.
     func computeEmptyStateMessage() -> String? {
         guard latestHasListed, latestListError == nil, installBannerModel == nil else { return nil }
-        guard runningRows.isEmpty, parallelGroups.isEmpty, recentRows.isEmpty else { return nil }
+        guard sections.isEmpty else { return nil }
 
         let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedQuery.isEmpty else { return "No tasks match \"\(trimmedQuery)\"." }

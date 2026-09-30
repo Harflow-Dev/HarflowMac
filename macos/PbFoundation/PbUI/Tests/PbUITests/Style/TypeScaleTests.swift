@@ -8,7 +8,7 @@ import Testing
 
     @Test func givenEachTextStyle_whenAskedForItsPointSize_thenPinsTheNativeMacSize() {
         let expected: [(style: PbTextStyle, size: CGFloat)] = [
-            (.caption, 11), (.secondary, 12), (.body, 13), (.headline, 15), (.title, 18)
+            (.caption, 11), (.secondary, 12), (.body, 13), (.reading, 14), (.headline, 15), (.title, 18), (.hero, 22)
         ]
         for (style, size) in expected {
             // given

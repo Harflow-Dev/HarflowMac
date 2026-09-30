@@ -16,6 +16,8 @@ struct MenuBarRunningRowModel: Identifiable, Equatable {
     let id: String
     let backend: String
     let title: String
+    /// The repository's name (`Format.repoName`), the second part of the activity line.
+    let repoName: String
     let startedAt: Date?
     let durationSeconds: Double?
     let activityLine: String?
