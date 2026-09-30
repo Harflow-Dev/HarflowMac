@@ -64,7 +64,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
         DeferredContent {
             placeholderContent
         } content: {
-            realContent
+            withToolbar { realContent }
                 .onAppear { viewModel.didAppear() }
                 .onDisappear { viewModel.didDisappear() }
         }
@@ -73,8 +73,6 @@ struct ParallelView<VM: ParallelViewModel>: View {
 
     private var realContent: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             if viewModel.isEmpty {
                 Text("No tasks in this group any more.").font(.pb(.body)).foregroundStyle(Color.secondaryText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -104,20 +102,37 @@ struct ParallelView<VM: ParallelViewModel>: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.groupName).font(.pb(.headline, weight: .semibold)).lineLimit(1)
-                Text(viewModel.headerSubtitle).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).lineLimit(1)
+    /// The group's header lives in the window's toolbar row, as the task detail's does. On macOS 26
+    /// the title sits on the bare toolbar (no glass capsule) and a spacer pushes the actions trailing.
+    @ViewBuilder
+    private func withToolbar(@ViewBuilder content: () -> some View) -> some View {
+        if #available(macOS 26.0, *) {
+            content().toolbar {
+                ToolbarItem(placement: .navigation) { groupTitle }.sharedBackgroundVisibility(.hidden)
+                ToolbarSpacer(.flexible)
+                ToolbarItemGroup(placement: .primaryAction) { groupActions }
             }
-            Spacer(minLength: 12)
-            Button("View prompt") { viewModel.didTapViewPrompt() }
-            if viewModel.canCancelAll {
-                Button("Cancel all", role: .destructive) { viewModel.didTapCancelAll() }
+        } else {
+            content().toolbar {
+                ToolbarItem(placement: .navigation) { groupTitle }
+                ToolbarItemGroup(placement: .primaryAction) { groupActions }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+    }
+
+    private var groupTitle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(viewModel.groupName).font(.pb(.headline, weight: .semibold)).lineLimit(1)
+            Text(viewModel.headerSubtitle).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private var groupActions: some View {
+        Button("View prompt") { viewModel.didTapViewPrompt() }
+        if viewModel.canCancelAll {
+            Button("Cancel all", role: .destructive) { viewModel.didTapCancelAll() }
+        }
     }
 
     /// The deferred first frame: a header skeleton plus N column skeletons. N is whatever is cheaply

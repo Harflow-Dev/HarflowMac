@@ -127,27 +127,29 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @ViewBuilder
     private var realContent: some View {
         if let task = viewModel.task {
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    header(task)
-                    tabPicker
-                    column
-                }
-                .background(Color.windowBG)
-                if isInspectorVisible {
-                    HStack(spacing: 0) {
-                        Divider()
-                        InspectorView(model: viewModel.inspectorModel)
-                            .frame(width: 280)
+            withToolbar(task: task) {
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        if hasHeaderContent { header(task) }
+                        tabPicker
+                        column
                     }
-                    .transition(.move(edge: .trailing))
+                    .background(Color.windowBG)
+                    if isInspectorVisible {
+                        HStack(spacing: 0) {
+                            Divider()
+                            InspectorView(model: viewModel.inspectorModel)
+                                .frame(width: 280)
+                        }
+                        .transition(.move(edge: .trailing))
+                    }
                 }
-            }
-            // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
-            // change can land outside the tap's transaction and would then not animate.
-            .animation(.easeInOut(duration: 0.25), value: isInspectorVisible)
-            .sheet(isPresented: $isRawEventsPresented) {
-                RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
+                // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
+                // change can land outside the tap's transaction and would then not animate.
+                .animation(.easeInOut(duration: 0.25), value: isInspectorVisible)
+                .sheet(isPresented: $isRawEventsPresented) {
+                    RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
+                }
             }
         } else if viewModel.hasListed {
             VStack(spacing: 8) {
@@ -186,26 +188,17 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     // MARK: Header
 
+    /// Whatever the toolbar row can't carry: breadcrumbs, the outcome line, banners and the
+    /// notice count. Empty (and so taking no space) for most tasks.
+    private var hasHeaderContent: Bool {
+        !viewModel.ancestorCrumbs.isEmpty || viewModel.outcomeMessage != nil || viewModel.takenOverBannerText != nil
+            || viewModel.spawnedByBannerText != nil || !(viewModel.inspectorModel?.notices.isEmpty ?? true)
+    }
+
     @ViewBuilder
     private func header(_ task: TaskInfo) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if !viewModel.ancestorCrumbs.isEmpty { breadcrumbs }
-            // One row when everything fits; at a narrow width the title keeps its own row and the
-            // status and actions move to a second row, rather than squeezing the title to nothing.
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 12) {
-                    titleBlock(task)
-                    Spacer(minLength: 12)
-                    statusAndActions(task)
-                }
-                VStack(alignment: .leading, spacing: 10) {
-                    titleBlock(task)
-                    HStack {
-                        Spacer(minLength: 0)
-                        statusAndActions(task)
-                    }
-                }
-            }
             if let message = viewModel.outcomeMessage {
                 Text(message).font(.pb(.secondary)).foregroundStyle(OutcomeColor.of(message)).textSelection(.enabled)
             }
@@ -227,9 +220,26 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 .help("Show the notices in the inspector")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
-        .padding(.top, 16)
-        .padding(.bottom, 12)
+        .padding(.top, 12)
+    }
+
+    /// Attaches the toolbar layout the running OS supports; the glass-free one needs macOS 26 APIs.
+    @ViewBuilder
+    private func withToolbar(task: TaskInfo, @ViewBuilder content: () -> some View) -> some View {
+        if #available(macOS 26.0, *) {
+            content().toolbar { glassFreeToolbarContent(task) }
+        } else {
+            content().toolbar { toolbarContent(task) }
+        }
+    }
+
+    /// The design's toolbar row: title and repo leading; status and actions trailing.
+    @ToolbarContentBuilder
+    private func toolbarContent(_ task: TaskInfo) -> some ToolbarContent {
+        ToolbarItem(placement: .navigation) { titleBlock(task) }
+        ToolbarItem(placement: .primaryAction) { statusAndActions(task) }
     }
 
     private var breadcrumbs: some View {
@@ -248,7 +258,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1).textSelection(.enabled)
+            Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1)
             HStack(spacing: 6) {
                 Text(Format.repoName(task.repoPath))
                 if let turnsText = viewModel.turnsText { Text("· \(turnsText)") }
@@ -262,23 +272,57 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @ViewBuilder
     private func statusAndActions(_ task: TaskInfo) -> some View {
         HStack(spacing: 10) {
-            TaskStatusLabel(task: task).fixedSize()
-            if viewModel.isBusy { ProgressView().controlSize(.small) }
-            Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.canTakeover)
-                .help(viewModel.takeoverHelp)
+            statusLabel(task)
+            takeoverButton
             moreMenu
-            Button {
-                isInspectorVisible.toggle()
-            } label: {
-                Image(systemName: "sidebar.right").frame(width: 24, height: 24).contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .help(isInspectorVisible ? "Hide inspector" : "Show inspector")
-            .accessibilityLabel(isInspectorVisible ? "Hide inspector" : "Show inspector")
+            inspectorToggle
         }
         .fixedSize()
+    }
+
+    /// macOS 26 draws each toolbar item in a glass capsule, which turned the title and the whole
+    /// action row into pills. Here the title, status and primary button sit on the bare toolbar, a
+    /// flexible spacer pushes the actions to the trailing edge, and only "…" and the inspector
+    /// toggle share one native glass group.
+    @available(macOS 26.0, *)
+    @ToolbarContentBuilder
+    private func glassFreeToolbarContent(_ task: TaskInfo) -> some ToolbarContent {
+        ToolbarItem(placement: .navigation) { titleBlock(task) }
+            .sharedBackgroundVisibility(.hidden)
+        ToolbarSpacer(.flexible)
+        ToolbarItem(placement: .primaryAction) { statusLabel(task) }
+            .sharedBackgroundVisibility(.hidden)
+        ToolbarItem(placement: .primaryAction) { takeoverButton }
+            .sharedBackgroundVisibility(.hidden)
+        ToolbarItemGroup(placement: .primaryAction) {
+            moreMenu
+            inspectorToggle
+        }
+    }
+
+    private func statusLabel(_ task: TaskInfo) -> some View {
+        HStack(spacing: 8) {
+            TaskStatusLabel(task: task).fixedSize()
+            if viewModel.isBusy { ProgressView().controlSize(.small) }
+        }
+    }
+
+    private var takeoverButton: some View {
+        Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
+            .buttonStyle(.borderedProminent)
+            .disabled(!viewModel.canTakeover)
+            .help(viewModel.takeoverHelp)
+    }
+
+    private var inspectorToggle: some View {
+        Button {
+            isInspectorVisible.toggle()
+        } label: {
+            Image(systemName: "sidebar.right").frame(width: 24, height: 24).contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(isInspectorVisible ? "Hide inspector" : "Show inspector")
+        .accessibilityLabel(isInspectorVisible ? "Hide inspector" : "Show inspector")
     }
 
     private var moreMenu: some View {
@@ -337,10 +381,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         case .prompt:
             ScrollView {
                 Text(viewModel.promptText)
-                    .font(.pb(.body, design: .monospaced))
+                    .font(.pb(.reading))
+                    .lineSpacing(6)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+                    .padding(24)
                     .readingColumn()
             }
         }
