@@ -97,6 +97,7 @@ public struct TaskRow: View {
     /// Invoked when the disclosure chevron is tapped (rows with `hasChildren`); `nil` when the row
     /// has no children, or on MenuBar's plain rows, which never render one.
     public let onToggleExpansion: (() -> Void)?
+    @Environment(\.backgroundProminence) private var prominence
 
     public init(model: TaskRowModel, onToggleExpansion: (() -> Void)? = nil) {
         self.model = model
@@ -109,7 +110,7 @@ public struct TaskRow: View {
             StatusIcon(status: model.status)
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.title).font(.pb(.body, weight: .medium)).lineLimit(1)
-                Text(model.subtitle).font(.pb(.caption)).foregroundStyle(Color.secondaryText).lineLimit(1)
+                Text(model.subtitle).font(.pb(.caption)).foregroundStyle(Color.secondaryText(on: prominence)).lineLimit(1)
             }
             Spacer(minLength: 4)
             if model.isRunning {
@@ -120,10 +121,10 @@ public struct TaskRow: View {
                     Text(Format.clock(elapsed))
                         .font(.pb(.caption))
                         .monospacedDigit()
-                        .foregroundStyle(Color.secondaryText)
+                        .foregroundStyle(Color.secondaryText(on: prominence))
                 }
             } else {
-                Text(model.ageText).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                Text(model.ageText).font(.pb(.caption)).foregroundStyle(Color.secondaryText(on: prominence))
             }
         }
         .padding(.vertical, 6)

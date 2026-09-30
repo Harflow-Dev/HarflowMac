@@ -413,7 +413,29 @@ public struct MarkdownText: View {
     }
 
     public static func inline(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        var result = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(text)
+        autolink(&result)
+        return result
+    }
+
+    /// Links bare URLs (`https://…`) that the Markdown parser leaves as text — never inside a code
+    /// span or an existing link.
+    static func autolink(_ string: inout AttributedString) {
+        let plain = String(string.characters)
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return }
+        let matches = detector.matches(in: plain, range: NSRange(plain.startIndex..., in: plain))
+        for match in matches {
+            guard let url = match.url, let scheme = url.scheme, ["http", "https"].contains(scheme.lowercased()),
+                  let textRange = Range(match.range, in: plain),
+                  let lower = AttributedString.Index(textRange.lowerBound, within: string),
+                  let upper = AttributedString.Index(textRange.upperBound, within: string) else { continue }
+            let range = lower ..< upper
+            let blocked = string[range].runs.contains { run in
+                run.link != nil || run.inlinePresentationIntent?.contains(.code) == true
+            }
+            if !blocked { string[range].link = url }
+        }
     }
 
     /// `inline(_:)` with inline `code` set in `codeFont` on the code-block tint, so it reads as code

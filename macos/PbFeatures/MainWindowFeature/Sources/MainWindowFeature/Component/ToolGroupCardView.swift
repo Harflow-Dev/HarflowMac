@@ -28,7 +28,7 @@ struct ToolGroupCardView: View {
                     .accessibilityHint(isExpanded ? "Hides the individual calls" : "Shows the individual calls")
                 if isExpanded {
                     if !group.pillNames.isEmpty {
-                        FilePillsView(names: group.pillNames, overflowCount: group.overflowCount)
+                        FilePillsView(names: group.pillNames, paths: group.pillPaths, overflowCount: group.overflowCount)
                     }
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(group.members) { member in
@@ -52,7 +52,7 @@ struct ToolGroupCardView: View {
                 }
             }
             Spacer(minLength: 8)
-            if group.isRunning { ProgressView().controlSize(.mini) }
+            if group.isRunning { RunningSpinner(size: 12) }
             Text(group.timeRangeText(start: start))
                 .font(.pb(.caption))
                 .monospacedDigit()
@@ -70,11 +70,23 @@ struct ToolGroupCardView: View {
 /// File names as wrapping pills, with a trailing "+N more" when the card holds more.
 struct FilePillsView: View {
     let names: [String]
+    /// The full path behind each name; tapping a pill opens it in its default app.
+    var paths: [String] = []
     let overflowCount: Int
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         PillFlowLayout(spacing: 6) {
-            ForEach(Array(names.enumerated()), id: \.offset) { _, name in pill(name) }
+            ForEach(Array(names.enumerated()), id: \.offset) { index, name in
+                if index < paths.count, let link = FileLinks.link(forPath: paths[index]) {
+                    Button { openURL(link) } label: { pill(name) }
+                        .buttonStyle(.plain)
+                        .help("Open \(paths[index])")
+                        .accessibilityLabel("Open \(name)")
+                } else {
+                    pill(name)
+                }
+            }
             if overflowCount > 0 { pill("+\(overflowCount) more") }
         }
     }

@@ -118,7 +118,8 @@ private struct ActivityStatusPreview: View {
             StartLineView(backend: "vibe", time: .now, freedom: "write_in_repo")
             ActivityNoticeView(text: "Context was compacted.", systemImage: "info.circle")
             ActivityNoticeView(text: "Not delivered: hello — the run had already ended", systemImage: "exclamationmark.triangle", style: .warning)
-            ActivityNoticeView(text: "Finished: Done · exit 0", systemImage: "flag.checkered", style: .finished(.completed))
+            ActivityNoticeView(text: "Finished", systemImage: "checkmark.circle.fill", style: .finished(.completed))
+            ActivityNoticeView(text: "Failed · exit 1", systemImage: "xmark.circle.fill", style: .finished(.failed))
             LiveStepLineView(text: "Reading AppDelegate.swift…")
         }
         .padding()

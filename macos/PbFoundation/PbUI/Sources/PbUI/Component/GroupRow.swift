@@ -8,14 +8,17 @@ import SwiftUI
 /// `ParallelGroup` value and never reads `AppModel`, so it qualifies for the shared component layer.
 public struct GroupRow: View {
     public let group: ParallelGroup
+    @Environment(\.backgroundProminence) private var prominence
 
     public init(group: ParallelGroup) {
         self.group = group
     }
 
-    /// "Parallel run · N of M finished".
-    public nonisolated static func subtitle(finished: Int, total: Int) -> String {
-        "Parallel run · \(finished) of \(total) finished"
+    /// "Parallel run · N of M finished" — or, for a group of one, "Group · <status>", since a
+    /// single member is not a parallel run.
+    public nonisolated static func subtitle(finished: Int, total: Int, singleMemberStatus: TaskStatus? = nil) -> String {
+        if total == 1, let singleMemberStatus { return "Group · \(singleMemberStatus.label)" }
+        return "Parallel run · \(finished) of \(total) finished"
     }
 
     /// The fraction of members that finished, clamped to 0...1; 0 for an empty group.
@@ -33,19 +36,19 @@ public struct GroupRow: View {
             BackendDotStack(backends: group.conversations.prefix(3).map(\.first.backend))
             VStack(alignment: .leading, spacing: 3) {
                 Text(group.name).font(.pb(.body, weight: .medium)).lineLimit(1)
-                Text(Self.subtitle(finished: group.doneCount, total: group.total))
+                Text(Self.subtitle(finished: group.doneCount, total: group.total, singleMemberStatus: group.conversations.first?.current.status))
                     .font(.pb(.caption))
-                    .foregroundStyle(Color.secondaryText)
+                    .foregroundStyle(Color.secondaryText(on: prominence))
                     .lineLimit(1)
                 if Self.showsProgress(anyRunning: group.anyRunning) {
                     ProgressView(value: Self.progress(finished: group.doneCount, total: group.total))
                         .progressViewStyle(.linear)
                         .controlSize(.mini)
-                        .tint(Color.runningFG)
+                        .tint(prominence == .increased ? Color.white : Color.runningFG)
                 }
             }
             Spacer(minLength: 4)
-            if group.anyRunning { ProgressView().controlSize(.mini) }
+            if group.anyRunning { RunningSpinner(tint: prominence == .increased ? .white : nil) }
         }
         .padding(.vertical, 6)
     }

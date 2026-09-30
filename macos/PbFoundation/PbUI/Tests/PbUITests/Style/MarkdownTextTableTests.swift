@@ -119,4 +119,20 @@ import Testing
         // then
         #expect(blocks == [.table([["A", "B"], ["only", ""], ["x", "y"]])])
     }
+
+    @Test func givenABareWebURL_whenStyledInline_thenItBecomesALink() {
+        // given / when
+        let styled = MarkdownText.inline("see https://example.com/docs for more")
+
+        // then
+        #expect(styled.runs.contains { $0.link == URL(string: "https://example.com/docs") })
+    }
+
+    @Test func givenAURLInsideInlineCode_whenStyledInline_thenItIsNotLinked() {
+        // given / when
+        let styled = MarkdownText.inline("run `curl https://example.com` now")
+
+        // then
+        #expect(styled.runs.allSatisfy { $0.link == nil })
+    }
 }

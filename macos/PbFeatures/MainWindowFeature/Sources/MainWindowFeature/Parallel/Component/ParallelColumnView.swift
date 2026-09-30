@@ -107,6 +107,7 @@ struct ParallelColumnView: View {
             }
         }
         .padding(16)
+        .opensFileLinks(repoPath: model.task.repoPath)
     }
 
     // MARK: Header

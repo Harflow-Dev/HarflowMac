@@ -104,6 +104,17 @@ import Testing
         #expect(GroupRow.subtitle(finished: 3, total: 5) == "Parallel run · 3 of 5 finished")
     }
 
+    @Test func givenAGroupOfOne_whenBuildingTheSubtitle_thenItReadsGroupAndTheMembersStatus() {
+        // given / when / then
+        #expect(GroupRow.subtitle(finished: 1, total: 1, singleMemberStatus: .completed) == "Group · Done")
+        #expect(GroupRow.subtitle(finished: 0, total: 1, singleMemberStatus: .running) == "Group · Running")
+    }
+
+    @Test func givenTwoOrMoreMembers_whenBuildingTheSubtitle_thenItStaysAParallelRunEvenWithAStatus() {
+        // given / when / then
+        #expect(GroupRow.subtitle(finished: 1, total: 2, singleMemberStatus: .completed) == "Parallel run · 1 of 2 finished")
+    }
+
     @Test func givenFinishedAndTotal_whenComputingProgress_thenItIsTheClampedFraction() {
         // given / when / then
         #expect(GroupRow.progress(finished: 1, total: 4) == 0.25)

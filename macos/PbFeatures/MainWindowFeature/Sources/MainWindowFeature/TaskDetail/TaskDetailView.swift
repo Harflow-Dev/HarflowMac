@@ -147,6 +147,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
                 // change can land outside the tap's transaction and would then not animate.
                 .animation(.easeInOut(duration: 0.25), value: isInspectorVisible)
+                .opensFileLinks(repoPath: task.repoPath)
                 .sheet(isPresented: $isRawEventsPresented) {
                     RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
                 }
@@ -258,7 +259,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1)
+            Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1).truncationMode(.tail).help(viewModel.title)
             HStack(spacing: 6) {
                 Text(Format.repoName(task.repoPath))
                 if let turnsText = viewModel.turnsText { Text("· \(turnsText)") }
@@ -267,6 +268,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             .foregroundStyle(Color.secondaryText)
             .lineLimit(1)
         }
+        // Capped so a long title truncates in the toolbar row instead of pushing the actions off it.
+        .frame(maxWidth: 440, alignment: .leading)
     }
 
     @ViewBuilder

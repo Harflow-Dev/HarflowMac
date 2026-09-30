@@ -198,6 +198,9 @@ struct SidebarView<VM: SidebarViewModel>: View {
             }
         }
         .listStyle(.sidebar)
+        // The first section header ("Running" whenever anything runs) otherwise sits flush against
+        // the list's top edge and is clipped under the filter row.
+        .contentMargins(.top, 8, for: .scrollContent)
         .onMoveCommand { viewModel.didPressMoveCommand($0) }
     }
 

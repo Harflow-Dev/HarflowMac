@@ -74,8 +74,8 @@ struct MessageBoxModel {
 // MARK: - MessageBoxView
 
 /// "Message this task" while a live-input run is going; "Continue" (a resume) once it settled.
-/// Rendered as a floating rounded field at the foot of the centred column, with the hint and the
-/// ⌘↩ affordance surfaced underneath it as a caption line.
+/// Rendered as a floating rounded field at the foot of the centred column. The hint is the field's
+/// accessibility hint and ⌘↩ is in the send button's tooltip; nothing is printed under the field.
 struct MessageBoxView: View {
     let model: MessageBoxModel
     let onSubmit: (String) -> Bool
@@ -95,12 +95,6 @@ struct MessageBoxView: View {
             .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.composerFill))
             .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(isEnabled ? Color.liveDot.opacity(0.4) : Color.cardBorder, lineWidth: 1))
             .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-
-            if !model.hint.isEmpty {
-                Text("\(model.label) · \(model.hint) · ⌘↩ to send")
-                    .font(.pb(.caption))
-                    .foregroundStyle(Color.secondaryText)
-            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
@@ -111,7 +105,7 @@ struct MessageBoxView: View {
         isEnabled && !model.isBusy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// An up-arrow in a filled circle; `buttonLabel` ("Send"/"Continue") is its tooltip and
+    /// An up-arrow in a filled rounded square; `buttonLabel` ("Send"/"Continue") is its tooltip and
     /// accessibility label.
     private var sendButton: some View {
         Button(action: submit) {
@@ -119,13 +113,13 @@ struct MessageBoxView: View {
                 .font(.pb(.body, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(canSubmit ? Color.accentColor : Color.secondaryText.opacity(0.35)))
-                .contentShape(Circle())
+                .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(canSubmit ? Color.accentColor : Color.secondaryText.opacity(0.35)))
+                .contentShape(RoundedRectangle(cornerRadius: PbRadius.button))
         }
         .buttonStyle(.plain)
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(!canSubmit)
-        .help(model.buttonLabel)
+        .help("\(model.buttonLabel) (⌘↩)")
         .accessibilityLabel(model.buttonLabel)
     }
 
@@ -143,6 +137,7 @@ struct MessageBoxView: View {
             .accessibilityElement(children: .combine)
         } else {
             TextField(model.placeholder, text: $text, axis: .vertical)
+                .accessibilityHint(model.hint)
                 .lineLimit(1 ... 6)
                 .textFieldStyle(.plain)
                 .disabled(!isEnabled)

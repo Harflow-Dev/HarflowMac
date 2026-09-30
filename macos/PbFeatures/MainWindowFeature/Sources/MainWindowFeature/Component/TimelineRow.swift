@@ -70,10 +70,19 @@ struct TimelineRow: View {
             )
         case .finished(let status, let exitCode, _):
             ActivityNoticeView(
-                text: "Finished: \(TaskStatus(status).label)" + (exitCode.map { " · exit \($0)" } ?? ""),
-                systemImage: "flag.checkered", style: .finished(TaskStatus(status))
+                text: Self.finishedText(status: TaskStatus(status), exitCode: exitCode),
+                systemImage: StatusIcon.symbolName(for: TaskStatus(status)) ?? "flag.checkered",
+                style: .finished(TaskStatus(status))
             )
         }
+    }
+
+    /// The end-of-run marker: "Finished" for a clean completion; otherwise the status, with the exit
+    /// code only when it is non-zero ("Failed · exit 1").
+    nonisolated static func finishedText(status: TaskStatus, exitCode: Int?) -> String {
+        let base = status == .completed ? "Finished" : status.label
+        guard let exitCode, exitCode != 0 else { return base }
+        return "\(base) · exit \(exitCode)"
     }
 
     /// The initial prompt needs no caption; other messages say where they came from.

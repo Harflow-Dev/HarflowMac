@@ -29,9 +29,11 @@ struct ToolRowModel {
 struct ToolRow: View {
     let model: ToolRowModel
     @State private var expanded = false
+    @Environment(\.openURL) private var openURL
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
             Button {
                 expanded.toggle()
             } label: {
@@ -51,13 +53,26 @@ struct ToolRow: View {
                             Text("failed").font(.pb(.caption)).foregroundStyle(Color.failedRed)
                         }
                     } else if model.live {
-                        ProgressView().controlSize(.mini)
+                        RunningSpinner(size: 12)
                     } else {
                         Text("no result").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                     }
                 }
             }
             .buttonStyle(.plain)
+            // A sibling of the expand button, not inside it: a button nested in a button's label
+            // does not reliably get its own taps.
+            if let path = model.call.path, let link = FileLinks.link(forPath: path) {
+                Button {
+                    openURL(link)
+                } label: {
+                    Image(systemName: "arrow.up.forward.square").foregroundStyle(Color.secondaryText)
+                }
+                .buttonStyle(.borderless)
+                .help("Open \((path as NSString).lastPathComponent)")
+                .accessibilityLabel("Open \((path as NSString).lastPathComponent)")
+            }
+            }
             if let old = model.call.editOld, let new = model.call.editNew {
                 EditPreview(old: old, new: new)
             }

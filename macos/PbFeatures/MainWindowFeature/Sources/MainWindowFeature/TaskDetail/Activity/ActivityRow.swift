@@ -90,6 +90,8 @@ struct ToolGroup: Equatable, Identifiable {
     let isRunning: Bool
     /// File names of a read card's distinct paths, at most `ToolGroup.pillLimit`.
     let pillNames: [String]
+    /// The full path behind each of `pillNames`, same order — what tapping a pill opens.
+    let pillPaths: [String]
     let overflowCount: Int
 
     static let pillLimit = 9
@@ -105,8 +107,10 @@ struct ToolGroup: Equatable, Identifiable {
         self.firstAt = members.first?.timestamp
         self.lastAt = members.last?.timestamp
         self.isRunning = members.contains(where: \.isPending)
-        let names = bucket == .read ? paths.map { ($0 as NSString).lastPathComponent } : []
+        let pillSource = bucket == .read ? paths : []
+        let names = pillSource.map { ($0 as NSString).lastPathComponent }
         self.pillNames = Array(names.prefix(Self.pillLimit))
+        self.pillPaths = Array(pillSource.prefix(Self.pillLimit))
         self.overflowCount = max(0, names.count - Self.pillLimit)
     }
 

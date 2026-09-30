@@ -21,7 +21,7 @@ struct MenuBarRunningRowView: View {
             ActivityCard {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        ProgressView().controlSize(.mini).frame(width: 16, height: 16)
+                        RunningSpinner().frame(width: 16, height: 16)
                         Text(model.title).font(.pb(.body, weight: .medium)).lineLimit(1)
                         Spacer(minLength: 4)
                         TimelineView(.periodic(from: .now, by: 1)) { context in
