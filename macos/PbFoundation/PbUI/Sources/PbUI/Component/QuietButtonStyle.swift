@@ -32,7 +32,8 @@ private struct QuietButtonBody: View {
     var body: some View {
         configuration.label
             .font(.pb(.body))
-            .foregroundStyle(isEnabled ? Color.primary : Color.secondaryText)
+            // A destructive action ("Cancel all") keeps its red, as a system button would.
+            .foregroundStyle(isEnabled ? (configuration.role == .destructive ? Color.failedRed : Color.primary) : Color.secondaryText)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(
@@ -51,6 +52,7 @@ private struct QuietButtonPreview: View {
         HStack(spacing: 12) {
             Button("Continue in terminal") {}.buttonStyle(QuietButtonStyle())
             Button("Take over") {}.buttonStyle(QuietButtonStyle()).disabled(true)
+            Button("Cancel all", role: .destructive) {}.buttonStyle(QuietButtonStyle())
             Button {} label: { Image(systemName: "sidebar.right") }.buttonStyle(QuietButtonStyle(isSelected: true))
             Button {} label: { Label("Copy", systemImage: "doc.on.doc").frame(width: 140) }.buttonStyle(QuietButtonStyle(isFilled: false))
         }

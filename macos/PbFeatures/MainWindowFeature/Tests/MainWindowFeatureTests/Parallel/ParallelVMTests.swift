@@ -479,7 +479,7 @@ import Testing
         
         // then
         await waitUntil { sut.columns.count == 2 }
-        #expect(sut.headerSubtitle.hasPrefix("2 agents · read_only, write_in_repo ·"))
+        #expect(sut.headerSubtitle.hasPrefix("2 agents · Can edit this repo, Read-only ·"))
     }
     
     // MARK: - Footer (F4-40)

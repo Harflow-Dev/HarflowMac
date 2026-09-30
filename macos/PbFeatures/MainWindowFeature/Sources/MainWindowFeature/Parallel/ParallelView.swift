@@ -110,7 +110,11 @@ struct ParallelView<VM: ParallelViewModel>: View {
             content().toolbar {
                 ToolbarItem(placement: .navigation) { groupTitle }.sharedBackgroundVisibility(.hidden)
                 ToolbarSpacer(.flexible)
-                ToolbarItemGroup(placement: .primaryAction) { groupActions }
+                // The task screen's quiet buttons, each on the bare toolbar — no glass capsule.
+                ToolbarItem(placement: .primaryAction) { viewPromptButton }.sharedBackgroundVisibility(.hidden)
+                if viewModel.canCancelAll {
+                    ToolbarItem(placement: .primaryAction) { cancelAllButton }.sharedBackgroundVisibility(.hidden)
+                }
             }
         } else {
             content().toolbar {
@@ -129,10 +133,16 @@ struct ParallelView<VM: ParallelViewModel>: View {
 
     @ViewBuilder
     private var groupActions: some View {
-        Button("View prompt") { viewModel.didTapViewPrompt() }
-        if viewModel.canCancelAll {
-            Button("Cancel all", role: .destructive) { viewModel.didTapCancelAll() }
-        }
+        viewPromptButton
+        if viewModel.canCancelAll { cancelAllButton }
+    }
+
+    private var viewPromptButton: some View {
+        Button("View prompt") { viewModel.didTapViewPrompt() }.buttonStyle(QuietButtonStyle())
+    }
+
+    private var cancelAllButton: some View {
+        Button("Cancel all", role: .destructive) { viewModel.didTapCancelAll() }.buttonStyle(QuietButtonStyle())
     }
 
     /// The deferred first frame: a header skeleton plus N column skeletons. N is whatever is cheaply

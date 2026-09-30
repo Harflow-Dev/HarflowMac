@@ -256,9 +256,10 @@ final class ParallelVM: ParallelViewModel {
         // Freedom/repo diversity is read from each conversation's FIRST member (its starting
         // configuration) — one entry per agent, not one per turn.
         let firstMembers = groupConversations.map(\.first)
-        let freedoms = Set(firstMembers.compactMap(\.freedom)).sorted().joined(separator: ", ")
-        let repos = Set(firstMembers.map { Format.repo($0.repoPath) }).sorted().joined(separator: ", ")
-        headerSubtitle = "\(groupConversations.count) agents · \(freedoms) · \(repos)"
+        let freedoms = Set(firstMembers.compactMap(\.freedom).map { AccessLabel.text(freedom: $0) }).sorted().joined(separator: ", ")
+        let repos = Set(firstMembers.map { Format.repoName($0.repoPath) }).sorted().joined(separator: ", ")
+        let count = groupConversations.count
+        headerSubtitle = "\(count) agent\(count == 1 ? "" : "s") · \(freedoms) · \(repos)"
         + (group?.startedAt.map { " · started \(Format.time($0))" } ?? "")
 
         recompute()
