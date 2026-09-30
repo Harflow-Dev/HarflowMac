@@ -11,9 +11,67 @@ import MonitorCore
 import PbUI
 import SwiftUI
 
+// MARK: - SummaryHeroModel
+
+/// The Summary's headline (decision D9): status icon, a status/duration sentence, and a
+/// "<Backend> · N turns" subline.
+struct SummaryHeroModel: Equatable {
+    let status: TaskStatus
+    let backend: String
+    /// The whole headline for a settled task ("Done in 21 min", or just "Done" when no exit was
+    /// observed). While running the view ticks "Running · m:ss" itself from `startedAt`.
+    let headline: String
+    /// While running: when it started, and the recorded duration `TaskInfo.elapsed(now:)` falls back
+    /// to when it has no start time.
+    let startedAt: Date?
+    let fallbackElapsed: TimeInterval?
+    /// "3 turns" — backend `numTurns` only, nil when unreported.
+    let turnsText: String?
+
+    var isRunning: Bool { status.isRunning }
+}
+
+// MARK: - SummaryStatTile
+
+struct SummaryStatTile: Equatable, Identifiable {
+    let title: String
+    let value: String
+    var id: String { title }
+}
+
+// MARK: - SummaryFileRow
+
+/// One "Files edited" row: the file name, its dim parent folder, and the full path for the tooltip
+/// and the accessibility label.
+struct SummaryFileRow: Equatable, Identifiable {
+    let id: String
+    let name: String
+    let parentFolder: String?
+    let fullPath: String
+    let status: EditedFileStatus
+    let accessibilityLabel: String
+
+    init(_ file: EditedFile) {
+        let nsPath = file.path as NSString
+        let folder = nsPath.deletingLastPathComponent
+        self.id = file.path
+        self.name = nsPath.lastPathComponent
+        self.parentFolder = (folder.isEmpty || folder == ".") ? nil : Format.repo(folder)
+        self.fullPath = file.path
+        self.status = file.status
+        self.accessibilityLabel = switch file.status {
+        case .edited: "Edited \(file.path)"
+        case .failed: "Edit failed \(file.path)"
+        case .unconfirmed: "Edit unconfirmed, no result recorded \(file.path)"
+        }
+    }
+}
+
 // MARK: - SummaryPaneModel
 
 struct SummaryPaneModel {
+    let hero: SummaryHeroModel?
+
     let finalAnswer: String?
     /// Shown in place of `finalAnswer` when it is nil — depends on whether the task is still
     /// running, so it is resolved once here rather than re-derived by the view.
@@ -33,17 +91,63 @@ struct SummaryPaneModel {
     let inputTokens: Int?
     let outputTokens: Int?
     let costUSD: Double?
+    /// Elapsed time of a settled task with an observed exit; nil otherwise (it would grow with now).
+    let durationSeconds: TimeInterval?
 
     /// `PbUI.EnforcementText.lines(_:)` — empty hides the section.
     let enforcementLines: [String]
 
-    var hasUsage: Bool { numTurns != nil || inputTokens != nil || outputTokens != nil || costUSD != nil }
+    var editedFileRows: [SummaryFileRow] { editedFiles.map(SummaryFileRow.init) }
+
+    /// Duration / Tokens / Cost, each only when reported.
+    var statTiles: [SummaryStatTile] {
+        var tiles: [SummaryStatTile] = []
+        if let durationSeconds { tiles.append(SummaryStatTile(title: "Duration", value: Self.durationText(durationSeconds))) }
+        if inputTokens != nil || outputTokens != nil {
+            let input = inputTokens.map(Self.tokenCount) ?? "–"
+            let output = outputTokens.map(Self.tokenCount) ?? "–"
+            tiles.append(SummaryStatTile(title: "Tokens (in / out)", value: "\(input) / \(output)"))
+        }
+        if let costUSD { tiles.append(SummaryStatTile(title: "Cost", value: String(format: "$%.4f", costUSD))) }
+        return tiles
+    }
 
     static let empty = SummaryPaneModel(
-        finalAnswer: nil, finalAnswerPlaceholder: "No answer yet.", refusalLines: [],
+        hero: nil, finalAnswer: nil, finalAnswerPlaceholder: "No answer yet.", refusalLines: [],
         editedFilesAvailability: .loading, editedFiles: [], editedFilesNote: nil, numTurns: nil, inputTokens: nil,
-        outputTokens: nil, costUSD: nil, enforcementLines: []
+        outputTokens: nil, costUSD: nil, durationSeconds: nil, enforcementLines: []
     )
+
+    /// "45 sec", "21 min", "1 h 5 min".
+    static func durationText(_ seconds: TimeInterval) -> String {
+        let total = Int(max(0, seconds).rounded(.down))
+        if total < 60 { return "\(total) sec" }
+        let minutes = total / 60
+        if minutes < 60 { return "\(minutes) min" }
+        let rest = minutes % 60
+        return rest == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(rest) min"
+    }
+
+    private static func tokenCount(_ value: Int) -> String { String(value) }
+
+    /// D9: a settled task shows its duration only when an exit was observed (`exitCode` present);
+    /// without one, the elapsed value would keep growing with "now".
+    static func heroParts(task: TaskInfo) -> (hero: SummaryHeroModel, duration: TimeInterval?) {
+        let status = task.status
+        var headline = status.label
+        var duration: TimeInterval?
+        if status.isTerminal, task.exitCode != nil, let elapsed = task.elapsed() {
+            duration = elapsed
+            let text = durationText(elapsed)
+            headline += status == .completed ? " in \(text)" : " after \(text)"
+        }
+        let turns = task.numTurns.map { "\($0) \($0 == 1 ? "turn" : "turns")" }
+        let model = SummaryHeroModel(
+            status: status, backend: task.backend, headline: headline, startedAt: task.startedAt,
+            fallbackElapsed: task.durationSeconds, turnsText: turns
+        )
+        return (model, duration)
+    }
 
     /// Combines every conversation member's own `eventsAvailability` into one overall state plus an
     /// optional note (Monitor piece 7, Review round 1 item 6): complete only once every member is
@@ -84,14 +188,16 @@ struct SummaryPaneModel {
     ) -> SummaryPaneModel {
         let hasSummary = summary?.isEmpty == false
         let (inputTokens, outputTokens) = tokens(from: task.raw["usage"]?.objectValue)
+        let (hero, duration) = heroParts(task: task)
         return SummaryPaneModel(
-            finalAnswer: hasSummary ? summary : nil,
+            hero: hero, finalAnswer: hasSummary ? summary : nil,
             finalAnswerPlaceholder: task.status.isRunning ? "No answer yet." : "No final answer.",
             refusalLines: task.permissionDenials.map(denialLine) + task.notices,
             editedFilesAvailability: eventsAvailability,
             editedFiles: EditedFiles.build(from: events, repoPath: task.repoPath),
             editedFilesNote: editedFilesNote,
             numTurns: task.numTurns, inputTokens: inputTokens, outputTokens: outputTokens, costUSD: task.totalCostUSD,
+            durationSeconds: duration,
             enforcementLines: EnforcementText.lines(task.enforcement)
         )
     }
@@ -105,15 +211,17 @@ struct SummaryPaneModel {
     ) -> SummaryPaneModel {
         let hasSummary = summary?.isEmpty == false
         let (inputTokens, outputTokens) = tokens(from: task.raw["usage"]?.objectValue)
+        let (hero, duration) = heroParts(task: task)
         let (availability, note) = aggregateAvailability(memberAvailabilities)
         return SummaryPaneModel(
-            finalAnswer: hasSummary ? summary : nil,
+            hero: hero, finalAnswer: hasSummary ? summary : nil,
             finalAnswerPlaceholder: task.status.isRunning ? "No answer yet." : "No final answer.",
             refusalLines: task.permissionDenials.map(denialLine) + task.notices,
             editedFilesAvailability: availability,
             editedFiles: EditedFiles.build(fromMembers: memberEventsOldestFirst, repoPath: task.repoPath),
             editedFilesNote: note,
             numTurns: task.numTurns, inputTokens: inputTokens, outputTokens: outputTokens, costUSD: task.totalCostUSD,
+            durationSeconds: duration,
             enforcementLines: EnforcementText.lines(task.enforcement)
         )
     }
@@ -124,134 +232,274 @@ struct SummaryPaneModel {
 struct SummaryPaneView: View {
     let model: SummaryPaneModel
 
-    @State private var finalAnswerExpanded = true
     @State private var refusalsExpanded = false
-    @State private var editedFilesExpanded = false
-    @State private var usageExpanded = false
     @State private var enforcementExpanded = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                group("Final answer", isExpanded: $finalAnswerExpanded) {
+            VStack(alignment: .leading, spacing: 18) {
+                if let hero = model.hero { heroSection(hero) }
+
+                if !model.statTiles.isEmpty { statTiles }
+
+                section("Result") {
                     if let answer = model.finalAnswer {
-                        MarkdownText(text: answer)
+                        ReadingMarkdownView(text: answer)
                     } else {
-                        Text(model.finalAnswerPlaceholder).font(.pb(.body)).foregroundStyle(.secondary)
+                        Text(model.finalAnswerPlaceholder).font(.pb(.body)).foregroundStyle(Color.secondaryText)
                     }
                 }
 
-                if !model.refusalLines.isEmpty {
-                    group("Refusals & warnings", isExpanded: $refusalsExpanded) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(Array(model.refusalLines.enumerated()), id: \.offset) { _, line in
-                                Text(line).font(.pb(.secondary)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
+                if !model.refusalLines.isEmpty { refusals }
 
                 editedFilesSection
 
-                if model.hasUsage {
-                    group("Usage & cost", isExpanded: $usageExpanded) { usageRows }
-                }
-
-                if !model.enforcementLines.isEmpty {
-                    group("What was enforced", isExpanded: $enforcementExpanded) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(model.enforcementLines, id: \.self) { line in
-                                Text(line).font(.pb(.secondary)).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
+                if !model.enforcementLines.isEmpty { enforcement }
             }
-            .padding(14)
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+
+    // MARK: Hero
+
+    private func heroSection(_ hero: SummaryHeroModel) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            StatusIcon(status: hero.status).scaleEffect(1.6).frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 3) {
+                if hero.isRunning {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let elapsed = hero.startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? hero.fallbackElapsed
+                        Text("Running · \(Format.clock(elapsed))").monospacedDigit()
+                    }
+                    .font(.pb(.hero, weight: .semibold))
+                } else {
+                    Text(hero.headline).font(.pb(.hero, weight: .semibold))
+                }
+                HStack(spacing: 4) {
+                    BackendLabel(backend: hero.backend)
+                    if let turns = hero.turnsText { Text("· \(turns)") }
+                }
+                .font(.pb(.secondary))
+                .foregroundStyle(Color.secondaryText)
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(StatusColor.of(hero.status))
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Stat tiles
+
+    private var statTiles: some View {
+        HStack(spacing: 10) {
+            ForEach(model.statTiles) { tile in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tile.title).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                    Text(tile.value).font(.pb(.body, weight: .semibold, design: .monospaced))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.cardFill))
+                .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(Color.cardBorder, lineWidth: 1))
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    // MARK: Refusals & enforcement
+
+    private var refusals: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            DisclosureGroup(isExpanded: $refusalsExpanded) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(model.refusalLines.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+.font(.pb(.secondary))
+.fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.top, 6)
+            } label: {
+                Label("Refusals & warnings · \(model.refusalLines.count)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.pb(.body, weight: .semibold))
+            }
+        }
+        .foregroundStyle(Color.warningFG)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.warningBG))
+    }
+
+    private var enforcement: some View {
+        DisclosureGroup(isExpanded: $enforcementExpanded) {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(model.enforcementLines, id: \.self) { line in
+                    Text(line).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                }
+            }
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Text("What was enforced").font(.pb(.body, weight: .semibold))
+        }
+    }
+
+    // MARK: Files edited
 
     @ViewBuilder
     private var editedFilesSection: some View {
         switch model.editedFilesAvailability {
         case .loading:
-            group("Files the agent edited", isExpanded: $editedFilesExpanded) {
-                SkeletonRows(count: 3, showsBadge: false)
-            }
+            section("Files edited") { SkeletonRows(count: 3, showsBadge: false) }
         case .unavailable:
-            group("Files the agent edited", isExpanded: $editedFilesExpanded) {
-                Text("Edit history isn't available for this task.").font(.pb(.secondary)).foregroundStyle(.secondary)
+            section("Files edited") {
+                Text("Edit history isn't available for this task.").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
             }
         case .available:
             if !model.editedFiles.isEmpty {
-                group("Files the agent edited", isExpanded: $editedFilesExpanded) {
+                section("Files edited · \(model.editedFiles.count)") {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("As reported by the agent's own edit tools — not a git diff; changes made by shell commands aren't listed.")
                             .font(.pb(.caption))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                         if let note = model.editedFilesNote {
-                            Text(note).font(.pb(.caption)).foregroundStyle(.secondary)
+                            Text(note).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                         }
                         VStack(spacing: 0) {
-                            ForEach(model.editedFiles) { file in
-                                HStack(spacing: 6) {
-                                    statusBadge(file.status)
-                                    Text(file.path).font(.pb(.secondary, design: .monospaced)).lineLimit(1).truncationMode(.middle)
-                                    Spacer()
-                                    if file.status == .unconfirmed {
-                                        Text("no result recorded").font(.pb(.caption)).foregroundStyle(.secondary)
-                                    }
-                                }
-                                .padding(.vertical, 3)
-                            }
+                            ForEach(model.editedFileRows) { row in fileRow(row) }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func fileRow(_ row: SummaryFileRow) -> some View {
+        HStack(spacing: 8) {
+            statusBadge(row.status)
+            Text(row.name).font(.pb(.secondary, weight: .medium)).lineLimit(1)
+            if let folder = row.parentFolder {
+                Text(folder).font(.pb(.caption)).foregroundStyle(Color.secondaryText).lineLimit(1).truncationMode(.head)
+            }
+            Spacer(minLength: 0)
+            if row.status == .unconfirmed {
+                Text("no result recorded").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+            }
+        }
+        .padding(.vertical, 3)
+        .help(row.fullPath)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.accessibilityLabel)
     }
 
     private func statusBadge(_ status: EditedFileStatus) -> some View {
         let (symbol, color): (String, Color) = switch status {
         case .edited: ("✓", Color.doneGreen)
         case .failed: ("✗", Color.failedRed)
-        case .unconfirmed: ("?", Color.secondary)
+        case .unconfirmed: ("?", Color.secondaryText)
         }
         return Text(symbol).font(.pb(.caption, weight: .bold, design: .monospaced)).foregroundStyle(color).frame(width: 12)
     }
 
-    @ViewBuilder
-    private var usageRows: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let turns = model.numTurns { usageRow("Turns", "\(turns)") }
-            if let input = model.inputTokens { usageRow("Input tokens", "\(input)") }
-            if let output = model.outputTokens { usageRow("Output tokens", "\(output)") }
-            if let cost = model.costUSD { usageRow("Cost", String(format: "$%.4f", cost)) }
-        }
-    }
-
-    private func usageRow(_ name: String, _ value: String) -> some View {
-        HStack {
-            Text(name).font(.pb(.secondary)).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).font(.pb(.secondary, design: .monospaced))
-        }
-    }
-
-    @ViewBuilder
-    private func group(_ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
-        DisclosureGroup(isExpanded: isExpanded) {
-            // macOS centres a DisclosureGroup's content unless it is given the full width.
-            content().padding(.top, 6).frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Text(title).font(.pb(.body, weight: .semibold))
+    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.pb(.headline, weight: .semibold))
+            content()
         }
     }
 }
 
 #if DEBUG
-#Preview {
-    SummaryPaneView(model: .empty)
-        .frame(width: 500, height: 400)
+private enum SummaryPreviewFixtures {
+    static func task(
+        status: String, exitCode: Int? = 0, turns: Int? = 12, usage: Bool = true, cost: Bool = true
+    ) -> TaskInfo {
+        var object: [String: JSONValue] = [
+            "task_id": .string("abc12345"), "backend": .string("claude"), "status": .string(status),
+            "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-90))),
+            "repo_path": .string("/Users/example/repo")
+        ]
+        if status != "running" { object["duration_seconds"] = .number(1260) }
+        if let exitCode { object["exit_code"] = .number(Double(exitCode)) }
+        if let turns { object["num_turns"] = .number(Double(turns)) }
+        if usage { object["usage"] = .object(["input_tokens": .number(48210), "output_tokens": .number(3150)]) }
+        if cost { object["total_cost_usd"] = .number(0.4213) }
+        return TaskInfo(.object(object))!
+    }
+
+    static let files = [
+        EditedFile(path: "macos/PbFeatures/MainWindowFeature/SummaryPaneView.swift", status: .edited),
+        EditedFile(path: "macos/Tests/SummaryPaneModelTests.swift", status: .failed),
+        EditedFile(path: "README.md", status: .unconfirmed)
+    ]
+
+    static func model(
+        _ task: TaskInfo, summary: String? = "Fixed the **login bug**. The store is now warmed before it is read.",
+        files: [EditedFile] = files, refusals: Bool = false
+    ) -> SummaryPaneModel {
+        var fields = task.raw
+        if refusals { fields["notices"] = .array([.string("auto-denied: git push")]) }
+        return SummaryPaneModel.build(
+            task: TaskInfo(.object(fields))!, summary: summary,
+            events: [], eventsAvailability: .available
+        )
+.with(editedFiles: files)
+    }
 }
+
+private extension SummaryPaneModel {
+    func with(editedFiles: [EditedFile]) -> SummaryPaneModel {
+        SummaryPaneModel(
+            hero: hero, finalAnswer: finalAnswer, finalAnswerPlaceholder: finalAnswerPlaceholder,
+            refusalLines: refusalLines, editedFilesAvailability: editedFilesAvailability, editedFiles: editedFiles,
+            editedFilesNote: editedFilesNote, numTurns: numTurns, inputTokens: inputTokens, outputTokens: outputTokens,
+            costUSD: costUSD, durationSeconds: durationSeconds, enforcementLines: enforcementLines
+        )
+    }
+}
+
+private struct SummaryPreviewGallery: View {
+    let model: SummaryPaneModel
+
+    var body: some View {
+        SummaryPaneView(model: model)
+            .frame(width: 520, height: 560)
+            .background(Color.windowBG)
+    }
+}
+
+private typealias Fixtures = SummaryPreviewFixtures
+
+private struct SummaryPreviewPair: View {
+    let model: SummaryPaneModel
+    var body: some View { SummaryPreviewGallery(model: model) }
+}
+
+private func completed() -> SummaryPaneModel { Fixtures.model(Fixtures.task(status: "completed")) }
+private func running() -> SummaryPaneModel {
+    Fixtures.model(Fixtures.task(status: "running", exitCode: nil), summary: nil, files: [])
+}
+
+private func failed() -> SummaryPaneModel { Fixtures.model(Fixtures.task(status: "failed", exitCode: 1), refusals: true) }
+private func cancelled() -> SummaryPaneModel { Fixtures.model(Fixtures.task(status: "cancelled", exitCode: 143), summary: nil) }
+private func noExit() -> SummaryPaneModel { Fixtures.model(Fixtures.task(status: "completed", exitCode: nil)) }
+private func bare() -> SummaryPaneModel {
+    Fixtures.model(Fixtures.task(status: "completed", turns: nil, usage: false, cost: false), files: [])
+}
+
+#Preview("Done - light") { SummaryPreviewPair(model: completed()).preferredColorScheme(.light) }
+#Preview("Done - dark") { SummaryPreviewPair(model: completed()).preferredColorScheme(.dark) }
+#Preview("Running - light") { SummaryPreviewPair(model: running()).preferredColorScheme(.light) }
+#Preview("Running - dark") { SummaryPreviewPair(model: running()).preferredColorScheme(.dark) }
+#Preview("Failed - light") { SummaryPreviewPair(model: failed()).preferredColorScheme(.light) }
+#Preview("Failed - dark") { SummaryPreviewPair(model: failed()).preferredColorScheme(.dark) }
+#Preview("Cancelled - light") { SummaryPreviewPair(model: cancelled()).preferredColorScheme(.light) }
+#Preview("Cancelled - dark") { SummaryPreviewPair(model: cancelled()).preferredColorScheme(.dark) }
+#Preview("No exit code - light") { SummaryPreviewPair(model: noExit()).preferredColorScheme(.light) }
+#Preview("No exit code - dark") { SummaryPreviewPair(model: noExit()).preferredColorScheme(.dark) }
+#Preview("Missing metrics, no files - light") { SummaryPreviewPair(model: bare()).preferredColorScheme(.light) }
+#Preview("Missing metrics, no files - dark") { SummaryPreviewPair(model: bare()).preferredColorScheme(.dark) }
+#Preview("Loading - light") { SummaryPreviewPair(model: .empty).preferredColorScheme(.light) }
+#Preview("Loading - dark") { SummaryPreviewPair(model: .empty).preferredColorScheme(.dark) }
 #endif
