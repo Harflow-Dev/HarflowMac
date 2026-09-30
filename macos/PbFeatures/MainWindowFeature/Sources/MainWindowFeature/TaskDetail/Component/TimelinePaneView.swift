@@ -177,7 +177,7 @@ struct SubTaskStripView: View {
                     } label: {
                         HStack(spacing: 8) {
                             StatusIcon(status: entry.task.status)
-                            BackendDot(backend: entry.task.backend)
+                            BackendLabel(backend: entry.task.backend)
                             Text(entry.title).lineLimit(1)
                             if let freedom = entry.task.freedom {
                                 Text(AccessLabel.text(freedom: freedom)).foregroundStyle(Color.secondaryText).lineLimit(1)

@@ -189,7 +189,7 @@ struct InspectorView: View {
             onSelectTask(entry.task.taskID)
         } label: {
             HStack(spacing: 6) {
-                BackendDot(backend: entry.task.backend)
+                BackendLabel(backend: entry.task.backend).font(.pb(.caption))
                 Text(entry.title).font(.pb(.secondary, weight: current ? .semibold : .regular)).lineLimit(1)
                 Spacer()
                 Text("depth \(entry.task.depth)").font(.pb(.caption)).foregroundStyle(.secondary)

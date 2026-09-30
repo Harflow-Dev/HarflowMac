@@ -114,7 +114,9 @@ struct PillFlowLayout: Layout {
         var lineHeight: CGFloat = 0
         var usedWidth: CGFloat = 0
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            // Capped at the line width so a long file name truncates instead of overflowing the column.
+            let natural = subview.sizeThatFits(.unspecified)
+            let size = natural.width > width ? subview.sizeThatFits(ProposedViewSize(width: width, height: nil)) : natural
             if x > 0, x + size.width > width {
                 x = 0
                 y += lineHeight + spacing
