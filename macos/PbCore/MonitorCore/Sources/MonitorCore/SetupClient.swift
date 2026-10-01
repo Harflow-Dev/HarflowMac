@@ -36,8 +36,9 @@ public struct HarnessRow: Equatable, Identifiable, Sendable {
         case "claude-desktop": return "Claude Desktop"
         case "claude-code": return "Claude Code"
         case "codex": return "Codex"
-        case "opencode": return "opencode"
-        case "vibe": return "vibe"
+        case "opencode": return "Opencode"
+        case "vibe": return "Vibe"
+        case "antigravity": return "Google Antigravity CLI"
         default: return key
         }
     }

@@ -11,6 +11,7 @@ import Testing
         #expect(BackendStyle.letter("codex") == "X")
         #expect(BackendStyle.letter("opencode") == "O")
         #expect(BackendStyle.letter("vibe") == "V")
+        #expect(BackendStyle.letter("antigravity") == "A")
     }
     
     @Test func givenAnUnknownBackend_whenReadingItsLetter_thenFallsBackToItsUppercasedFirstCharacter() {
@@ -23,7 +24,8 @@ import Testing
         #expect(BackendStyle.helpText("claude") == "Claude Code CLI")
         #expect(BackendStyle.helpText("codex") == "OpenAI Codex CLI")
         #expect(BackendStyle.helpText("vibe") == "Mistral Vibe CLI, using your configured model")
-        #expect(BackendStyle.helpText("opencode") == "opencode CLI")
+        #expect(BackendStyle.helpText("opencode") == "Opencode CLI")
+        #expect(BackendStyle.helpText("antigravity") == "Google Antigravity CLI")
     }
 
     @Test func givenAnUnknownBackend_whenReadingItsHelpText_thenReturnsNil() {
@@ -31,9 +33,9 @@ import Testing
         #expect(BackendStyle.helpText("mystery") == nil)
     }
 
-    @Test func givenTheKnownBackendsList_whenReadingIt_thenContainsExactlyTheFourSupportedBackends() {
+    @Test func givenTheKnownBackendsList_whenReadingIt_thenContainsExactlyTheFiveSupportedBackends() {
         // given / when / then
-        #expect(BackendStyle.known == ["claude", "codex", "opencode", "vibe"])
+        #expect(BackendStyle.known == ["claude", "codex", "opencode", "vibe", "antigravity"])
     }
     
     @Test func givenEachKnownBackend_whenReadingItsColors_thenReturnsADistinctPair() {
@@ -104,6 +106,15 @@ import Testing
         #expect(BackendStyle.supportsTurnLimit("vibe"))
         #expect(!BackendStyle.supportsTurnLimit("codex"))
         #expect(!BackendStyle.supportsTurnLimit("opencode"))
+        #expect(!BackendStyle.supportsTurnLimit("antigravity"))
         #expect(!BackendStyle.supportsTurnLimit("someday"))
+    }
+
+    @Test func givenEachBackend_whenReadingItsEffortLevels_thenTheyMirrorEachBackendsOwnVocabulary() {
+        // given / when / then — antigravity refuses `xhigh` (measured); the others take the lot.
+        #expect(BackendStyle.effortLevels("claude") == ["low", "medium", "high", "xhigh"])
+        #expect(BackendStyle.effortLevels("codex") == ["low", "medium", "high", "xhigh"])
+        #expect(BackendStyle.effortLevels("opencode") == ["low", "medium", "high", "xhigh"])
+        #expect(BackendStyle.effortLevels("antigravity") == ["low", "medium", "high"])
     }
 }

@@ -481,6 +481,33 @@ import Testing
         verify(useCase).run(.matching { $0.backend == "vibe" && $0.reasoningEffort == nil && $0.model == nil }).called(1)
     }
 
+    @Test func givenAntigravitySelected_whenEffortOptionsAreRead_thenOnlyItsThreeLevelsAreOffered() {
+        // given — antigravity refuses `xhigh` outright (measured), so it must never be offered.
+        let (sut, _, _, _) = makeSUT(catalog: catalog([("antigravity", true), ("claude", true)]))
+
+        // when
+        sut.didChangeBackend("antigravity")
+
+        // then
+        #expect(sut.showsEffort)
+        #expect(sut.effortOptions == ["low", "medium", "high"])
+    }
+
+    @Test func givenXhighSelectedThenAntigravityChosen_whenStarted_thenTheInvalidEffortIsNotSent() async {
+        // given
+        let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true), ("antigravity", true)]))
+        sut.didChangeEffort("xhigh")
+        #expect(sut.effort == "xhigh")
+
+        // when
+        sut.didChangeBackend("antigravity")
+        await start(sut, useCase, routing)
+
+        // then — the switch resets an effort the new backend does not offer.
+        #expect(sut.effort == "")
+        verify(useCase).run(.matching { $0.backend == "antigravity" && $0.reasoningEffort == nil }).called(1)
+    }
+
     // MARK: - Freedom
 
     @Test func givenTheDefaultSheet_whenAccessOptionsAreRead_thenReadOnlyIsSelectedAndOnlyUnrestrictedWarns() {

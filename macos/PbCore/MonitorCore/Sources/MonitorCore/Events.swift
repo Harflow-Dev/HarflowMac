@@ -8,7 +8,7 @@ import Foundation
 /// new log version, is how the log stays readable by an older app (see `EVENT_KINDS`).
 public let eventLogVersion = 1
 
-/// One line of `<task_id>.events.jsonl`, schema v1 (README "The normalized event log").
+/// One line of `<task_id>.events.jsonl`, schema v1 (`EVENT_KINDS` in `src/polybridge/events.py`).
 /// The kind set mirrors `events.EVENT_KINDS`; anything else decodes as `.unknown` and is ignored.
 public struct TaskEvent: Equatable, Identifiable, Sendable {
     public enum Kind: Equatable, Sendable {
