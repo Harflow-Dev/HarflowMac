@@ -185,7 +185,21 @@ import Testing
         #expect(dialog.actions.first?.title == "Install")
         withExtendedLifetime(cancellable) {}
     }
-    
+
+    @Test func givenAnOutOfDateRow_whenDidTapInstall_thenTheDialogOffersAnUpdate() async {
+        // given
+        let (sut, _) = makeSUT()
+        let row = document(#"{"v":1,"clients":[{"key":"codex","available":true,"installed":true,"current":false}]}"#).rows[0]
+
+        // when
+        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstall(row) }
+
+        // then
+        #expect(dialog.title == "Update polybridge in \(row.displayName)?")
+        #expect(dialog.actions.first?.title == "Update")
+        withExtendedLifetime(cancellable) {}
+    }
+
     @Test func givenDidTapRemove_whenPublished_thenTheDialogCopyMatchesTheOldConfirmation() async {
         // given
         let (sut, _) = makeSUT()

@@ -115,11 +115,12 @@ final class HarnessesVM: HarnessesViewModel {
     }
     
     func didTapInstall(_ row: HarnessRow) {
+        let isUpdate = HarnessRowActions.isOutOfDate(row: row)
         publishDialog(
-            "Install polybridge into \(row.displayName)?",
+            isUpdate ? "Update polybridge in \(row.displayName)?" : "Install polybridge into \(row.displayName)?",
             description: "This runs polybridge-setup, which edits \(row.displayName)'s own configuration."
         ) {
-            AlertAction(title: "Install") { [weak self] in
+            AlertAction(title: isUpdate ? "Update" : "Install") { [weak self] in
                 Task { await self?.run(.install, row) }
             }
         }

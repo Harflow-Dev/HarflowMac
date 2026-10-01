@@ -95,6 +95,7 @@ import Testing
         given(useCase).runningInSubtrees(of: .any).willProduce { ids in runningInSubtreesBox.value ?? ids }
         given(useCase).cancelAll(.any).willReturn()
         given(useCase).beginTakeover(taskID: .any).willReturn()
+        given(useCase).setOutcome(.any, .any).willReturn()
         given(routing).selectTask(.any).willReturn()
 
         let sut = ParallelVM(groupName: groupName, useCase: useCase, routing: routing)

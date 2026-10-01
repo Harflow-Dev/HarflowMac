@@ -49,7 +49,9 @@ protocol ParallelUseCase: Sendable {
 
     func runningInSubtrees(of ids: [String]) -> [String]
     func cancelAll(_ ids: [String]) async
-    
+    /// The durable outcome line a column shows — TaskDetail's own refusal channel.
+    func setOutcome(_ id: String, _ text: String?)
+
     /// Dispatches into `TakeoverService` synchronously; the VM routes to the task screen immediately
     /// after calling this. Take over always opens Terminal.app.
     func beginTakeover(taskID: String)
@@ -175,10 +177,14 @@ final class ParallelVM: ParallelViewModel {
     
     func didTapCancelAll() {
         guard canCancelAll else { return }
-        let ids = memberIDs
         publishDialog("Cancel every running task in this group?") {
-            AlertAction(title: "Cancel all", role: .destructive) { [useCase] in
-                Task { await useCase.cancelAll(useCase.runningInSubtrees(of: ids)) }
+            AlertAction(title: "Cancel all", role: .destructive) { [weak self] in
+                guard let self else { return }
+                // Membership is read at confirm time, not when the dialog opened: the dialog promises
+                // the whole group, and a member that joined meanwhile (a new root, or a resume, which
+                // `runningInSubtrees` never reaches via `spawned_by`) is part of it (PR #1 review).
+                let ids = useCase.runningInSubtrees(of: memberIDs)
+                Task { [useCase] in await useCase.cancelAll(ids) }
             }
         }
     }
@@ -368,11 +374,24 @@ final class ParallelVM: ParallelViewModel {
         publishDialog(title, description: message) {
             AlertAction(title: buttonTitle) { [weak self] in
                 guard let self else { return }
+                guard !refuseIfConversationMovedOn(from: taskID) else { return }
                 // Dispatches synchronously into a service-owned task, then routes immediately —
                 // decision 5's call path, kept exact (`ParallelView.swift:~123-127`).
                 useCase.beginTakeover(taskID: taskID)
                 routing.selectTask(taskID)
             }
         }
+    }
+
+    /// TaskDetail's `refuseIfConversationMovedOn`, per column (PR #1 review): if the conversation
+    /// `dialogTaskID` belongs to gained a newer member while the dialog was open, confirming must not
+    /// take over the stale member (it would be refused `session_busy`) nor silently retarget. The
+    /// refusal is recorded on the column's current member, where the column shows it.
+    private func refuseIfConversationMovedOn(from dialogTaskID: String) -> Bool {
+        let conversation = conversations.first { $0.members.contains { $0.taskID == dialogTaskID } }
+        let currentID = conversation?.current.taskID
+        guard currentID != dialogTaskID else { return false }
+        useCase.setOutcome(currentID ?? dialogTaskID, "The conversation moved on — review and try again.")
+        return true
     }
 }

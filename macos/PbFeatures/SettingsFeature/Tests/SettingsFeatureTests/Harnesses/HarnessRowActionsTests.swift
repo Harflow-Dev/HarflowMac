@@ -58,4 +58,28 @@ import Testing
         // then
         #expect(HarnessRowActions.isRemoveDisabled(row: installed, isAnyWorking: false) == false)
     }
+
+    @Test func givenAnInstalledRowThatIsNotCurrent_whenRenderingActions_thenItReadsAsAnUpdate() throws {
+        // given — registered, but not what install would write now (e.g. a stale PATH)
+        let stale = try row(#"{"key":"codex","available":true,"installed":true,"current":false}"#)
+
+        // then
+        #expect(HarnessRowActions.isOutOfDate(row: stale))
+        #expect(HarnessRowActions.installTitle(row: stale) == "Update")
+    }
+
+    @Test func givenRowsThatAreNotOutOfDate_whenRenderingActions_thenTheyKeepInstallOrReinstall() throws {
+        // given — current, could-not-tell, and not installed (even with current false)
+        let current = try row(#"{"key":"codex","available":true,"installed":true,"current":true}"#)
+        let unknownCurrency = try row(#"{"key":"codex","available":true,"installed":true}"#)
+        let notInstalled = try row(#"{"key":"codex","available":true,"installed":false,"current":false}"#)
+
+        // then
+        #expect(!HarnessRowActions.isOutOfDate(row: current))
+        #expect(HarnessRowActions.installTitle(row: current) == "Reinstall")
+        #expect(!HarnessRowActions.isOutOfDate(row: unknownCurrency))
+        #expect(HarnessRowActions.installTitle(row: unknownCurrency) == "Reinstall")
+        #expect(!HarnessRowActions.isOutOfDate(row: notInstalled))
+        #expect(HarnessRowActions.installTitle(row: notInstalled) == "Install")
+    }
 }

@@ -24,6 +24,18 @@ enum HarnessRowActions {
     static func isRemoveDisabled(row: HarnessRow, isAnyWorking: Bool) -> Bool {
         isAnyWorking || row.installed == false
     }
+
+    /// Registered, but not what install would write now — most often a stale `PATH`, frozen when it
+    /// was registered, that no longer reaches an agent CLI (installed later, or moved by an nvm Node
+    /// upgrade). The registration then *looks* fine while dispatch fails, so it must not read as done.
+    static func isOutOfDate(row: HarnessRow) -> Bool {
+        row.installed == true && row.current == false
+    }
+
+    static func installTitle(row: HarnessRow) -> String {
+        if isOutOfDate(row: row) { return "Update" }
+        return row.installed == true ? "Reinstall" : "Install"
+    }
 }
 
 // MARK: - HarnessRowView
@@ -40,7 +52,7 @@ struct HarnessRowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text(row.displayName).font(.pb(.headline, weight: .medium))
-                    Text(row.stateLabel).font(.pb(.secondary)).foregroundStyle(row.installed == true ? Color.doneGreen : .secondary)
+                    Text(row.stateLabel).font(.pb(.secondary)).foregroundStyle(stateColor)
                     if let action = row.action { Chip(text: "last: \(action)") }
                 }
                 if let rowError = row.error { Text(rowError).font(.pb(.secondary)).foregroundStyle(Color.failedRed) }
@@ -50,12 +62,17 @@ struct HarnessRowView: View {
             }
             Spacer()
             if isWorking { ProgressView().controlSize(.small) }
-            Button(row.installed == true ? "Reinstall" : "Install", action: onInstall)
+            Button(HarnessRowActions.installTitle(row: row), action: onInstall)
                 .disabled(HarnessRowActions.isInstallDisabled(row: row, isAnyWorking: isAnyWorking))
             Button("Remove", action: onRemove)
                 .disabled(HarnessRowActions.isRemoveDisabled(row: row, isAnyWorking: isAnyWorking))
         }
         .padding(.vertical, 4)
+    }
+
+    private var stateColor: Color {
+        if HarnessRowActions.isOutOfDate(row: row) { return .warningFG }
+        return row.installed == true ? .doneGreen : .secondary
     }
 }
 

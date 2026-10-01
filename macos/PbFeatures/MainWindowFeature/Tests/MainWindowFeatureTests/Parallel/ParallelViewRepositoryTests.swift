@@ -96,6 +96,19 @@ import Testing
         // then
         verify(actions).cancelAll(.value(["abc123", "def456"])).called(1)
     }
+
+    @Test func givenSetOutcome_whenCalled_thenItForwardsToTaskActionRepository() {
+        // given
+        let actions = MockTaskActionRepository()
+        given(actions).setOutcome(.value("abc123"), .value("moved on")).willReturn()
+        let sut = ParallelViewRepository(taskActionRepository: actions)
+
+        // when
+        sut.setOutcome("abc123", "moved on")
+
+        // then
+        verify(actions).setOutcome(.value("abc123"), .value("moved on")).called(1)
+    }
     
     @Test func givenTitlesPublisher_whenSubscribed_thenItForwardsTaskListTitles() {
         // given — F4-11/MS-LIST-5 sibling for Parallel (Codex review finding, round 1): titles load

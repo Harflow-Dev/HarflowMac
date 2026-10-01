@@ -62,6 +62,7 @@ final class ParallelViewRepository: ParallelUseCase, @unchecked Sendable {
 
     func runningInSubtrees(of ids: [String]) -> [String] { taskListRepository.runningInSubtrees(of: ids) }
     func cancelAll(_ ids: [String]) async { await taskActionRepository.cancelAll(ids) }
+    func setOutcome(_ id: String, _ text: String?) { taskActionRepository.setOutcome(id, text) }
 
     func beginTakeover(taskID: String) { takeoverService.beginTakeover(taskID: taskID) }
 }
