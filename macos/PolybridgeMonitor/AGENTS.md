@@ -58,9 +58,11 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
 - **Single instance (Monitor piece 9, best-effort — not guaranteed).** Two bundle paths of the same
   app (e.g. an installed `/Applications/Polybridge Monitor.app` and a freshly built
   `macos/build/Polybridge Monitor.app`) can otherwise both run at once, since macOS treats each
-  bundle path as its own app. `SingleInstanceGuard.findDuplicate` (`SingleInstanceGuard.swift`) is
-  the pure rule: another **non-terminated** process with this app's own bundle identifier, running
-  from a **different** bundle path, is a duplicate; a terminated match or a same-path match is not.
+  bundle path as its own app. `SingleInstanceGuard.findDuplicate` (`SingleInstanceGuard.swift`) elects
+  the oldest **non-terminated** process with this app's own bundle identifier across **different**
+  bundle paths. Launch dates order candidates, with PID breaking ties; known dates precede unknown
+  dates. Only a copy outranked by another yields, preventing reciprocal shutdown during concurrent
+  launches. A terminated match or a same-path match is ignored.
   `AppDelegate.applicationWillFinishLaunching` runs it once, before any launch `application(_:open:)`
   batch or `applicationDidFinishLaunching` — every other single-instance branch relies on that
   ordering. A duplicate: skips task listing, notification-delegate registration, and the normal

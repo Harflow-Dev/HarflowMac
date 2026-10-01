@@ -64,6 +64,7 @@ import Testing
         sut.selfBundleIdentifier = { Self.selfBundleIdentifier }
         sut.selfBundleURL = { Self.selfBundleURL }
         sut.selfProcessIdentifier = { 111 }
+        sut.selfLaunchDate = { Date(timeIntervalSince1970: 1) }
 
         sut.forwardURLs = { urls, bundleURL, configuration, completion in
             forwardCalls.value.append((urls, bundleURL, configuration))
@@ -83,9 +84,46 @@ import Testing
         )
     }
 
+    @Test func givenTwoConcurrentCopies_whenBothLaunch_thenOnlyTheNewerCopyTerminates() {
+        // given
+        let first = makeSUT()
+        let second = makeSUT()
+        let firstApp = RunningAppSnapshot(
+            bundleIdentifier: Self.selfBundleIdentifier, bundleURL: Self.selfBundleURL,
+            isTerminated: false, processIdentifier: 111, launchDate: Date(timeIntervalSince1970: 0)
+        )
+        var secondApp = duplicateSnapshot()
+        secondApp.launchDate = Date(timeIntervalSince1970: 1)
+        first.sut.selfLaunchDate = { firstApp.launchDate }
+        second.sut.selfProcessIdentifier = { secondApp.processIdentifier }
+        second.sut.selfBundleURL = { secondApp.bundleURL }
+        second.sut.selfLaunchDate = { secondApp.launchDate }
+        first.sut.runningApplications = { [secondApp, firstApp] }
+        second.sut.runningApplications = { [firstApp, secondApp] }
+
+        // when — both inspect each other before either finishes launching.
+        let notification = Notification(name: .init("launch"))
+        first.sut.applicationWillFinishLaunching(notification)
+        second.sut.applicationWillFinishLaunching(notification)
+        first.sut.applicationDidFinishLaunching(notification)
+        second.sut.applicationDidFinishLaunching(notification)
+        second.scheduled.value.first(where: { $0.delay == 0 })?.action()
+        second.reopenCompletions.value.first?(.success(()))
+
+        // then
+        #expect(first.sut.singleInstanceState.isPrimaryInstance)
+        #expect(first.startTaskListingCalls.value == 1)
+        #expect(first.terminateCallCount.value == 0)
+        #expect(!second.sut.singleInstanceState.isPrimaryInstance)
+        #expect(second.startTaskListingCalls.value == 0)
+        #expect(second.reopenCalls.value.first?.bundleURL == Self.selfBundleURL)
+        #expect(second.terminateCallCount.value == 1)
+    }
+
     private func duplicateSnapshot(pid: pid_t = 222) -> RunningAppSnapshot {
         RunningAppSnapshot(
-            bundleIdentifier: Self.selfBundleIdentifier, bundleURL: Self.otherBundleURL, isTerminated: false, processIdentifier: pid
+            bundleIdentifier: Self.selfBundleIdentifier, bundleURL: Self.otherBundleURL,
+            isTerminated: false, processIdentifier: pid, launchDate: Date(timeIntervalSince1970: 0)
         )
     }
 
