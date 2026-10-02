@@ -23,6 +23,8 @@ struct WorkflowCanvas: View {
     let onConnect: (String) -> Void
     let onDrop: (String, CGPoint) -> Void
     var onDelete: () -> Void = {}
+    var onCopy: () -> Void = {}
+    var onPaste: () -> Void = {}
     var onRename: (String, String) -> Void = { _, _ in }
     @State private var scrollController = WorkflowCanvasScrollController()
     @State private var routeCache = WorkflowRouteCache()
@@ -39,7 +41,6 @@ struct WorkflowCanvas: View {
     @FocusState private var isCanvasFocused: Bool
 
     @GestureState private var connectionDrag: WorkflowConnectionDrag?
-
     private var activeConnectionDrag: WorkflowConnectionDrag? { scrollController.connectionDrag ?? connectionDrag }
 
     private var selection: Set<String> { selectedNodeIDs.isEmpty ? Set(selectedNodeID.map { [$0] } ?? []) : selectedNodeIDs }
@@ -201,6 +202,7 @@ struct WorkflowCanvas: View {
             onDelete()
             return .handled
         }
+        .modifier(WorkflowClipboardCommands(isEnabled: isCanvasFocused && isEditable && editingTitleNodeID == nil, onCopy: onCopy, onPaste: onPaste))
         .onDeleteCommand {
             guard isCanvasFocused, isEditable, editingTitleNodeID == nil, selectedNodeID != nil || selectedEdgeID != nil else { return }
             onDelete()
@@ -482,9 +484,7 @@ private struct WorkflowCanvasNode: View {
                     Text("Attempt \(attempt)").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                 }
             }
-            if !isEditable {
-                Text(status.replacingOccurrences(of: "_", with: " ").capitalized).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-            }
+            WorkflowNodeDetail(node: node, status: status, isEditable: isEditable)
         }
     }
 

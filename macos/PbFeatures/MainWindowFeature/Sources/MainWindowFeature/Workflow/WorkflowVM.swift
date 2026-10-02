@@ -1,3 +1,5 @@
+import AppKit
+import Combine
 import Foundation
 import Mockable
 import MonitorCore
@@ -36,8 +38,8 @@ protocol WorkflowRouting: ParallelRouting {
 final class WorkflowVM: WorkflowViewModel {
     var workflows: [WorkflowRecord] = []
     var runs: [WorkflowRunModel] = []
-    var definition: [String: JSONValue] = [:] { didSet { scheduleValidation() } }
-    var name = "" { didSet { scheduleValidation() } }
+    var definition: [String: JSONValue] = [:] { didSet { scheduleValidation(); scheduleDraftPersistence() } }
+    var name = "" { didSet { scheduleValidation(); scheduleDraftPersistence() } }
     var loadedName = ""
     var revision = 0
     var savedDefinition: [String: JSONValue] = [:]
@@ -50,10 +52,15 @@ final class WorkflowVM: WorkflowViewModel {
 
     var selectedEdgeID: String?
     var connectionSourceID: String?
-    var selectedRun: WorkflowRunModel? { didSet { scheduleValidation() } }
+    var selectedRun: WorkflowRunModel? { didSet { scheduleValidation(); scheduleDraftPersistence() } }
     var selectedActivationID: String?
     var isEditing = false
-    var isBusy = false
+    private var operationBusy = false
+    var isBusy: Bool {
+        get { operationBusy || builderDispatchPending }
+        set { operationBusy = newValue }
+    }
+
     var errorText: String?
     var validationMessage: String?
     var repo = ""
@@ -74,12 +81,18 @@ final class WorkflowVM: WorkflowViewModel {
     var parallel: ParallelVM
 
     @ObservationIgnored let useCase: any WorkflowUseCase
+    @ObservationIgnored let draftStore: any WorkflowDraftStoring
+    var builderDispatchPending = false
+    @ObservationIgnored var draftWriteTask: Task<Void, Never>?
+    @ObservationIgnored var draftKey: String?
+    @ObservationIgnored var draftPersistenceSuspended = false
     @ObservationIgnored let routing: any WorkflowRouting
+    @ObservationIgnored private var terminationSubscription: AnyCancellable?
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var generationID = UUID()
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored var editorLoadID = UUID()
-    @ObservationIgnored private var pendingEditorName: String?
+    @ObservationIgnored var pendingEditorName: String?
     @ObservationIgnored var draftID = UUID()
     @ObservationIgnored var validationTask: Task<Void, Never>?
     @ObservationIgnored var validationID = UUID()
@@ -89,7 +102,8 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var validationSuspended = false
     @ObservationIgnored private var operation: Task<Void, Never>?
 
-    init(useCase: any WorkflowUseCase, routing: any WorkflowRouting, parallel: ParallelVM) {
+    init(useCase: any WorkflowUseCase, routing: any WorkflowRouting, parallel: ParallelVM, draftStore: any WorkflowDraftStoring) {
+        self.draftStore = draftStore
         self.useCase = useCase
         self.routing = routing
         self.parallel = parallel
@@ -118,15 +132,19 @@ final class WorkflowVM: WorkflowViewModel {
     var backendIDs: [String] { useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs }
     var selectedNode: WorkflowNodeModel? { nodes.first { $0.id == selectedNodeID } }
     var selectedEdge: WorkflowEdgeModel? { edges.first { $0.id == selectedEdgeID } }
-    var canSave: Bool { !isBusy && selectedRun == nil }
+    var canSave: Bool { !isBusy && selectedRun == nil && hasUnsavedChanges }
 
-    var hasUnsavedChanges: Bool { loadedName.isEmpty || definition != savedDefinition }
+    var hasUnsavedChanges: Bool { loadedName.isEmpty || name != loadedName || !WorkflowDraftEquality.matches(definition, savedDefinition) }
 
     func didAppear() {
         guard !didSubscribe else {
             return
         }
         didSubscribe = true
+        if let builderSession { restoreBuilderSession(builderSession) }
+        terminationSubscription = NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification).sink { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.persistDraft() }
+        }
         if let pendingEditorName {
             self.pendingEditorName = nil
             selectWorkflow(WorkflowRecord(raw: ["name": .string(pendingEditorName)]))
@@ -148,6 +166,8 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        persistDraft()
+        terminationSubscription = nil
         editorLoadID = UUID()
         validationSuspended = true
         validationTask?.cancel()
@@ -162,6 +182,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func refresh(generation: UUID? = nil) async {
+        reconnectBuilderSession()
         do {
             let list = try await useCase.command("list", options: [], positionals: [])
             let runList = try await useCase.command("list-runs", options: [], positionals: [])
@@ -187,72 +208,24 @@ final class WorkflowVM: WorkflowViewModel {
         }
     }
 
-    func selectWorkflow(_ workflow: WorkflowRecord) {
-        draftID = UUID()
-        let loadingDraftID = draftID
-        editorLoadID = UUID()
-        let loadingID = editorLoadID
-        perform { [weak self] in
-            guard let self else {
-                return
-            }
-            guard draftID == loadingDraftID, editorLoadID == loadingID else { return }
-            let response = try await useCase.command("get", options: [], positionals: [workflow.id])
-            guard !Task.isCancelled, draftID == loadingDraftID, editorLoadID == loadingID else { return }
-            let record = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
-            definition = record.definition
-            savedDefinition = definition
-            name = record.id.isEmpty ? workflow.id : record.id
-            loadedName = name
-            revision = record.revision
-            selectedRun = nil
-            selectedNodeID = nil
-            selectedEdgeID = nil
-            isEditing = true
-            parallel.setWorkflowTaskIDs([])
-        }
-    }
-
-    func selectRun(_ run: WorkflowRunModel) {
-        draftID = UUID()
-        selectedRun = run
-        isEditing = false
-        selectedNodeID = nil
-        selectedEdgeID = nil
-        selectedActivationID = nil
-        perform { [weak self] in await self?.refresh() }
-    }
-
-    func newWorkflow() {
-        draftID = UUID()
-        selectedRun = nil
-        name = ""
-        loadedName = ""
-        revision = 0
-        savedDefinition = [:]
-        definition = Self.starterDefinition()
-        isEditing = true
-        selectedNodeID = "start"
-        selectedEdgeID = nil
-        parallel.setWorkflowTaskIDs([])
-    }
-
-    func prepareEditor(name: String?) {
-        validationSuspended = true
-        pendingEditorName = name
-        if let name { self.name = name; isEditing = true } else { newWorkflow() }
-    }
-
-    func openWorkflowEditor(_ name: String) { routing.openWorkflowEditor(name: name) }
-
     func duplicate() {
         guard selectedRun == nil else {
             return
         }
+        guard draftKey != "new", canUseDraftSlot("new") else {
+            if draftKey == "new" { errorText = "Save this new workflow before creating a copy." }
+            return
+        }
+        persistDraft()
+        draftKey = "new"
+        draftPersistenceSuspended = true
         draftID = UUID()
         name += "-copy"
         loadedName = ""
         revision = 0
+        savedDefinition = [:]
+        draftPersistenceSuspended = false
+        persistDraft()
     }
 
     func deleteWorkflow() {
@@ -310,49 +283,6 @@ final class WorkflowVM: WorkflowViewModel {
             }
             showsRunSheet = false
             selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "workflow_name": .string(loadedName), "definition": .object(definition)])
-            isEditing = false
-            await useCase.refreshTasks()
-            await refresh()
-        }
-    }
-
-    func generate() {
-        let capturedName = name
-        let capturedRepo = repo
-        let capturedPrompt = prompt
-        let candidate = generationAgent
-        let context = isRefining ? WorkflowRefinementContext(draftID: draftID, loadID: editorLoadID, definition: definition,
-                                                            name: name, loadedName: loadedName, revision: revision, baseline: savedDefinition) : nil
-        var options = ["--prompt=\(capturedPrompt)", "--fallbacks=\((candidate["fallbacks"] ?? .array([])).rendered())"]
-            + Self.candidateOptions(candidate)
-        if !capturedRepo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { options.append("--repo=\(capturedRepo)") }
-        if let context {
-            options.append("--definition-json=\(JSONValue.object(effectiveDefinition).rendered())")
-            let source: JSONValue = .object(["name": .string(context.loadedName), "revision": .number(Double(context.revision)),
-                                              "saved_definition": .object(context.baseline)])
-            options.append("--source=\(source.rendered())")
-        }
-        let submittedOptions = options
-        perform { [weak self] in
-            guard let self else { return }
-            let response = try await useCase.command("build", options: submittedOptions, positionals: [capturedName])
-            guard let id = response["workflow_run_id"]?.stringValue else { throw WorkflowUIError.missingRun }
-            if let context {
-                guard draftID == context.draftID, editorLoadID == context.loadID,
-                      definition == context.definition, name == context.name, loadedName == context.loadedName,
-                      revision == context.revision, savedDefinition == context.baseline else {
-                    errorText = "The canvas changed while the agent started. Your edits are preserved; find the proposal in workflow history."
-                    return
-                }
-                var active = context
-                active.runID = id
-                refinementContext = active
-            }
-            showsGenerateSheet = false
-            var initialRun: [String: JSONValue] = ["workflow_run_id": .string(id), "workflow_name": .string(capturedName),
-                                                 "kind": .string("builder"), "status": .string("starting")]
-            if let context { initialRun["editing_definition"] = .object(context.definition) }
-            selectedRun = WorkflowRunModel(raw: initialRun)
             isEditing = false
             await useCase.refreshTasks()
             await refresh()
@@ -534,7 +464,7 @@ final class WorkflowVM: WorkflowViewModel {
         definition["connections"] = .array(entries.map(JSONValue.object))
     }
 
-    private func updateActivityMembership() {
+    func updateActivityMembership() {
         let activations = selectedRun?.activations ?? []
         let relevant = activations.filter { ["node", "builder"].contains($0["role"]?.stringValue ?? "") }
         var latestByNode: [String: [String: JSONValue]] = [:]
@@ -558,7 +488,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func perform(_ work: @escaping @MainActor () async throws -> Void) {
-        guard !isBusy else {
+        guard !operationBusy else {
             return
         }
         isBusy = true

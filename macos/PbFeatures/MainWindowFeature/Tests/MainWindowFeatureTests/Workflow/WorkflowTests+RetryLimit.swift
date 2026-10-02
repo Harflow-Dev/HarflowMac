@@ -11,7 +11,8 @@ extension WorkflowTests {
     @Test func givenCanonicalRetryMetadata_whenLimitsAndTopologyChange_thenDraftStaysRawAndInferenceNeverStales() async throws {
         // given
         let useCase = MockWorkflowUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         var raw = try fixture("definition")
         var connections = WorkflowJSON.objects(raw["connections"])
         let index = try #require(connections.firstIndex { $0["id"]?.stringValue == "review-fix" })

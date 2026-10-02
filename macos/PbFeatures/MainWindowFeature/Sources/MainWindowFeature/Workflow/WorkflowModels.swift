@@ -20,6 +20,7 @@ struct WorkflowNodeModel: Identifiable, Equatable {
     var type: String { raw["type"]?.stringValue ?? "agent" }
     var role: String { raw["role"]?.stringValue ?? "task" }
     var instructions: String { raw["instructions"]?.stringValue ?? "" }
+    var isOptional: Bool { type == "agent" && (raw["optional"]?.boolValue ?? false) }
     var position: CGPoint {
         let position = raw["position"]?.objectValue ?? [:]
         return CGPoint(x: position["x"]?.doubleValue ?? 80, y: position["y"]?.doubleValue ?? 80)

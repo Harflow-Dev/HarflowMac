@@ -16,7 +16,7 @@ public extension MainWindowNavigationCoordinator {
 extension MainWindowCoordinator: WorkflowRouting {
     public func buildWorkflowEditorView(name: String?) -> AnyView {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
-        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel)
+        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel, draftStore: WorkflowDraftStore.applicationStore())
         vm.prepareEditor(name: name)
         return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id(name ?? "new-workflow").eraseToAnyView()
     }
@@ -36,7 +36,7 @@ extension MainWindowCoordinator: WorkflowRouting {
 
     public func buildWorkflowRunView(id: String) -> AnyView {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
-        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel)
+        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel, draftStore: WorkflowDraftStore.applicationStore())
         vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "status": .string("starting")])
         return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id("workflow-run:\(id)").eraseToAnyView()
     }

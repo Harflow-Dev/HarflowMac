@@ -16,7 +16,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     } else if node.type == "start" {
                         workflowEditor.disabled(viewModel.selectedRun != nil)
                     } else {
-                        nodeEditor(node).disabled(viewModel.selectedRun != nil)
+                        nodeEditor(node).disabled(viewModel.selectedRun != nil || viewModel.isBusy)
                     }
                 } else if let edge = viewModel.selectedEdge {
                     edgeEditor(edge)
@@ -99,6 +99,13 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 Picker("Role", selection: nodeString(node, "role", default: "task")) {
                     ForEach(["planning", "implementation", "review", "task"], id: \.self) { Text($0.capitalized).tag($0) }
                 }
+                Toggle("Optional", isOn: Binding(get: { viewModel.selectedNode?.isOptional ?? false }, set: {
+                    guard viewModel.selectedRun == nil, !viewModel.isBusy else { return }
+                    viewModel.updateNode(node.id, key: "optional", value: .bool($0))
+                }))
+                Text("Continue if this step fails within a parallel branch. Required branches must succeed.")
+                    .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
                 SectionLabel(text: "Instructions")
                 TextEditor(text: nodeString(node, "instructions"))
 .font(.pb(.body))
@@ -185,6 +192,11 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     private func nodeHistory(_ node: WorkflowNodeModel) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: node.name)
+            if node.type == "agent" {
+                Text(node.isOptional ? "Optional step" : "Required step")
+                    .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+            }
             Text(node.instructions).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
             Button("Show latest steps") { viewModel.selectActivation(nil) }.buttonStyle(QuietButtonStyle())
             ForEach(Array((viewModel.selectedRun?.activations.filter {

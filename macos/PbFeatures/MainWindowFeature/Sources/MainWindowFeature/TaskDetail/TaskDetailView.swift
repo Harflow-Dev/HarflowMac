@@ -368,11 +368,14 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }
     }
 
+    @ViewBuilder
     private var takeoverButton: some View {
-        Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
-            .buttonStyle(QuietButtonStyle())
-            .disabled(!viewModel.canTakeover)
-            .help(viewModel.takeoverHelp)
+        if !isEmbedded {
+            Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
+                .buttonStyle(QuietButtonStyle())
+                .disabled(!viewModel.canTakeover)
+                .help(viewModel.takeoverHelp)
+        }
     }
 
     private var inspectorToggle: some View {

@@ -28,6 +28,8 @@ extension WorkflowVM {
     func returnToCanvas() {
         guard canReturnToCanvas else { return }
         selectedRun = nil
+        refinementContext = nil
+        persistDraft(reconnectBuilder: false)
         isEditing = true
         parallel.setWorkflowTaskIDs([])
     }
@@ -37,6 +39,8 @@ extension WorkflowVM {
               !appliedProposalIDs.contains(run.id),
               let proposal = run.raw["generated_definition"]?.objectValue,
               run.isBuilderProposal else { return }
+        draftPersistenceSuspended = true
+        defer { draftPersistenceSuspended = false }
         if let context = refinementContext, context.runID == run.id {
             guard draftID == context.draftID, editorLoadID == context.loadID,
                   definition == context.definition, name == context.name, loadedName == context.loadedName,
@@ -49,6 +53,9 @@ extension WorkflowVM {
             savedDefinition = context.baseline
             name = context.name
         } else {
+            let sourceName = run.raw["source_name"]?.stringValue ?? ""
+            let targetKey = sourceName == run.name && !sourceName.isEmpty ? "saved:" + sourceName : "new"
+            guard canUseDraftSlot(targetKey) else { return }
             // History opens an isolated proposal using its original saved revision, never the latest file.
             draftID = UUID()
             editorLoadID = UUID()
@@ -58,6 +65,7 @@ extension WorkflowVM {
             name = run.name
             if loadedName != name { loadedName = ""; revision = 0; savedDefinition = [:] }
         }
+        draftKey = loadedName.isEmpty ? "new" : "saved:" + loadedName
         var edited = proposal
         edited["name"] = .string(name)
         edited.removeValue(forKey: "revision")
@@ -68,6 +76,8 @@ extension WorkflowVM {
         appliedProposalIDs.insert(run.id)
         refinementContext = nil
         selectedRun = nil
+        draftPersistenceSuspended = false
+        persistDraft(reconnectBuilder: false)
         isEditing = true
         parallel.setWorkflowTaskIDs([])
     }

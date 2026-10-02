@@ -72,6 +72,8 @@ protocol WorkflowViewModel: ViewModel {
     func updateEdge(_ id: String, key: String, value: JSONValue?)
     func moveNode(_ id: String, to point: CGPoint)
     func addNode(_ kind: String, at point: CGPoint?)
+    func copySelectedNodes()
+    func pasteNodes()
     func deleteSelected()
     func loadModels(_ backend: String)
     func nodeStatus(_ id: String) -> String
@@ -144,7 +146,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                         RunningSpinner()
                     }
                 Text(viewModel.selectedRun.map { $0.status.replacingOccurrences(of: "_", with: " ").capitalized }
-                     ?? (viewModel.isEditing ? "Revision \(viewModel.revision) · Workflow editor" : "Build reusable agent workflows"))
+                     ?? (viewModel.isEditing
+                         ? "Revision \(viewModel.revision) · Workflow editor\(viewModel.hasUnsavedChanges ? " · Draft" : "")"
+                         : "Build reusable agent workflows"))
                     .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)
                 }
@@ -268,7 +272,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             selectedNodeID: viewModel.selectedNodeID,
             selectedNodeIDs: viewModel.selectedNodeIDs,
             selectedEdgeID: viewModel.selectedEdgeID,
-            isEditable: viewModel.selectedRun == nil,
+            isEditable: viewModel.selectedRun == nil && !viewModel.isBusy,
             takenEdgeIDs: Set(WorkflowJSON.objects(viewModel.selectedRun?.raw["decisions"]).flatMap {
                            $0["connections"]?.arrayValue?.compactMap(\.stringValue) ?? []
                        }),
@@ -283,6 +287,8 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             onConnect: { viewModel.connectionSourceID = $0 },
             onDrop: { viewModel.addNode($0, at: $1) },
             onDelete: viewModel.deleteSelected,
+            onCopy: viewModel.copySelectedNodes,
+            onPaste: viewModel.pasteNodes,
             onRename: { viewModel.updateNode($0, key: "title", value: .string($1)) }
         )
     }

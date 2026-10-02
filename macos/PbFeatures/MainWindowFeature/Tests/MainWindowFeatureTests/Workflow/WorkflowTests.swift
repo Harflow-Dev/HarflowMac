@@ -29,7 +29,9 @@ import Testing
         given(routing).selectTask(.any).willReturn()
         given(routing).didSaveWorkflow(name: .any).willReturn()
         given(routing).openWorkflowEditor(name: .any).willReturn()
-        return (WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut), useCase)
+        let store = WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        return (vm, useCase)
     }
 
     @Test func givenCanonicalEngineDefinition_whenMapped_thenCanvasReadsConnectionsTitlesRolesAndCandidates() throws {
@@ -215,7 +217,8 @@ import Testing
     @Test func givenDelayedValidation_whenDraftChanges_thenOldSuccessCannotClearNewWarning() async {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "old-name"
         await waitUntil { useCase.requests.count == 1 }
@@ -234,7 +237,8 @@ import Testing
     @Test func givenValidationFailureAndDisappearance_whenResponsesArrive_thenSaveStaysClickable() async {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "workflow"
         await waitUntil { useCase.requests.count == 1 }
@@ -253,7 +257,8 @@ import Testing
     @Test func givenSaveInFlight_whenOpeningNewDraft_thenOldSaveResponseCannotReplaceDraftMetadata() async {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "original"
         await waitUntil { useCase.requests.count == 1 }
@@ -323,7 +328,8 @@ import Testing
     @Test func givenEditorLoadInFlight_whenDraftChangesOrViewDisappears_thenStaleDefinitionCannotReplaceDraft() async {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         var loaded = WorkflowVM.starterDefinition()
         loaded["name"] = .string("old-workflow")
         // when / then
@@ -345,7 +351,8 @@ import Testing
         useCase.delayRefresh = true
         let routing = MockWorkflowRouting()
         given(routing).didSaveWorkflow(name: .any).willReturn()
-        let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "workflow"
         await waitUntil { useCase.requests.count == 1 }
@@ -413,7 +420,8 @@ import Testing
 
     @Test func givenInvalidGraph_whenSaving_thenCanonicalWarningShowsWithoutPersistence() async {
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.newWorkflow()
         vm.name = "draft"
         var alert: AlertContent?
@@ -432,7 +440,8 @@ import Testing
 
     @Test func givenPendingValidGraph_whenSaveClicked_thenValidatesExactSnapshotBeforePersisting() async {
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.newWorkflow()
         vm.name = "pending-draft"
         vm.save()
@@ -455,7 +464,8 @@ import Testing
     @Test(arguments: ["definition", "name", "revision", "new-draft", "disappear"])
     func givenSaveValidationInFlight_whenDraftChanges_thenStaleSuccessCannotPersist(_ change: String) async {
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.newWorkflow()
         vm.name = "draft"
         vm.save()
@@ -500,7 +510,8 @@ import Testing
 
     @Test func givenLegacyEditableModes_whenSaving_thenOnlySubmittedSnapshotUsesAutomaticBranching() async {
         let useCase = ControlledWorkflowValidationUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.newWorkflow()
         vm.name = "legacy"
         vm.updateNode("review", key: "branch_mode", value: .string("choose_one"))
@@ -536,63 +547,4 @@ import Testing
         #expect(WorkflowCandidateSettings.replacingBackend(in: unsupported, with: "claude")["max_turns"] == .number(100))
     }
 
-}
-
-// MARK: - ControlledWorkflowValidationUseCase
-
-@MainActor
-private final class ControlledWorkflowValidationUseCase: WorkflowUseCase, @unchecked Sendable {
-    var requests: [[String: JSONValue]] = []
-    var savedRequests: [[String: JSONValue]] = []
-    var delayRefresh = false
-    var pendingRefresh: CheckedContinuation<[String: JSONValue], Never>?
-    var pendingLoad: CheckedContinuation<[String: JSONValue], Never>?
-    private var pendingSave: CheckedContinuation<[String: JSONValue], Never>?
-    private var pending: [Int: CheckedContinuation<[String: JSONValue], any Error>] = [:]
-    var backendIDs: [String] { ["codex"] }
-
-    func validate(definition: JSONValue) async throws -> [String: JSONValue] {
-        let index = requests.count
-        requests.append(definition.objectValue ?? [:])
-        return try await withCheckedThrowingContinuation { pending[index] = $0 }
-    }
-
-    func finish(_ index: Int, result: Result<[String: JSONValue], any Error>) {
-        pending.removeValue(forKey: index)?.resume(with: result)
-    }
-
-    func command(_ command: String, options _: [String], positionals _: [String]) async throws -> [String: JSONValue] {
-        if command == "list", delayRefresh {
-            return await withCheckedContinuation { pendingRefresh = $0 }
-        }
-        guard command == "get" else { return [:] }
-        return await withCheckedContinuation { pendingLoad = $0 }
-    }
-
-    func finishRefresh() {
-        pendingRefresh?.resume(returning: [:])
-        pendingRefresh = nil
-    }
-
-    func finishAllValidations() {
-        for index in Array(pending.keys) { finish(index, result: .success(["valid": .bool(true)])) }
-    }
-
-    func finishLoad(_ response: [String: JSONValue]) {
-        pendingLoad?.resume(returning: response)
-        pendingLoad = nil
-    }
-
-    func save(name _: String, definition: JSONValue, expectedRevision _: Int) async throws -> [String: JSONValue] {
-        savedRequests.append(definition.objectValue ?? [:])
-        return await withCheckedContinuation { pendingSave = $0 }
-    }
-
-    func finishSave(_ response: [String: JSONValue]) {
-        pendingSave?.resume(returning: response)
-        pendingSave = nil
-    }
-
-    func refreshTasks() async {}
-    func modelOptions(backend _: String) async -> [ModelOption] { [] }
 }

@@ -62,6 +62,7 @@ extension WorkflowVM {
             showSaveWarning("Enter a workflow name.")
             return
         }
+        persistDraft()
         let snapshot = SaveSnapshot(self)
         validationTask?.cancel()
         validationTask = nil
@@ -70,18 +71,58 @@ extension WorkflowVM {
             guard let self, snapshot.matches(self), await validateForSave(snapshot) else { return }
             guard snapshot.matches(self) else { return }
             let response = try await useCase.save(name: snapshot.name, definition: .object(snapshot.definition), expectedRevision: snapshot.revision)
-            guard snapshot.matches(self, exactDefinition: false) else { return }
             let record = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
+            WorkflowDraftCompletion.completed[snapshot.draftID] = WorkflowDraftCompletion(
+                name: snapshot.name, revision: record.revision, submitted: snapshot.definition, saved: record.definition
+            )
+            guard snapshot.matches(self, exactDefinition: false, exactName: false) else {
+                reconcileSavedDraft(snapshot, record: record)
+                return
+            }
+            let previousDraftKey = draftKey
+            draftPersistenceSuspended = true
             revision = record.revision
             savedDefinition = record.definition
             loadedName = snapshot.name
             let hasNewerEdits = snapshot.definition != effectiveDefinition
             if !hasNewerEdits { definition = record.definition }
+            draftPersistenceSuspended = false
+            finishDraftSave(previousKey: previousDraftKey)
             await refresh()
             if snapshot.isFirstSave, !hasNewerEdits,
                snapshot.matches(self, revision: record.revision, definition: record.definition) {
                 routing.didSaveWorkflow(name: snapshot.name)
             }
+        }
+    }
+
+    private func reconcileSavedDraft(_ snapshot: SaveSnapshot, record: WorkflowRecord) {
+        guard let key = snapshot.draftKey else { return }
+        do {
+            guard var draft = try draftStore.load(key: key),
+                  draft["draft_id"]?.stringValue == snapshot.draftID.uuidString,
+                  draft["revision"]?.intValue == snapshot.revision else { return }
+            let current = draft["definition"]?.objectValue ?? [:]
+            var effective = current
+            effective["name"] = draft["name"]
+            let unchanged = effective == snapshot.definition
+            if !unchanged {
+                draft["loaded_name"] = .string(snapshot.name)
+                draft["revision"] = .number(Double(record.revision))
+                draft["saved_definition"] = .object(record.definition)
+                let target = "saved:" + snapshot.name
+                if target != key, let existing = try draftStore.load(key: target), existing["draft_id"] != draft["draft_id"] {
+                    errorText = "Workflow saved, but another draft occupies its new name. Your original draft is preserved."
+                    return
+                }
+                try draftStore.save(draft, key: target)
+                if target != key { try draftStore.remove(key: key) }
+            } else {
+                try draftStore.remove(key: key)
+            }
+            if draftID == snapshot.draftID { reloadEditorAfterLateSave(name: snapshot.name) }
+        } catch {
+            errorText = "Workflow saved, but draft cleanup failed: \(Self.message(error))"
         }
     }
 
@@ -125,8 +166,10 @@ private struct SaveSnapshot {
     let editorLoadID: UUID
     let isFirstSave: Bool
     let alreadyValidated: Bool
+    let draftKey: String?
 
     @MainActor init(_ vm: WorkflowVM) {
+        self.draftKey = vm.draftKey
         self.definition = vm.effectiveDefinition
         self.name = vm.name
         self.revision = vm.revision
@@ -136,9 +179,12 @@ private struct SaveSnapshot {
         self.alreadyValidated = vm.validatedDefinition == definition
     }
 
-    @MainActor func matches(_ vm: WorkflowVM, revision: Int? = nil, definition: [String: JSONValue]? = nil, exactDefinition: Bool = true) -> Bool {
+    @MainActor func matches(
+        _ vm: WorkflowVM, revision: Int? = nil, definition: [String: JSONValue]? = nil,
+        exactDefinition: Bool = true, exactName: Bool = true
+    ) -> Bool {
         guard !Task.isCancelled, vm.selectedRun == nil else { return false }
-        guard vm.draftID == draftID, vm.editorLoadID == editorLoadID, vm.name == name else { return false }
+        guard vm.draftID == draftID, vm.editorLoadID == editorLoadID, !exactName || vm.name == name else { return false }
         guard vm.revision == (revision ?? self.revision) else { return false }
         return !exactDefinition || vm.effectiveDefinition == (definition ?? self.definition)
     }

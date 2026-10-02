@@ -57,7 +57,8 @@ extension WorkflowTests {
     func givenPlacedUnsavedCanvas_whenBuilderStartsThenCanvasChanges_thenCapturedInputIsSentAndNewEditsSurvive(_ repo: String) async throws {
         // given
         let useCase = RecordingWorkflowBuilderUseCase()
-        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut)
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = try fixture("definition")
         vm.name = "current"
         vm.repo = repo

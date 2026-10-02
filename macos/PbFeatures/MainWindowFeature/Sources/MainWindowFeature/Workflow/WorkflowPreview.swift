@@ -15,7 +15,8 @@ enum WorkflowPreview {
         let vm = WorkflowVM(
             useCase: useCase,
             routing: routing,
-            parallel: ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: routing)
+            parallel: ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: routing),
+            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         )
         vm.newWorkflow()
         vm.name = "code-review"
