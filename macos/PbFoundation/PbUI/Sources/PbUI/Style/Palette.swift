@@ -110,6 +110,8 @@ enum Palette {
     static let opencodeFG = Entry("opencodeFG", light: 0x0F6B64, dark: 0x5FD3C7)
     static let vibeBG = Entry("vibeBG", light: 0xF1E6FA, dark: 0x3A2650)
     static let vibeFG = Entry("vibeFG", light: 0x6B2FA0, dark: 0xC99BF0)
+    static let antigravityBG = Entry("antigravityBG", light: 0xD9E8FB, dark: 0x1E3048)
+    static let antigravityFG = Entry("antigravityFG", light: 0x1A4E8F, dark: 0x7FAEF0)
     static let otherBackendBG = Entry("otherBackendBG", light: 0xEEEEF0, dark: 0x3A3A3C)
     static let otherBackendFG = Entry("otherBackendFG", light: 0x3A3A3C, dark: 0xD1D1D6)
 
@@ -126,6 +128,7 @@ enum Palette {
     static let dotClaude = Entry("dot.claude", light: 0xC8643C, dark: 0xE08A62)
     static let dotCodex = Entry("dot.codex", light: 0x6E6E76, dark: 0xC9C9CF)
     static let dotVibe = Entry("dot.vibe", light: 0x8A4FD0, dark: 0xB48CF0)
+    static let dotAntigravity = Entry("dot.antigravity", light: 0x2E6FD8, dark: 0x7FAEF0)
     static let dotOpencode = Entry("dot.opencode", light: 0x0F6B64, dark: 0x5FD3C7)
     static let dotOther = Entry("dot.other", light: 0x8E8E93, dark: 0x98989D)
 
@@ -133,8 +136,9 @@ enum Palette {
         hairline, accentLink, selectedRow, doneGreen, failedRed, cancelledGray, runningBG, runningFG,
         neutralFill, neutralText, warningFG, warningBG, dangerFG, dangerBG, codeFill, editPreviewFill,
         inspectorFill, diffHunkFill, diffAddedFill, diffRemovedFill, claudeBG, claudeFG, codexBG, codexFG,
-        opencodeBG, opencodeFG, vibeBG, vibeFG, otherBackendBG, otherBackendFG,
+        opencodeBG, opencodeFG, vibeBG, vibeFG, antigravityBG, antigravityFG, otherBackendBG,
+        otherBackendFG,
         windowBG, sidebarBG, cardFill, cardBorder, composerFill, promptBubble, pillFill, selectedSegment, secondaryText,
-        liveDot, dotClaude, dotCodex, dotVibe, dotOpencode, dotOther
+        liveDot, dotClaude, dotCodex, dotVibe, dotAntigravity, dotOpencode, dotOther
     ]
 }

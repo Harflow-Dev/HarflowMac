@@ -15,6 +15,9 @@ public final class ModelCatalogRepositoryImpl: ModelCatalogRepository, Sendable 
     /// How long `opencode models` may run before it is abandoned.
     static let opencodeTimeout: Double = 8
 
+    /// How long `agy models` may run before it is abandoned.
+    static let agyTimeout: Double = 8
+
     /// The aliases `claude --help` documents for `--model`.
     static let claudeAliases = ["fable", "opus", "sonnet"]
 
@@ -37,10 +40,40 @@ public final class ModelCatalogRepositoryImpl: ModelCatalogRepository, Sendable 
     private func discover(_ backend: String) async -> [ModelOption] {
         switch backend {
         case "opencode": await opencodeModels()
+        case "antigravity": await agyModels()
         case "codex": codexModels()
         case "claude": Self.claudeAliases.map { ModelOption(value: $0, label: $0.capitalized) }
         default: []
         }
+    }
+
+    /// `agy models` prints `<id>\t<label>` per line, preceded by a `Fetching available models...`
+    /// notice; the PATH is the discovered login+interactive one, which `env` uses to find the
+    /// binary.
+    private func agyModels() async -> [ModelOption] {
+        let result = await runner.run(
+            executable: "/usr/bin/env", arguments: ["agy", "models"],
+            environment: toolEnvironment.environment(), currentDirectory: toolEnvironment.home,
+            timeout: Self.agyTimeout
+        )
+        guard case .success(let output) = result, !output.timedOut, output.exitCode == 0 else { return [] }
+        return Self.parseAgy(output.stdout)
+    }
+
+    /// One option per non-blank line that is not the fetching notice: the id up to the first tab,
+    /// the label after it — the id itself when there is no tab or the label is blank.
+    static func parseAgy(_ data: Data) -> [ModelOption] {
+        (String(data: data, encoding: .utf8) ?? "")
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && $0 != "Fetching available models..." }
+            .map { line in
+                let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                let id = fields.first ?? ""
+                let label = fields.count > 1 && !fields[1].isEmpty ? fields[1] : id
+                return ModelOption(value: id, label: label)
+            }
     }
 
     /// `opencode models` prints one model id per line; the PATH is the discovered login+interactive

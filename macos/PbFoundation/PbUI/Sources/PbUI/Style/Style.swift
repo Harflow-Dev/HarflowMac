@@ -66,6 +66,7 @@ public enum BackendStyle {
         case "codex": "X"
         case "opencode": "O"
         case "vibe": "V"
+        case "antigravity": "A"
         default: String(backend.prefix(1)).uppercased()
         }
     }
@@ -76,6 +77,7 @@ public enum BackendStyle {
         case "codex": (Palette.codexBG.color, Palette.codexFG.color)
         case "opencode": (Palette.opencodeBG.color, Palette.opencodeFG.color)
         case "vibe": (Palette.vibeBG.color, Palette.vibeFG.color)
+        case "antigravity": (Palette.antigravityBG.color, Palette.antigravityFG.color)
         default: (Palette.otherBackendBG.color, Palette.otherBackendFG.color)
         }
     }
@@ -96,6 +98,7 @@ public enum BackendStyle {
         case "codex": Palette.dotCodex
         case "opencode": Palette.dotOpencode
         case "vibe": Palette.dotVibe
+        case "antigravity": Palette.dotAntigravity
         default: Palette.dotOther
         }
     }
@@ -107,21 +110,25 @@ public enum BackendStyle {
         case "claude": "Claude Code CLI"
         case "codex": "OpenAI Codex CLI"
         case "vibe": "Mistral Vibe CLI, using your configured model"
-        case "opencode": "opencode CLI"
+        case "opencode": "Opencode CLI"
+        case "antigravity": "Google Antigravity CLI"
         default: nil
         }
     }
 
-    /// Whether polybridge accepts a turn cap for `backend` — mirrors each backend's own
-    /// `supports_turn_cap` (claude and vibe; codex and opencode reject `--max-turns`). An unknown
-    /// backend gets no Turn limit field rather than one that fails at start.
+    /// Whether polybridge accepts a turn cap — mirrors each backend's `supports_turn_cap`
+    /// (claude and vibe; codex, opencode, antigravity and unknown backends get no field at all).
     public nonisolated static func supportsTurnLimit(_ backend: String) -> Bool {
         backend == "claude" || backend == "vibe"
     }
 
-    /// The backends the New session sheet offers. Display list only: polybridge-ctl has no
-    /// command that lists backends, and `run` validates the choice itself.
-    public static let known = ["claude", "codex", "opencode", "vibe"]
+    /// The reasoning-effort levels polybridge accepts for `backend` — antigravity refuses `xhigh`; the catalog carries no levels, so this is New Session's table.
+    public static func effortLevels(_ backend: String) -> [String] {
+        backend == "antigravity" ? ["low", "medium", "high"] : ["low", "medium", "high", "xhigh"]
+    }
+
+    /// The backends the New session sheet offers. Display list only; `run` validates the choice itself.
+    public static let known = ["claude", "codex", "opencode", "vibe", "antigravity"]
 }
 
 public struct Chip: View {

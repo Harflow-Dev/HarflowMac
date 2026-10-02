@@ -7,7 +7,7 @@ public enum EditedFileStatus: Equatable, Sendable {
     /// Its latest `tool_call`'s `tool_result` arrived with `ok == false`.
     case failed
     /// Its latest `tool_call` has no `tool_result` yet — or never got one (some backends never
-    /// emit one for this call shape; see `README.md`'s edit-evidence table).
+    /// emit one for this call shape; see each backend's `normalize` in `src/polybridge/backends/`).
     case unconfirmed
 }
 

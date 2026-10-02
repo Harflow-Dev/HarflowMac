@@ -24,6 +24,113 @@ import Testing
         )
     }
 
+    @Test func givenConcurrentCopies_whenBothCheckForDuplicates_thenExactlyOneRemainsPrimary() {
+        // given
+        let first = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier, bundleURL: Self.selfURL,
+            isTerminated: false, processIdentifier: 100
+        )
+        let second = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier,
+            bundleURL: URL(fileURLWithPath: "/tmp/Polybridge Monitor.app"),
+            isTerminated: false, processIdentifier: 200
+        )
+        let apps = [second, first]
+
+        // when
+        let firstDuplicate = SingleInstanceGuard.findDuplicate(
+            among: apps, selfBundleIdentifier: first.bundleIdentifier,
+            selfBundleURL: first.bundleURL, selfProcessIdentifier: first.processIdentifier
+        )
+        let secondDuplicate = SingleInstanceGuard.findDuplicate(
+            among: apps, selfBundleIdentifier: second.bundleIdentifier,
+            selfBundleURL: second.bundleURL, selfProcessIdentifier: second.processIdentifier
+        )
+
+        // then
+        #expect(firstDuplicate == nil)
+        #expect(secondDuplicate == first)
+    }
+
+    @Test func givenOlderPrimaryWithHigherPID_whenANewerCopyLaunches_thenTheOlderCopyWins() {
+        // given
+        let older = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier, bundleURL: Self.selfURL,
+            isTerminated: false, processIdentifier: 999, launchDate: Date(timeIntervalSince1970: 0)
+        )
+        let newer = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier, bundleURL: URL(fileURLWithPath: "/tmp/Monitor.app"),
+            isTerminated: false, processIdentifier: 100, launchDate: Date(timeIntervalSince1970: 1)
+        )
+
+        // when / then — both views of the same concurrent launch agree despite PID reuse.
+        for apps in [[older, newer], [newer, older]] {
+            #expect(SingleInstanceGuard.findDuplicate(
+                among: apps, selfBundleIdentifier: Self.selfIdentifier, selfBundleURL: older.bundleURL,
+                selfProcessIdentifier: older.processIdentifier, selfLaunchDate: older.launchDate
+            ) == nil)
+            #expect(SingleInstanceGuard.findDuplicate(
+                among: apps, selfBundleIdentifier: Self.selfIdentifier, selfBundleURL: newer.bundleURL,
+                selfProcessIdentifier: newer.processIdentifier, selfLaunchDate: newer.launchDate
+            ) == older)
+        }
+    }
+
+    @Test func givenEqualLaunchDates_whenBothCopiesCheck_thenPIDBreaksTheTie() {
+        // given
+        let date = Date(timeIntervalSince1970: 1)
+        let other = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier, bundleURL: URL(fileURLWithPath: "/tmp/Monitor.app"),
+            isTerminated: false, processIdentifier: 50, launchDate: date
+        )
+
+        // when
+        let found = SingleInstanceGuard.findDuplicate(
+            among: [other], selfBundleIdentifier: Self.selfIdentifier, selfBundleURL: Self.selfURL,
+            selfProcessIdentifier: Self.selfPID, selfLaunchDate: date
+        )
+
+        // then
+        #expect(found == other)
+    }
+
+    @Test func givenAnUnknownLaunchDate_whenSelfHasAKnownDate_thenSelfRemainsPrimary() {
+        // given
+        let other = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier, bundleURL: URL(fileURLWithPath: "/tmp/Monitor.app"),
+            isTerminated: false, processIdentifier: 50
+        )
+
+        // when
+        let found = SingleInstanceGuard.findDuplicate(
+            among: [other], selfBundleIdentifier: Self.selfIdentifier, selfBundleURL: Self.selfURL,
+            selfProcessIdentifier: Self.selfPID, selfLaunchDate: Date(timeIntervalSince1970: 1)
+        )
+
+        // then
+        #expect(found == nil)
+    }
+
+    @Test func givenSeveralOlderCopies_whenTheirListingOrderChanges_thenTheOldestIsAlwaysChosen() {
+        // given
+        let oldest = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier, bundleURL: URL(fileURLWithPath: "/tmp/Oldest.app"),
+            isTerminated: false, processIdentifier: 300, launchDate: Date(timeIntervalSince1970: 0)
+        )
+        let other = RunningAppSnapshot(
+            bundleIdentifier: Self.selfIdentifier, bundleURL: URL(fileURLWithPath: "/tmp/Other.app"),
+            isTerminated: false, processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 1)
+        )
+
+        // when / then
+        for apps in [[oldest, other], [other, oldest]] {
+            #expect(SingleInstanceGuard.findDuplicate(
+                among: apps, selfBundleIdentifier: Self.selfIdentifier, selfBundleURL: Self.selfURL,
+                selfProcessIdentifier: Self.selfPID, selfLaunchDate: Date(timeIntervalSince1970: 2)
+            ) == oldest)
+        }
+    }
+
     @Test func givenNoOtherRunningApps_whenFindingADuplicate_thenNoneIsFound() {
         // given / when
         let duplicate = findDuplicate(among: [])
@@ -38,7 +145,7 @@ import Testing
             bundleIdentifier: Self.selfIdentifier,
             bundleURL: URL(fileURLWithPath: "/Users/example/Applications/Polybridge Monitor.app"),
             isTerminated: false,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -55,7 +162,7 @@ import Testing
             bundleIdentifier: Self.selfIdentifier,
             bundleURL: Self.selfURL,
             isTerminated: false,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -72,7 +179,7 @@ import Testing
             bundleIdentifier: Self.selfIdentifier,
             bundleURL: URL(fileURLWithPath: "/Applications/../Applications/Polybridge Monitor.app"),
             isTerminated: false,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -88,7 +195,7 @@ import Testing
             bundleIdentifier: Self.selfIdentifier,
             bundleURL: URL(fileURLWithPath: "/Users/example/Applications/Polybridge Monitor.app"),
             isTerminated: true,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -104,7 +211,7 @@ import Testing
             bundleIdentifier: "com.example.other",
             bundleURL: URL(fileURLWithPath: "/Applications/Other.app"),
             isTerminated: false,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -137,7 +244,7 @@ import Testing
             bundleIdentifier: "dev.polybridge.monitor",
             bundleURL: URL(fileURLWithPath: "/Users/example/Applications/Polybridge Monitor.app"),
             isTerminated: false,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -155,7 +262,7 @@ import Testing
             bundleIdentifier: Self.selfIdentifier,
             bundleURL: URL(fileURLWithPath: "/Users/example/Applications/Polybridge Monitor.app"),
             isTerminated: false,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -170,7 +277,7 @@ import Testing
     @Test func givenACandidateWithNoBundleURL_whenFindingADuplicate_thenItIsIgnored() {
         // given
         let noURL = RunningAppSnapshot(
-            bundleIdentifier: Self.selfIdentifier, bundleURL: nil, isTerminated: false, processIdentifier: 200
+            bundleIdentifier: Self.selfIdentifier, bundleURL: nil, isTerminated: false, processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when
@@ -192,7 +299,7 @@ import Testing
             bundleIdentifier: Self.selfIdentifier,
             bundleURL: URL(fileURLWithPath: "/Users/example/Applications/Polybridge Monitor.app"),
             isTerminated: false,
-            processIdentifier: 200
+            processIdentifier: 200, launchDate: Date(timeIntervalSince1970: 0)
         )
 
         // when

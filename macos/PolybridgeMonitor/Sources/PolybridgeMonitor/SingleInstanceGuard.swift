@@ -19,6 +19,7 @@ struct RunningAppSnapshot: Equatable {
     let bundleURL: URL?
     let isTerminated: Bool
     let processIdentifier: pid_t
+    var launchDate: Date?
 }
 
 extension RunningAppSnapshot {
@@ -28,33 +29,46 @@ extension RunningAppSnapshot {
             bundleIdentifier: app.bundleIdentifier,
             bundleURL: app.bundleURL,
             isTerminated: app.isTerminated,
-            processIdentifier: app.processIdentifier
+            processIdentifier: app.processIdentifier,
+            launchDate: app.launchDate
         )
     }
 }
 
 // MARK: - SingleInstanceGuard
 
-/// Best-effort duplicate detection: a duplicate is another **non-terminated** process with this
-/// app's own bundle identifier, running from a **different** bundle path. A terminated match, a
-/// match with a different bundle identifier, a match at the exact same bundle path (macOS never
-/// launches a second process from one bundle path), or this process's own entry are never
-/// duplicates. Deliberately conservative when either side's path is unknown: with nothing to
-/// compare, a mismatch is not asserted.
+/// Elects the oldest matching app at another bundle path. Equal or unavailable launch dates use
+/// PID as a deterministic tie break; known dates precede unknown ones. Every concurrent copy uses
+/// the same ordering, so two launches cannot each defer to the other and both quit.
 enum SingleInstanceGuard {
     static func findDuplicate(
         among runningApps: [RunningAppSnapshot],
         selfBundleIdentifier: String?,
         selfBundleURL: URL?,
-        selfProcessIdentifier: pid_t
+        selfProcessIdentifier: pid_t,
+        selfLaunchDate: Date? = nil
     ) -> RunningAppSnapshot? {
         guard let selfBundleIdentifier, let normalizedSelfURL = normalize(selfBundleURL) else { return nil }
-        return runningApps.first { candidate in
+        let own = RunningAppSnapshot(
+            bundleIdentifier: selfBundleIdentifier, bundleURL: normalizedSelfURL,
+            isTerminated: false, processIdentifier: selfProcessIdentifier, launchDate: selfLaunchDate
+        )
+        let candidates = runningApps.filter { candidate in
             guard !candidate.isTerminated else { return false }
             guard candidate.processIdentifier != selfProcessIdentifier else { return false }
             guard candidate.bundleIdentifier == selfBundleIdentifier else { return false }
             guard let candidateURL = normalize(candidate.bundleURL) else { return false }
-            return candidateURL != normalizedSelfURL
+            return candidateURL != normalizedSelfURL && precedes(candidate, own)
+        }
+        return candidates.min(by: precedes)
+    }
+
+    private static func precedes(_ lhs: RunningAppSnapshot, _ rhs: RunningAppSnapshot) -> Bool {
+        switch (lhs.launchDate, rhs.launchDate) {
+        case let (left?, right?) where left != right: left < right
+        case (_?, nil): true
+        case (nil, _?): false
+        default: lhs.processIdentifier < rhs.processIdentifier
         }
     }
 

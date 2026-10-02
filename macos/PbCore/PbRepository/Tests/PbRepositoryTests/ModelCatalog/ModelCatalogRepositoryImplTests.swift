@@ -143,6 +143,71 @@ import Testing
         #expect(runner.calls.count == 1)
     }
 
+    // MARK: - antigravity
+
+    @Test func givenAgyStdoutWithTheFetchingNoticeAndBlanks_whenAsked_thenOneOptionPerModelLine() async {
+        // given — measured shape: a `Fetching available models...` notice, then `<id>\t<label>`.
+        let text = "Fetching available models...\n\ngemini-3.8-flash\tGemini 3.8 Flash\n\r\nclaude-sonnet-4-6\tClaude Sonnet 4.6\n\n"
+        let runner = RecordingRunner(answer: .success(stdout(text)))
+        let (sut, _, _) = makeSUT(runner: runner)
+
+        // when
+        let models = await sut.models(for: "antigravity")
+
+        // then
+        #expect(models == [
+            ModelOption(value: "gemini-3.8-flash", label: "Gemini 3.8 Flash"),
+            ModelOption(value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6")
+        ])
+    }
+
+    @Test func givenAnAgyLineWithNoTab_whenAsked_thenTheIdIsItsOwnLabel() async {
+        // given
+        let runner = RecordingRunner(answer: .success(stdout("gemini-3.8-flash\n")))
+        let (sut, _, _) = makeSUT(runner: runner)
+
+        // when
+        let models = await sut.models(for: "antigravity")
+
+        // then
+        #expect(models == [ModelOption(value: "gemini-3.8-flash", label: "gemini-3.8-flash")])
+    }
+
+    @Test func givenAgy_whenAsked_thenItRunsWithTheDiscoveredEnvironmentFromHomeWithATimeout() async {
+        // given
+        let (sut, runner, _) = makeSUT(environment: ["PATH": "/login/bin:/interactive/bin"])
+
+        // when
+        _ = await sut.models(for: "antigravity")
+
+        // then
+        #expect(runner.calls == [
+            .init(
+                executable: "/usr/bin/env", arguments: ["agy", "models"],
+                environment: ["PATH": "/login/bin:/interactive/bin"], currentDirectory: "/home/me", timeout: 8
+            )
+        ])
+    }
+
+    @Test(arguments: [1, 2])
+    func givenAgyExitsNonZero_whenAsked_thenTheListIsEmpty(_ exitCode: Int32) async {
+        // given
+        let runner = RecordingRunner(answer: .success(ProcessOutput(exitCode: exitCode, stdout: Data("a/b\n".utf8), stderr: "boom")))
+        let (sut, _, _) = makeSUT(runner: runner)
+
+        // then
+        #expect(await sut.models(for: "antigravity").isEmpty)
+    }
+
+    @Test func givenAgyTimesOut_whenAsked_thenTheListIsEmpty() async {
+        // given
+        let runner = RecordingRunner(answer: .success(ProcessOutput(exitCode: 0, stdout: Data("a/b\n".utf8), stderr: "", timedOut: true)))
+        let (sut, _, _) = makeSUT(runner: runner)
+
+        // then
+        #expect(await sut.models(for: "antigravity").isEmpty)
+    }
+
     // MARK: - codex
 
     @Test func givenACodexCache_whenAsked_thenOnlyListedModelsComeBackByAscendingPriority() async {

@@ -136,7 +136,11 @@ final class NewSessionVM: NewSessionViewModel {
 
     /// Only agents polybridge can cap (claude, vibe); codex and opencode would reject the run.
     var showsTurnLimit: Bool { BackendStyle.supportsTurnLimit(backend) }
-    var effortOptions: [String] { showsEffort ? Self.effortLevels : [] }
+    /// The effort levels offered for the chosen backend: antigravity takes only `low`/`medium`/
+    /// `high` (it refuses `xhigh`), the others take polybridge's full vocabulary — the per-backend
+    /// table lives in `BackendStyle`, and `didChangeBackend` resets an effort the new backend
+    /// does not offer.
+    var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
 
     var canStart: Bool {
         !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -158,7 +162,6 @@ final class NewSessionVM: NewSessionViewModel {
     // MARK: - Constants
 
     static let recentRepoLimit = 5
-    static let effortLevels = ["low", "medium", "high", "xhigh"]
     private static let freedomLevels: [(id: String, detail: String)] = [
         ("read_only", "Reads the code and answers. Doesn't change any files. Good for questions and reviews."),
         ("write_in_repo", "Edits files in the repo. Commits and pushes are blocked, so you review before anything leaves."),

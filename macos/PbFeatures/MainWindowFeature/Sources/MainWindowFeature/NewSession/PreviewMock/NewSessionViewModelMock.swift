@@ -44,7 +44,7 @@ final class NewSessionViewModelMock: NewSessionViewModel {
         }
     }
 
-    var effortOptions: [String] { showsEffort ? ["low", "medium", "high", "xhigh"] : [] }
+    var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
     var showsEffort: Bool { backend != "vibe" }
     var showsModel: Bool { backend != "vibe" }
     var showsTurnLimit: Bool { true }

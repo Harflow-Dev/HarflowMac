@@ -129,7 +129,7 @@ private let previewCards = [
     AgentCardModel(id: "claude", name: "Claude", helpText: BackendStyle.helpText("claude"), isSelected: true, isNotInstalled: false),
     AgentCardModel(id: "codex", name: "Codex", helpText: BackendStyle.helpText("codex"), isSelected: false, isNotInstalled: false),
     AgentCardModel(id: "vibe", name: "Vibe", helpText: BackendStyle.helpText("vibe"), isSelected: false, isNotInstalled: false),
-    AgentCardModel(id: "opencode", name: "opencode", helpText: BackendStyle.helpText("opencode"), isSelected: false, isNotInstalled: true),
+    AgentCardModel(id: "opencode", name: "Opencode", helpText: BackendStyle.helpText("opencode"), isSelected: false, isNotInstalled: true),
     AgentCardModel(id: "mystery", name: "Mystery", helpText: nil, isSelected: false, isNotInstalled: false)
 ]
 

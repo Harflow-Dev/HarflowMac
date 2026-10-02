@@ -75,7 +75,7 @@ import Testing
 
     @Test func givenEachBackendDot_whenResolvedInBothModes_thenLightAndDarkValuesDiffer() {
         // given
-        let dots = [Palette.dotClaude, Palette.dotCodex, Palette.dotVibe, Palette.dotOpencode, Palette.dotOther]
+        let dots = [Palette.dotClaude, Palette.dotCodex, Palette.dotVibe, Palette.dotOpencode, Palette.dotAntigravity, Palette.dotOther]
 
         // when / then
         for dot in dots {

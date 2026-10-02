@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     var selfBundleIdentifier: () -> String? = { Bundle.main.bundleIdentifier }
     var selfBundleURL: () -> URL? = { Bundle.main.bundleURL }
     var selfProcessIdentifier: () -> pid_t = { ProcessInfo.processInfo.processIdentifier }
+    var selfLaunchDate: () -> Date? = { NSRunningApplication.current.launchDate }
 
     /// Forwards buffered `application(_:open:)` URLs to the already-running instance. The
     /// `NSWorkspace.OpenConfiguration` is built by the caller (`forwardURLBatch`) so a test can
@@ -129,10 +130,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var pendingOperations = 0
     private var terminated = false
 
-    /// Best-effort single-instance guard (Monitor piece 9): if another non-terminated process
-    /// with this app's own bundle identifier is already running from a **different** bundle path,
-    /// this launch is a duplicate. `SingleInstanceGuard.findDuplicate` is the pure rule; this
-    /// method only wires it to real AppKit state and records the result for
+    /// Best-effort single-instance guard: this launch yields only to an older-ranked,
+    /// non-terminated process with the same bundle identifier at a different bundle path.
+    /// `SingleInstanceGuard.findDuplicate` is the pure rule; this method only wires it to real AppKit state and records the result for
     /// `applicationDidFinishLaunching`, `application(_:open:)` and `applicationShouldHandleReopen`
     /// to act on. Runs before `applicationDidFinishLaunching` and before AppKit delivers any
     /// launch `application(_:open:)` batch, so every other single-instance branch below can rely
@@ -144,7 +144,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 among: runningApplications(),
                 selfBundleIdentifier: selfBundleIdentifier(),
                 selfBundleURL: selfBundleURL(),
-                selfProcessIdentifier: selfProcessIdentifier()
+                selfProcessIdentifier: selfProcessIdentifier(),
+                selfLaunchDate: selfLaunchDate()
             ) else { return }
             duplicateOf = duplicate
             singleInstanceState.isPrimaryInstance = false
