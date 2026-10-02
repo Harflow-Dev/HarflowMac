@@ -139,10 +139,15 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     Text(viewModel.selectedRun?.name ?? (viewModel.isEditing ? viewModel.name : "Workflows"))
                         .font(.pb(.headline, weight: .semibold))
                 }
+                HStack(spacing: 6) {
+                    if let run = viewModel.selectedRun, ["starting", "running"].contains(run.status) {
+                        RunningSpinner()
+                    }
                 Text(viewModel.selectedRun.map { $0.status.replacingOccurrences(of: "_", with: " ").capitalized }
                      ?? (viewModel.isEditing ? "Revision \(viewModel.revision) · Workflow editor" : "Build reusable agent workflows"))
                     .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)
+                }
             }
             Spacer()
             if viewModel.isBusy {
@@ -334,15 +339,29 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 VSplitView {
                     HSplitView {
                         canvas
-                        if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
-                            WorkflowInspector(viewModel: viewModel).frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
-                        }
+                        runSidebar
                     }.frame(minHeight: 170, idealHeight: 300)
                     activity.frame(minHeight: 240)
                 }
             } else {
-                activity
+                HSplitView { activity; runSidebar }
             }
+        }
+    }
+
+    @ViewBuilder private var runSidebar: some View {
+        if let run = viewModel.selectedRun {
+            VStack(spacing: 0) {
+                WorkflowRunPlan(run: run).padding(16)
+                Divider()
+                if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
+                    WorkflowInspector(viewModel: viewModel)
+                } else {
+                    Spacer(minLength: 0)
+                }
+            }
+.frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
+.background(Color.cardFill)
         }
     }
 

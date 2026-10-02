@@ -41,10 +41,11 @@ struct TimelinePaneModel {
     let liveStep: LiveStep?
     /// Changes when the feed grows or changes in place; Follow live scrolls on it.
     let updateToken: ActivityUpdateToken
+    let pendingMessages: [PendingMessage]
 
     init(
         stepCountText: String, rows: [ConversationTimelineRow], activityRows: [ActivityRow], start: Date?, emptyText: String?,
-        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken
+        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken, pendingMessages: [PendingMessage] = []
     ) {
         self.stepCountText = stepCountText
         self.rows = rows
@@ -55,6 +56,7 @@ struct TimelinePaneModel {
         self.isLoading = isLoading
         self.liveStep = liveStep
         self.updateToken = updateToken
+        self.pendingMessages = pendingMessages
     }
 
     /// Derives the feed rows, live step and update token from `rows` — for previews and tests; the
@@ -89,7 +91,7 @@ struct TimelinePaneView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 8)
             .readingColumn()
-            if model.isLoading {
+            if model.isLoading, model.liveStep == nil {
                 SkeletonRows(count: 5, showsBadge: false)
                     .padding(24)
                     .readingColumn()
@@ -112,6 +114,9 @@ struct TimelinePaneView: View {
                     }
                     if let subTaskStrip = model.subTaskStrip {
                         SubTaskStripView(model: subTaskStrip)
+                    }
+                    ForEach(model.pendingMessages) { message in
+                        PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
                     }
                     if let liveStep = model.liveStep {
                         LiveStepLineView(text: liveStep.text)

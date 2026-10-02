@@ -16,13 +16,16 @@ struct LiveStep: Equatable {
 
     /// The latest tool call still waiting for its result in the running turn; `nil` for a terminal
     /// task (its unresolved calls keep reading "no result") and when nothing is pending.
-    init?(rows: [ConversationTimelineRow]) {
+    init?(rows: [ConversationTimelineRow], isRunning: Bool = false) {
         let liveItems: [TimelineItem] = rows.compactMap { row in
             guard row.live, case .item(let item) = row.kind else { return nil }
             return item
         }
-        guard let current = Timeline.current(in: liveItems), case .tool(let call, _) = current.body else { return nil }
-        self.text = Self.text(for: call)
+        if let current = Timeline.current(in: liveItems), case .tool(let call, _) = current.body {
+            self.text = Self.text(for: call)
+        } else if isRunning, !liveItems.contains(where: { if case .text(_, streaming: true) = $0.body { return true }; return false }) {
+            self.text = "Thinking…"
+        } else { return nil }
     }
 
     /// "Reading <file>…", "Running <command>…", else "<tool>…".

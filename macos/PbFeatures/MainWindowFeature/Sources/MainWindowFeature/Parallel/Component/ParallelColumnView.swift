@@ -43,6 +43,7 @@ struct ParallelColumnModel: Identifiable {
     let activityRows: [ActivityRow]
     /// The "what is it doing now" line under the feed; `nil` unless a call is pending in a running turn.
     let liveStep: LiveStep?
+    var pendingMessages: [PendingMessage] = []
     /// True while NO member of this conversation has any timeline item yet AND at least one
     /// member's own event stream is still `.loading` (Monitor piece 12, Design point 4, extended
     /// across every member for piece 13) — the column shows `SkeletonRows` instead of the empty
@@ -99,7 +100,7 @@ struct ParallelColumnView: View {
                 PromptBubbleView(text: prompt)
             }
             Divider()
-            if model.isLoading {
+            if model.isLoading, model.liveStep == nil {
                 SkeletonRows(count: 4, showsBadge: false)
                     .padding(.top, 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -148,7 +149,7 @@ struct ParallelColumnView: View {
             }
             ScrollViewReader { proxy in
                 scrollingFeed(shown)
-                    .onChange(of: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep)) { _, _ in
+                    .onChange(of: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep, pendingMessages: model.pendingMessages)) { _, _ in
                         if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
                     }
                     .onChange(of: followLive) { _, isOn in
@@ -171,6 +172,9 @@ struct ParallelColumnView: View {
                     Button("Show all \(ParallelColumnModel.itemCount(model.rows)) steps") { showAll = true }
                         .buttonStyle(.link)
                         .font(.pb(.secondary))
+                }
+                ForEach(model.pendingMessages) { message in
+                    PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
                 }
                 if let liveStep = model.liveStep {
                     LiveStepLineView(text: liveStep.text)

@@ -82,6 +82,6 @@ extension TaskDetailVMTests {
         // then
         await waitUntil { harness.sut.timelineModel.updateToken != before }
         #expect(harness.sut.timelineModel.rows.count == 1)
-        #expect(harness.sut.timelineModel.liveStep == nil)
+        #expect(harness.sut.timelineModel.liveStep?.text == "Thinking…")
     }
 }

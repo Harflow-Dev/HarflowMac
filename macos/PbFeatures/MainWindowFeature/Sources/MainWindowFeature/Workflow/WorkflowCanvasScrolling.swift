@@ -28,6 +28,12 @@ enum WorkflowCanvasScrolling {
         WorkflowCanvasZoom.logical(CGSize(width: after.minX - before.minX, height: after.minY - before.minY), scale: scale)
     }
 
+    static func firstLocalGridDot(in rectangle: CGRect) -> CGPoint {
+        let spacing = WorkflowCanvasGeometry.gridSpacing
+        return CGPoint(x: ceil(rectangle.minX / spacing) * spacing - rectangle.minX,
+                       y: ceil(rectangle.minY / spacing) * spacing - rectangle.minY)
+    }
+
     static func visibleGrid(_ visible: CGRect, scale: CGFloat, content: CGSize) -> CGRect {
         let logical = CGRect(x: visible.minX / scale, y: visible.minY / scale,
                              width: visible.width / scale, height: visible.height / scale)

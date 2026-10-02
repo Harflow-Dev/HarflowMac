@@ -6,15 +6,11 @@ import SwiftUI
 
 struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
     var viewModel: VM
-    @State private var showsTasks = true
 
     var body: some View {
         if let run = viewModel.selectedRun {
             VStack(alignment: .leading, spacing: 12) {
                 decision(run)
-                if !run.tasks.isEmpty {
-                    checklist(run)
-                }
                 if ["needs_attention", "paused"].contains(run.status) {
                     recovery(run)
                 }
@@ -52,32 +48,6 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
 .textSelection(.enabled)
             Spacer()
         }
-    }
-
-    private func checklist(_ run: WorkflowRunModel) -> some View {
-        let completed = run.tasks.filter { $0["status"]?.stringValue == "completed" }.count
-        return DisclosureGroup("Tasks · \(completed) of \(run.tasks.count) completed", isExpanded: $showsTasks) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(run.tasks.enumerated()), id: \.offset) { _, task in
-                        HStack(alignment: .top, spacing: 8) {
-                            let done = task["status"]?.stringValue == "completed"
-                            Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(done ? Color.doneGreen : Color.secondaryText)
-                                .accessibilityLabel(done ? "Completed by orchestrator" : "Pending")
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(task["title"]?.stringValue ?? task["id"]?.stringValue ?? "Task").font(.pb(.body))
-                                if let reason = task["reason"]?.stringValue, !reason.isEmpty {
-                                    Text(reason).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-                                }
-                            }
-                        }
-                    }
-                }
-.frame(maxWidth: .infinity, alignment: .leading)
-.padding(.vertical, 6)
-            }.frame(maxHeight: 120)
-        }.font(.pb(.secondary, weight: .medium))
     }
 
     private func recovery(_ run: WorkflowRunModel) -> some View {

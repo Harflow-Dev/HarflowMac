@@ -6,6 +6,17 @@ import Testing
 // MARK: - WorkflowBuilderPresentationTests
 
 @Suite struct WorkflowBuilderPresentationTests {
+    @Test func givenLivePlanUpdate_whenMappingEntries_thenIdentitySurvivesOrchestratorCompletion() throws {
+        // given
+        let pending: [String: JSONValue] = ["id": .string("task-1"), "title": .string("Review"), "status": .string("pending")]
+        var completed = pending
+        completed["status"] = .string("completed")
+        completed["completed_by_activation_id"] = .string("orchestrator-2")
+        // when / then
+        #expect(try #require(WorkflowPlanEntry(pending)).id == #require(WorkflowPlanEntry(completed)).id)
+        #expect(WorkflowPlanEntry(completed)?.raw["status"]?.stringValue == "completed")
+    }
+
     @Test(arguments: [false, true])
     func givenHistoricalBuilder_whenProjectingMembers_thenOnlyInitialInjectedRequestIsHidden(_ marked: Bool) throws {
         // given

@@ -40,6 +40,23 @@ import Testing
         #expect(grid.width * grid.height < 120000)
     }
 
+    @Test(arguments: [0.5, 1, 2] as [CGFloat])
+    func givenHugeCanvasAndOffGridScroll_whenSizingGridSurface_thenViewportBoundedAndGlobalDotPhaseStable(_ zoom: CGFloat) {
+        // given
+        let visible = CGRect(x: 19813, y: 17907, width: 800, height: 500)
+        let extent = CGSize(width: 100000, height: 100000)
+        // when
+        let surface = WorkflowCanvasScrolling.visibleGrid(visible, scale: zoom, content: extent)
+        let first = WorkflowCanvasScrolling.firstLocalGridDot(in: surface)
+        // then
+        #expect(surface.width <= 800 / zoom + 20)
+        #expect(surface.height <= 500 / zoom + 20)
+        #expect(first.x >= 0 && first.x < 10)
+        #expect(first.y >= 0 && first.y < 10)
+        #expect((surface.minX + first.x).truncatingRemainder(dividingBy: 10) == 0)
+        #expect((surface.minY + first.y).truncatingRemainder(dividingBy: 10) == 0)
+    }
+
     @Test func givenCachedRoutes_whenScrollingOrChangingOnlyTitles_thenReusesRouteButGeometryChangesRecompute() {
         // given
         let cache = WorkflowRouteCache()

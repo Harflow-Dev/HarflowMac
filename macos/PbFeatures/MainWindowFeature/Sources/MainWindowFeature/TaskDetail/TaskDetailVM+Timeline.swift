@@ -49,7 +49,8 @@ extension TaskDetailVM {
         // member's own event stream is still `.loading` — never once real content exists, and never
         // for `.unavailable` (that keeps today's honest empty-log message).
         let isLoading = itemCount == 0 && members.contains { (eventsAvailabilityByMember[$0.taskID] ?? .loading) == .loading }
-        let liveStep = LiveStep(rows: rows)
+        let liveStep = LiveStep(rows: rows, isRunning: task.status.isRunning)
+        let pendingMessages = PendingMessage.visible(snapshot: useCase.snapshot(currentTaskID), events: eventsByMember[currentTaskID] ?? [])
         timelineModel = TimelinePaneModel(
             stepCountText: "\(itemCount) steps",
             rows: rows,
@@ -61,7 +62,8 @@ extension TaskDetailVM {
             subTaskStrip: subTaskStrip,
             isLoading: isLoading,
             liveStep: liveStep,
-            updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep)
+            updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep, pendingMessages: pendingMessages),
+            pendingMessages: pendingMessages
         )
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
         promptText = conversationTimelineMembers.first?.prompt

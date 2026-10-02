@@ -19,7 +19,7 @@ struct TaskStatusLabel: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            StatusIcon(status: task.status)
+            if task.status.isRunning { RunningSpinner() } else { StatusIcon(status: task.status) }
             if task.status.isRunning {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     label(elapsed: task.elapsed(now: context.date))

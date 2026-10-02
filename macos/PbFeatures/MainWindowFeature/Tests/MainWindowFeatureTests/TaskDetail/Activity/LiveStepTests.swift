@@ -6,6 +6,15 @@ import Testing
 @Suite struct LiveStepTests {
     typealias Fixture = ActivityFixture
 
+    @Test func givenActiveTaskWithoutInspectableOutput_whenBuildingLiveStep_thenThinkingOnlyWhileRunning() {
+        // given / when / then
+        #expect(LiveStep(rows: [], isRunning: true)?.text == "Thinking…")
+        #expect(LiveStep(rows: [], isRunning: false) == nil)
+        #expect(LiveStep(rows: [Fixture.text(1, streaming: true)], isRunning: true) == nil)
+        #expect(LiveStep(rows: [Fixture.tool(1, path: "/a.swift", resolved: false)], isRunning: true)?.text == "Reading a.swift…")
+        #expect(LiveStep(rows: [Fixture.tool(1, path: "/old.swift", resolved: false, live: false)], isRunning: true)?.text == "Thinking…")
+    }
+
     @Test func givenAPendingRead_whenBuildingTheLiveStep_thenItReadsTheFileName() {
         #expect(LiveStep(rows: [Fixture.tool(1, path: "/repo/Sources/AppDelegate.swift", resolved: false)])?.text == "Reading AppDelegate.swift…")
     }

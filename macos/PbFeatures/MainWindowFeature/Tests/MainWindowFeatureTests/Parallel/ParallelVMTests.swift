@@ -10,7 +10,6 @@ import Testing
 
 @MainActor
 @Suite struct ParallelVMTests {
-    
     func task(
         id: String, backend: String = "claude", status: String = "running", startedAt: Date? = .now,
         group: String? = "g1", freedom: String? = nil, sessionID: String? = "sess-1234567890",
@@ -78,6 +77,7 @@ import Testing
         given(useCase).titlesPublisher().willReturn(titlesSubject.eraseToAnyPublisher())
         given(useCase).task(.any).willProduce { tasksBox.value[$0] }
         given(useCase).title(.any).willProduce { titlesBox.value[$0] ?? "Task \($0.prefix(8))" }
+        given(useCase).events(for: .any).willReturn([])
         given(useCase).items(for: .any).willProduce { itemsBox.value[$0] ?? [] }
         given(useCase).itemsPublisher(for: .any).willProduce { id in Just(itemsBox.value[id] ?? []).eraseToAnyPublisher() }
         given(useCase).prompt(for: .any).willReturn(nil)
@@ -533,6 +533,7 @@ import Testing
         // then
         await waitUntil { sut.columns.count == 1 }
         #expect(sut.columns.first?.isLoading == true)
+        #expect(sut.columns.first?.liveStep?.text == "Thinking…")
     }
 
     @Test func givenNoItemsAndAvailableAvailability_whenColumnBuilds_thenIsLoadingIsFalse() async {

@@ -94,6 +94,8 @@ struct WorkflowCanvas: View {
     var body: some View {
         GeometryReader { viewport in
         let contentSize = WorkflowCanvasZoom.contentSize(extent: CGSize(width: width, height: height), viewport: viewport.size, scale: zoom)
+        let visible = scrollController.visibleRect.isEmpty ? CGRect(origin: .zero, size: viewport.size) : scrollController.visibleRect
+        let grid = WorkflowCanvasScrolling.visibleGrid(visible, scale: zoom, content: contentSize)
         ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
                 Color.windowBG
@@ -108,17 +110,21 @@ struct WorkflowCanvas: View {
                         .position(x: marquee.midX, y: marquee.midY)
                         .allowsHitTesting(false)
                 }
-                Canvas { context, size in
-                    let visible = scrollController.visibleRect.isEmpty ? CGRect(origin: .zero, size: viewport.size) : scrollController.visibleRect
-                    let grid = WorkflowCanvasScrolling.visibleGrid(visible, scale: zoom, content: size)
-                    guard !grid.isNull, !grid.isEmpty else { return }
-                    for x in stride(from: floor(grid.minX / 10) * 10, through: grid.maxX, by: WorkflowCanvasGeometry.gridSpacing) {
-                        for y in stride(from: floor(grid.minY / 10) * 10, through: grid.maxY, by: WorkflowCanvasGeometry.gridSpacing) {
-                            let dot = Path(ellipseIn: CGRect(x: x - 0.5, y: y - 0.5, width: 1, height: 1))
-                            context.fill(dot, with: .color(Color.secondaryText.opacity(0.10)))
+                if !grid.isNull, !grid.isEmpty {
+                    Canvas { context, size in
+                        let first = WorkflowCanvasScrolling.firstLocalGridDot(in: grid)
+                        var dots = Path()
+                        for x in stride(from: first.x, through: size.width, by: WorkflowCanvasGeometry.gridSpacing) {
+                            for y in stride(from: first.y, through: size.height, by: WorkflowCanvasGeometry.gridSpacing) {
+                                dots.addEllipse(in: CGRect(x: x - 0.5, y: y - 0.5, width: 1, height: 1))
+                            }
                         }
+                        context.fill(dots, with: .color(Color.secondaryText.opacity(0.10)))
                     }
-                }.allowsHitTesting(false)
+                    .frame(width: grid.width, height: grid.height)
+                    .position(x: grid.midX, y: grid.midY)
+                    .allowsHitTesting(false)
+                }
                 ForEach(edges) { edge in edgeView(edge) }
                 if let drag = activeConnectionDrag, let source = nodes.first(where: { $0.id == drag.sourceID }) {
                     let target = WorkflowCanvasGeometry.target(at: drag.location, sourceID: drag.sourceID, nodes: nodes)

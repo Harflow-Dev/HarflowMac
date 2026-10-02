@@ -36,6 +36,7 @@ protocol ParallelUseCase: Sendable {
 
     /// Decision 6: one lease per member, acquired while its column is on screen.
     func acquireEventLease(_ taskID: String) -> any EventStreamLease
+    func events(for taskID: String) -> [TaskEvent]
     func items(for taskID: String) -> [TimelineItem]
     func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never>
     func prompt(for taskID: String) -> String?
@@ -375,7 +376,8 @@ final class ParallelVM: ParallelViewModel {
             prompt: useCase.prompt(for: firstID),
             rows: rows,
             activityRows: ActivityRowsBuilder.build(from: rows),
-            liveStep: LiveStep(rows: rows),
+            liveStep: LiveStep(rows: rows, isRunning: current.status.isRunning),
+            pendingMessages: PendingMessage.visible(snapshot: latestSnapshots[currentID], events: useCase.events(for: currentID)),
             isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
             summary: latestSnapshots[currentID]?.summary,
