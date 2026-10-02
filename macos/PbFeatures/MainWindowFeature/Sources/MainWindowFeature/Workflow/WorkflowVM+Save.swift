@@ -21,6 +21,10 @@ extension WorkflowVM {
         validationTask = nil
         validationID = UUID()
         validatedDefinition = nil
+        if canonicalValidationSource.map({ WorkflowRetryMetadata.topology($0) != WorkflowRetryMetadata.topology(definition) }) == true {
+            canonicalValidationDefinition = nil
+            canonicalValidationSource = nil
+        }
         guard selectedRun == nil else { validationMessage = nil; return }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             validationMessage = "Enter a workflow name."
@@ -38,6 +42,8 @@ extension WorkflowVM {
                 guard !Task.isCancelled, requestID == validationID, snapshot == effectiveDefinition, selectedRun == nil else { return }
                 if response["valid"]?.boolValue == true {
                     validatedDefinition = snapshot
+                    canonicalValidationDefinition = response["definition"]?.objectValue
+                    canonicalValidationSource = snapshot
                     validationMessage = nil
                 } else {
                     validationMessage = response["error"]?.stringValue ?? "Workflow is invalid."

@@ -14,6 +14,7 @@ protocol WorkflowViewModel: ViewModel {
     var loadedName: String { get }
     var revision: Int { get }
     var selectedNodeID: String? { get set }
+    var selectedNodeIDs: Set<String> { get }
     var selectedEdgeID: String? { get set }
     var connectionSourceID: String? { get set }
     var selectedRun: WorkflowRunModel? { get }
@@ -34,6 +35,8 @@ protocol WorkflowViewModel: ViewModel {
     var modelChoices: [String: [ModelChoiceModel]] { get }
     var showsRunSheet: Bool { get set }
     var showsGenerateSheet: Bool { get set }
+    var isRefining: Bool { get }
+    var canReturnToCanvas: Bool { get }
     var parallel: ParallelVM { get }
     var nodes: [WorkflowNodeModel] { get }
     var edges: [WorkflowEdgeModel] { get }
@@ -55,7 +58,14 @@ protocol WorkflowViewModel: ViewModel {
     func prepareLaunch()
     func start()
     func generate()
+    func prepareGeneration(refining: Bool)
+    func returnToCanvas()
+    func applyAgentProposal()
     func control(_ command: String)
+    func continueWithOneMoreRetry()
+    func selectNodes(_ ids: Set<String>, primary: String?)
+    func toggleNode(_ id: String)
+    func moveNodes(_ positions: [String: CGPoint])
     func selectNode(_ id: String)
     func selectActivation(_ id: String?)
     func updateNode(_ id: String, key: String, value: JSONValue?)
@@ -73,9 +83,13 @@ protocol WorkflowViewModel: ViewModel {
 struct WorkflowView<VM: WorkflowViewModel>: View {
     @Environment(\.viewEvent) var viewEvent
     @State var viewModel: VM
+    private let builderTaskView: ((String, String) -> AnyView)?
     @AppStorage("workflowViewMode") private var viewMode = "Graph"
 
-    init(_ viewModel: VM) { _viewModel = State(initialValue: viewModel) }
+    init(_ viewModel: VM, builderTaskView: ((String, String) -> AnyView)? = nil) {
+        _viewModel = State(initialValue: viewModel)
+        self.builderTaskView = builderTaskView
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,7 +104,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 .padding(12)
                 Divider()
             }
-            if viewModel.selectedRun != nil {
+            if viewModel.selectedRun?.isBuilder == true {
+                builderContent
+            } else if viewModel.selectedRun != nil {
                 runContent
             } else {
                 editor
@@ -133,12 +149,27 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 ProgressView().controlSize(.small)
             }
             if let run = viewModel.selectedRun {
+                if run.isBuilder {
+                    if run.status == "completed" {
+                        Button(run.isBuilderProposal ? "Apply proposal" : "Open generated draft") {
+                            if run.isBuilderProposal {
+                                viewModel.applyAgentProposal()
+                            } else {
+                                viewModel.openWorkflowEditor(run.name)
+                            }
+                        }.buttonStyle(QuietButtonStyle())
+                    }
+                    if viewModel.canReturnToCanvas {
+                        Button("Return to canvas") { viewModel.returnToCanvas() }.buttonStyle(QuietButtonStyle())
+                    }
+                } else {
                 Picker("View", selection: $viewMode) {
                     Text("Graph").tag("Graph")
                     Text("Parallel").tag("Parallel")
                 }
 .pickerStyle(.segmented)
 .frame(width: 170)
+                }
                 if ["running", "starting"].contains(run.status) {
                     Button("Pause") { viewModel.control("pause") }.buttonStyle(QuietButtonStyle())
                 }
@@ -146,8 +177,11 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     Button("Cancel", role: .destructive) { viewModel.control("cancel") }.buttonStyle(QuietButtonStyle())
                 }
             } else if viewModel.isEditing {
+                Button("Edit with agent", systemImage: "sparkles") { viewModel.prepareGeneration(refining: true) }
+                    .buttonStyle(QuietButtonStyle())
+.disabled(viewModel.isBusy)
                 Menu {
-                    Button("Generate with agent…") { viewModel.showsGenerateSheet = true }
+                    Button("Generate with agent…") { viewModel.prepareGeneration(refining: false) }
                     Button("Duplicate") { viewModel.duplicate() }
                     Button("Delete", role: .destructive) { viewModel.deleteWorkflow() }.disabled(viewModel.loadedName.isEmpty)
                 } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton)
@@ -158,7 +192,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 .buttonStyle(QuietButtonStyle())
                     .disabled(viewModel.hasUnsavedChanges || viewModel.isBusy)
             } else {
-                Button("Generate", systemImage: "sparkles") { viewModel.showsGenerateSheet = true }.buttonStyle(QuietButtonStyle())
+                Button("Generate", systemImage: "sparkles") { viewModel.prepareGeneration(refining: false) }.buttonStyle(QuietButtonStyle())
                 Button("New workflow", systemImage: "plus") { viewModel.newWorkflow() }.buttonStyle(QuietButtonStyle())
             }
         }
@@ -227,6 +261,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             nodes: viewModel.nodes,
             edges: viewModel.edges,
             selectedNodeID: viewModel.selectedNodeID,
+            selectedNodeIDs: viewModel.selectedNodeIDs,
             selectedEdgeID: viewModel.selectedEdgeID,
             isEditable: viewModel.selectedRun == nil,
             takenEdgeIDs: Set(WorkflowJSON.objects(viewModel.selectedRun?.raw["decisions"]).flatMap {
@@ -237,11 +272,58 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             onSelectNode: viewModel.selectNode,
             onSelectEdge: { viewModel.selectedEdgeID = $0; viewModel.selectedNodeID = nil },
             onMove: viewModel.moveNode,
+            onSelectNodes: { viewModel.selectNodes($0, primary: $1) },
+            onToggleNode: viewModel.toggleNode,
+            onMoveNodes: viewModel.moveNodes,
             onConnect: { viewModel.connectionSourceID = $0 },
             onDrop: { viewModel.addNode($0, at: $1) },
             onDelete: viewModel.deleteSelected,
             onRename: { viewModel.updateNode($0, key: "title", value: .string($1)) }
         )
+    }
+
+    private var builderContent: some View {
+        VStack(spacing: 0) {
+            if let run = viewModel.selectedRun, ["needs_attention", "failed", "paused"].contains(run.status),
+               !run.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(run.reason)
+                    .font(.pb(.secondary))
+                    .foregroundStyle(Color.warningFG)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                Divider()
+            }
+            GeometryReader { viewport in
+                let minimums = WorkflowBuilderLayout.minimums(height: viewport.size.height)
+                VSplitView {
+                    HSplitView {
+                        canvas.frame(minWidth: 0, maxWidth: .infinity)
+                        if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
+                            WorkflowInspector(viewModel: viewModel)
+                                .frame(minWidth: 180, idealWidth: 240, maxWidth: 260)
+                        }
+                    }
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: minimums.canvas, idealHeight: viewport.size.height * 0.42)
+                    .clipped()
+                    GeometryReader { taskPane in
+                        if let run = viewModel.selectedRun, let taskID = run.builderTaskID, let builderTaskView {
+                            builderTaskView(taskID, run.id)
+                                .frame(width: taskPane.size.width, height: taskPane.size.height)
+                                .clipped()
+                        } else {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Starting workflow builder…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }.frame(minHeight: minimums.task)
+                }
+                .frame(width: viewport.size.width, height: viewport.size.height)
+                .clipped()
+            }
+        }
     }
 
     private var runContent: some View {

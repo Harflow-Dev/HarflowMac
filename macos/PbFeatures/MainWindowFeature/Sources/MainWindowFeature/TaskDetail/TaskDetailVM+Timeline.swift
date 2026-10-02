@@ -32,9 +32,12 @@ extension TaskDetailVM {
         let members = conversationMembers
         let start = members.first?.startedAt
         let conversationTimelineMembers = members.map {
-            ConversationItemMember(task: $0, items: itemsByMember[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
+            WorkflowBuilderPresentation.conversationMember(
+                task: $0, items: itemsByMember[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID), isBuilder: isWorkflowBuilder
+            )
         }
-        let rows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
+        let allRows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
+        let rows = isWorkflowBuilder ? WorkflowBuilderPresentation.visibleRows(allRows) : allRows
         let subTaskStrip: SubTaskStripModel? = allChildren.isEmpty ? nil : SubTaskStripModel(
             children: allChildren.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             start: start,
@@ -61,7 +64,7 @@ extension TaskDetailVM {
             updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep)
         )
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
-        promptText = useCase.prompt(for: members[0].taskID)
+        promptText = conversationTimelineMembers.first?.prompt
         ?? "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
         rawEventsPath = useCase.eventsPath(for: currentTaskID)
         rawEvents = eventsByMember[currentTaskID] ?? []

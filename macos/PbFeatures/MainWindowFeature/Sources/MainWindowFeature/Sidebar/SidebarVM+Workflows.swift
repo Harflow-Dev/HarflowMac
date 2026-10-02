@@ -26,6 +26,14 @@ struct SidebarWorkflowRun {
 }
 
 extension SidebarVM {
+    var workflowBuilderTaskIDs: Set<String> {
+        Set(workflowRuns.filter { $0.raw["kind"]?.stringValue == "builder" }.flatMap { run in
+            WorkflowJSON.objects(run.raw["activations"]).flatMap { activation in
+                WorkflowJSON.objects(activation["tasks"]).compactMap { $0["task_id"]?.stringValue }
+            }
+        })
+    }
+
     var savedWorkflows: [WorkflowRecord] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return workflowDefinitions.filter { record in
@@ -66,6 +74,7 @@ extension SidebarVM {
     func filteredWorkflowRuns() -> [SidebarWorkflowRun] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return workflowRuns.filter { run in
+            guard run.raw["kind"]?.stringValue != "builder" else { return false }
             let text = "\(run.name) \(run.id) \(run.raw["repo_path"]?.stringValue ?? "") \(run.raw["prompt"]?.stringValue ?? "")"
             let backends = workflowBackends(run.raw["definition"]?.objectValue ?? [:])
             return (query.isEmpty || text.lowercased().contains(query)) && (selectedBackend == "all" || backends.contains(selectedBackend))

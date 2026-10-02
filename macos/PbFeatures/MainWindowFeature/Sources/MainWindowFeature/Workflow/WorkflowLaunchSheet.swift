@@ -8,9 +8,20 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
     var viewModel: VM
     let isGenerating: Bool
 
+    private var sheetTitle: String {
+        isGenerating ? (viewModel.isRefining ? "Edit workflow with agent" : "Generate a workflow") : "Run workflow"
+    }
+
+    private var sheetDescription: String {
+        guard isGenerating else { return "Agents follow the graph. Polybridge tracks execution and enforces limits." }
+        return viewModel.isRefining
+            ? "An agent proposes changes to your current canvas. Review and apply them, then Save when ready."
+            : "An agent creates a draft. Polybridge validates and stores it for you to edit."
+    }
+
     private var canSubmit: Bool {
-        !viewModel.isBusy && !viewModel.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !viewModel.repo.isEmpty && !viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        WorkflowBuilderLayout.canSubmit(isGenerating: isGenerating, isBusy: viewModel.isBusy,
+                                        name: viewModel.name, repo: viewModel.repo, prompt: viewModel.prompt)
     }
 
     var body: some View {
@@ -18,9 +29,8 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(isGenerating ? "Generate a workflow" : "Run workflow").font(.pb(.headline, weight: .semibold))
-                        Text(isGenerating ? "An agent creates a draft. Polybridge validates and stores it for you to edit." :
-                            "Agents follow the graph. Polybridge tracks execution and enforces limits.")
+                        Text(sheetTitle).font(.pb(.headline, weight: .semibold))
+                        Text(sheetDescription)
                             .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)
                     }
@@ -30,7 +40,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                         Text(viewModel.loadedName).font(.pb(.body, weight: .semibold))
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(text: isGenerating ? "Describe the workflow" : "Task")
+                        SectionLabel(text: isGenerating ? (viewModel.isRefining ? "Describe the changes" : "Describe the workflow") : "Task")
                         TextEditor(text: Binding(get: { viewModel.prompt }, set: { viewModel.prompt = $0 }))
 .font(.pb(.body))
 .frame(minHeight: 120)
@@ -38,9 +48,10 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             .accessibilityLabel(isGenerating ? "Workflow request" : "Workflow task")
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(text: "Repository")
+                        SectionLabel(text: isGenerating ? "Repository (optional)" : "Repository")
                         HStack {
-                            TextField("/path/to/repository", text: Binding(get: { viewModel.repo }, set: { viewModel.repo = $0 }))
+                            TextField(isGenerating ? "Optional repository for context" : "/path/to/repository",
+                                      text: Binding(get: { viewModel.repo }, set: { viewModel.repo = $0 }))
                                 .textFieldStyle(.roundedBorder)
                             Button("Choose…") { viewModel.chooseRepo() }.buttonStyle(QuietButtonStyle())
                         }
@@ -91,7 +102,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                 if viewModel.isBusy {
                     ProgressView().controlSize(.small)
                 }
-                Button(isGenerating ? "Generate" : "Run") {
+                Button(isGenerating ? (viewModel.isRefining ? "Propose changes" : "Generate") : "Run") {
                     if isGenerating {
                         viewModel.generate()
                     } else {

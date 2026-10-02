@@ -18,7 +18,14 @@ extension MainWindowCoordinator: WorkflowRouting {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
         let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel)
         vm.prepareEditor(name: name)
-        return WorkflowView(vm).id(name ?? "new-workflow").eraseToAnyView()
+        return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id(name ?? "new-workflow").eraseToAnyView()
+    }
+
+    private func buildWorkflowBuilderTaskView(taskID: String, runID: String) -> AnyView {
+        let useCase = TaskDetailViewRepository(builderRunID: runID)
+        let vm = TaskDetailVM(taskID: taskID, useCase: useCase, routing: self, isWorkflowBuilder: true)
+        let conversationID = useCase.conversationMembers(of: taskID).first?.id ?? taskID
+        return TaskDetailView(vm, isEmbedded: true).id(conversationID).eraseToAnyView()
     }
 
     func didSaveWorkflow(name: String) { selection = .workflow(name) }
@@ -31,6 +38,6 @@ extension MainWindowCoordinator: WorkflowRouting {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
         let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel)
         vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "status": .string("starting")])
-        return WorkflowView(vm).id("workflow-run:\(id)").eraseToAnyView()
+        return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id("workflow-run:\(id)").eraseToAnyView()
     }
 }

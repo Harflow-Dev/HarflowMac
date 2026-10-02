@@ -7,6 +7,23 @@ import PbTestUtilities
 import Testing
 
 extension SidebarVMTests {
+    @Test func givenBuilderTasksAndRuns_whenListed_thenOnlyExecutionAppearsInHistory() async {
+        // given
+        let harness = makeSUT()
+        harness.sut.workflowRuns = [SidebarWorkflowRun(raw: ["kind": .string("builder"), "workflow_run_id": .string("builder"),
+            "status": .string("running"), "activations": .array([.object(["tasks": .array([.object(["task_id": .string("legacy")])])])])])]
+        let builder = TaskInfo(.object(["task_id": .string("edit"), "backend": .string("codex"), "status": .string("running"),
+            "workflow_builder": .bool(true)]))!
+        harness.sut.didAppear()
+        // when
+        harness.tasksSubject.send([builder, task(id: "legacy"), task(id: "execution")])
+        await waitUntil { harness.sut.runningRows.map(\.id) == ["execution"] }
+        // then
+        #expect(harness.sut.filteredWorkflowRuns().isEmpty)
+        #expect(harness.sut.latestTasks.contains { $0.taskID == "execution" })
+        harness.sut.didDisappear()
+    }
+
     @Test func givenWorkflowHistory_whenBucketed_thenActiveAndDatedRunsShareTaskHistoryWithoutIDCollisions() async {
         // given
         let harness = makeSUT()

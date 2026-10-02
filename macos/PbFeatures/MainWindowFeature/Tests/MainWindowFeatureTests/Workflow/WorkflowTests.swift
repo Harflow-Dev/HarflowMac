@@ -189,6 +189,9 @@ import Testing
         harness.sut.deleteSelected()
         harness.sut.addNode("task")
         harness.sut.moveNode("start", to: CGPoint(x: 123, y: 456))
+        harness.sut.updateNode("start", key: "prompt", value: .string("AX setter must not mutate"))
+        harness.sut.updateNode("work", key: "instructions", value: .string("AX setter must not mutate"))
+        harness.sut.updateEdge(harness.sut.edges.first?.id ?? "", key: "condition", value: .string("AX setter must not mutate"))
         // then
         #expect(harness.sut.definition == original)
     }

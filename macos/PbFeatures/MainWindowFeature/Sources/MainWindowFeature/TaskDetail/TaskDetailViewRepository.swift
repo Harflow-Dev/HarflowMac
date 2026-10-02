@@ -18,6 +18,8 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
 
     // MARK: - Private Properties
 
+    private let builderRunID: String?
+    @GlobalEnvironment(\.workflowRepository) private var workflowRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.taskSnapshotRepository) private var taskSnapshotRepository
     @GlobalEnvironment(\.taskActionRepository) private var taskActionRepository
@@ -33,8 +35,12 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         taskActionRepository: (any TaskActionRepository)? = nil,
         eventStreamRepository: (any EventStreamRepository)? = nil,
         takeoverService: (any TakeoverService)? = nil,
-        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil
+        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
+        builderRunID: String? = nil,
+        workflowRepository: (any WorkflowRepository)? = nil
     ) {
+        self.builderRunID = builderRunID
+        if let workflowRepository { self.workflowRepository = workflowRepository }
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskSnapshotRepository { self.taskSnapshotRepository = taskSnapshotRepository }
         if let taskActionRepository { self.taskActionRepository = taskActionRepository }
@@ -82,11 +88,32 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func outcomesPublisher() -> AnyPublisher<[String: String], Never> { taskActionRepository.outcomesPublisher() }
     
     @discardableResult func cancel(_ id: String) async throws -> Bool { try await taskActionRepository.cancel(id) }
-    @discardableResult func send(_ id: String, text: String) async throws -> Bool { try await taskActionRepository.send(id, text: text) }
+    @discardableResult func send(_ id: String, text: String) async throws -> Bool {
+        if builderRunID != nil { _ = try await builderFollowup(id, text: text); return true }
+        return try await taskActionRepository.send(id, text: text)
+    }
+
     @discardableResult func resume(_ id: String, text: String, onResumed: @escaping @Sendable (String) async -> Void) async throws -> String? {
-        try await taskActionRepository.resume(id, text: text, onResumed: onResumed)
+        if builderRunID != nil {
+            return try await builderFollowup(id, text: text)
+        }
+        return try await taskActionRepository.resume(id, text: text, onResumed: onResumed)
     }
     
+    private func builderFollowup(_ id: String, text: String) async throws -> String? {
+        guard let builderRunID else { return nil }
+        let response = try await workflowRepository.command("builder-followup", options: ["--prompt=\(text)"], positionals: [builderRunID])
+        let state = response["status"]?.stringValue ?? "queued"
+        taskActionRepository.setOutcome(id, state == "queued_next_turn" ? "Queued for the next builder turn." : "Queued for the workflow builder.")
+        await taskListRepository.refresh()
+        return nil
+    }
+
+    func allowPolybridgeTools(backend: String) async throws -> [String: JSONValue] {
+        let ctl = try toolEnvironmentRepository.ctl().get()
+        return try await ctl.mcpAllowlist(backend: backend, allow: "polybridge/*").get()
+    }
+
     func beginTakeover(taskID: String) { takeoverService.beginTakeover(taskID: taskID) }
     func setOutcome(_ id: String, _ text: String?) { taskActionRepository.setOutcome(id, text) }
 

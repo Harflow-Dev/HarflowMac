@@ -41,7 +41,13 @@ final class WorkflowVM: WorkflowViewModel {
     var loadedName = ""
     var revision = 0
     var savedDefinition: [String: JSONValue] = [:]
-    var selectedNodeID: String?
+    private var primaryNodeID: String?
+    private(set) var selectedNodeIDs: Set<String> = []
+    var selectedNodeID: String? {
+        get { primaryNodeID }
+        set { selectedNodeIDs = newValue.map { [$0] } ?? []; primaryNodeID = newValue }
+    }
+
     var selectedEdgeID: String?
     var connectionSourceID: String?
     var selectedRun: WorkflowRunModel? { didSet { scheduleValidation() } }
@@ -62,6 +68,9 @@ final class WorkflowVM: WorkflowViewModel {
     var modelChoices: [String: [ModelChoiceModel]] = [:]
     var showsRunSheet = false
     var showsGenerateSheet = false
+    var isRefining = false
+    var refinementContext: WorkflowRefinementContext?
+    var appliedProposalIDs: Set<String> = []
     var parallel: ParallelVM
 
     @ObservationIgnored let useCase: any WorkflowUseCase
@@ -74,6 +83,8 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var draftID = UUID()
     @ObservationIgnored var validationTask: Task<Void, Never>?
     @ObservationIgnored var validationID = UUID()
+    var canonicalValidationDefinition: [String: JSONValue]?
+    var canonicalValidationSource: [String: JSONValue]?
     @ObservationIgnored var validatedDefinition: [String: JSONValue]?
     @ObservationIgnored var validationSuspended = false
     @ObservationIgnored private var operation: Task<Void, Never>?
@@ -91,7 +102,19 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     var nodes: [WorkflowNodeModel] { WorkflowJSON.nodes(displayedDefinition) }
-    var edges: [WorkflowEdgeModel] { WorkflowJSON.edges(displayedDefinition) }
+    var edges: [WorkflowEdgeModel] {
+        let raw = WorkflowJSON.edges(displayedDefinition)
+        guard selectedRun == nil else { return raw }
+        let canonical = canonicalValidationSource.map { WorkflowRetryMetadata.topology($0) == WorkflowRetryMetadata.topology(definition) } == true
+            ? canonicalValidationDefinition : nil
+        let flags = Dictionary(uniqueKeysWithValues: WorkflowJSON.edges(canonical ?? [:]).map { ($0.id, $0.isBackward) })
+        return raw.map { edge in
+            var mapped = edge.raw
+            mapped["backward"] = .bool(flags[edge.id] ?? false)
+            return WorkflowEdgeModel(raw: mapped)
+        }
+    }
+
     var backendIDs: [String] { useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs }
     var selectedNode: WorkflowNodeModel? { nodes.first { $0.id == selectedNodeID } }
     var selectedEdge: WorkflowEdgeModel? { edges.first { $0.id == selectedEdgeID } }
@@ -294,35 +317,44 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func generate() {
+        let capturedName = name
+        let capturedRepo = repo
+        let capturedPrompt = prompt
+        let candidate = generationAgent
+        let context = isRefining ? WorkflowRefinementContext(draftID: draftID, loadID: editorLoadID, definition: definition,
+                                                            name: name, loadedName: loadedName, revision: revision, baseline: savedDefinition) : nil
+        var options = ["--prompt=\(capturedPrompt)", "--fallbacks=\((candidate["fallbacks"] ?? .array([])).rendered())"]
+            + Self.candidateOptions(candidate)
+        if !capturedRepo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { options.append("--repo=\(capturedRepo)") }
+        if let context {
+            options.append("--definition-json=\(JSONValue.object(effectiveDefinition).rendered())")
+            let source: JSONValue = .object(["name": .string(context.loadedName), "revision": .number(Double(context.revision)),
+                                              "saved_definition": .object(context.baseline)])
+            options.append("--source=\(source.rendered())")
+        }
+        let submittedOptions = options
         perform { [weak self] in
-            guard let self else {
-                return
-            }
-            let fallbacks = generationAgent["fallbacks"] ?? .array([])
-            let options = ["--repo=\(repo)", "--prompt=\(prompt)", "--fallbacks=\(fallbacks.rendered())"]
-                + Self.candidateOptions(generationAgent)
-            let response = try await useCase.command("build", options: options, positionals: [name])
-            guard let id = response["workflow_run_id"]?.stringValue else {
-                throw WorkflowUIError.missingRun
+            guard let self else { return }
+            let response = try await useCase.command("build", options: submittedOptions, positionals: [capturedName])
+            guard let id = response["workflow_run_id"]?.stringValue else { throw WorkflowUIError.missingRun }
+            if let context {
+                guard draftID == context.draftID, editorLoadID == context.loadID,
+                      definition == context.definition, name == context.name, loadedName == context.loadedName,
+                      revision == context.revision, savedDefinition == context.baseline else {
+                    errorText = "The canvas changed while the agent started. Your edits are preserved; find the proposal in workflow history."
+                    return
+                }
+                var active = context
+                active.runID = id
+                refinementContext = active
             }
             showsGenerateSheet = false
-            selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "workflow_name": .string(name)])
+            var initialRun: [String: JSONValue] = ["workflow_run_id": .string(id), "workflow_name": .string(capturedName),
+                                                 "kind": .string("builder"), "status": .string("starting")]
+            if let context { initialRun["editing_definition"] = .object(context.definition) }
+            selectedRun = WorkflowRunModel(raw: initialRun)
             isEditing = false
             await useCase.refreshTasks()
-            await refresh()
-        }
-    }
-
-    func control(_ command: String) {
-        guard let runID = selectedRun?.id else {
-            return
-        }
-        perform { [weak self] in
-            guard let self else {
-                return
-            }
-            let options = command == "resume" ? ["--instructions=\(instructions)", "--additional-attempts=\(additionalAttempts)"] : []
-            _ = try await useCase.command(command, options: options, positionals: [runID])
             await refresh()
         }
     }
@@ -336,12 +368,39 @@ final class WorkflowVM: WorkflowViewModel {
         selectedEdgeID = nil
     }
 
+    func selectNodes(_ ids: Set<String>, primary: String? = nil) {
+        let valid = ids.intersection(Set(nodes.map(\.id)))
+        selectedNodeIDs = valid
+        primaryNodeID = primary.flatMap { valid.contains($0) ? $0 : nil } ?? valid.sorted().first
+        selectedEdgeID = nil
+        connectionSourceID = nil
+    }
+
+    func toggleNode(_ id: String) {
+        var selection = selectedNodeIDs
+        if !selection.insert(id).inserted { selection.remove(id) }
+        selectNodes(selection, primary: selection.contains(id) ? id : primaryNodeID)
+    }
+
+    func moveNodes(_ positions: [String: CGPoint]) {
+        guard selectedRun == nil, !positions.isEmpty else { return }
+        var entries = WorkflowJSON.objects(definition["nodes"])
+        for index in entries.indices {
+            guard let id = entries[index]["id"]?.stringValue, let point = positions[id] else { continue }
+            entries[index]["position"] = .object(["x": .number(max(0, point.x)), "y": .number(max(0, point.y))])
+        }
+        let value = JSONValue.array(entries.map(JSONValue.object))
+        guard definition["nodes"] != value else { return }
+        definition["nodes"] = value
+    }
+
     func selectActivation(_ id: String?) {
         selectedActivationID = id
         updateActivityMembership()
     }
 
     func updateNode(_ id: String, key: String, value: JSONValue?) {
+        guard selectedRun == nil else { return }
         var entries = WorkflowJSON.objects(definition["nodes"])
         guard let index = entries.firstIndex(where: { $0["id"]?.stringValue == id }) else {
             return
@@ -351,6 +410,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func updateEdge(_ id: String, key: String, value: JSONValue?) {
+        guard selectedRun == nil else { return }
         var entries = WorkflowJSON.objects(definition["connections"])
         guard let index = entries.firstIndex(where: { $0["id"]?.stringValue == id }) else {
             return
@@ -404,13 +464,16 @@ final class WorkflowVM: WorkflowViewModel {
 .filter { $0["id"]?.stringValue != id }
                 .map(JSONValue.object))
             selectedEdgeID = nil
-        } else if let id = selectedNodeID {
-            definition["nodes"] = .array(WorkflowJSON.objects(definition["nodes"]).filter { $0["id"]?.stringValue != id }.map(JSONValue.object))
-            definition["connections"] = .array(WorkflowJSON.objects(definition["connections"])
-                .filter { $0["source"]?.stringValue != id && $0["target"]?.stringValue != id }
-.map(JSONValue.object))
+        } else if !selectedNodeIDs.isEmpty {
+            let removed = selectedNodeIDs
+            var updated = definition
+            updated["nodes"] = .array(WorkflowJSON.objects(definition["nodes"]).filter { !removed.contains($0["id"]?.stringValue ?? "") }.map(JSONValue.object))
+            updated["connections"] = .array(WorkflowJSON.objects(definition["connections"])
+                .filter { !removed.contains($0["source"]?.stringValue ?? "") && !removed.contains($0["target"]?.stringValue ?? "") }
+                .map(JSONValue.object))
+            definition = updated
             selectedNodeID = nil
-            if connectionSourceID == id { connectionSourceID = nil }
+            if let source = connectionSourceID, removed.contains(source) { connectionSourceID = nil }
         }
     }
 

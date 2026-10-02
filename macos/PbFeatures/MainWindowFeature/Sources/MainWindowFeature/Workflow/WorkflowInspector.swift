@@ -11,39 +11,69 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let node = viewModel.selectedNode {
-                    if viewModel.selectedRun != nil {
+                    if let run = viewModel.selectedRun, !run.isBuilder {
                         nodeHistory(node)
                     } else if node.type == "start" {
-                        workflowEditor
+                        workflowEditor.disabled(viewModel.selectedRun != nil)
                     } else {
-                        nodeEditor(node)
+                        nodeEditor(node).disabled(viewModel.selectedRun != nil)
                     }
                 } else if let edge = viewModel.selectedEdge {
                     edgeEditor(edge)
                 } else {
-                    workflowEditor
+                    workflowEditor.disabled(viewModel.selectedRun != nil)
                 }
             }.padding(16)
         }.background(Color.cardFill)
     }
 
+    private var inspectorDefinition: [String: JSONValue] {
+        viewModel.selectedRun?.definition ?? viewModel.definition
+    }
+
     private var workflowEditor: some View {
         VStack(alignment: .leading, spacing: 16) {
             SectionLabel(text: "Workflow")
-            TextField("Workflow name", text: Binding(get: { viewModel.name }, set: { viewModel.name = $0 }))
+            TextField("Workflow name", text: Binding(get: { inspectorDefinition["name"]?.stringValue ?? viewModel.name }, set: {
+                    guard viewModel.selectedRun == nil else { return }
+                    viewModel.name = $0
+                }))
 .textFieldStyle(.roundedBorder)
                 .disabled(!viewModel.loadedName.isEmpty)
             TextField(
                 "Description",
-                text: Binding(get: { viewModel.definition["description"]?.stringValue ?? "" }, set: { viewModel.definition["description"] = .string($0) }),
+                text: Binding(get: { inspectorDefinition["description"]?.stringValue ?? "" }, set: {
+                    guard viewModel.selectedRun == nil else { return }
+                    viewModel.definition["description"] = .string($0)
+                }),
                 axis: .vertical
             )
                 .textFieldStyle(.roundedBorder)
+            if let start = WorkflowJSON.objects(inspectorDefinition["nodes"]).first(where: { $0["type"]?.stringValue == "start" }),
+               let startID = start["id"]?.stringValue {
+                SectionLabel(text: "Workflow prompt (optional)")
+                TextEditor(text: Binding(get: {
+                    WorkflowJSON.objects(inspectorDefinition["nodes"]).first { $0["id"]?.stringValue == startID }?["prompt"]?.stringValue ?? ""
+                }, set: {
+                    guard viewModel.selectedRun == nil else { return }
+                    viewModel.updateNode(startID, key: "prompt", value: .string($0))
+                }))
+                    .font(.pb(.body))
+                    .frame(minHeight: 100)
+                    .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
+                    .accessibilityLabel("Workflow prompt")
+                Text("Describe the workflow's purpose to guide the orchestrator.")
+                    .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+            }
             SectionLabel(text: "Orchestrator")
             WorkflowAgentEditor(
                 candidate: Binding(
-                    get: { viewModel.definition["orchestrator"]?.objectValue ?? ["backend": .string("codex")] },
-                    set: { viewModel.definition["orchestrator"] = .object($0) }
+                    get: { inspectorDefinition["orchestrator"]?.objectValue ?? ["backend": .string("codex")] },
+                    set: {
+                    guard viewModel.selectedRun == nil else { return }
+                    viewModel.definition["orchestrator"] = .object($0)
+                    }
                 ),
                 backendIDs: viewModel.backendIDs,
                 modelChoices: viewModel.modelChoices,
@@ -123,6 +153,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
             Toggle("Default path", isOn: Binding(get: { viewModel.selectedEdge?.isDefault ?? false }, set: {
                 viewModel.updateEdge(edge.id, key: "default", value: .bool($0))
             }))
+            if edge.isBackward || edge.maxRetries != nil {
+                retryLimit(edge)
+            }
             Text("The orchestrator uses connection conditions to choose one or more next steps. "
                  + "Selected parallel paths wait where their arrows meet. Returning to an earlier step creates a loop automatically; "
                  + "Polybridge enforces connected paths and attempt limits.")
@@ -130,6 +163,23 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
 .foregroundStyle(Color.secondaryText)
         }
         .disabled(viewModel.selectedRun != nil)
+    }
+
+    private func retryLimit(_ edge: WorkflowEdgeModel) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Limit retries", isOn: Binding(get: { viewModel.selectedEdge?.maxRetries != nil }, set: {
+                viewModel.updateEdge(edge.id, key: "max_retries", value: $0 ? .number(3) : nil)
+            }))
+            if edge.maxRetries != nil {
+                Stepper("Max retries: \(edge.maxRetries ?? 3)", value: Binding(get: { viewModel.selectedEdge?.maxRetries ?? 3 }, set: {
+                    viewModel.updateEdge(edge.id, key: "max_retries", value: .number(Double($0)))
+                }), in: 0 ... 1000).disabled(!edge.isBackward)
+                Text(edge.isBackward ? "0 disables this retry. Node attempt and workflow limits still apply."
+                     : "This limit applies when the connection returns to an earlier step.")
+                    .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+            }
+        }
     }
 
     private func nodeHistory(_ node: WorkflowNodeModel) -> some View {
@@ -172,9 +222,12 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         })
     }
 
-    private func integer(_ key: String, default fallback: Int) -> Int { viewModel.definition[key]?.intValue ?? fallback }
+    private func integer(_ key: String, default fallback: Int) -> Int { inspectorDefinition[key]?.intValue ?? fallback }
     private func intBinding(_ key: String, default fallback: Int) -> Binding<Int> {
-        Binding(get: { integer(key, default: fallback) }, set: { viewModel.definition[key] = .number(Double($0)) })
+        Binding(get: { integer(key, default: fallback) }, set: {
+                    guard viewModel.selectedRun == nil else { return }
+                    viewModel.definition[key] = .number(Double($0))
+                })
     }
 }
 

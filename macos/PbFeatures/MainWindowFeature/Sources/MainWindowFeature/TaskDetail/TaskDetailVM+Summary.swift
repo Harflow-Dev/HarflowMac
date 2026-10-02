@@ -25,7 +25,8 @@ extension TaskDetailVM {
         // `summary` is a snapshot-only field (nil on a bare listing), so the freshest snapshot
         // wins over whatever `task` itself resolved to — the same precedence the git-backed
         // Changes pane used before it.
-        let summary = useCase.snapshot(currentTaskID)?.summary ?? task.summary
+        let rawSummary = useCase.snapshot(currentTaskID)?.summary ?? task.summary
+        let summary = isWorkflowBuilder ? WorkflowBuilderPresentation.summary(rawSummary) : rawSummary
         let members = conversationMembers
         let memberEvents = members.map { eventsByMember[$0.taskID] ?? [] }
         let memberAvailabilities = members.map { eventsAvailabilityByMember[$0.taskID] ?? .loading }

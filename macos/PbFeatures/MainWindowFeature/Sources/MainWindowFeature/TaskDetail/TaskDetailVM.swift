@@ -70,6 +70,7 @@ protocol TaskDetailUseCase: Sendable {
     /// Records a durable outcome line for `id` through `TaskActionRepository.setOutcome` (Monitor
     /// piece 3/3's "Copy resume command") — the same channel Cancel/Send/Resume use, so the line
     /// survives a recompute or a leave/revisit, unlike writing the VM's `outcomeMessage` directly.
+    func allowPolybridgeTools(backend: String) async throws -> [String: JSONValue]
     func setOutcome(_ id: String, _ text: String?)
 
     // Events (decision 6)
@@ -153,6 +154,7 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - Internal Properties (shared across extensions)
 
+    @ObservationIgnored let isWorkflowBuilder: Bool
     @ObservationIgnored let useCase: any TaskDetailUseCase
     @ObservationIgnored let routing: any TaskDetailRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
@@ -204,7 +206,8 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - Init
 
-    init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting) {
+    init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting, isWorkflowBuilder: Bool = false) {
+        self.isWorkflowBuilder = isWorkflowBuilder
         self.taskID = taskID
         self.currentTaskID = taskID
         self.identityTaskID = taskID
@@ -340,7 +343,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             spawnedByBannerText = nil
         }
 
-        canTakeover = !isBusy && detail.sessionID != nil
+        canTakeover = !isWorkflowBuilder && !isBusy && detail.sessionID != nil
         takeoverButtonLabel = detail.status.isRunning ? "Take over" : "Continue in terminal"
         takeoverHelp = detail.sessionID == nil
         ? "The task has not reported a session yet."
@@ -350,12 +353,12 @@ final class TaskDetailVM: TaskDetailViewModel {
         } else {
             openParentTaskID = nil
         }
-        canCancel = detail.status.isRunning
+        canCancel = !isWorkflowBuilder && detail.status.isRunning
 
         // Read from the snapshot explicitly, not `detail` (which came from `detail(_:)` and can
         // briefly be the brief listing when statuses disagree — that shape has no `resume_command`
         // at all).
-        resumeCommand = useCase.snapshot(currentTaskID)?.resumeCommand
+        resumeCommand = isWorkflowBuilder ? nil : useCase.snapshot(currentTaskID)?.resumeCommand
         copyResumeCommandHelp = detail.status.isRunning
         ? "Copies a command that resumes this session in your own terminal. This task is still "
         + "running — resuming it now puts two writers on one conversation; prefer Take over."

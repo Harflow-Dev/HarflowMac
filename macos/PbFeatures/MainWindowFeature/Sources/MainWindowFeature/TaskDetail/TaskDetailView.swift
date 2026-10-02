@@ -45,6 +45,8 @@ protocol TaskDetailViewModel: ViewModel {
     var ancestorCrumbs: [AncestorCrumb] { get }
     var isBusy: Bool { get }
     var outcomeMessage: String? { get }
+    var polybridgeApprovalBackend: String? { get }
+    func didTapAllowPolybridgeTools()
     var takenOverBannerText: String? { get }
     var spawnedByBannerText: String? { get }
     var canTakeover: Bool { get }
@@ -99,13 +101,16 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    private let isEmbedded: Bool
+    @State private var embeddedInspectorVisible = false
     @State private var isRawEventsPresented = false
     @AppStorage("monitor.inspectorVisible") private var isInspectorVisible = false
     @Environment(\.openURL) private var openURL
     
     // MARK: - Init
     
-    init(_ viewModel: VM) {
+    init(_ viewModel: VM, isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
         _viewModel = State(initialValue: viewModel)
     }
     
@@ -136,12 +141,26 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             withToolbar(task: task) {
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
+                        if let backend = viewModel.polybridgeApprovalBackend {
+                            HStack(spacing: 12) {
+                                Text("\(backend.capitalized) needs approval to update this canvas.")
+                                    .font(.pb(.secondary))
+.foregroundStyle(Color.warningFG)
+                                Spacer(minLength: 0)
+                                Button("Always allow Polybridge tools") { viewModel.didTapAllowPolybridgeTools() }
+                                    .buttonStyle(QuietButtonStyle())
+.disabled(viewModel.isBusy)
+                            }
+.padding(.horizontal, 16)
+.padding(.vertical, 8)
+                        }
                         if hasHeaderContent { header(task) }
                         tabPicker
                         column
                     }
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                     .background(Color.windowBG)
-                    if isInspectorVisible {
+                    if showsInspector {
                         HStack(spacing: 0) {
                             Divider()
                             InspectorView(model: viewModel.inspectorModel)
@@ -152,7 +171,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 }
                 // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
                 // change can land outside the tap's transaction and would then not animate.
-                .animation(.easeInOut(duration: 0.25), value: isInspectorVisible)
+                .animation(.easeInOut(duration: 0.25), value: showsInspector)
                 .opensFileLinks(repoPath: task.repoPath)
                 .sheet(isPresented: $isRawEventsPresented) {
                     RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
@@ -201,7 +220,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
             if let noticeText = NoticeSummary.text(count: viewModel.inspectorModel?.notices.count ?? 0) {
                 Button {
-                    isInspectorVisible = true
+                    setInspectorVisible(true)
                 } label: {
                     Label(noticeText, systemImage: "exclamationmark.triangle")
                         .font(.pb(.secondary))
@@ -219,7 +238,18 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     /// Attaches the toolbar layout the running OS supports; the glass-free one needs macOS 26 APIs.
     @ViewBuilder
     private func withToolbar(task: TaskInfo, @ViewBuilder content: () -> some View) -> some View {
-        if #available(macOS 26.0, *) {
+        if isEmbedded {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    titleBlock(task).frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    statusAndActions(task)
+                }
+.padding(.horizontal, 16)
+.padding(.vertical, 10)
+                Divider()
+                content().frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            }
+        } else if #available(macOS 26.0, *) {
             content().toolbar { glassFreeToolbarContent(task) }
         } else {
             content().toolbar { toolbarContent(task) }
@@ -321,8 +351,14 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             .sharedBackgroundVisibility(.hidden)
     }
 
+    private var showsInspector: Bool { isEmbedded ? embeddedInspectorVisible : isInspectorVisible }
+
+    private func setInspectorVisible(_ visible: Bool) {
+        if isEmbedded { embeddedInspectorVisible = visible } else { isInspectorVisible = visible }
+    }
+
     private var inspectorToggleText: String {
-        isInspectorVisible ? "Hide inspector" : "Show inspector"
+        showsInspector ? "Hide inspector" : "Show inspector"
     }
 
     private func statusLabel(_ task: TaskInfo) -> some View {
@@ -341,11 +377,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     private var inspectorToggle: some View {
         Button {
-            isInspectorVisible.toggle()
+            setInspectorVisible(!showsInspector)
         } label: {
             Image(systemName: "sidebar.right")
         }
-        .buttonStyle(QuietButtonStyle(isSelected: isInspectorVisible))
+        .buttonStyle(QuietButtonStyle(isSelected: showsInspector))
         .help(inspectorToggleText)
         .accessibilityLabel(inspectorToggleText)
     }
@@ -385,8 +421,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             options: viewModel.tabs.map { ($0, $0.rawValue) },
             selection: Binding(get: { viewModel.tab }, set: { viewModel.didSelectTab($0) })
         )
-        .padding(.top, 16)
-        .padding(.bottom, 16)
+        .padding(.top, isEmbedded ? 8 : 16)
+        .padding(.bottom, isEmbedded ? 8 : 16)
     }
 
     /// Content over the composer. Each tab centres its own content with `readingColumn()` inside its

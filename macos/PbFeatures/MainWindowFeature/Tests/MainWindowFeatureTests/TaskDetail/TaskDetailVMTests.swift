@@ -182,13 +182,13 @@ import Testing
     }
 
     @discardableResult
-    func makeSUT(taskID: String = "abc12345") -> SUT {
+    func makeSUT(taskID: String = "abc12345", isWorkflowBuilder: Bool = false) -> SUT {
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
         let fixtures = Fixtures()
         let lease = configureStubs(useCase: useCase, routing: routing, taskID: taskID, fixtures: fixtures)
 
-        let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing)
+        let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing, isWorkflowBuilder: isWorkflowBuilder)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: fixtures.tasksSubject,
             hasListedSubject: fixtures.hasListedSubject, snapshotsSubject: fixtures.snapshotsSubject,

@@ -19,9 +19,14 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
                     recovery(run)
                 }
                 if run.raw["kind"]?.stringValue == "builder", run.status == "completed" {
-                    Button("Open generated draft") {
-                        viewModel.openWorkflowEditor(run.name)
-                    }.buttonStyle(QuietButtonStyle())
+                    if run.isBuilderProposal {
+                        Button("Apply proposal") { viewModel.applyAgentProposal() }.buttonStyle(QuietButtonStyle())
+                    } else {
+                        Button("Open generated draft") { viewModel.openWorkflowEditor(run.name) }.buttonStyle(QuietButtonStyle())
+                    }
+                }
+                if viewModel.canReturnToCanvas {
+                    Button("Return to canvas") { viewModel.returnToCanvas() }.buttonStyle(QuietButtonStyle())
                 }
                 if viewModel.selectedActivationID != nil {
                     Button("Show latest steps") { viewModel.selectActivation(nil) }.buttonStyle(QuietButtonStyle())
@@ -90,6 +95,11 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
                     in: 0 ... 100
                 )
                     .fixedSize()
+                if run.raw["exhausted_retry_edges"]?.arrayValue?.isEmpty == false {
+                    Button("Continue with one more retry") { viewModel.continueWithOneMoreRetry() }
+                        .buttonStyle(QuietButtonStyle())
+.disabled(viewModel.isBusy)
+                }
                 Button("Resume") { viewModel.control("resume") }.buttonStyle(QuietButtonStyle()).disabled(viewModel.isBusy)
             }.font(.pb(.body))
         }

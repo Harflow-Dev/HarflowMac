@@ -333,11 +333,11 @@ final class SidebarVM: SidebarViewModel {
             // so there is no cost reason to suppress a same-content republish either.
             .sink { [weak self] tasks in
                 guard let self else { return }
-                latestTasks = tasks
+                latestTasks = tasks.filter { $0.raw["workflow_builder"]?.boolValue != true }
                 // Built together with `latestTasks`, before anything below reads it (Plan review
                 // round 1, item 1) — `tryApplyPendingReveal()` runs before `recompute()` and must see
                 // an index that already matches this listing.
-                conversationIndex = ConversationIndex(tasks)
+                conversationIndex = ConversationIndex(latestTasks)
                 // A reveal that arrived before its task was listed retries here on every listing.
                 tryApplyPendingReveal()
                 recompute()
@@ -417,8 +417,9 @@ final class SidebarVM: SidebarViewModel {
         let query = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
         let backend = selectedBackend
         let isFilterActive = !query.isEmpty || backend != "all"
+        let builderIDs = workflowBuilderTaskIDs
         func matches(_ task: TaskInfo) -> Bool {
-            (backend == "all" || task.backend == backend)
+            !builderIDs.contains(task.taskID) && (backend == "all" || task.backend == backend)
             && (query.isEmpty
                 || useCase.title(task.taskID).lowercased().contains(query)
                 || task.taskID.lowercased().contains(query)
