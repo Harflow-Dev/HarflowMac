@@ -13,11 +13,13 @@ import PbUI
 enum SidebarItem: Identifiable, Equatable {
     case task(TaskRowModel)
     case group(ParallelGroup)
+    case workflow(TaskRowModel)
 
     var id: String {
         switch self {
         case .task(let row): "task:\(row.id)"
         case .group(let group): group.id
+        case .workflow(let row): "workflow:\(row.id)"
         }
     }
 }

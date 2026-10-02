@@ -168,7 +168,7 @@ public final class AppCoordinator: ParentCoordinator, WindowPresenting, LaunchUR
     public func handle(path: any PathDestination) {
         guard let destination = path as? MonitorDestination else { return }
         switch destination {
-        case .task, .group:
+        case .task, .group, .workflow, .newWorkflow, .workflowRun:
             mainWindowCoordinator.handle(path: destination)
         case .newSession:
             // Decision 5: ⌘N (or the File menu item) must bring the window forward before the New

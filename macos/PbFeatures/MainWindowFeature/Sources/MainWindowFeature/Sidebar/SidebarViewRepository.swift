@@ -13,7 +13,14 @@ import SwiftEnvironment
 
 /// Concrete `SidebarUseCase` backed by `TaskListRepository`.
 @MainActor
-final class SidebarViewRepository: SidebarUseCase, @unchecked Sendable {
+final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, @unchecked Sendable {
+    @GlobalEnvironment(\.workflowRepository) private var workflowRepository
+
+    func workflowSnapshot() async throws -> SidebarWorkflowSnapshot {
+        let definitions = try await workflowRepository.command("list", options: [], positionals: [])
+        let runs = try await workflowRepository.command("list-runs", options: [], positionals: [])
+        return SidebarWorkflowSnapshot(definitions: WorkflowJSON.objects(definitions["workflows"]), runs: WorkflowJSON.objects(runs["runs"]))
+    }
 
     // MARK: - Private Properties
 

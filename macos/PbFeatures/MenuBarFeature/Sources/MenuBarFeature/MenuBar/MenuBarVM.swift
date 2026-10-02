@@ -93,6 +93,11 @@ protocol MenuBarRouting: Sendable {
 @Observable
 @MainActor
 final class MenuBarVM: MenuBarViewModel {
+    let workflowStatus: WorkflowMenuBarStatusVM?
+    var workflowRows: [WorkflowMenuBarRow] { workflowStatus?.rows ?? [] }
+    var workflowActiveCount: Int { workflowStatus?.activeCount ?? 0 }
+    var workflowAttentionCount: Int { workflowStatus?.attentionCount ?? 0 }
+    var workflowStatusError: String? { workflowStatus?.errorText }
     
     // MARK: - MenuBarViewModel Properties
     
@@ -129,7 +134,8 @@ final class MenuBarVM: MenuBarViewModel {
 
     // MARK: - Init
 
-    init(useCase: any MenuBarUseCase, routing: any MenuBarRouting) {
+    init(useCase: any MenuBarUseCase, routing: any MenuBarRouting, workflowStatus: WorkflowMenuBarStatusVM? = nil) {
+        self.workflowStatus = workflowStatus
         self.useCase = useCase
         self.routing = routing
         self.connectionLine = useCase.connectionLine
@@ -143,7 +149,15 @@ final class MenuBarVM: MenuBarViewModel {
     // MARK: - MenuBarViewModel Methods
     
     func didAppear() {
+        workflowStatus?.didAppear()
         subscribeIfNeeded()
+    }
+
+    func didDisappearStatusItem() { workflowStatus?.didDisappear() }
+
+    func didSelectWorkflow(_ runID: String) {
+        routing.select(.workflowRun(runID))
+        routing.openWindow()
     }
     
     /// See the type-level comment: this deliberately does not tear down the core subscriptions,

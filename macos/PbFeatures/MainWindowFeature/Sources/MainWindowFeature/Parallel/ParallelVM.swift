@@ -140,6 +140,9 @@ final class ParallelVM: ParallelViewModel {
     /// only. `recompute()` always re-reads each member's own `useCase.task(_:)` before building a
     /// column (F4-40), never a `TaskInfo` cached here.
     @ObservationIgnored private var conversations: [Conversation] = []
+    @ObservationIgnored private var workflowTaskIDs: [String]?
+    @ObservationIgnored private var workflowFocusedTaskIDs: Set<String>?
+    @ObservationIgnored private var workflowTitles: [String: String] = [:]
     
     // MARK: - Init
     
@@ -153,6 +156,15 @@ final class ParallelVM: ParallelViewModel {
     
     func didAppear() {
         subscribeIfNeeded()
+    }
+
+    /// Workflow membership comes from persisted dispatch associations, never group names. The
+    /// existing Parallel feed, actions and per-member leases remain the activity implementation.
+    func setWorkflowTaskIDs(_ ids: [String], focusedTaskIDs: Set<String>? = nil, titles: [String: String] = [:]) {
+        workflowTaskIDs = ids
+        workflowFocusedTaskIDs = focusedTaskIDs
+        workflowTitles = titles
+        if didSubscribe { recomputeMembersAndLeases() }
     }
     
     /// Idempotent teardown (root AGENTS.md rule 7): releases every outstanding lease, cancels every
@@ -246,7 +258,16 @@ final class ParallelVM: ParallelViewModel {
     /// conversation rather than one task per column.
     private func recomputeMembersAndLeases() {
         let group = Lineage.sections(latestTasks).parallel.first { $0.name == groupName }
-        let groupConversations = group?.conversations ?? []
+        let groupConversations: [Conversation]
+        if let workflowTaskIDs {
+            let byID = Dictionary(uniqueKeysWithValues: latestTasks.map { ($0.taskID, $0) })
+            let associated = workflowTaskIDs.compactMap { byID[$0] }
+            groupConversations = Lineage.conversations(associated).filter { conversation in
+                workflowFocusedTaskIDs.map { focus in conversation.members.contains { focus.contains($0.taskID) } } ?? true
+            }
+        } else {
+            groupConversations = group?.conversations ?? []
+        }
         let newIDs = groupConversations.flatMap { $0.members.map(\.taskID) }
         let newIDSet = Set(newIDs)
         let oldIDSet = Set(memberIDs)
@@ -346,7 +367,7 @@ final class ParallelVM: ParallelViewModel {
         return ParallelColumnModel(
             id: conversation.id,
             task: current,
-            title: useCase.title(firstID),
+            title: workflowTitles[currentID] ?? useCase.title(firstID),
             subtitle: subtitle,
             isBusy: latestBusy.contains(currentID),
             outcomeMessage: latestOutcomes[currentID],

@@ -61,7 +61,10 @@ import Testing
         let catalogBox: Box<BackendCatalog>
     }
 
-    func makeSUT(connectionLine: String = "connecting…", installState: InstallState = .idle, catalog: BackendCatalog = .empty) -> SUT {
+    func makeSUT(
+        connectionLine: String = "connecting…", installState: InstallState = .idle, catalog: BackendCatalog = .empty,
+        onSelect: ((MonitorDestination?) -> Void)? = nil, workflowUseCase: (any SidebarWorkflowUseCase)? = nil
+    ) -> SUT {
         let useCase = MockSidebarUseCase()
         let routing = MockSidebarRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
@@ -92,7 +95,7 @@ import Testing
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(routing).selection.willProduce { routingSelectionBox.value }
         given(routing).selectionPublisher().willReturn(selectionSubject.eraseToAnyPublisher())
-        given(routing).select(.any).willReturn()
+        given(routing).select(.any).willProduce { onSelect?($0) }
         given(routing).openNewSession().willReturn()
         given(routing).pendingReveal.willProduce { pendingRevealBox.value }
         given(routing).revealPublisher().willReturn(revealSubject.eraseToAnyPublisher())
@@ -113,7 +116,7 @@ import Testing
         given(useCase).installAnyway().willReturn(true)
         given(useCase).reset().willReturn()
 
-        let sut = SidebarVM(useCase: useCase, routing: routing)
+        let sut = SidebarVM(useCase: useCase, routing: routing, workflowUseCase: workflowUseCase)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
             hasListedSubject: hasListedSubject, selectionSubject: selectionSubject, titlesSubject: titlesSubject,
@@ -393,8 +396,9 @@ import Testing
         
         // then
         verify(routing).select(.value(.task("abc123"))).called(1)
+        #expect(sut.selection == .task("abc123"))
     }
-    
+
     @Test func givenAnExternalSelectionChange_whenPublished_thenSelectionUpdates() async {
         // given — e.g. "Open parent" in the still-app-target `TaskDetailView`, routed through the
         // same `MainWindowCoordinator.selection` this VM reads via `SidebarRouting`.

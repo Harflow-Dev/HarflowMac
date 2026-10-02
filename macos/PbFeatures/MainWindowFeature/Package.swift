@@ -38,6 +38,7 @@ let package = Package(
                 .product(name: "PbTestUtilities", package: "PbUtilities"),
                 .product(name: "PbCommonTestMock", package: "PbCommon")
             ],
+            resources: [.copy("Workflow/Fixtures")],
             swiftSettings: [
                 .define("MOCKING")
             ]

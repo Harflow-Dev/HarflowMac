@@ -39,6 +39,9 @@ protocol SidebarViewModel: ViewModel {
     /// The install/update banner, or `nil` when nothing needs surfacing — shown in place of the
     /// red error section (settled plan, section 5).
     var installBannerModel: InstallBanner.Model? { get }
+    var savedWorkflows: [WorkflowRecord] { get }
+    var workflowErrorMessage: String? { get }
+    func didTapNewWorkflow()
 
     func didAppear()
     func didDisappear()
@@ -57,6 +60,12 @@ protocol SidebarViewModel: ViewModel {
     func didPressMoveCommand(_ direction: MoveCommandDirection)
 }
 
+extension SidebarViewModel {
+    var savedWorkflows: [WorkflowRecord] { [] }
+    var workflowErrorMessage: String? { nil }
+    func didTapNewWorkflow() {}
+}
+
 // MARK: - SidebarView
 
 struct SidebarView<VM: SidebarViewModel>: View {
@@ -68,6 +77,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    @State private var workflowsExpanded = true
     
     // MARK: - Init
     
@@ -166,6 +176,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
 
     private var list: some View {
         List(selection: Binding(get: { viewModel.selection }, set: { viewModel.didSelect($0) })) {
+            workflowDefinitions
             if let bannerModel = viewModel.installBannerModel {
                 Section {
                     InstallBanner(
@@ -215,7 +226,39 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
             GroupRow(group: group).tag(MonitorDestination.group(group.name))
+        case .workflow(let row):
+            TaskRow(model: row).tag(MonitorDestination.workflowRun(row.id))
         }
+    }
+
+    private var workflowDefinitions: some View {
+        Section {
+            if workflowsExpanded {
+                ForEach(viewModel.savedWorkflows) { workflow in
+                    Label(workflow.id, systemImage: "point.3.connected.trianglepath.dotted")
+                        .font(.pb(.body))
+                        .tag(MonitorDestination.workflow(workflow.id))
+                }
+                if let error = viewModel.workflowErrorMessage {
+                    Text(error).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                }
+            }
+        } header: {
+            HStack(spacing: 8) {
+                Button { workflowsExpanded.toggle() } label: {
+                    SectionLabel(text: "Workflows")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(workflowsExpanded ? "Collapse workflows" : "Expand workflows")
+                Button { viewModel.didTapNewWorkflow() } label: { Image(systemName: "plus") }
+                    .buttonStyle(.plain)
+                    .font(.pb(.caption, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("New workflow")
+                Spacer()
+            }
+        }
+        .collapsible(false)
     }
 
     private var footer: some View {

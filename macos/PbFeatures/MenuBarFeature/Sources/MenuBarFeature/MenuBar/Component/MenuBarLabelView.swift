@@ -48,12 +48,22 @@ struct MenuBarLabelView<VM: MenuBarViewModel>: View {
                 Image(systemName: "point.3.connected.trianglepath.dotted")
             }
             if viewModel.runningCount > 0 { Text("\(viewModel.runningCount)") }
+            if viewModel.workflowActiveCount > 0 {
+                Image(systemName: "arrow.triangle.branch")
+                Text("\(viewModel.workflowActiveCount)")
+            }
+            if viewModel.workflowAttentionCount > 0 { Image(systemName: "exclamationmark.circle") }
         }
         .accessibilityLabel("Polybridge Monitor")
+        .accessibilityValue(
+            "\(viewModel.runningCount) agents running, \(viewModel.workflowActiveCount) workflows, "
+                + "\(viewModel.workflowAttentionCount) need attention"
+        )
         .onAppear {
             viewModel.didAppear()
             viewModel.didCaptureWindowOpener { openWindow(id: "main") }
         }
+        .onDisappear { viewModel.didDisappearStatusItem() }
     }
 }
 

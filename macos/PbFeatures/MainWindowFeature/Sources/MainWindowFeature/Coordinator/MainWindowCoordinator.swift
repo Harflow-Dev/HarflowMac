@@ -42,6 +42,10 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     func buildParallelView(name: String) -> AnyView
     /// Builds the task detail screen for `id`.
     func buildTaskDetailView(id: String) -> AnyView
+    /// Builds the workflow library and execution monitor.
+    func buildWorkflowEditorView(name: String?) -> AnyView
+    /// Builds the monitor for a persisted workflow run.
+    func buildWorkflowRunView(id: String) -> AnyView
 }
 
 // MARK: - PasteboardWriting
@@ -122,7 +126,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).
             requestReveal(taskID: id)
-        case .group: selection = destination
+        case .group, .workflow, .newWorkflow, .workflowRun: selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)
         }
@@ -226,7 +230,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     private func sharedSidebarVM() -> SidebarVM {
         if let sidebarVM { return sidebarVM }
         let useCase = SidebarViewRepository()
-        let newVM = SidebarVM(useCase: useCase, routing: self)
+        let newVM = SidebarVM(useCase: useCase, routing: self, workflowUseCase: useCase)
         sidebarVM = newVM
         return newVM
     }

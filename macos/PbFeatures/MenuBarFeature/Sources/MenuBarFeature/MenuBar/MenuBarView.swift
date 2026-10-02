@@ -28,6 +28,10 @@ protocol MenuBarViewModel: ViewModel {
     var isConnected: Bool { get }
     var connectionLine: String { get }
     var runningCount: Int { get }
+    var workflowRows: [WorkflowMenuBarRow] { get }
+    var workflowActiveCount: Int { get }
+    var workflowAttentionCount: Int { get }
+    var workflowStatusError: String? { get }
     /// The header's subline under "N running".
     var headerSubline: String { get }
     /// The install/update banner, or `nil` when nothing needs surfacing — shown where the red list
@@ -36,6 +40,8 @@ protocol MenuBarViewModel: ViewModel {
 
     func didAppear()
     func didDisappear()
+    func didDisappearStatusItem()
+    func didSelectWorkflow(_ runID: String)
     func didAppearRunningRow(_ taskID: String)
     func didDisappearRunningRow(_ taskID: String)
     func didSelectRunningTask(_ taskID: String)
@@ -47,6 +53,15 @@ protocol MenuBarViewModel: ViewModel {
     func didTapInstallBannerPrimary()
     func didTapInstallBannerSecondary()
     func didTapInstallBannerDismiss()
+}
+
+extension MenuBarViewModel {
+    var workflowRows: [WorkflowMenuBarRow] { [] }
+    var workflowActiveCount: Int { 0 }
+    var workflowAttentionCount: Int { 0 }
+    var workflowStatusError: String? { nil }
+    func didDisappearStatusItem() {}
+    func didSelectWorkflow(_: String) {}
 }
 
 // MARK: - MenuBarView
@@ -78,12 +93,14 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     notices
+                    workflows
                     ForEach(viewModel.runningRows) { row in
                         MenuBarRunningRowView(model: row) { viewModel.didSelectRunningTask(row.id) }
                             .onAppear { viewModel.didAppearRunningRow(row.id) }
                             .onDisappear { viewModel.didDisappearRunningRow(row.id) }
                     }
-                    if viewModel.runningRows.isEmpty, viewModel.listErrorMessage == nil, viewModel.installBannerModel == nil {
+                    if viewModel.runningRows.isEmpty, viewModel.workflowActiveCount == 0,
+                       viewModel.listErrorMessage == nil, viewModel.installBannerModel == nil {
                         Text("Nothing running.").font(.pb(.body)).foregroundStyle(Color.secondaryText)
                     }
                     recent
@@ -106,6 +123,11 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(viewModel.runningCount) running").font(.pb(.headline, weight: .semibold))
+                if viewModel.workflowActiveCount > 0 {
+                    Text("\(viewModel.workflowActiveCount) workflows · \(viewModel.workflowAttentionCount) need attention")
+                        .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+                }
                 HStack(spacing: 5) {
                     Circle().fill(viewModel.isConnected ? Color.doneGreen : Color.failedRed).frame(width: 7, height: 7)
                     Text(viewModel.headerSubline).font(.pb(.caption)).foregroundStyle(Color.secondaryText).lineLimit(1)
@@ -150,6 +172,21 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
                     TaskRow(model: task).contentShape(Rectangle())
                 }.buttonStyle(.plain)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var workflows: some View {
+        let active = viewModel.workflowRows.filter(\.isActive)
+        let settled = viewModel.workflowRows.filter { !$0.isActive }.prefix(3)
+        if !active.isEmpty || !settled.isEmpty {
+            SectionLabel(text: "Workflows")
+            ForEach(active + settled) { row in
+                WorkflowMenuBarRowView(model: row) { viewModel.didSelectWorkflow(row.id) }
+            }
+        }
+        if let error = viewModel.workflowStatusError {
+            Text(error).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
         }
     }
     

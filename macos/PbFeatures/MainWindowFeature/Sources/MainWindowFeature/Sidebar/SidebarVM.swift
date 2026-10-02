@@ -109,6 +109,12 @@ protocol SidebarRouting: Sendable {
 @Observable
 @MainActor
 final class SidebarVM: SidebarViewModel {
+    var workflowDefinitions: [WorkflowRecord] = []
+    var workflowRuns: [SidebarWorkflowRun] = []
+    var workflowErrorMessage: String?
+    @ObservationIgnored var workflowPoll: Task<Void, Never>?
+    @ObservationIgnored var workflowGeneration = UUID()
+    @ObservationIgnored let workflowUseCase: (any SidebarWorkflowUseCase)?
     
     // MARK: - SidebarViewModel Properties
     
@@ -151,6 +157,7 @@ final class SidebarVM: SidebarViewModel {
     /// from elsewhere (e.g. "Open parent" in `TaskDetailView`). Initialised from `routing.selection`
     /// and kept live by the `selectionPublisher()` subscription in `subscribeIfNeeded()`.
     private(set) var selection: MonitorDestination?
+    @ObservationIgnored private var selectionRevision = 0
     /// The install/update banner to show in place of the red error section, or `nil` when nothing
     /// needs surfacing (settled plan, section 5's precedence rules). Written from
     /// `SidebarVM+InstallBanner.swift` too, so it cannot be `private(set)` — `private` is
@@ -163,7 +170,7 @@ final class SidebarVM: SidebarViewModel {
     // The properties below are read or written from `SidebarVM+InstallBanner.swift` as well as this
     // file, so — same reasoning as `installBannerModel` above — they cannot be `private`.
     @ObservationIgnored let useCase: any SidebarUseCase
-    @ObservationIgnored private let routing: any SidebarRouting
+    @ObservationIgnored let routing: any SidebarRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
     // `latestTasks`/`collapsedTaskIDs`/`lastKnownSiblingsByMember` are also read/written from
@@ -204,7 +211,8 @@ final class SidebarVM: SidebarViewModel {
 
     // MARK: - Init
 
-    init(useCase: any SidebarUseCase, routing: any SidebarRouting) {
+    init(useCase: any SidebarUseCase, routing: any SidebarRouting, workflowUseCase: (any SidebarWorkflowUseCase)? = nil) {
+        self.workflowUseCase = workflowUseCase
         self.useCase = useCase
         self.routing = routing
         self.connectionLine = useCase.connectionLine
@@ -230,9 +238,11 @@ final class SidebarVM: SidebarViewModel {
         // still holds it (Design point 5), so pick it up here rather than only via `revealPublisher()`.
         if let reveal = routing.pendingReveal { handleReveal(reveal) }
         subscribeIfNeeded()
+        startWorkflowPolling()
     }
 
     func didDisappear() {
+        stopWorkflowPolling()
         cancellables.removeAll()
         didSubscribe = false
     }
@@ -248,6 +258,8 @@ final class SidebarVM: SidebarViewModel {
     }
 
     func didSelect(_ destination: MonitorDestination?) {
+        selectionRevision += 1
+        selection = normalized(destination)
         routing.select(destination)
     }
 
@@ -374,9 +386,10 @@ final class SidebarVM: SidebarViewModel {
             .store(in: &cancellables)
 
         routing.selectionPublisher()
+            .map { [weak self] destination in (destination, self?.selectionRevision) }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] destination in
-                guard let self else { return }
+            .sink { [weak self] destination, revision in
+                guard let self, revision == selectionRevision else { return }
                 selection = normalized(destination)
             }
             .store(in: &cancellables)
@@ -392,7 +405,7 @@ final class SidebarVM: SidebarViewModel {
     /// 7); Parallel groups stay task-level, unchanged (Review round 1, item 3). Never mutates
     /// `collapsedTaskIDs` itself — an ordinary recompute (a new listing, a search keystroke) must
     /// never re-expand a row the person collapsed.
-    private func recompute() {
+    func recompute() {
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
         recomputeBackendTabs()
