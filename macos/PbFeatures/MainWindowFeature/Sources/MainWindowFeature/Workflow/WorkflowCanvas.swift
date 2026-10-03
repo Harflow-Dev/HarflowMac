@@ -20,11 +20,15 @@ struct WorkflowCanvas: View {
     var onSelectNodes: (Set<String>, String?) -> Void = { _, _ in }
     var onToggleNode: (String) -> Void = { _ in }
     var onMoveNodes: ([String: CGPoint]) -> Void = { _ in }
+    var onBeginNodeDrag: () -> Void = {}
+    var onEndNodeDrag: () -> Void = {}
     let onConnect: (String) -> Void
     let onDrop: (String, CGPoint) -> Void
     var onDelete: () -> Void = {}
     var onCopy: () -> Void = {}
     var onPaste: () -> Void = {}
+    var canUndo = false
+    var onUndo: () -> Void = {}
     var onRename: (String, String) -> Void = { _, _ in }
     @State private var scrollController = WorkflowCanvasScrollController()
     @State private var routeCache = WorkflowRouteCache()
@@ -38,7 +42,7 @@ struct WorkflowCanvas: View {
     @State private var tooltipSize = CGSize(width: 260, height: 40)
     @State private var zoom: CGFloat = 1
     @State private var editingTitleNodeID: String?
-    @FocusState private var isCanvasFocused: Bool
+    @FocusState var isCanvasFocused: Bool
 
     @GestureState private var connectionDrag: WorkflowConnectionDrag?
     private var activeConnectionDrag: WorkflowConnectionDrag? { scrollController.connectionDrag ?? connectionDrag }
@@ -48,6 +52,8 @@ struct WorkflowCanvas: View {
     private func moveGroup(anchor id: String, point: CGPoint) {
         guard isEditable else { return }
         if groupAnchor != id {
+            isCanvasFocused = true
+            onBeginNodeDrag()
             let ids = selection.contains(id) ? selection : [id]
             groupOrigins = Dictionary(uniqueKeysWithValues: nodes.filter { ids.contains($0.id) }.map { ($0.id, $0.position) })
             groupAnchor = id
@@ -96,10 +102,9 @@ struct WorkflowCanvas: View {
         GeometryReader { viewport in
         let contentSize = WorkflowCanvasZoom.contentSize(extent: CGSize(width: width, height: height), viewport: viewport.size, scale: zoom)
         let visible = scrollController.visibleRect.isEmpty ? CGRect(origin: .zero, size: viewport.size) : scrollController.visibleRect
-        let grid = WorkflowCanvasScrolling.visibleGrid(visible, scale: zoom, content: contentSize)
         ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
-                Color.windowBG
+                Color.clear
                     .contentShape(Rectangle())
                     .gesture(marqueeGesture)
                     .onTapGesture { isCanvasFocused = true; onSelectNodes([], nil) }
@@ -110,21 +115,6 @@ struct WorkflowCanvas: View {
                         .frame(width: marquee.width, height: marquee.height)
                         .position(x: marquee.midX, y: marquee.midY)
                         .allowsHitTesting(false)
-                }
-                if !grid.isNull, !grid.isEmpty {
-                    Canvas { context, size in
-                        let first = WorkflowCanvasScrolling.firstLocalGridDot(in: grid)
-                        var dots = Path()
-                        for x in stride(from: first.x, through: size.width, by: WorkflowCanvasGeometry.gridSpacing) {
-                            for y in stride(from: first.y, through: size.height, by: WorkflowCanvasGeometry.gridSpacing) {
-                                dots.addEllipse(in: CGRect(x: x - 0.5, y: y - 0.5, width: 1, height: 1))
-                            }
-                        }
-                        context.fill(dots, with: .color(Color.secondaryText.opacity(0.10)))
-                    }
-                    .frame(width: grid.width, height: grid.height)
-                    .position(x: grid.midX, y: grid.midY)
-                    .allowsHitTesting(false)
                 }
                 ForEach(edges) { edge in edgeView(edge) }
                 if let drag = activeConnectionDrag, let source = nodes.first(where: { $0.id == drag.sourceID }) {
@@ -147,7 +137,7 @@ struct WorkflowCanvas: View {
                             moveGroup(anchor: node.id, point: point)
                             scrollController.updateNode(id: node.id, point: point, scale: zoom, onMove: moveGroup)
                         },
-                        onDragEnded: { scrollController.stop(); groupOrigins = [:]; groupAnchor = nil },
+                        onDragEnded: { scrollController.stop(); onEndNodeDrag(); groupOrigins = [:]; groupAnchor = nil },
                         onConnect: { isCanvasFocused = true; onConnect(node.id) },
                         onRename: { onRename(node.id, $0) },
                         onTitleEditingChanged: { editing in
@@ -193,19 +183,30 @@ struct WorkflowCanvas: View {
                 return true
             }
         }
+        .background {
+            Canvas { context, _ in
+                let points = WorkflowCanvasGrid.screenDots(viewport: visible, scale: zoom, content: contentSize)
+                var dots = Path()
+                for point in points {
+                    dots.addEllipse(in: CGRect(x: point.x - 0.85, y: point.y - 0.85, width: 1.7, height: 1.7))
+                }
+                context.fill(dots, with: .color(Color.secondaryText.opacity(0.30)))
+            }.allowsHitTesting(false)
+        }
         .background(Color.windowBG)
         .focusable(isEditable)
         .focusEffectDisabled()
         .focused($isCanvasFocused)
         .onKeyPress(keys: [.delete, .deleteForward]) { _ in
             guard isEditable, editingTitleNodeID == nil, selectedNodeID != nil || selectedEdgeID != nil else { return .ignored }
-            onDelete()
+            deletePreservingCanvasFocus()
             return .handled
         }
         .modifier(WorkflowClipboardCommands(isEnabled: isCanvasFocused && isEditable && editingTitleNodeID == nil, onCopy: onCopy, onPaste: onPaste))
+        .modifier(WorkflowUndoCommands(isEnabled: isCanvasFocused && isEditable && editingTitleNodeID == nil && canUndo, onUndo: onUndo))
         .onDeleteCommand {
             guard isCanvasFocused, isEditable, editingTitleNodeID == nil, selectedNodeID != nil || selectedEdgeID != nil else { return }
-            onDelete()
+            deletePreservingCanvasFocus()
         }
         .accessibilityLabel("Workflow graph")
         .overlay(alignment: .topLeading) { arrowTooltip(viewport: viewport.size) }
@@ -220,8 +221,8 @@ struct WorkflowCanvas: View {
                 marqueeBaseline = nil
                 marqueePrimary = nil
             } }
-        .onChange(of: isEditable) { _, _ in scrollController.stop(); groupOrigins = [:]; groupAnchor = nil; hoveredArrow = nil }
-        .onChange(of: zoom) { _, _ in scrollController.stop(); groupOrigins = [:]; groupAnchor = nil; hoveredArrow = nil }
+        .onChange(of: isEditable) { _, _ in scrollController.stop(); onEndNodeDrag(); groupOrigins = [:]; groupAnchor = nil; hoveredArrow = nil }
+        .onChange(of: zoom) { _, _ in scrollController.stop(); onEndNodeDrag(); groupOrigins = [:]; groupAnchor = nil; hoveredArrow = nil }
         .onChange(of: scrollController.visibleRect) { _, _ in hoveredArrow = nil }
         .onChange(of: scrollController.isDragging) { _, dragging in if dragging { hoveredArrow = nil } }
         .onChange(of: nodes) { _, _ in hoveredArrow = nil }
@@ -232,6 +233,7 @@ struct WorkflowCanvas: View {
             routeCache.retain(ids: Set(edges.map(\.id)).union(["preview"]))
         }
         .onDisappear {
+            onEndNodeDrag()
             hoveredArrow = nil
             scrollController.stop()
             routeCache.retain(ids: [])

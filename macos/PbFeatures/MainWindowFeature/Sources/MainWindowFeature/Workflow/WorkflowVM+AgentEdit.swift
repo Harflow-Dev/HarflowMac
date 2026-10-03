@@ -56,6 +56,7 @@ extension WorkflowVM {
             let sourceName = run.raw["source_name"]?.stringValue ?? ""
             let targetKey = sourceName == run.name && !sourceName.isEmpty ? "saved:" + sourceName : "new"
             guard canUseDraftSlot(targetKey) else { return }
+            resetEditHistory()
             // History opens an isolated proposal using its original saved revision, never the latest file.
             draftID = UUID()
             editorLoadID = UUID()

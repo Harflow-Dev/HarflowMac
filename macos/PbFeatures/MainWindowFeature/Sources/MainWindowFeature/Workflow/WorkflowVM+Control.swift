@@ -4,21 +4,35 @@ import MonitorCore
 
 extension WorkflowVM {
     func continueWithOneMoreRetry() {
-        guard selectedRun?.raw["exhausted_retry_edges"]?.arrayValue?.isEmpty == false else { return }
+        guard let run = selectedRun, run.allowsMonitorControl, !run.isSettling,
+              run.raw["exhausted_retry_edges"]?.arrayValue?.isEmpty == false,
+              !(run.requiresAnswer && instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) else { return }
+        let command = run.isDelegation && run.status == "failed" ? "recover" : "resume"
+        guard command != "recover" || run.canRecover else { return }
         additionalAttempts = 1
-        control("resume")
+        control(command)
     }
 
     func control(_ command: String) {
-        guard let runID = selectedRun?.id else {
-            return
+        guard let run = selectedRun, run.allowsMonitorControl else { return }
+        if ["resume", "recover"].contains(command) {
+            guard !run.isSettling,
+                  !(run.requiresAnswer && instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty),
+                  command != "recover" || run.canRecover else { return }
         }
         perform { [weak self] in
             guard let self else {
                 return
             }
-            let options = command == "resume" ? ["--instructions=\(instructions)", "--additional-attempts=\(additionalAttempts)"] : []
-            _ = try await useCase.command(command, options: options, positionals: [runID])
+            var options: [String] = run.raw["interaction_owner"]?.stringValue == "monitor" ? ["--monitor"] : []
+            if command == "resume" || command == "recover" {
+                let reasonFlag = command == "recover" ? "--reason" : "--instructions"
+                options += ["\(reasonFlag)=\(instructions)", "--additional-attempts=\(additionalAttempts)"]
+            }
+            if command == "resume", let decisionID = run.raw["input_decision_id"]?.stringValue {
+                options.append("--decision-id=\(decisionID)")
+            }
+            _ = try await useCase.command(command, options: options, positionals: [run.id])
             await refresh()
         }
     }

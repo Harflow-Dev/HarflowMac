@@ -343,7 +343,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             spawnedByBannerText = nil
         }
 
-        canTakeover = !isWorkflowBuilder && !isBusy && detail.sessionID != nil
+        canTakeover = !isWorkflowBuilder && WorkflowNodePresentation.allowsTerminal(detail) && !isBusy && detail.sessionID != nil
         takeoverButtonLabel = detail.status.isRunning ? "Take over" : "Continue in terminal"
         takeoverHelp = detail.sessionID == nil
         ? "The task has not reported a session yet."

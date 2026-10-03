@@ -36,7 +36,7 @@ extension TaskDetailVM {
     /// round 2, finding 1): if the conversation moved on while the dialog was open, this refuses
     /// rather than silently taking over whatever the new current member turned out to be.
     func didTapTakeover() {
-        guard !isWorkflowBuilder else { return }
+        guard !isWorkflowBuilder, WorkflowNodePresentation.allowsTerminal(task) else { return }
         guard let task else { return }
         let dialogTaskID = currentTaskID
         let isRunning = task.status.isRunning

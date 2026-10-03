@@ -11,7 +11,12 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
         if let run = viewModel.selectedRun {
             VStack(alignment: .leading, spacing: 12) {
                 decision(run)
-                if ["needs_attention", "paused"].contains(run.status) {
+                if let request = run.raw["prompt"]?.stringValue, !request.isEmpty, !run.isBuilder {
+                    DisclosureGroup("Request") {
+                        Text(request).font(.pb(.body)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    }.font(.pb(.secondary))
+                }
+                if run.allowsMonitorControl, ["needs_attention", "paused", "needs_input"].contains(run.status) || (run.isDelegation && run.status == "failed") {
                     recovery(run)
                 }
                 if run.raw["kind"]?.stringValue == "builder", run.status == "completed" {
@@ -51,11 +56,13 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
     }
 
     private func recovery(_ run: WorkflowRunModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(run.reason.isEmpty ? "Scheduling is paused." : run.reason)
+        let missingAnswer = run.requiresAnswer && viewModel.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(run.question.isEmpty ? "Scheduling is paused." : run.question)
                 .font(.pb(.secondary))
 .foregroundStyle(Color.warningFG)
 .textSelection(.enabled)
+            if run.isSettling { Text("Waiting for running branches to finish…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText) }
             HStack {
                 TextField("Additional instructions", text: Binding(get: { viewModel.instructions }, set: { viewModel.instructions = $0 }))
                     .textFieldStyle(.roundedBorder)
@@ -68,9 +75,11 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
                 if run.raw["exhausted_retry_edges"]?.arrayValue?.isEmpty == false {
                     Button("Continue with one more retry") { viewModel.continueWithOneMoreRetry() }
                         .buttonStyle(QuietButtonStyle())
-.disabled(viewModel.isBusy)
+.disabled(viewModel.isBusy || run.isSettling || missingAnswer)
                 }
-                Button("Resume") { viewModel.control("resume") }.buttonStyle(QuietButtonStyle()).disabled(viewModel.isBusy)
+                Button(run.status == "failed" ? "Recover" : "Resume") { viewModel.control(run.status == "failed" ? "recover" : "resume") }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(viewModel.isBusy || run.isSettling || missingAnswer)
             }.font(.pb(.body))
         }
     }

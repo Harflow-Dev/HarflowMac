@@ -38,9 +38,12 @@ protocol WorkflowRouting: ParallelRouting {
 final class WorkflowVM: WorkflowViewModel {
     var workflows: [WorkflowRecord] = []
     var runs: [WorkflowRunModel] = []
-    var definition: [String: JSONValue] = [:] { didSet { scheduleValidation(); scheduleDraftPersistence() } }
-    var name = "" { didSet { scheduleValidation(); scheduleDraftPersistence() } }
+    var definition: [String: JSONValue] = [:] { didSet { recordEdit(name: name, definition: oldValue); scheduleValidation(); scheduleDraftPersistence() } }
+    var name = "" { didSet { recordEdit(name: oldValue, definition: definition); scheduleValidation(); scheduleDraftPersistence() } }
     var loadedName = ""
+    var initialLoadingID = UUID()
+    var initialLoadingKind: String? { didSet { initialLoadingID = UUID() } }
+    var initialLoadFailed = false
     var revision = 0
     var savedDefinition: [String: JSONValue] = [:]
     private var primaryNodeID: String?
@@ -91,6 +94,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var generationID = UUID()
     @ObservationIgnored private var didSubscribe = false
+    @ObservationIgnored var editorReadTask: Task<Void, Never>?
     @ObservationIgnored var editorLoadID = UUID()
     @ObservationIgnored var pendingEditorName: String?
     @ObservationIgnored var draftID = UUID()
@@ -132,7 +136,22 @@ final class WorkflowVM: WorkflowViewModel {
     var backendIDs: [String] { useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs }
     var selectedNode: WorkflowNodeModel? { nodes.first { $0.id == selectedNodeID } }
     var selectedEdge: WorkflowEdgeModel? { edges.first { $0.id == selectedEdgeID } }
-    var canSave: Bool { !isBusy && selectedRun == nil && hasUnsavedChanges }
+    var canSave: Bool { initialLoadingKind == nil && !initialLoadFailed && !isBusy && selectedRun == nil && hasUnsavedChanges }
+
+    var canDiscard: Bool {
+        canEditHistory && (name != loadedName
+            || !WorkflowDraftEquality.matches(definition, loadedName.isEmpty ? Self.starterDefinition() : savedDefinition))
+    }
+
+    var canUndo: Bool { canEditHistory && !editHistory.isEmpty }
+    var canEditHistory: Bool {
+        initialLoadingKind == nil && !initialLoadFailed && selectedRun == nil && !isBusy
+            && !(isRefining && showsGenerateSheet) && refinementContext == nil
+    }
+
+    var editHistory: [WorkflowEditSnapshot] = []
+    var editHistorySuspended = false
+    var nodeDragSnapshot: WorkflowEditSnapshot?
 
     var hasUnsavedChanges: Bool { loadedName.isEmpty || name != loadedName || !WorkflowDraftEquality.matches(definition, savedDefinition) }
 
@@ -141,6 +160,10 @@ final class WorkflowVM: WorkflowViewModel {
             return
         }
         didSubscribe = true
+        if selectedRun?.raw["status"]?.stringValue == nil, selectedRun != nil {
+            initialLoadingKind = "run"
+            initialLoadFailed = false
+        }
         if let builderSession { restoreBuilderSession(builderSession) }
         terminationSubscription = NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification).sink { [weak self] _ in
             MainActor.assumeIsolated { _ = self?.persistDraft() }
@@ -166,8 +189,16 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        if initialLoadingKind == "editor", let key = draftKey, key.hasPrefix("saved:") {
+            pendingEditorName = String(key.dropFirst(6))
+        }
+        if initialLoadingKind != nil { initialLoadFailed = true }
+        initialLoadingKind = nil
         persistDraft()
+        resetEditHistory()
         terminationSubscription = nil
+        editorReadTask?.cancel()
+        editorReadTask = nil
         editorLoadID = UUID()
         validationSuspended = true
         validationTask?.cancel()
@@ -183,6 +214,15 @@ final class WorkflowVM: WorkflowViewModel {
 
     func refresh(generation: UUID? = nil) async {
         reconnectBuilderSession()
+        let refreshRunID = selectedRun?.id
+        let loadingID = initialLoadingID
+        let loadingRunID = initialLoadingKind == "run" ? selectedRun?.id : nil
+        defer {
+            if let loadingRunID, selectedRun?.id == loadingRunID, initialLoadingKind == "run", initialLoadingID == loadingID {
+                initialLoadingKind = nil
+                initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
+            }
+        }
         do {
             let list = try await useCase.command("list", options: [], positionals: [])
             let runList = try await useCase.command("list-runs", options: [], positionals: [])
@@ -191,19 +231,21 @@ final class WorkflowVM: WorkflowViewModel {
             }
             workflows = WorkflowJSON.objects(list["workflows"]).map { WorkflowRecord(raw: $0) }
             runs = WorkflowJSON.objects(runList["runs"]).map { WorkflowRunModel(raw: $0) }
+            guard selectedRun?.id == refreshRunID else { return }
             if let run = selectedRun {
                 let response = try await useCase.command("status", options: [], positionals: [run.id])
-                guard !Task.isCancelled, selectedRun?.id == run.id,
+                guard !Task.isCancelled, selectedRun?.id == run.id, initialLoadingID == loadingID,
                       generation == nil || generation == generationID else {
                           return
                       }
                 selectedRun = WorkflowRunModel(raw: response["run"]?.objectValue ?? response)
+                initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
                 updateActivityMembership()
             }
         } catch {
-            guard !Task.isCancelled, generation == nil || generation == generationID else {
-                return
-            }
+            guard !Task.isCancelled, selectedRun?.id == refreshRunID,
+                  initialLoadingID == loadingID,
+                  generation == nil || generation == generationID else { return }
             errorText = Self.message(error)
         }
     }
@@ -217,6 +259,7 @@ final class WorkflowVM: WorkflowViewModel {
             return
         }
         persistDraft()
+        resetEditHistory()
         draftKey = "new"
         draftPersistenceSuspended = true
         draftID = UUID()
@@ -273,7 +316,7 @@ final class WorkflowVM: WorkflowViewModel {
             guard let self else {
                 return
             }
-            var options = ["--repo=\(repo)", "--prompt=\(prompt)", "--freedom=\(freedom)"]
+            var options = ["--monitor", "--repo=\(repo)", "--prompt=\(prompt)", "--freedom=\(freedom)"]
             if overrideOrchestrator {
                 options += Self.candidateOptions(launchAgent)
             }
@@ -282,6 +325,8 @@ final class WorkflowVM: WorkflowViewModel {
                 throw WorkflowUIError.missingRun
             }
             showsRunSheet = false
+            initialLoadingKind = "run"
+            initialLoadFailed = false
             selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "workflow_name": .string(loadedName), "definition": .object(definition)])
             isEditing = false
             await useCase.refreshTasks()
@@ -377,7 +422,7 @@ final class WorkflowVM: WorkflowViewModel {
             var candidate = WorkflowCandidateSettings.make(backend: backendIDs.first ?? "codex")
             candidate["fallbacks"] = .array([])
             node["agent"] = .object(candidate)
-            node["session_mode"] = .string("resume")
+            node["session_mode"] = .string("agent_decides")
             node["max_attempts"] = .number(3)
             node["freedom"] = .string(WorkflowAccess.defaultLevel(for: kind))
             node["branch_mode"] = .string("auto")
@@ -477,8 +522,10 @@ final class WorkflowVM: WorkflowViewModel {
             let nodeID = activation["node_id"]?.stringValue ?? ""
             let title = nodes.first { $0.id == nodeID }?.name ?? "Workflow builder"
             let index = relevant.filter { $0["node_id"]?.stringValue == nodeID }.firstIndex { $0["id"] == activation["id"] }.map { $0 + 1 } ?? 1
-            for (fallback, task) in WorkflowJSON.objects(activation["tasks"]).enumerated() {
+            let fallbackIndices = WorkflowExecutionAttempts.fallbackIndices(activation)
+            for task in WorkflowJSON.objects(activation["tasks"]) {
                 if let id = task["task_id"]?.stringValue {
+                    let fallback = fallbackIndices[id] ?? 0
                     titles[id] = "\(title) · \(index)\(fallback > 0 ? " · Fallback \(fallback)" : "")"
                 }
             }

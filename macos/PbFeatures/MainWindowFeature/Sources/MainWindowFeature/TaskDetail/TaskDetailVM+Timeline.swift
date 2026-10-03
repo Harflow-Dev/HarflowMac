@@ -31,13 +31,15 @@ extension TaskDetailVM {
     func recomputeTimeline(task: TaskInfo, allChildren: [TaskInfo]) {
         let members = conversationMembers
         let start = members.first?.startedAt
-        let conversationTimelineMembers = members.map {
-            WorkflowBuilderPresentation.conversationMember(
-                task: $0, items: itemsByMember[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID), isBuilder: isWorkflowBuilder
+        let conversationTimelineMembers = members.map { member in
+            let prompt = member.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID)
+            return WorkflowBuilderPresentation.conversationMember(
+                task: member, items: itemsByMember[member.taskID] ?? [], prompt: prompt, isBuilder: isWorkflowBuilder
             )
         }
         let allRows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
-        let rows = isWorkflowBuilder ? WorkflowBuilderPresentation.visibleRows(allRows) : allRows
+        let rows = isWorkflowBuilder ? WorkflowBuilderPresentation.visibleRows(allRows)
+        : WorkflowNodePresentation.isWorker(task) ? WorkflowNodePresentation.visibleRows(allRows) : allRows
         let subTaskStrip: SubTaskStripModel? = allChildren.isEmpty ? nil : SubTaskStripModel(
             children: allChildren.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             start: start,
@@ -66,7 +68,10 @@ extension TaskDetailVM {
             pendingMessages: pendingMessages
         )
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
-        promptText = conversationTimelineMembers.first?.prompt
+        let visiblePrompt = WorkflowNodePresentation.isWorker(task)
+        ? task.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: currentTaskID)
+        : conversationTimelineMembers.first?.prompt
+        promptText = visiblePrompt
         ?? "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
         rawEventsPath = useCase.eventsPath(for: currentTaskID)
         rawEvents = eventsByMember[currentTaskID] ?? []

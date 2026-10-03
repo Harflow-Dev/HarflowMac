@@ -66,6 +66,7 @@ extension WorkflowVM {
             guard let draft = try draftStore.load(key: key), let restored = draft["definition"]?.objectValue else { return false }
             draftPersistenceSuspended = true
             defer { draftPersistenceSuspended = false }
+            resetEditHistory()
             draftID = draft["draft_id"]?.stringValue.flatMap(UUID.init(uuidString:)) ?? UUID()
             editorLoadID = UUID()
             selectedRun = nil

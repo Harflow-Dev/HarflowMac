@@ -50,6 +50,16 @@ struct WorkflowRunModel: Identifiable, Equatable {
     var name: String { raw["workflow_name"]?.stringValue ?? raw["name"]?.stringValue ?? "Workflow" }
     var status: String { raw["status"]?.stringValue ?? "unknown" }
     var reason: String { raw["attention_reason"]?.stringValue ?? raw["reason"]?.stringValue ?? "" }
+    var isDelegation: Bool { raw["execution_contract"]?.stringValue == "delegation" }
+    var allowsMonitorControl: Bool {
+        guard raw["status"]?.stringValue != nil else { return false }
+        return raw["interaction_owner"]?.stringValue != "caller"
+    }
+
+    var isSettling: Bool { raw["settling"]?.boolValue ?? false }
+    var canRecover: Bool { isDelegation && status == "failed" && !isSettling }
+    var requiresAnswer: Bool { isDelegation && ["needs_input", "needs_attention", "failed"].contains(status) }
+    var question: String { raw["input_question"]?.stringValue ?? raw["question"]?.stringValue ?? reason }
     var isBuilder: Bool { raw["kind"]?.stringValue == "builder" }
     var isBuilderProposal: Bool { raw["editing_definition"] != nil || raw["builder_followup"]?.boolValue == true }
     var builderDraftRevision: Int { raw["draft_revision"]?.intValue ?? 0 }
@@ -60,6 +70,19 @@ struct WorkflowRunModel: Identifiable, Equatable {
     var definition: [String: JSONValue] {
         if isBuilder { return raw["builder_draft"]?.objectValue ?? raw["editing_definition"]?.objectValue ?? [:] }
         return raw["definition"]?.objectValue ?? [:]
+    }
+
+    var technicalPlan: String? {
+        if let plan = raw["technical_plan"]?.stringValue, !plan.isEmpty { return plan }
+        let planningIDs = Set(WorkflowJSON.nodes(definition).filter { $0.role == "planning" }.map(\.id))
+        return activations.reversed()
+.first { activation in
+            activation["role"]?.stringValue == "node"
+            && planningIDs.contains(activation["node_id"]?.stringValue ?? "")
+            && activation["status"]?.stringValue == "completed"
+            && activation["node_result"]?["status"]?.stringValue == "succeeded"
+            && !(activation["node_result"]?["result"]?["technical_plan"]?.stringValue ?? "").isEmpty
+        }?["node_result"]?["result"]?["technical_plan"]?.stringValue
     }
 
     var activations: [[String: JSONValue]] { raw["activations"]?.arrayValue?.compactMap(\.objectValue) ?? [] }
@@ -79,5 +102,21 @@ enum WorkflowJSON {
 
     static func edges(_ definition: [String: JSONValue]) -> [WorkflowEdgeModel] {
         objects(definition["connections"]).map { WorkflowEdgeModel(raw: $0) }
+    }
+}
+
+// MARK: - WorkflowExecutionAttempts
+
+enum WorkflowExecutionAttempts {
+    static func fallbackIndices(_ activation: [String: JSONValue]) -> [String: Int] {
+        let replies = Set(WorkflowJSON.objects(activation["questions"]).compactMap { $0["reply_task_id"]?.stringValue })
+        var fallback = -1
+        var indices: [String: Int] = [:]
+        for task in WorkflowJSON.objects(activation["tasks"]) {
+            guard let id = task["task_id"]?.stringValue else { continue }
+            if !replies.contains(id) { fallback += 1 }
+            indices[id] = max(0, fallback)
+        }
+        return indices
     }
 }

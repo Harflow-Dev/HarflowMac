@@ -127,9 +127,11 @@ struct ParallelColumnView: View {
             }
             HStack(spacing: 10) {
                 if model.isBusy { ProgressView().controlSize(.small) }
+                if WorkflowNodePresentation.allowsTerminal(model.task) {
                 Button(model.task.status.isRunning ? "Take over" : "Continue in terminal") { model.onTapTakeover() }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(model.task.sessionID == nil || model.isBusy)
+                }
                 Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
             }
             .font(.pb(.secondary))

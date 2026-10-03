@@ -5,9 +5,13 @@ import MonitorCore
 
 extension WorkflowVM {
     func selectWorkflow(_ workflow: WorkflowRecord) {
+        resetEditHistory()
+        editorReadTask?.cancel()
         persistDraft()
         draftKey = "saved:" + workflow.id
-        if restoreDraft() { return }
+        if restoreDraft() { initialLoadingKind = nil; initialLoadFailed = false; return }
+        initialLoadingKind = "editor"
+        initialLoadFailed = false
         draftPersistenceSuspended = true
         draftID = UUID()
         let loadingDraftID = draftID
@@ -15,7 +19,7 @@ extension WorkflowVM {
         let loadingID = editorLoadID
         let loadingDefinition = definition
         let loadingName = name
-        perform { [weak self] in
+        editorReadTask = Task { [weak self] in
             guard let self else {
                 return
             }
@@ -24,10 +28,19 @@ extension WorkflowVM {
             defer {
                 if editorLoadID == loadingID {
                     draftPersistenceSuspended = false
+                    initialLoadingKind = nil
+                    initialLoadFailed = !loaded
                     if !loaded { draftKey = nil }
                 }
             }
-            let response = try await useCase.command("get", options: [], positionals: [workflow.id])
+            let response: [String: JSONValue]
+            do {
+                response = try await useCase.command("get", options: [], positionals: [workflow.id])
+            } catch {
+                guard draftID == loadingDraftID, editorLoadID == loadingID, !Task.isCancelled else { return }
+                errorText = Self.message(error)
+                return
+            }
             guard !Task.isCancelled, draftID == loadingDraftID, editorLoadID == loadingID,
                   definition == loadingDefinition, name == loadingName else { return }
             let record = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
@@ -48,8 +61,13 @@ extension WorkflowVM {
     }
 
     func selectRun(_ run: WorkflowRunModel) {
+        resetEditHistory()
+        editorReadTask?.cancel()
+        editorLoadID = UUID()
         persistDraft()
         draftID = UUID()
+        initialLoadingKind = "run"
+        initialLoadFailed = false
         selectedRun = run
         isEditing = false
         selectedNodeID = nil
@@ -59,6 +77,11 @@ extension WorkflowVM {
     }
 
     func newWorkflow() {
+        resetEditHistory()
+        editorReadTask?.cancel()
+        editorLoadID = UUID()
+        initialLoadingKind = nil
+        initialLoadFailed = false
         persistDraft()
         draftKey = "new"
         if restoreDraft() { return }
@@ -81,6 +104,8 @@ extension WorkflowVM {
     func prepareEditor(name: String?) {
         validationSuspended = true
         pendingEditorName = name
+        initialLoadingKind = name == nil ? nil : "editor"
+        initialLoadFailed = false
         if let name { draftPersistenceSuspended = true; self.name = name; isEditing = true; draftPersistenceSuspended = false } else { newWorkflow() }
     }
 

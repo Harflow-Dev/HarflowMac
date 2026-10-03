@@ -21,6 +21,8 @@ protocol WorkflowViewModel: ViewModel {
     var selectedActivationID: String? { get }
     var isEditing: Bool { get }
     var isBusy: Bool { get }
+    var initialLoadingKind: String? { get }
+    var initialLoadFailed: Bool { get }
     var errorText: String? { get }
     var validationMessage: String? { get }
     var repo: String { get set }
@@ -44,6 +46,8 @@ protocol WorkflowViewModel: ViewModel {
     var selectedNode: WorkflowNodeModel? { get }
     var selectedEdge: WorkflowEdgeModel? { get }
     var canSave: Bool { get }
+    var canDiscard: Bool { get }
+    var canUndo: Bool { get }
     var hasUnsavedChanges: Bool { get }
     func didAppear()
     func didDisappear()
@@ -51,6 +55,10 @@ protocol WorkflowViewModel: ViewModel {
     func selectRun(_ run: WorkflowRunModel)
     func newWorkflow()
     func openWorkflowEditor(_ name: String)
+    func discardChanges()
+    func undoWorkflowEdit()
+    func beginNodeDrag()
+    func endNodeDrag()
     func save()
     func duplicate()
     func deleteWorkflow()
@@ -95,7 +103,11 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            if viewModel.initialLoadingKind != nil {
+                HStack { SkeletonBlock(width: 220, height: 18); Spacer() }.padding(16)
+            } else {
+                header.disabled(viewModel.initialLoadFailed)
+            }
             Divider()
             if let error = viewModel.errorText {
                 Text(error)
@@ -106,7 +118,11 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 .padding(12)
                 Divider()
             }
-            if viewModel.selectedRun?.isBuilder == true {
+            if let loadingKind = viewModel.initialLoadingKind {
+                WorkflowLoadingView(isRun: loadingKind == "run")
+            } else if viewModel.initialLoadFailed {
+                ContentUnavailableView("Workflow could not be loaded", systemImage: "exclamationmark.triangle")
+            } else if viewModel.selectedRun?.isBuilder == true {
                 builderContent
             } else if viewModel.selectedRun != nil {
                 runContent
@@ -179,10 +195,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 .pickerStyle(.segmented)
 .frame(width: 170)
                 }
-                if ["running", "starting"].contains(run.status) {
+                if run.allowsMonitorControl, ["running", "starting"].contains(run.status) {
                     Button("Pause") { viewModel.control("pause") }.buttonStyle(QuietButtonStyle())
                 }
-                if !["completed", "failed", "cancelled"].contains(run.status) {
+                if run.allowsMonitorControl, !["completed", "failed", "cancelled"].contains(run.status) {
                     Button("Cancel", role: .destructive) { viewModel.control("cancel") }.buttonStyle(QuietButtonStyle())
                 }
             } else if viewModel.isEditing {
@@ -194,6 +210,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     Button("Duplicate") { viewModel.duplicate() }
                     Button("Delete", role: .destructive) { viewModel.deleteWorkflow() }.disabled(viewModel.loadedName.isEmpty)
                 } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton)
+                Button("Discard Changes") { viewModel.discardChanges() }.buttonStyle(QuietButtonStyle()).disabled(!viewModel.canDiscard)
                 Button("Save") { viewModel.save() }.buttonStyle(QuietButtonStyle()).disabled(!viewModel.canSave)
                 Button("Run", systemImage: "play") {
                     viewModel.prepareLaunch()
@@ -210,14 +227,14 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     }
 
     private var editor: some View {
-        HSplitView {
+        WorkflowInspectorSplit {
             VStack(spacing: 0) {
                 canvas.frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider()
                 stepTray
             }
-            .frame(minWidth: 400)
-            WorkflowInspector(viewModel: viewModel).frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
+        } inspector: {
+            WorkflowInspector(viewModel: viewModel)
         }
     }
 
@@ -284,11 +301,15 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             onSelectNodes: { viewModel.selectNodes($0, primary: $1) },
             onToggleNode: viewModel.toggleNode,
             onMoveNodes: viewModel.moveNodes,
+            onBeginNodeDrag: viewModel.beginNodeDrag,
+            onEndNodeDrag: viewModel.endNodeDrag,
             onConnect: { viewModel.connectionSourceID = $0 },
             onDrop: { viewModel.addNode($0, at: $1) },
             onDelete: viewModel.deleteSelected,
             onCopy: viewModel.copySelectedNodes,
             onPaste: viewModel.pasteNodes,
+            canUndo: viewModel.canUndo,
+            onUndo: viewModel.undoWorkflowEdit,
             onRename: { viewModel.updateNode($0, key: "title", value: .string($1)) }
         )
     }
@@ -313,7 +334,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                         canvas.frame(minWidth: 0, maxWidth: .infinity)
                         if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
                             WorkflowInspector(viewModel: viewModel)
-                                .frame(minWidth: 180, idealWidth: 240, maxWidth: 260)
+                                .frame(minWidth: 220, idealWidth: 260, maxWidth: 500)
                         }
                     }
                     .frame(minWidth: 0, maxWidth: .infinity, minHeight: minimums.canvas, idealHeight: viewport.size.height * 0.42)
@@ -359,6 +380,15 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         if let run = viewModel.selectedRun {
             VStack(spacing: 0) {
                 WorkflowRunPlan(run: run).padding(16)
+                if let plan = run.technicalPlan {
+                    DisclosureGroup("Technical plan") {
+                        ScrollView {
+                            ReadingMarkdownView(text: plan).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
+                        }.frame(maxHeight: 300)
+                    }
+.font(.pb(.secondary, weight: .medium))
+.padding(16)
+                }
                 Divider()
                 if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
                     WorkflowInspector(viewModel: viewModel)
@@ -366,7 +396,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     Spacer(minLength: 0)
                 }
             }
-.frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
+.frame(minWidth: 220, idealWidth: 260, maxWidth: 500)
 .background(Color.cardFill)
         }
     }

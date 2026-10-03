@@ -39,7 +39,7 @@ extension WorkflowVM {
                 node["instructions"] = .string(Self.starterInstructions(role))
                 node["agent"] = .object(["backend": .string("codex"), "fallbacks": .array([])])
                 node["freedom"] = .string(WorkflowAccess.defaultLevel(for: role))
-                node["session_mode"] = .string("resume")
+                node["session_mode"] = .string("agent_decides")
                 node["branch_mode"] = .string("auto")
                 node["max_attempts"] = .number(3)
             }

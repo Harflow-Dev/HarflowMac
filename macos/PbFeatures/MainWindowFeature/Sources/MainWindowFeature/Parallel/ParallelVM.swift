@@ -347,17 +347,21 @@ final class ParallelVM: ParallelViewModel {
     /// all act on the CURRENT (newest) member; `title` names the conversation from its FIRST member
     /// — the same current-vs-first split `TaskDetailVM.recompute()` uses.
     private func makeColumnModel(for conversation: Conversation) -> ParallelColumnModel {
-        let current = conversation.current
+        let current = latestSnapshots[conversation.current.taskID] ?? conversation.current
         let currentID = current.taskID
         let firstID = conversation.first.taskID
         let subtitle = ParallelColumnModel.subtitle(
             repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count
         )
 
-        let itemMembers = conversation.members.map {
-            ConversationItemMember(task: $0, items: itemsByTask[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
+        let itemMembers = conversation.members.map { member in
+            let snapshot = latestSnapshots[member.taskID] ?? member
+            let prompt = snapshot.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID)
+            return ConversationItemMember(task: snapshot, items: itemsByTask[member.taskID] ?? [], prompt: prompt)
         }
-        let rows = ConversationTimeline.rows(itemMembers: itemMembers)
+        let rawRows = ConversationTimeline.rows(itemMembers: itemMembers)
+        let isWorker = WorkflowNodePresentation.isWorker(current)
+        let rows = isWorker ? WorkflowNodePresentation.visibleRows(rawRows) : rawRows
         // Monitor piece 12, Design point 4's rule, extended across every member (piece 13): a
         // shimmer only while NO member has any real content yet AND at least one member's own event
         // stream is still `.loading`; never once any member has items, and never for `.unavailable`
@@ -373,14 +377,14 @@ final class ParallelVM: ParallelViewModel {
             isBusy: latestBusy.contains(currentID),
             outcomeMessage: latestOutcomes[currentID],
             showPrompt: showPrompt,
-            prompt: useCase.prompt(for: firstID),
+            prompt: isWorker ? current.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: currentID) : itemMembers.first?.prompt,
             rows: rows,
             activityRows: ActivityRowsBuilder.build(from: rows),
             liveStep: LiveStep(rows: rows, isRunning: current.status.isRunning),
             pendingMessages: PendingMessage.visible(snapshot: latestSnapshots[currentID], events: useCase.events(for: currentID)),
             isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
-            summary: latestSnapshots[currentID]?.summary,
+            summary: isWorker ? WorkflowNodePresentation.summary(latestSnapshots[currentID]?.summary) : latestSnapshots[currentID]?.summary,
             onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: currentID) },
             onTapOpenTask: { [weak self] in self?.routing.selectTask(currentID) },
             start: conversation.first.startedAt
@@ -388,6 +392,7 @@ final class ParallelVM: ParallelViewModel {
     }
     
     private func didTapTakeover(taskID: String) {
+        guard WorkflowNodePresentation.allowsTerminal(latestSnapshots[taskID] ?? useCase.task(taskID)) else { return }
         guard let task = useCase.task(taskID) else { return }
         let isRunning = task.status.isRunning
         let title = isRunning ? "Take over this task?" : "Continue this session in a terminal?"

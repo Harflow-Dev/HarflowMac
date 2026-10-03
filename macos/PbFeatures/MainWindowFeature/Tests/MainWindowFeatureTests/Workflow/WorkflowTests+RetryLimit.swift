@@ -58,7 +58,7 @@ extension WorkflowTests {
         let harness = makeVM()
         let vm = harness.sut
         given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
-        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"),
+        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "status": .string("needs_attention"),
                                                "exhausted_retry_edges": .array([.string("retry")])])
         vm.instructions = "Try the alternate fix"
         vm.additionalAttempts = 9

@@ -79,6 +79,8 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 modelChoices: viewModel.modelChoices,
                 loadModels: viewModel.loadModels
             )
+            Stepper("Decision attempts: \(integer("max_decision_attempts", default: 3))", value: intBinding("max_decision_attempts", default: 3), in: 1 ... 10)
+            Stepper("Inspections: \(integer("max_inspections", default: 20))", value: intBinding("max_inspections", default: 20), in: 1 ... 1000)
             Stepper("Parallel agents: \(integer("max_parallel", default: 4))", value: intBinding("max_parallel", default: 4), in: 1 ... 64)
             Stepper("Transition limit: \(integer("max_transitions", default: 100))", value: intBinding("max_transitions", default: 100), in: 1 ... 10000)
             Text("Select a node or connection to edit its instructions and conditions.").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
@@ -121,13 +123,22 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     modelChoices: viewModel.modelChoices,
                     loadModels: viewModel.loadModels
                 )
-                Picker("Session", selection: nodeString(node, "session_mode", default: "resume")) {
-                    Text("Resume").tag("resume")
-                    Text("Fresh").tag("fresh")
-                }.pickerStyle(.segmented)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Session").fixedSize(horizontal: true, vertical: false)
+                    Picker("Session", selection: nodeString(node, "session_mode", default: "agent_decides")) {
+                        Text("Let agent decide").tag("agent_decides")
+                        Text("Resume").tag("resume")
+                        Text("Fresh").tag("fresh")
+                    }
+.labelsHidden()
+.pickerStyle(.segmented)
+                }
                 Stepper("Attempt limit: \(node.raw["max_attempts"]?.intValue ?? 3)", value: Binding(get: {
                     viewModel.selectedNode?.raw["max_attempts"]?.intValue ?? 3
                 }, set: { viewModel.updateNode(node.id, key: "max_attempts", value: .number(Double($0))) }), in: 1 ... 10000)
+                Stepper("Context questions: \(node.raw["max_context_questions"]?.intValue ?? 10)", value: Binding(get: {
+                    viewModel.selectedNode?.raw["max_context_questions"]?.intValue ?? 10
+                }, set: { viewModel.updateNode(node.id, key: "max_context_questions", value: .number(Double($0))) }), in: 1 ... 100)
                 Picker("Access", selection: nodeString(node, "freedom", default: WorkflowAccess.defaultLevel(for: node.role))) {
                     ForEach(WorkflowAccess.allowedLevels(for: node.role), id: \.self) { level in
                         Text(WorkflowAccess.title(level)).tag(level)
@@ -206,10 +217,26 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     let label = activation["role"]?.stringValue == "orchestrator" ? "Decision" : "Attempt"
                     Text("\(label) \(index + 1) · \(activation["status"]?.stringValue ?? "")")
                         .font(.pb(.secondary, weight: .semibold))
+                    if let assignment = activation["assignment_prompt"]?.stringValue {
+                        Text("Assignment").font(.pb(.secondary, weight: .semibold))
+                        Text(assignment).font(.pb(.secondary)).textSelection(.enabled)
+                    }
+                    ForEach(Array(WorkflowJSON.objects(activation["questions"]).enumerated()), id: \.offset) { _, question in
+                        Text("Question: " + (question["question"]?.stringValue ?? "")).font(.pb(.secondary)).textSelection(.enabled)
+                        if let context = question["context"]?.stringValue { Text(context).font(.pb(.secondary)).textSelection(.enabled) }
+                        if let answer = question["answer"]?.stringValue {
+                            Text("Answer: " + answer).font(.pb(.secondary)).textSelection(.enabled)
+                        }
+                    }
+                    if let result = activation["node_result"], let description = WorkflowNodePresentation.summary(result.rendered()) {
+                        Text("Result").font(.pb(.secondary, weight: .semibold))
+                        Text(description).font(.pb(.secondary)).textSelection(.enabled)
+                    }
                     if activation["role"]?.stringValue == "node", let id = activation["id"]?.stringValue {
                         Button("Show activity") { viewModel.selectActivation(id) }.buttonStyle(QuietButtonStyle())
                     }
-                    ForEach(Array(WorkflowJSON.objects(activation["tasks"]).enumerated()), id: \.offset) { attempt, task in
+                    ForEach(Array(WorkflowJSON.objects(activation["tasks"]).enumerated()), id: \.offset) { _, task in
+                        let attempt = WorkflowExecutionAttempts.fallbackIndices(activation)[task["task_id"]?.stringValue ?? ""] ?? 0
                         HStack(alignment: .top, spacing: 6) {
                             BackendDot(backend: task["candidate"]?["backend"]?.stringValue ?? "")
                             VStack(alignment: .leading, spacing: 3) {

@@ -370,7 +370,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     @ViewBuilder
     private var takeoverButton: some View {
-        if !isEmbedded {
+        if !isEmbedded, WorkflowNodePresentation.allowsTerminal(viewModel.task) {
             Button(viewModel.takeoverButtonLabel) { viewModel.didTapTakeover() }
                 .buttonStyle(QuietButtonStyle())
                 .disabled(!viewModel.canTakeover)
