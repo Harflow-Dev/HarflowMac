@@ -126,10 +126,7 @@ struct TimelinePaneView: View {
                 .padding(24)
                 .readingColumn()
             }
-            .onChange(of: model.updateToken) { _, _ in
-                if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
-            }
-            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            .followLiveScroll(token: model.updateToken, enabled: followLive, proxy: proxy, target: "bottom")
         }
     }
 

@@ -42,6 +42,7 @@ protocol SidebarViewModel: ViewModel {
     var savedWorkflows: [WorkflowRecord] { get }
     var workflowErrorMessage: String? { get }
     func didTapNewWorkflow()
+    func groupConversations(_ group: ParallelGroup) -> [Conversation]
     func isExecutionParentExpanded(_ id: String) -> Bool
 
     func didAppear()
@@ -65,6 +66,7 @@ extension SidebarViewModel {
     var savedWorkflows: [WorkflowRecord] { [] }
     var workflowErrorMessage: String? { nil }
     func didTapNewWorkflow() {}
+    func groupConversations(_ group: ParallelGroup) -> [Conversation] { group.conversations }
     func isExecutionParentExpanded(_ id: String) -> Bool { false }
 }
 
@@ -231,7 +233,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
             HStack(spacing: 4) {
-                if group.total > 1 {
+                if viewModel.groupConversations(group).count > 1 {
                 Button { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: group.id) } } label: {
                     Image(systemName: viewModel.isExecutionParentExpanded(group.id) ? "chevron.down" : "chevron.right")
                         .font(.pb(.caption))
@@ -239,7 +241,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
 .buttonStyle(.plain)
 .accessibilityLabel("Expand or collapse \(group.name)")
                 }
-                GroupRow(group: group)
+                GroupRow(group: group, conversations: viewModel.groupConversations(group))
             }.tag(MonitorDestination.group(group.name))
         case .workflow(let row):
             TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion("workflow:\(row.id)") } : nil)

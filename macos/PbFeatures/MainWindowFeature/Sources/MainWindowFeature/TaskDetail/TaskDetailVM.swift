@@ -274,8 +274,9 @@ final class TaskDetailVM: TaskDetailViewModel {
     func recomputeMembersAndLeases() {
         let resolvedMembers = useCase.conversationMembers(of: identityTaskID)
         let requested = resolvedMembers.first { $0.taskID == taskID }
-        let isOrchestrator = requested?.raw["workflow_role"]?.stringValue == "orchestrator"
-        let isExecutionChild = !isOrchestrator && (requested?.raw["workflow_run_id"]?.stringValue != nil || requested?.group != nil)
+        let isLogicalWorkflow = requested?.raw["workflow_role"]?.stringValue == "orchestrator"
+            || requested?.raw["workflow_node_id"]?.stringValue != nil
+        let isExecutionChild = !isWorkflowBuilder && !isLogicalWorkflow && requested?.raw["workflow_run_id"]?.stringValue != nil
         var members = isExecutionChild ? [requested].compactMap(\.self) : resolvedMembers
         if !isExecutionChild, members.isEmpty, let survivor = useCase.oldestSurvivor(among: Set(lastKnownMemberIDsOldestFirst)) {
             members = useCase.conversationMembers(of: survivor)

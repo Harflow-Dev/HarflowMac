@@ -54,7 +54,11 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }
     func hasListedPublisher() -> AnyPublisher<Bool, Never> { taskListRepository.hasListedPublisher() }
     func titlesPublisher() -> AnyPublisher<[String: String], Never> { taskListRepository.titlesPublisher() }
-    func detail(_ id: String) -> TaskInfo? { taskListRepository.detail(id) }
+    func detail(_ id: String) -> TaskInfo? {
+        guard let listed = taskListRepository.task(id) else { return taskListRepository.detail(id) }
+        return WorkflowNodePresentation.merged(taskListRepository.detail(id), with: listed)
+    }
+
     func task(_ id: String) -> TaskInfo? { taskListRepository.task(id) }
     func title(_ id: String) -> String { taskListRepository.title(id) }
     func ancestors(of id: String) -> [TaskInfo] { Lineage.ancestors(of: id, in: taskListRepository.tasks) }

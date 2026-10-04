@@ -273,7 +273,7 @@ final class SidebarVM: SidebarViewModel {
 
     func didToggleExpansion(taskID: String) {
         if taskID.hasPrefix("group:"),
-           !Lineage.sections(latestTasks).parallel.contains(where: { $0.id == taskID && $0.total > 1 }) { return }
+           !Lineage.sections(latestTasks).parallel.contains(where: { $0.id == taskID && groupConversations($0).count > 1 }) { return }
         if taskID.hasPrefix("workflow:") || taskID.hasPrefix("group:") {
             if !expandedExecutionParents.insert(taskID).inserted {
                 expandedExecutionParents.remove(taskID)

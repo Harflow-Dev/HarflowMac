@@ -151,13 +151,8 @@ struct ParallelColumnView: View {
             }
             ScrollViewReader { proxy in
                 scrollingFeed(shown)
-                    .onChange(of: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep, pendingMessages: model.pendingMessages)) { _, _ in
-                        if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
-                    }
-                    .onChange(of: followLive) { _, isOn in
-                        if isOn { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
-                    }
-                    .onAppear { if followLive { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
+                    .followLiveScroll(token: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep, pendingMessages: model.pendingMessages),
+                                      enabled: followLive, proxy: proxy, target: Self.bottomID)
             }
         }
     }

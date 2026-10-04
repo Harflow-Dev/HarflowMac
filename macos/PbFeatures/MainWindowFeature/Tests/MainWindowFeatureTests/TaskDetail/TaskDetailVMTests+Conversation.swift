@@ -93,7 +93,9 @@ extension TaskDetailVMTests {
     /// from the start — pass every member a test will EVER push through `membersBox`, including ones
     /// not yet in `initialMembers`, since a test adding a brand-new follow-up mid-run needs that
     /// member's stubs to already exist before it ever appears.
-    func makeConversationSUT(openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil) -> ConversationSUT {
+    func makeConversationSUT(
+        openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil, isWorkflowBuilder: Bool = false
+    ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
@@ -155,7 +157,7 @@ extension TaskDetailVMTests {
             return Dictionary(ids.map { ($0, childrenBoxes[$0]?.value ?? []) }, uniquingKeysWith: { first, _ in first })
         }
 
-        let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing)
+        let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing, isWorkflowBuilder: isWorkflowBuilder)
         return ConversationSUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, membersBox: membersBox,
             eventsBox: eventsBoxes, childrenBox: childrenBoxes, childrenOfEachCallCount: childrenOfEachCallCount,

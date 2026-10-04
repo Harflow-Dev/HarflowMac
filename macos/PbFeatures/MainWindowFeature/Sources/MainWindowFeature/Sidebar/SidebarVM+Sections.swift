@@ -74,7 +74,7 @@ extension SidebarVM {
         switch entry {
         case .tree(let node): flattenedRows(node, forcedExpandedIDs: forcedExpandedIDs).map(SidebarItem.task)
         case .group(let group):
-            [.group(group)] + (group.total > 1 && expandedExecutionParents.contains(group.id) ? executionRows(groupChildren(group.name)) : [])
+            [.group(group)] + (groupConversations(group).count > 1 && expandedExecutionParents.contains(group.id) ? executionRows(groupChildren(group.name)) : [])
         case .workflow(let run):
             [.workflow(workflowRow(run))] + (expandedExecutionParents.contains("workflow:\(run.id)") ? executionRows(workflowChildren(run.id)) : [])
         }

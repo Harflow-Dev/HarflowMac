@@ -99,9 +99,15 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     @ViewBuilder
     private func technicalPlanSetting(_ node: WorkflowNodeModel) -> some View {
         if node.role == "planning" {
+            Toggle("Require task list", isOn: Binding(get: {
+                viewModel.selectedNode?.raw["require_tasks"]?.boolValue ?? true
+            }, set: { viewModel.updateNode(node.id, key: "require_tasks", value: .bool($0)) }))
             Toggle("Require technical plan", isOn: Binding(get: {
                 viewModel.selectedNode?.raw["require_technical_plan"]?.boolValue ?? true
             }, set: { viewModel.updateNode(node.id, key: "require_technical_plan", value: .bool($0)) }))
+            Text("Disable both for a brief result without replacing the run's existing plan or task list.")
+                .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
         }
     }
 

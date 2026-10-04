@@ -236,3 +236,21 @@ extension WorkflowDelegationTests {
         #expect(projected[0].taskID == "managed")
     }
 }
+
+extension WorkflowDelegationTests {
+    @Test func givenSnapshotWithoutWorkflowMetadata_whenRefreshed_thenContractStaysDecodedAndAssignmentRetained() throws {
+        // given
+        let listed = try #require(TaskInfo(.object(["task_id": .string("node"), "workflow_role": .string("node"),
+            "workflow_run_id": .string("run"), "execution_contract": .string("delegation"),
+            "display_prompt": .string("Focused assignment"), "workflow_status": .string("running")])))
+        let snapshot = try #require(TaskInfo(.object(["task_id": .string("node"), "status": .string("completed"),
+            "summary": .string(#"{"status":"succeeded","result":{"brief":"Done"},"evidence":[]}"#)])))
+        // when
+        let merged = WorkflowNodePresentation.merged(snapshot, with: listed)
+        // then
+        #expect(WorkflowNodePresentation.isManaged(merged))
+        #expect(WorkflowNodePresentation.summary(merged.summary)?.contains("Succeeded") == true)
+        #expect(merged.raw["display_prompt"]?.stringValue == "Focused assignment")
+        #expect(!WorkflowNodePresentation.allowsTerminal(merged))
+    }
+}

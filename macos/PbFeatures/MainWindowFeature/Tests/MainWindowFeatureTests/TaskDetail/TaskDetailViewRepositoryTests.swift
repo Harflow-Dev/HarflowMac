@@ -186,7 +186,7 @@ private final class LockedBox<Value>: @unchecked Sendable {
 }
 
 extension TaskDetailViewRepositoryTests {
-    @Test func givenFreshOrchestratorSessions_whenOpeningAnyDecision_thenRepositoryReturnsCompleteLogicalHistory() throws {
+    @Test func givenFreshOrchestratorSessions_whenOpeningAnyDecision_thenSessionsRemainSeparate() throws {
         // given
         let repository = MockTaskListRepository()
         let tasks = try ["a", "b"].enumerated().map { index, id in
@@ -198,7 +198,7 @@ extension TaskDetailViewRepositoryTests {
         given(repository).tasks.willReturn(tasks.reversed())
         let sut = TaskDetailViewRepository(taskListRepository: repository)
         // when / then
-        #expect(sut.conversationMembers(of: "b").map(\.taskID) == ["a", "b"])
-        #expect(sut.conversationMembers(of: "a").map(\.taskID) == ["a", "b"])
+        #expect(sut.conversationMembers(of: "b").map(\.taskID) == ["b"])
+        #expect(sut.conversationMembers(of: "a").map(\.taskID) == ["a"])
     }
 }

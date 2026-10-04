@@ -263,11 +263,11 @@ final class ParallelVM: ParallelViewModel {
         if let workflowTaskIDs {
             let byID = Dictionary(uniqueKeysWithValues: latestTasks.map { ($0.taskID, $0) })
             let associated = workflowTaskIDs.compactMap { byID[$0] }
-            groupConversations = Lineage.conversations(associated).filter { conversation in
+            groupConversations = WorkflowOrchestratorConversation.conversations(associated).filter { conversation in
                 workflowFocusedTaskIDs.map { focus in conversation.members.contains { focus.contains($0.taskID) } } ?? true
             }
         } else {
-            groupConversations = group?.conversations ?? []
+            groupConversations = WorkflowOrchestratorConversation.conversations(group?.conversations.flatMap(\.members) ?? [])
         }
         let newIDs = groupConversations.flatMap { $0.members.map(\.taskID) }
         let newIDSet = Set(newIDs)
@@ -347,7 +347,7 @@ final class ParallelVM: ParallelViewModel {
     /// all act on the CURRENT (newest) member; `title` names the conversation from its FIRST member
     /// — the same current-vs-first split `TaskDetailVM.recompute()` uses.
     private func makeColumnModel(for conversation: Conversation) -> ParallelColumnModel {
-        let current = latestSnapshots[conversation.current.taskID] ?? conversation.current
+        let current = WorkflowNodePresentation.merged(latestSnapshots[conversation.current.taskID], with: conversation.current)
         let currentID = current.taskID
         let firstID = conversation.first.taskID
         let subtitle = ParallelColumnModel.subtitle(
@@ -355,7 +355,7 @@ final class ParallelVM: ParallelViewModel {
         )
 
         let itemMembers = conversation.members.map { member in
-            let snapshot = latestSnapshots[member.taskID] ?? member
+            let snapshot = WorkflowNodePresentation.merged(latestSnapshots[member.taskID], with: member)
             let prompt = snapshot.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID)
             return ConversationItemMember(task: snapshot, items: itemsByTask[member.taskID] ?? [], prompt: prompt)
         }

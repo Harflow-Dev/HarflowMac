@@ -192,9 +192,10 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// The first task of the group's only agent conversation, or `nil` when the group has none or
     /// several (then it is a real parallel run). Membership is read when the view is built.
     nonisolated static func soleConversationID(inGroup name: String, tasks: [TaskInfo]) -> String? {
-        guard let group = Lineage.sections(tasks).parallel.first(where: { $0.name == name }),
-              group.conversations.count == 1 else { return nil }
-        return group.conversations[0].first.taskID
+        guard let group = Lineage.sections(tasks).parallel.first(where: { $0.name == name }) else { return nil }
+        let sessions = WorkflowOrchestratorConversation.conversations(group.conversations.flatMap(\.members))
+        guard sessions.count == 1 else { return nil }
+        return sessions[0].first.taskID
     }
 
     /// A fresh VM every call, keyed by `id` exactly like `buildParallelView(name:)` above: `.id()`
@@ -213,7 +214,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public func buildTaskDetailView(id: String) -> AnyView {
         let useCase = TaskDetailViewRepository()
         let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self)
-        let conversationID = Lineage.conversationID(of: id, in: taskListRepository.tasks)
+        let conversationID = WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID
+            ?? Lineage.conversationID(of: id, in: taskListRepository.tasks)
         return TaskDetailView(vm).id(conversationID).eraseToAnyView()
     }
     

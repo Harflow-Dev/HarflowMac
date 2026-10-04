@@ -5,6 +5,15 @@ import MonitorCore
 
 /// Display projection only; durable task events keep their original contracts.
 enum WorkflowNodePresentation {
+    static func merged(_ snapshot: TaskInfo?, with listed: TaskInfo) -> TaskInfo {
+        guard let snapshot else { return listed }
+        var raw = snapshot.raw
+        for (key, value) in listed.raw where key.hasPrefix("workflow_") || ["execution_contract", "display_prompt"].contains(key) {
+            raw[key] = value
+        }
+        return TaskInfo(.object(raw)) ?? listed
+    }
+
     static func isWorker(_ task: TaskInfo) -> Bool {
         task.raw["workflow_role"]?.stringValue == "node" && task.raw["execution_contract"]?.stringValue == "delegation"
     }
