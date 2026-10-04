@@ -13,6 +13,7 @@ extension WorkflowTests {
         let useCase = MockWorkflowUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+        defer { vm.didDisappear() }
         var raw = try fixture("definition")
         var connections = WorkflowJSON.objects(raw["connections"])
         let index = try #require(connections.firstIndex { $0["id"]?.stringValue == "review-fix" })
@@ -25,7 +26,11 @@ extension WorkflowTests {
         vm.definition = raw
         vm.name = "retry"
         vm.selectedEdgeID = "review-fix"
-        await waitUntil { vm.canonicalValidationDefinition != nil }
+        // Await this specific request: a shared MainActor can be busy beyond
+        // polling deadlines on CI without the validation having failed.
+        let validation = try #require(vm.validationTask)
+        await validation.value
+        _ = try #require(vm.canonicalValidationDefinition)
         // when
         #expect(vm.selectedEdge?.isBackward == true)
         #expect(vm.definition == raw)
@@ -37,7 +42,6 @@ extension WorkflowTests {
         #expect(vm.selectedEdge?.isBackward == false)
         #expect(vm.selectedEdge?.maxRetries == 3)
         #expect(vm.canonicalValidationDefinition == nil)
-        vm.didDisappear()
     }
 
     @Test func givenRetryLimit_whenSetToZeroOrRemoved_thenZeroIsPreservedAndAbsenceRestoresUncappedMode() throws {

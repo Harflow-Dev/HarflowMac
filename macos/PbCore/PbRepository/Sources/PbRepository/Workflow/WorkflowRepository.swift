@@ -29,9 +29,9 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
 
     public func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
         let ctl = try toolEnvironment.ctl().get()
-        // Builder JSON is a logical payload here, never a process argv entry.
+        // Workflow prompts and builder JSON are logical payloads, never process argv entries.
         // Keep its disposable files alive until the CLI has finished, including failures.
-        let input = command == "build" ? try WorkflowBuildInputs.prepare(options: options) : nil
+        let input = ["build", "start", "builder-followup"].contains(command) ? try WorkflowCommandInputs.prepare(options: options) : nil
         defer { input?.cleanUp() }
         return try await ctl.workflow(command, options: input?.options ?? options, positionals: positionals).get()
     }

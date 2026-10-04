@@ -214,39 +214,39 @@ import Testing
         #expect(harness.sut.canSave)
     }
 
-    @Test func givenDelayedValidation_whenDraftChanges_thenOldSuccessCannotClearNewWarning() async {
+    @Test func givenDelayedValidation_whenDraftChanges_thenOldSuccessCannotClearNewWarning() async throws {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "old-name"
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         // when
         vm.name = "new-name"
         useCase.finish(0, result: .success(["valid": .bool(true)]))
         // then
         #expect(vm.canSave)
-        await waitUntil { useCase.requests.count == 2 }
+        try #require(await useCase.waitForRequestCount(2), "Validation request did not enter the controlled use case")
         #expect(useCase.requests[1]["name"] == .string("new-name"))
         useCase.finish(1, result: .success(["valid": .bool(false), "error": .string("No end node")]))
         await waitUntil { vm.validationMessage == "No end node" }
         #expect(vm.canSave)
     }
 
-    @Test func givenValidationFailureAndDisappearance_whenResponsesArrive_thenSaveStaysClickable() async {
+    @Test func givenValidationFailureAndDisappearance_whenResponsesArrive_thenSaveStaysClickable() async throws {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "workflow"
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         // when
         useCase.finish(0, result: .failure(ToolError.notFound(tool: "polybridge-ctl", searched: [])))
         await waitUntil { vm.validationMessage?.hasPrefix("Unable to validate workflow.") == true }
         vm.name = "renamed"
-        await waitUntil { useCase.requests.count == 2 }
+        try #require(await useCase.waitForRequestCount(2), "Validation request did not enter the controlled use case")
         vm.didDisappear()
         useCase.finish(1, result: .success(["valid": .bool(true)]))
         // then
@@ -254,18 +254,18 @@ import Testing
         #expect(vm.errorText == nil)
     }
 
-    @Test func givenSaveInFlight_whenOpeningNewDraft_thenOldSaveResponseCannotReplaceDraftMetadata() async {
+    @Test func givenSaveInFlight_whenOpeningNewDraft_thenOldSaveResponseCannotReplaceDraftMetadata() async throws {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "original"
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         useCase.finish(0, result: .success(["valid": .bool(true)]))
         await waitUntil { vm.validationMessage == nil }
         vm.save()
-        await waitUntil { useCase.savedRequests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1, saving: true), "Save request did not enter the controlled use case")
         // when
         vm.newWorkflow()
         let freshDraft = vm.definition
@@ -345,7 +345,7 @@ import Testing
         }
     }
 
-    @Test func givenFirstSaveRefreshInFlight_whenEditingDraft_thenNavigationDoesNotDiscardNewerEdits() async {
+    @Test func givenFirstSaveRefreshInFlight_whenEditingDraft_thenNavigationDoesNotDiscardNewerEdits() async throws {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         useCase.delayRefresh = true
@@ -355,11 +355,11 @@ import Testing
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "workflow"
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         useCase.finish(0, result: .success(["valid": .bool(true)]))
         await waitUntil { vm.validationMessage == nil }
         vm.save()
-        await waitUntil { useCase.savedRequests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1, saving: true), "Save request did not enter the controlled use case")
         var saved = useCase.savedRequests[0]
         saved["revision"] = .number(4)
         useCase.finishSave(saved)
@@ -418,7 +418,7 @@ import Testing
         withExtendedLifetime(subscription) {}
     }
 
-    @Test func givenInvalidGraph_whenSaving_thenCanonicalWarningShowsWithoutPersistence() async {
+    @Test func givenInvalidGraph_whenSaving_thenCanonicalWarningShowsWithoutPersistence() async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
@@ -429,7 +429,7 @@ import Testing
         #expect(vm.canSave)
         vm.save()
         #expect(vm.isBusy)
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         useCase.finish(0, result: .success(["valid": .bool(false), "error": .string("Orphan node has no outgoing connection")]))
         await waitUntil { alert != nil && !vm.isBusy }
         #expect(alert?.description == "Orphan node has no outgoing connection")
@@ -438,18 +438,18 @@ import Testing
         withExtendedLifetime(subscription) {}
     }
 
-    @Test func givenPendingValidGraph_whenSaveClicked_thenValidatesExactSnapshotBeforePersisting() async {
+    @Test func givenPendingValidGraph_whenSaveClicked_thenValidatesExactSnapshotBeforePersisting() async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.newWorkflow()
         vm.name = "pending-draft"
         vm.save()
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         #expect(useCase.requests[0]["name"] == .string("pending-draft"))
         #expect(useCase.savedRequests.isEmpty)
         useCase.finish(0, result: .success(["valid": .bool(true)]))
-        await waitUntil { useCase.savedRequests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1, saving: true), "Save request did not enter the controlled use case")
         #expect(useCase.savedRequests[0] == useCase.requests[0])
         var response = useCase.savedRequests[0]
         response["revision"] = .number(1)
@@ -462,14 +462,14 @@ import Testing
     }
 
     @Test(arguments: ["definition", "name", "revision", "new-draft", "disappear"])
-    func givenSaveValidationInFlight_whenDraftChanges_thenStaleSuccessCannotPersist(_ change: String) async {
+    func givenSaveValidationInFlight_whenDraftChanges_thenStaleSuccessCannotPersist(_ change: String) async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
         vm.newWorkflow()
         vm.name = "draft"
         vm.save()
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         switch change {
         case "name": vm.name = "renamed"
         case "revision": vm.revision = 10
@@ -485,12 +485,15 @@ import Testing
         useCase.finishAllValidations()
     }
 
-    @Test func givenValidatedSnappedNode_whenMovedWithinSameGridCell_thenValidationRemainsCached() async {
+    @Test func givenValidatedSnappedNode_whenMovedWithinSameGridCell_thenValidationRemainsCached() async throws {
         let harness = makeVM()
         harness.sut.newWorkflow()
         harness.sut.name = "draft"
         harness.sut.moveNode("start", to: CGPoint(x: 80, y: 80))
-        await waitUntil { harness.sut.validationMessage == nil }
+        defer { harness.sut.didDisappear() }
+        let validation = try #require(harness.sut.validationTask)
+        await validation.value
+        _ = try #require(harness.sut.validatedDefinition)
         let before = harness.sut.definition
         harness.sut.moveNode("start", to: CGPoint(x: 81, y: 81))
         #expect(harness.sut.definition == before)
@@ -508,7 +511,7 @@ import Testing
         }
     }
 
-    @Test func givenLegacyEditableModes_whenSaving_thenOnlySubmittedSnapshotUsesAutomaticBranching() async {
+    @Test func givenLegacyEditableModes_whenSaving_thenOnlySubmittedSnapshotUsesAutomaticBranching() async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
@@ -516,7 +519,7 @@ import Testing
         vm.name = "legacy"
         vm.updateNode("review", key: "branch_mode", value: .string("choose_one"))
         vm.save()
-        await waitUntil { useCase.requests.count == 1 }
+        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
         #expect(vm.nodes.first { $0.id == "review" }?.raw["branch_mode"] == .string("choose_one"))
         #expect(WorkflowJSON.nodes(useCase.requests[0]).allSatisfy { $0.raw["branch_mode"] == .string("auto") })
         useCase.finish(0, result: .success(["valid": .bool(false), "error": .string("Stop before save")]))

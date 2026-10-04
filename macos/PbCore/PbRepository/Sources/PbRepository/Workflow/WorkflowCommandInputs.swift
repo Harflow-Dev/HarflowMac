@@ -1,9 +1,9 @@
 import Foundation
 
-// MARK: - WorkflowBuildInputs
+// MARK: - WorkflowCommandInputs
 
-/// Moves logical builder payload options into disposable files at the process boundary.
-struct WorkflowBuildInputs {
+/// Moves logical workflow payload options into disposable files at the process boundary.
+struct WorkflowCommandInputs {
     let options: [String]
     private let directory: URL?
 
@@ -14,7 +14,9 @@ struct WorkflowBuildInputs {
     }
 
     init(options: [String], root: URL, write: (Data, URL) throws -> Void) throws {
-        let payloads = [("--definition-json=", "--definition=", "definition.json"), ("--source=", "--source-file=", "source.json")]
+        let payloads = [("--definition-json=", "--definition=", "definition.json"),
+                        ("--source=", "--source-file=", "source.json"),
+                        ("--prompt=", "--prompt-file=", "prompt.txt")]
         guard options.contains(where: { option in payloads.contains { option.hasPrefix($0.0) } }) else {
             self.options = options
             self.directory = nil

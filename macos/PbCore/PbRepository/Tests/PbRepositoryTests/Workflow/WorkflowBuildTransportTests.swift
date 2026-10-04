@@ -51,9 +51,10 @@ extension WorkflowBuildTransportTests {
         // given
         let paths = LockedBox<[String]>([])
         let gate = AsyncGate()
+        defer { gate.open() }
         let runner = StubProcessRunner { call in
             let filenames = call.arguments
-.filter { $0.hasPrefix("--definition=") || $0.hasPrefix("--source-file=") }
+.filter { option in ["--definition=", "--source-file=", "--prompt-file="].contains { option.hasPrefix($0) } }
                 .map { String($0.split(separator: "=", maxSplits: 1)[1]) }
             paths.mutate { $0 = filenames }
             gate.waitSync()
@@ -62,8 +63,12 @@ extension WorkflowBuildTransportTests {
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
         let sut = WorkflowRepositoryImpl(toolEnvironment: environment)
-        let task = Task { try await sut.command("build", options: ["--definition-json={}", "--source={}"], positionals: ["canvas"]) }
-        await waitUntil { paths.value.count == 2 }
+        let task = Task {
+            try await sut.command("build", options: ["--definition-json={}", "--source={}",
+                                                    "--prompt=\(String(repeating: "request", count: 100_000))"], positionals: ["canvas"])
+        }
+        await waitUntil { paths.value.count == 3 }
+        try #require(paths.value.count == 3)
         // when
         task.cancel()
         for path in paths.value { #expect(FileManager.default.fileExists(atPath: path)) }
@@ -78,7 +83,7 @@ extension WorkflowBuildTransportTests {
         var directory: URL?
         // when
         #expect(throws: CocoaError.self) {
-            _ = try WorkflowBuildInputs(options: ["--definition-json={}", "--source={}"], root: FileManager.default.temporaryDirectory) { data, url in
+            _ = try WorkflowCommandInputs(options: ["--definition-json={}", "--source={}"], root: FileManager.default.temporaryDirectory) { data, url in
                 directory = url.deletingLastPathComponent()
                 if url.lastPathComponent == "source.json" { throw CocoaError(.fileWriteOutOfSpace) }
                 try data.write(to: url)
@@ -92,9 +97,44 @@ extension WorkflowBuildTransportTests {
         // given
         let options = ["--prompt=Explain --source={}", "--definition=/external/canvas.json", "--backend=codex"]
         // when
-        let input = try WorkflowBuildInputs.prepare(options: options)
-        input.cleanUp()
+        let input = try WorkflowCommandInputs.prepare(options: options)
+        defer { input.cleanUp() }
         // then
-        #expect(input.options == options)
+        let option = try #require(input.options.first { $0.hasPrefix("--prompt-file=") })
+        let path = String(option.dropFirst("--prompt-file=".count))
+        #expect(try String(contentsOfFile: path, encoding: .utf8) == "Explain --source={}")
+        #expect(input.options.contains("--definition=/external/canvas.json"))
+        #expect(!input.options.contains { $0.hasPrefix("--source-file=") })
+    }
+}
+
+extension WorkflowBuildTransportTests {
+    @Test(arguments: ["build", "start", "builder-followup"], [false, true])
+    func givenLargeWorkflowPrompt_whenDispatching_thenCompletePromptUsesDisposableFile(_ command: String, _ failure: Bool) async throws {
+        // given
+        let prompt = String(repeating: "Detailed request 🦋\r\n", count: 30_000)
+        let paths = LockedBox<[String]>([])
+        let runner = StubProcessRunner { call in
+            #expect(call.arguments.reduce(0) { $0 + $1.utf8.count } < 8192)
+            if let option = call.arguments.first(where: { $0.hasPrefix("--prompt-file=") }) {
+                let path = String(option.dropFirst("--prompt-file=".count))
+                paths.mutate { $0 = [path] }
+                #expect((try? String(contentsOfFile: path, encoding: .utf8)) == prompt)
+                #expect((try? FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int) == 0o600)
+            } else {
+                Issue.record("Workflow prompt was placed in argv")
+            }
+            return failure ? .failure(.unreadable(tool: "polybridge-ctl", exitCode: 1, stderr: "failed"))
+                : .success(stdout(#"{"v":4,"result":{"workflow_run_id":"builder"}}"#))
+        }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
+        let sut = WorkflowRepositoryImpl(toolEnvironment: environment)
+        // when
+        let result = try? await sut.command(command, options: ["--prompt=\(prompt)"], positionals: ["canvas"])
+        // then
+        #expect((result != nil) == !failure)
+        #expect(paths.value.count == 1)
+        for path in paths.value { #expect(!FileManager.default.fileExists(atPath: path)) }
     }
 }

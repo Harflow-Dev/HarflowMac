@@ -14,12 +14,40 @@ final class ControlledWorkflowValidationUseCase: WorkflowUseCase, @unchecked Sen
     var pendingLoad: CheckedContinuation<[String: JSONValue], Never>?
     private var pendingSave: CheckedContinuation<[String: JSONValue], Never>?
     private var pending: [Int: CheckedContinuation<[String: JSONValue], any Error>] = [:]
+    private struct RequestWaiter {
+        let count: Int
+        let saving: Bool
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
+    private var requestWaiters: [UUID: RequestWaiter] = [:]
     var backendIDs: [String] { ["codex"] }
 
     func validate(definition: JSONValue) async throws -> [String: JSONValue] {
         let index = requests.count
         requests.append(definition.objectValue ?? [:])
+        finishRequestWaiters()
         return try await withCheckedThrowingContinuation { pending[index] = $0 }
+    }
+
+    /// Signal actual mock entry instead of polling a deadline during main-actor contention.
+    func waitForRequestCount(_ count: Int, saving: Bool = false) async -> Bool {
+        if (saving ? savedRequests.count : requests.count) >= count { return true }
+        let id = UUID()
+        return await withCheckedContinuation { continuation in
+            requestWaiters[id] = RequestWaiter(count: count, saving: saving, continuation: continuation)
+            Task { @MainActor [weak self] in
+                // This interval begins when the timeout task can actually execute.
+                try? await Task.sleep(for: .seconds(3))
+                self?.requestWaiters.removeValue(forKey: id)?.continuation.resume(returning: false)
+            }
+        }
+    }
+
+    private func finishRequestWaiters() {
+        for (id, waiter) in requestWaiters where (waiter.saving ? savedRequests.count : requests.count) >= waiter.count {
+            requestWaiters.removeValue(forKey: id)?.continuation.resume(returning: true)
+        }
     }
 
     func finish(_ index: Int, result: Result<[String: JSONValue], any Error>) {
@@ -50,6 +78,7 @@ final class ControlledWorkflowValidationUseCase: WorkflowUseCase, @unchecked Sen
 
     func save(name _: String, definition: JSONValue, expectedRevision _: Int) async throws -> [String: JSONValue] {
         savedRequests.append(definition.objectValue ?? [:])
+        finishRequestWaiters()
         return await withCheckedContinuation { pendingSave = $0 }
     }
 
