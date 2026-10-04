@@ -42,6 +42,7 @@ protocol SidebarViewModel: ViewModel {
     var savedWorkflows: [WorkflowRecord] { get }
     var workflowErrorMessage: String? { get }
     func didTapNewWorkflow()
+    func isExecutionParentExpanded(_ id: String) -> Bool
 
     func didAppear()
     func didDisappear()
@@ -64,6 +65,7 @@ extension SidebarViewModel {
     var savedWorkflows: [WorkflowRecord] { [] }
     var workflowErrorMessage: String? { nil }
     func didTapNewWorkflow() {}
+    func isExecutionParentExpanded(_ id: String) -> Bool { false }
 }
 
 // MARK: - SidebarView
@@ -196,7 +198,10 @@ struct SidebarView<VM: SidebarViewModel>: View {
             } else {
                 ForEach(viewModel.sections) { section in
                     Section {
-                        ForEach(section.items) { item in itemView(item) }
+                        ForEach(section.items) { item in
+                            itemView(item)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                        }
                     } header: {
                         SectionLabel(text: section.title)
                     }
@@ -222,12 +227,23 @@ struct SidebarView<VM: SidebarViewModel>: View {
     private func itemView(_ item: SidebarItem) -> some View {
         switch item {
         case .task(let row):
-            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { viewModel.didToggleExpansion(taskID: row.id) } : nil)
+            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: row.id) } } : nil)
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
-            GroupRow(group: group).tag(MonitorDestination.group(group.name))
+            HStack(spacing: 4) {
+                if group.total > 1 {
+                Button { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: group.id) } } label: {
+                    Image(systemName: viewModel.isExecutionParentExpanded(group.id) ? "chevron.down" : "chevron.right")
+                        .font(.pb(.caption))
+                }
+.buttonStyle(.plain)
+.accessibilityLabel("Expand or collapse \(group.name)")
+                }
+                GroupRow(group: group)
+            }.tag(MonitorDestination.group(group.name))
         case .workflow(let row):
-            TaskRow(model: row).tag(MonitorDestination.workflowRun(row.id))
+            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: "workflow:\(row.id)") } } : nil)
+                .tag(MonitorDestination.workflowRun(row.id))
         }
     }
 

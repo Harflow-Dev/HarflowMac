@@ -9,9 +9,16 @@ enum WorkflowNodePresentation {
         task.raw["workflow_role"]?.stringValue == "node" && task.raw["execution_contract"]?.stringValue == "delegation"
     }
 
+    static func isManaged(_ task: TaskInfo) -> Bool {
+        ["node", "orchestrator"].contains(task.raw["workflow_role"]?.stringValue ?? "")
+            && task.raw["execution_contract"]?.stringValue == "delegation"
+    }
+
     static func allowsTerminal(_ task: TaskInfo?) -> Bool {
         guard let task else { return true }
-        return task.raw["workflow_run_id"]?.stringValue == nil || task.raw["workflow_status"]?.stringValue == "completed"
+        if task.raw["workflow_run_id"]?.stringValue == nil { return true }
+        return ["completed", "failed", "cancelled"].contains(task.raw["workflow_status"]?.stringValue ?? "")
+            && task.raw["workflow_settling"]?.boolValue == false
     }
 
     static func summary(_ text: String?) -> String? {
@@ -20,7 +27,9 @@ enum WorkflowNodePresentation {
         if source.hasPrefix("```json"), source.hasSuffix("```") {
             source = String(source.dropFirst(7).dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        guard let object = JSONValue.parse(Data(source.utf8))?.objectValue,
+        guard let object = JSONValue.parse(Data(source.utf8))?.objectValue else { return text }
+        if let decision = decisionSummary(object) { return decision }
+        guard
               let status = object["status"]?.stringValue, ["succeeded", "failed", "blocked", "asking"].contains(status),
               let result = object["result"]?.objectValue, object["evidence"]?.arrayValue != nil else { return text }
         var lines = [status == "asking" ? "Asking for context" : status.capitalized]
@@ -34,6 +43,19 @@ enum WorkflowNodePresentation {
         return lines.joined(separator: "\n\n")
     }
 
+    private static func decisionSummary(_ object: [String: JSONValue]) -> String? {
+        guard let action = object["action"]?.stringValue,
+           ["continue", "complete", "failed", "needs_input", "answer", "inspect"].contains(action) else { return nil }
+            var lines = [action == "continue" ? "Continuing workflow" : action.replacingOccurrences(of: "_", with: " ").capitalized]
+            if let reason = object["reason"]?.stringValue { lines.append(reason) }
+            if let question = object["question"]?.stringValue { lines.append("Question: " + question) }
+            if let answer = object["answer"]?.stringValue { lines.append("Answer: " + answer) }
+            for next in object["next"]?.arrayValue ?? [] {
+                if let assignment = next.objectValue?["prompt"]?.stringValue { lines.append("Assignment:\n" + assignment) }
+            }
+            return lines.joined(separator: "\n\n")
+    }
+
     private static func readable(_ value: JSONValue) -> String {
         if let text = value.stringValue { return text }
         if let array = value.arrayValue { return array.map(readable).joined(separator: "\n") }
@@ -43,12 +65,14 @@ enum WorkflowNodePresentation {
         return value.rendered()
     }
 
-    static func visibleRows(_ rows: [ConversationTimelineRow]) -> [ConversationTimelineRow] {
+    static func visibleRows(_ rows: [ConversationTimelineRow], tasks: [String: TaskInfo]? = nil, compact: Bool = false) -> [ConversationTimelineRow] {
         rows.map { row in
+            if let tasks, !(tasks[row.taskID].map(isManaged) ?? false) { return row }
             guard case let .item(item) = row.kind, case let .text(text, _) = item.body,
                   let display = summary(text), display != text else { return row }
+            let projectedText = compact ? String(display.prefix(240)) + (display.count > 240 ? "… Open task for details." : "") : display
             var payload: [String: JSONValue] = ["v": .number(1), "seq": .number(Double(item.id)),
-                                                "kind": .string("assistant_text"), "text": .string(display)]
+                                                "kind": .string("assistant_text"), "text": .string(projectedText)]
             if let time = item.at { payload["observed_at"] = .string(time.ISO8601Format()) }
             guard let event = TaskEvent(line: JSONValue.object(payload).rendered()),
                   let projected = Timeline.items(from: [event]).first else { return row }

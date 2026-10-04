@@ -65,7 +65,6 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             loadModels: viewModel.loadModels
                         )
                     } else {
-                        accessOptions
                         Toggle(
                             "Override orchestrator agent",
                             isOn: Binding(get: { viewModel.overrideOrchestrator }, set: { viewModel.overrideOrchestrator = $0 })
@@ -113,32 +112,6 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
 .disabled(!canSubmit)
             }.padding(20)
         }.frame(width: 580, height: 650)
-    }
-
-    private var accessOptions: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: "Run access limit")
-            ForEach(WorkflowAccess.levels, id: \.self) { level in
-                AccessOptionRow(model: AccessOptionModel(
-                    id: level,
-                    title: WorkflowAccess.title(level),
-                    detail: accessDetail(level),
-                    isSelected: viewModel.freedom == level,
-                    isWarning: ["publish", "unrestricted"].contains(level)
-                )) {
-                    viewModel.freedom = level
-                }
-            }
-        }
-    }
-
-    private func accessDetail(_ level: String) -> String {
-        switch level {
-        case "read_only": "Limit every step to reading. Workflows with implementation steps require write access."
-        case "write_in_repo": "Allow repository edits; each step keeps its configured access limit."
-        case "publish": "Allow publication where a step permits it; each step keeps its configured access limit."
-        default: "Allow unrestricted execution where a step permits it; each step keeps its configured access limit."
-        }
     }
 
 }

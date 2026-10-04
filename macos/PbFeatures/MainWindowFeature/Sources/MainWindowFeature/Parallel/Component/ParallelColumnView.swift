@@ -181,27 +181,9 @@ struct ParallelColumnView: View {
                 if let liveStep = model.liveStep {
                     LiveStepLineView(text: liveStep.text)
                 }
-                Divider()
-                summary
                 Color.clear.frame(height: 1).id(Self.bottomID)
             }
             .padding(.bottom, 12)
-        }
-    }
-
-    @ViewBuilder
-    private var summary: some View {
-        if model.task.status.isTerminal {
-            SectionLabel(text: "Final summary")
-            if let summary = model.summary, !summary.isEmpty {
-                ReadingMarkdownView(text: summary)
-            } else {
-                Text("No summary was reported.").font(.pb(.body)).foregroundStyle(Color.secondaryText)
-            }
-        } else {
-            Text("Still working… the final summary shows here when \(BackendStyle.displayName(model.task.backend)) finishes.")
-                .font(.pb(.body))
-                .foregroundStyle(Color.secondaryText)
         }
     }
 

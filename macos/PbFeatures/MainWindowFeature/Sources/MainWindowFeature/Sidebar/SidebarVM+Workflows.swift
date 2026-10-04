@@ -73,10 +73,21 @@ extension SidebarVM {
 
     func filteredWorkflowRuns() -> [SidebarWorkflowRun] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return workflowRuns.filter { run in
+        var runs = workflowRuns
+        let known = Set(runs.map(\.id))
+        for task in latestTasks {
+            guard let id = task.raw["workflow_run_id"]?.stringValue, !known.contains(id), !runs.contains(where: { $0.id == id }),
+                  task.raw["workflow_builder"]?.boolValue != true else { continue }
+            runs.append(SidebarWorkflowRun(raw: ["workflow_run_id": .string(id),
+                "name": task.raw["workflow_name"] ?? .string("Workflow"),
+                "status": task.raw["workflow_status"] ?? .string("running"),
+                "repo_path": .string(task.repoPath),
+                "created_at": .number(task.startedAt?.timeIntervalSince1970 ?? 0)]))
+        }
+        return runs.filter { run in
             guard run.raw["kind"]?.stringValue != "builder" else { return false }
             let text = "\(run.name) \(run.id) \(run.raw["repo_path"]?.stringValue ?? "") \(run.raw["prompt"]?.stringValue ?? "")"
-            let backends = workflowBackends(run.raw["definition"]?.objectValue ?? [:])
+            let backends = workflowBackends(run.raw["definition"]?.objectValue ?? [:]).union(workflowChildren(run.id).map(\.backend))
             return (query.isEmpty || text.lowercased().contains(query)) && (selectedBackend == "all" || backends.contains(selectedBackend))
         }
     }
@@ -96,6 +107,7 @@ extension SidebarVM {
             ? .other(rawStatus.replacingOccurrences(of: "_", with: " ").capitalized) : TaskStatus(rawStatus)
         return TaskRowModel(id: run.id, backend: "workflow", title: run.name, status: status,
                             repoName: Format.repoName(run.raw["repo_path"]?.stringValue ?? ""), ageText: Format.age(run.startedAt),
-                            subTaskSummary: run.raw["attention_reason"]?.stringValue, startedAt: run.startedAt)
+                            subTaskSummary: run.raw["attention_reason"]?.stringValue, startedAt: run.startedAt,
+                            hasChildren: !workflowChildren(run.id).isEmpty, isExpanded: expandedExecutionParents.contains("workflow:\(run.id)"))
     }
 }

@@ -36,6 +36,10 @@ extension SidebarVM {
     func normalized(_ destination: MonitorDestination?) -> MonitorDestination? {
         guard case .task(let id) = destination else { return destination }
         if latestTasks.contains(where: { $0.taskID == id }) {
+            if executionParent(of: id) != nil {
+                expandExecutionParent(of: id)
+                return .task(id)
+            }
             return .task(conversationIndex.conversationID(of: id))
         }
         if let siblings = lastKnownSiblingsByMember[id],

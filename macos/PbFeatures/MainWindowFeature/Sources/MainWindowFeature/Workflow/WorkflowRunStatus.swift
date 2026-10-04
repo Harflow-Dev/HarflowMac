@@ -11,11 +11,7 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
         if let run = viewModel.selectedRun {
             VStack(alignment: .leading, spacing: 12) {
                 decision(run)
-                if let request = run.raw["prompt"]?.stringValue, !request.isEmpty, !run.isBuilder {
-                    DisclosureGroup("Request") {
-                        Text(request).font(.pb(.body)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                    }.font(.pb(.secondary))
-                }
+                WorkflowRunDiagnostics(run: run)
                 if run.allowsMonitorControl, ["needs_attention", "paused", "needs_input"].contains(run.status) || (run.isDelegation && run.status == "failed") {
                     recovery(run)
                 }

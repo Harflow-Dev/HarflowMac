@@ -96,6 +96,7 @@ struct WorkflowDelegationTests {
         let running = try #require(TaskInfo(.object(raw)))
         var completedRaw = raw
         completedRaw["workflow_status"] = .string("completed")
+        completedRaw["workflow_settling"] = .bool(false)
         let completed = try #require(TaskInfo(.object(completedRaw)))
         // when / then
         #expect(!WorkflowNodePresentation.allowsTerminal(running))
@@ -173,4 +174,65 @@ struct WorkflowDelegationTests {
         #expect(indices == ["primary": 0, "reply": 0, "fallback": 1, "fallback-reply": 1])
     }
 
+}
+
+// MARK: - Managed execution presentation
+
+extension WorkflowDelegationTests {
+    @Test func givenOrchestratorContract_whenRendered_thenReasonAndAssignmentsReplaceJSON() {
+        // given
+        let contract = "{\"decision_id\":\"decision\",\"action\":\"continue\",\"reason\":\"Review the patch\","
+            + "\"next\":[{\"continuation_id\":\"review\",\"prompt\":\"Check cancellation\"}]}"
+        // when
+        let display = WorkflowNodePresentation.summary(contract)
+        // then
+        #expect(display?.contains("Review the patch") == true)
+        #expect(display?.contains("Check cancellation") == true)
+        #expect(display?.contains("decision_id") == false)
+    }
+
+    @Test(arguments: ["running", "paused", "needs_input", "needs_attention", "cancelling", "completed", "failed", "cancelled"])
+    func givenWorkflowStatus_whenCheckingTakeover_thenOnlySettledTerminalPermitsIt(status: String) throws {
+        // given
+        var raw: [String: JSONValue] = ["task_id": .string("worker"), "workflow_run_id": .string("run"),
+                                       "workflow_status": .string(status), "workflow_settling": .bool(false)]
+        let settled = try #require(TaskInfo(.object(raw)))
+        raw["workflow_settling"] = .bool(true)
+        let settling = try #require(TaskInfo(.object(raw)))
+        // when / then
+        #expect(WorkflowNodePresentation.allowsTerminal(settled) == ["completed", "failed", "cancelled"].contains(status))
+        #expect(!WorkflowNodePresentation.allowsTerminal(settling))
+    }
+}
+
+extension WorkflowDelegationTests {
+    @Test func givenTerminalWorkflowWithoutSettlementProof_whenCheckingTakeover_thenHidden() throws {
+        // given
+        let task = try #require(TaskInfo(.object(["task_id": .string("worker"), "workflow_run_id": .string("run"),
+                                                  "workflow_status": .string("completed")])))
+        // when / then
+        #expect(!WorkflowNodePresentation.allowsTerminal(task))
+    }
+
+    @Test func givenMixedTaskRows_whenProjectedCompact_thenOnlyManagedRowDecodedAndBounded() throws {
+        // given
+        let contract = "{\"decision_id\":\"d\",\"action\":\"continue\",\"reason\":\"" + String(repeating: "A", count: 1000) + "\",\"next\":[]}"
+        let managed = try #require(TaskInfo(.object(["task_id": .string("managed"), "workflow_role": .string("orchestrator"),
+                                                     "execution_contract": .string("delegation")])))
+        let ordinary = try #require(TaskInfo(.object(["task_id": .string("ordinary")])))
+        let rows = ["managed", "ordinary"].map { id in
+            ConversationTimelineRow(id: id, taskID: id, timestamp: nil, kind: .item(PreviewFixtures.textItem(contract)), live: false)
+        }
+        // when
+        let projected = WorkflowNodePresentation.visibleRows(rows, tasks: ["managed": managed, "ordinary": ordinary], compact: true)
+        // then
+        guard case .item(let managedItem) = projected[0].kind, case .text(let managedText, _) = managedItem.body,
+              case .item(let ordinaryItem) = projected[1].kind, case .text(let ordinaryText, _) = ordinaryItem.body else {
+            Issue.record("Expected text rows"); return
+        }
+        #expect(managedText.count < 300)
+        #expect(managedText.contains("Open task"))
+        #expect(ordinaryText == contract)
+        #expect(projected[0].taskID == "managed")
+    }
 }

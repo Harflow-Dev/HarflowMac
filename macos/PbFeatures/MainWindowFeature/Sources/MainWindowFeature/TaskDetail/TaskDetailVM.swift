@@ -272,8 +272,11 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// `identityTaskID` from the resolved conversation's own first member, so this keeps tracking
     /// the SAME conversation the sidebar does, even when it was opened through a later member.
     func recomputeMembersAndLeases() {
-        var members = useCase.conversationMembers(of: identityTaskID)
-        if members.isEmpty, let survivor = useCase.oldestSurvivor(among: Set(lastKnownMemberIDsOldestFirst)) {
+        let resolvedMembers = useCase.conversationMembers(of: identityTaskID)
+        let requested = resolvedMembers.first { $0.taskID == taskID }
+        let isExecutionChild = requested?.raw["workflow_run_id"]?.stringValue != nil || requested?.group != nil
+        var members = isExecutionChild ? [requested].compactMap(\.self) : resolvedMembers
+        if !isExecutionChild, members.isEmpty, let survivor = useCase.oldestSurvivor(among: Set(lastKnownMemberIDsOldestFirst)) {
             members = useCase.conversationMembers(of: survivor)
         }
         if !members.isEmpty {

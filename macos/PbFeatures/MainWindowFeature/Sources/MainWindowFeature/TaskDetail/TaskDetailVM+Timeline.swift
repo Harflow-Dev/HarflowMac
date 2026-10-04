@@ -39,7 +39,7 @@ extension TaskDetailVM {
         }
         let allRows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
         let rows = isWorkflowBuilder ? WorkflowBuilderPresentation.visibleRows(allRows)
-        : WorkflowNodePresentation.isWorker(task) ? WorkflowNodePresentation.visibleRows(allRows) : allRows
+        : WorkflowNodePresentation.visibleRows(allRows, tasks: Dictionary(uniqueKeysWithValues: members.map { ($0.taskID, $0) }))
         let subTaskStrip: SubTaskStripModel? = allChildren.isEmpty ? nil : SubTaskStripModel(
             children: allChildren.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             start: start,

@@ -562,3 +562,23 @@ extension TaskDetailVMTests {
         #expect(harness.sut.summaryModel.editedFilesAvailability == .available)
     }
 }
+
+// MARK: - Exact execution detail
+
+extension TaskDetailVMTests {
+    @Test func givenWorkflowResumeChain_whenOlderChildOpened_thenShowsThatExecutionOnly() throws {
+        // given
+        var oldRaw = conversationTask("old").raw
+        oldRaw["workflow_run_id"] = .string("workflow")
+        var nextRaw = conversationTask("next", parentTaskID: "old", minute: 1).raw
+        nextRaw["workflow_run_id"] = .string("workflow")
+        let old = try #require(TaskInfo(.object(oldRaw)))
+        let next = try #require(TaskInfo(.object(nextRaw)))
+        let harness = makeConversationSUT(openedAs: "old", initialMembers: [old, next])
+        // when
+        harness.sut.recomputeMembersAndLeases()
+        // then
+        #expect(harness.sut.conversationMembers.map(\.taskID) == ["old"])
+        #expect(harness.sut.currentTaskID == "old")
+    }
+}

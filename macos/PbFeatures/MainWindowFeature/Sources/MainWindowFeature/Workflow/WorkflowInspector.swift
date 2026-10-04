@@ -217,6 +217,12 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     let label = activation["role"]?.stringValue == "orchestrator" ? "Decision" : "Attempt"
                     Text("\(label) \(index + 1) · \(activation["status"]?.stringValue ?? "")")
                         .font(.pb(.secondary, weight: .semibold))
+                    if let error = activation["result_error"]?.stringValue {
+                        Text(error).font(.pb(.secondary)).foregroundStyle(Color.warningFG).textSelection(.enabled)
+                    }
+                    if let retryOf = activation["retry_of_execution_id"]?.stringValue {
+                        Text("Retry of execution " + retryOf).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                    }
                     if let assignment = activation["assignment_prompt"]?.stringValue {
                         Text("Assignment").font(.pb(.secondary, weight: .semibold))
                         Text(assignment).font(.pb(.secondary)).textSelection(.enabled)

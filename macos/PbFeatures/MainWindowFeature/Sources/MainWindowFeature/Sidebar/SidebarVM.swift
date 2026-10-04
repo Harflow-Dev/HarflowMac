@@ -199,6 +199,7 @@ final class SidebarVM: SidebarViewModel {
     /// Lives for the app's lifetime (this VM is cached across window close/reopen); never mutated by
     /// an ordinary `recompute()` — only `didToggleExpansion(taskID:)` and an applied reveal touch it.
     @ObservationIgnored var collapsedTaskIDs: Set<String> = []
+    @ObservationIgnored var expandedExecutionParents: Set<String> = []
     /// A reveal that could not be applied yet because its task was not in `latestTasks` — retried on
     /// every `tasksPublisher` emission until it lands, or replaced by a fresher one.
     @ObservationIgnored private var pendingRevealToApply: PendingReveal?
@@ -260,6 +261,7 @@ final class SidebarVM: SidebarViewModel {
     func didSelect(_ destination: MonitorDestination?) {
         selectionRevision += 1
         selection = normalized(destination)
+        recompute()
         routing.select(destination)
     }
 
@@ -270,6 +272,22 @@ final class SidebarVM: SidebarViewModel {
     // MARK: - Collapsible tree (settled plan, Design points 1-5)
 
     func didToggleExpansion(taskID: String) {
+        if taskID.hasPrefix("group:"),
+           !Lineage.sections(latestTasks).parallel.contains(where: { $0.id == taskID && $0.total > 1 }) { return }
+        if taskID.hasPrefix("workflow:") || taskID.hasPrefix("group:") {
+            if !expandedExecutionParents.insert(taskID).inserted {
+                expandedExecutionParents.remove(taskID)
+                if case .task(let selectedID) = selection, executionParent(of: selectedID) == taskID {
+                    let parent: MonitorDestination = taskID.hasPrefix("workflow:")
+                        ? .workflowRun(String(taskID.dropFirst(9))) : .group(String(taskID.dropFirst(6)))
+                    selectionRevision += 1
+                    selection = parent
+                    routing.select(parent)
+                }
+            }
+            recompute()
+            return
+        }
         if collapsedTaskIDs.contains(taskID) {
             collapsedTaskIDs.remove(taskID)
         } else {
@@ -390,7 +408,7 @@ final class SidebarVM: SidebarViewModel {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] destination, revision in
                 guard let self, revision == selectionRevision else { return }
-                selection = normalized(destination)
+                applyExternalSelection(destination)
             }
             .store(in: &cancellables)
 
@@ -405,6 +423,11 @@ final class SidebarVM: SidebarViewModel {
     /// 7); Parallel groups stay task-level, unchanged (Review round 1, item 3). Never mutates
     /// `collapsedTaskIDs` itself — an ordinary recompute (a new listing, a search keystroke) must
     /// never re-expand a row the person collapsed.
+    private func applyExternalSelection(_ destination: MonitorDestination?) {
+        selection = normalized(destination)
+        recompute()
+    }
+
     func recompute() {
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
@@ -417,7 +440,7 @@ final class SidebarVM: SidebarViewModel {
         let query = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
         let backend = selectedBackend
         let isFilterActive = !query.isEmpty || backend != "all"
-        let builderIDs = workflowBuilderTaskIDs
+        let builderIDs = Set(workflowTaskOwners.keys)
         func matches(_ task: TaskInfo) -> Bool {
             !builderIDs.contains(task.taskID) && (backend == "all" || task.backend == backend)
             && (query.isEmpty
@@ -448,6 +471,7 @@ final class SidebarVM: SidebarViewModel {
             })
             : []
 
+        selection = normalized(selection)
         sections = bucketedSections(
             trees: matched.running + matched.recent,
             groups: Lineage.sections(latestTasks, matches: matches).parallel,
@@ -518,6 +542,7 @@ final class SidebarVM: SidebarViewModel {
     private func tryApplyPendingReveal() -> Bool {
         guard let reveal = pendingRevealToApply else { return false }
         guard latestTasks.contains(where: { $0.taskID == reveal.taskID }) else { return false }
+        expandExecutionParent(of: reveal.taskID)
         for ancestor in conversationIndex.ancestors(ofConversationContaining: reveal.taskID) { collapsedTaskIDs.remove(ancestor.id) }
         pendingRevealToApply = nil
         routing.consumeReveal(requestID: reveal.requestID)

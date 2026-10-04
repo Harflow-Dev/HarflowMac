@@ -361,7 +361,8 @@ final class ParallelVM: ParallelViewModel {
         }
         let rawRows = ConversationTimeline.rows(itemMembers: itemMembers)
         let isWorker = WorkflowNodePresentation.isWorker(current)
-        let rows = isWorker ? WorkflowNodePresentation.visibleRows(rawRows) : rawRows
+        let rowTasks = Dictionary(uniqueKeysWithValues: itemMembers.map { ($0.task.taskID, $0.task) })
+        let rows = WorkflowNodePresentation.visibleRows(rawRows, tasks: rowTasks, compact: true)
         // Monitor piece 12, Design point 4's rule, extended across every member (piece 13): a
         // shimmer only while NO member has any real content yet AND at least one member's own event
         // stream is still `.loading`; never once any member has items, and never for `.unavailable`
@@ -384,7 +385,8 @@ final class ParallelVM: ParallelViewModel {
             pendingMessages: PendingMessage.visible(snapshot: latestSnapshots[currentID], events: useCase.events(for: currentID)),
             isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
-            summary: isWorker ? WorkflowNodePresentation.summary(latestSnapshots[currentID]?.summary) : latestSnapshots[currentID]?.summary,
+            summary: WorkflowNodePresentation.isManaged(current)
+                ? WorkflowNodePresentation.summary(latestSnapshots[currentID]?.summary) : latestSnapshots[currentID]?.summary,
             onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: currentID) },
             onTapOpenTask: { [weak self] in self?.routing.selectTask(currentID) },
             start: conversation.first.startedAt

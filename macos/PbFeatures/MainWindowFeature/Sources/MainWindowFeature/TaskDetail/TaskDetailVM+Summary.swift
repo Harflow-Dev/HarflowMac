@@ -27,7 +27,7 @@ extension TaskDetailVM {
         // Changes pane used before it.
         let rawSummary = useCase.snapshot(currentTaskID)?.summary ?? task.summary
         let summary = isWorkflowBuilder ? WorkflowBuilderPresentation.summary(rawSummary)
-        : WorkflowNodePresentation.isWorker(task) ? WorkflowNodePresentation.summary(rawSummary) : rawSummary
+        : WorkflowNodePresentation.isManaged(task) ? WorkflowNodePresentation.summary(rawSummary) : rawSummary
         let members = conversationMembers
         let memberEvents = members.map { eventsByMember[$0.taskID] ?? [] }
         let memberAvailabilities = members.map { eventsAvailabilityByMember[$0.taskID] ?? .loading }

@@ -316,7 +316,7 @@ final class WorkflowVM: WorkflowViewModel {
             guard let self else {
                 return
             }
-            var options = ["--monitor", "--repo=\(repo)", "--prompt=\(prompt)", "--freedom=\(freedom)"]
+            var options = ["--monitor", "--repo=\(repo)", "--prompt=\(prompt)"]
             if overrideOrchestrator {
                 options += Self.candidateOptions(launchAgent)
             }

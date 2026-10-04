@@ -24,6 +24,7 @@ public struct TaskRowModel: Identifiable, Equatable {
     public let status: TaskStatus
     /// The repository's name (`Format.repoName`), the first part of the subtitle.
     public let repoName: String
+    public let detailLabel: String?
     public let ageText: String
     /// Indentation depth for a sub-task row. `0` (default) renders flush.
     public let indent: Int
@@ -65,6 +66,7 @@ public struct TaskRowModel: Identifiable, Equatable {
         status: TaskStatus,
         repoName: String,
         ageText: String,
+        detailLabel: String? = nil,
         indent: Int = 0,
         subTaskSummary: String? = nil,
         startedAt: Date? = nil,
@@ -78,6 +80,7 @@ public struct TaskRowModel: Identifiable, Equatable {
         self.title = title
         self.status = status
         self.repoName = repoName
+        self.detailLabel = detailLabel
         self.ageText = ageText
         self.indent = indent
         self.subTaskSummary = subTaskSummary
@@ -107,9 +110,14 @@ public struct TaskRow: View {
     public var body: some View {
         HStack(spacing: 8) {
             TreeGutter(model: model, onToggleExpansion: onToggleExpansion)
+                // Continue guides through the row’s vertical content padding.
+                .padding(.vertical, -6)
             StatusIcon(status: model.status)
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.title).font(.pb(.body, weight: .medium)).lineLimit(1)
+                if let detail = model.detailLabel {
+                    Text(detail).font(.pb(.caption)).foregroundStyle(Color.secondaryText(on: prominence)).lineLimit(1)
+                }
                 Text(model.subtitle).font(.pb(.caption)).foregroundStyle(Color.secondaryText(on: prominence)).lineLimit(1)
             }
             Spacer(minLength: 4)
