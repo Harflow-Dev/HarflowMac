@@ -6,6 +6,7 @@ import SwiftUI
 
 struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
     var viewModel: VM
+    @State private var showsDecision = false
 
     var body: some View {
         if let run = viewModel.selectedRun {
@@ -47,7 +48,22 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
                 .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)
 .textSelection(.enabled)
-            Spacer()
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if !deciding, let reason = last?["reason"]?.stringValue, !reason.isEmpty {
+                Button("Show more") { showsDecision = true }
+                    .buttonStyle(.link)
+                    .fixedSize()
+                    .popover(isPresented: $showsDecision) {
+                        ScrollView {
+                            Text(reason)
+.font(.pb(.body))
+.textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+.padding(16)
+                        }.frame(width: 480, height: 320)
+                    }
+            }
         }
     }
 

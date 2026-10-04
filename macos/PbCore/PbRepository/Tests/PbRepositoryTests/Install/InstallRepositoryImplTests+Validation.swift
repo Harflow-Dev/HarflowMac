@@ -116,10 +116,10 @@ extension InstallRepositoryImplTests {
     }
 
     @Test func givenCtlListReturnsAnUnsupportedVersion_whenValidating_thenTheContractFailureIsShown() async {
-        // given — v3 is genuinely outside `ctlContractVersions` ({1, 2}); v2 added
+        // given — v4 is outside `ctlContractVersions` ({1, 2, 3}); v2 added
         // `resume_command` (Monitor piece 3/3) and is accepted, covered below.
         let runner = InstallRepositoryImplTests.makeRunner(
-            ctlListJSON: #"{"v":3,"tasks":[]}"#
+            ctlListJSON: #"{"v":4,"tasks":[]}"#
         )
         let sut = makeSUT(runner: runner)
 
@@ -134,8 +134,8 @@ extension InstallRepositoryImplTests {
         #expect(message.contains("contract version"))
     }
 
-    @Test func givenCtlListReturnsV1OrV2_whenValidating_thenBothAreAccepted() async {
-        for version in [1, 2] {
+    @Test func givenCtlListReturnsSupportedVersion_whenValidating_thenAllAreAccepted() async {
+        for version in [1, 2, 3] {
             // given
             let runner = InstallRepositoryImplTests.makeRunner(
                 ctlListJSON: #"{"v":\#(version),"tasks":[]}"#

@@ -74,6 +74,26 @@ struct WorkflowRunModel: Identifiable, Equatable {
         return raw["definition"]?.objectValue ?? [:]
     }
 
+    var emptyChecklistPresentation: WorkflowEmptyChecklistPresentation {
+        let planningIDs = Set(WorkflowJSON.nodes(definition).filter { $0.role == "planning" }.map(\.id))
+        let proposal = activations.reversed().first {
+            planningIDs.contains($0["node_id"]?.stringValue ?? "")
+                && $0["status"]?.stringValue == "completed"
+                && $0["node_result"]?["status"]?.stringValue == "succeeded"
+        }
+        let disposition = raw["checklist_disposition"]?.objectValue
+        let isAccepted = disposition?["status"]?.stringValue == "not_needed"
+            && (proposal == nil || disposition?["execution_id"]?.stringValue == proposal?["id"]?.stringValue)
+        if isAccepted {
+            return .init(title: "No checklist needed", reason: disposition?["reason"]?.stringValue)
+        }
+        if proposal?["node_result"]?["result"]?["no_checklist_needed"]?.boolValue == true {
+            return .init(title: "No checklist proposed", reason: proposal?["node_result"]?["result"]?["checklist_reason"]?.stringValue)
+        }
+        return .init(title: ["starting", "running", "needs_input", "paused"].contains(status)
+            ? "Waiting for a plan…" : "No plan was provided for this run.", reason: nil)
+    }
+
     var technicalPlan: String? {
         if let plan = raw["technical_plan"]?.stringValue, !plan.isEmpty { return plan }
         let planningIDs = Set(WorkflowJSON.nodes(definition).filter { $0.role == "planning" }.map(\.id))
@@ -121,4 +141,11 @@ enum WorkflowExecutionAttempts {
         }
         return indices
     }
+}
+
+// MARK: - WorkflowEmptyChecklistPresentation
+
+struct WorkflowEmptyChecklistPresentation: Equatable {
+    let title: String
+    let reason: String?
 }

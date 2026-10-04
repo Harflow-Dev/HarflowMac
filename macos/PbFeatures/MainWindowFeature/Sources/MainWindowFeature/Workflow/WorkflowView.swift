@@ -438,7 +438,10 @@ struct WorkflowActivityColumns: View {
                         HStack(alignment: .top, spacing: 0) {
                             ForEach(columns) { column in
                                 ParallelColumnView(model: column)
-                                    .frame(width: ParallelLayout.columnWidth(memberCount: columns.count, availableWidth: proxy.size.width))
+                                    .frame(
+                                        width: ParallelLayout.columnWidth(memberCount: columns.count, availableWidth: proxy.size.width),
+                                        height: max(0, proxy.size.height)
+                                    )
                                     .id(column.task.taskID)
                                 Divider()
                             }

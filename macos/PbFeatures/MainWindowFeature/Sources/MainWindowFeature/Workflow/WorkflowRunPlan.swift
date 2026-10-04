@@ -7,13 +7,16 @@ struct WorkflowRunPlan: View {
     @State private var showsTasks = true
     var body: some View {
         let completed = run.tasks.filter { $0["status"]?.stringValue == "completed" }.count
-        return DisclosureGroup("Plan · \(completed) of \(run.tasks.count) completed", isExpanded: $showsTasks) {
+        return DisclosureGroup(run.tasks.isEmpty ? "Plan" : "Plan · \(completed) of \(run.tasks.count) completed", isExpanded: $showsTasks) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if run.tasks.isEmpty {
-                        Text(["starting", "running"].contains(run.status) ? "Waiting for a plan…" : "No plan was provided for this run.")
+                        Text(run.emptyChecklistPresentation.title)
                             .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)
+                    }
+                    if run.tasks.isEmpty, let reason = run.emptyChecklistPresentation.reason, !reason.isEmpty {
+                        Text(reason).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
                     }
                     ForEach(run.tasks.compactMap(WorkflowPlanEntry.init)) { entry in
                         let task = entry.raw
