@@ -92,6 +92,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored let routing: any WorkflowRouting
     @ObservationIgnored private var terminationSubscription: AnyCancellable?
     @ObservationIgnored private var poll: Task<Void, Never>?
+    @ObservationIgnored private var runPolling = WorkflowRunPolling()
     @ObservationIgnored private var generationID = UUID()
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored var editorReadTask: Task<Void, Never>?
@@ -224,16 +225,16 @@ final class WorkflowVM: WorkflowViewModel {
             }
         }
         do {
-            let list = try await useCase.command("list", options: [], positionals: [])
-            let runList = try await useCase.command("list-runs", options: [], positionals: [])
-            guard !Task.isCancelled, generation == nil || generation == generationID else {
-                return
+            if selectedRun == nil {
+                let list = try await useCase.command("list", options: [], positionals: [])
+                let runList = try await useCase.command("list-runs", options: [], positionals: [])
+                guard !Task.isCancelled, generation == nil || generation == generationID else { return }
+                workflows = WorkflowJSON.objects(list["workflows"]).map { WorkflowRecord(raw: $0) }
+                runs = WorkflowJSON.objects(runList["runs"]).map { WorkflowRunModel(raw: $0) }
             }
-            workflows = WorkflowJSON.objects(list["workflows"]).map { WorkflowRecord(raw: $0) }
-            runs = WorkflowJSON.objects(runList["runs"]).map { WorkflowRunModel(raw: $0) }
             guard selectedRun?.id == refreshRunID else { return }
             if let run = selectedRun {
-                let response = try await useCase.command("status", options: [], positionals: [run.id])
+                let response = try await runPolling.load(id: run.id, useCase: useCase)
                 guard !Task.isCancelled, selectedRun?.id == run.id, initialLoadingID == loadingID,
                       generation == nil || generation == generationID else {
                           return

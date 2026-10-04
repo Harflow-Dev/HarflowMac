@@ -27,7 +27,7 @@ final class ControlledWorkflowValidationUseCase: WorkflowUseCase, @unchecked Sen
     }
 
     func command(_ command: String, options _: [String], positionals _: [String]) async throws -> [String: JSONValue] {
-        if command == "list", delayRefresh {
+        if ["list", "status"].contains(command), delayRefresh {
             return await withCheckedContinuation { pendingRefresh = $0 }
         }
         guard command == "get" else { return [:] }
