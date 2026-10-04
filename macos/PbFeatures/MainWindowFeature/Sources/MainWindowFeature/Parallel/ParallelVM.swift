@@ -385,8 +385,8 @@ final class ParallelVM: ParallelViewModel {
             pendingMessages: PendingMessage.visible(snapshot: latestSnapshots[currentID], events: useCase.events(for: currentID)),
             isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
-            summary: WorkflowNodePresentation.isManaged(current)
-                ? WorkflowNodePresentation.summary(latestSnapshots[currentID]?.summary) : latestSnapshots[currentID]?.summary,
+            summary: (WorkflowNodePresentation.isManaged(current) || WorkflowNodePresentation.resultError(current) != nil)
+                ? WorkflowNodePresentation.summary(latestSnapshots[currentID]?.summary, task: current) : latestSnapshots[currentID]?.summary,
             onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: currentID) },
             onTapOpenTask: { [weak self] in self?.routing.selectTask(currentID) },
             start: conversation.first.startedAt

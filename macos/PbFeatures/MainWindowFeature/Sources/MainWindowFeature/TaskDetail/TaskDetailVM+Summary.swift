@@ -26,8 +26,9 @@ extension TaskDetailVM {
         // wins over whatever `task` itself resolved to — the same precedence the git-backed
         // Changes pane used before it.
         let rawSummary = useCase.snapshot(currentTaskID)?.summary ?? task.summary
+        let projectsWorkflowResult = WorkflowNodePresentation.isManaged(task) || WorkflowNodePresentation.resultError(task) != nil
         let summary = isWorkflowBuilder ? WorkflowBuilderPresentation.summary(rawSummary)
-        : WorkflowNodePresentation.isManaged(task) ? WorkflowNodePresentation.summary(rawSummary) : rawSummary
+            : projectsWorkflowResult ? WorkflowNodePresentation.summary(rawSummary, task: task) : rawSummary
         let members = conversationMembers
         let memberEvents = members.map { eventsByMember[$0.taskID] ?? [] }
         let memberAvailabilities = members.map { eventsAvailabilityByMember[$0.taskID] ?? .loading }

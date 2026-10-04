@@ -37,6 +37,39 @@ extension TaskDetailVMTests {
         harness.sut.didDisappear()
     }
 
+    @Test func givenOrchestratorCheckpointPrompts_whenSameSessionHistoryRendered_thenOriginalRequestAppearsOnce() async throws {
+        // given
+        let prompts = ["Review this pull request", "Planning settled. Choose the review step."]
+        let members = try prompts.enumerated().map { index, prompt in
+            var raw = conversationTask("decision-\(index)", minute: index).raw
+            raw["workflow_run_id"] = .string("run")
+            raw["workflow_role"] = .string("orchestrator")
+            raw["execution_contract"] = .string("delegation")
+            raw["display_prompt"] = .string(prompt)
+            return try #require(TaskInfo(.object(raw)))
+        }
+        let harness = makeConversationSUT(openedAs: "decision-0", initialMembers: members)
+        for (index, member) in members.enumerated() {
+            let event: [String: JSONValue] = ["v": .number(1), "seq": .number(1), "kind": .string("task_started"),
+                "prompt": .string(prompts[index])]
+            harness.eventsBox[member.taskID]?.value = [try #require(TaskEvent(line: JSONValue.object(event).rendered()))]
+        }
+        // when
+        harness.sut.didAppear()
+        harness.tasksSubject.send(members)
+        await waitUntil { harness.sut.conversationMembers.count == 2 }
+        // then
+        let displayed = harness.sut.timelineModel.rows.compactMap { row -> String? in
+            if case .separator(let text) = row.kind { return text }
+            if case .item(let item) = row.kind, case .started(let start) = item.body { return start.prompt }
+            return nil
+        }
+        #expect(displayed == prompts)
+        #expect(harness.sut.promptText == prompts[0])
+        #expect(!displayed.joined().contains("decision_id"))
+        harness.sut.didDisappear()
+    }
+
     @Test func givenResumedWorkflowWorker_whenOpened_thenCurrentPromptAndDistinctHistoricalBubblesRemain() async throws {
         // given
         var firstRaw = conversationTask("a", minute: 0).raw

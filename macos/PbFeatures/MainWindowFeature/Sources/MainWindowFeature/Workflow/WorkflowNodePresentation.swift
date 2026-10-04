@@ -34,7 +34,13 @@ enum WorkflowNodePresentation {
             && task.raw["workflow_settling"]?.boolValue == false
     }
 
-    static func summary(_ text: String?) -> String? {
+    static func resultError(_ task: TaskInfo?) -> String? {
+        guard let reason = task?.raw["workflow_result_error"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else { return nil }
+        return String(reason.prefix(2000)) + (reason.count > 2000 ? "…" : "")
+    }
+
+    static func summary(_ text: String?, task: TaskInfo? = nil) -> String? {
+        if let reason = resultError(task) { return "Malformed output\n\n" + reason }
         guard let text else { return nil }
         var source = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if source.hasPrefix("```json"), source.hasSuffix("```") {
@@ -79,7 +85,10 @@ enum WorkflowNodePresentation {
     }
 
     static func visibleRows(_ rows: [ConversationTimelineRow], tasks: [String: TaskInfo]? = nil, compact: Bool = false) -> [ConversationTimelineRow] {
-        rows.map { row in
+        let (malformedRows, suppressed, appendAfter, standalone) = malformedProjection(rows, tasks: tasks ?? [:])
+        let projected: [ConversationTimelineRow] = rows.compactMap { row in
+            if suppressed.contains(row.id) { return nil }
+            if let reason = malformedRows[row.id] { return malformedRow(row, reason: reason) }
             if let tasks, !(tasks[row.taskID].map(isManaged) ?? false) { return row }
             guard case let .item(item) = row.kind, case let .text(text, _) = item.body,
                   let display = summary(text), display != text else { return row }
@@ -91,5 +100,64 @@ enum WorkflowNodePresentation {
                   let projected = Timeline.items(from: [event]).first else { return row }
             return ConversationTimelineRow(id: row.id, taskID: row.taskID, timestamp: row.timestamp, kind: .item(projected), live: row.live)
         }
+        return projected.flatMap { row in
+            if let appended = appendAfter[row.id] { return [row, appended] }
+            return [row]
+        } + standalone
     }
+
+    private static func malformedProjection(_ rows: [ConversationTimelineRow], tasks: [String: TaskInfo])
+        -> ([String: String], Set<String>, [String: ConversationTimelineRow], [ConversationTimelineRow]) {
+        var malformedRows: [String: String] = [:]
+        var suppressed: Set<String> = []
+        var appendAfter: [String: ConversationTimelineRow] = [:]
+        var standalone: [ConversationTimelineRow] = []
+        let rowsByTask = Dictionary(grouping: rows, by: \.taskID)
+        for (taskID, task) in tasks {
+            guard let reason = resultError(task) else { continue }
+            let ownRows = rowsByTask[taskID] ?? []
+            let finalBlock = terminalTextBlock(ownRows)
+            if let last = finalBlock.first {
+                malformedRows[last.id] = reason
+                suppressed.formUnion(finalBlock.dropFirst().map(\.id))
+            } else if let last = ownRows.last {
+                appendAfter[last.id] = malformedRow(last, reason: reason)
+            } else {
+                let anchor = ConversationTimelineRow(id: taskID, taskID: taskID, timestamp: task.startedAt, kind: .separator(text: ""), live: false)
+                standalone.append(malformedRow(anchor, reason: reason))
+            }
+        }
+        return (malformedRows, suppressed, appendAfter, standalone)
+    }
+
+    private static func terminalTextBlock(_ rows: [ConversationTimelineRow]) -> [ConversationTimelineRow] {
+        var block: [ConversationTimelineRow] = []
+        for row in rows.reversed() {
+            guard case .item(let item) = row.kind else { break }
+            if block.isEmpty {
+                switch item.body {
+                case .finished, .notice: continue
+                default: break
+                }
+            }
+            guard case .text = item.body else { break }
+            block.append(row)
+        }
+        return block
+    }
+
+    /// Presentation-only tool-shaped cell; original response and events remain stored unchanged.
+    private static func malformedRow(_ row: ConversationTimelineRow, reason: String) -> ConversationTimelineRow {
+        let seq: Int = if case .item(let item) = row.kind { item.id } else { 0 }
+        let callID = "workflow-output-error-" + row.taskID
+        var call: [String: JSONValue] = ["v": .number(1), "seq": .number(Double(seq)), "kind": .string("tool_call"),
+            "call_id": .string(callID), "tool": .string("Malformed output"), "category": .string("workflow_protocol_error")]
+        if let time = row.timestamp { call["observed_at"] = .string(time.ISO8601Format()) }
+        let result: [String: JSONValue] = ["v": .number(1), "seq": .number(Double(seq + 1)), "kind": .string("tool_result"),
+            "call_id": .string(callID), "ok": .bool(false), "output_tail": .string(reason)]
+        let events = [call, result].compactMap { TaskEvent(line: JSONValue.object($0).rendered()) }
+        guard let item = Timeline.items(from: events).first else { return row }
+        return ConversationTimelineRow(id: row.taskID + "#workflow-output-error", taskID: row.taskID, timestamp: row.timestamp, kind: .item(item), live: false)
+    }
+
 }
