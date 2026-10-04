@@ -22,7 +22,10 @@ struct SidebarWorkflowRun {
     var id: String { raw["workflow_run_id"]?.stringValue ?? "" }
     var name: String { raw["name"]?.stringValue ?? "Workflow" }
     var startedAt: Date? { raw["created_at"]?.doubleValue.map(Date.init(timeIntervalSince1970:)) }
-    var isActive: Bool { ["starting", "running", "paused", "needs_attention", "cancelling"].contains(raw["status"]?.stringValue ?? "") }
+    var isActive: Bool {
+        raw["settling"]?.boolValue == true
+            || ["starting", "running", "paused", "needs_input", "needs_attention", "cancelling"].contains(raw["status"]?.stringValue ?? "")
+    }
 }
 
 extension SidebarVM {
@@ -81,13 +84,17 @@ extension SidebarVM {
             runs.append(SidebarWorkflowRun(raw: ["workflow_run_id": .string(id),
                 "name": task.raw["workflow_name"] ?? .string("Workflow"),
                 "status": task.raw["workflow_status"] ?? .string("running"),
+                "settling": task.raw["workflow_settling"] ?? .bool(false),
                 "repo_path": .string(task.repoPath),
                 "created_at": .number(task.startedAt?.timeIntervalSince1970 ?? 0)]))
         }
         return runs.filter { run in
             guard run.raw["kind"]?.stringValue != "builder" else { return false }
             let text = "\(run.name) \(run.id) \(run.raw["repo_path"]?.stringValue ?? "") \(run.raw["prompt"]?.stringValue ?? "")"
-            let backends = workflowBackends(run.raw["definition"]?.objectValue ?? [:]).union(workflowChildren(run.id).map(\.backend))
+            let declaredBackends = Set(run.raw["backends"]?.arrayValue?.compactMap(\.stringValue) ?? [])
+            let backends = workflowBackends(run.raw["definition"]?.objectValue ?? [:])
+                .union(declaredBackends)
+.union(workflowChildren(run.id).map(\.backend))
             return (query.isEmpty || text.lowercased().contains(query)) && (selectedBackend == "all" || backends.contains(selectedBackend))
         }
     }
@@ -103,7 +110,8 @@ extension SidebarVM {
 
     func workflowRow(_ run: SidebarWorkflowRun) -> TaskRowModel {
         let rawStatus = run.raw["status"]?.stringValue ?? "unknown"
-        let status: TaskStatus = ["paused", "needs_attention", "starting", "cancelling"].contains(rawStatus)
+        let specialStatus = ["paused", "needs_input", "needs_attention", "starting", "cancelling"].contains(rawStatus)
+        let status: TaskStatus = run.raw["settling"]?.boolValue == true ? .other("Settling") : specialStatus
             ? .other(rawStatus.replacingOccurrences(of: "_", with: " ").capitalized) : TaskStatus(rawStatus)
         return TaskRowModel(id: run.id, backend: "workflow", title: run.name, status: status,
                             repoName: Format.repoName(run.raw["repo_path"]?.stringValue ?? ""), ageText: Format.age(run.startedAt),

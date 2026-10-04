@@ -158,10 +158,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                         .font(.pb(.headline, weight: .semibold))
                 }
                 HStack(spacing: 6) {
-                    if let run = viewModel.selectedRun, ["starting", "running"].contains(run.status) {
+                    if let run = viewModel.selectedRun, run.isSettling || ["starting", "running"].contains(run.status) {
                         RunningSpinner()
                     }
-                Text(viewModel.selectedRun.map { $0.status.replacingOccurrences(of: "_", with: " ").capitalized }
+                Text(viewModel.selectedRun.map { $0.isSettling ? "Settling" : $0.status.replacingOccurrences(of: "_", with: " ").capitalized }
                      ?? (viewModel.isEditing
                          ? "Revision \(viewModel.revision) · Workflow editor\(viewModel.hasUnsavedChanges ? " · Draft" : "")"
                          : "Build reusable agent workflows"))
@@ -316,7 +316,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 
     private var builderContent: some View {
         VStack(spacing: 0) {
-            if let run = viewModel.selectedRun, ["needs_attention", "failed", "paused"].contains(run.status),
+            if let run = viewModel.selectedRun, ["needs_input", "needs_attention", "failed", "paused"].contains(run.status),
                !run.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(run.reason)
                     .font(.pb(.secondary))

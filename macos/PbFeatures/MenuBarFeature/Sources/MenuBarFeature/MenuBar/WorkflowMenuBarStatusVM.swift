@@ -18,16 +18,18 @@ struct WorkflowMenuBarRow: Identifiable, Equatable {
     let name: String
     let status: String
     let detail: String
-    var isActive: Bool { ["starting", "running", "paused", "needs_attention", "cancelling"].contains(status) }
-    var isWorking: Bool { ["starting", "running", "cancelling"].contains(status) }
-    var needsAttention: Bool { status == "needs_attention" }
-    var statusLabel: String { status.replacingOccurrences(of: "_", with: " ").capitalized }
+    let isSettling: Bool
+    var isActive: Bool { isSettling || ["starting", "running", "paused", "needs_attention", "needs_input", "cancelling"].contains(status) }
+    var isWorking: Bool { isSettling || ["starting", "running", "cancelling"].contains(status) }
+    var needsAttention: Bool { ["needs_attention", "needs_input"].contains(status) }
+    var statusLabel: String { isSettling ? "Settling" : status.replacingOccurrences(of: "_", with: " ").capitalized }
 
     init?(_ raw: [String: JSONValue]) {
         guard let id = raw["workflow_run_id"]?.stringValue, !id.isEmpty else { return nil }
         self.id = id
         self.name = raw["name"]?.stringValue ?? "Workflow"
         self.status = raw["status"]?.stringValue ?? "unknown"
+        self.isSettling = raw["settling"]?.boolValue ?? false
         let decision = raw["decisions"]?.arrayValue?.last?["reason"]?.stringValue
         self.detail = raw["attention_reason"]?.stringValue ?? decision ?? "Workflow"
     }

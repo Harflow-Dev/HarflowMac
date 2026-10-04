@@ -9,7 +9,6 @@ final class WorkflowMenuBarViewRepository: WorkflowMenuBarUseCase, @unchecked Se
     @GlobalEnvironment(\.workflowRepository) private var repository
 
     func runs() async throws -> [[String: JSONValue]] {
-        let result = try await repository.command("list-runs", options: [], positionals: [])
-        return result["runs"]?.arrayValue?.compactMap(\.objectValue) ?? []
+        try await repository.historySummaries()
     }
 }

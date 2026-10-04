@@ -112,7 +112,8 @@ extension TaskDetailVMTests {
         // the box regardless of id", so a retention test can shrink the listing and see `taskID`
         // stop resolving while a surviving member still does, exactly like production.
         given(useCase).conversationMembers(of: .any).willProduce { id in
-            Lineage.conversation(containing: id, in: membersBox.value)?.members ?? []
+            WorkflowOrchestratorConversation.members(containing: id, in: membersBox.value)
+                ?? Lineage.conversation(containing: id, in: membersBox.value)?.members ?? []
         }
         // Realistic, not a stub-of-convenience: this file's own retention tests
         // (`givenTheFirstMembersRecordIsPrunedByRetentionWhileOpen…`,

@@ -22,8 +22,20 @@ public struct StatusIcon: View {
         case .completed: "checkmark.circle.fill"
         case .failed, .timedOut: "xmark.circle.fill"
         case .cancelled: "minus.circle.fill"
-        case .other: "circle.dashed"
+        case let .other(label):
+            switch label.lowercased().replacingOccurrences(of: "_", with: " ") {
+            case "settling": nil
+            case "needs input", "needs attention": "exclamationmark.circle"
+            default: "circle.dashed"
+            }
         }
+    }
+
+    private var attentionStatus: Bool {
+        if case let .other(label) = status {
+            return ["needs input", "needs attention"].contains(label.lowercased().replacingOccurrences(of: "_", with: " "))
+        }
+        return false
     }
 
     public var body: some View {
@@ -31,7 +43,7 @@ public struct StatusIcon: View {
             if let symbol = Self.symbolName(for: status) {
                 Image(systemName: symbol)
                     .font(.pb(.body))
-                    .foregroundStyle(prominence == .increased ? Color.white : StatusColor.of(status))
+                    .foregroundStyle(prominence == .increased ? Color.white : attentionStatus ? Color.warningFG : StatusColor.of(status))
             } else {
                 RunningSpinner(tint: prominence == .increased ? .white : nil)
             }

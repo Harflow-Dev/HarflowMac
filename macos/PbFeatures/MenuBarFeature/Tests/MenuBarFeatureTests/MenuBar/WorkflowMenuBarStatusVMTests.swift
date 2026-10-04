@@ -87,3 +87,15 @@ extension MenuBarVMTests {
         #expect(harness.sut.runningCount == 0)
     }
 }
+
+extension WorkflowMenuBarStatusVMTests {
+    @Test func givenInputRequestAndTerminalSettling_whenMapped_thenBothRemainActiveWithCorrectIndicators() throws {
+        // given / when
+        let input = try #require(WorkflowMenuBarRow(["workflow_run_id": .string("input"), "status": .string("needs_input")]))
+        let settling = try #require(WorkflowMenuBarRow(["workflow_run_id": .string("settling"), "status": .string("failed"), "settling": .bool(true)]))
+        // then
+        #expect(input.isActive && input.needsAttention && !input.isWorking)
+        #expect(settling.isActive && settling.isWorking)
+        #expect(settling.statusLabel == "Settling")
+    }
+}

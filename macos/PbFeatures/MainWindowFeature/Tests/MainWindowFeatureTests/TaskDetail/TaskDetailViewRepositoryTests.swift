@@ -184,3 +184,21 @@ private final class LockedBox<Value>: @unchecked Sendable {
         return TaskInfo(.object(object))!
     }
 }
+
+extension TaskDetailViewRepositoryTests {
+    @Test func givenFreshOrchestratorSessions_whenOpeningAnyDecision_thenRepositoryReturnsCompleteLogicalHistory() throws {
+        // given
+        let repository = MockTaskListRepository()
+        let tasks = try ["a", "b"].enumerated().map { index, id in
+            try #require(TaskInfo(.object([
+                "task_id": .string(id), "workflow_run_id": .string("run"), "workflow_role": .string("orchestrator"),
+                "started_at": .string("2026-10-04T00:0\(index):00Z"), "session_id": .string("fresh-\(id)")
+            ])))
+        }
+        given(repository).tasks.willReturn(tasks.reversed())
+        let sut = TaskDetailViewRepository(taskListRepository: repository)
+        // when / then
+        #expect(sut.conversationMembers(of: "b").map(\.taskID) == ["a", "b"])
+        #expect(sut.conversationMembers(of: "a").map(\.taskID) == ["a", "b"])
+    }
+}

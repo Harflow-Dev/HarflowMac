@@ -8,6 +8,33 @@ import Testing
 
 @MainActor
 extension TaskDetailVMTests {
+    @Test func givenFiveFreshOrchestratorDecisions_whenLogicalChildOpened_thenEveryDecisionActivityRemainsInspectable() async throws {
+        // given
+        let members = try (0 ..< 5).map { index in
+            var raw = conversationTask("decision-\(index)", minute: index).raw
+            raw["workflow_run_id"] = .string("run")
+            raw["workflow_role"] = .string("orchestrator")
+            raw["execution_contract"] = .string("delegation")
+            raw["session_id"] = .string("fresh-session-\(index)")
+            return try #require(TaskInfo(.object(raw)))
+        }
+        let harness = makeConversationSUT(openedAs: "decision-0", initialMembers: members)
+        for member in members {
+            let event: [String: JSONValue] = ["v": .number(1), "seq": .number(1), "kind": .string("assistant_text"),
+                                               "text": .string("Activity from " + member.taskID)]
+            harness.eventsBox[member.taskID]?.value = [try #require(TaskEvent(line: JSONValue.object(event).rendered()))]
+        }
+        // when
+        harness.sut.didAppear()
+        harness.tasksSubject.send(members)
+        await waitUntil { harness.sut.timelineModel.rows.filter { if case .item = $0.kind { return true }; return false }.count == 5 }
+        // then
+        #expect(harness.sut.conversationMembers.map(\.taskID) == members.map(\.taskID))
+        #expect(Set(harness.sut.timelineModel.rows.map(\.taskID)) == Set(members.map(\.taskID)))
+        #expect(harness.sut.turnsText == "5 decisions")
+        harness.sut.didDisappear()
+    }
+
     @Test func givenResumedWorkflowWorker_whenOpened_thenCurrentPromptAndDistinctHistoricalBubblesRemain() async throws {
         // given
         var firstRaw = conversationTask("a", minute: 0).raw

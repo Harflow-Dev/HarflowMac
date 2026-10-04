@@ -74,7 +74,8 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func siblings(of id: String) -> [TaskInfo] { Lineage.siblings(of: id, in: taskListRepository.tasks) }
 
     func conversationMembers(of id: String) -> [TaskInfo] {
-        Lineage.conversation(containing: id, in: taskListRepository.tasks)?.members ?? []
+        WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)
+            ?? Lineage.conversation(containing: id, in: taskListRepository.tasks)?.members ?? []
     }
 
     func cancelScope(of id: String) -> Set<String> { Lineage.cancelScope(of: id, in: taskListRepository.tasks) }

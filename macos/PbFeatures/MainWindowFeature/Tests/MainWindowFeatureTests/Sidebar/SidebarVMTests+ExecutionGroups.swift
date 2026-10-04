@@ -69,3 +69,27 @@ extension SidebarVMTests {
         #expect(harness.sut.selection == .task("b"))
     }
 }
+
+extension SidebarVMTests {
+    @Test func givenMultipleOrchestratorDecisions_whenWorkflowExpanded_thenOneLogicalChildWithCurrentStatus() throws {
+        // given
+        let harness = makeSUT()
+        let turns = try ["a", "b"].enumerated().map { index, id in
+            try #require(TaskInfo(.object([
+                "task_id": .string(id), "workflow_run_id": .string("run"), "workflow_role": .string("orchestrator"),
+                "workflow_status": .string("running"), "status": .string(index == 0 ? "completed" : "running"),
+                "started_at": .string("2026-10-04T00:0\(index):00Z")
+            ])))
+        }
+        harness.sut.latestTasks = turns
+        harness.sut.conversationIndex = ConversationIndex(turns)
+        // when
+        harness.sut.didSelect(.task("b"))
+        harness.sut.recompute()
+        // then
+        #expect(harness.sut.workflowChildren("run").map(\.taskID) == ["a"])
+        #expect(harness.sut.workflowChildren("run").first?.status.isRunning == true)
+        #expect(harness.sut.selection == .task("a"))
+        #expect(harness.sut.sections.flatMap(\.items).map(\.id) == ["workflow:run", "task:a"])
+    }
+}

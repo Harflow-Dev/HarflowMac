@@ -150,6 +150,12 @@ extension TaskDetailVM {
                                               placeholder: "Ask for changes to this workflow…", buttonLabel: task.status.isRunning ? "Send" : "Continue")
             return
         }
+        if WorkflowNodePresentation.blocksDirectMessages(task) {
+            messageBoxModel = MessageBoxModel(canSend: false, canContinue: false, isBusy: isBusy,
+                                              label: "Workflow-managed task", hint: "Answer workflow questions from the workflow run",
+                                              placeholder: "The workflow controls this task until the run has settled", buttonLabel: "Send", isLocked: true)
+            return
+        }
         let canSend = task.liveInput && task.status.isRunning && !task.takenOver
         let canContinue = task.status.isTerminal && task.sessionID != nil
         let label = canSend ? "Message this task" : (canContinue ? "Continue this session" : "Messages")
@@ -192,6 +198,7 @@ extension TaskDetailVM {
             }
             return true
         }
+        guard !WorkflowNodePresentation.blocksDirectMessages(task) else { return false }
         let canSend = task.liveInput && task.status.isRunning && !task.takenOver
         let canContinue = task.status.isTerminal && task.sessionID != nil
         if canSend {

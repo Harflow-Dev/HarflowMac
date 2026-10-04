@@ -96,6 +96,15 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         }
     }
 
+    @ViewBuilder
+    private func technicalPlanSetting(_ node: WorkflowNodeModel) -> some View {
+        if node.role == "planning" {
+            Toggle("Require technical plan", isOn: Binding(get: {
+                viewModel.selectedNode?.raw["require_technical_plan"]?.boolValue ?? true
+            }, set: { viewModel.updateNode(node.id, key: "require_technical_plan", value: .bool($0)) }))
+        }
+    }
+
     private func nodeEditor(_ node: WorkflowNodeModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -111,6 +120,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 Picker("Role", selection: nodeString(node, "role", default: "task")) {
                     ForEach(["planning", "implementation", "review", "task"], id: \.self) { Text($0.capitalized).tag($0) }
                 }
+                technicalPlanSetting(node)
                 Toggle("Optional", isOn: Binding(get: { viewModel.selectedNode?.isOptional ?? false }, set: {
                     guard viewModel.selectedRun == nil, !viewModel.isBusy else { return }
                     viewModel.updateNode(node.id, key: "optional", value: .bool($0))

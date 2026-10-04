@@ -34,7 +34,10 @@ extension SidebarVM {
 
     func workflowChildren(_ runID: String) -> [TaskInfo] {
         let owners = workflowTaskOwners
-        return latestTasks.filter { owners[$0.taskID] == runID }.sorted(by: executionOrder)
+        let all = latestTasks.filter { owners[$0.taskID] == runID }.sorted(by: executionOrder)
+        let orchestrators = all.filter { $0.raw["workflow_role"]?.stringValue == "orchestrator" }
+        let workers = all.filter { $0.raw["workflow_role"]?.stringValue != "orchestrator" }
+        return (workers + [WorkflowOrchestratorConversation.representative(orchestrators)].compactMap(\.self)).sorted(by: executionOrder)
     }
 
     func groupChildren(_ name: String) -> [TaskInfo] {
@@ -76,12 +79,14 @@ extension SidebarVM {
     }
 
     private func workflowChildLabel(_ task: TaskInfo) -> String? {
+        if task.raw["workflow_role"]?.stringValue == "orchestrator" { return "Orchestrator" }
         for run in workflowRuns {
             for activation in WorkflowJSON.objects(run.raw["activations"]) {
                 guard WorkflowJSON.objects(activation["tasks"]).contains(where: { $0["task_id"]?.stringValue == task.taskID }) else { continue }
                 if activation["role"]?.stringValue == "orchestrator" { return "Orchestrator" }
                 if let nodeID = activation["node_id"]?.stringValue {
-                    return WorkflowJSON.nodes(run.raw["definition"]?.objectValue ?? [:]).first(where: { $0.id == nodeID })?.name ?? nodeID
+                    return run.raw["node_labels"]?[nodeID]?.stringValue
+                        ?? WorkflowJSON.nodes(run.raw["definition"]?.objectValue ?? [:]).first(where: { $0.id == nodeID })?.name ?? nodeID
                 }
             }
         }

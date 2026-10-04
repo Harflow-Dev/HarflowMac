@@ -292,8 +292,9 @@ extension MainWindowCoordinator: ParallelRouting {
     /// parent", all of Design point 5's non-sidebar reveal triggers besides URL/notification/menu
     /// bar (handled in `handle(path:)` above).
     public func selectTask(_ taskID: String) {
-        selection = .task(taskID)
-        requestReveal(taskID: taskID)
+        let logicalID = WorkflowOrchestratorConversation.members(containing: taskID, in: taskListRepository.tasks)?.first?.taskID ?? taskID
+        selection = .task(logicalID)
+        requestReveal(taskID: logicalID)
     }
 }
 

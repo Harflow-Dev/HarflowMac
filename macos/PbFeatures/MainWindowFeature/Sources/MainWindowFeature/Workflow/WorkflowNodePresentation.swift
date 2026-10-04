@@ -14,6 +14,10 @@ enum WorkflowNodePresentation {
             && task.raw["execution_contract"]?.stringValue == "delegation"
     }
 
+    static func blocksDirectMessages(_ task: TaskInfo) -> Bool {
+        task.raw["workflow_run_id"]?.stringValue != nil && task.raw["workflow_builder"]?.boolValue != true && !allowsTerminal(task)
+    }
+
     static func allowsTerminal(_ task: TaskInfo?) -> Bool {
         guard let task else { return true }
         if task.raw["workflow_run_id"]?.stringValue == nil { return true }

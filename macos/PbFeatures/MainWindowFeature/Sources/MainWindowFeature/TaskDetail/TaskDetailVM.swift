@@ -274,7 +274,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     func recomputeMembersAndLeases() {
         let resolvedMembers = useCase.conversationMembers(of: identityTaskID)
         let requested = resolvedMembers.first { $0.taskID == taskID }
-        let isExecutionChild = requested?.raw["workflow_run_id"]?.stringValue != nil || requested?.group != nil
+        let isOrchestrator = requested?.raw["workflow_role"]?.stringValue == "orchestrator"
+        let isExecutionChild = !isOrchestrator && (requested?.raw["workflow_run_id"]?.stringValue != nil || requested?.group != nil)
         var members = isExecutionChild ? [requested].compactMap(\.self) : resolvedMembers
         if !isExecutionChild, members.isEmpty, let survivor = useCase.oldestSurvivor(among: Set(lastKnownMemberIDsOldestFirst)) {
             members = useCase.conversationMembers(of: survivor)
@@ -315,7 +316,8 @@ final class TaskDetailVM: TaskDetailViewModel {
         task = detail
         currentTaskID = detail.taskID
         let firstMember = conversationMembers[0]
-        turnsText = conversationMembers.count > 1 ? "\(conversationMembers.count) turns" : nil
+        let historyKind = detail.raw["workflow_role"]?.stringValue == "orchestrator" ? "decisions" : "turns"
+        turnsText = conversationMembers.count > 1 ? "\(conversationMembers.count) \(historyKind)" : nil
 
         title = useCase.title(firstMember.taskID)
         // The conversation's OWN placement in the sidebar's tree (breadcrumbs) — always the FIRST

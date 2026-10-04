@@ -18,8 +18,8 @@ final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, @unch
 
     func workflowSnapshot() async throws -> SidebarWorkflowSnapshot {
         let definitions = try await workflowRepository.command("list", options: [], positionals: [])
-        let runs = try await workflowRepository.command("list-runs", options: [], positionals: [])
-        return SidebarWorkflowSnapshot(definitions: WorkflowJSON.objects(definitions["workflows"]), runs: WorkflowJSON.objects(runs["runs"]))
+        let runs = try await workflowRepository.historySummaries()
+        return SidebarWorkflowSnapshot(definitions: WorkflowJSON.objects(definitions["workflows"]), runs: runs)
     }
 
     // MARK: - Private Properties
