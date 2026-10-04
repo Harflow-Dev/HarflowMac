@@ -69,6 +69,7 @@ extension WorkflowVM {
             + Self.candidateOptions(candidate)
         if !repo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { options.append("--repo=\(repo)") }
         if let context {
+            // Logical payload options: the repository transports both JSON values through disposable files.
             options.append("--definition-json=\(JSONValue.object(effectiveDefinition).rendered())")
             let source: JSONValue = .object(["name": .string(context.loadedName), "revision": .number(Double(context.revision)),
                                               "saved_definition": .object(context.baseline)])
