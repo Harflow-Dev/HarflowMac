@@ -11,7 +11,8 @@ enum WorkflowCanvasGeometry {
     }
 
     static func size(_ node: WorkflowNodeModel) -> CGSize {
-        ["start", "end"].contains(node.type) ? CGSize(width: 72, height: 72) : CGSize(width: 200, height: 92)
+        if node.isParallelBoundary { return CGSize(width: 110, height: 72) }
+        return ["start", "end"].contains(node.type) ? CGSize(width: 72, height: 72) : CGSize(width: 200, height: 92)
     }
 
     static func center(_ node: WorkflowNodeModel) -> CGPoint {

@@ -227,7 +227,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
     private func itemView(_ item: SidebarItem) -> some View {
         switch item {
         case .task(let row):
-            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: row.id) } } : nil)
+            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion(row.id) } : nil)
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
             HStack(spacing: 4) {
@@ -242,9 +242,13 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 GroupRow(group: group)
             }.tag(MonitorDestination.group(group.name))
         case .workflow(let row):
-            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: "workflow:\(row.id)") } } : nil)
+            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion("workflow:\(row.id)") } : nil)
                 .tag(MonitorDestination.workflowRun(row.id))
         }
+    }
+
+    private func toggleExpansion(_ id: String) {
+        withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: id) }
     }
 
     private var workflowDefinitions: some View {

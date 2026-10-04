@@ -404,6 +404,7 @@ final class WorkflowVM: WorkflowViewModel {
 
     func addNode(_ kind: String, at point: CGPoint? = nil) {
         guard selectedRun == nil else { return }
+        if kind == "parallel_group" { addParallelGroup(at: point); return }
         var entries = WorkflowJSON.objects(definition["nodes"])
         guard !["start", "end"].contains(kind) || !entries.contains(where: { $0["type"]?.stringValue == kind }) else { return }
         let id = UUID().uuidString.lowercased()
@@ -476,6 +477,7 @@ final class WorkflowVM: WorkflowViewModel {
             return status
         }
         if let node = nodes.first(where: { $0.id == id }) {
+            if let status = WorkflowParallelGroup.status(of: node, run: run) { return status }
             if node.type == "start", !run.activations.isEmpty {
                 return "completed"
             }

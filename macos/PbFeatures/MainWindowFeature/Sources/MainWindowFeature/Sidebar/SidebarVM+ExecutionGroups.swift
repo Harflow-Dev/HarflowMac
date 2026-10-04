@@ -77,7 +77,8 @@ extension SidebarVM {
 
     private func workflowChildLabel(_ task: TaskInfo) -> String? {
         for run in workflowRuns {
-            for activation in WorkflowJSON.objects(run.raw["activations"]) where WorkflowJSON.objects(activation["tasks"]).contains(where: { $0["task_id"]?.stringValue == task.taskID }) {
+            for activation in WorkflowJSON.objects(run.raw["activations"]) {
+                guard WorkflowJSON.objects(activation["tasks"]).contains(where: { $0["task_id"]?.stringValue == task.taskID }) else { continue }
                 if activation["role"]?.stringValue == "orchestrator" { return "Orchestrator" }
                 if let nodeID = activation["node_id"]?.stringValue {
                     return WorkflowJSON.nodes(run.raw["definition"]?.objectValue ?? [:]).first(where: { $0.id == nodeID })?.name ?? nodeID

@@ -20,6 +20,8 @@ struct WorkflowNodeModel: Identifiable, Equatable {
     var type: String { raw["type"]?.stringValue ?? "agent" }
     var role: String { raw["role"]?.stringValue ?? "task" }
     var instructions: String { raw["instructions"]?.stringValue ?? "" }
+    var isParallelBoundary: Bool { ["parallel_start", "parallel_end"].contains(type) }
+    var parallelGroupID: String? { raw["parallel_group_id"]?.stringValue }
     var isOptional: Bool { type == "agent" && (raw["optional"]?.boolValue ?? false) }
     var position: CGPoint {
         let position = raw["position"]?.objectValue ?? [:]

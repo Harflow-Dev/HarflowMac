@@ -11,7 +11,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let node = viewModel.selectedNode {
-                    if let run = viewModel.selectedRun, !run.isBuilder {
+                    if node.isParallelBoundary {
+                        parallelEditor(node)
+                    } else if let run = viewModel.selectedRun, !run.isBuilder {
                         nodeHistory(node)
                     } else if node.type == "start" {
                         workflowEditor.disabled(viewModel.selectedRun != nil)
@@ -27,7 +29,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         }.background(Color.cardFill)
     }
 
-    private var inspectorDefinition: [String: JSONValue] {
+    var inspectorDefinition: [String: JSONValue] {
         viewModel.selectedRun?.definition ?? viewModel.definition
     }
 
@@ -87,6 +89,13 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         }.font(.pb(.body))
     }
 
+    @ViewBuilder
+    private func nextPathHint(_ node: WorkflowNodeModel) -> some View {
+        if node.type != "end", WorkflowJSON.edges(inspectorDefinition).filter({ $0.source == node.id }).count > 1 {
+            Text("Choose exactly one next path").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+        }
+    }
+
     private func nodeEditor(_ node: WorkflowNodeModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -96,6 +105,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     .buttonStyle(.borderless)
 .accessibilityLabel("Delete step")
             }
+            nextPathHint(node)
             if node.type == "agent" {
                 TextField("Step name", text: nodeString(node, "title")).textFieldStyle(.roundedBorder)
                 Picker("Role", selection: nodeString(node, "role", default: "task")) {
@@ -160,7 +170,8 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 }
             }
             Text("\(edge.source) → \(edge.target)").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
-            Text("Condition").font(.pb(.body, weight: .medium))
+            Text(WorkflowJSON.nodes(inspectorDefinition).first { $0.id == edge.source }?.type == "parallel_start" ? "Branch purpose" : "Condition")
+                .font(.pb(.body, weight: .medium))
             TextEditor(text: Binding(get: { viewModel.selectedEdge?.condition ?? "" }, set: {
                 viewModel.updateEdge(edge.id, key: "condition", value: .string($0))
             }))
@@ -174,8 +185,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
             if edge.isBackward || edge.maxRetries != nil {
                 retryLimit(edge)
             }
-            Text("The orchestrator uses connection conditions to choose one or more next steps. "
-                 + "Selected parallel paths wait where their arrows meet. Returning to an earlier step creates a loop automatically; "
+            Text("The orchestrator chooses exactly one outgoing path from ordinary nodes. "
+                 + "Parallel start runs every branch; its matching Parallel end waits for all branches. "
+                 + "Returning to an earlier step creates a loop automatically; "
                  + "Polybridge enforces connected paths and attempt limits.")
                 .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)

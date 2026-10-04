@@ -34,12 +34,18 @@ enum WorkflowClipboard {
             let bounds = CGRect(origin: point(node), size: WorkflowCanvasGeometry.size(node)).insetBy(dx: -20, dy: -20)
             return existing.contains { bounds.intersects(CGRect(origin: $0.position, size: WorkflowCanvasGeometry.size($0))) }
         }) { offset += 40 }
+        // Even partial copies get new group identities, so they cannot accidentally pair with originals.
+        var groups: [String: String] = [:]
+        for node in originals where node.isParallelBoundary {
+            if let group = node.parallelGroupID, groups[group] == nil { groups[group] = UUID().uuidString.lowercased() }
+        }
         var mapping: [String: String] = [:]
         let copies = originals.map { node -> JSONValue in
             var raw = node.raw
             let id = "node_" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
             mapping[node.id] = id
             raw["id"] = .string(id)
+            if let group = node.parallelGroupID, let replacement = groups[group] { raw["parallel_group_id"] = .string(replacement) }
             let position = point(node)
             raw["position"] = .object(["x": .number(position.x), "y": .number(position.y)])
             return .object(raw)

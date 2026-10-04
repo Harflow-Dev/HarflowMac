@@ -47,6 +47,11 @@ struct WorkflowCanvas: View {
     @GestureState private var connectionDrag: WorkflowConnectionDrag?
     private var activeConnectionDrag: WorkflowConnectionDrag? { scrollController.connectionDrag ?? connectionDrag }
 
+    private var parallelRegion: Set<String> {
+        guard let selectedNodeID, let node = nodes.first(where: { $0.id == selectedNodeID }), node.isParallelBoundary else { return [] }
+        return WorkflowParallelGroup.region(of: node, nodes: nodes, edges: edges)
+    }
+
     private var selection: Set<String> { selectedNodeIDs.isEmpty ? Set(selectedNodeID.map { [$0] } ?? []) : selectedNodeIDs }
 
     private func moveGroup(anchor id: String, point: CGPoint) {
@@ -129,7 +134,7 @@ struct WorkflowCanvas: View {
                         node: node,
                         status: status(node.id),
                         attempt: attempt(node.id),
-                        isSelected: selection.contains(node.id),
+                        isSelected: selection.contains(node.id) || parallelRegion.contains(node.id),
                         isEditable: isEditable,
                         zoom: zoom,
                         onSelect: { isCanvasFocused = true; if NSEvent.modifierFlags.contains(.command) { onToggleNode(node.id) } else { onSelectNode(node.id) } },
@@ -175,7 +180,7 @@ struct WorkflowCanvas: View {
             }
             .dropDestination(for: String.self) { values, location in
                 guard isEditable, let role = values.first,
-                      ["planning", "implementation", "review", "task", "start", "join", "end"].contains(role) else {
+                      ["planning", "implementation", "review", "task", "start", "join", "end", "parallel_group"].contains(role) else {
                           return false
                       }
                 guard !["start", "end"].contains(role) || !nodes.contains(where: { $0.type == role }) else { return false }
@@ -343,6 +348,11 @@ struct WorkflowCanvas: View {
         }
     }
 
+    private func isHighlighted(_ edge: WorkflowEdgeModel) -> Bool {
+        edge.id == selectedEdgeID || takenEdgeIDs.contains(edge.id)
+            || (parallelRegion.contains(edge.source) && parallelRegion.contains(edge.target))
+    }
+
     @ViewBuilder
     private func edgeView(_ edge: WorkflowEdgeModel) -> some View {
         if let source = nodes.first(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) {
@@ -352,9 +362,9 @@ struct WorkflowCanvas: View {
             let label = "Connection from \(source.name) to \(target.name)"
                 + (edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : ": \(edge.condition)")
             connection.stroke(
-                edge.id == selectedEdgeID || takenEdgeIDs.contains(edge.id) ? Color.accentLink : Color.secondaryText.opacity(0.7),
+                isHighlighted(edge) ? Color.accentLink : Color.secondaryText.opacity(0.7),
                 style: StrokeStyle(
-                    lineWidth: edge.id == selectedEdgeID || takenEdgeIDs.contains(edge.id) ? 2 : 1.5,
+                    lineWidth: isHighlighted(edge) ? 2 : 1.5,
                     dash: edge.isBackward ? [5, 3] : []
                 )
             )
@@ -393,7 +403,7 @@ private struct WorkflowCanvasNode: View {
     private var nodeSize: CGSize { WorkflowCanvasGeometry.size(node) }
     private var canEditTitle: Bool { isEditable && node.type == "agent" }
     private var displayTitle: String { node.type == "agent" ? node.name : WorkflowRole.title(node.type) }
-    private var isCompact: Bool { ["start", "end"].contains(node.type) }
+    private var isCompact: Bool { ["start", "end", "parallel_start", "parallel_end"].contains(node.type) }
     private var isRunning: Bool { ["running", "reserved"].contains(status) }
     private var border: Color { isRunning || isSelected ? .accentLink : .cardBorder }
 
@@ -412,6 +422,7 @@ private struct WorkflowCanvasNode: View {
         .frame(width: nodeSize.width, height: nodeSize.height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(displayTitle), \(status)")
+        .help(node.raw["group_label"]?.stringValue ?? displayTitle)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onSelect() }
         .onChange(of: dragOrigin) { _, origin in
@@ -556,25 +567,6 @@ private struct WorkflowCanvasNode: View {
                 let translation = WorkflowCanvasZoom.logical(value.translation, scale: zoom)
                 onMove(CGPoint(x: origin.x + translation.width, y: origin.y + translation.height))
             }
-    }
-}
-
-// MARK: - WorkflowRole
-
-enum WorkflowRole {
-    static let palette = ["start", "planning", "implementation", "review", "task", "end"]
-    static func title(_ role: String) -> String { role == "join" ? "Wait for all" : role.capitalized }
-    static func symbol(_ role: String) -> String {
-        switch role {
-        case "planning": "list.bullet.clipboard"
-        case "implementation": "hammer"
-        case "review": "checkmark.bubble"
-        case "task": "terminal"
-        case "start": "play"
-        case "join": "arrow.triangle.merge"
-        case "end": "stop"
-        default: "circle"
-        }
     }
 }
 
