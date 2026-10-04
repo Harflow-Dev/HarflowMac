@@ -6,6 +6,7 @@ import SwiftUI
 
 struct WorkflowInspector<VM: WorkflowViewModel>: View {
     var viewModel: VM
+    @State private var timeoutUnit: WorkflowTimeoutUnit = .minutes
 
     var body: some View {
         ScrollView {
@@ -149,17 +150,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     modelChoices: viewModel.modelChoices,
                     loadModels: viewModel.loadModels
                 )
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Session").fixedSize(horizontal: true, vertical: false)
-                    Picker("Session", selection: nodeString(node, "session_mode", default: "agent_decides")) {
-                        Text("Let agent decide").tag("agent_decides")
-                        Text("Resume").tag("resume")
-                        Text("Fresh").tag("fresh")
-                    }
-.labelsHidden()
-.pickerStyle(.segmented)
-                }
-                Stepper("Attempt limit: \(node.raw["max_attempts"]?.intValue ?? 3)", value: Binding(get: {
+                sessionSetting(node)
+                timeoutSetting(node)
+                Stepper("Attempts per visit: \(node.raw["max_attempts"]?.intValue ?? 3)", value: Binding(get: {
                     viewModel.selectedNode?.raw["max_attempts"]?.intValue ?? 3
                 }, set: { viewModel.updateNode(node.id, key: "max_attempts", value: .number(Double($0))) }), in: 1 ... 10000)
                 Stepper("Context questions: \(node.raw["max_context_questions"]?.intValue ?? 10)", value: Binding(get: {
@@ -172,6 +165,69 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 }
             }
         }.font(.pb(.body))
+    }
+
+    private func sessionSetting(_ node: WorkflowNodeModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Session").fixedSize(horizontal: true, vertical: false)
+            Picker("Session", selection: nodeString(node, "session_mode", default: "agent_decides")) {
+                Text("Let agent decide").tag("agent_decides")
+                Text("Resume this node").tag("resume")
+                Text("Fresh").tag("fresh")
+                Text("Continue previous node")
+.tag("continue_previous")
+                    .disabled(!WorkflowNodeExecutionSettings.canContinuePrevious(node, definition: inspectorDefinition))
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            if node.raw["session_mode"]?.stringValue == "continue_previous" {
+                Text("Reuse the previous serial node's compatible session. Otherwise start Fresh; fallbacks also start Fresh.")
+                    .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+            }
+        }
+    }
+
+    private func timeoutSetting(_ node: WorkflowNodeModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Time limit", isOn: Binding(get: {
+                viewModel.selectedNode.map { WorkflowNodeExecutionSettings.timeoutSeconds($0) != nil } ?? false
+            }, set: { enabled in
+                viewModel.updateNode(node.id, key: "timeout_seconds", value: enabled ? .number(900) : nil)
+            }))
+            if WorkflowNodeExecutionSettings.timeoutSeconds(node) != nil {
+                HStack(spacing: 6) {
+                    TextField("Duration", value: Binding(get: {
+                        timeoutUnit.value(for: viewModel.selectedNode.flatMap(WorkflowNodeExecutionSettings.timeoutSeconds) ?? 900)
+                    }, set: { value in
+                        guard let seconds = timeoutUnit.seconds(for: value) else { return }
+                        viewModel.updateNode(node.id, key: "timeout_seconds", value: .number(Double(seconds)))
+                    }), format: .number.grouping(.never).precision(.fractionLength(0 ... 6)))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .accessibilityLabel("Time limit duration")
+                    Picker("Unit", selection: $timeoutUnit) {
+                        ForEach(WorkflowTimeoutUnit.allCases, id: \.self) { unit in
+                            Text(unit.rawValue).tag(unit)
+                        }
+                    }
+.labelsHidden()
+.pickerStyle(.menu)
+                    Stepper("Adjust duration", value: Binding(get: {
+                        timeoutUnit.value(for: viewModel.selectedNode.flatMap(WorkflowNodeExecutionSettings.timeoutSeconds) ?? 900)
+                    }, set: { value in
+                        guard let seconds = timeoutUnit.seconds(for: value) else { return }
+                        viewModel.updateNode(node.id, key: "timeout_seconds", value: .number(Double(seconds)))
+                    }), in: (1 / timeoutUnit.multiplier) ... (86400 / timeoutUnit.multiplier), step: 1)
+                        .labelsHidden()
+                }
+                Text("Stop and settle the attempt before retrying or using a fallback.")
+                    .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+            }
+        }.onChange(of: node.id, initial: true) { _, _ in
+            timeoutUnit = .preferred(for: WorkflowNodeExecutionSettings.timeoutSeconds(node) ?? 900)
+        }
     }
 
     private func edgeEditor(_ edge: WorkflowEdgeModel) -> some View {
@@ -243,7 +299,8 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
             } ?? []).enumerated()), id: \.offset) { index, activation in
                 VStack(alignment: .leading, spacing: 8) {
                     let label = activation["role"]?.stringValue == "orchestrator" ? "Decision" : "Attempt"
-                    Text("\(label) \(index + 1) · \(activation["status"]?.stringValue ?? "")")
+                    let attempt = activation["attempt_in_visit"]?.intValue ?? index + 1
+                    Text("\(label) \(attempt) · \(activation["status"]?.stringValue ?? "")")
                         .font(.pb(.secondary, weight: .semibold))
                     if let error = activation["result_error"]?.stringValue {
                         Text(error).font(.pb(.secondary)).foregroundStyle(Color.warningFG).textSelection(.enabled)
@@ -251,6 +308,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     if let retryOf = activation["retry_of_execution_id"]?.stringValue {
                         Text("Retry of execution " + retryOf).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                     }
+                    executionSessionDetails(activation)
                     if let assignment = activation["assignment_prompt"]?.stringValue {
                         Text("Assignment").font(.pb(.secondary, weight: .semibold))
                         Text(assignment).font(.pb(.secondary)).textSelection(.enabled)
@@ -286,6 +344,18 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
 .padding(10)
 .background(Color.composerFill, in: RoundedRectangle(cornerRadius: PbRadius.row))
             }
+        }
+    }
+
+    @ViewBuilder
+    private func executionSessionDetails(_ activation: [String: JSONValue]) -> some View {
+        if let mode = activation["execution_session_mode"]?.stringValue {
+            Text("Session: " + mode.replacingOccurrences(of: "_", with: " "))
+                .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+        }
+        if let reason = activation["session_reason"]?.stringValue {
+            Text(reason).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
         }
     }
 

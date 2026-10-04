@@ -22,6 +22,50 @@ struct WorkflowDelegationTests {
         #expect(WorkflowNodePresentation.summary("Ordinary response") == "Ordinary response")
     }
 
+    @Test func givenPrefacedFencedResult_whenPresented_thenAcceptedContractIsDecoded() {
+        // given
+        let response = "Verification complete. Final result:\n\n```json\n"
+        + "{\"status\":\"succeeded\",\"result\":{\"verdict\":\"changes_needed\"},\"evidence\":[\"Static review\"]}\n```\nDone."
+        // when
+        let display = WorkflowNodePresentation.summary(response)
+        // then
+        #expect(display?.hasPrefix("Succeeded") == true)
+        #expect(display?.contains("Static review") == true)
+        #expect(display?.contains("```") == false)
+    }
+
+    @Test func givenContractWithTrailingProse_whenPresented_thenFirstObjectIsDecoded() {
+        // given
+        let response = "{\"status\":\"succeeded\",\"result\":{\"note\":\"A brace } inside text\"},\"evidence\":[]}\nTrailing text"
+        // when
+        let display = WorkflowNodePresentation.summary(response)
+        // then
+        #expect(display?.hasPrefix("Succeeded") == true)
+        #expect(display?.contains("A brace } inside text") == true)
+    }
+
+    @Test func givenVibeFencedContract_whenCompactTimelineRefreshes_thenDecodedResultKeepsRowIdentity() throws {
+        // given
+        let task = try #require(TaskInfo(.object(["task_id": .string("vibe"), "workflow_role": .string("node"),
+            "execution_contract": .string("delegation")])))
+        let contract = "All verification complete. Final result:\n```json\n"
+        + "{\"status\":\"succeeded\",\"result\":{\"coverage\":\"" + String(repeating: "Checked files. ", count: 100) + "\"},\"evidence\":[]}\n```"
+        let row = ConversationTimelineRow(id: "vibe-final", taskID: "vibe", timestamp: nil,
+            kind: .item(PreviewFixtures.textItem(contract)), live: false)
+        // when
+        let before = WorkflowNodePresentation.visibleRows([row], tasks: ["vibe": task], compact: true)
+        let after = WorkflowNodePresentation.visibleRows([row], tasks: ["vibe": WorkflowNodePresentation.merged(task, with: task)], compact: true)
+        // then
+        #expect(before == after)
+        #expect(before.first?.id == row.id)
+        guard case .item(let item) = before.first?.kind, case .text(let text, _) = item.body else {
+            Issue.record("Expected decoded text"); return
+        }
+        #expect(text.hasPrefix("Succeeded"))
+        #expect(text.contains("Open task for details."))
+        #expect(!text.contains("```"))
+    }
+
     @Test func givenAgentDecidesStarter_whenCreated_thenEveryWorkerLetsAgentDecide() {
         // given
         let definition = WorkflowVM.starterDefinition()

@@ -42,11 +42,7 @@ enum WorkflowNodePresentation {
     static func summary(_ text: String?, task: TaskInfo? = nil) -> String? {
         if let reason = resultError(task) { return "Malformed output\n\n" + reason }
         guard let text else { return nil }
-        var source = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if source.hasPrefix("```json"), source.hasSuffix("```") {
-            source = String(source.dropFirst(7).dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard let object = JSONValue.parse(Data(source.utf8))?.objectValue else { return text }
+        guard let object = contractObject(text) else { return text }
         if let decision = decisionSummary(object) { return decision }
         guard
               let status = object["status"]?.stringValue, ["succeeded", "failed", "blocked", "asking"].contains(status),
@@ -60,6 +56,58 @@ enum WorkflowNodePresentation {
             lines.append("Evidence:\n" + evidence.map { "• " + readable($0) }.joined(separator: "\n"))
         }
         return lines.joined(separator: "\n\n")
+    }
+
+    /// Match accepted envelope formatting without exposing protocol text in the activity feed.
+    private static func contractObject(_ text: String) -> [String: JSONValue]? {
+        let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let object = JSONValue.parse(Data(source.utf8))?.objectValue { return object }
+        var candidates: [[String: JSONValue]] = []
+        var scanner = EnvelopeScanner()
+        var start: String.Index?
+        for index in source.indices {
+            let character = source[index]
+            if start == nil {
+                guard character == "{" else { continue }
+                start = index
+                scanner = EnvelopeScanner()
+                continue
+            }
+            if scanner.consume(character), let begin = start {
+                let envelope = String(source[begin ... index])
+                guard let object = JSONValue.parse(Data(envelope.utf8))?.objectValue else { return nil }
+                candidates.append(object)
+                start = nil
+            }
+        }
+        guard let first = candidates.first, candidates.allSatisfy({ $0 == first }) else { return nil }
+        return first
+    }
+
+    private struct EnvelopeScanner {
+        var depth = 1
+        var quoted = false
+        var escaped = false
+
+        mutating func consume(_ character: Character) -> Bool {
+            if quoted {
+                consumeQuoted(character)
+                return false
+            }
+            switch character {
+            case "\"": quoted = true
+            case "{": depth += 1
+            case "}": depth -= 1
+            default: break
+            }
+            return depth == 0
+        }
+
+        private mutating func consumeQuoted(_ character: Character) {
+            if escaped { escaped = false } else if character == "\\" {
+                escaped = true
+            } else if character == "\"" { quoted = false }
+        }
     }
 
     private static func decisionSummary(_ object: [String: JSONValue]) -> String? {

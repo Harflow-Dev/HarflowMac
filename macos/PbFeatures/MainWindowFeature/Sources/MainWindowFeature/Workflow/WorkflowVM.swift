@@ -492,7 +492,8 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func nodeAttempt(_ id: String) -> Int {
-        selectedRun?.activations.filter { $0["node_id"]?.stringValue == id && $0["role"]?.stringValue == "node" }.count ?? 0
+        let executions = selectedRun?.activations.filter { $0["node_id"]?.stringValue == id && $0["role"]?.stringValue == "node" } ?? []
+        return executions.last?["attempt_in_visit"]?.intValue ?? executions.count
     }
 
     private func addEdge(source: String, target: String) {
