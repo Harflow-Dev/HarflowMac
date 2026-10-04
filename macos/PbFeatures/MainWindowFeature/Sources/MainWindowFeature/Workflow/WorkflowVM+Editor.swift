@@ -60,6 +60,12 @@ extension WorkflowVM {
         }
     }
 
+    func prepareRun(id: String, polling: WorkflowRunPolling) {
+        runPolling = polling
+        selectedRun = WorkflowRunModel(raw: polling.cached(id: id) ?? ["workflow_run_id": .string(id)])
+        initialLoadingKind = polling.cached(id: id) == nil ? "run" : nil
+    }
+
     func selectRun(_ run: WorkflowRunModel) {
         resetEditHistory()
         editorReadTask?.cancel()

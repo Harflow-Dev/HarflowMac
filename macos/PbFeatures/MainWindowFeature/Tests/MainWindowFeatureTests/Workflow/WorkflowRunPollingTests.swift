@@ -8,6 +8,65 @@ import Testing
 
 @MainActor
 @Suite struct WorkflowRunPollingTests {
+    @Test func givenLiveRunChanges_whenLoadingFrozenSnapshot_thenCompletesWithoutDigestRestart() async throws {
+        // given
+        let useCase = PollingUseCase()
+        useCase.snapshotMode = true
+        useCase.changeDuringPaging = true
+        let loader = WorkflowRunPolling()
+        // when
+        let raw = try await loader.load(id: "run", useCase: useCase)
+        // then
+        #expect(raw["summary"]?.stringValue == String(repeating: "x", count: 9000))
+        #expect(raw["status"]?.stringValue == "running")
+        #expect(useCase.snapshotStatus == "completed")
+        #expect(useCase.detailCalls == 0)
+        #expect(useCase.statusOptions.count == 2)
+        #expect(loader.cached(id: "run") == raw)
+    }
+
+    @Test func givenCachedRun_whenOpeningAnotherViewModel_thenContentAppearsWithoutInitialShimmer() async throws {
+        // given
+        let useCase = PollingUseCase()
+        useCase.snapshotMode = true
+        let loader = WorkflowRunPolling()
+        let raw = try await loader.load(id: "run", useCase: useCase)
+        let vm = WorkflowTests().makeVM().sut
+        // when
+        vm.prepareRun(id: "run", polling: loader)
+        // then
+        #expect(vm.initialLoadingKind == nil)
+        #expect(vm.selectedRun?.raw == raw)
+    }
+
+    @Test func givenSameContentDigestsAndChangedStatus_whenPolling_thenStatusAdvances() async throws {
+        // given
+        let useCase = PollingUseCase()
+        useCase.snapshotMode = true
+        let loader = WorkflowRunPolling()
+        _ = try await loader.load(id: "run", useCase: useCase)
+        useCase.snapshotStatus = "needs_input"
+        // when
+        let raw = try await loader.load(id: "run", useCase: useCase)
+        // then
+        #expect(raw["status"]?.stringValue == "needs_input")
+    }
+
+    @Test func givenUnchangedSnapshot_whenPolling_thenOnlyCompactStatusIsRead() async throws {
+        // given
+        let useCase = PollingUseCase()
+        useCase.snapshotMode = true
+        let loader = WorkflowRunPolling()
+        let first = try await loader.load(id: "run", useCase: useCase)
+        let initialCalls = useCase.statusOptions.count
+        // when
+        let second = try await loader.load(id: "run", useCase: useCase)
+        // then
+        #expect(second == first)
+        #expect(useCase.statusOptions.count == initialCalls + 1)
+        #expect(useCase.statusOptions.last == ["--monitor-view"])
+    }
+
     @Test func givenPagedExecution_whenPollingTwice_thenAllHistoryLoadsAndUnchangedViewsAreCached() async throws {
         // given
         let useCase = PollingUseCase()
@@ -21,7 +80,7 @@ import Testing
         #expect(first["activations"]?.arrayValue?.last?["node_result"]?["result"]?.stringValue == String(repeating: "x", count: 9000))
         #expect(first == second)
         #expect(useCase.detailCalls == detailCalls)
-        #expect(useCase.statusOptions == [["--monitor-view"], ["--monitor-view"]])
+        #expect(useCase.statusOptions == [["--monitor-view", "--snapshot"], ["--monitor-view"]])
         #expect(useCase.cursors.contains("page-two"))
     }
 
@@ -68,12 +127,36 @@ private final class PollingUseCase: WorkflowUseCase, @unchecked Sendable {
     var statusOptions: [[String]] = []
     var cursors: [String] = []
     var detailCalls = 0
+    var snapshotMode = false
+    var snapshotStatus = "running"
+    var changeDuringPaging = false
+    var frozenContent = ""
     var editingContent = "null"
     var staleOnce = false
     var staleRaised = false
     func command(_ command: String, options: [String], positionals _: [String]) async throws -> [String: JSONValue] {
         if command == "status" {
             statusOptions.append(options)
+            if snapshotMode {
+                if !options.contains("--snapshot") {
+                    return ["workflow_run_id": .string("run"), "status": .string(snapshotStatus),
+                            "monitor_digests": .object(["constant": .string("constant")])]
+                }
+                let current = "{\"workflow_run_id\":\"run\",\"status\":\"\(snapshotStatus)\","
+                    + "\"summary\":\"\(String(repeating: "x", count: 9000))\","
+                    + "\"monitor_digests\":{\"constant\":\"constant\"}}"
+                let offset = options.contains("--cursor=page-two") ? 8000 : 0
+                if offset == 0 {
+                    frozenContent = current
+                    if changeDuringPaging { snapshotStatus = "completed" }
+                }
+                let text = frozenContent
+                let end = min(offset + 8000, text.count)
+                return ["monitor_snapshot": .bool(true), "workflow_run_id": .string("run"), "content_sha256": .string("frozen"),
+                        "offset": .number(Double(offset)), "total_characters": .number(Double(text.count)),
+                        "chunk": .string(String(text.dropFirst(offset).prefix(end - offset))),
+                        "next_cursor": end < text.count ? .string("page-two") : .null]
+            }
             return ["workflow_run_id": .string("run"), "status": .string("completed"),
                     "kind": .string("builder"),
                     "monitor_digests": .object(["execution_index": .string("execution_index"), "editing_definition": .string("editing_definition")])]

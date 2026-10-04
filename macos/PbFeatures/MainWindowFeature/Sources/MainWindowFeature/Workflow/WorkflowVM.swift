@@ -92,7 +92,8 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored let routing: any WorkflowRouting
     @ObservationIgnored private var terminationSubscription: AnyCancellable?
     @ObservationIgnored private var poll: Task<Void, Never>?
-    @ObservationIgnored private var runPolling = WorkflowRunPolling()
+    @ObservationIgnored var refreshErrorText: String?
+    @ObservationIgnored var runPolling = WorkflowRunPolling()
     @ObservationIgnored private var generationID = UUID()
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored var editorReadTask: Task<Void, Never>?
@@ -241,13 +242,17 @@ final class WorkflowVM: WorkflowViewModel {
                       }
                 selectedRun = WorkflowRunModel(raw: response["run"]?.objectValue ?? response)
                 initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
+                if errorText == refreshErrorText || errorText == WorkflowRunPolling.staleDetailMessage { errorText = nil }
+                refreshErrorText = nil
                 updateActivityMembership()
             }
         } catch {
             guard !Task.isCancelled, selectedRun?.id == refreshRunID,
                   initialLoadingID == loadingID,
                   generation == nil || generation == generationID else { return }
-            errorText = Self.message(error)
+            let message = Self.message(error)
+            refreshErrorText = message
+            errorText = message
         }
     }
 

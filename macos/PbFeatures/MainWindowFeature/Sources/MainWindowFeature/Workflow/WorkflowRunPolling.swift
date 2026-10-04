@@ -6,6 +6,19 @@ import MonitorCore
 /// Reassembles changed authoritative views without repeatedly transferring old results.
 @MainActor
 final class WorkflowRunPolling {
+    nonisolated static let staleDetailMessage = "Workflow details changed while loading. Refreshing the latest revision."
+    private var snapshots: [String: [String: JSONValue]] = [:]
+    private var recentRuns: [String] = []
+
+    func cached(id: String) -> [String: JSONValue]? { snapshots[id] }
+
+    private func remember(_ raw: [String: JSONValue], id: String) {
+        snapshots[id] = raw
+        recentRuns.removeAll { $0 == id }
+        recentRuns.append(id)
+        if recentRuns.count > 8 { snapshots.removeValue(forKey: recentRuns.removeFirst()) }
+    }
+
     private var runID: String?
     private var loadID = UUID()
     private var digests: [String: String] = [:]
@@ -16,11 +29,42 @@ final class WorkflowRunPolling {
     func load(id: String, useCase: any WorkflowUseCase) async throws -> [String: JSONValue] {
         let generation = UUID()
         loadID = generation
-        let response = try await useCase.command("status", options: ["--monitor-view"], positionals: [id])
+        let (response, isCached) = try await status(id: id, useCase: useCase)
         guard loadID == generation else { throw CancellationError() }
+        if isCached { return response }
+        if response["monitor_snapshot"]?.boolValue == true {
+            let raw = try await WorkflowMonitorSnapshot.read(first: response, id: id, useCase: useCase)
+            guard loadID == generation else { throw CancellationError() }
+            remember(raw, id: id)
+            return raw
+        }
+        return try await loadLegacy(response: response, id: id, generation: generation, useCase: useCase)
+    }
+
+    private func status(id: String, useCase: any WorkflowUseCase) async throws -> ([String: JSONValue], Bool) {
+        let previous = snapshots[id]
+        let hasDigests = previous?["monitor_digests"]?.objectValue != nil
+        let options = hasDigests ? ["--monitor-view"] : ["--monitor-view", "--snapshot"]
+        var response = try await useCase.command("status", options: options, positionals: [id])
+        let stateKeys = ["status", "updated_at", "settling", "draft_revision", "input_decision_id", "revision", "interaction_owner"]
+        if hasDigests, let previous, stateKeys.allSatisfy({ response[$0] == previous[$0] }),
+           let advertised = response["monitor_digests"], advertised == previous["monitor_digests"] {
+            return (previous, true)
+        }
+        if hasDigests, response["monitor_digests"] != nil {
+            response = try await useCase.command("status", options: ["--monitor-view", "--snapshot"], positionals: [id])
+        }
+        return (response, false)
+    }
+
+    private func loadLegacy(response: [String: JSONValue], id: String, generation: UUID,
+                            useCase: any WorkflowUseCase) async throws -> [String: JSONValue] {
         let metadata = response["run"]?.objectValue ?? response
         // Preview fixtures and old CLI responses retain their existing complete shape.
-        guard let advertised = metadata["monitor_digests"]?.objectValue else { return metadata }
+        guard let advertised = metadata["monitor_digests"]?.objectValue else {
+            remember(metadata, id: id)
+            return metadata
+        }
         if runID != id {
             runID = id
             digests = [:]
@@ -41,6 +85,7 @@ final class WorkflowRunPolling {
             if value == .null { result.removeValue(forKey: field) } else { result[field] = value }
         }
         result["activations"] = .array(ordered)
+        remember(result, id: id)
         return result
     }
 
@@ -99,6 +144,6 @@ final class WorkflowRunPolling {
 
     private enum PollingError: LocalizedError {
         case invalidDetail
-        var errorDescription: String? { "Workflow details changed while loading. Refreshing the latest revision." }
+        var errorDescription: String? { WorkflowRunPolling.staleDetailMessage }
     }
 }

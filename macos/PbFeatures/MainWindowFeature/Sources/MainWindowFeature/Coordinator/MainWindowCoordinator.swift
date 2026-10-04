@@ -94,6 +94,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     @ObservationIgnored private let selectionSubject = PassthroughSubject<MonitorDestination?, Never>()
     @ObservationIgnored private let isNewSessionPresentedSubject = PassthroughSubject<Bool, Never>()
+    @ObservationIgnored let workflowRunPolling = WorkflowRunPolling()
     @ObservationIgnored private var sidebarVM: SidebarVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
     /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
