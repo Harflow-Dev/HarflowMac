@@ -24,7 +24,7 @@ struct WorkflowBranchSelectionTests {
             edge("web-end", "web-review", "merge"), edge("after", "merge", "after")])]
     }
 
-    private func generation(_ sequence: Int, selected: [String], excluded: [String], 
+    private func generation(_ sequence: Int, selected: [String], excluded: [String],
                             stack: [String] = [], split: String = "split", join: String = "merge") -> JSONValue {
         .object(["split_id": .string(split), "join_id": .string(join), "selection_sequence": .number(Double(sequence)),
             "selected_connection_ids": .array(selected.map(JSONValue.string)), "excluded_connection_ids": .array(excluded.map(JSONValue.string)),
