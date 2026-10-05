@@ -17,6 +17,7 @@ struct ToolGroupCardView: View {
     let start: Date?
     let isExpanded: Bool
     let onToggle: () -> Void
+    @State private var seenMemberIDs: Set<String> = []
 
     var body: some View {
         ActivityCard {
@@ -33,8 +34,10 @@ struct ToolGroupCardView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(group.members) { member in
                             ToolRow(model: ToolRowModel(call: member.call, result: member.result, live: member.live))
+                                .pbFadeIn(animate: !seenMemberIDs.contains(member.id))
+                                .onAppear { seenMemberIDs.insert(member.id) }
                         }
-                    }
+                    }.pbFadeIn()
                 }
             }
         }

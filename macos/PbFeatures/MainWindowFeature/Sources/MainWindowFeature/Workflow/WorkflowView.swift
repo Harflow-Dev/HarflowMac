@@ -107,9 +107,17 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     var body: some View {
         VStack(spacing: 0) {
             if viewModel.initialLoadingKind != nil {
-                HStack { SkeletonBlock(width: 220, height: 18); Spacer() }.padding(16)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        SkeletonBlock(width: 220, height: 20)
+                        SkeletonBlock(width: 140, height: 14)
+                    }
+                    Spacer()
+                }
+.padding(.horizontal, 16)
+.padding(.vertical, 12)
             } else {
-                header.disabled(viewModel.initialLoadFailed)
+                header.disabled(viewModel.initialLoadFailed).pbFadeIn()
             }
             Divider()
             if let error = viewModel.errorText {
@@ -121,16 +129,18 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 .padding(12)
                 Divider()
             }
-            if let loadingKind = viewModel.initialLoadingKind {
+            if viewModel.initialLoadingKind == "run" ||
+                (viewModel.initialLoadingKind == nil && !viewModel.initialLoadFailed
+                    && viewModel.selectedRun != nil && viewModel.selectedRun?.isBuilder != true) {
+                runContent
+            } else if let loadingKind = viewModel.initialLoadingKind {
                 WorkflowLoadingView(isRun: loadingKind == "run")
             } else if viewModel.initialLoadFailed {
                 ContentUnavailableView("Workflow could not be loaded", systemImage: "exclamationmark.triangle")
             } else if viewModel.selectedRun?.isBuilder == true {
-                builderContent
-            } else if viewModel.selectedRun != nil {
-                runContent
+                builderContent.pbFadeIn()
             } else {
-                editor
+                editor.pbFadeIn()
             }
         }
         .background(Color.windowBG)
@@ -370,19 +380,23 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     }
 
     private var runContent: some View {
-        VStack(spacing: 0) {
-            WorkflowRunStatus(viewModel: viewModel)
-            Divider()
-            if viewMode == "Graph" {
-                VSplitView {
-                    HSplitView {
-                        canvas
-                        runSidebar
-                    }.frame(minHeight: 170, idealHeight: 300)
-                    activity.frame(minHeight: 240)
-                }
+        let isLoading = viewModel.initialLoadingKind == "run"
+        return VStack(spacing: 0) {
+            if isLoading {
+                HStack { SkeletonBlock(height: 14); Spacer(minLength: 60) }
+                    .frame(height: 27)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
             } else {
-                HSplitView { activity; runSidebar }
+                WorkflowRunStatus(viewModel: viewModel).pbFadeIn()
+            }
+            Divider()
+            WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading) {
+                if isLoading { WorkflowLoadingCanvas() } else { canvas.pbFadeIn() }
+            } inspector: {
+                if isLoading { WorkflowLoadingInspector(isRun: true) } else { runSidebar.pbFadeIn() }
+            } activity: {
+                if isLoading { WorkflowLoadingActivity() } else { activity.pbFadeIn() }
             }
         }
     }
@@ -429,7 +443,6 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     Spacer(minLength: 0)
                 }
             }
-.frame(minWidth: 220, idealWidth: 260, maxWidth: 500)
 .background(Color.cardFill)
         }
     }

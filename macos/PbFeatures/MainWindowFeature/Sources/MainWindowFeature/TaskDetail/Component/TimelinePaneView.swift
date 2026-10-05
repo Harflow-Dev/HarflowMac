@@ -86,6 +86,8 @@ struct TimelinePaneView: View {
     @State private var followLive = true
     @State private var olderAnchor: String?
     @State private var expandedGroups: Set<String> = []
+    @State private var seenRowIDs: Set<String> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -103,7 +105,7 @@ struct TimelinePaneView: View {
                     .readingColumn()
                     .frame(maxHeight: .infinity, alignment: .top)
             } else {
-                feed
+                feed.pbFadeIn()
             }
         }
     }
@@ -113,11 +115,20 @@ struct TimelinePaneView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
                     if let onLoadMore = model.onLoadMore, model.history.hasMore || model.history.error != nil {
-                        Button(model.history.error == nil ? "Load more activity" : "Retry older activity") {
+                        Button {
                             olderAnchor = model.activityRows.first?.id
                             onLoadMore()
-                        }.disabled(model.history.isLoading)
-                        if model.history.isLoading { ProgressView() }
+                        } label: {
+                            if model.history.isLoading {
+                                LoadingLabel("Loading activity…")
+                            } else {
+                                Text(model.history.error == nil ? "Load more activity" : "Retry older activity")
+                                    .font(.pb(.secondary))
+.frame(minHeight: 20)
+                            }
+                        }
+.buttonStyle(.plain)
+.disabled(model.history.isLoading)
                         if let error = model.history.error { Text(error).font(.pb(.secondary)) }
                     } else if !model.rows.isEmpty {
                         Text("Beginning of loaded activity").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
@@ -126,7 +137,10 @@ struct TimelinePaneView: View {
                         Text(emptyText).font(.pb(.body)).foregroundStyle(Color.secondaryText)
                     }
                     ForEach(model.activityRows) { row in
-                        rowView(row).id(row.id)
+                        rowView(row)
+.id(row.id)
+                            .pbFadeIn(animate: !seenRowIDs.contains(row.id))
+                            .onAppear { seenRowIDs.insert(row.id) }
                     }
                     if let subTaskStrip = model.subTaskStrip {
                         SubTaskStripView(model: subTaskStrip)
@@ -157,7 +171,9 @@ struct TimelinePaneView: View {
         switch row {
         case .toolGroup(let group):
             ToolGroupCardView(group: group, start: model.start, isExpanded: expandedGroups.contains(group.id)) {
-                if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
+                withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) {
+                    if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
+                }
             }
         case .single(let row):
             switch row.kind {

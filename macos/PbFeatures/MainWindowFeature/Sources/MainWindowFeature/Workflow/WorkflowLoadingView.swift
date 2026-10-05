@@ -6,49 +6,47 @@ import SwiftUI
 struct WorkflowLoadingView: View {
     let isRun: Bool
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                GeometryReader { geometry in
-                    let scale = min(1, max(0.2, (geometry.size.width - 40) / 508))
-                    HStack(spacing: 0) {
-                        node(compact: true)
-                        connector
-                        node(compact: false)
-                        connector
-                        node(compact: false)
-                        connector
-                        node(compact: true)
-                    }
-                    .frame(width: 508, height: 86)
-                    .scaleEffect(scale)
-                    .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
-                }.clipped()
-                VStack(alignment: .leading, spacing: 16) {
-                    SkeletonBlock(width: 110, height: 16)
-                    SkeletonRows(count: isRun ? 3 : 5)
-                    if !isRun { SkeletonBlock(height: 100) }
-                    Spacer()
-                }
-.padding(16)
-.frame(width: 240)
-.background(Color.cardFill)
-            }.frame(minHeight: 220, maxHeight: isRun ? 300 : .infinity)
+        Group {
             if isRun {
-                Divider()
-                HStack(alignment: .top, spacing: 24) {
-                    ForEach(0 ..< 2) { _ in
-                        VStack(alignment: .leading, spacing: 18) {
-                            SkeletonBlock(width: 120, height: 16)
-                            SkeletonBlock(height: 60)
-                            SkeletonRows(count: 3)
-                        }.frame(maxWidth: .infinity)
-                    }
-                }.padding(24)
-                Spacer()
+                WorkflowRunPanes(isGraph: true) {
+                    WorkflowLoadingCanvas()
+                } inspector: {
+                    WorkflowLoadingInspector(isRun: true)
+                } activity: {
+                    WorkflowLoadingActivity()
+                }
+            } else {
+                WorkflowInspectorSplit {
+                    WorkflowLoadingCanvas()
+                } inspector: {
+                    WorkflowLoadingInspector(isRun: false)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(isRun ? "Loading workflow run" : "Loading workflow canvas")
+    }
+}
+
+// MARK: - WorkflowLoadingCanvas
+
+struct WorkflowLoadingCanvas: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let scale = min(1, max(0.2, (geometry.size.width - 40) / 508))
+            HStack(spacing: 0) {
+                node(compact: true)
+                connector
+                node(compact: false)
+                connector
+                node(compact: false)
+                connector
+                node(compact: true)
+            }
+            .frame(width: 508, height: 86)
+            .scaleEffect(scale)
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+        }.clipped()
     }
 
     private var connector: some View {
@@ -79,6 +77,47 @@ struct WorkflowLoadingView: View {
         .frame(width: compact ? 64 : 130, height: compact ? 64 : 86)
         .background(Color.cardFill, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.cardBorder))
+    }
+}
+
+// MARK: - WorkflowLoadingInspector
+
+struct WorkflowLoadingInspector: View {
+    let isRun: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SkeletonBlock(width: 110, height: 16)
+            SkeletonRows(count: isRun ? 3 : 5)
+            if !isRun { SkeletonBlock(height: 100) }
+            Spacer(minLength: 0)
+        }
+.padding(16)
+.background(Color.cardFill)
+    }
+}
+
+// MARK: - WorkflowLoadingActivity
+
+struct WorkflowLoadingActivity: View {
+    var body: some View {
+        GeometryReader { viewport in
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(0 ..< 2) { _ in
+                        VStack(alignment: .leading, spacing: 18) {
+                            SkeletonBlock(width: 120, height: 16)
+                            SkeletonBlock(height: 60)
+                            SkeletonRows(count: 3)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(16)
+                        .frame(width: ParallelLayout.columnWidth(memberCount: 2, availableWidth: viewport.size.width),
+                               height: viewport.size.height)
+                        Divider()
+                    }
+                }
+            }
+        }
     }
 }
 

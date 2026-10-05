@@ -30,8 +30,12 @@ struct WorkflowCanvasNode: View {
     private var canEditTitle: Bool { isEditable && ["agent", "workflow"].contains(node.type) }
     private var displayTitle: String { ["agent", "workflow"].contains(node.type) ? node.name : WorkflowRole.title(node.type) }
     private var isCompact: Bool { ["start", "end", "parallel_start", "parallel_end"].contains(node.type) }
-    private var isRunning: Bool { ["running", "reserved"].contains(status) }
-    private var border: Color { isRunning || isSelected ? .accentLink : .cardBorder }
+    private var isRunning: Bool { status == "running" }
+    private var outline: WorkflowNodeOutline { WorkflowNodeOutline(status: status, isSelected: isSelected) }
+    private var border: Color {
+        if isSelected || status == "reserved" { return .accentLink }
+        return outline.isExecuting ? .accentLink.opacity(0.25) : .cardBorder
+    }
 
     var body: some View {
         ZStack {
@@ -119,6 +123,7 @@ struct WorkflowCanvasNode: View {
                 } else {
                     Text(node.type == "workflow" ? (node.workflowName.isEmpty ? "Select workflow" : node.workflowName) : node.type.capitalized)
                         .lineLimit(1)
+                        .help(node.workflowName.isEmpty ? "Select workflow" : node.workflowName)
                         .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
                 }
@@ -157,10 +162,10 @@ struct WorkflowCanvasNode: View {
                 Text(node.name).font(.pb(.body, weight: .semibold)).lineLimit(1)
             }
             .buttonStyle(.plain)
-            .help("Click to rename this step")
+            .help("\(node.name)\nClick to rename this step")
             .accessibilityLabel("Edit title for \(node.name)")
         } else {
-            Text(displayTitle).font(.pb(.body, weight: .semibold)).lineLimit(1)
+            Text(displayTitle).font(.pb(.body, weight: .semibold)).lineLimit(1).help(displayTitle)
         }
     }
 
@@ -177,7 +182,14 @@ struct WorkflowCanvasNode: View {
         cardContent.padding(12)
         .frame(width: nodeSize.width, height: nodeSize.height)
         .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(isRunning ? Color.accentLink.opacity(0.08) : Color.cardFill))
-        .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(border, lineWidth: isRunning || isSelected ? 2 : 1))
+        .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(border, lineWidth: outline.isEmphasized ? 2 : 1))
+        .overlay {
+            if outline.isExecuting {
+                WorkflowRunningOutline(isSelected: isSelected)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         .contentShape(RoundedRectangle(cornerRadius: PbRadius.card))
         .onTapGesture {
             if editedTitle == nil { onSelect() }
