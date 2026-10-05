@@ -26,6 +26,7 @@ protocol WorkflowViewModel: ViewModel {
     var errorText: String? { get }
     var validationMessage: String? { get }
     var validationDependencies: [String: JSONValue] { get }
+    var branchSelection: WorkflowBranchSelection { get }
     var repo: String { get set }
     var prompt: String { get set }
     var freedom: String { get set }
@@ -317,8 +318,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             canUndo: viewModel.canUndo,
             onUndo: viewModel.undoWorkflowEdit,
             onRename: { viewModel.updateNode($0, key: "title", value: .string($1)) },
-            childRunID: { viewModel.selectedRun?.latestChildRunID(for: $0) },
-            onOpenRun: viewModel.openRun
+            childRunID: { viewModel.selectedRun?.latestChildRunID(for: $0, selection: viewModel.branchSelection) },
+            onOpenRun: viewModel.openRun,
+            selectedBranchEdgeIDs: viewModel.branchSelection.selectedEdgeIDs,
+            excludedBranchEdgeIDs: viewModel.branchSelection.excludedEdgeIDs
         )
     }
 
@@ -496,4 +499,5 @@ struct WorkflowActivityColumns: View {
 
 extension WorkflowViewModel {
     var validationDependencies: [String: JSONValue] { [:] }
+    var branchSelection: WorkflowBranchSelection { WorkflowBranchSelection() }
 }

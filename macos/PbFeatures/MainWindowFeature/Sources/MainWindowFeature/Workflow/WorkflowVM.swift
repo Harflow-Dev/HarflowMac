@@ -56,7 +56,8 @@ final class WorkflowVM: WorkflowViewModel {
 
     var selectedEdgeID: String?
     var connectionSourceID: String?
-    var selectedRun: WorkflowRunModel? { didSet { scheduleValidation(); scheduleDraftPersistence() } }
+    var selectedRun: WorkflowRunModel? { didSet { updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence() } }
+    var branchSelection = WorkflowBranchSelection()
     var selectedActivationID: String?
     var isEditing = false
     private var operationBusy = false
@@ -486,9 +487,10 @@ final class WorkflowVM: WorkflowViewModel {
         guard let run = selectedRun else {
             return "pending"
         }
+        if branchSelection.excludedNodeIDs.contains(id) { return "not_selected" }
         if let status = run.activations
 .last(where: {
-            $0["node_id"]?.stringValue == id && $0["role"]?.stringValue == "node"
+            $0["node_id"]?.stringValue == id && $0["role"]?.stringValue == "node" && branchSelection.includes($0, nodeID: id)
         })?["status"]?.stringValue {
             return status
         }
@@ -508,7 +510,10 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func nodeAttempt(_ id: String) -> Int {
-        let executions = selectedRun?.activations.filter { $0["node_id"]?.stringValue == id && $0["role"]?.stringValue == "node" } ?? []
+        if branchSelection.excludedNodeIDs.contains(id) { return 0 }
+        let executions = selectedRun?.activations.filter {
+            $0["node_id"]?.stringValue == id && $0["role"]?.stringValue == "node" && branchSelection.includes($0, nodeID: id)
+        } ?? []
         return executions.last?["attempt_in_visit"]?.intValue ?? executions.count
     }
 

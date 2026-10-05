@@ -29,15 +29,19 @@ enum WorkflowParallelGroup {
     static func status(of node: WorkflowNodeModel, run: WorkflowRunModel) -> String? {
         guard node.isParallelBoundary else { return nil }
         let key = node.type == "parallel_start" ? "split_id" : "join_id"
-        let active = run.raw["joins"]?.objectValue?.values.contains { $0[key]?.stringValue == node.id } == true
-        if active {
+        let history = WorkflowGroupInvocation.history(in: run)
+        var latestBySplit: [String: String] = [:]
+        for group in history where latestBySplit[group.splitID] == nil { latestBySplit[group.splitID] = group.id }
+        let latestIDs = Set(latestBySplit.values)
+        let knownIDs = Set(history.map(\.id))
+        guard let group = history.first(where: {
+            $0.raw[key]?.stringValue == node.id && $0.ancestorIDs.allSatisfy { !knownIDs.contains($0) || latestIDs.contains($0) }
+        }) else { return nil }
+        if !group.isReleased {
             if ["failed", "cancelled"].contains(run.status) { return run.status }
             return node.type == "parallel_start" ? "completed" : "waiting"
         }
-        if run.raw["released_parallel_groups"]?.objectValue?.values.contains(where: { $0[key]?.stringValue == node.id }) == true {
-            return "completed"
-        }
-        return nil
+        return "completed"
     }
 
 }

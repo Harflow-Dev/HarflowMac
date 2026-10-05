@@ -13,7 +13,8 @@ struct WorkflowNodeDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
         if !isEditable {
-            Text(status.replacingOccurrences(of: "_", with: " ").capitalized + (node.isOptional ? " · Optional" : ""))
+            let statusLabel = status == "not_selected" ? "Not selected" : status.replacingOccurrences(of: "_", with: " ").capitalized
+            Text(statusLabel + (node.isOptional ? " · Optional" : ""))
                 .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
         } else if node.isOptional {

@@ -65,9 +65,10 @@ struct WorkflowRunModel: Identifiable, Equatable {
         activations.compactMap { $0["invocation"]?["child_workflow_run_id"]?.stringValue }
     }
 
-    func latestChildRunID(for nodeID: String) -> String? {
+    func latestChildRunID(for nodeID: String, selection: WorkflowBranchSelection = WorkflowBranchSelection()) -> String? {
+        guard !selection.excludedNodeIDs.contains(nodeID) else { return nil }
         let activation = activations.last {
-            $0["node_id"]?.stringValue == nodeID && $0["invocation"]?["child_workflow_run_id"]?.stringValue != nil
+            $0["node_id"]?.stringValue == nodeID && selection.includes($0, nodeID: nodeID) && $0["invocation"]?["child_workflow_run_id"]?.stringValue != nil
         }
         return activation?["invocation"]?["child_workflow_run_id"]?.stringValue
     }

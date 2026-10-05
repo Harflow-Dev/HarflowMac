@@ -25,21 +25,8 @@ extension WorkflowInspector {
 .textFieldStyle(.roundedBorder)
 .disabled(viewModel.selectedRun != nil || viewModel.isBusy)
             Text("\(branches) branches").font(.pb(.secondary))
-            if let run = viewModel.selectedRun, let start {
-                let generations = run.raw["joins"]?.objectValue?.values.compactMap(\.objectValue) ?? []
-                let waiting = generations.filter { $0["split_id"]?.stringValue == start.id }
-                ForEach(Array(waiting.enumerated()), id: \.offset) { _, generation in
-                    let completed = generation["arrival_ids"]?.arrayValue?.count ?? 0
-                    let expected = generation["expected"]?.intValue ?? branches
-                    Text("\(completed) of \(expected) branches resolved").font(.pb(.secondary))
-                }
-                let released = run.raw["released_parallel_groups"]?
-.objectValue?
-.values
-.compactMap(\.objectValue)
-                    .filter { $0["split_id"]?.stringValue == start.id } ?? []
-                if !released.isEmpty { Text("\(released.count) completed group executions").font(.pb(.secondary)) }
-            }
+            if node.type == "parallel_start", let start { branchSelectionEditor(start) }
+            if let run = viewModel.selectedRun, let start { branchSelectionHistory(start, run: run) }
             if let partner {
                 Button("Select " + WorkflowRole.title(partner.type)) { viewModel.selectNode(partner.id) }
                     .buttonStyle(QuietButtonStyle())
@@ -47,8 +34,9 @@ extension WorkflowInspector {
                 Text("Missing matching parallel boundary. Repair the pair before saving.")
                     .foregroundStyle(Color.warningFG)
             }
-            Text(node.type == "parallel_start" ? "Runs every outgoing branch. Conditions for choosing this group belong on its incoming connection."
-                 : "Waits for all branches to resolve before the orchestrator chooses the next step.")
+            Text(node.type == "parallel_start"
+                ? "Branch membership is fixed for each invocation. Re-entering the group may make a new selection."
+                : "Waits for every selected branch to resolve before the orchestrator chooses the next step.")
                 .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)
             if viewModel.selectedRun == nil {
