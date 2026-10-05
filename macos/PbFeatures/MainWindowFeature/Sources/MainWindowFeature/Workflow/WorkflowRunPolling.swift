@@ -35,6 +35,8 @@ final class WorkflowRunPolling {
         if response["monitor_snapshot"]?.boolValue == true {
             let raw = try await WorkflowMonitorSnapshot.read(first: response, id: id, useCase: useCase)
             guard loadID == generation else { throw CancellationError() }
+            await seedSnapshot(raw, id: id, generation: generation, useCase: useCase)
+            guard loadID == generation else { throw CancellationError() }
             remember(raw, id: id)
             return raw
         }
@@ -45,16 +47,37 @@ final class WorkflowRunPolling {
         let previous = snapshots[id]
         let hasDigests = previous?["monitor_digests"]?.objectValue != nil
         let options = hasDigests ? ["--monitor-view"] : ["--monitor-view", "--snapshot"]
-        var response = try await useCase.command("status", options: options, positionals: [id])
+        let response = try await useCase.command("status", options: options, positionals: [id])
         let stateKeys = ["status", "updated_at", "settling", "draft_revision", "input_decision_id", "revision", "interaction_owner"]
         if hasDigests, let previous, stateKeys.allSatisfy({ response[$0] == previous[$0] }),
            let advertised = response["monitor_digests"], advertised == previous["monitor_digests"] {
             return (previous, true)
         }
-        if hasDigests, response["monitor_digests"] != nil {
-            response = try await useCase.command("status", options: ["--monitor-view", "--snapshot"], positionals: [id])
-        }
         return (response, false)
+    }
+
+    private func seedSnapshot(_ raw: [String: JSONValue], id: String, generation: UUID, useCase: any WorkflowUseCase) async {
+        guard let advertised = raw["monitor_digests"]?.objectValue else { return }
+        runID = id
+        digests = [:]; values = [:]; executions = [:]; executionDigests = [:]
+        for (field, value) in advertised where field != "execution_index" {
+            if let digest = value.stringValue { digests[field] = digest; values[field] = raw[field] ?? .null }
+        }
+        guard let digest = advertised["execution_index"]?.stringValue else { return }
+        // Snapshot activations are complete, but their individual digests live in the bounded index.
+        // A concurrent advance may invalidate that view; keep the valid frozen bootstrap regardless.
+        guard let index = try? await read(id: id, view: "execution_index", expectedDigest: digest, useCase: useCase),
+              loadID == generation else { return }
+        values["execution_index"] = index; digests["execution_index"] = digest
+        let byID = Dictionary(WorkflowJSON.objects(raw["activations"]).compactMap { execution -> (String, JSONValue)? in
+            guard let id = execution["id"]?.stringValue else { return nil }
+            return (id, .object(execution))
+        }, uniquingKeysWith: { first, _ in first })
+        for row in WorkflowJSON.objects(index) {
+            if let id = row["id"]?.stringValue, let digest = row["digest"]?.stringValue, let value = byID[id] {
+                executions[id] = value; executionDigests[id] = digest
+            }
+        }
     }
 
     private func loadLegacy(response: [String: JSONValue], id: String, generation: UUID,
@@ -125,7 +148,7 @@ final class WorkflowRunPolling {
         var text = ""
         repeat {
             try Task.checkCancellation()
-            var options = ["--view=\(view)"]
+            var options = ["--monitor-view", "--view=\(view)"]
             if let cursor { options.append("--cursor=\(cursor)") }
             let page = try await useCase.command("detail", options: options, positionals: [id])
             guard page["workflow_run_id"]?.stringValue == id, page["view"]?.stringValue == view,
