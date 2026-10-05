@@ -404,7 +404,7 @@ extension TaskDetailVMTests {
 
     // MARK: - Continue does not navigate (Design point 7)
 
-    @Test func givenAnEligibleContinue_whenSubmitted_thenItTargetsTheCurrentMemberAndNeverSelectsTheNewTask() async {
+    @Test(.timeLimit(.minutes(1))) func givenAnEligibleContinue_whenSubmitted_thenItTargetsTheCurrentMemberAndNeverSelectsTheNewTask() async {
         // given
         let taskA = conversationTask("a", status: "completed", minute: 0)
         let harness = makeConversationSUT(openedAs: "a", initialMembers: [taskA])
@@ -413,10 +413,14 @@ extension TaskDetailVMTests {
         await waitUntil { harness.sut.task != nil }
 
         // when
+        // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
+        let invocation = AsyncStream<Bool>.makeStream()
+        when(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).perform { invocation.continuation.yield(true) }
         #expect(harness.sut.submitMessage("one more thing"))
 
         // then
-        await verify(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).calledEventually(1, before: .seconds(5))
+        #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
+        verify(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).called(1)
         try? await Task.sleep(for: .milliseconds(50))
         verify(harness.routing).selectTask(.any).called(0)
     }

@@ -58,13 +58,17 @@ import Testing
         ])
     }
 
-    @Test func givenAnAgentWithNoKnownModels_whenTheSheetAppears_thenOnlyDefaultIsOffered() async {
+    @Test(.timeLimit(.minutes(1))) func givenAnAgentWithNoKnownModels_whenTheSheetAppears_thenOnlyDefaultIsOffered() async {
         // given
         let (sut, useCase, _, _) = makeSUT()
 
         // when
+        // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
+        let invocation = AsyncStream<Bool>.makeStream()
+        when(useCase).models(for: .any).perform { invocation.continuation.yield(true) }
         sut.didAppear()
-        await verify(useCase).models(for: .any).calledEventually(1, before: .seconds(5))
+        #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
+        verify(useCase).models(for: .any).called(1)
 
         // then
         #expect(sut.modelChoices == [ModelChoiceModel(id: "", title: "Default")])

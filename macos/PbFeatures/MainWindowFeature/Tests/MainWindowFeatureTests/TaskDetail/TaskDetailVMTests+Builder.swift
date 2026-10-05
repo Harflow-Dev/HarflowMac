@@ -38,7 +38,7 @@ extension TaskDetailVMTests {
         harness.sut.didDisappear()
     }
 
-    @Test(arguments: ["running", "completed"])
+    @Test(.timeLimit(.minutes(1)), arguments: ["running", "completed"])
     func givenBuilderWithoutLiveInput_whenChatting_thenQueuesThroughBuilderSendAndDisablesOrdinaryControls(_ status: String) async {
         // given
         let harness = makeSUT(isWorkflowBuilder: true)
@@ -48,6 +48,9 @@ extension TaskDetailVMTests {
         harness.tasksSubject.send([builder])
         await waitUntil { harness.sut.task != nil }
         // when
+        // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
+        let invocation = AsyncStream<Bool>.makeStream()
+        when(harness.useCase).send(.value("abc12345"), text: .value("add review")).perform { invocation.continuation.yield(true) }
         let accepted = harness.sut.submitMessage("  add review  ")
         // then
         #expect(accepted)
@@ -55,7 +58,8 @@ extension TaskDetailVMTests {
         #expect(!harness.sut.canTakeover)
         #expect(!harness.sut.canCancel)
         #expect(harness.sut.resumeCommand == nil)
-        await verify(harness.useCase).send(.value("abc12345"), text: .value("add review")).calledEventually(1, before: .seconds(5))
+        #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
+        verify(harness.useCase).send(.value("abc12345"), text: .value("add review")).called(1)
         verify(harness.useCase).resume(.any, text: .any, onResumed: .any).called(0)
         harness.sut.didDisappear()
     }
