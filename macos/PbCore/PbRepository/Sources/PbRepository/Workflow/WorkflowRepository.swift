@@ -45,7 +45,11 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
         // Keep its disposable files alive until the CLI has finished, including failures.
         let input = ["build", "start", "builder-followup", "resume", "recover"].contains(command) ? try WorkflowCommandInputs.prepare(options: options) : nil
         defer { input?.cleanUp() }
-        return try await ctl.workflow(command, options: input?.options ?? options, positionals: positionals).get()
+        var processOptions = input?.options ?? options
+        if command == "list", !processOptions.contains("--monitor-view") {
+            processOptions.append("--monitor-view")
+        }
+        return try await ctl.workflow(command, options: processOptions, positionals: positionals).get()
     }
 
     public func validate(definition: JSONValue) async throws -> [String: JSONValue] {

@@ -6,6 +6,26 @@ import PbTestUtilities
 import Testing
 
 struct WorkflowControlTransportTests {
+    @Test(arguments: ["list", "get"], [false, true])
+    func givenLogicalWorkflowCommand_whenExecuted_thenOnlyListUsesBoundedMonitorView(command: String, explicitFlag: Bool) async throws {
+        let options = explicitFlag ? ["--monitor-view"] : []
+        let calls = LockedBox<[[String]]>([])
+        let runner = StubProcessRunner { call in
+            calls.mutate { $0.append(call.arguments) }
+            return .success(stdout(#"{"v":5,"result":{"workflows":[]}}"#))
+        }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
+        let sut: any WorkflowRepository = WorkflowRepositoryImpl(toolEnvironment: environment)
+        _ = try await sut.command(command, options: options, positionals: ["named-workflow"])
+        let arguments = try #require(calls.value.first)
+        #expect(calls.value.count == 1)
+        #expect(arguments.contains("workflow-" + command))
+        #expect(arguments.contains("named-workflow"))
+        #expect(arguments.filter { $0 == "--monitor-view" }.count == ((command == "list" || explicitFlag) ? 1 : 0))
+        #expect(options == (explicitFlag ? ["--monitor-view"] : []))
+    }
+
     @Test(arguments: ["resume", "recover"], [false, true])
     func givenLargeUnicodeInstructions_whenControllingRun_thenPrivateFilePreservesAllBytesAndCleansUp(command: String, failure: Bool) async throws {
         let flag = command == "resume" ? "--instructions" : "--reason"
