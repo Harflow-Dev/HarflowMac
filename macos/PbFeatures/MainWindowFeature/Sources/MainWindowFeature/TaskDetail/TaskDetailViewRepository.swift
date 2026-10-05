@@ -137,7 +137,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     }
 
     func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage? {
-        let page = try await taskListRepository.conversationPage(sessionID: sessionID, cursor: cursor)
+        let page = try await taskListRepository.conversationPage(sessionID: sessionID, cursor: cursor, limit: 100)
         for task in page.items { relatedMembers[task.taskID] = task }
         return page
     }

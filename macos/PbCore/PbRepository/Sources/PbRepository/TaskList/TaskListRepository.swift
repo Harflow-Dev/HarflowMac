@@ -74,7 +74,11 @@ public extension TaskListRepository {
     func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { Just(historyState).eraseToAnyPublisher() }
     func loadMoreHistory() async {}
     func resolve(_ id: String) async -> TaskInfo? { task(id) }
-    func conversationPage(sessionID: String, cursor: String?, limit: Int = 100) async throws -> TaskHistoryPage {
+    func conversationPage(sessionID: String, cursor: String?) async throws -> TaskHistoryPage {
+        try await conversationPage(sessionID: sessionID, cursor: cursor, limit: 100)
+    }
+
+    func conversationPage(sessionID: String, cursor: String?, limit: Int) async throws -> TaskHistoryPage {
         throw ToolError.unsupportedCommand(tool: "polybridge-ctl", command: "task-list-page", detail: "Conversation pages unavailable")
     }
 }
