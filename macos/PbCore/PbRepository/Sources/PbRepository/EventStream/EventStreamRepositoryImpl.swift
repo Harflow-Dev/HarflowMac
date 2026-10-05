@@ -127,6 +127,7 @@ private final class TaskStream: @unchecked Sendable {
     @Subjected var summary = EventSummary()
     private let summaryQueue = DispatchQueue(label: "dev.polybridge.monitor.summary")
     private var summaryStopped = false
+    private var summaryRetry: DispatchWorkItem?
     private var summaryFileLimit = 100
     private var lastSummaryPublish = Date.distantPast
     private var summaryBuilder = EventSummaryBuilder()
@@ -188,7 +189,9 @@ private final class TaskStream: @unchecked Sendable {
         tail.maxLines = EventPages.pageSize
         guard let step = tail.read(path: path) else {
             summaryBuilder.setAvailability(.unavailable)
-            summary = summaryBuilder.summary
+            summary = summaryBuilder.snapshot(fileLimit: summaryFileLimit)
+            // read(path:) can mutate its cursor before a seek/read fails. Commit only successful reads.
+            scheduleSummaryRetry(tail: initial)
             return
         }
         if step.reset { summaryBuilder = EventSummaryBuilder() }
@@ -201,14 +204,25 @@ private final class TaskStream: @unchecked Sendable {
         if step.more {
             summaryQueue.async { [weak self] in self?.readSummary(tail: tail) }
         } else {
-            summaryQueue.asyncAfter(deadline: .now() + 1) { [weak self] in self?.readSummary(tail: tail) }
+            scheduleSummaryRetry(tail: tail)
         }
+    }
+
+    private func scheduleSummaryRetry(tail: LineTail) {
+        summaryRetry?.cancel()
+        let retry = DispatchWorkItem { [weak self] in self?.readSummary(tail: tail) }
+        summaryRetry = retry
+        summaryQueue.asyncAfter(deadline: .now() + 1, execute: retry)
     }
 
     func stopActivity() { tailer?.stop(); tailer = nil }
 
     func stop() {
-        summaryQueue.async { [weak self] in self?.summaryStopped = true }
+        summaryQueue.async { [weak self] in
+            self?.summaryStopped = true
+            self?.summaryRetry?.cancel()
+            self?.summaryRetry = nil
+        }
         tailer?.stop()
         tailer = nil
         bufferLock.lock()

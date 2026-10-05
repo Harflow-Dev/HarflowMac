@@ -24,11 +24,31 @@ import MonitorCore
 extension TaskDetailVM {
 
     private func activityHistory(_ members: [TaskInfo]) -> EventHistoryState {
-        var state = useCase.eventHistory(for: members.first?.taskID ?? currentTaskID)
-        if conversationHasMore || conversationMembers.contains(where: { !loadedActivityMembers.contains($0.taskID) }) { state.hasMore = true }
-        state.isLoading = state.isLoading || conversationLoading
-        state.error = state.error ?? conversationError
-        return state
+        let states = members.map { useCase.eventHistory(for: $0.taskID) }
+        return EventHistoryState(
+            hasMore: states.contains(where: \.hasMore) || conversationHasMore
+                || conversationMembers.contains(where: { !loadedActivityMembers.contains($0.taskID) }),
+            isLoading: states.contains(where: \.isLoading) || conversationLoading,
+            error: states.compactMap(\.error).first ?? conversationError,
+            generation: states.map(\.generation).max() ?? 0
+        )
+    }
+
+    private func loadMoreConversationActivity() {
+        let loaded = conversationMembers.filter { loadedActivityMembers.contains($0.taskID) }
+        guard !loaded.contains(where: { useCase.eventHistory(for: $0.taskID).isLoading }) else { return }
+        if let member = loaded.first(where: {
+            let state = useCase.eventHistory(for: $0.taskID)
+            return state.hasMore || state.error != nil
+        }) {
+            useCase.loadMoreEvents(member.taskID)
+        } else if let previous = conversationMembers.last(where: { !loadedActivityMembers.contains($0.taskID) }) {
+            loadedActivityMembers.insert(previous.taskID)
+            acquireMemberLease(previous.taskID)
+            recompute()
+        } else if conversationHasMore || conversationError != nil {
+            loadConversationHistory(initial: false)
+        }
     }
 
     /// Rebuilds the Timeline tab's model: the concatenated conversation rows, whether the task is
@@ -75,18 +95,7 @@ extension TaskDetailVM {
             updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep, pendingMessages: pendingMessages),
             pendingMessages: pendingMessages,
             history: activityHistory(members),
-            onLoadMore: { [weak self] in
-                guard let self, let id = conversationMembers.first?.taskID else { return }
-                if useCase.eventHistory(for: id).hasMore || useCase.eventHistory(for: id).error != nil {
-                    useCase.loadMoreEvents(id)
-                } else if let previous = conversationMembers.last(where: { !loadedActivityMembers.contains($0.taskID) }) {
-                    loadedActivityMembers.insert(previous.taskID)
-                    acquireMemberLease(previous.taskID)
-                    recompute()
-                } else if conversationHasMore || conversationError != nil {
-                    loadConversationHistory(initial: false)
-                }
-            }
+            onLoadMore: { [weak self] in self?.loadMoreConversationActivity() }
         )
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
         let visiblePrompt = WorkflowNodePresentation.isWorker(task)

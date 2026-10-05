@@ -94,10 +94,11 @@ extension TaskDetailVMTests {
     /// not yet in `initialMembers`, since a test adding a brand-new follow-up mid-run needs that
     /// member's stubs to already exist before it ever appears.
     func makeConversationSUT(
-        openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil, isWorkflowBuilder: Bool = false
+        openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil, isWorkflowBuilder: Bool = false,
+        eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() }
     ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
-        useCase.configurePagingDefaults()
+        useCase.configurePagingDefaults(eventHistory: eventHistory)
         let routing = MockTaskDetailRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let membersBox = Box(initialMembers)
