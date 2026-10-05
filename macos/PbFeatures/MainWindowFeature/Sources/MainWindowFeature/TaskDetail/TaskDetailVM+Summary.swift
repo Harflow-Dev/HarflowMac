@@ -30,10 +30,39 @@ extension TaskDetailVM {
         let summary = isWorkflowBuilder ? WorkflowBuilderPresentation.summary(rawSummary)
             : projectsWorkflowResult ? WorkflowNodePresentation.summary(rawSummary, task: task) : rawSummary
         let members = conversationMembers
-        let memberEvents = members.map { eventsByMember[$0.taskID] ?? [] }
-        let memberAvailabilities = members.map { eventsAvailabilityByMember[$0.taskID] ?? .loading }
-        summaryModel = SummaryPaneModel.build(
-            task: task, summary: summary, memberEventsOldestFirst: memberEvents, memberAvailabilities: memberAvailabilities
+        let summaries = members.map { useCase.eventSummary(for: $0.taskID) }
+        let base = SummaryPaneModel.build(task: task, summary: summary, memberEventsOldestFirst: [], memberAvailabilities: summaries.map(\.availability))
+        var order: [String] = []
+        var latest: [String: EditedFileStatus] = [:]
+        let prefix = task.repoPath.hasSuffix("/") ? task.repoPath : task.repoPath + "/"
+        for projection in summaries {
+            var memberVersions: [String: Int] = [:]
+            for file in projection.files {
+                let path = !task.repoPath.isEmpty && file.path.hasPrefix(prefix) ? String(file.path.dropFirst(prefix.count)) : file.path
+                if latest[path] == nil { order.append(path) }
+                let version = projection.fileSequences[file.path] ?? 0
+                if version >= memberVersions[path, default: -1] {
+                    latest[path] = file.status
+                    memberVersions[path] = version
+                }
+            }
+        }
+        let partialConversation = conversationLoading || conversationHasMore || conversationHistoryIncomplete || conversationError != nil
+        summaryModel = SummaryPaneModel(
+            hero: base.hero, finalAnswer: base.finalAnswer, finalAnswerPlaceholder: base.finalAnswerPlaceholder,
+            refusalLines: base.refusalLines, editedFilesAvailability: partialConversation ? .loading : base.editedFilesAvailability,
+            editedFiles: order.map { EditedFile(path: $0, status: latest[$0] ?? .unconfirmed) },
+            editedFilesNote: partialConversation ? "Conversation history is still loading; file accounting is incomplete." : base.editedFilesNote,
+            numTurns: base.numTurns,
+            inputTokens: base.inputTokens, outputTokens: base.outputTokens, costUSD: base.costUSD,
+            additionalFileCount: summaries.reduce(0) { $0 + max(0, $1.totalFiles - $1.files.count) },
+            onLoadMoreFiles: { [weak self] in
+                guard let self, let member = conversationMembers.first(where: {
+                    let projection = useCase.eventSummary(for: $0.taskID)
+                    return projection.totalFiles > projection.files.count
+                }) else { return }
+                useCase.loadMoreSummaryFiles(member.taskID)
+            }
         )
     }
 }

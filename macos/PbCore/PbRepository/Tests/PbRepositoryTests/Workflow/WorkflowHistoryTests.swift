@@ -9,9 +9,9 @@ struct WorkflowHistoryTests {
     @Test func givenPagedSummaries_whenPollingHistory_thenOnlyOneBoundedActiveFirstPageIsFetched() async throws {
         // given
         let repository = MockWorkflowRepository()
-        given(repository).command(.value("list-runs"), options: .value([]), positionals: .value([])).willReturn([
-            "runs": .array([.object(["workflow_run_id": .string("active")])]), "next_offset": .number(100)
-        ])
+        let page = try #require(HistoryPage(raw: ["items": .array([.object(["workflow_run_id": .string("active")])]),
+            "next_cursor": .string("next"), "has_more": .bool(true), "bootstrap_pending": .bool(false)]))
+        given(repository).historyPage(cursor: .value(nil), activeOnly: .value(true), relatedRunID: .value(nil)).willReturn(page)
         // when
         let rows = try await repository.historySummaries()
         // then

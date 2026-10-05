@@ -15,6 +15,12 @@ protocol SidebarWorkflowUseCase: Sendable {
 struct SidebarWorkflowSnapshot: Sendable {
     let definitions: [[String: JSONValue]]
     let runs: [[String: JSONValue]]
+    let page: HistoryPage?
+    init(definitions: [[String: JSONValue]], runs: [[String: JSONValue]], page: HistoryPage? = nil) {
+        self.definitions = definitions
+        self.runs = runs
+        self.page = page
+    }
 }
 
 struct SidebarWorkflowRun {
@@ -57,8 +63,11 @@ extension SidebarVM {
                     let snapshot = try await workflowUseCase.workflowSnapshot()
                     guard let self, !Task.isCancelled, workflowGeneration == token else { return }
                     workflowDefinitions = snapshot.definitions.map { WorkflowRecord(raw: $0) }
-                    workflowRuns = snapshot.runs.map { SidebarWorkflowRun(raw: $0) }.filter { !$0.id.isEmpty }
+                    mergeWorkflowHeaders(snapshot.runs, replacing: snapshot.page == nil)
+                    if let page = snapshot.page { updateWorkflowHistory(page, advancing: false) }
                     workflowErrorMessage = nil
+                    await refreshLoadedWorkflowStatus(excluding: Set(snapshot.runs.compactMap { $0["workflow_run_id"]?.stringValue }))
+                    guard !Task.isCancelled, workflowGeneration == token else { return }
                     recompute()
                 } catch {
                     guard let self, !Task.isCancelled, workflowGeneration == token else { return }
@@ -73,6 +82,7 @@ extension SidebarVM {
         workflowGeneration = UUID()
         workflowPoll?.cancel()
         workflowPoll = nil
+        workflowHistoryState.isLoading = false
     }
 
     func filteredWorkflowRuns() -> [SidebarWorkflowRun] {

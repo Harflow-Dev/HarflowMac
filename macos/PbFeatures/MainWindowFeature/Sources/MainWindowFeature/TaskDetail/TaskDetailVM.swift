@@ -74,7 +74,16 @@ protocol TaskDetailUseCase: Sendable {
     func setOutcome(_ id: String, _ text: String?)
 
     // Events (decision 6)
+    func resolveTask(_ id: String) async -> TaskInfo?
+    func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage?
+    func acquireSummaryLease(_ id: String) -> any EventStreamLease
     func acquireEventLease(_ id: String) -> any EventStreamLease
+    func loadMoreSummaryFiles(_ id: String)
+    func loadMoreEvents(_ id: String)
+    func eventHistory(for id: String) -> EventHistoryState
+    func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never>
+    func eventSummary(for id: String) -> EventSummary
+    func eventSummaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never>
     func events(for id: String) -> [TaskEvent]
     func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never>
     func items(for id: String) -> [TimelineItem]
@@ -87,6 +96,24 @@ protocol TaskDetailUseCase: Sendable {
     func current(for id: String) -> TimelineItem?
     func prompt(for id: String) -> String?
     func eventsPath(for id: String) -> String
+}
+
+extension TaskDetailUseCase {
+    func resolveTask(_ id: String) async -> TaskInfo? { task(id) }
+    func conversationHistory(sessionID _: String, cursor _: String?) async throws -> TaskHistoryPage? { nil }
+    func acquireSummaryLease(_ id: String) -> any EventStreamLease { acquireEventLease(id) }
+    func loadMoreSummaryFiles(_: String) {}
+    func loadMoreEvents(_: String) {}
+    func eventHistory(for _: String) -> EventHistoryState { EventHistoryState() }
+    func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { Just(eventHistory(for: id)).eraseToAnyPublisher() }
+    func eventSummary(for id: String) -> EventSummary {
+        var builder = EventSummaryBuilder()
+        builder.append(events(for: id))
+        builder.setAvailability(eventsAvailability(for: id))
+        return builder.summary
+    }
+
+    func eventSummaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never> { Just(eventSummary(for: id)).eraseToAnyPublisher() }
 }
 
 // MARK: - TaskDetailRouting
@@ -168,6 +195,15 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// One event lease per conversation member (Parallel's own pattern — decision 6), acquired as
     /// members appear and released as they drop out, so a follow-up's own turn tails from the
     /// moment it exists.
+    @ObservationIgnored var conversationCursor: String?
+    @ObservationIgnored var conversationHasMore = false
+    @ObservationIgnored var conversationHistoryIncomplete = false
+    @ObservationIgnored var conversationLoading = false
+    @ObservationIgnored var conversationError: String?
+    @ObservationIgnored var conversationLookup: Task<Void, Never>?
+    @ObservationIgnored var loadedActivityMembers: Set<String> = []
+    @ObservationIgnored var summaryLeases: [String: any EventStreamLease] = [:]
+    @ObservationIgnored var summaryCancellables: [String: AnyCancellable] = [:]
     @ObservationIgnored var leases: [String: any EventStreamLease] = [:]
     @ObservationIgnored var memberCancellables: [String: [AnyCancellable]] = [:]
     /// Kept only for Summary/"Files the agent edited" (`+Summary.swift`), which still pairs
@@ -222,16 +258,25 @@ final class TaskDetailVM: TaskDetailViewModel {
         // task, and a publisher requested before that is an empty one that never updates.
         recomputeMembersAndLeases()
         subscribeIfNeeded()
+        loadConversationHistory(initial: true)
     }
 
     /// Idempotent teardown (root AGENTS.md rule 7): releases every member's event lease, cancels
     /// every subscription, and resets `didSubscribe` so a reappearing screen subscribes and
     /// re-acquires leases fresh.
     func didDisappear() {
+        conversationLookup?.cancel()
+        conversationLookup = nil
+        conversationLoading = false
+        conversationHistoryIncomplete = false
         cancellables.removeAll()
         memberCancellables.removeAll()
         for lease in leases.values { lease.release() }
         leases.removeAll()
+        for lease in summaryLeases.values { lease.release() }
+        summaryLeases.removeAll()
+        summaryCancellables.removeAll()
+        loadedActivityMembers.removeAll()
         eventsByMember.removeAll()
         itemsByMember.removeAll()
         eventsAvailabilityByMember.removeAll()
@@ -286,7 +331,18 @@ final class TaskDetailVM: TaskDetailViewModel {
             identityTaskID = members[0].taskID
         }
         conversationMembers = members
-        let newIDs = Set(members.map(\.taskID))
+        if let newest = members.last { loadedActivityMembers.insert(newest.taskID) }
+        let allIDs = Set(members.map(\.taskID))
+        for member in members where summaryLeases[member.taskID] == nil {
+            let id = member.taskID
+            summaryLeases[id] = useCase.acquireSummaryLease(id)
+            summaryCancellables[id] = useCase.eventSummaryPublisher(for: id).receive(on: DispatchQueue.main).sink { [weak self] _ in self?.recompute() }
+        }
+        for id in Set(summaryLeases.keys).subtracting(allIDs) {
+            summaryLeases.removeValue(forKey: id)?.release()
+            summaryCancellables[id] = nil
+        }
+        let newIDs = allIDs.intersection(loadedActivityMembers)
         let oldIDs = Set(leases.keys)
         for id in newIDs.subtracting(oldIDs) { acquireMemberLease(id) }
         for id in oldIDs.subtracting(newIDs) { releaseMemberLease(id) }

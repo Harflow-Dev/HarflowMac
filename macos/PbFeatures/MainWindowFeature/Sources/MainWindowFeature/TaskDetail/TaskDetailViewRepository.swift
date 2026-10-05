@@ -19,6 +19,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     // MARK: - Private Properties
 
     private let builderRunID: String?
+    private var relatedMembers: [String: TaskInfo] = [:]
     @GlobalEnvironment(\.workflowRepository) private var workflowRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.taskSnapshotRepository) private var taskSnapshotRepository
@@ -78,8 +79,8 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func siblings(of id: String) -> [TaskInfo] { Lineage.siblings(of: id, in: taskListRepository.tasks) }
 
     func conversationMembers(of id: String) -> [TaskInfo] {
-        WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)
-            ?? Lineage.conversation(containing: id, in: taskListRepository.tasks)?.members ?? []
+        WorkflowOrchestratorConversation.members(containing: id, in: conversationInventory)
+            ?? Lineage.conversation(containing: id, in: conversationInventory)?.members ?? []
     }
 
     func cancelScope(of id: String) -> Set<String> { Lineage.cancelScope(of: id, in: taskListRepository.tasks) }
@@ -123,6 +124,31 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func setOutcome(_ id: String, _ text: String?) { taskActionRepository.setOutcome(id, text) }
 
     func acquireEventLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquire(id) }
+    private var conversationInventory: [TaskInfo] {
+        var tasks = relatedMembers
+        for task in taskListRepository.tasks { tasks[task.taskID] = task }
+        return Array(tasks.values)
+    }
+
+    func resolveTask(_ id: String) async -> TaskInfo? {
+        let task = await taskListRepository.resolve(id)
+        if let task { relatedMembers[id] = task }
+        return task
+    }
+
+    func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage? {
+        let page = try await taskListRepository.conversationPage(sessionID: sessionID, cursor: cursor)
+        for task in page.items { relatedMembers[task.taskID] = task }
+        return page
+    }
+
+    func acquireSummaryLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquireSummary(id) }
+    func loadMoreSummaryFiles(_ id: String) { eventStreamRepository.loadMoreSummaryFiles(id) }
+    func loadMoreEvents(_ id: String) { eventStreamRepository.loadMore(id) }
+    func eventHistory(for id: String) -> EventHistoryState { eventStreamRepository.history(for: id) }
+    func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { eventStreamRepository.historyPublisher(for: id) }
+    func eventSummary(for id: String) -> EventSummary { eventStreamRepository.summary(for: id) }
+    func eventSummaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never> { eventStreamRepository.summaryPublisher(for: id) }
     func events(for id: String) -> [TaskEvent] { eventStreamRepository.events(for: id) }
     func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never> { eventStreamRepository.eventsPublisher(for: id) }
     func items(for id: String) -> [TimelineItem] { eventStreamRepository.items(for: id) }

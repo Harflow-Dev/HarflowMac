@@ -28,6 +28,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
+        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
         let expected = sameSession ? members : [members[0]]
         await waitUntil { harness.sut.timelineModel.rows.filter { if case .item = $0.kind { return true }; return false }.count == expected.count }
         // then
@@ -57,6 +58,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
+        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
         await waitUntil { harness.sut.conversationMembers.count == 2 }
         // then
         let displayed = harness.sut.timelineModel.rows.compactMap { row -> String? in
@@ -91,6 +93,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([first, current])
+        harness.sut.timelineModel.onLoadMore?()
         await waitUntil { harness.sut.task != nil }
         // then
         #expect(harness.sut.promptText == "Answer to the worker question")
@@ -125,6 +128,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
+        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
         await waitUntil { harness.sut.task?.taskID == "attempt-1" }
         // then
         #expect(harness.sut.conversationMembers.map(\.taskID) == ["attempt-0", "attempt-1"])
@@ -145,6 +149,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
+        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
         await waitUntil { harness.sut.task?.taskID == "builder-1" }
         // then
         #expect(harness.sut.conversationMembers.count == 2)

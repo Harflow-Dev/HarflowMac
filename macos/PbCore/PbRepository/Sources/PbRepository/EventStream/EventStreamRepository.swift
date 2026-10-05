@@ -27,6 +27,14 @@ public protocol EventStreamLease: AnyObject, Sendable {
 @Mockable
 public protocol EventStreamRepository: Sendable {
 
+    func acquireSummary(_ taskID: String) -> any EventStreamLease
+    func loadMoreSummaryFiles(_ taskID: String)
+    func loadMore(_ taskID: String)
+    func history(for taskID: String) -> EventHistoryState
+    func historyPublisher(for taskID: String) -> AnyPublisher<EventHistoryState, Never>
+    func summary(for taskID: String) -> EventSummary
+    func summaryPublisher(for taskID: String) -> AnyPublisher<EventSummary, Never>
+
     func acquire(_ taskID: String) -> any EventStreamLease
 
     func events(for taskID: String) -> [TaskEvent]
@@ -49,6 +57,22 @@ public protocol EventStreamRepository: Sendable {
     /// Every task id with at least one outstanding lease — what `TaskListRepository` refreshes
     /// snapshots for on every successful list (F6's structural requirement).
     var leasedTaskIDs: Set<String> { get }
+}
+
+public extension EventStreamRepository {
+    func acquireSummary(_ id: String) -> any EventStreamLease { acquire(id) }
+    func loadMoreSummaryFiles(_: String) {}
+    func loadMore(_: String) {}
+    func history(for _: String) -> EventHistoryState { EventHistoryState() }
+    func historyPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { Just(history(for: id)).eraseToAnyPublisher() }
+    func summary(for id: String) -> EventSummary {
+        var builder = EventSummaryBuilder()
+        builder.append(events(for: id))
+        builder.setAvailability(eventsAvailability(for: id))
+        return builder.summary
+    }
+
+    func summaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never> { Just(summary(for: id)).eraseToAnyPublisher() }
 }
 
 // MARK: - NullEventStreamLease

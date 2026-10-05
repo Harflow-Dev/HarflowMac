@@ -28,6 +28,8 @@ protocol MenuBarViewModel: ViewModel {
     var isConnected: Bool { get }
     var connectionLine: String { get }
     var runningCount: Int { get }
+    var taskCountsLoading: Bool { get }
+    var workflowCountsLoading: Bool { get }
     var workflowRows: [WorkflowMenuBarRow] { get }
     var workflowActiveCount: Int { get }
     var workflowAttentionCount: Int { get }
@@ -62,6 +64,11 @@ extension MenuBarViewModel {
     var workflowStatusError: String? { nil }
     func didDisappearStatusItem() {}
     func didSelectWorkflow(_: String) {}
+}
+
+extension MenuBarViewModel {
+    var taskCountsLoading: Bool { false }
+    var workflowCountsLoading: Bool { false }
 }
 
 // MARK: - MenuBarView
@@ -122,8 +129,10 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
     private var header: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(viewModel.runningCount) running").font(.pb(.headline, weight: .semibold))
-                if viewModel.workflowActiveCount > 0 {
+                Text(viewModel.taskCountsLoading ? "Counting running agents…" : "\(viewModel.runningCount) running").font(.pb(.headline, weight: .semibold))
+                if viewModel.workflowCountsLoading {
+                    Text("Counting workflows…").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                } else if viewModel.workflowActiveCount > 0 {
                     Text("\(viewModel.workflowActiveCount) workflows · \(viewModel.workflowAttentionCount) need attention")
                         .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)

@@ -13,13 +13,26 @@ import SwiftEnvironment
 
 /// Concrete `SidebarUseCase` backed by `TaskListRepository`.
 @MainActor
-final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, @unchecked Sendable {
+final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, SidebarHistoryUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.workflowRepository) private var workflowRepository
 
     func workflowSnapshot() async throws -> SidebarWorkflowSnapshot {
         let definitions = try await workflowRepository.command("list", options: [], positionals: [])
-        let runs = try await workflowRepository.historySummaries()
-        return SidebarWorkflowSnapshot(definitions: WorkflowJSON.objects(definitions["workflows"]), runs: runs)
+        let page = try await workflowRepository.historyPage(cursor: nil, activeOnly: false, relatedRunID: nil)
+        let active = try await workflowRepository.historyPage(cursor: nil, activeOnly: true, relatedRunID: nil)
+        return SidebarWorkflowSnapshot(definitions: WorkflowJSON.objects(definitions["workflows"]),
+                                       runs: page.items + active.items + page.relatedHeaders + active.relatedHeaders, page: page)
+    }
+
+    func taskHistoryStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { taskListRepository.historyStatePublisher() }
+    func loadMoreTaskHistory() async { await taskListRepository.loadMoreHistory() }
+    func resolveTask(_ id: String) async { _ = await taskListRepository.resolve(id) }
+    func workflowBatch(runIDs: [String]) async throws -> HistoryPage {
+        try await workflowRepository.historyBatch(runIDs: runIDs)
+    }
+
+    func workflowPage(cursor: String?, relatedRunID: String?) async throws -> HistoryPage {
+        try await workflowRepository.historyPage(cursor: cursor, activeOnly: false, relatedRunID: relatedRunID)
     }
 
     // MARK: - Private Properties

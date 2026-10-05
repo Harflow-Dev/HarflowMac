@@ -43,6 +43,7 @@ extension TaskDetailVMTests {
         #expect(harness.sut.summaryModel.editedFilesAvailability == .loading)
 
         // when
+        harness.eventsAvailabilityBox.value = .unavailable
         harness.eventsAvailabilitySubject.send(.unavailable)
 
         // then
@@ -50,6 +51,7 @@ extension TaskDetailVMTests {
         #expect(harness.sut.summaryModel.editedFilesAvailability == .unavailable)
 
         // when
+        harness.eventsAvailabilityBox.value = .available
         harness.eventsAvailabilitySubject.send(.available)
 
         // then

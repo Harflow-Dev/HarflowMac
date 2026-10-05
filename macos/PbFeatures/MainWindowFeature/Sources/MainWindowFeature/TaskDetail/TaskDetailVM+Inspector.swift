@@ -40,6 +40,9 @@ extension TaskDetailVM {
             current: useCase.current(for: currentTaskID),
             stepCount: timelineModel.rows.filter { if case .item = $0.kind { return true }; return false }.count,
             activity: activity,
+            activityNote: conversationLoading || conversationHasMore || conversationHistoryIncomplete || conversationError != nil
+                || conversationMembers.contains(where: { useCase.eventSummary(for: $0.taskID).availability != .available })
+                ? "Partial activity totals while history or summaries are loading or unavailable." : nil,
             subtaskCount: subtaskCount,
             ancestors: ancestors.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             siblings: siblings.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },

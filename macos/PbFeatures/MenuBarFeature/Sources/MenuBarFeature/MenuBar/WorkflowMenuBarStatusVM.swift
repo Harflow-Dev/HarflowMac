@@ -11,6 +11,11 @@ protocol WorkflowMenuBarUseCase: Sendable {
     func runs() async throws -> [[String: JSONValue]]
 }
 
+@MainActor
+protocol WorkflowMenuBarPageUseCase {
+    func activePage() async throws -> HistoryPage
+}
+
 // MARK: - WorkflowMenuBarRow
 
 struct WorkflowMenuBarRow: Identifiable, Equatable {
@@ -46,8 +51,11 @@ struct WorkflowMenuBarRow: Identifiable, Equatable {
 final class WorkflowMenuBarStatusVM: ViewModel {
     private(set) var rows: [WorkflowMenuBarRow] = []
     private(set) var errorText: String?
-    var activeCount: Int { rows.filter(\.isActive).count }
-    var attentionCount: Int { rows.filter(\.needsAttention).count }
+    private(set) var countsLoading = true
+    private var catalogActiveCount: Int?
+    private var catalogAttentionCount: Int?
+    var activeCount: Int { catalogActiveCount ?? (countsLoading ? 0 : rows.filter(\.isActive).count) }
+    var attentionCount: Int { catalogAttentionCount ?? (countsLoading ? 0 : rows.filter(\.needsAttention).count) }
 
     @ObservationIgnored private let useCase: any WorkflowMenuBarUseCase
     @ObservationIgnored private var poll: Task<Void, Never>?
@@ -76,8 +84,21 @@ final class WorkflowMenuBarStatusVM: ViewModel {
 
     func refresh(generation token: UUID? = nil) async {
         do {
-            let result = try await useCase.runs()
+            let result: [[String: JSONValue]]
+            var activeCount: Int?
+            var attentionCount: Int?
+            var loadingCounts = false
+            if let pages = useCase as? any WorkflowMenuBarPageUseCase {
+                let page = try await pages.activePage()
+                loadingCounts = !page.countsComplete || page.totalActiveRootCount == nil || page.totalAttentionRootCount == nil
+                activeCount = !loadingCounts ? page.totalActiveRootCount : catalogActiveCount
+                attentionCount = !loadingCounts ? page.totalAttentionRootCount : catalogAttentionCount
+                result = page.items + page.relatedHeaders
+            } else { result = try await useCase.runs(); loadingCounts = false }
             guard !Task.isCancelled, token == nil || token == generation else { return }
+            countsLoading = loadingCounts
+            catalogActiveCount = activeCount
+            catalogAttentionCount = attentionCount
             let mapped = result.compactMap(WorkflowMenuBarRow.init)
             // A child is part of its owning workflow tree, not another badge item.
             let known = Set(mapped.map(\.id))

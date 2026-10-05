@@ -47,6 +47,7 @@ struct MenuBarLabelView<VM: MenuBarViewModel>: View {
             } else {
                 Image(systemName: "point.3.connected.trianglepath.dotted")
             }
+            if viewModel.taskCountsLoading || viewModel.workflowCountsLoading { Text("…") }
             if viewModel.runningCount > 0 { Text("\(viewModel.runningCount)") }
             if viewModel.workflowActiveCount > 0 {
                 Image(systemName: "arrow.triangle.branch")
@@ -56,8 +57,9 @@ struct MenuBarLabelView<VM: MenuBarViewModel>: View {
         }
         .accessibilityLabel("Polybridge Monitor")
         .accessibilityValue(
-            "\(viewModel.runningCount) agents running, \(viewModel.workflowActiveCount) workflows, "
-                + "\(viewModel.workflowAttentionCount) need attention"
+            (viewModel.taskCountsLoading ? "Agent count loading, " : "\(viewModel.runningCount) agents running, ")
+                + (viewModel.workflowCountsLoading ? "Workflow count loading, " : "\(viewModel.workflowActiveCount) workflows, ")
+                + (viewModel.workflowCountsLoading ? "Attention count loading" : "\(viewModel.workflowAttentionCount) need attention")
         )
         .onAppear {
             viewModel.didAppear()

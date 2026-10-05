@@ -108,6 +108,8 @@ extension TaskDetailVM {
                     recompute()
                 }
         )
+        subscriptions.append(useCase.eventHistoryPublisher(for: id).receive(on: DispatchQueue.main).sink { [weak self] _ in self?.recompute() })
+        subscriptions.append(useCase.eventSummaryPublisher(for: id).receive(on: DispatchQueue.main).sink { [weak self] _ in self?.recompute() })
         memberCancellables[id] = subscriptions
     }
 

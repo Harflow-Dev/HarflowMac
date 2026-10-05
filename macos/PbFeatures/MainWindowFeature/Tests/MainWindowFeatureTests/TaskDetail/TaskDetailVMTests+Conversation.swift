@@ -97,6 +97,7 @@ extension TaskDetailVMTests {
         openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil, isWorkflowBuilder: Bool = false
     ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
+        useCase.configurePagingDefaults()
         let routing = MockTaskDetailRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let membersBox = Box(initialMembers)
@@ -521,6 +522,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([taskA, taskB])
+        harness.sut.timelineModel.onLoadMore?()
         await waitUntil { harness.sut.task != nil }
 
         // then
@@ -562,6 +564,8 @@ extension TaskDetailVMTests {
 
         // then
         #expect(Set(harness.sut.summaryModel.editedFiles.map(\.path)) == ["a.swift", "b.swift"])
+        await waitUntil { !harness.sut.conversationLoading }
+        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesAvailability == .available)
     }
 }

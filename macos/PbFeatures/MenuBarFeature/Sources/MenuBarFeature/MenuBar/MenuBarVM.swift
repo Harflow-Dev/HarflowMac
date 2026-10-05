@@ -61,6 +61,11 @@ protocol MenuBarUseCase: Sendable {
     func reset()
 }
 
+@MainActor
+protocol MenuBarCountAvailabilityUseCase {
+    var countsComplete: Bool { get }
+}
+
 // MARK: - MenuBarRouting
 
 /// Navigation the menu bar performs — always through the coordinator, never a direct `AppModel`
@@ -97,6 +102,8 @@ final class MenuBarVM: MenuBarViewModel {
     var workflowRows: [WorkflowMenuBarRow] { workflowStatus?.rows ?? [] }
     var workflowActiveCount: Int { workflowStatus?.activeCount ?? 0 }
     var workflowAttentionCount: Int { workflowStatus?.attentionCount ?? 0 }
+    private(set) var taskCountsLoading = false
+    var workflowCountsLoading: Bool { workflowStatus?.countsLoading ?? false }
     var workflowStatusError: String? { workflowStatus?.errorText }
     
     // MARK: - MenuBarViewModel Properties
@@ -140,6 +147,7 @@ final class MenuBarVM: MenuBarViewModel {
         self.routing = routing
         self.connectionLine = useCase.connectionLine
         self.runningCount = useCase.runningCount
+        self.taskCountsLoading = !((useCase as? any MenuBarCountAvailabilityUseCase)?.countsComplete ?? true)
         self.installState = useCase.installState
         self.lastCheckMessage = useCase.lastCheckMessage
         self.installAnywayBlockedMessage = useCase.installAnywayBlockedMessage
@@ -298,6 +306,7 @@ final class MenuBarVM: MenuBarViewModel {
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
         runningCount = useCase.runningCount
+        taskCountsLoading = !((useCase as? any MenuBarCountAvailabilityUseCase)?.countsComplete ?? true)
         
         let running = latestTasks
             .filter(\.status.isRunning)

@@ -18,7 +18,7 @@ extension TaskDetailVMTests {
 
     // MARK: - Leases: one per member, acquired/released, a new member is picked up
 
-    @Test func givenAConversationOfTwo_whenAppearing_thenEachMemberGetsItsOwnLeaseAndDisappearReleasesBoth() async {
+    @Test func givenAConversationOfTwo_whenAppearing_thenOlderActivityWaitsForLoadMore() async {
         // given
         let taskA = conversationTask("a", status: "completed", minute: 0)
         let taskB = conversationTask("b", status: "completed", parentTaskID: "a", minute: 1)
@@ -30,6 +30,9 @@ extension TaskDetailVMTests {
         await waitUntil { harness.sut.task != nil }
 
         // then
+        verify(harness.useCase).acquireEventLease(.value("a")).called(0)
+        #expect(harness.sut.timelineModel.history.hasMore)
+        harness.sut.timelineModel.onLoadMore?()
         verify(harness.useCase).acquireEventLease(.value("a")).called(1)
         verify(harness.useCase).acquireEventLease(.value("b")).called(1)
 

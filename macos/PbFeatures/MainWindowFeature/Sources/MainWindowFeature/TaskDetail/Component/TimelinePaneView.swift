@@ -42,10 +42,13 @@ struct TimelinePaneModel {
     /// Changes when the feed grows or changes in place; Follow live scrolls on it.
     let updateToken: ActivityUpdateToken
     let pendingMessages: [PendingMessage]
+    let history: EventHistoryState
+    let onLoadMore: (() -> Void)?
 
     init(
         stepCountText: String, rows: [ConversationTimelineRow], activityRows: [ActivityRow], start: Date?, emptyText: String?,
-        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken, pendingMessages: [PendingMessage] = []
+        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken,
+        pendingMessages: [PendingMessage] = [], history: EventHistoryState = EventHistoryState(), onLoadMore: (() -> Void)? = nil
     ) {
         self.stepCountText = stepCountText
         self.rows = rows
@@ -57,6 +60,8 @@ struct TimelinePaneModel {
         self.liveStep = liveStep
         self.updateToken = updateToken
         self.pendingMessages = pendingMessages
+        self.history = history
+        self.onLoadMore = onLoadMore
     }
 
     /// Derives the feed rows, live step and update token from `rows` — for previews and tests; the
@@ -79,6 +84,7 @@ struct TimelinePaneModel {
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
     @State private var followLive = true
+    @State private var olderAnchor: String?
     @State private var expandedGroups: Set<String> = []
 
     var body: some View {
@@ -106,6 +112,16 @@ struct TimelinePaneView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
+                    if let onLoadMore = model.onLoadMore, model.history.hasMore || model.history.error != nil {
+                        Button(model.history.error == nil ? "Load more activity" : "Retry older activity") {
+                            olderAnchor = model.activityRows.first?.id
+                            onLoadMore()
+                        }.disabled(model.history.isLoading)
+                        if model.history.isLoading { ProgressView() }
+                        if let error = model.history.error { Text(error).font(.pb(.secondary)) }
+                    } else if !model.rows.isEmpty {
+                        Text("Beginning of loaded activity").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                    }
                     if let emptyText = model.emptyText {
                         Text(emptyText).font(.pb(.body)).foregroundStyle(Color.secondaryText)
                     }
@@ -126,7 +142,13 @@ struct TimelinePaneView: View {
                 .padding(24)
                 .readingColumn()
             }
-            .followLiveScroll(token: model.updateToken, enabled: followLive, proxy: proxy, target: "bottom")
+            .followLiveScroll(token: model.updateToken, enabled: followLive && olderAnchor == nil, proxy: proxy, target: "bottom")
+            .onChange(of: model.activityRows.first?.id) { _, _ in
+                if let olderAnchor { proxy.scrollTo(olderAnchor, anchor: .top); self.olderAnchor = nil }
+            }
+            .onChange(of: model.history.isLoading) { _, loading in
+                if !loading, let olderAnchor { proxy.scrollTo(olderAnchor, anchor: .top); self.olderAnchor = nil }
+            }
         }
     }
 

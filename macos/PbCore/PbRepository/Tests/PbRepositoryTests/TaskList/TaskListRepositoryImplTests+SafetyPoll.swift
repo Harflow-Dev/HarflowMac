@@ -31,7 +31,7 @@ extension TaskListRepositoryImplTests {
         let callCount = LockedBox(0)
         let runner = StubProcessRunner { _ in
             callCount.mutate { $0 += 1 }
-            return .success(stdout(result()))
+            return .success(historyStdout(result()))
         }
         return (CtlClient(executable: "/bin/echo", environment: [:], runner: runner), callCount)
     }
@@ -68,7 +68,8 @@ extension TaskListRepositoryImplTests {
         withExtendedLifetime(sut) {}
     }
 
-    @Test func givenTheSafetyPollFires_whenATaskIsRunning_thenItRefreshes() async {
+    @Test(arguments: ["running", "failed"])
+    func givenTheSafetyPollFires_whenTaskIsRunningOrNeedsReconciliation_thenItRefreshes(status: String) async {
         // given — "now" never advances, so the reconcile interval never elapses; only "any task
         // running" can explain the refresh below.
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
@@ -76,14 +77,14 @@ extension TaskListRepositoryImplTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":2,"tasks":[{"task_id":"a","status":"running","backend":"claude"}]}"# }
+        let (client, callCount) = countingCtl { #"{"v":2,"tasks":[{"task_id":"a","status":"\#(status)","needs_reconciliation":true,"backend":"claude"}]}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(dir.path)
         given(toolEnvironment).ctl().willReturn(.success(client))
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
         sut.start()
         await waitUntil { sut.hasListed }
-        #expect(sut.tasks.contains { $0.status.isRunning })
+        #expect(sut.tasks.contains { $0.status.isRunning || $0.raw["needs_reconciliation"]?.boolValue == true })
         // See the note in `whenTheReconcileIntervalHasElapsed_thenItRefreshes` on why the captured
         // poll closure must be waited for before firing it.
         await waitUntil { capturedPoll.value != nil }
@@ -230,127 +231,29 @@ extension TaskListRepositoryImplTests {
 
     // MARK: MS-LIST-5 — titles
 
-    @Test func givenAnExistingTitle_whenTitlesReload_thenItIsNeverOverwritten() async {
+    @Test func givenReadableLogsWithoutCatalogTitles_whenRefreshed_thenNoEventLogTitleLoadStarts() async {
         // given
-        let tasksDir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tasksDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tasksDir) }
-        let eventsFile = tasksDir.appendingPathComponent("t1.events.jsonl")
-        // `TaskTitle.firstPrompt` finds the first line by locating a "\n" delimiter — a real
-        // events.jsonl always ends each line that way, so the fixture must too.
-        try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"first title"}"# + "\n").write(to: eventsFile, atomically: true, encoding: .utf8)
-
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(tasksDir.path)
-        given(toolEnvironment).ctl().willReturn(.success(ctlClient(listing: ["t1"])))
-        let sut = makeSUT(toolEnvironment: toolEnvironment)
-
-        // when — the first refresh discovers "first title" from disk; the file is then rewritten
-        // with different content before a second refresh runs, which must not overwrite the title
-        // already on record (F4-11: "merges keep the old value").
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"log title"}"# + "\n")
+            .write(to: dir.appendingPathComponent("t1.events.jsonl"), atomically: true, encoding: .utf8)
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(dir.path)
+        given(environment).ctl().willReturn(.success(ctlClient(listing: ["t1"])))
+        let sut = makeSUT(toolEnvironment: environment)
+        // when
         await sut.refresh()
-        await waitUntil { sut.titles["t1"] != nil }
-        #expect(sut.titles["t1"] == "first title")
-
-        try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"second title"}"# + "\n").write(to: eventsFile, atomically: true, encoding: .utf8)
-        // A fixed sleep here would have the same flaw as the 500-title cap test: it would only prove
-        // "no overwrite happened within N ms," which a slow CI runner could pass despite a real bug.
-        // No wait is needed at all, deterministic or otherwise: `loadTitles()`'s missing-ids guard
-        // (`titlesValue[$0] == nil`) is evaluated synchronously, inline, before `refresh()` returns —
-        // "t1" already has a title from the pass above, so this second call decides, synchronously,
-        // not to spawn a background load for it at all. There is no pending async work left to race.
-        await sut.refresh()
-
         // then
-        #expect(sut.titles["t1"] == "first title")
+        #expect(sut.titleLoadPassCount == 0)
+        #expect(sut.title("t1") == "Task t1")
     }
 
-    @Test func givenNoTitleFound_whenDisplayed_thenTheFallbackIsTaskPlusFirst8Chars() async {
+    @Test func givenNoTitleFound_whenDisplayed_thenTheFallbackIsTaskPlusFirst8Chars() {
         // given
         let sut = makeSUT()
-
         // when / then
         #expect(sut.title("abcdefgh12345") == "Task abcdefgh")
-    }
-
-    @Test func givenMoreThan500MissingTitles_whenLoaded_thenOnly500AreFetched() async {
-        // given — MS-LIST-5/F4-11: titles are loaded off-main, capped at 500 missing ids per
-        // refresh. 501 tasks are listed, each with a real, readable events file, so every one of
-        // them *could* resolve a title — only the cap should stop the 501st from getting one.
-        let tasksDir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tasksDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tasksDir) }
-        let ids = (0 ..< 501).map { "task\(String(format: "%04d", $0))" }
-        for id in ids {
-            try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"prompt for \#(id)"}"# + "\n")
-                .write(to: tasksDir.appendingPathComponent("\(id).events.jsonl"), atomically: true, encoding: .utf8)
-        }
-        let listingJSON = "[" + ids.map { #"{"task_id":"\#($0)","status":"completed","backend":"claude"}"# }.joined(separator: ",") + "]"
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(tasksDir.path)
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(
-            executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":2,"tasks":\#(listingJSON)}"#))
-        )))
-        let sut = makeSUT(toolEnvironment: toolEnvironment)
-
-        // when — wait for the title-loading pass to actually finish (`titleLoadPassCount` is
-        // incremented in `mergeTitles(_:)`, right after the merge lands, once per pass) rather than
-        // for `titles.count` to merely reach 500: on a slow CI runner, an uncapped implementation
-        // could still be mid-loop at the 150 ms mark used previously, having reached 500 without
-        // ever having attempted the forbidden 501st — that fixed wait could pass without the cap
-        // ever being exercised. Waiting for the pass's own completion signal instead means the
-        // assertion below only runs once the whole pass — capped or not — has truly finished.
-        await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 1 }
-
-        // then — exactly 500, never all 501.
-        #expect(sut.titleLoadPassCount == 1)
-        #expect(sut.titles.count == 500)
-    }
-
-    @Test func givenAHeadOf500UnreadableSettledTitles_whenRefreshedAgain_thenLaterTasksStillGetTheirs() async {
-        // given — the first 500 listed tasks are settled and have no events file at all; after them,
-        // a settled task with a readable log and a running one whose log appears only later.
-        let tasksDir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tasksDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tasksDir) }
-        let unreadable = (0 ..< 500).map { "gone\(String(format: "%04d", $0))" }
-        func writePrompt(_ id: String) {
-            try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"prompt for \#(id)"}"# + "\n")
-                .write(to: tasksDir.appendingPathComponent("\(id).events.jsonl"), atomically: true, encoding: .utf8)
-        }
-        writePrompt("readable")
-        let entries = unreadable.map { #"{"task_id":"\#($0)","status":"completed","backend":"claude"}"# }
-            + [#"{"task_id":"readable","status":"completed","backend":"claude"}"#,
-               #"{"task_id":"fresh","status":"running","backend":"claude"}"#]
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(tasksDir.path)
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(
-            executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":2,"tasks":[\#(entries.joined(separator: ","))]}"#))
-        )))
-        let sut = makeSUT(toolEnvironment: toolEnvironment)
-        await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 1 }
-        #expect(sut.titles.isEmpty, "the capped first pass only reaches the 500 unreadable ones")
-
-        // when — the running task's log is written, and the listing refreshes
-        writePrompt("fresh")
-        await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 2 }
-
-        // then — never-tried ids come ahead of the earlier failures, so the pass reaches both
-        #expect(sut.titles["readable"] == "prompt for readable")
-        #expect(sut.titles["fresh"] == "prompt for fresh", "a running task stays retryable")
-
-        // when — one of the failures turns out to have been transient
-        writePrompt("gone0007")
-        await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 3 }
-
-        // then — failures are retried behind the queue, never dropped for good
-        #expect(sut.titles["gone0007"] == "prompt for gone0007")
     }
 
     // MARK: MS-LIST-6 — detail() precedence (the C.8 fix)
@@ -374,7 +277,7 @@ extension TaskListRepositoryImplTests {
         #expect(detail?.status == .running)
     }
 
-    @Test func givenATaskGoneFromTheListing_whenAskedForDetail_thenNilIsReturned() async {
+    @Test func givenTaskOutsideNewestPage_whenAskedForDetail_thenLoadedHistoryRemainsAvailable() async {
         // given — seed a listing containing "t1" first and confirm `detail` actually resolves it,
         // then list again without it. `ctl()` reads from a mutable box rather than being re-`given`
         // between calls — see the note on the `Mockable` FIFO pitfall elsewhere in this file.
@@ -392,7 +295,7 @@ extension TaskListRepositoryImplTests {
         let detail = sut.detail("t1")
 
         // then
-        #expect(detail == nil)
+        #expect(detail?.taskID == "t1")
     }
 
     @Test func givenNoSnapshotAndNoDifferingStatus_whenAskedForDetail_thenTheListingEntryIsReturned() async {
@@ -482,7 +385,7 @@ extension TaskListRepositoryImplTests {
         #expect(notified.value.isEmpty)
 
         // when
-        let doneRunner = StubProcessRunner(output: stdout(#"{"v":2,"tasks":[{"task_id":"a","status":"completed","backend":"claude","depth":0}]}"#))
+        let doneRunner = StubProcessRunner(output: historyStdout(#"{"v":2,"tasks":[{"task_id":"a","status":"completed","backend":"claude","depth":0}]}"#))
         resultBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: doneRunner)) }
         await sut.refresh()
 
@@ -496,7 +399,7 @@ extension TaskListRepositoryImplTests {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
-        let runner = StubProcessRunner(output: stdout(
+        let runner = StubProcessRunner(output: historyStdout(
             #"{"v":2,"tasks":[{"task_id":"root","status":"completed","backend":"claude","depth":0},"#
                 + #"{"task_id":"child","status":"running","backend":"claude","spawned_by":"root","depth":1}]}"#
         ))

@@ -10,6 +10,7 @@
 
 import MonitorCore
 import PbCommon
+import PbRepository
 import PbUI
 import SwiftUI
 
@@ -21,6 +22,10 @@ protocol SidebarViewModel: ViewModel {
     
     /// Running / Today / Earlier, in that order, empty buckets omitted (settled plan D10).
     var sections: [SidebarSection] { get }
+    var taskHistoryState: HistoryLoadingState { get }
+    var workflowHistoryState: HistoryLoadingState { get }
+    func didTapLoadMoreTasks()
+    func didTapLoadMoreWorkflows()
     var listErrorMessage: String? { get }
     /// The list body's empty-state message, or `nil` when there's real content to show (Monitor
     /// piece 6's precedence rules — see `SidebarVM.computeEmptyStateMessage()`).
@@ -68,6 +73,13 @@ extension SidebarViewModel {
     func didTapNewWorkflow() {}
     func groupConversations(_ group: ParallelGroup) -> [Conversation] { group.conversations }
     func isExecutionParentExpanded(_ id: String) -> Bool { false }
+}
+
+extension SidebarViewModel {
+    var taskHistoryState: HistoryLoadingState { HistoryLoadingState() }
+    var workflowHistoryState: HistoryLoadingState { HistoryLoadingState() }
+    func didTapLoadMoreTasks() {}
+    func didTapLoadMoreWorkflows() {}
 }
 
 // MARK: - SidebarView
@@ -120,7 +132,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Color.secondaryText)
-                TextField("Search", text: Binding(get: { viewModel.searchQuery }, set: { viewModel.didChangeSearchQuery($0) }))
+                TextField("Search loaded history", text: Binding(get: { viewModel.searchQuery }, set: { viewModel.didChangeSearchQuery($0) }))
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 10)
@@ -178,6 +190,29 @@ struct SidebarView<VM: SidebarViewModel>: View {
         return tab.isNotFound ? "\(name) (not found on PATH)" : name
     }
 
+    private func historyControl(_ source: String, state: HistoryLoadingState, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if state.historyIncomplete {
+                Text("Some large legacy records need direct inspection; history ordering is incomplete.")
+                    .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+            }
+            if state.isLoading {
+                ProgressView("Loading \(source.lowercased())…")
+            } else if let error = state.error {
+                Text(error.message).font(.pb(.caption)).foregroundStyle(Color.failedRed)
+                Button("Retry \(source.lowercased())", action: action)
+            } else if state.bootstrapPending {
+                Text("Preparing \(source.lowercased()) history…").font(.pb(.caption))
+                Button("Continue loading \(source.lowercased())", action: action)
+            } else if state.hasMore {
+                Button("Load more \(source.lowercased())", action: action)
+            } else {
+                Text("End of loaded \(source.lowercased()) history").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+            }
+        }
+    }
+
     private var list: some View {
         List(selection: Binding(get: { viewModel.selection }, set: { viewModel.didSelect($0) })) {
             workflowDefinitions
@@ -207,6 +242,10 @@ struct SidebarView<VM: SidebarViewModel>: View {
                     } header: {
                         SectionLabel(text: section.title)
                     }
+                }
+                Section("History") {
+                    historyControl("Tasks", state: viewModel.taskHistoryState, action: viewModel.didTapLoadMoreTasks)
+                    historyControl("Workflows", state: viewModel.workflowHistoryState, action: viewModel.didTapLoadMoreWorkflows)
                 }
                 if let message = viewModel.emptyStateMessage {
                     Text(message)

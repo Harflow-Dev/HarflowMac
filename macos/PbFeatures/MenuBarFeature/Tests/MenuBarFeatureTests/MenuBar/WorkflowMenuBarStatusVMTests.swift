@@ -10,6 +10,57 @@ import Testing
 
 @MainActor
 @Suite struct WorkflowMenuBarStatusVMTests {
+    final class Pages: WorkflowMenuBarUseCase, WorkflowMenuBarPageUseCase {
+        var page: HistoryPage
+        init(page: HistoryPage) { self.page = page }
+        func runs() async throws -> [[String: JSONValue]] { [] }
+        func activePage() async throws -> HistoryPage { page }
+    }
+
+    @Test func givenMoreActiveRootsThanVisiblePage_whenRefreshed_thenBadgeUsesCatalogTotals() async throws {
+        // given
+        let page = try #require(HistoryPage(raw: ["items": .array([.object(run("visible", status: "running"))]),
+            "next_cursor": .string("next"), "has_more": .bool(true), "bootstrap_pending": .bool(false),
+            "total_active_count": .number(400), "total_active_root_count": .number(250), "total_attention_root_count": .number(12)]))
+        let vm = WorkflowMenuBarStatusVM(useCase: Pages(page: page))
+        // when
+        await vm.refresh()
+        // then
+        #expect(vm.rows.count == 1)
+        #expect(vm.activeCount == 250)
+        #expect(vm.attentionCount == 12)
+    }
+
+    @Test func givenBootstrapCounts_whenRefreshing_thenColdCountsStayUnknownAndLastCompleteCountsSurvive() async throws {
+        // given
+        var raw: [String: JSONValue] = ["items": .array([.object(run("partial", status: "running"))]),
+            "next_cursor": .null, "has_more": .bool(false), "bootstrap_pending": .bool(true),
+            "total_active_count": .number(2), "total_active_root_count": .number(1), "total_attention_root_count": .number(0)]
+        let pages = Pages(page: try #require(HistoryPage(raw: raw)))
+        let vm = WorkflowMenuBarStatusVM(useCase: pages)
+        // when / then: the first partial inventory is explicitly unknown.
+        await vm.refresh()
+        #expect(vm.countsLoading)
+        #expect(vm.activeCount == 0)
+        raw["bootstrap_pending"] = .bool(false)
+        raw["total_active_root_count"] = .number(250)
+        raw["total_attention_root_count"] = .number(12)
+        pages.page = try #require(HistoryPage(raw: raw))
+        await vm.refresh()
+        #expect(!vm.countsLoading)
+        #expect(vm.activeCount == 250)
+        // when another indexing generation begins, previously verified counts remain visible.
+        raw["bootstrap_pending"] = .bool(true)
+        raw["total_active_root_count"] = .null
+        raw["total_attention_root_count"] = .null
+        pages.page = try #require(HistoryPage(raw: raw))
+        await vm.refresh()
+        // then
+        #expect(vm.countsLoading)
+        #expect(vm.activeCount == 250)
+        #expect(vm.attentionCount == 12)
+    }
+
     func run(_ id: String, status: String) -> [String: JSONValue] {
         ["workflow_run_id": .string(id), "name": .string(id), "status": .string(status)]
     }

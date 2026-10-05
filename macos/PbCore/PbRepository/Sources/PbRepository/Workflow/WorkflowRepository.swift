@@ -8,6 +8,8 @@ import SwiftEnvironment
 /// CLI-only workflow persistence and execution seam. No Monitor code writes workflow state.
 @Mockable
 public protocol WorkflowRepository: Sendable {
+    func historyBatch(runIDs: [String]) async throws -> HistoryPage
+    func historyPage(cursor: String?, activeOnly: Bool, relatedRunID: String?) async throws -> HistoryPage
     /// Executes a workflow command and returns its versioned result payload.
     func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue]
     /// Validates an editable graph without saving workflow state.
@@ -27,6 +29,16 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
         self.toolEnvironment = toolEnvironment
     }
 
+    public func historyBatch(runIDs: [String]) async throws -> HistoryPage {
+        let ctl = try toolEnvironment.ctl().get()
+        return try await ctl.workflowHistoryPage(runIDs: runIDs).get()
+    }
+
+    public func historyPage(cursor: String? = nil, activeOnly: Bool = false, relatedRunID: String? = nil) async throws -> HistoryPage {
+        let ctl = try toolEnvironment.ctl().get()
+        return try await ctl.workflowHistoryPage(cursor: cursor, activeOnly: activeOnly, relatedRunID: relatedRunID).get()
+    }
+
     public func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
         let ctl = try toolEnvironment.ctl().get()
         // Workflow prompts and builder JSON are logical payloads, never process argv entries.
@@ -44,6 +56,16 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
     public func save(name: String, definition: JSONValue, expectedRevision: Int) async throws -> [String: JSONValue] {
         let ctl = try toolEnvironment.ctl().get()
         return try await ctl.saveWorkflow(name: name, definition: definition, expectedRevision: expectedRevision).get()
+    }
+}
+
+public extension WorkflowRepository {
+    func historyBatch(runIDs: [String]) async throws -> HistoryPage {
+        throw ToolError.unsupportedCommand(tool: "polybridge-ctl", command: "workflow-list-page", detail: "History batches unavailable")
+    }
+
+    func historyPage(cursor: String? = nil, activeOnly: Bool = false, relatedRunID: String? = nil) async throws -> HistoryPage {
+        throw ToolError.unsupportedCommand(tool: "polybridge-ctl", command: "workflow-list-page", detail: "History pages unavailable")
     }
 }
 

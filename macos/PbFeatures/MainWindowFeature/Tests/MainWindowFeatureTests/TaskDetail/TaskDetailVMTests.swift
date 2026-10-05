@@ -184,6 +184,7 @@ import Testing
     @discardableResult
     func makeSUT(taskID: String = "abc12345", isWorkflowBuilder: Bool = false) -> SUT {
         let useCase = MockTaskDetailUseCase()
+        useCase.configurePagingDefaults()
         let routing = MockTaskDetailRouting()
         let fixtures = Fixtures()
         let lease = configureStubs(useCase: useCase, routing: routing, taskID: taskID, fixtures: fixtures)

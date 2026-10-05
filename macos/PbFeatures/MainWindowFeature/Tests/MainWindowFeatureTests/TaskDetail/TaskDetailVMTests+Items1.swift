@@ -116,6 +116,7 @@ extension TaskDetailVMTests {
         // refusing it. The settled plan is explicit: the field clears "even if ... the busy guard
         // rejects it" (`2026-09-25-monitor-architecture-plan-settled.md:172`).
         let useCase = MockTaskDetailUseCase()
+        useCase.configurePagingDefaults()
         let routing = MockTaskDetailRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())

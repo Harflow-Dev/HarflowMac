@@ -91,6 +91,8 @@ struct SummaryPaneModel {
     let inputTokens: Int?
     let outputTokens: Int?
     let costUSD: Double?
+    var additionalFileCount = 0
+    var onLoadMoreFiles: (() -> Void)?
 
     var editedFileRows: [SummaryFileRow] { editedFiles.map(SummaryFileRow.init) }
 
@@ -120,7 +122,7 @@ struct SummaryPaneModel {
         return tiles
     }
 
-    static let empty = SummaryPaneModel(
+    @MainActor static let empty = SummaryPaneModel(
         hero: nil, finalAnswer: nil, finalAnswerPlaceholder: "No answer yet.", refusalLines: [],
         editedFilesAvailability: .loading, editedFiles: [], editedFilesNote: nil, numTurns: nil, inputTokens: nil,
         outputTokens: nil, costUSD: nil
@@ -372,14 +374,17 @@ struct SummaryPaneView: View {
         let allRows = model.editedFileRows
         let visible = SummaryPaneModel.visibleFileRows(allRows, showingAll: showAllFiles)
         return ActivityCard {
-            VStack(alignment: .leading, spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(visible.rows.enumerated()), id: \.element.id) { index, row in
                     if index > 0 { Divider() }
                     fileRow(row)
                 }
                 if visible.hiddenCount > 0 {
                     Divider()
-                    Button("Show all \(allRows.count)") { showAllFiles = true }
+                    Button("Show loaded \(allRows.count)") { showAllFiles = true }
+                }
+                if model.additionalFileCount > 0, let loadMore = model.onLoadMoreFiles {
+                    Button("Load more files (\(model.additionalFileCount) task file entries not shown)") { showAllFiles = true; loadMore() }
                         .buttonStyle(.link)
                         .font(.pb(.secondary, weight: .medium))
                         .padding(.top, 8)
