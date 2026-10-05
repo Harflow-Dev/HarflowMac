@@ -75,9 +75,15 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
 .foregroundStyle(Color.warningFG)
 .textSelection(.enabled)
             if run.isSettling { Text("Waiting for running branches to finish…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText) }
+            Text("Additional instructions")
+                .font(.pb(.secondary))
+                .foregroundStyle(Color.secondaryText)
+            TextEditor(text: Binding(get: { viewModel.instructions }, set: { viewModel.instructions = $0 }))
+                .font(.pb(.body))
+                .frame(height: 100)
+                .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
+                .accessibilityLabel("Additional instructions")
             HStack {
-                TextField("Additional instructions", text: Binding(get: { viewModel.instructions }, set: { viewModel.instructions = $0 }))
-                    .textFieldStyle(.roundedBorder)
                 Stepper(
                     "Extra attempts: \(viewModel.additionalAttempts)",
                     value: Binding(get: { viewModel.additionalAttempts }, set: { viewModel.additionalAttempts = $0 }),

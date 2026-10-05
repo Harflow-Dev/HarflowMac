@@ -16,7 +16,9 @@ struct WorkflowCommandInputs {
     init(options: [String], root: URL, write: (Data, URL) throws -> Void) throws {
         let payloads = [("--definition-json=", "--definition=", "definition.json"),
                         ("--source=", "--source-file=", "source.json"),
-                        ("--prompt=", "--prompt-file=", "prompt.txt")]
+                        ("--prompt=", "--prompt-file=", "prompt.txt"),
+                        ("--instructions=", "--instructions-file=", "instructions.txt"),
+                        ("--reason=", "--reason-file=", "reason.txt")]
         guard options.contains(where: { option in payloads.contains { option.hasPrefix($0.0) } }) else {
             self.options = options
             self.directory = nil

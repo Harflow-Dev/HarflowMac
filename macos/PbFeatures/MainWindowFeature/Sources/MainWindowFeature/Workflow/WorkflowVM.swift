@@ -231,10 +231,8 @@ final class WorkflowVM: WorkflowViewModel {
         do {
             if selectedRun == nil {
                 let list = try await useCase.command("list", options: [], positionals: [])
-                let runList = try await useCase.command("list-runs", options: [], positionals: [])
                 guard !Task.isCancelled, generation == nil || generation == generationID else { return }
                 workflows = WorkflowJSON.objects(list["workflows"]).map { WorkflowRecord(raw: $0) }
-                runs = WorkflowJSON.objects(runList["runs"]).map { WorkflowRunModel(raw: $0) }
             }
             guard selectedRun?.id == refreshRunID else { return }
             if let run = selectedRun {
