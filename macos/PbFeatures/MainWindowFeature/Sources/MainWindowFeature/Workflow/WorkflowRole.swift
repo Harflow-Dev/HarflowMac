@@ -3,9 +3,10 @@ import Foundation
 // MARK: - WorkflowRole
 
 enum WorkflowRole {
-    static let palette = ["start", "planning", "implementation", "review", "task", "parallel_group", "end"]
+    static let palette = ["start", "planning", "implementation", "review", "task", "workflow", "parallel_group", "end"]
     static func title(_ role: String) -> String {
         switch role {
+        case "workflow": "Run workflow"
         case "join": "Wait for all"
         case "parallel_group": "Parallel group"
         case "parallel_start": "Parallel start"
@@ -20,6 +21,7 @@ enum WorkflowRole {
         case "implementation": "hammer"
         case "review": "checkmark.bubble"
         case "task": "terminal"
+        case "workflow": "rectangle.3.group"
         case "start": "play"
         case "join", "parallel_end": "arrow.triangle.merge"
         case "parallel_start", "parallel_group": "arrow.triangle.branch"

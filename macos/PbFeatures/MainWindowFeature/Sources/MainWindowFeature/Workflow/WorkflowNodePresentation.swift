@@ -8,7 +8,8 @@ enum WorkflowNodePresentation {
     static func merged(_ snapshot: TaskInfo?, with listed: TaskInfo) -> TaskInfo {
         guard let snapshot else { return listed }
         var raw = snapshot.raw
-        for (key, value) in listed.raw where key.hasPrefix("workflow_") || ["execution_contract", "display_prompt"].contains(key) {
+        for (key, value) in listed.raw where key.hasPrefix("workflow_")
+            || ["execution_contract", "display_prompt", "root_workflow_run_id", "suspended_via_root"].contains(key) {
             raw[key] = value
         }
         return TaskInfo(.object(raw)) ?? listed
@@ -30,8 +31,9 @@ enum WorkflowNodePresentation {
     static func allowsTerminal(_ task: TaskInfo?) -> Bool {
         guard let task else { return true }
         if task.raw["workflow_run_id"]?.stringValue == nil { return true }
-        return ["completed", "failed", "cancelled"].contains(task.raw["workflow_status"]?.stringValue ?? "")
-            && task.raw["workflow_settling"]?.boolValue == false
+        return ["completed", "failed", "cancelled"].contains(task.raw["workflow_tree_status"]?.stringValue ?? task.raw["workflow_status"]?.stringValue ?? "")
+            && (task.raw["workflow_tree_settling"]?.boolValue ?? task.raw["workflow_settling"]?.boolValue) == false
+            && task.raw["suspended_via_root"]?.boolValue != true
     }
 
     static func resultError(_ task: TaskInfo?) -> String? {

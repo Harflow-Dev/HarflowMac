@@ -30,6 +30,8 @@ struct WorkflowCanvas: View {
     var canUndo = false
     var onUndo: () -> Void = {}
     var onRename: (String, String) -> Void = { _, _ in }
+    var childRunID: (String) -> String? = { _ in nil }
+    var onOpenRun: (String) -> Void = { _ in }
     @State private var scrollController = WorkflowCanvasScrollController()
     @State private var routeCache = WorkflowRouteCache()
     @State private var groupOrigins: [String: CGPoint] = [:]
@@ -137,6 +139,8 @@ struct WorkflowCanvas: View {
                         isSelected: selection.contains(node.id) || parallelRegion.contains(node.id),
                         isEditable: isEditable,
                         zoom: zoom,
+                        childRunID: childRunID(node.id),
+                        onOpenRun: onOpenRun,
                         onSelect: { isCanvasFocused = true; if NSEvent.modifierFlags.contains(.command) { onToggleNode(node.id) } else { onSelectNode(node.id) } },
                         onMove: { point in
                             moveGroup(anchor: node.id, point: point)
@@ -387,6 +391,8 @@ private struct WorkflowCanvasNode: View {
     let isSelected: Bool
     let isEditable: Bool
     let zoom: CGFloat
+    let childRunID: String?
+    let onOpenRun: (String) -> Void
     let onSelect: () -> Void
     let onMove: (CGPoint) -> Void
     let onDragEnded: () -> Void
@@ -401,8 +407,8 @@ private struct WorkflowCanvasNode: View {
     @GestureState private var dragOrigin: CGPoint?
 
     private var nodeSize: CGSize { WorkflowCanvasGeometry.size(node) }
-    private var canEditTitle: Bool { isEditable && node.type == "agent" }
-    private var displayTitle: String { node.type == "agent" ? node.name : WorkflowRole.title(node.type) }
+    private var canEditTitle: Bool { isEditable && ["agent", "workflow"].contains(node.type) }
+    private var displayTitle: String { ["agent", "workflow"].contains(node.type) ? node.name : WorkflowRole.title(node.type) }
     private var isCompact: Bool { ["start", "end", "parallel_start", "parallel_end"].contains(node.type) }
     private var isRunning: Bool { ["running", "reserved"].contains(status) }
     private var border: Color { isRunning || isSelected ? .accentLink : .cardBorder }
@@ -490,14 +496,16 @@ private struct WorkflowCanvasNode: View {
                 if node.type == "agent" {
                     BackendLabel(backend: node.backend).font(.pb(.caption))
                 } else {
-                    Text(node.type.capitalized).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                    Text(node.type == "workflow" ? (node.workflowName.isEmpty ? "Select workflow" : node.workflowName) : node.type.capitalized)
+                        .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
                 }
                 Spacer(minLength: 0)
                 if attempt > 0 {
                     Text("Attempt \(attempt)").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                 }
             }
-            WorkflowNodeDetail(node: node, status: status, isEditable: isEditable)
+            WorkflowNodeDetail(node: node, status: status, isEditable: isEditable, childRunID: childRunID, onOpenRun: onOpenRun)
         }
     }
 

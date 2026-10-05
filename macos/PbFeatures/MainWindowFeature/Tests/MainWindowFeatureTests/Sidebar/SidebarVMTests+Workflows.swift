@@ -125,3 +125,41 @@ private final class SuspendedSidebarWorkflows: SidebarWorkflowUseCase {
         return snapshot
     }
 }
+
+extension SidebarVMTests {
+    @Test func givenNestedRuns_whenExpanded_thenChildAppearsUnderParentAndSearchKeepsAncestor() {
+        // given
+        let harness = makeSUT()
+        harness.sut.workflowRuns = [
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("root"), "name": .string("Parent"), "status": .string("running")]),
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "name": .string("Nested"), "status": .string("running"),
+                                     "parent_workflow_run_id": .string("root")])
+        ]
+        harness.sut.expandedExecutionParents.insert("workflow:root")
+        // when
+        let items = harness.sut.workflowTreeItems(harness.sut.workflowRuns[0])
+        harness.sut.didChangeSearchQuery("Nested")
+        // then
+        #expect(items.map(\.id) == ["workflow:root", "workflow:child"])
+        if case .workflow(let child) = items.last { #expect(child.indent == 1) }
+        #expect(harness.sut.filteredWorkflowRuns().map(\.id) == ["root", "child"])
+        #expect(harness.sut.items(in: .running).map(\.id) == ["workflow:root", "workflow:child"])
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenNestedTask_whenRevealed_thenAllWorkflowAncestorsExpand() {
+        // given
+        let harness = makeSUT()
+        harness.sut.workflowRuns = [
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("root")]),
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "parent_workflow_run_id": .string("root")]),
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("grandchild"), "parent_workflow_run_id": .string("child")])
+        ]
+        harness.sut.latestTasks = [TaskInfo(.object(["task_id": .string("nested-task"), "workflow_run_id": .string("grandchild")]))!]
+        // when
+        harness.sut.expandExecutionParent(of: "nested-task")
+        // then
+        #expect(harness.sut.expandedExecutionParents == ["workflow:root", "workflow:child", "workflow:grandchild"])
+    }
+}

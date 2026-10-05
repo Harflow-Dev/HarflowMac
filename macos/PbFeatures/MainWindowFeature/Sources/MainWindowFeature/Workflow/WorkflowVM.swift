@@ -29,6 +29,7 @@ protocol WorkflowRouting: ParallelRouting {
     func chooseDirectory() async -> String?
     func didSaveWorkflow(name: String)
     func openWorkflowEditor(name: String?)
+    func openWorkflowRun(id: String)
 }
 
 // MARK: - WorkflowVM
@@ -65,6 +66,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     var errorText: String?
+    var validationDependencies: [String: JSONValue] = [:]
     var validationMessage: String?
     var repo = ""
     var prompt = ""
@@ -414,11 +416,11 @@ final class WorkflowVM: WorkflowViewModel {
         var entries = WorkflowJSON.objects(definition["nodes"])
         guard !["start", "end"].contains(kind) || !entries.contains(where: { $0["type"]?.stringValue == kind }) else { return }
         let id = UUID().uuidString.lowercased()
-        let type = ["start", "join", "end"].contains(kind) ? kind : "agent"
+        let type = ["start", "join", "end", "workflow"].contains(kind) ? kind : "agent"
         let point = WorkflowCanvasGeometry.snapped(point ?? CGPoint(x: 80 + (entries.count % 4) * 250, y: 200 + (entries.count / 4) * 130))
         var node: [String: JSONValue] = [
             "id": .string(id),
-            "title": .string(kind.capitalized),
+            "title": .string(WorkflowRole.title(kind)),
             "type": .string(type),
             "branch_mode": .string("auto"),
             "position": .object(["x": .number(point.x), "y": .number(point.y)])
@@ -433,6 +435,14 @@ final class WorkflowVM: WorkflowViewModel {
             node["max_attempts"] = .number(3)
             node["freedom"] = .string(WorkflowAccess.defaultLevel(for: kind))
             node["branch_mode"] = .string("auto")
+        }
+        if type == "workflow" {
+            node["workflow_ref"] = .object(["workflow_id": .string("")])
+            node["orchestrator_mode"] = .string("child")
+            node["instructions"] = .string("")
+            node["max_attempts"] = .number(3)
+            node["optional"] = .bool(false)
+            definition["routing_mode"] = .string("explicit")
         }
         entries.append(node)
         definition["nodes"] = .array(entries.map(JSONValue.object))

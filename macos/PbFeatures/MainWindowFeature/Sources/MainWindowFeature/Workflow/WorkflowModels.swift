@@ -6,6 +6,7 @@ import MonitorCore
 struct WorkflowRecord: Identifiable, Equatable {
     var raw: [String: JSONValue]
     var id: String { raw["name"]?.stringValue ?? "" }
+    var workflowID: String { raw["workflow_id"]?.stringValue ?? definition["workflow_id"]?.stringValue ?? "" }
     var revision: Int { raw["revision"]?.intValue ?? 0 }
     var definition: [String: JSONValue] { raw["definition"]?.objectValue ?? raw }
     var description: String { definition["description"]?.stringValue ?? "" }
@@ -22,11 +23,15 @@ struct WorkflowNodeModel: Identifiable, Equatable {
     var instructions: String { raw["instructions"]?.stringValue ?? "" }
     var isParallelBoundary: Bool { ["parallel_start", "parallel_end"].contains(type) }
     var parallelGroupID: String? { raw["parallel_group_id"]?.stringValue }
-    var isOptional: Bool { type == "agent" && (raw["optional"]?.boolValue ?? false) }
+    var isOptional: Bool { ["agent", "workflow"].contains(type) && (raw["optional"]?.boolValue ?? false) }
     var position: CGPoint {
         let position = raw["position"]?.objectValue ?? [:]
         return CGPoint(x: position["x"]?.doubleValue ?? 80, y: position["y"]?.doubleValue ?? 80)
     }
+
+    var workflowID: String { raw["workflow_ref"]?["workflow_id"]?.stringValue ?? "" }
+    var workflowName: String { raw["workflow_name"]?.stringValue ?? "" }
+    var orchestratorMode: String { raw["orchestrator_mode"]?.stringValue ?? "child" }
 
     var backend: String { raw["agent"]?["backend"]?.stringValue ?? "" }
 }
@@ -53,7 +58,31 @@ struct WorkflowRunModel: Identifiable, Equatable {
     var status: String { raw["status"]?.stringValue ?? "unknown" }
     var reason: String { raw["attention_reason"]?.stringValue ?? raw["reason"]?.stringValue ?? "" }
     var isDelegation: Bool { raw["execution_contract"]?.stringValue == "delegation" }
+    var parentRunID: String? { raw["parent_workflow_run_id"]?.stringValue ?? raw["parent_link"]?["workflow_run_id"]?.stringValue }
+    var rootRunID: String { raw["root_workflow_run_id"]?.stringValue ?? raw["parent_link"]?["root_workflow_run_id"]?.stringValue ?? id }
+    var sessionOwnerRunID: String { raw["orchestrator_session_owner_run_id"]?.stringValue ?? id }
+    var childRunIDs: [String] {
+        activations.compactMap { $0["invocation"]?["child_workflow_run_id"]?.stringValue }
+    }
+
+    func latestChildRunID(for nodeID: String) -> String? {
+        let activation = activations.last {
+            $0["node_id"]?.stringValue == nodeID && $0["invocation"]?["child_workflow_run_id"]?.stringValue != nil
+        }
+        return activation?["invocation"]?["child_workflow_run_id"]?.stringValue
+    }
+
+    func childRunLabel(_ childID: String) -> String {
+        let activation = activations.last { $0["invocation"]?["child_workflow_run_id"]?.stringValue == childID }
+        let invocation = activation?["invocation"]
+        let name = invocation?["workflow_name"]?.stringValue ?? "Child workflow"
+        let outcome = activation?["node_result"]?["result"]?["child_outcome"]
+        let status = outcome?["child_status"]?.stringValue ?? invocation?["stage"]?.stringValue ?? "unknown"
+        return "\(name.isEmpty ? "Child workflow" : name) · \(status.replacingOccurrences(of: "_", with: " "))"
+    }
+
     var allowsMonitorControl: Bool {
+        guard parentRunID == nil else { return false }
         guard raw["status"]?.stringValue != nil else { return false }
         return raw["interaction_owner"]?.stringValue != "caller"
     }

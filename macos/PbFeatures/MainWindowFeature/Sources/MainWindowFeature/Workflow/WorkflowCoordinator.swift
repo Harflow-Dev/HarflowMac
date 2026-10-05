@@ -30,6 +30,8 @@ extension MainWindowCoordinator: WorkflowRouting {
 
     func didSaveWorkflow(name: String) { selection = .workflow(name) }
 
+    func openWorkflowRun(id: String) { handle(path: MonitorDestination.workflowRun(id)) }
+
     func openWorkflowEditor(name: String?) {
         selection = name.map { .workflow($0) } ?? .newWorkflow(UUID())
     }

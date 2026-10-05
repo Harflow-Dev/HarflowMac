@@ -156,6 +156,7 @@ final class SidebarVM: SidebarViewModel {
     /// would never mark the view as needing a redraw when the coordinator's selection changes
     /// from elsewhere (e.g. "Open parent" in `TaskDetailView`). Initialised from `routing.selection`
     /// and kept live by the `selectionPublisher()` subscription in `subscribeIfNeeded()`.
+    private var pendingWorkflowRevealID: String?
     private(set) var selection: MonitorDestination?
     @ObservationIgnored private var selectionRevision = 0
     /// The install/update banner to show in place of the red error section, or `nil` when nothing
@@ -235,6 +236,8 @@ final class SidebarVM: SidebarViewModel {
         // cached `MainWindowCoordinator`/`SidebarVM` survive a window close/reopen, so this is a
         // real, reachable gap, not a hypothetical one.
         selection = normalized(routing.selection)
+        requestWorkflowReveal(selection)
+        if case .workflowRun = selection { recompute() }
         // Same reasoning for a reveal requested while this screen was unsubscribed: the coordinator
         // still holds it (Design point 5), so pick it up here rather than only via `revealPublisher()`.
         if let reveal = routing.pendingReveal { handleReveal(reveal) }
@@ -425,10 +428,29 @@ final class SidebarVM: SidebarViewModel {
     /// never re-expand a row the person collapsed.
     private func applyExternalSelection(_ destination: MonitorDestination?) {
         selection = normalized(destination)
+        requestWorkflowReveal(selection)
         recompute()
     }
 
+    private func requestWorkflowReveal(_ destination: MonitorDestination?) {
+        if case .workflowRun(let id) = destination { pendingWorkflowRevealID = id } else { pendingWorkflowRevealID = nil }
+    }
+
+    private func revealWorkflowAncestors() {
+        guard let id = pendingWorkflowRevealID else { return }
+        var current = id
+        var visited: Set<String> = []
+        while visited.insert(current).inserted {
+            guard let run = workflowRuns.first(where: { $0.id == current }) else { return }
+            guard let parent = run.parentRunID else { pendingWorkflowRevealID = nil; return }
+            expandedExecutionParents.insert("workflow:\(parent)")
+            current = parent
+        }
+        pendingWorkflowRevealID = nil
+    }
+
     func recompute() {
+        revealWorkflowAncestors()
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
         recomputeBackendTabs()

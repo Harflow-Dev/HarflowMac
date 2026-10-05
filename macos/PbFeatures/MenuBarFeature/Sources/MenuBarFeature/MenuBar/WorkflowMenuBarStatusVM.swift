@@ -15,6 +15,7 @@ protocol WorkflowMenuBarUseCase: Sendable {
 
 struct WorkflowMenuBarRow: Identifiable, Equatable {
     let id: String
+    let rootID: String
     let name: String
     let status: String
     let detail: String
@@ -27,6 +28,7 @@ struct WorkflowMenuBarRow: Identifiable, Equatable {
     init?(_ raw: [String: JSONValue]) {
         guard let id = raw["workflow_run_id"]?.stringValue, !id.isEmpty else { return nil }
         self.id = id
+        self.rootID = raw["root_workflow_run_id"]?.stringValue ?? id
         self.name = raw["name"]?.stringValue ?? "Workflow"
         self.status = raw["status"]?.stringValue ?? "unknown"
         self.isSettling = raw["settling"]?.boolValue ?? false
@@ -76,7 +78,17 @@ final class WorkflowMenuBarStatusVM: ViewModel {
         do {
             let result = try await useCase.runs()
             guard !Task.isCancelled, token == nil || token == generation else { return }
-            rows = result.compactMap(WorkflowMenuBarRow.init)
+            let mapped = result.compactMap(WorkflowMenuBarRow.init)
+            // A child is part of its owning workflow tree, not another badge item.
+            let known = Set(mapped.map(\.id))
+            rows = mapped.filter { $0.rootID == $0.id || !known.contains($0.rootID) }.map { row in
+                let descendants = mapped.filter { $0.rootID == row.id && $0.id != row.id }
+                guard let attention = descendants.first(where: \.needsAttention) ?? descendants.first(where: \.isActive),
+                      attention.needsAttention || !row.isActive else { return row }
+                return WorkflowMenuBarRow(["workflow_run_id": .string(row.id), "name": .string(row.name),
+                    "status": .string(attention.status), "attention_reason": .string("\(attention.name): \(attention.detail)"),
+                    "settling": .bool(row.isSettling)]) ?? row
+            }
             errorText = nil
         } catch {
             guard !Task.isCancelled, token == nil || token == generation else { return }

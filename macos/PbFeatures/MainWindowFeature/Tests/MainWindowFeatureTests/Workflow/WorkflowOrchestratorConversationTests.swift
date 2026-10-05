@@ -67,3 +67,45 @@ extension WorkflowOrchestratorConversationTests {
         #expect(WorkflowOrchestratorConversation.conversations(tasks).count == 2)
     }
 }
+
+extension WorkflowOrchestratorConversationTests {
+    @Test func givenChildReusingOwnerSession_whenGrouped_thenOneConversationIncludesBothRuns() throws {
+        // given
+        let owner = try task("owner", minute: 0)
+        var child = try task("child", run: "child-run", minute: 1).raw
+        child["workflow_session_owner_run_id"] = .string("run")
+        let tasks = [owner, try #require(TaskInfo(.object(child)))]
+        // when / then
+        #expect(WorkflowOrchestratorConversation.conversations(tasks).count == 1)
+        #expect(WorkflowOrchestratorConversation.members(containing: "child", in: tasks)?.map(\.taskID) == ["owner", "child"])
+    }
+
+    @Test func givenChildRunWithMonitorOwner_whenMapped_thenControlsStayAtRootAndChildLinksStayScoped() {
+        // given
+        let child = WorkflowRunModel(raw: ["workflow_run_id": .string("child"), "status": .string("paused"),
+            "interaction_owner": .string("monitor"), "parent_workflow_run_id": .string("parent"),
+            "root_workflow_run_id": .string("root"), "orchestrator_session_owner_run_id": .string("root"),
+            "activations": .array([.object(["invocation": .object(["child_workflow_run_id": .string("grandchild")])])])])
+        // when / then
+        #expect(!child.allowsMonitorControl)
+        #expect(child.parentRunID == "parent")
+        #expect(child.rootRunID == "root")
+        #expect(child.sessionOwnerRunID == "root")
+        #expect(child.childRunIDs == ["grandchild"])
+    }
+}
+
+extension WorkflowOrchestratorConversationTests {
+    @Test func givenCompletedChildWhileRootRunning_whenMessageEligibilityChecked_thenDirectControlStaysBlocked() throws {
+        // given
+        var raw = try task("child", run: "child-run", minute: 0).raw
+        raw["workflow_status"] = .string("completed")
+        raw["workflow_settling"] = .bool(false)
+        raw["workflow_tree_status"] = .string("running")
+        raw["workflow_tree_settling"] = .bool(false)
+        // when / then
+        #expect(WorkflowNodePresentation.blocksDirectMessages(try #require(TaskInfo(.object(raw)))))
+        raw["workflow_tree_status"] = .string("completed")
+        #expect(!WorkflowNodePresentation.blocksDirectMessages(try #require(TaskInfo(.object(raw)))))
+    }
+}

@@ -51,7 +51,7 @@ extension SidebarVM {
     /// start time sorts last, ties broken by id), then flattens every entry into items. Empty
     /// buckets are omitted.
     func bucketedSections(trees: [ConversationNode], groups: [ParallelGroup], forcedExpandedIDs: Set<String>) -> [SidebarSection] {
-        let entries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group) + filteredWorkflowRuns().map(SidebarEntry.workflow)
+        let entries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group) + workflowRootRuns().map(SidebarEntry.workflow)
         let now = currentDate()
         var buckets: [SidebarSection.Bucket: [SidebarEntry]] = [:]
         for entry in entries {
@@ -62,6 +62,12 @@ extension SidebarVM {
             let ordered = bucketEntries.sorted(by: Self.newestFirst)
             return SidebarSection(bucket: bucket, items: ordered.flatMap { items(for: $0, forcedExpandedIDs: forcedExpandedIDs) })
         }
+    }
+
+    private func workflowRootRuns() -> [SidebarWorkflowRun] {
+        let runs = filteredWorkflowRuns()
+        let ids = Set(runs.map(\.id))
+        return runs.filter { $0.parentRunID == nil || !ids.contains($0.parentRunID ?? "") }
     }
 
     private func bucket(for entry: SidebarEntry, now: Date) -> SidebarSection.Bucket {
@@ -76,7 +82,7 @@ extension SidebarVM {
         case .group(let group):
             [.group(group)] + (groupConversations(group).count > 1 && expandedExecutionParents.contains(group.id) ? executionRows(groupChildren(group.name)) : [])
         case .workflow(let run):
-            [.workflow(workflowRow(run))] + (expandedExecutionParents.contains("workflow:\(run.id)") ? executionRows(workflowChildren(run.id)) : [])
+            workflowTreeItems(run)
         }
     }
 

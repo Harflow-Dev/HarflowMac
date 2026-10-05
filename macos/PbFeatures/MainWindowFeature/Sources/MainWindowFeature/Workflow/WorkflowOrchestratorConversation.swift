@@ -9,6 +9,7 @@ enum WorkflowOrchestratorConversation {
         guard let selected = tasks.first(where: { $0.taskID == id }) else { return nil }
         let lineage = Lineage.conversation(containing: id, in: tasks)?.members ?? [selected]
         let runID = selected.raw["workflow_run_id"]?.stringValue
+        let ownerID = selected.raw["workflow_session_owner_run_id"]?.stringValue ?? runID
         guard runID != nil || lineage.contains(where: { $0.group != nil }) else { return nil }
         guard let session = selected.sessionID, !session.isEmpty, selected.backend != "unknown" else { return [selected] }
         let role = selected.raw["workflow_role"]?.stringValue ?? (selected.raw["workflow_builder"]?.boolValue == true ? "builder" : "")
@@ -18,7 +19,8 @@ enum WorkflowOrchestratorConversation {
             guard ["orchestrator", "builder", "node"].contains(role), role != "node" || nodeID != nil else { return [selected] }
             candidates = tasks.filter {
                 let otherRole = $0.raw["workflow_role"]?.stringValue ?? ($0.raw["workflow_builder"]?.boolValue == true ? "builder" : "")
-                return $0.raw["workflow_run_id"]?.stringValue == runID && otherRole == role
+                let otherOwner = $0.raw["workflow_session_owner_run_id"]?.stringValue ?? $0.raw["workflow_run_id"]?.stringValue
+                return (role == "orchestrator" ? otherOwner == ownerID : $0.raw["workflow_run_id"]?.stringValue == runID) && otherRole == role
                     && (role != "node" || $0.raw["workflow_node_id"]?.stringValue == nodeID)
             }
         } else {

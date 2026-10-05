@@ -17,7 +17,7 @@ extension SidebarVM {
             }
         }
         for task in latestTasks {
-            if let runID = task.raw["workflow_run_id"]?.stringValue { owners[task.taskID] = runID }
+            if let runID = task.raw["workflow_session_owner_run_id"]?.stringValue ?? task.raw["workflow_run_id"]?.stringValue { owners[task.taskID] = runID }
         }
         var changed = true
         while changed {
@@ -72,18 +72,28 @@ extension SidebarVM {
     }
 
     func expandExecutionParent(of taskID: String) {
-        if let parent = executionParent(of: taskID) { expandedExecutionParents.insert(parent) }
+        if let parent = executionParent(of: taskID) {
+            expandedExecutionParents.insert(parent)
+            var runID = workflowTaskOwners[taskID]
+            var visited: Set<String> = []
+            while let id = runID, visited.insert(id).inserted,
+                  let parentID = workflowRuns.first(where: { $0.id == id })?.parentRunID {
+                expandedExecutionParents.insert("workflow:\(parentID)")
+                runID = parentID
+            }
+        }
     }
 
     func isExecutionParentExpanded(_ id: String) -> Bool { expandedExecutionParents.contains(id) }
 
-    func executionRows(_ tasks: [TaskInfo]) -> [SidebarItem] {
+    func executionRows(_ tasks: [TaskInfo], depth: Int = 1) -> [SidebarItem] {
         let owners = workflowTaskOwners
         let rows = tasks.contains(where: { owners[$0.taskID] != nil }) ? tasks
             : WorkflowOrchestratorConversation.conversations(tasks).compactMap { WorkflowOrchestratorConversation.representative($0.members) }
         return rows.enumerated().map { index, task in
             .task(TaskRowModel(id: task.taskID, backend: task.backend, title: useCase.title(task.taskID), status: task.status,
-                               repoName: Format.repoName(task.repoPath), ageText: Format.age(task.startedAt), detailLabel: workflowChildLabel(task), indent: 1,
+                               repoName: Format.repoName(task.repoPath), ageText: Format.age(task.startedAt),
+                               detailLabel: workflowChildLabel(task), indent: depth,
                                startedAt: task.startedAt, durationSeconds: task.durationSeconds,
                                guides: [index == rows.count - 1 ? .last : .branch]))
         }

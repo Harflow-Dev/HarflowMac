@@ -67,6 +67,7 @@ private struct PreviewWorkflowRouting: WorkflowRouting {
     func selectTask(_: String) {}
     func didSaveWorkflow(name _: String) {}
     func openWorkflowEditor(name _: String?) {}
+    func openWorkflowRun(id _: String) {}
 }
 
 #Preview("Workflow editor") { WorkflowView(WorkflowPreview.make()).frame(width: 1200, height: 700) }

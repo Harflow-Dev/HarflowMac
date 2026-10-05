@@ -52,7 +52,8 @@ enum WorkflowBuilderPresentation {
               let nodes = object["nodes"]?.arrayValue, !nodes.isEmpty,
               let connections = object["connections"]?.arrayValue else { return false }
         return nodes.allSatisfy { node in
-            node["id"]?.stringValue != nil && ["start", "agent", "join", "parallel_start", "parallel_end", "end"].contains(node["type"]?.stringValue ?? "agent")
+            node["id"]?.stringValue != nil
+                && ["start", "agent", "workflow", "join", "parallel_start", "parallel_end", "end"].contains(node["type"]?.stringValue ?? "agent")
         } && connections.allSatisfy { edge in edge["source"]?.stringValue != nil && edge["target"]?.stringValue != nil }
     }
 

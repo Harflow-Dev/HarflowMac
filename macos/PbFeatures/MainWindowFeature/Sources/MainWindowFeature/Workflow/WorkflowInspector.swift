@@ -16,6 +16,8 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                         parallelEditor(node)
                     } else if let run = viewModel.selectedRun, !run.isBuilder {
                         nodeHistory(node)
+                    } else if node.type == "workflow" {
+                        workflowNodeEditor(node).disabled(viewModel.selectedRun != nil || viewModel.isBusy)
                     } else if node.type == "start" {
                         workflowEditor.disabled(viewModel.selectedRun != nil)
                     } else {
@@ -109,6 +111,79 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
             Text("Disable both for a brief result without replacing the run's existing plan or task list.")
                 .font(.pb(.secondary))
 .foregroundStyle(Color.secondaryText)
+        }
+    }
+
+    private func workflowNodeEditor(_ node: WorkflowNodeModel) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                SectionLabel(text: "Run workflow")
+                Spacer()
+                Button(role: .destructive) { viewModel.deleteSelected() } label: { Image(systemName: "trash") }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Delete step")
+            }
+            TextField("Step name", text: nodeString(node, "title")).textFieldStyle(.roundedBorder)
+            Picker("Saved workflow", selection: Binding(get: { node.workflowID }, set: { id in
+                viewModel.updateNode(node.id, key: "workflow_ref", value: .object(["workflow_id": .string(id)]))
+                viewModel.updateNode(node.id, key: "workflow_name", value: .string(viewModel.workflows.first { $0.workflowID == id }?.id ?? ""))
+            })) {
+                Text("Select workflow").tag("")
+                if !node.workflowID.isEmpty, !viewModel.workflows.contains(where: { $0.workflowID == node.workflowID }) {
+                    Text("Unavailable workflow").tag(node.workflowID)
+                }
+                ForEach(viewModel.workflows.filter { !$0.workflowID.isEmpty }) { record in
+                    Text(record.id).tag(record.workflowID)
+                }
+            }
+            Picker("Orchestrator mode", selection: nodeString(node, "orchestrator_mode", default: "child")) {
+                Text("Child orchestrator").tag("child")
+                Text("Current orchestrator").tag("current")
+            }
+            Text(node.orchestratorMode == "current"
+                ? "The current orchestrator directs the child's nodes in its own workflow boundary."
+                : "The child uses its saved orchestrator and its own planning context.")
+                .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+            SectionLabel(text: "Assignment guidance")
+            TextEditor(text: nodeString(node, "instructions"))
+                .font(.pb(.body))
+.frame(minHeight: 100)
+                .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
+                .accessibilityLabel("Assignment guidance")
+            Toggle("Optional", isOn: Binding(get: { node.isOptional }, set: {
+                viewModel.updateNode(node.id, key: "optional", value: .bool($0))
+            }))
+            Text("Optional branches follow the workflow's failure safety rules.").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+            timeoutSetting(node)
+            Stepper("Attempts per visit: \(node.raw["max_attempts"]?.intValue ?? 3)", value: Binding(get: {
+                viewModel.selectedNode?.raw["max_attempts"]?.intValue ?? 3
+            }, set: { viewModel.updateNode(node.id, key: "max_attempts", value: .number(Double($0))) }), in: 1 ... 10000)
+            savedWorkflowAccess
+            Text("Harness, access, network and session settings remain owned by the saved child workflows.")
+                .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+            if let message = viewModel.validationMessage { Text(message).font(.pb(.secondary)).foregroundStyle(Color.failedRed) }
+            nextPathHint(node)
+        }.font(.pb(.body))
+    }
+
+    private var savedWorkflowAccess: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Workflow tree access requirements")
+            if let access = viewModel.validationDependencies["access"]?.objectValue {
+                ForEach(access.keys.sorted(), id: \.self) { id in
+                    let requirement = access[id]
+                    let label = viewModel.validationDependencies["workflows"]?[id]?["name"]?.stringValue ?? id
+                    let freedom = WorkflowAccess.title(requirement?["max_freedom"]?.stringValue ?? "read_only")
+                    let network = requirement?["network"]?.boolValue == true ? " · Network" : ""
+                    Text("\(label): \(freedom)\(network)")
+                        .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+                }
+            } else {
+                Text("Select a saved workflow to validate its full dependency tree.").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+            }
         }
     }
 

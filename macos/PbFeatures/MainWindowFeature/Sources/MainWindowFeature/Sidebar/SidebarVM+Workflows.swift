@@ -21,6 +21,7 @@ struct SidebarWorkflowRun {
     let raw: [String: JSONValue]
     var id: String { raw["workflow_run_id"]?.stringValue ?? "" }
     var name: String { raw["name"]?.stringValue ?? "Workflow" }
+    var parentRunID: String? { raw["parent_workflow_run_id"]?.stringValue ?? raw["parent_link"]?["workflow_run_id"]?.stringValue }
     var startedAt: Date? { raw["created_at"]?.doubleValue.map(Date.init(timeIntervalSince1970:)) }
     var isActive: Bool {
         raw["settling"]?.boolValue == true
@@ -88,7 +89,7 @@ extension SidebarVM {
                 "repo_path": .string(task.repoPath),
                 "created_at": .number(task.startedAt?.timeIntervalSince1970 ?? 0)]))
         }
-        return runs.filter { run in
+        let matching = runs.filter { run in
             guard run.raw["kind"]?.stringValue != "builder" else { return false }
             let text = "\(run.name) \(run.id) \(run.raw["repo_path"]?.stringValue ?? "") \(run.raw["prompt"]?.stringValue ?? "")"
             let declaredBackends = Set(run.raw["backends"]?.arrayValue?.compactMap(\.stringValue) ?? [])
@@ -97,6 +98,29 @@ extension SidebarVM {
 .union(workflowChildren(run.id).map(\.backend))
             return (query.isEmpty || text.lowercased().contains(query)) && (selectedBackend == "all" || backends.contains(selectedBackend))
         }
+        var visible = Set(matching.map(\.id))
+        for run in matching {
+            var parent = run.parentRunID
+            var visited: Set<String> = [run.id]
+            while let id = parent, visited.insert(id).inserted, let ancestor = runs.first(where: { $0.id == id }) {
+                visible.insert(id)
+                parent = ancestor.parentRunID
+            }
+        }
+        return runs.filter { visible.contains($0.id) }
+    }
+
+    func workflowTreeItems(_ run: SidebarWorkflowRun, depth: Int = 0, visited: Set<String> = []) -> [SidebarItem] {
+        guard !visited.contains(run.id) else { return [] }
+        let runs = filteredWorkflowRuns()
+        let children = runs.filter { $0.parentRunID == run.id }
+        let expanded = expandedExecutionParents.contains("workflow:\(run.id)") || !searchQuery.isEmpty || selectedBackend != "all"
+        let row = workflowRow(run, depth: depth, expanded: expanded)
+        guard expanded else { return [.workflow(row)] }
+        var seen = visited
+        seen.insert(run.id)
+        return [.workflow(row)] + executionRows(workflowChildren(run.id), depth: depth + 1)
+            + children.flatMap { workflowTreeItems($0, depth: depth + 1, visited: seen) }
     }
 
     private func workflowBackends(_ definition: [String: JSONValue]) -> Set<String> {
@@ -108,14 +132,15 @@ extension SidebarVM {
         })
     }
 
-    func workflowRow(_ run: SidebarWorkflowRun) -> TaskRowModel {
+    func workflowRow(_ run: SidebarWorkflowRun, depth: Int = 0, expanded: Bool? = nil) -> TaskRowModel {
         let rawStatus = run.raw["status"]?.stringValue ?? "unknown"
         let specialStatus = ["paused", "needs_input", "needs_attention", "starting", "cancelling"].contains(rawStatus)
         let status: TaskStatus = run.raw["settling"]?.boolValue == true ? .other("Settling") : specialStatus
             ? .other(rawStatus.replacingOccurrences(of: "_", with: " ").capitalized) : TaskStatus(rawStatus)
         return TaskRowModel(id: run.id, backend: "workflow", title: run.name, status: status,
                             repoName: Format.repoName(run.raw["repo_path"]?.stringValue ?? ""), ageText: Format.age(run.startedAt),
-                            subTaskSummary: run.raw["attention_reason"]?.stringValue, startedAt: run.startedAt,
-                            hasChildren: !workflowChildren(run.id).isEmpty, isExpanded: expandedExecutionParents.contains("workflow:\(run.id)"))
+                            indent: depth, subTaskSummary: run.raw["attention_reason"]?.stringValue, startedAt: run.startedAt,
+                            hasChildren: !workflowChildren(run.id).isEmpty || workflowRuns.contains { $0.parentRunID == run.id },
+                            isExpanded: expanded ?? expandedExecutionParents.contains("workflow:\(run.id)"))
     }
 }

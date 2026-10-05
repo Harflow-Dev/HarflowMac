@@ -120,6 +120,8 @@ extension WorkflowVM {
         pendingEditorName = name
     }
 
+    func openRun(_ id: String) { routing.openWorkflowRun(id: id) }
+
     func openWorkflowEditor(_ name: String) { routing.openWorkflowEditor(name: name) }
 
 }

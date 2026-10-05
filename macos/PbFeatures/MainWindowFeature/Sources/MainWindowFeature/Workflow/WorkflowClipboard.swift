@@ -59,6 +59,7 @@ enum WorkflowClipboard {
             return .object(raw)
         }
         var result = definition
+        if originals.contains(where: { $0.type == "workflow" }) { result["routing_mode"] = .string("explicit") }
         result["nodes"] = .array((definition["nodes"]?.arrayValue ?? []) + copies)
         result["connections"] = .array((definition["connections"]?.arrayValue ?? []) + edges)
         return (result, Set(mapping.values))

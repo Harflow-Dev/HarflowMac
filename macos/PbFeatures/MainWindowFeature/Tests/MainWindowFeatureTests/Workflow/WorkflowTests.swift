@@ -551,3 +551,19 @@ import Testing
     }
 
 }
+
+extension WorkflowTests {
+    @Test func givenChildLink_whenOpened_thenCoordinatorReceivesRunDestination() {
+        // given
+        let useCase = MockWorkflowUseCase()
+        given(useCase).backendIDs.willReturn(["codex"])
+        let routing = MockWorkflowRouting()
+        given(routing).openWorkflowRun(id: .any).willReturn()
+        let sut = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,
+            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+        // when
+        sut.openRun("child")
+        // then
+        verify(routing).openWorkflowRun(id: .value("child")).called(1)
+    }
+}

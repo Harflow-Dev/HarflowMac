@@ -99,3 +99,36 @@ extension WorkflowMenuBarStatusVMTests {
         #expect(settling.statusLabel == "Settling")
     }
 }
+
+extension WorkflowMenuBarStatusVMTests {
+    @Test func givenChildQuestion_whenRefreshed_thenOneRootBadgeShowsChildAttention() async {
+        // given
+        let useCase = MockWorkflowMenuBarUseCase()
+        var child = run("child", status: "needs_input")
+        child["root_workflow_run_id"] = .string("root")
+        child["attention_reason"] = .string("Choose an option")
+        given(useCase).runs().willReturn([run("root", status: "paused"), child])
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase)
+        // when
+        await sut.refresh()
+        // then
+        #expect(sut.rows.map(\.id) == ["root"])
+        #expect(sut.activeCount == 1)
+        #expect(sut.attentionCount == 1)
+        #expect(sut.rows.first?.detail == "child: Choose an option")
+    }
+
+    @Test func givenCompletedRootWithSettlingChild_whenRefreshed_thenTreeRemainsActive() async {
+        // given
+        let useCase = MockWorkflowMenuBarUseCase()
+        var child = run("child", status: "running")
+        child["root_workflow_run_id"] = .string("root")
+        given(useCase).runs().willReturn([run("root", status: "completed"), child])
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase)
+        // when
+        await sut.refresh()
+        // then
+        #expect(sut.activeCount == 1)
+        #expect(sut.rows.count == 1)
+    }
+}

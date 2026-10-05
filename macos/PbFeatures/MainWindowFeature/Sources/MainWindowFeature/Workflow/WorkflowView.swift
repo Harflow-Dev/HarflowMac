@@ -25,6 +25,7 @@ protocol WorkflowViewModel: ViewModel {
     var initialLoadFailed: Bool { get }
     var errorText: String? { get }
     var validationMessage: String? { get }
+    var validationDependencies: [String: JSONValue] { get }
     var repo: String { get set }
     var prompt: String { get set }
     var freedom: String { get set }
@@ -53,6 +54,7 @@ protocol WorkflowViewModel: ViewModel {
     func didDisappear()
     func selectWorkflow(_ workflow: WorkflowRecord)
     func selectRun(_ run: WorkflowRunModel)
+    func openRun(_ id: String)
     func newWorkflow()
     func openWorkflowEditor(_ name: String)
     func discardChanges()
@@ -174,6 +176,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 ProgressView().controlSize(.small)
             }
             if let run = viewModel.selectedRun {
+                if let parentID = run.parentRunID {
+                    Button("Open parent") { viewModel.openRun(parentID) }
+                        .buttonStyle(QuietButtonStyle())
+                }
                 if run.isBuilder {
                     if run.status == "completed" {
                         Button(run.isBuilderProposal ? "Apply proposal" : "Open generated draft") {
@@ -310,7 +316,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             onPaste: viewModel.pasteNodes,
             canUndo: viewModel.canUndo,
             onUndo: viewModel.undoWorkflowEdit,
-            onRename: { viewModel.updateNode($0, key: "title", value: .string($1)) }
+            onRename: { viewModel.updateNode($0, key: "title", value: .string($1)) },
+            childRunID: { viewModel.selectedRun?.latestChildRunID(for: $0) },
+            onOpenRun: viewModel.openRun
         )
     }
 
@@ -379,6 +387,28 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     @ViewBuilder private var runSidebar: some View {
         if let run = viewModel.selectedRun {
             VStack(spacing: 0) {
+                if run.parentRunID != nil {
+                    Text("Child workflow · Plan and checklist belong to this run").font(.pb(.caption)).foregroundStyle(Color.secondaryText).padding(16)
+                }
+                if run.sessionOwnerRunID != run.id {
+                    Button("Open owning orchestrator") { viewModel.openRun(run.sessionOwnerRunID) }
+                        .buttonStyle(QuietButtonStyle())
+.padding(.horizontal, 16)
+                }
+                ForEach(run.childRunIDs, id: \.self) { childID in
+                    Button("Open \(run.childRunLabel(childID))") { viewModel.openRun(childID) }
+                        .buttonStyle(QuietButtonStyle())
+.padding(.horizontal, 16)
+                }
+                if let assignment = run.raw["prompt"]?.stringValue, !assignment.isEmpty {
+                    DisclosureGroup(run.parentRunID == nil ? "Original request" : "Assignment for this child") {
+                        ScrollView {
+                            ReadingMarkdownView(text: assignment).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
+                        }.frame(maxHeight: 240)
+                    }
+.font(.pb(.secondary, weight: .medium))
+.padding(16)
+                }
                 WorkflowRunPlan(run: run).padding(16)
                 if let plan = run.technicalPlan {
                     DisclosureGroup("Technical plan") {
@@ -461,3 +491,9 @@ struct WorkflowActivityColumns: View {
     WorkflowActivityColumns(columns: ParallelViewModelMock().columns, selectedTaskID: nil).frame(width: 1000, height: 500)
 }
 #endif
+
+// MARK: - WorkflowViewModel defaults
+
+extension WorkflowViewModel {
+    var validationDependencies: [String: JSONValue] { [:] }
+}
