@@ -23,6 +23,9 @@ struct TaskHistoryPaginationTests {
         let runner = StubProcessRunner { call in
             if call.arguments.contains("--active-only") { return .success(response([])) }
             if call.arguments.contains("--cursor=page2") { return .success(response(Array(catalog[100 ..< 200]), cursor: "page3")) }
+            if let ids = call.arguments.first(where: { $0.hasPrefix("--task-ids=") }) {
+                return .success(response(ids.dropFirst("--task-ids=".count).split(separator: ",").map(String.init)))
+            }
             return .success(response(Array(catalog.prefix(100)), cursor: "page2"))
         }
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
@@ -110,6 +113,7 @@ struct TaskHistoryPaginationTests {
         let runner = StubProcessRunner { call in
             if call.arguments.contains("--active-only") { return .success(response([])) }
             if call.arguments.contains("--cursor=page2") { return .success(response(["older"], cursor: "page3")) }
+            if call.arguments.contains("--task-ids=older") { return .success(response(["older"])) }
             if blockPoll.value { entered.mutate { $0 = true }; gate.waitSync() }
             return .success(response(["newest"], cursor: "page2"))
         }

@@ -485,7 +485,9 @@ final class SidebarVM: SidebarViewModel {
         selection = normalized(selection)
         sections = bucketedSections(
             trees: matched.running + matched.recent,
-            groups: Lineage.sections(latestTasks, matches: matches).parallel,
+            // A catalog without group metadata cannot have parallel groups. Avoid rebuilding
+            // the entire legacy task tree after the conversation index already supplied its rows.
+            groups: latestTasks.contains(where: { $0.group != nil }) ? Lineage.sections(latestTasks, matches: matches).parallel : [],
             forcedExpandedIDs: forcedExpandedIDs
         )
 

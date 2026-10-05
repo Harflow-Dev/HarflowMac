@@ -3,8 +3,6 @@ import Foundation
 import MonitorCore
 import PbUtilities
 
-// MARK: - TaskListRepositoryImpl
-
 public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendable {
 
     private let toolEnvironment: any ToolEnvironmentRepository
@@ -18,10 +16,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     @Subjected private var hasListedValue = false
     @Subjected private var titlesValue: [String: String] = [:]
 
-    // Test seams (internal, not public API): each counts completed passes of an otherwise
-    // fire-and-forget background unit, so a test can await one deterministically instead of a fixed
-    // sleep that races a slow CI runner. See `mergeTitles(_:)` and `startWatching()`'s poll closure,
-    // their only writers.
+    // Test seams count completed background passes so tests can await completion instead of sleeping.
     @Subjected private(set) var titleLoadPassCount = 0
     @Subjected private(set) var safetyPollEvaluationCount = 0
     /// Calls that joined a pass already in flight instead of starting one — counted only after the
@@ -48,6 +43,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private var historyInitialized = false
     private var historyRefreshFailed = false
     private var activeRefreshOffset = 0
+    private var terminalRefreshOffset = 0
     private var snapshotRefreshOffset = 0
 
     private let refreshCoordinator = RefreshCoordinator()
@@ -57,13 +53,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private let lastRefreshLock = NSLock()
     private var lastRefreshValue: Date = .distantPast
 
-    /// `lastRefresh` is written from `runOneRefresh()` (reached from `refresh()`, itself called from
-    /// several independent contexts: `start()`'s Task, the throttled-refresh Task, the poll Task,
-    /// `settingsChanged()`) and read from the poll closure's reconcile check, which runs on
-    /// `Scheduling`'s own queue — a different thread than any of the writers. A plain stored `var`
-    /// here is a genuine data race the Swift 6 compiler does not catch (this type is
-    /// `@unchecked Sendable`); a lock-backed computed property closes it the same way `watcher` and
-    /// `titlesValue`'s merge already are.
+    /// Refresh tasks and the safety-poll queue share this timestamp under a lock.
     private var lastRefresh: Date {
         get { lastRefreshLock.lock(); defer { lastRefreshLock.unlock() }; return lastRefreshValue }
         set { lastRefreshLock.lock(); defer { lastRefreshLock.unlock() }; lastRefreshValue = newValue }
@@ -82,8 +72,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         self.finishNotifier = finishNotifier
         self.scheduler = scheduler
     }
-
-    // MARK: Published state
 
     public var tasks: [TaskInfo] { tasksValue }
     public var listError: ToolError? { listErrorValue }
@@ -124,7 +112,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
                 let requiresReconciliation = self.tasksValue.contains {
                     $0.status.isRunning || $0.raw["needs_reconciliation"]?.boolValue == true
                 }
-                if due || requiresReconciliation || self.listErrorValue != nil || !self.watcherActive {
+                if due || requiresReconciliation || self.historyStateValue.bootstrapPending || self.listErrorValue != nil || !self.watcherActive {
                     await self.refresh()
                 }
                 self.countSafetyPollEvaluation()
@@ -235,7 +223,10 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
                     let visible = Set(page.items.map(\.taskID) + activePage.items.map(\.taskID))
                     let stale = nextActiveRefreshBatch(excluding: visible)
                     let updates = stale.isEmpty ? nil : try await client.taskHistoryPage(taskIDs: stale).get()
-                    result = .success(mergeHistory(page, active: activePage, updates: updates))
+                    let terminalIDs = nextTerminalRefreshBatch(excluding: visible)
+                    let terminalPage = terminalIDs.isEmpty ? nil : try await client.taskHistoryPage(taskIDs: terminalIDs).get()
+                    result = .success(mergeHistory(page, active: activePage, updates: updates,
+                                                  terminalPage: terminalPage, terminalIDs: terminalIDs))
                 } catch {
                     result = .failure(error as? ToolError ?? .unreadable(tool: "polybridge-ctl", exitCode: 0, stderr: String(describing: error)))
                 }
@@ -273,10 +264,18 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     public var historyState: HistoryLoadingState { historyStateValue }
     public func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { $historyStateValue.eraseToAnyPublisher() }
 
-    private func mergeHistory(_ page: TaskHistoryPage, active: TaskHistoryPage? = nil, updates: TaskHistoryPage? = nil, advancing: Bool = false) -> [TaskInfo] {
+    private func mergeHistory(_ page: TaskHistoryPage, active: TaskHistoryPage? = nil, updates: TaskHistoryPage? = nil,
+                              terminalPage: TaskHistoryPage? = nil, terminalIDs: [String] = [], advancing: Bool = false) -> [TaskInfo] {
         historyLock.withLock {
+            pruneTerminalHistory(terminalPage, ids: terminalIDs)
             for task in page.items + page.relatedItems + (active?.items ?? []) + (active?.relatedItems ?? [])
                 + (updates?.items ?? []) + (updates?.relatedItems ?? []) { historyTasks[task.taskID] = task }
+            for task in (terminalPage?.items ?? []) + (terminalPage?.relatedItems ?? []) {
+                let current = [historyTasks[task.taskID], relatedTasks[task.taskID]].compactMap(\.self)
+                guard !current.contains(where: { $0.status.isRunning || $0.raw["needs_reconciliation"]?.boolValue == true }) else { continue }
+                if historyTasks[task.taskID] != nil { historyTasks[task.taskID] = task }
+                if relatedTasks[task.taskID] != nil { relatedTasks[task.taskID] = task }
+            }
             let countPage = active?.page ?? page.page
             if !advancing, countPage.countsComplete { totalActiveCount = countPage.totalActiveCount }
             var state = historyStateValue
@@ -287,6 +286,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             if !page.page.bootstrapPending { historyInitialized = true }
             state.bootstrapPending = page.page.bootstrapPending || (active?.page.bootstrapPending ?? false)
             state.historyIncomplete = page.page.historyIncomplete
+            state.authorityIncomplete = page.page.authorityIncomplete
             if !advancing { state.countsComplete = countPage.countsComplete && !page.page.bootstrapPending }
             if advancing { state.error = nil }
             historyStateValue = state
@@ -334,6 +334,39 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         }
     }
 
+    private func pruneTerminalHistory(_ terminalPage: TaskHistoryPage?, ids terminalIDs: [String]) {
+    if let terminalPage, ![terminalPage.page.hasMore, terminalPage.page.bootstrapPending,
+                           terminalPage.page.authorityIncomplete, terminalPage.page.historyIncomplete].contains(true) {
+        let present = Set(terminalPage.items.map(\.taskID))
+        for id in terminalIDs where !present.contains(id) {
+            // A concurrent explicit resolution may have promoted this row to active.
+            let current = [historyTasks[id], relatedTasks[id]].compactMap(\.self)
+            guard !current.isEmpty, current.allSatisfy({ !$0.status.isRunning && $0.raw["needs_reconciliation"]?.boolValue != true }) else { continue }
+            historyTasks.removeValue(forKey: id)
+            relatedTasks.removeValue(forKey: id)
+        }
+    }
+    }
+
+    private func nextTerminalRefreshBatch(excluding ids: Set<String>) -> [String] {
+        historyLock.withLock {
+            let inventory = historyTasks.merging(relatedTasks) { history, related in
+                history.status.isRunning || history.raw["needs_reconciliation"]?.boolValue == true ? history : related
+            }
+            let terminal = inventory.values
+.filter {
+                !$0.status.isRunning && $0.raw["needs_reconciliation"]?.boolValue != true && !ids.contains($0.taskID)
+            }
+.map(\.taskID)
+.sorted()
+            guard !terminal.isEmpty else { terminalRefreshOffset = 0; return [] }
+            let offset = terminalRefreshOffset % terminal.count
+            let batch = Array((Array(terminal[offset...]) + Array(terminal[..<offset])).prefix(100))
+            terminalRefreshOffset = (offset + batch.count) % terminal.count
+            return batch
+        }
+    }
+
     private func nextActiveRefreshBatch(excluding ids: Set<String>) -> [String] {
         historyLock.withLock {
             let active = historyTasks.values
@@ -351,7 +384,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     }
 
     public func loadMoreHistory() async {
-        if historyLock.withLock({ historyRefreshFailed }) {
+        if historyLock.withLock({ historyRefreshFailed || historyStateValue.authorityIncomplete }) {
             await refresh()
             return
         }
@@ -411,10 +444,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         return page
     }
 
-    /// A task started with an explicit `title` carries it in the listing. It replaces any
-    /// prompt-derived entry for that id (unlike `mergeTitles`, where the existing value wins), and
-    /// being present before `loadTitles()` runs it also keeps those ids out of the event-log reads.
-    /// A synchronous helper so the lock is never taken directly inside an `async` context.
+    /// Explicit catalog titles take precedence over prompt-derived titles.
     private func seedExplicitTitles(from listed: [TaskInfo]) {
         var explicit: [String: String] = [:]
         for task in listed {

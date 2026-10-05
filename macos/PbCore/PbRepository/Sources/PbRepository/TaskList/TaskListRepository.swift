@@ -62,6 +62,7 @@ public struct HistoryLoadingState: Equatable, Sendable {
     public var hasMore = false
     public var bootstrapPending = false
     public var historyIncomplete = false
+    public var authorityIncomplete = false
     public var countsComplete = false
     public var isLoading = false
     public var error: ToolError?

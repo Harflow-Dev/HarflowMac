@@ -8,6 +8,7 @@ public struct HistoryPage: Equatable, Sendable {
     public let hasMore: Bool
     public let bootstrapPending: Bool
     public let historyIncomplete: Bool
+    public let authorityIncomplete: Bool
     public let totalActiveRootCount: Int?
     public let totalAttentionRootCount: Int?
     public let countsComplete: Bool
@@ -38,6 +39,7 @@ public struct HistoryPage: Equatable, Sendable {
         self.hasMore = hasMore
         bootstrapPending = bootstrap
         historyIncomplete = raw["history_incomplete"]?.boolValue ?? false
+        authorityIncomplete = raw["authority_incomplete"]?.boolValue ?? false
         countsComplete = (raw["counts_complete"]?.boolValue ?? !bootstrap) && raw["total_active_count"] != .null
         totalActiveRootCount = raw["total_active_root_count"]?.intValue
         totalAttentionRootCount = raw["total_attention_root_count"]?.intValue

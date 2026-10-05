@@ -100,6 +100,30 @@ extension TaskListRepositoryImplTests {
         withExtendedLifetime(sut) {}
     }
 
+    @Test func givenColdHistoryBootstrap_whenSafetyPollFires_thenItAdvancesWithoutActiveTasks() async {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("PbRepoTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let (scheduler, capturedPoll) = makePollCapturingScheduler(now: LockedBox(Date()))
+        let calls = LockedBox(0)
+        let runner = StubProcessRunner { _ in
+            calls.mutate { $0 += 1 }
+            return .success(stdout(#"{"v":5,"result":{"items":[],"next_cursor":null,"has_more":false,"bootstrap_pending":true}}"#))
+        }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(dir.path)
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let sut = makeSUT(toolEnvironment: environment, scheduler: scheduler)
+        sut.start()
+        await waitUntil { capturedPoll.value != nil && sut.historyState.bootstrapPending }
+        let initial = calls.value
+        capturedPoll.value?()
+        await waitUntil { calls.value > initial }
+        #expect(calls.value > initial)
+        #expect(sut.tasks.isEmpty)
+        withExtendedLifetime(sut) {}
+    }
+
     @Test func givenTheSafetyPollFires_whenThereIsAListError_thenItRefreshes() async {
         // given — the very first refresh (inside `start()`) fails, leaving `listError` set, no
         // running tasks (the listing never succeeded), and "now" never advances.

@@ -51,4 +51,14 @@ struct HistoryPageTests {
         #expect(!decoded.page.countsComplete)
         #expect(decoded.page.nextCursor == "next-page")
     }
+
+    @Test func givenAuthorityBlockedReceipt_whenDecoded_thenItDoesNotPretendToBeTransientBootstrap() throws {
+        var page = raw(0)
+        page["authority_incomplete"] = .bool(true)
+        page["history_incomplete"] = .bool(true)
+        let decoded = try #require(HistoryPage(raw: page))
+        #expect(decoded.authorityIncomplete)
+        #expect(decoded.historyIncomplete)
+        #expect(!decoded.bootstrapPending)
+    }
 }

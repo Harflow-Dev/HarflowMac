@@ -192,7 +192,11 @@ struct SidebarView<VM: SidebarViewModel>: View {
 
     private func historyControl(_ source: String, state: HistoryLoadingState, action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            if state.historyIncomplete {
+            if state.authorityIncomplete {
+                Text("History is blocked by a large legacy record. Inspect a known task directly to restore access.")
+                    .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+            } else if state.historyIncomplete {
                 Text("Some large legacy records need direct inspection; history ordering is incomplete.")
                     .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
@@ -201,6 +205,8 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 ProgressView("Loading \(source.lowercased())…")
             } else if let error = state.error {
                 Text(error.message).font(.pb(.caption)).foregroundStyle(Color.failedRed)
+                Button("Retry \(source.lowercased())", action: action)
+            } else if state.authorityIncomplete {
                 Button("Retry \(source.lowercased())", action: action)
             } else if state.bootstrapPending {
                 Text("Preparing \(source.lowercased()) history…").font(.pb(.caption))

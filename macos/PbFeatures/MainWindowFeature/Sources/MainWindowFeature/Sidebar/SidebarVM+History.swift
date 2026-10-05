@@ -101,6 +101,7 @@ extension SidebarVM {
         if !page.bootstrapPending { workflowHistoryInitialized = true }
         workflowHistoryState.bootstrapPending = page.bootstrapPending
         workflowHistoryState.historyIncomplete = page.historyIncomplete
+        workflowHistoryState.authorityIncomplete = page.authorityIncomplete
         workflowHistoryState.error = nil
     }
 
