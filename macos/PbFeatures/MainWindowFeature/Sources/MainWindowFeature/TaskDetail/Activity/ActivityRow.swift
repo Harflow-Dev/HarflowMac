@@ -41,7 +41,7 @@ enum ToolBucket: Equatable, Sendable {
         case "read": self = .read
         case "search": self = .search
         case "shell": self = .shell
-        case "edit", "write": return nil
+        case "edit", "write", "workflow_protocol_error": return nil
         default: self = .other
         }
     }

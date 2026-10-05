@@ -12,6 +12,12 @@ import SwiftEnvironment
 @Mockable
 public protocol TaskListRepository: Sendable {
 
+    var historyState: HistoryLoadingState { get }
+    func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never>
+    func loadMoreHistory() async
+    func resolve(_ id: String) async -> TaskInfo?
+    func conversationPage(sessionID: String, cursor: String?, limit: Int) async throws -> TaskHistoryPage
+
     var tasks: [TaskInfo] { get }
     var listError: ToolError? { get }
     var hasListed: Bool { get }
@@ -49,6 +55,32 @@ public protocol TaskListRepository: Sendable {
     func runningInSubtrees(of ids: [String]) -> [String]
     var runningCount: Int { get }
     var connectionLine: String { get }
+}
+
+public struct HistoryLoadingState: Equatable, Sendable {
+    public var nextCursor: String?
+    public var hasMore = false
+    public var bootstrapPending = false
+    public var historyIncomplete = false
+    public var authorityIncomplete = false
+    public var countsComplete = false
+    public var isLoading = false
+    public var error: ToolError?
+    public init() {}
+}
+
+public extension TaskListRepository {
+    var historyState: HistoryLoadingState { HistoryLoadingState() }
+    func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { Just(historyState).eraseToAnyPublisher() }
+    func loadMoreHistory() async {}
+    func resolve(_ id: String) async -> TaskInfo? { task(id) }
+    func conversationPage(sessionID: String, cursor: String?) async throws -> TaskHistoryPage {
+        try await conversationPage(sessionID: sessionID, cursor: cursor, limit: 100)
+    }
+
+    func conversationPage(sessionID: String, cursor: String?, limit: Int) async throws -> TaskHistoryPage {
+        throw ToolError.unsupportedCommand(tool: "polybridge-ctl", command: "task-list-page", detail: "Conversation pages unavailable")
+    }
 }
 
 // MARK: - NullTaskListRepository

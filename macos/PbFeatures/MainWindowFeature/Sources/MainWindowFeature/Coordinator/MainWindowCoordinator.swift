@@ -42,6 +42,10 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     func buildParallelView(name: String) -> AnyView
     /// Builds the task detail screen for `id`.
     func buildTaskDetailView(id: String) -> AnyView
+    /// Builds the workflow library and execution monitor.
+    func buildWorkflowEditorView(name: String?) -> AnyView
+    /// Builds the monitor for a persisted workflow run.
+    func buildWorkflowRunView(id: String) -> AnyView
 }
 
 // MARK: - PasteboardWriting
@@ -90,6 +94,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     @ObservationIgnored private let selectionSubject = PassthroughSubject<MonitorDestination?, Never>()
     @ObservationIgnored private let isNewSessionPresentedSubject = PassthroughSubject<Bool, Never>()
+    @ObservationIgnored let workflowRunPolling = WorkflowRunPolling()
     @ObservationIgnored private var sidebarVM: SidebarVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
     /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
@@ -122,7 +127,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).
             requestReveal(taskID: id)
-        case .group: selection = destination
+        case .group, .workflow, .newWorkflow, .workflowRun: selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)
         }
@@ -188,9 +193,10 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// The first task of the group's only agent conversation, or `nil` when the group has none or
     /// several (then it is a real parallel run). Membership is read when the view is built.
     nonisolated static func soleConversationID(inGroup name: String, tasks: [TaskInfo]) -> String? {
-        guard let group = Lineage.sections(tasks).parallel.first(where: { $0.name == name }),
-              group.conversations.count == 1 else { return nil }
-        return group.conversations[0].first.taskID
+        guard let group = Lineage.sections(tasks).parallel.first(where: { $0.name == name }) else { return nil }
+        let sessions = WorkflowOrchestratorConversation.conversations(group.conversations.flatMap(\.members))
+        guard sessions.count == 1 else { return nil }
+        return sessions[0].first.taskID
     }
 
     /// A fresh VM every call, keyed by `id` exactly like `buildParallelView(name:)` above: `.id()`
@@ -209,7 +215,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public func buildTaskDetailView(id: String) -> AnyView {
         let useCase = TaskDetailViewRepository()
         let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self)
-        let conversationID = Lineage.conversationID(of: id, in: taskListRepository.tasks)
+        let conversationID = WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID
+            ?? Lineage.conversationID(of: id, in: taskListRepository.tasks)
         return TaskDetailView(vm).id(conversationID).eraseToAnyView()
     }
     
@@ -226,7 +233,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     private func sharedSidebarVM() -> SidebarVM {
         if let sidebarVM { return sidebarVM }
         let useCase = SidebarViewRepository()
-        let newVM = SidebarVM(useCase: useCase, routing: self)
+        let newVM = SidebarVM(useCase: useCase, routing: self, workflowUseCase: useCase)
         sidebarVM = newVM
         return newVM
     }
@@ -288,8 +295,9 @@ extension MainWindowCoordinator: ParallelRouting {
     /// parent", all of Design point 5's non-sidebar reveal triggers besides URL/notification/menu
     /// bar (handled in `handle(path:)` above).
     public func selectTask(_ taskID: String) {
-        selection = .task(taskID)
-        requestReveal(taskID: taskID)
+        let logicalID = WorkflowOrchestratorConversation.members(containing: taskID, in: taskListRepository.tasks)?.first?.taskID ?? taskID
+        selection = .task(logicalID)
+        requestReveal(taskID: logicalID)
     }
 }
 

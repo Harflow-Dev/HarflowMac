@@ -70,10 +70,20 @@ protocol TaskDetailUseCase: Sendable {
     /// Records a durable outcome line for `id` through `TaskActionRepository.setOutcome` (Monitor
     /// piece 3/3's "Copy resume command") — the same channel Cancel/Send/Resume use, so the line
     /// survives a recompute or a leave/revisit, unlike writing the VM's `outcomeMessage` directly.
+    func allowPolybridgeTools(backend: String) async throws -> [String: JSONValue]
     func setOutcome(_ id: String, _ text: String?)
 
     // Events (decision 6)
+    func resolveTask(_ id: String) async -> TaskInfo?
+    func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage?
+    func acquireSummaryLease(_ id: String) -> any EventStreamLease
     func acquireEventLease(_ id: String) -> any EventStreamLease
+    func loadMoreSummaryFiles(_ id: String)
+    func loadMoreEvents(_ id: String)
+    func eventHistory(for id: String) -> EventHistoryState
+    func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never>
+    func eventSummary(for id: String) -> EventSummary
+    func eventSummaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never>
     func events(for id: String) -> [TaskEvent]
     func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never>
     func items(for id: String) -> [TimelineItem]
@@ -86,6 +96,24 @@ protocol TaskDetailUseCase: Sendable {
     func current(for id: String) -> TimelineItem?
     func prompt(for id: String) -> String?
     func eventsPath(for id: String) -> String
+}
+
+extension TaskDetailUseCase {
+    func resolveTask(_ id: String) async -> TaskInfo? { task(id) }
+    func conversationHistory(sessionID _: String, cursor _: String?) async throws -> TaskHistoryPage? { nil }
+    func acquireSummaryLease(_ id: String) -> any EventStreamLease { acquireEventLease(id) }
+    func loadMoreSummaryFiles(_: String) {}
+    func loadMoreEvents(_: String) {}
+    func eventHistory(for _: String) -> EventHistoryState { EventHistoryState() }
+    func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { Just(eventHistory(for: id)).eraseToAnyPublisher() }
+    func eventSummary(for id: String) -> EventSummary {
+        var builder = EventSummaryBuilder()
+        builder.append(events(for: id))
+        builder.setAvailability(eventsAvailability(for: id))
+        return builder.summary
+    }
+
+    func eventSummaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never> { Just(eventSummary(for: id)).eraseToAnyPublisher() }
 }
 
 // MARK: - TaskDetailRouting
@@ -153,6 +181,7 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - Internal Properties (shared across extensions)
 
+    @ObservationIgnored let isWorkflowBuilder: Bool
     @ObservationIgnored let useCase: any TaskDetailUseCase
     @ObservationIgnored let routing: any TaskDetailRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
@@ -166,6 +195,15 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// One event lease per conversation member (Parallel's own pattern — decision 6), acquired as
     /// members appear and released as they drop out, so a follow-up's own turn tails from the
     /// moment it exists.
+    @ObservationIgnored var conversationCursor: String?
+    @ObservationIgnored var conversationHasMore = false
+    @ObservationIgnored var conversationHistoryIncomplete = false
+    @ObservationIgnored var conversationLoading = false
+    @ObservationIgnored var conversationError: String?
+    @ObservationIgnored var conversationLookup: Task<Void, Never>?
+    @ObservationIgnored var loadedActivityMembers: Set<String> = []
+    @ObservationIgnored var summaryLeases: [String: any EventStreamLease] = [:]
+    @ObservationIgnored var summaryCancellables: [String: AnyCancellable] = [:]
     @ObservationIgnored var leases: [String: any EventStreamLease] = [:]
     @ObservationIgnored var memberCancellables: [String: [AnyCancellable]] = [:]
     /// Kept only for Summary/"Files the agent edited" (`+Summary.swift`), which still pairs
@@ -204,7 +242,8 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - Init
 
-    init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting) {
+    init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting, isWorkflowBuilder: Bool = false) {
+        self.isWorkflowBuilder = isWorkflowBuilder
         self.taskID = taskID
         self.currentTaskID = taskID
         self.identityTaskID = taskID
@@ -219,16 +258,25 @@ final class TaskDetailVM: TaskDetailViewModel {
         // task, and a publisher requested before that is an empty one that never updates.
         recomputeMembersAndLeases()
         subscribeIfNeeded()
+        loadConversationHistory(initial: true)
     }
 
     /// Idempotent teardown (root AGENTS.md rule 7): releases every member's event lease, cancels
     /// every subscription, and resets `didSubscribe` so a reappearing screen subscribes and
     /// re-acquires leases fresh.
     func didDisappear() {
+        conversationLookup?.cancel()
+        conversationLookup = nil
+        conversationLoading = false
+        conversationHistoryIncomplete = false
         cancellables.removeAll()
         memberCancellables.removeAll()
         for lease in leases.values { lease.release() }
         leases.removeAll()
+        for lease in summaryLeases.values { lease.release() }
+        summaryLeases.removeAll()
+        summaryCancellables.removeAll()
+        loadedActivityMembers.removeAll()
         eventsByMember.removeAll()
         itemsByMember.removeAll()
         eventsAvailabilityByMember.removeAll()
@@ -269,8 +317,13 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// `identityTaskID` from the resolved conversation's own first member, so this keeps tracking
     /// the SAME conversation the sidebar does, even when it was opened through a later member.
     func recomputeMembersAndLeases() {
-        var members = useCase.conversationMembers(of: identityTaskID)
-        if members.isEmpty, let survivor = useCase.oldestSurvivor(among: Set(lastKnownMemberIDsOldestFirst)) {
+        let resolvedMembers = useCase.conversationMembers(of: identityTaskID)
+        let requested = resolvedMembers.first { $0.taskID == taskID }
+        let isLogicalWorkflow = requested?.raw["workflow_role"]?.stringValue == "orchestrator"
+            || requested?.raw["workflow_node_id"]?.stringValue != nil
+        let isExecutionChild = !isWorkflowBuilder && !isLogicalWorkflow && requested?.raw["workflow_run_id"]?.stringValue != nil
+        var members = isExecutionChild ? [requested].compactMap(\.self) : resolvedMembers
+        if !isExecutionChild, members.isEmpty, let survivor = useCase.oldestSurvivor(among: Set(lastKnownMemberIDsOldestFirst)) {
             members = useCase.conversationMembers(of: survivor)
         }
         if !members.isEmpty {
@@ -278,7 +331,18 @@ final class TaskDetailVM: TaskDetailViewModel {
             identityTaskID = members[0].taskID
         }
         conversationMembers = members
-        let newIDs = Set(members.map(\.taskID))
+        if let newest = members.last { loadedActivityMembers.insert(newest.taskID) }
+        let allIDs = Set(members.map(\.taskID))
+        for member in members where summaryLeases[member.taskID] == nil {
+            let id = member.taskID
+            summaryLeases[id] = useCase.acquireSummaryLease(id)
+            summaryCancellables[id] = useCase.eventSummaryPublisher(for: id).receive(on: DispatchQueue.main).sink { [weak self] _ in self?.recompute() }
+        }
+        for id in Set(summaryLeases.keys).subtracting(allIDs) {
+            summaryLeases.removeValue(forKey: id)?.release()
+            summaryCancellables[id] = nil
+        }
+        let newIDs = allIDs.intersection(loadedActivityMembers)
         let oldIDs = Set(leases.keys)
         for id in newIDs.subtracting(oldIDs) { acquireMemberLease(id) }
         for id in oldIDs.subtracting(newIDs) { releaseMemberLease(id) }
@@ -309,7 +373,8 @@ final class TaskDetailVM: TaskDetailViewModel {
         task = detail
         currentTaskID = detail.taskID
         let firstMember = conversationMembers[0]
-        turnsText = conversationMembers.count > 1 ? "\(conversationMembers.count) turns" : nil
+        let historyKind = detail.raw["workflow_role"]?.stringValue == "orchestrator" ? "decisions" : "turns"
+        turnsText = conversationMembers.count > 1 ? "\(conversationMembers.count) \(historyKind)" : nil
 
         title = useCase.title(firstMember.taskID)
         // The conversation's OWN placement in the sidebar's tree (breadcrumbs) — always the FIRST
@@ -340,7 +405,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             spawnedByBannerText = nil
         }
 
-        canTakeover = !isBusy && detail.sessionID != nil
+        canTakeover = !isWorkflowBuilder && WorkflowNodePresentation.allowsTerminal(detail) && !isBusy && detail.sessionID != nil
         takeoverButtonLabel = detail.status.isRunning ? "Take over" : "Continue in terminal"
         takeoverHelp = detail.sessionID == nil
         ? "The task has not reported a session yet."
@@ -350,12 +415,12 @@ final class TaskDetailVM: TaskDetailViewModel {
         } else {
             openParentTaskID = nil
         }
-        canCancel = detail.status.isRunning
+        canCancel = !isWorkflowBuilder && detail.status.isRunning
 
         // Read from the snapshot explicitly, not `detail` (which came from `detail(_:)` and can
         // briefly be the brief listing when statuses disagree — that shape has no `resume_command`
         // at all).
-        resumeCommand = useCase.snapshot(currentTaskID)?.resumeCommand
+        resumeCommand = isWorkflowBuilder ? nil : useCase.snapshot(currentTaskID)?.resumeCommand
         copyResumeCommandHelp = detail.status.isRunning
         ? "Copies a command that resumes this session in your own terminal. This task is still "
         + "running — resuming it now puts two writers on one conversation; prefer Take over."

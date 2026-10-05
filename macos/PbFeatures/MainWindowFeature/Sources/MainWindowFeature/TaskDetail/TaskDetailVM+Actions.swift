@@ -36,6 +36,7 @@ extension TaskDetailVM {
     /// round 2, finding 1): if the conversation moved on while the dialog was open, this refuses
     /// rather than silently taking over whatever the new current member turned out to be.
     func didTapTakeover() {
+        guard !isWorkflowBuilder, WorkflowNodePresentation.allowsTerminal(task) else { return }
         guard let task else { return }
         let dialogTaskID = currentTaskID
         let isRunning = task.status.isRunning
@@ -65,6 +66,7 @@ extension TaskDetailVM {
     /// captures the task this dialog's own copy described, and the confirm action refuses rather
     /// than cancelling whatever the conversation's new current member is if it moved on first.
     func didTapCancel() {
+        guard !isWorkflowBuilder else { return }
         let dialogTaskID = currentTaskID
         var description = "polybridge stops the run and, best-effort, every live sub-task it started."
         let notCancelled = notCancelledByThisTitles()
@@ -141,6 +143,19 @@ extension TaskDetailVM {
     /// composer is disabled with the copy of the specific `MessageBoxDisabledReason` (settled plan
     /// D7) — a taken-over running task no longer claims it "was not started with live input".
     func recomputeMessageBox(task: TaskInfo) {
+        if isWorkflowBuilder {
+            messageBoxModel = MessageBoxModel(canSend: task.status.isRunning, canContinue: task.status.isTerminal, isBusy: isBusy,
+                                              label: "Message this task",
+                                              hint: "Messages join the current turn when supported, or queue for the next builder turn",
+                                              placeholder: "Ask for changes to this workflow…", buttonLabel: task.status.isRunning ? "Send" : "Continue")
+            return
+        }
+        if WorkflowNodePresentation.blocksDirectMessages(task) {
+            messageBoxModel = MessageBoxModel(canSend: false, canContinue: false, isBusy: isBusy,
+                                              label: "Workflow-managed task", hint: "Answer workflow questions from the workflow run",
+                                              placeholder: "The workflow controls this task until the run has settled", buttonLabel: "Send", isLocked: true)
+            return
+        }
         let canSend = task.liveInput && task.status.isRunning && !task.takenOver
         let canContinue = task.status.isTerminal && task.sessionID != nil
         let label = canSend ? "Message this task" : (canContinue ? "Continue this session" : "Messages")
@@ -170,6 +185,20 @@ extension TaskDetailVM {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else { return false }
         guard let task else { return false }
+        if isWorkflowBuilder {
+            guard task.status.isRunning || task.status.isTerminal else { return false }
+            let capturedUseCase = useCase
+            let id = currentTaskID
+            Task {
+                do {
+                    _ = try await capturedUseCase.send(id, text: message)
+                } catch {
+                    capturedUseCase.setOutcome(id, "Couldn't queue the builder message: \(error.localizedDescription)")
+                }
+            }
+            return true
+        }
+        guard !WorkflowNodePresentation.blocksDirectMessages(task) else { return false }
         let canSend = task.liveInput && task.status.isRunning && !task.takenOver
         let canContinue = task.status.isTerminal && task.sessionID != nil
         if canSend {

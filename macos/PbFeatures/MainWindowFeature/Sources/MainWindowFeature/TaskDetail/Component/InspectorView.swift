@@ -24,6 +24,7 @@ struct InspectorModel {
     let current: TimelineItem?
     let stepCount: Int
     let activity: ActivityCounts
+    var activityNote: String?
     let subtaskCount: Int
     let ancestors: [SubTaskEntry]
     let siblings: [SubTaskEntry]
@@ -88,6 +89,7 @@ struct InspectorView: View {
                     }
                     if !model.notices.isEmpty { notices(model) }
                     section("Activity") {
+                        if let note = model.activityNote { Text(note).font(.pb(.secondary)).foregroundStyle(Color.secondaryText) }
                         Text("\(model.activity.toolCalls) tool calls · \(model.activity.edits) edits · "
                              + "\(model.activity.commands) commands · \(model.subtaskCount) sub-tasks")
                         .font(.pb(.secondary))

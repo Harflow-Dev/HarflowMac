@@ -8,11 +8,17 @@ import SwiftUI
 /// `ParallelGroup` value and never reads `AppModel`, so it qualifies for the shared component layer.
 public struct GroupRow: View {
     public let group: ParallelGroup
+    private let conversations: [Conversation]
     @Environment(\.backgroundProminence) private var prominence
 
-    public init(group: ParallelGroup) {
+    /// Accepts the screen's actual-session projection while preserving ordinary group rendering by default.
+    public init(group: ParallelGroup, conversations: [Conversation]? = nil) {
         self.group = group
+        self.conversations = conversations ?? group.conversations
     }
+
+    private var total: Int { conversations.count }
+    private var doneCount: Int { conversations.filter(\.current.status.isTerminal).count }
 
     /// "Parallel run · N of M finished" — or, for a group of one, "Group · <status>", since a
     /// single member is not a parallel run.
@@ -33,15 +39,15 @@ public struct GroupRow: View {
 
     public var body: some View {
         HStack(spacing: 8) {
-            BackendDotStack(backends: group.conversations.prefix(3).map(\.first.backend))
+            BackendDotStack(backends: conversations.prefix(3).map(\.first.backend))
             VStack(alignment: .leading, spacing: 3) {
                 Text(group.name).font(.pb(.body, weight: .medium)).lineLimit(1)
-                Text(Self.subtitle(finished: group.doneCount, total: group.total, singleMemberStatus: group.conversations.first?.current.status))
+                Text(Self.subtitle(finished: doneCount, total: total, singleMemberStatus: conversations.first?.current.status))
                     .font(.pb(.caption))
                     .foregroundStyle(Color.secondaryText(on: prominence))
                     .lineLimit(1)
                 if Self.showsProgress(anyRunning: group.anyRunning) {
-                    ProgressView(value: Self.progress(finished: group.doneCount, total: group.total))
+                    ProgressView(value: Self.progress(finished: doneCount, total: total))
                         .progressViewStyle(.linear)
                         .controlSize(.mini)
                         .tint(prominence == .increased ? Color.white : Color.runningFG)

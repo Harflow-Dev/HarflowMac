@@ -43,6 +43,7 @@ struct ParallelColumnModel: Identifiable {
     let activityRows: [ActivityRow]
     /// The "what is it doing now" line under the feed; `nil` unless a call is pending in a running turn.
     let liveStep: LiveStep?
+    var pendingMessages: [PendingMessage] = []
     /// True while NO member of this conversation has any timeline item yet AND at least one
     /// member's own event stream is still `.loading` (Monitor piece 12, Design point 4, extended
     /// across every member for piece 13) — the column shows `SkeletonRows` instead of the empty
@@ -99,7 +100,7 @@ struct ParallelColumnView: View {
                 PromptBubbleView(text: prompt)
             }
             Divider()
-            if model.isLoading {
+            if model.isLoading, model.liveStep == nil {
                 SkeletonRows(count: 4, showsBadge: false)
                     .padding(.top, 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -126,9 +127,11 @@ struct ParallelColumnView: View {
             }
             HStack(spacing: 10) {
                 if model.isBusy { ProgressView().controlSize(.small) }
+                if WorkflowNodePresentation.allowsTerminal(model.task) {
                 Button(model.task.status.isRunning ? "Take over" : "Continue in terminal") { model.onTapTakeover() }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(model.task.sessionID == nil || model.isBusy)
+                }
                 Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
             }
             .font(.pb(.secondary))
@@ -148,13 +151,8 @@ struct ParallelColumnView: View {
             }
             ScrollViewReader { proxy in
                 scrollingFeed(shown)
-                    .onChange(of: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep)) { _, _ in
-                        if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
-                    }
-                    .onChange(of: followLive) { _, isOn in
-                        if isOn { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
-                    }
-                    .onAppear { if followLive { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
+                    .followLiveScroll(token: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep, pendingMessages: model.pendingMessages),
+                                      enabled: followLive, proxy: proxy, target: Self.bottomID)
             }
         }
     }
@@ -172,30 +170,15 @@ struct ParallelColumnView: View {
                         .buttonStyle(.link)
                         .font(.pb(.secondary))
                 }
+                ForEach(model.pendingMessages) { message in
+                    PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
+                }
                 if let liveStep = model.liveStep {
                     LiveStepLineView(text: liveStep.text)
                 }
-                Divider()
-                summary
                 Color.clear.frame(height: 1).id(Self.bottomID)
             }
             .padding(.bottom, 12)
-        }
-    }
-
-    @ViewBuilder
-    private var summary: some View {
-        if model.task.status.isTerminal {
-            SectionLabel(text: "Final summary")
-            if let summary = model.summary, !summary.isEmpty {
-                ReadingMarkdownView(text: summary)
-            } else {
-                Text("No summary was reported.").font(.pb(.body)).foregroundStyle(Color.secondaryText)
-            }
-        } else {
-            Text("Still working… the final summary shows here when \(BackendStyle.displayName(model.task.backend)) finishes.")
-                .font(.pb(.body))
-                .foregroundStyle(Color.secondaryText)
         }
     }
 

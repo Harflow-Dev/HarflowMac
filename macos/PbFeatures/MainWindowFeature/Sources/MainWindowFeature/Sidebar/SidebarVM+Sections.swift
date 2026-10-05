@@ -17,11 +17,13 @@ import PbUI
 enum SidebarEntry {
     case tree(ConversationNode)
     case group(ParallelGroup)
+    case workflow(SidebarWorkflowRun)
 
     var isRunning: Bool {
         switch self {
         case .tree(let node): node.anyRunning
         case .group(let group): group.anyRunning
+        case .workflow(let run): run.isActive
         }
     }
 
@@ -30,6 +32,7 @@ enum SidebarEntry {
         switch self {
         case .tree(let node): node.conversation.current.startedAt
         case .group(let group): group.startedAt
+        case .workflow(let run): run.startedAt
         }
     }
 
@@ -37,6 +40,7 @@ enum SidebarEntry {
         switch self {
         case .tree(let node): "task:\(node.id)"
         case .group(let group): group.id
+        case .workflow(let run): "workflow:\(run.id)"
         }
     }
 }
@@ -47,7 +51,7 @@ extension SidebarVM {
     /// start time sorts last, ties broken by id), then flattens every entry into items. Empty
     /// buckets are omitted.
     func bucketedSections(trees: [ConversationNode], groups: [ParallelGroup], forcedExpandedIDs: Set<String>) -> [SidebarSection] {
-        let entries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group)
+        let entries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group) + workflowRootRuns().map(SidebarEntry.workflow)
         let now = currentDate()
         var buckets: [SidebarSection.Bucket: [SidebarEntry]] = [:]
         for entry in entries {
@@ -60,6 +64,12 @@ extension SidebarVM {
         }
     }
 
+    private func workflowRootRuns() -> [SidebarWorkflowRun] {
+        let runs = filteredWorkflowRuns()
+        let ids = Set(runs.map(\.id))
+        return runs.filter { $0.parentRunID == nil || !ids.contains($0.parentRunID ?? "") }
+    }
+
     private func bucket(for entry: SidebarEntry, now: Date) -> SidebarSection.Bucket {
         if entry.isRunning { return .running }
         guard let startedAt = entry.startedAt, Calendar.current.isDate(startedAt, inSameDayAs: now) else { return .earlier }
@@ -69,7 +79,10 @@ extension SidebarVM {
     private func items(for entry: SidebarEntry, forcedExpandedIDs: Set<String>) -> [SidebarItem] {
         switch entry {
         case .tree(let node): flattenedRows(node, forcedExpandedIDs: forcedExpandedIDs).map(SidebarItem.task)
-        case .group(let group): [.group(group)]
+        case .group(let group):
+            [.group(group)] + (groupConversations(group).count > 1 && expandedExecutionParents.contains(group.id) ? executionRows(groupChildren(group.name)) : [])
+        case .workflow(let run):
+            workflowTreeItems(run)
         }
     }
 

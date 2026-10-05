@@ -38,7 +38,9 @@ struct ToolRow: View {
                 expanded.toggle()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: icon).frame(width: 14).foregroundStyle(Color.secondaryText)
+                    Image(systemName: icon)
+.frame(width: 14)
+                        .foregroundStyle(model.call.category == "workflow_protocol_error" ? Color.failedRed : Color.secondaryText)
                     Text(model.call.tool).font(.pb(.body, weight: .medium))
                     Text(model.call.headline)
                         .font(.pb(.secondary, design: .monospaced))
@@ -49,13 +51,18 @@ struct ToolRow: View {
                     if let result = model.result {
                         if let code = result.exitCode {
                             Text("exit \(code)").font(.pb(.caption)).foregroundStyle(code == 0 ? Color.doneGreen : Color.failedRed)
-                        } else if !result.ok {
+                        } else if !result.ok, model.call.category != "workflow_protocol_error" {
                             Text("failed").font(.pb(.caption)).foregroundStyle(Color.failedRed)
                         }
                     } else if model.live {
                         RunningSpinner(size: 12)
                     } else {
                         Text("no result").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                    }
+                    if model.call.category == "workflow_protocol_error" {
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                            .font(.pb(.caption, weight: .semibold))
+.foregroundStyle(Color.secondaryText)
                     }
                 }
             }
@@ -94,6 +101,7 @@ struct ToolRow: View {
     
     private var icon: String {
         switch model.call.category {
+        case "workflow_protocol_error": "xmark.circle.fill"
         case "read": "doc.text"
         case "search": "magnifyingglass"
         case "edit", "write": "pencil"

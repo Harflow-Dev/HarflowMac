@@ -47,10 +47,13 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    @State private var allowlistRow: HarnessRow?
+    private let buildAllowlist: (HarnessRow) -> AnyView
     
     // MARK: - Init
     
-    init(_ viewModel: VM) {
+    init(_ viewModel: VM, buildAllowlist: @escaping (HarnessRow) -> AnyView = { _ in AnyView(EmptyView()) }) {
+        self.buildAllowlist = buildAllowlist
         _viewModel = State(initialValue: viewModel)
     }
     
@@ -83,11 +86,15 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
                     isWorking: viewModel.workingKey == row.key,
                     isAnyWorking: viewModel.workingKey != nil,
                     onInstall: { viewModel.didTapInstall(row) },
-                    onRemove: { viewModel.didTapRemove(row) }
+                    onRemove: { viewModel.didTapRemove(row) },
+                    onAllowlist: { allowlistRow = row }
                 )
             }
         }
         .padding(16)
+        .sheet(item: $allowlistRow) { row in
+            buildAllowlist(row)
+        }
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
         .publishViewEvent(from: viewModel, to: viewEvent)

@@ -23,6 +23,8 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var title = "Fix the login bug"
     var ancestorCrumbs: [AncestorCrumb] = []
     var isBusy = false
+    var polybridgeApprovalBackend: String? { nil }
+    func didTapAllowPolybridgeTools() {}
     var outcomeMessage: String?
     var takenOverBannerText: String?
     var spawnedByBannerText: String?

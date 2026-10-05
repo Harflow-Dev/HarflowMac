@@ -82,6 +82,46 @@ extension TaskDetailVMTests {
         // then
         await waitUntil { harness.sut.timelineModel.updateToken != before }
         #expect(harness.sut.timelineModel.rows.count == 1)
-        #expect(harness.sut.timelineModel.liveStep == nil)
+        #expect(harness.sut.timelineModel.liveStep?.text == "Thinking…")
+    }
+}
+
+@MainActor
+extension TaskDetailVMTests {
+    @Test func givenUnloadedConversationHistory_whenInspectorShowsCounts_thenTotalsAreExplicitlyPartial() async {
+        let harness = makeSUT()
+        harness.detailBox.value = task()
+        harness.sut.didAppear()
+        harness.sut.conversationHasMore = true
+        harness.sut.recompute()
+        #expect(harness.sut.inspectorModel?.activityNote?.contains("Partial") == true)
+        harness.sut.didSelectTab(.summary)
+        #expect(harness.sut.summaryModel.editedFilesAvailability == .loading)
+        #expect(harness.sut.summaryModel.editedFilesNote?.contains("incomplete") == true)
+        harness.sut.didDisappear()
+    }
+}
+
+@MainActor
+extension TaskDetailVMTests {
+    @Test func givenIncompleteExhaustedHistory_whenApplyingPage_thenAccountingIsPartialWithoutMorePages() async {
+        let harness = makeSUT()
+        harness.detailBox.value = task()
+        harness.sut.didAppear()
+        await waitUntil { !harness.sut.conversationLoading }
+        let page = TaskHistoryPage(raw: [
+            "items": .array([]), "next_cursor": .null, "has_more": .bool(false),
+            "bootstrap_pending": .bool(false), "history_incomplete": .bool(true)
+        ])!
+        harness.sut.applyConversationPage(page, initial: true)
+        harness.sut.recompute()
+        #expect(!harness.sut.conversationMembers.isEmpty)
+        #expect(!harness.sut.conversationHasMore)
+        #expect(!harness.sut.timelineModel.history.hasMore)
+        #expect(harness.sut.inspectorModel?.activityNote?.contains("Partial") == true)
+        harness.sut.didSelectTab(.summary)
+        #expect(harness.sut.summaryModel.editedFilesNote?.contains("incomplete") == true)
+        harness.sut.didDisappear()
+        #expect(!harness.sut.conversationHistoryIncomplete)
     }
 }

@@ -13,7 +13,7 @@ import SwiftEnvironment
 
 /// Concrete `MenuBarUseCase` backed by `TaskListRepository` and `EventStreamRepository`.
 @MainActor
-final class MenuBarViewRepository: MenuBarUseCase, @unchecked Sendable {
+final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCase, @unchecked Sendable {
     
     // MARK: - Private Properties
     
@@ -44,6 +44,7 @@ final class MenuBarViewRepository: MenuBarUseCase, @unchecked Sendable {
     func titlesPublisher() -> AnyPublisher<[String: String], Never> { taskListRepository.titlesPublisher() }
     
     var connectionLine: String { taskListRepository.connectionLine }
+    var countsComplete: Bool { taskListRepository.historyState.countsComplete }
     var runningCount: Int { taskListRepository.runningCount }
     
     func title(_ taskID: String) -> String { taskListRepository.title(taskID) }

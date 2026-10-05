@@ -17,6 +17,25 @@ extension TaskDetailVMTests {
         return harness.sut.messageBoxModel
     }
 
+    @Test func givenManagedWorkflowTask_whenSubmittingDirectMessage_thenComposerIsLockedAndSubmitRefuses() async throws {
+        // given
+        let harness = makeSUT()
+        var raw = task(status: "running", liveInput: true, takenOver: false).raw
+        raw["workflow_run_id"] = .string("run")
+        raw["workflow_status"] = .string("running")
+        raw["workflow_settling"] = .bool(false)
+        let managed = try #require(TaskInfo(.object(raw)))
+        harness.detailBox.value = managed
+        harness.sut.didAppear()
+        harness.tasksSubject.send([managed])
+        await waitUntil { harness.sut.task != nil }
+        // when / then
+        #expect(harness.sut.messageBoxModel.isLocked)
+        #expect(!harness.sut.messageBoxModel.canSend && !harness.sut.messageBoxModel.canContinue)
+        #expect(!harness.sut.submitMessage("Bypass the workflow"))
+        harness.sut.didDisappear()
+    }
+
     @Test func givenARunningTaskWithoutLiveInput_whenRenderingTheComposer_thenItIsLockedWithTheLiveInputCopy() async {
         // given / when
         let model = await shownModel(task(status: "running", liveInput: false, takenOver: false))

@@ -93,8 +93,12 @@ extension TaskDetailVMTests {
     /// from the start — pass every member a test will EVER push through `membersBox`, including ones
     /// not yet in `initialMembers`, since a test adding a brand-new follow-up mid-run needs that
     /// member's stubs to already exist before it ever appears.
-    func makeConversationSUT(openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil) -> ConversationSUT {
+    func makeConversationSUT(
+        openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil, isWorkflowBuilder: Bool = false,
+        eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() }
+    ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
+        useCase.configurePagingDefaults(eventHistory: eventHistory)
         let routing = MockTaskDetailRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let membersBox = Box(initialMembers)
@@ -112,7 +116,8 @@ extension TaskDetailVMTests {
         // the box regardless of id", so a retention test can shrink the listing and see `taskID`
         // stop resolving while a surviving member still does, exactly like production.
         given(useCase).conversationMembers(of: .any).willProduce { id in
-            Lineage.conversation(containing: id, in: membersBox.value)?.members ?? []
+            WorkflowOrchestratorConversation.members(containing: id, in: membersBox.value)
+                ?? Lineage.conversation(containing: id, in: membersBox.value)?.members ?? []
         }
         // Realistic, not a stub-of-convenience: this file's own retention tests
         // (`givenTheFirstMembersRecordIsPrunedByRetentionWhileOpen…`,
@@ -154,7 +159,7 @@ extension TaskDetailVMTests {
             return Dictionary(ids.map { ($0, childrenBoxes[$0]?.value ?? []) }, uniquingKeysWith: { first, _ in first })
         }
 
-        let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing)
+        let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing, isWorkflowBuilder: isWorkflowBuilder)
         return ConversationSUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, membersBox: membersBox,
             eventsBox: eventsBoxes, childrenBox: childrenBoxes, childrenOfEachCallCount: childrenOfEachCallCount,
@@ -400,7 +405,7 @@ extension TaskDetailVMTests {
 
     // MARK: - Continue does not navigate (Design point 7)
 
-    @Test func givenAnEligibleContinue_whenSubmitted_thenItTargetsTheCurrentMemberAndNeverSelectsTheNewTask() async {
+    @Test(.timeLimit(.minutes(1))) func givenAnEligibleContinue_whenSubmitted_thenItTargetsTheCurrentMemberAndNeverSelectsTheNewTask() async {
         // given
         let taskA = conversationTask("a", status: "completed", minute: 0)
         let harness = makeConversationSUT(openedAs: "a", initialMembers: [taskA])
@@ -409,10 +414,14 @@ extension TaskDetailVMTests {
         await waitUntil { harness.sut.task != nil }
 
         // when
+        // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
+        let invocation = AsyncStream<Bool>.makeStream()
+        when(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).perform { invocation.continuation.yield(true) }
         #expect(harness.sut.submitMessage("one more thing"))
 
         // then
-        await verify(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).calledEventually(1, before: .seconds(5))
+        #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
+        verify(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).called(1)
         try? await Task.sleep(for: .milliseconds(50))
         verify(harness.routing).selectTask(.any).called(0)
     }
@@ -518,6 +527,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([taskA, taskB])
+        harness.sut.timelineModel.onLoadMore?()
         await waitUntil { harness.sut.task != nil }
 
         // then
@@ -559,6 +569,28 @@ extension TaskDetailVMTests {
 
         // then
         #expect(Set(harness.sut.summaryModel.editedFiles.map(\.path)) == ["a.swift", "b.swift"])
+        await waitUntil { !harness.sut.conversationLoading }
+        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesAvailability == .available)
+    }
+}
+
+// MARK: - Exact execution detail
+
+extension TaskDetailVMTests {
+    @Test func givenWorkflowResumeChain_whenOlderChildOpened_thenShowsThatExecutionOnly() throws {
+        // given
+        var oldRaw = conversationTask("old").raw
+        oldRaw["workflow_run_id"] = .string("workflow")
+        var nextRaw = conversationTask("next", parentTaskID: "old", minute: 1).raw
+        nextRaw["workflow_run_id"] = .string("workflow")
+        let old = try #require(TaskInfo(.object(oldRaw)))
+        let next = try #require(TaskInfo(.object(nextRaw)))
+        let harness = makeConversationSUT(openedAs: "old", initialMembers: [old, next])
+        // when
+        harness.sut.recomputeMembersAndLeases()
+        // then
+        #expect(harness.sut.conversationMembers.map(\.taskID) == ["old"])
+        #expect(harness.sut.currentTaskID == "old")
     }
 }

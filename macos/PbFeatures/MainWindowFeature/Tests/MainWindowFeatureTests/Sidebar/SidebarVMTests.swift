@@ -61,7 +61,10 @@ import Testing
         let catalogBox: Box<BackendCatalog>
     }
 
-    func makeSUT(connectionLine: String = "connecting…", installState: InstallState = .idle, catalog: BackendCatalog = .empty) -> SUT {
+    func makeSUT(
+        connectionLine: String = "connecting…", installState: InstallState = .idle, catalog: BackendCatalog = .empty,
+        onSelect: ((MonitorDestination?) -> Void)? = nil, workflowUseCase: (any SidebarWorkflowUseCase)? = nil
+    ) -> SUT {
         let useCase = MockSidebarUseCase()
         let routing = MockSidebarRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
@@ -92,7 +95,7 @@ import Testing
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(routing).selection.willProduce { routingSelectionBox.value }
         given(routing).selectionPublisher().willReturn(selectionSubject.eraseToAnyPublisher())
-        given(routing).select(.any).willReturn()
+        given(routing).select(.any).willProduce { onSelect?($0) }
         given(routing).openNewSession().willReturn()
         given(routing).pendingReveal.willProduce { pendingRevealBox.value }
         given(routing).revealPublisher().willReturn(revealSubject.eraseToAnyPublisher())
@@ -113,7 +116,7 @@ import Testing
         given(useCase).installAnyway().willReturn(true)
         given(useCase).reset().willReturn()
 
-        let sut = SidebarVM(useCase: useCase, routing: routing)
+        let sut = SidebarVM(useCase: useCase, routing: routing, workflowUseCase: workflowUseCase)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
             hasListedSubject: hasListedSubject, selectionSubject: selectionSubject, titlesSubject: titlesSubject,
@@ -393,8 +396,9 @@ import Testing
         
         // then
         verify(routing).select(.value(.task("abc123"))).called(1)
+        #expect(sut.selection == .task("abc123"))
     }
-    
+
     @Test func givenAnExternalSelectionChange_whenPublished_thenSelectionUpdates() async {
         // given — e.g. "Open parent" in the still-app-target `TaskDetailView`, routed through the
         // same `MainWindowCoordinator.selection` this VM reads via `SidebarRouting`.
@@ -560,18 +564,26 @@ import Testing
         }
         sut.didAppear()
 
-        // when
-        let start = Date()
+        // Settle the real publisher first. Its receive(on: .main) hop can wait behind unrelated
+        // concurrently running tests; that queue latency is not time spent building sidebar rows.
         harness.tasksSubject.send(tasks)
+        await waitUntil { sut.latestTasks.count == 2000 }
+        #expect(sut.latestTasks.count == 2000)
+        let unfilteredCount = sut.runningRows.count + sut.recentRows.count
+
+        // Measure the actual synchronous filter action/recompute against the settled inventory.
+        // No scheduler or polling wait is timed; the index has its own tight construction test.
+        let start = Date()
         sut.didSelectBackendFilter("claude")
-        await waitUntil { !sut.runningRows.isEmpty || !sut.recentRows.isEmpty }
         let elapsed = Date().timeIntervalSince(start)
 
-        // then
-        // 3 s, not 1 s: this is wall-clock time through the real VM path — publisher hops and 50 ms
-        // polling included — on a shared CI runner (1.06 s was seen there). The quadratic path this
-        // guards against takes several seconds at this size; `ConversationIndexTests` holds the
-        // tight, contention-free bound.
+        // Keep behavior checks on the real published inventory; contextual ancestors may use
+        // another backend, but filtering must retain matches and reduce the displayed inventory.
+        #expect(sut.selectedBackend == "claude")
+        #expect((sut.runningRows + sut.recentRows).contains { $0.backend == "claude" })
+        #expect(sut.runningRows.count + sut.recentRows.count < unfilteredCount)
+        // Retain the existing 3-second ceiling; ConversationIndexTests independently retain
+        // their tight construction bound. This test measures actual VM work under that ceiling.
         #expect(
             elapsed < 3.0,
             "recompute() at 4x the real listing's size should stay well under the quadratic cost (\(elapsed)s)"

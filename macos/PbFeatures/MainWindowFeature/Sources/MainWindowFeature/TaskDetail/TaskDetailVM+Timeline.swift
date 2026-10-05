@@ -23,18 +23,51 @@ import MonitorCore
 
 extension TaskDetailVM {
 
+    private func activityHistory(_ members: [TaskInfo]) -> EventHistoryState {
+        let states = members.map { useCase.eventHistory(for: $0.taskID) }
+        return EventHistoryState(
+            hasMore: states.contains(where: \.hasMore) || conversationHasMore
+                || conversationMembers.contains(where: { !loadedActivityMembers.contains($0.taskID) }),
+            isLoading: states.contains(where: \.isLoading) || conversationLoading,
+            error: states.compactMap(\.error).first ?? conversationError,
+            generation: states.map(\.generation).max() ?? 0
+        )
+    }
+
+    private func loadMoreConversationActivity() {
+        let loaded = conversationMembers.filter { loadedActivityMembers.contains($0.taskID) }
+        guard !loaded.contains(where: { useCase.eventHistory(for: $0.taskID).isLoading }) else { return }
+        if let member = loaded.first(where: {
+            let state = useCase.eventHistory(for: $0.taskID)
+            return state.hasMore || state.error != nil
+        }) {
+            useCase.loadMoreEvents(member.taskID)
+        } else if let previous = conversationMembers.last(where: { !loadedActivityMembers.contains($0.taskID) }) {
+            loadedActivityMembers.insert(previous.taskID)
+            acquireMemberLease(previous.taskID)
+            recompute()
+        } else if conversationHasMore || conversationError != nil {
+            loadConversationHistory(initial: false)
+        }
+    }
+
     /// Rebuilds the Timeline tab's model: the concatenated conversation rows, whether the task is
     /// live (per-turn — a running spinner never appears on an older, already-terminal turn even
     /// while the newest one runs), and the sub-task strip (children of ANY member, Design point 3).
     /// `allChildren` is `recompute()`'s own `allConversationChildren()` result (Monitor piece 11) —
     /// shared with `recomputeInspector`'s subtask count instead of each recomputing it separately.
     func recomputeTimeline(task: TaskInfo, allChildren: [TaskInfo]) {
-        let members = conversationMembers
-        let start = members.first?.startedAt
-        let conversationTimelineMembers = members.map {
-            ConversationItemMember(task: $0, items: itemsByMember[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
+        let members = conversationMembers.filter { loadedActivityMembers.contains($0.taskID) }
+        let start = conversationMembers.first?.startedAt
+        let conversationTimelineMembers = members.map { member in
+            let prompt = member.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID)
+            return WorkflowBuilderPresentation.conversationMember(
+                task: member, items: itemsByMember[member.taskID] ?? [], prompt: prompt, isBuilder: isWorkflowBuilder
+            )
         }
-        let rows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
+        let allRows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
+        let rows = isWorkflowBuilder ? WorkflowBuilderPresentation.visibleRows(allRows)
+        : WorkflowNodePresentation.visibleRows(allRows, tasks: Dictionary(uniqueKeysWithValues: members.map { ($0.taskID, $0) }))
         let subTaskStrip: SubTaskStripModel? = allChildren.isEmpty ? nil : SubTaskStripModel(
             children: allChildren.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             start: start,
@@ -46,7 +79,8 @@ extension TaskDetailVM {
         // member's own event stream is still `.loading` — never once real content exists, and never
         // for `.unavailable` (that keeps today's honest empty-log message).
         let isLoading = itemCount == 0 && members.contains { (eventsAvailabilityByMember[$0.taskID] ?? .loading) == .loading }
-        let liveStep = LiveStep(rows: rows)
+        let liveStep = LiveStep(rows: rows, isRunning: task.status.isRunning)
+        let pendingMessages = PendingMessage.visible(snapshot: useCase.snapshot(currentTaskID), events: eventsByMember[currentTaskID] ?? [])
         timelineModel = TimelinePaneModel(
             stepCountText: "\(itemCount) steps",
             rows: rows,
@@ -58,10 +92,16 @@ extension TaskDetailVM {
             subTaskStrip: subTaskStrip,
             isLoading: isLoading,
             liveStep: liveStep,
-            updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep)
+            updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep, pendingMessages: pendingMessages),
+            pendingMessages: pendingMessages,
+            history: activityHistory(members),
+            onLoadMore: { [weak self] in self?.loadMoreConversationActivity() }
         )
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
-        promptText = useCase.prompt(for: members[0].taskID)
+        let visiblePrompt = WorkflowNodePresentation.isWorker(task)
+        ? task.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: currentTaskID)
+        : conversationMembers.first?.raw["display_prompt"]?.stringValue ?? conversationMembers.first.flatMap { useCase.prompt(for: $0.taskID) }
+        promptText = visiblePrompt
         ?? "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
         rawEventsPath = useCase.eventsPath(for: currentTaskID)
         rawEvents = eventsByMember[currentTaskID] ?? []

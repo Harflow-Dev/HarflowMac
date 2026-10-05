@@ -41,10 +41,14 @@ struct TimelinePaneModel {
     let liveStep: LiveStep?
     /// Changes when the feed grows or changes in place; Follow live scrolls on it.
     let updateToken: ActivityUpdateToken
+    let pendingMessages: [PendingMessage]
+    let history: EventHistoryState
+    let onLoadMore: (() -> Void)?
 
     init(
         stepCountText: String, rows: [ConversationTimelineRow], activityRows: [ActivityRow], start: Date?, emptyText: String?,
-        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken
+        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken,
+        pendingMessages: [PendingMessage] = [], history: EventHistoryState = EventHistoryState(), onLoadMore: (() -> Void)? = nil
     ) {
         self.stepCountText = stepCountText
         self.rows = rows
@@ -55,6 +59,9 @@ struct TimelinePaneModel {
         self.isLoading = isLoading
         self.liveStep = liveStep
         self.updateToken = updateToken
+        self.pendingMessages = pendingMessages
+        self.history = history
+        self.onLoadMore = onLoadMore
     }
 
     /// Derives the feed rows, live step and update token from `rows` — for previews and tests; the
@@ -77,6 +84,7 @@ struct TimelinePaneModel {
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
     @State private var followLive = true
+    @State private var olderAnchor: String?
     @State private var expandedGroups: Set<String> = []
 
     var body: some View {
@@ -89,7 +97,7 @@ struct TimelinePaneView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 8)
             .readingColumn()
-            if model.isLoading {
+            if model.isLoading, model.liveStep == nil {
                 SkeletonRows(count: 5, showsBadge: false)
                     .padding(24)
                     .readingColumn()
@@ -104,6 +112,16 @@ struct TimelinePaneView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
+                    if let onLoadMore = model.onLoadMore, model.history.hasMore || model.history.error != nil {
+                        Button(model.history.error == nil ? "Load more activity" : "Retry older activity") {
+                            olderAnchor = model.activityRows.first?.id
+                            onLoadMore()
+                        }.disabled(model.history.isLoading)
+                        if model.history.isLoading { ProgressView() }
+                        if let error = model.history.error { Text(error).font(.pb(.secondary)) }
+                    } else if !model.rows.isEmpty {
+                        Text("Beginning of loaded activity").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                    }
                     if let emptyText = model.emptyText {
                         Text(emptyText).font(.pb(.body)).foregroundStyle(Color.secondaryText)
                     }
@@ -113,6 +131,9 @@ struct TimelinePaneView: View {
                     if let subTaskStrip = model.subTaskStrip {
                         SubTaskStripView(model: subTaskStrip)
                     }
+                    ForEach(model.pendingMessages) { message in
+                        PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
+                    }
                     if let liveStep = model.liveStep {
                         LiveStepLineView(text: liveStep.text)
                     }
@@ -121,10 +142,13 @@ struct TimelinePaneView: View {
                 .padding(24)
                 .readingColumn()
             }
-            .onChange(of: model.updateToken) { _, _ in
-                if followLive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .followLiveScroll(token: model.updateToken, enabled: followLive && olderAnchor == nil, proxy: proxy, target: "bottom")
+            .onChange(of: model.activityRows.first?.id) { _, _ in
+                if let olderAnchor { proxy.scrollTo(olderAnchor, anchor: .top); self.olderAnchor = nil }
             }
-            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: model.history.isLoading) { _, loading in
+                if !loading, let olderAnchor { proxy.scrollTo(olderAnchor, anchor: .top); self.olderAnchor = nil }
+            }
         }
     }
 

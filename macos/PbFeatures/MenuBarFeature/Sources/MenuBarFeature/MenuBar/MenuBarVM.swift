@@ -61,6 +61,11 @@ protocol MenuBarUseCase: Sendable {
     func reset()
 }
 
+@MainActor
+protocol MenuBarCountAvailabilityUseCase {
+    var countsComplete: Bool { get }
+}
+
 // MARK: - MenuBarRouting
 
 /// Navigation the menu bar performs — always through the coordinator, never a direct `AppModel`
@@ -93,6 +98,13 @@ protocol MenuBarRouting: Sendable {
 @Observable
 @MainActor
 final class MenuBarVM: MenuBarViewModel {
+    let workflowStatus: WorkflowMenuBarStatusVM?
+    var workflowRows: [WorkflowMenuBarRow] { workflowStatus?.rows ?? [] }
+    var workflowActiveCount: Int { workflowStatus?.activeCount ?? 0 }
+    var workflowAttentionCount: Int { workflowStatus?.attentionCount ?? 0 }
+    private(set) var taskCountsLoading = false
+    var workflowCountsLoading: Bool { workflowStatus?.countsLoading ?? false }
+    var workflowStatusError: String? { workflowStatus?.errorText }
     
     // MARK: - MenuBarViewModel Properties
     
@@ -129,11 +141,13 @@ final class MenuBarVM: MenuBarViewModel {
 
     // MARK: - Init
 
-    init(useCase: any MenuBarUseCase, routing: any MenuBarRouting) {
+    init(useCase: any MenuBarUseCase, routing: any MenuBarRouting, workflowStatus: WorkflowMenuBarStatusVM? = nil) {
+        self.workflowStatus = workflowStatus
         self.useCase = useCase
         self.routing = routing
         self.connectionLine = useCase.connectionLine
         self.runningCount = useCase.runningCount
+        self.taskCountsLoading = !((useCase as? any MenuBarCountAvailabilityUseCase)?.countsComplete ?? true)
         self.installState = useCase.installState
         self.lastCheckMessage = useCase.lastCheckMessage
         self.installAnywayBlockedMessage = useCase.installAnywayBlockedMessage
@@ -143,7 +157,15 @@ final class MenuBarVM: MenuBarViewModel {
     // MARK: - MenuBarViewModel Methods
     
     func didAppear() {
+        workflowStatus?.didAppear()
         subscribeIfNeeded()
+    }
+
+    func didDisappearStatusItem() { workflowStatus?.didDisappear() }
+
+    func didSelectWorkflow(_ runID: String) {
+        routing.select(.workflowRun(runID))
+        routing.openWindow()
     }
     
     /// See the type-level comment: this deliberately does not tear down the core subscriptions,
@@ -284,6 +306,7 @@ final class MenuBarVM: MenuBarViewModel {
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
         runningCount = useCase.runningCount
+        taskCountsLoading = !((useCase as? any MenuBarCountAvailabilityUseCase)?.countsComplete ?? true)
         
         let running = latestTasks
             .filter(\.status.isRunning)

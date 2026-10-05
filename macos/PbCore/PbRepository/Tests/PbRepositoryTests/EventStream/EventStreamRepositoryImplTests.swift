@@ -32,6 +32,50 @@ import Testing
         #"{"v":1,"seq":1,"kind":"task_started","prompt":"\#(prompt)","backend":"claude"}"#
     }
 
+    @Test func givenLongLog_whenPaging_thenSummaryRemainsCumulativeAndPairingCrossesPages() async {
+        let lines = (1 ... 250).map { seq -> String in
+            if seq == 150 { return #"{"v":1,"seq":150,"kind":"tool_call","call_id":"edit","tool":"Edit","category":"edit", "#
+                    + #""path":"/repo/a.swift","input_preview":""}"#
+            }
+            if seq == 151 { return #"{"v":1,"seq":151,"kind":"tool_result","call_id":"edit","ok":true,"output_tail":"done"}"# }
+            return #"{"v":1,"seq":\#(seq),"kind":"assistant_text","text":"row"}"#
+        }
+        let (dir, id, tasksDir) = writeEventsFile(lines: lines)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(tasksDir)
+        let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).refresh(.any).willReturn()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let lease = sut.acquire(id)
+        defer { lease.release() }
+        await waitUntil { sut.events(for: id).count == 100 && sut.summary(for: id).availability == .available }
+        #expect(sut.events(for: id).map(\.seq) == Array(151 ... 250))
+        #expect(sut.summary(for: id).files == [EditedFile(path: "/repo/a.swift", status: .edited)])
+        sut.loadMore(id)
+        await waitUntil { sut.events(for: id).count == 200 }
+        #expect(sut.items(for: id) == Timeline.items(from: lines.dropFirst(50).compactMap(TaskEvent.init(line:))))
+        #expect(sut.summary(for: id).activity.edits == 1)
+        sut.loadMore(id)
+        await waitUntil { !sut.history(for: id).hasMore && sut.events(for: id).count == 250 }
+        #expect(sut.events(for: id).map(\.seq) == Array(1 ... 250))
+    }
+
+    @Test func givenOnlySummaryInterest_whenAcquired_thenActivityIsNotSeeded() async {
+        let (dir, id, tasksDir) = writeEventsFile(lines: [taskStartedLine()])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(tasksDir)
+        let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).refresh(.any).willReturn()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let lease = sut.acquireSummary(id)
+        defer { lease.release() }
+        await waitUntil { sut.summary(for: id).availability == .available }
+        #expect(sut.events(for: id).isEmpty)
+        #expect(sut.summary(for: id).prompt == "hello")
+    }
+
     @Test func givenNoEventsPathExists_whenAcquiringAStream_thenItFallsBackToDevNull() async {
         // given — F4-13: `TaskTitle.eventsPath` returns nil for a task id that fails
         // `MonitorURL.isValidTaskID` (here, one containing "/"), so the tailer must fall back to

@@ -10,7 +10,7 @@ extension TaskListRepositoryImplTests {
     // MARK: Explicit titles (listing `title`)
 
     private func listingClient(_ entries: [String]) -> CtlClient {
-        let runner = StubProcessRunner(output: stdout(#"{"v":2,"tasks":[\#(entries.joined(separator: ","))]}"#))
+        let runner = StubProcessRunner(output: historyStdout(#"{"v":2,"tasks":[\#(entries.joined(separator: ","))]}"#))
         return CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
     }
 
@@ -29,7 +29,7 @@ extension TaskListRepositoryImplTests {
         return dir
     }
 
-    @Test func givenAListedTitle_whenRefreshed_thenItOverridesThePromptDerivedTitle() async {
+    @Test func givenAListedTitle_whenRefreshed_thenItOverridesTheFallbackTitle() async {
         // given — a prompt-derived title is already on record for "a"
         let dir = makeTasksDirectory(prompts: ["a": "prompt title"])
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -39,8 +39,8 @@ extension TaskListRepositoryImplTests {
         given(toolEnvironment).ctl().willProduce { resultBox.value }
         let sut = makeSUT(toolEnvironment: toolEnvironment)
         await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titles["a"] == "prompt title" }
-        #expect(sut.title("a") == "prompt title")
+        #expect(sut.titleLoadPassCount == 0)
+        #expect(sut.title("a") == "Task a")
 
         // when
         resultBox.mutate { $0 = .success(listingClient([entry("a", title: "Explicit title")])) }
@@ -51,7 +51,7 @@ extension TaskListRepositoryImplTests {
         #expect(sut.titles["a"] == "Explicit title")
     }
 
-    @Test func givenNoListedTitle_whenDisplayed_thenPromptTitleThenTaskPrefixFallback() async {
+    @Test func givenNoListedTitle_whenDisplayed_thenUsesTaskPrefixWithoutScanningLogs() async {
         // given — "a" has a prompt log, "b" has nothing, "c" has a blank title
         let dir = makeTasksDirectory(prompts: ["a": "prompt title"])
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -64,10 +64,10 @@ extension TaskListRepositoryImplTests {
 
         // when
         await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titleLoadPassCount >= 1 }
+        #expect(sut.titleLoadPassCount == 0)
 
         // then
-        #expect(sut.title("a") == "prompt title")
+        #expect(sut.title("a") == "Task a")
         #expect(sut.title("bbbbbbbbbbbb") == "Task bbbbbbbb")
         #expect(sut.title("cccccccccccc") == "Task cccccccc")
     }
@@ -124,7 +124,7 @@ extension TaskListRepositoryImplTests {
         }
         let sut = makeSUT(toolEnvironment: toolEnvironment, finishNotifier: finishNotifier)
         await sut.refresh()
-        await waitUntil(timeout: 5) { sut.titles["a"] == "prompt title" }
+        #expect(sut.titleLoadPassCount == 0)
 
         // when
         resultBox.mutate { $0 = .success(listingClient([entry("a", status: "completed", title: "Explicit title")])) }

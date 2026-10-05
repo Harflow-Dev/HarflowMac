@@ -46,6 +46,7 @@ struct HarnessRowView: View {
     let isAnyWorking: Bool
     let onInstall: () -> Void
     let onRemove: () -> Void
+    var onAllowlist: () -> Void = {}
     
     var body: some View {
         HStack(alignment: .top) {
@@ -62,6 +63,7 @@ struct HarnessRowView: View {
             }
             Spacer()
             if isWorking { ProgressView().controlSize(.small) }
+            Button("MCP approvals", action: onAllowlist).disabled(isAnyWorking)
             Button(HarnessRowActions.installTitle(row: row), action: onInstall)
                 .disabled(HarnessRowActions.isInstallDisabled(row: row, isAnyWorking: isAnyWorking))
             Button("Remove", action: onRemove)

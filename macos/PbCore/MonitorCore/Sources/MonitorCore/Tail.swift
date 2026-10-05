@@ -17,6 +17,7 @@ public struct LineTail: Equatable, Sendable {
     public static let anchorLength = 64
     /// Bound on one read, so a huge backlog is consumed over several passes instead of at once.
     public var maxChunk: Int
+    public var maxLines: Int = .max
 
     public init(maxChunk: Int = 4 << 20) {
         self.maxChunk = maxChunk
@@ -52,7 +53,8 @@ public struct LineTail: Equatable, Sendable {
 
     /// Consume `data`, which was read starting at the offset `prepare` returned.
     public mutating func consume(_ data: Data, reset: Bool) -> Step {
-        guard let lastNewline = data.lastIndex(of: UInt8(ascii: "\n")) else {
+        let endings = data.indices.filter { data[$0] == 10 }
+        guard let lastNewline = endings.prefix(maxLines).last else {
             // No complete line yet. If a single line is longer than a whole chunk, skip it rather
             // than wedge on it forever.
             if data.count >= maxChunk {
@@ -68,7 +70,13 @@ public struct LineTail: Equatable, Sendable {
         let lines = complete.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: true).map {
             String(decoding: $0, as: UTF8.self)
         }
-        return Step(lines: lines, reset: reset, more: data.count >= maxChunk)
+        return Step(lines: lines, reset: reset, more: data.count >= maxChunk || endings.count > maxLines)
+    }
+
+    public mutating func seed(_ cursor: EventPageCursor) {
+        offset = cursor.offset
+        fileID = cursor.fileID
+        anchor = cursor.anchor
     }
 
     private mutating func remember<D: DataProtocol>(_ consumed: D) {
@@ -117,7 +125,11 @@ public final class EventFileTailer {
 
     public let path: String
     private let queue = DispatchQueue(label: "dev.polybridge.monitor.tail")
-    private var tail = LineTail()
+    private var tail = LineTail(maxChunk: EventPages.byteLimit)
+    private var seeded = false
+    private var olderCursor: EventPageCursor?
+    private var history = EventHistoryState(isLoading: true)
+    private var historyHandler: ((EventHistoryState) -> Void)?
     private var source: DispatchSourceFileSystemObject?
     private var poll: DispatchSourceTimer?
     private var handler: Handler?
@@ -126,9 +138,11 @@ public final class EventFileTailer {
     /// never re-notifies the caller.
     private var availability: EventAvailability = .loading
 
-    public init(path: String, handler: @escaping Handler) {
+    public init(path: String, historyHandler: ((EventHistoryState) -> Void)? = nil, handler: @escaping Handler) {
         self.path = path
         self.handler = handler
+        self.historyHandler = historyHandler
+        tail.maxLines = EventPages.pageSize
     }
 
     public func start() {
@@ -148,6 +162,52 @@ public final class EventFileTailer {
             poll = nil
             handler = nil
         }
+    }
+
+    public func loadMore() {
+        queue.async { [self] in
+            guard !stopped, !history.isLoading, let cursor = olderCursor else { return }
+            history.isLoading = true
+            publishHistory()
+            do {
+                let page = try EventPages.read(path: path, before: cursor)
+                olderCursor = page.next
+                history = EventHistoryState(hasMore: page.next != nil, generation: history.generation)
+                if let handler {
+                    DispatchQueue.main.async { handler(page.events, false, .available) }
+                }
+            } catch EventPageError.changed {
+                seeded = false
+                seed(reset: true)
+                return
+            } catch {
+                history.isLoading = false
+                history.error = "The older activity page could not be read."
+            }
+            publishHistory()
+        }
+    }
+
+    private func publishHistory() {
+        let value = history
+        if let historyHandler { DispatchQueue.main.async { historyHandler(value) } }
+    }
+
+    private func seed(reset: Bool) {
+        do {
+            let page = try EventPages.read(path: path)
+            tail.seed(page.end)
+            seeded = true
+            olderCursor = page.next
+            history = EventHistoryState(hasMore: page.next != nil, generation: history.generation + (reset ? 1 : 0))
+            availability = .available
+            if let handler { DispatchQueue.main.async { handler(page.events, true, .available) } }
+        } catch {
+            history.isLoading = false
+            history.error = "The activity log could not be read."
+            if let handler { DispatchQueue.main.async { handler([], reset, .unavailable) } }
+        }
+        publishHistory()
     }
 
     private func startPoll() {
@@ -183,16 +243,18 @@ public final class EventFileTailer {
 
     private func drain() {
         guard !stopped else { return }
+        if !seeded { seed(reset: false); return }
         var collected: [TaskEvent] = []
         var reset = false
         var opened = false
         // Bounded: a few chunks per wake-up, the poll picks up the rest.
-        for _ in 0..<8 {
+        for _ in 0..<1 {
             guard let step = tail.read(path: path) else { break }
             opened = true
             if step.reset {
-                reset = true
-                collected.removeAll()
+                seeded = false
+                seed(reset: true)
+                return
             }
             collected.append(contentsOf: step.lines.compactMap(TaskEvent.init(line:)))
             if !step.more { break }

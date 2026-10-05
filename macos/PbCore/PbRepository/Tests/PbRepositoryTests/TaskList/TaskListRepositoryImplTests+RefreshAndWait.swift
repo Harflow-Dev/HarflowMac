@@ -52,11 +52,14 @@ extension TaskListRepositoryImplTests {
         given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
         let gate = AsyncGate()
         let passCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = StubProcessRunner { call in
+            if call.arguments.contains("--active-only") || call.arguments.contains(where: { $0.hasPrefix("--task-ids=") }) {
+                return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
+            }
             let thisPass = passCount.value + 1
             passCount.mutate { $0 = thisPass }
             if thisPass == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":2,"tasks":[{"task_id":"pass\#(thisPass)","status":"running","backend":"claude"}]}"#))
+            return .success(historyStdout(#"{"v":2,"tasks":[{"task_id":"pass\#(thisPass)","status":"running","backend":"claude"}]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -76,7 +79,7 @@ extension TaskListRepositoryImplTests {
             Issue.record("expected success")
             return
         }
-        #expect(sut.tasks.map(\.taskID) == ["pass2"])
+        #expect(Set(sut.tasks.map(\.taskID)) == ["pass1", "pass2"])
     }
 
     @Test func givenTheWaiterStartedTheLoop_whenAPollArmsAnotherPass_thenItReturnsAfterItsOwnPass() async {
@@ -87,12 +90,15 @@ extension TaskListRepositoryImplTests {
         let firstPassGate = AsyncGate()
         let secondPassGate = AsyncGate()
         let passCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = StubProcessRunner { call in
+            if call.arguments.contains("--active-only") || call.arguments.contains(where: { $0.hasPrefix("--task-ids=") }) {
+                return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
+            }
             let thisPass = passCount.value + 1
             passCount.mutate { $0 = thisPass }
             if thisPass == 1 { firstPassGate.waitSync() }
             if thisPass == 2 { secondPassGate.waitSync() }
-            return .success(stdout(#"{"v":2,"tasks":[{"task_id":"pass\#(thisPass)","status":"running","backend":"claude"}]}"#))
+            return .success(historyStdout(#"{"v":2,"tasks":[{"task_id":"pass\#(thisPass)","status":"running","backend":"claude"}]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -130,7 +136,7 @@ extension TaskListRepositoryImplTests {
         let runner = StubProcessRunner { _ in
             callCount.mutate { $0 += 1 }
             if callCount.value == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":2,"tasks":[]}"#))
+            return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -163,7 +169,7 @@ extension TaskListRepositoryImplTests {
         let runner = StubProcessRunner { _ in
             callCount.mutate { $0 += 1 }
             if callCount.value == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":2,"tasks":[]}"#))
+            return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -184,6 +190,6 @@ extension TaskListRepositoryImplTests {
             Issue.record("expected success")
             return
         }
-        #expect(callCount.value == 2)
+        #expect(callCount.value == 4)
     }
 }

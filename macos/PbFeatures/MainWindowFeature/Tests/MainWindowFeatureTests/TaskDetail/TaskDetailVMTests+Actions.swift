@@ -121,7 +121,7 @@ extension TaskDetailVMTests {
     
     // MARK: - MS-DETAIL-5: message box submit
     
-    @Test func givenAnEligibleMessage_whenSubmitted_thenTheFieldClearsImmediatelyRegardlessOfLaterOutcome() async {
+    @Test(.timeLimit(.minutes(1))) func givenAnEligibleMessage_whenSubmitted_thenTheFieldClearsImmediatelyRegardlessOfLaterOutcome() async {
         // given — a live-input running task: Send is eligible.
         let harness = makeSUT()
         let sut = harness.sut
@@ -135,14 +135,18 @@ extension TaskDetailVMTests {
         await waitUntil { sut.task != nil }
         
         // when
+        // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
+        let invocation = AsyncStream<Bool>.makeStream()
+        when(useCase).send(.value("abc12345"), text: .value("hello")).perform { invocation.continuation.yield(true) }
         let cleared = sut.submitMessage("  hello  ")
         
         // then — eligible, so the caller is told to clear the field immediately.
         #expect(cleared)
-        await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(5))
+        #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
+        verify(useCase).send(.value("abc12345"), text: .value("hello")).called(1)
     }
     
-    @Test func givenAnEligibleResume_whenItSucceeds_thenItDispatchesButDoesNotNavigate() async {
+    @Test(.timeLimit(.minutes(1))) func givenAnEligibleResume_whenItSucceeds_thenItDispatchesButDoesNotNavigate() async {
         // given — a terminal task with a session: Continue (resume) is eligible. Monitor piece 7,
         // Design point 7: Continue no longer navigates — the conversation stays selected, and the
         // new turn appears once the listing refreshes and this VM's own membership recomputes.
@@ -159,11 +163,15 @@ extension TaskDetailVMTests {
         await waitUntil { sut.task != nil }
 
         // when
+        // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
+        let invocation = AsyncStream<Bool>.makeStream()
+        when(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).perform { invocation.continuation.yield(true) }
         let cleared = sut.submitMessage("follow up")
 
         // then
         #expect(cleared)
-        await verify(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(5))
+        #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
+        verify(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).called(1)
         try? await Task.sleep(for: .milliseconds(50))
         verify(routing).selectTask(.any).called(0)
     }

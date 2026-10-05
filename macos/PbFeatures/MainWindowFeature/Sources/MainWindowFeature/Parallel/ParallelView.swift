@@ -85,7 +85,10 @@ struct ParallelView<VM: ParallelViewModel>: View {
                         HStack(alignment: .top, spacing: 0) {
                             ForEach(viewModel.columns) { column in
                                 ParallelColumnView(model: column)
-                                    .frame(width: ParallelLayout.columnWidth(memberCount: viewModel.columns.count, availableWidth: proxy.size.width))
+                                    .frame(
+                                        width: ParallelLayout.columnWidth(memberCount: viewModel.columns.count, availableWidth: proxy.size.width),
+                                        height: max(0, proxy.size.height)
+                                    )
                                 Divider()
                             }
                         }
@@ -168,7 +171,10 @@ struct ParallelView<VM: ParallelViewModel>: View {
                     HStack(alignment: .top, spacing: 0) {
                         ForEach(0 ..< columnCount, id: \.self) { _ in
                             columnPlaceholder
-                                .frame(width: ParallelLayout.columnWidth(memberCount: columnCount, availableWidth: proxy.size.width))
+                                .frame(
+                                    width: ParallelLayout.columnWidth(memberCount: columnCount, availableWidth: proxy.size.width),
+                                    height: max(0, proxy.size.height)
+                                )
                             Divider()
                         }
                     }

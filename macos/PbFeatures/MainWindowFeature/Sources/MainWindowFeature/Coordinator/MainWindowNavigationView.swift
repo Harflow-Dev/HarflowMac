@@ -47,6 +47,12 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 coordinator.buildTaskDetailView(id: id)
             case .group(let name):
                 coordinator.buildParallelView(name: name)
+            case .workflow(let name):
+                coordinator.buildWorkflowEditorView(name: name)
+            case .newWorkflow(let id):
+                coordinator.buildWorkflowEditorView(name: nil).id(id)
+            case .workflowRun(let id):
+                coordinator.buildWorkflowRunView(id: id)
             case .newSession, .openWindow, nil:
                 emptyDetailView
             }

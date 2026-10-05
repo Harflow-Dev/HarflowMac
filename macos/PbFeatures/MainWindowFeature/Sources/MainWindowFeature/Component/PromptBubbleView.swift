@@ -21,11 +21,13 @@ struct PromptBubbleView: View {
 
     let text: String
     var caption: String?
+    let isPending: Bool
     @State private var isExpanded: Bool
 
-    init(text: String, caption: String? = nil, isInitiallyExpanded: Bool = false) {
+    init(text: String, caption: String? = nil, isInitiallyExpanded: Bool = false, isPending: Bool = false) {
         self.text = text
         self.caption = caption
+        self.isPending = isPending
         _isExpanded = State(initialValue: isInitiallyExpanded)
     }
 
@@ -44,6 +46,7 @@ struct PromptBubbleView: View {
                 }
                 Text(text)
                     .font(.pb(.reading))
+                    .foregroundStyle(isPending ? Color.secondaryText : Color.primary)
                     .lineSpacing(6)
                     .lineLimit(isLong && !isExpanded ? Self.collapsedLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,7 +58,7 @@ struct PromptBubbleView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.promptBubble))
+            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(isPending ? Color.promptBubble.opacity(0.45) : Color.promptBubble))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
     }

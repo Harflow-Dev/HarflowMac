@@ -10,6 +10,7 @@
 
 import MonitorCore
 import PbCommon
+import PbRepository
 import PbUI
 import SwiftUI
 
@@ -21,6 +22,10 @@ protocol SidebarViewModel: ViewModel {
     
     /// Running / Today / Earlier, in that order, empty buckets omitted (settled plan D10).
     var sections: [SidebarSection] { get }
+    var taskHistoryState: HistoryLoadingState { get }
+    var workflowHistoryState: HistoryLoadingState { get }
+    func didTapLoadMoreTasks()
+    func didTapLoadMoreWorkflows()
     var listErrorMessage: String? { get }
     /// The list body's empty-state message, or `nil` when there's real content to show (Monitor
     /// piece 6's precedence rules — see `SidebarVM.computeEmptyStateMessage()`).
@@ -39,6 +44,11 @@ protocol SidebarViewModel: ViewModel {
     /// The install/update banner, or `nil` when nothing needs surfacing — shown in place of the
     /// red error section (settled plan, section 5).
     var installBannerModel: InstallBanner.Model? { get }
+    var savedWorkflows: [WorkflowRecord] { get }
+    var workflowErrorMessage: String? { get }
+    func didTapNewWorkflow()
+    func groupConversations(_ group: ParallelGroup) -> [Conversation]
+    func isExecutionParentExpanded(_ id: String) -> Bool
 
     func didAppear()
     func didDisappear()
@@ -57,6 +67,21 @@ protocol SidebarViewModel: ViewModel {
     func didPressMoveCommand(_ direction: MoveCommandDirection)
 }
 
+extension SidebarViewModel {
+    var savedWorkflows: [WorkflowRecord] { [] }
+    var workflowErrorMessage: String? { nil }
+    func didTapNewWorkflow() {}
+    func groupConversations(_ group: ParallelGroup) -> [Conversation] { group.conversations }
+    func isExecutionParentExpanded(_ id: String) -> Bool { false }
+}
+
+extension SidebarViewModel {
+    var taskHistoryState: HistoryLoadingState { HistoryLoadingState() }
+    var workflowHistoryState: HistoryLoadingState { HistoryLoadingState() }
+    func didTapLoadMoreTasks() {}
+    func didTapLoadMoreWorkflows() {}
+}
+
 // MARK: - SidebarView
 
 struct SidebarView<VM: SidebarViewModel>: View {
@@ -68,6 +93,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    @State private var workflowsExpanded = true
     
     // MARK: - Init
     
@@ -106,7 +132,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Color.secondaryText)
-                TextField("Search", text: Binding(get: { viewModel.searchQuery }, set: { viewModel.didChangeSearchQuery($0) }))
+                TextField("Search loaded history", text: Binding(get: { viewModel.searchQuery }, set: { viewModel.didChangeSearchQuery($0) }))
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 10)
@@ -164,8 +190,38 @@ struct SidebarView<VM: SidebarViewModel>: View {
         return tab.isNotFound ? "\(name) (not found on PATH)" : name
     }
 
+    private func historyControl(_ source: String, state: HistoryLoadingState, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if state.authorityIncomplete {
+                Text("History is blocked by a large legacy record. Inspect a known task directly to restore access.")
+                    .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+            } else if state.historyIncomplete {
+                Text("Some large legacy records need direct inspection; history ordering is incomplete.")
+                    .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+            }
+            if state.isLoading {
+                ProgressView("Loading \(source.lowercased())…")
+            } else if let error = state.error {
+                Text(error.message).font(.pb(.caption)).foregroundStyle(Color.failedRed)
+                Button("Retry \(source.lowercased())", action: action)
+            } else if state.authorityIncomplete {
+                Button("Retry \(source.lowercased())", action: action)
+            } else if state.bootstrapPending {
+                Text("Preparing \(source.lowercased()) history…").font(.pb(.caption))
+                Button("Continue loading \(source.lowercased())", action: action)
+            } else if state.hasMore {
+                Button("Load more \(source.lowercased())", action: action)
+            } else {
+                Text("End of loaded \(source.lowercased()) history").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+            }
+        }
+    }
+
     private var list: some View {
         List(selection: Binding(get: { viewModel.selection }, set: { viewModel.didSelect($0) })) {
+            workflowDefinitions
             if let bannerModel = viewModel.installBannerModel {
                 Section {
                     InstallBanner(
@@ -185,10 +241,17 @@ struct SidebarView<VM: SidebarViewModel>: View {
             } else {
                 ForEach(viewModel.sections) { section in
                     Section {
-                        ForEach(section.items) { item in itemView(item) }
+                        ForEach(section.items) { item in
+                            itemView(item)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                        }
                     } header: {
                         SectionLabel(text: section.title)
                     }
+                }
+                Section("History") {
+                    historyControl("Tasks", state: viewModel.taskHistoryState, action: viewModel.didTapLoadMoreTasks)
+                    historyControl("Workflows", state: viewModel.workflowHistoryState, action: viewModel.didTapLoadMoreWorkflows)
                 }
                 if let message = viewModel.emptyStateMessage {
                     Text(message)
@@ -211,11 +274,58 @@ struct SidebarView<VM: SidebarViewModel>: View {
     private func itemView(_ item: SidebarItem) -> some View {
         switch item {
         case .task(let row):
-            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { viewModel.didToggleExpansion(taskID: row.id) } : nil)
+            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion(row.id) } : nil)
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
-            GroupRow(group: group).tag(MonitorDestination.group(group.name))
+            HStack(spacing: 4) {
+                if viewModel.groupConversations(group).count > 1 {
+                Button { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: group.id) } } label: {
+                    Image(systemName: viewModel.isExecutionParentExpanded(group.id) ? "chevron.down" : "chevron.right")
+                        .font(.pb(.caption))
+                }
+.buttonStyle(.plain)
+.accessibilityLabel("Expand or collapse \(group.name)")
+                }
+                GroupRow(group: group, conversations: viewModel.groupConversations(group))
+            }.tag(MonitorDestination.group(group.name))
+        case .workflow(let row):
+            TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion("workflow:\(row.id)") } : nil)
+                .tag(MonitorDestination.workflowRun(row.id))
         }
+    }
+
+    private func toggleExpansion(_ id: String) {
+        withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: id) }
+    }
+
+    private var workflowDefinitions: some View {
+        Section {
+            if workflowsExpanded {
+                ForEach(viewModel.savedWorkflows) { workflow in
+                    Label(workflow.id, systemImage: "point.3.connected.trianglepath.dotted")
+                        .font(.pb(.body))
+                        .tag(MonitorDestination.workflow(workflow.id))
+                }
+                if let error = viewModel.workflowErrorMessage {
+                    Text(error).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                }
+            }
+        } header: {
+            HStack(spacing: 8) {
+                Button { workflowsExpanded.toggle() } label: {
+                    SectionLabel(text: "Workflows")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(workflowsExpanded ? "Collapse workflows" : "Expand workflows")
+                Button { viewModel.didTapNewWorkflow() } label: { Image(systemName: "plus") }
+                    .buttonStyle(.plain)
+                    .font(.pb(.caption, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("New workflow")
+                Spacer()
+            }
+        }
+        .collapsible(false)
     }
 
     private var footer: some View {

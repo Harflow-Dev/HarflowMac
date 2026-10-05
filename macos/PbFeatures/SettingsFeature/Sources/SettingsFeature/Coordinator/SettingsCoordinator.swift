@@ -54,7 +54,10 @@ public final class SettingsCoordinator: SettingsNavigationCoordinator {
     public func buildHarnessesView() -> AnyView {
         let useCase = HarnessesViewRepository()
         let vm = HarnessesVM(useCase: useCase)
-        return HarnessesView(vm).eraseToAnyView()
+        return HarnessesView(vm) { row in
+            let allowlist = MCPAllowlistVM(backend: MCPAllowlistVM.backend(for: row.key), title: row.displayName, useCase: MCPAllowlistRepository())
+            return MCPAllowlistView(viewModel: allowlist).eraseToAnyView()
+        }.eraseToAnyView()
     }
     
     // MARK: - ViewCoordinator

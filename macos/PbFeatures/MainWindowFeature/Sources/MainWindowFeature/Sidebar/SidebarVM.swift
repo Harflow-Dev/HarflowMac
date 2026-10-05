@@ -1,8 +1,3 @@
-//
-//  SidebarVM.swift
-//  MainWindowFeature
-//
-
 import Combine
 import Foundation
 import Mockable
@@ -109,6 +104,13 @@ protocol SidebarRouting: Sendable {
 @Observable
 @MainActor
 final class SidebarVM: SidebarViewModel {
+    var workflowDefinitions: [WorkflowRecord] = []
+    var workflowRuns: [SidebarWorkflowRun] = []
+    var workflowErrorMessage: String?
+    @ObservationIgnored var workflowPoll: Task<Void, Never>?
+    @ObservationIgnored var workflowGeneration = UUID()
+    @ObservationIgnored let historyUseCase: (any SidebarHistoryUseCase)?
+    @ObservationIgnored let workflowUseCase: (any SidebarWorkflowUseCase)?
     
     // MARK: - SidebarViewModel Properties
     
@@ -140,6 +142,11 @@ final class SidebarVM: SidebarViewModel {
     /// task history (alphabetical) — Design point 3/Review round 1 item 5.
     /// Written from `SidebarVM+Backends.swift` too, hence not `private(set)` (`private` is file-scoped).
     var backendTabs: [BackendTab] = [.all]
+    var taskHistoryState = HistoryLoadingState()
+    var workflowHistoryState = HistoryLoadingState()
+    var workflowHistoryInitialized = false
+    var workflowRefreshOffset = 0
+
     var selectedBackend = "all"
     /// A quiet note shown near the tab row when the catalog is degraded with nothing carried over —
     /// "Backend list unavailable — update polybridge." (Review round 1 item 2). `nil` otherwise.
@@ -150,7 +157,9 @@ final class SidebarVM: SidebarViewModel {
     /// would never mark the view as needing a redraw when the coordinator's selection changes
     /// from elsewhere (e.g. "Open parent" in `TaskDetailView`). Initialised from `routing.selection`
     /// and kept live by the `selectionPublisher()` subscription in `subscribeIfNeeded()`.
+    var pendingWorkflowRevealID: String?
     private(set) var selection: MonitorDestination?
+    @ObservationIgnored private var selectionRevision = 0
     /// The install/update banner to show in place of the red error section, or `nil` when nothing
     /// needs surfacing (settled plan, section 5's precedence rules). Written from
     /// `SidebarVM+InstallBanner.swift` too, so it cannot be `private(set)` — `private` is
@@ -163,7 +172,7 @@ final class SidebarVM: SidebarViewModel {
     // The properties below are read or written from `SidebarVM+InstallBanner.swift` as well as this
     // file, so — same reasoning as `installBannerModel` above — they cannot be `private`.
     @ObservationIgnored let useCase: any SidebarUseCase
-    @ObservationIgnored private let routing: any SidebarRouting
+    @ObservationIgnored let routing: any SidebarRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
     // `latestTasks`/`collapsedTaskIDs`/`lastKnownSiblingsByMember` are also read/written from
@@ -192,6 +201,7 @@ final class SidebarVM: SidebarViewModel {
     /// Lives for the app's lifetime (this VM is cached across window close/reopen); never mutated by
     /// an ordinary `recompute()` — only `didToggleExpansion(taskID:)` and an applied reveal touch it.
     @ObservationIgnored var collapsedTaskIDs: Set<String> = []
+    @ObservationIgnored var expandedExecutionParents: Set<String> = []
     /// A reveal that could not be applied yet because its task was not in `latestTasks` — retried on
     /// every `tasksPublisher` emission until it lands, or replaced by a fresher one.
     @ObservationIgnored private var pendingRevealToApply: PendingReveal?
@@ -204,7 +214,10 @@ final class SidebarVM: SidebarViewModel {
 
     // MARK: - Init
 
-    init(useCase: any SidebarUseCase, routing: any SidebarRouting) {
+    init(useCase: any SidebarUseCase, routing: any SidebarRouting, workflowUseCase: (any SidebarWorkflowUseCase)? = nil,
+         historyUseCase: (any SidebarHistoryUseCase)? = nil) {
+        self.workflowUseCase = workflowUseCase
+        self.historyUseCase = historyUseCase ?? (useCase as? any SidebarHistoryUseCase)
         self.useCase = useCase
         self.routing = routing
         self.connectionLine = useCase.connectionLine
@@ -226,13 +239,19 @@ final class SidebarVM: SidebarViewModel {
         // cached `MainWindowCoordinator`/`SidebarVM` survive a window close/reopen, so this is a
         // real, reachable gap, not a hypothetical one.
         selection = normalized(routing.selection)
+        requestWorkflowReveal(selection)
+        resolveUnloadedSelection(selection)
+        if case .workflowRun = selection { recompute() }
         // Same reasoning for a reveal requested while this screen was unsubscribed: the coordinator
         // still holds it (Design point 5), so pick it up here rather than only via `revealPublisher()`.
         if let reveal = routing.pendingReveal { handleReveal(reveal) }
+        if !didSubscribe { subscribeToHistory() }
         subscribeIfNeeded()
+        startWorkflowPolling()
     }
 
     func didDisappear() {
+        stopWorkflowPolling()
         cancellables.removeAll()
         didSubscribe = false
     }
@@ -248,6 +267,9 @@ final class SidebarVM: SidebarViewModel {
     }
 
     func didSelect(_ destination: MonitorDestination?) {
+        selectionRevision += 1
+        selection = normalized(destination)
+        recompute()
         routing.select(destination)
     }
 
@@ -258,6 +280,22 @@ final class SidebarVM: SidebarViewModel {
     // MARK: - Collapsible tree (settled plan, Design points 1-5)
 
     func didToggleExpansion(taskID: String) {
+        if taskID.hasPrefix("group:"),
+           !Lineage.sections(latestTasks).parallel.contains(where: { $0.id == taskID && groupConversations($0).count > 1 }) { return }
+        if taskID.hasPrefix("workflow:") || taskID.hasPrefix("group:") {
+            if !expandedExecutionParents.insert(taskID).inserted {
+                expandedExecutionParents.remove(taskID)
+                if case .task(let selectedID) = selection, executionParent(of: selectedID) == taskID {
+                    let parent: MonitorDestination = taskID.hasPrefix("workflow:")
+                        ? .workflowRun(String(taskID.dropFirst(9))) : .group(String(taskID.dropFirst(6)))
+                    selectionRevision += 1
+                    selection = parent
+                    routing.select(parent)
+                }
+            }
+            recompute()
+            return
+        }
         if collapsedTaskIDs.contains(taskID) {
             collapsedTaskIDs.remove(taskID)
         } else {
@@ -321,11 +359,11 @@ final class SidebarVM: SidebarViewModel {
             // so there is no cost reason to suppress a same-content republish either.
             .sink { [weak self] tasks in
                 guard let self else { return }
-                latestTasks = tasks
+                latestTasks = tasks.filter { $0.raw["workflow_builder"]?.boolValue != true }
                 // Built together with `latestTasks`, before anything below reads it (Plan review
                 // round 1, item 1) — `tryApplyPendingReveal()` runs before `recompute()` and must see
                 // an index that already matches this listing.
-                conversationIndex = ConversationIndex(tasks)
+                conversationIndex = ConversationIndex(latestTasks)
                 // A reveal that arrived before its task was listed retries here on every listing.
                 tryApplyPendingReveal()
                 recompute()
@@ -374,10 +412,11 @@ final class SidebarVM: SidebarViewModel {
             .store(in: &cancellables)
 
         routing.selectionPublisher()
+            .map { [weak self] destination in (destination, self?.selectionRevision) }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] destination in
-                guard let self else { return }
-                selection = normalized(destination)
+            .sink { [weak self] destination, revision in
+                guard let self, revision == selectionRevision else { return }
+                applyExternalSelection(destination)
             }
             .store(in: &cancellables)
 
@@ -392,7 +431,15 @@ final class SidebarVM: SidebarViewModel {
     /// 7); Parallel groups stay task-level, unchanged (Review round 1, item 3). Never mutates
     /// `collapsedTaskIDs` itself — an ordinary recompute (a new listing, a search keystroke) must
     /// never re-expand a row the person collapsed.
-    private func recompute() {
+    private func applyExternalSelection(_ destination: MonitorDestination?) {
+        selection = normalized(destination)
+        requestWorkflowReveal(selection)
+        resolveUnloadedSelection(selection)
+        recompute()
+    }
+
+    func recompute() {
+        revealWorkflowAncestors()
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
         recomputeBackendTabs()
@@ -404,8 +451,9 @@ final class SidebarVM: SidebarViewModel {
         let query = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
         let backend = selectedBackend
         let isFilterActive = !query.isEmpty || backend != "all"
+        let builderIDs = Set(workflowTaskOwners.keys)
         func matches(_ task: TaskInfo) -> Bool {
-            (backend == "all" || task.backend == backend)
+            !builderIDs.contains(task.taskID) && (backend == "all" || task.backend == backend)
             && (query.isEmpty
                 || useCase.title(task.taskID).lowercased().contains(query)
                 || task.taskID.lowercased().contains(query)
@@ -434,9 +482,12 @@ final class SidebarVM: SidebarViewModel {
             })
             : []
 
+        selection = normalized(selection)
         sections = bucketedSections(
             trees: matched.running + matched.recent,
-            groups: Lineage.sections(latestTasks, matches: matches).parallel,
+            // A catalog without group metadata cannot have parallel groups. Avoid rebuilding
+            // the entire legacy task tree after the conversation index already supplied its rows.
+            groups: latestTasks.contains(where: { $0.group != nil }) ? Lineage.sections(latestTasks, matches: matches).parallel : [],
             forcedExpandedIDs: forcedExpandedIDs
         )
 
@@ -492,6 +543,7 @@ final class SidebarVM: SidebarViewModel {
 
     private func handleReveal(_ reveal: PendingReveal) {
         pendingRevealToApply = reveal
+        resolveUnloadedSelection(.task(reveal.taskID))
         if tryApplyPendingReveal() { recompute() }
     }
 
@@ -504,6 +556,7 @@ final class SidebarVM: SidebarViewModel {
     private func tryApplyPendingReveal() -> Bool {
         guard let reveal = pendingRevealToApply else { return false }
         guard latestTasks.contains(where: { $0.taskID == reveal.taskID }) else { return false }
+        expandExecutionParent(of: reveal.taskID)
         for ancestor in conversationIndex.ancestors(ofConversationContaining: reveal.taskID) { collapsedTaskIDs.remove(ancestor.id) }
         pendingRevealToApply = nil
         routing.consumeReveal(requestID: reveal.requestID)

@@ -8,6 +8,15 @@ import Testing
 
 @Suite struct TaskListRepositoryImplTests {
 
+    func historyStdout(_ json: String) -> ProcessOutput {
+        var raw = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:]
+        if let items = raw.removeValue(forKey: "tasks") {
+            raw["result"] = ["items": items, "next_cursor": NSNull(), "has_more": false, "bootstrap_pending": false]
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: raw)) ?? Data()
+        return stdout(String(bytes: data, encoding: .utf8) ?? "")
+    }
+
     // MARK: Fixtures
 
     func ctlClient(listing: [String], runner: StubProcessRunner? = nil) -> CtlClient {
@@ -15,7 +24,7 @@ import Testing
             #"{"task_id":"\#($0)","status":"running","backend":"claude"}"#
         }
 .joined(separator: ",") + "]"
-        let stub = runner ?? StubProcessRunner(output: stdout(#"{"v":2,"tasks":\#(payload)}"#))
+        let stub = runner ?? StubProcessRunner(output: historyStdout(#"{"v":2,"tasks":\#(payload)}"#))
         return CtlClient(executable: "/bin/echo", environment: [:], runner: stub)
     }
 
@@ -70,7 +79,7 @@ import Testing
         let runner = StubProcessRunner { _ in
             callCount.mutate { $0 += 1 }
             if callCount.value == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":2,"tasks":[]}"#))
+            return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -86,7 +95,7 @@ import Testing
 
         // then — the in-flight call ran again once more for the coalesced request, not once per
         // caller running independently (which would race arbitrarily higher).
-        #expect(callCount.value == 2)
+        #expect(callCount.value == 4)
     }
 
     @Test func givenAFailedListing_whenRefreshed_thenStaleTasksAndSnapshotsAreKeptAndOnlyListErrorChanges() async {
@@ -150,7 +159,7 @@ import Testing
         let listCallCount = LockedBox(0)
         let runner = StubProcessRunner { _ in
             listCallCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":2,"tasks":[]}"#))
+            return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(ctlClient(listing: [], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)

@@ -127,22 +127,24 @@ struct CtlDecodingTests {
 
     @Test
     func givenAnUnsupportedSchemaVersion_whenDecoded_thenItIsRefused() {
-        // given / when — v3 is genuinely outside `ctlContractVersions` ({1, 2}).
-        guard case .failure(.unsupportedVersion(_, let v)) = decode(#"{"v": 3, "tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
+        // given / when — v6 is outside `ctlContractVersions` ({1, 2, 3, 4, 5}).
+        guard case .failure(.unsupportedVersion(_, let v)) = decode(#"{"v": 6, "tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
         // then
-        #expect(v == "3")
-        #expect(ToolError.unsupportedVersion(tool: "polybridge-ctl", version: "3").message.contains("understands versions 1 or 2"))
+        #expect(v == "6")
+        #expect(ToolError.unsupportedVersion(tool: "polybridge-ctl", version: "6").message.contains("understands versions 1 or 2 or 3 or 4 or 5"))
         guard case .failure(.unsupportedVersion(_, let none)) = decode(#"{"tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
         #expect(none == "none")
     }
 
     @Test
-    func givenEitherCtlContractVersion_whenDecoded_thenBothAreAccepted() {
-        // given / when / then — v2 added `resume_command` (Monitor piece 3/3); v1 records simply
-        // have none, so both stay readable.
-        #expect(ctlContractVersions == [1, 2])
+    func givenSupportedCtlContractVersions_whenDecoded_thenAllAreAccepted() {
+        // given / when / then — older documents lack optional fields and remain readable.
+        #expect(ctlContractVersions == [1, 2, 3, 4, 5])
         guard case .success(.tasks) = decode(#"{"v": 1, "tasks": []}"#) else { Issue.record("v1 should decode"); return }
         guard case .success(.tasks) = decode(#"{"v": 2, "tasks": []}"#) else { Issue.record("v2 should decode"); return }
+        guard case .success(.tasks) = decode(#"{"v": 3, "tasks": []}"#) else { Issue.record("v3 should decode"); return }
+        guard case .success(.tasks) = decode(#"{"v": 5, "tasks": []}"#) else { Issue.record("v5 should decode"); return }
+        guard case .success(.tasks) = decode(#"{"v": 4, "tasks": []}"#) else { Issue.record("v4 should decode"); return }
     }
 
     @Test

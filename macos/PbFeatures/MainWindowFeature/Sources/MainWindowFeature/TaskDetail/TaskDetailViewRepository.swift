@@ -18,6 +18,9 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
 
     // MARK: - Private Properties
 
+    private let builderRunID: String?
+    private var relatedMembers: [String: TaskInfo] = [:]
+    @GlobalEnvironment(\.workflowRepository) private var workflowRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.taskSnapshotRepository) private var taskSnapshotRepository
     @GlobalEnvironment(\.taskActionRepository) private var taskActionRepository
@@ -33,8 +36,12 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         taskActionRepository: (any TaskActionRepository)? = nil,
         eventStreamRepository: (any EventStreamRepository)? = nil,
         takeoverService: (any TakeoverService)? = nil,
-        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil
+        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
+        builderRunID: String? = nil,
+        workflowRepository: (any WorkflowRepository)? = nil
     ) {
+        self.builderRunID = builderRunID
+        if let workflowRepository { self.workflowRepository = workflowRepository }
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskSnapshotRepository { self.taskSnapshotRepository = taskSnapshotRepository }
         if let taskActionRepository { self.taskActionRepository = taskActionRepository }
@@ -48,7 +55,11 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }
     func hasListedPublisher() -> AnyPublisher<Bool, Never> { taskListRepository.hasListedPublisher() }
     func titlesPublisher() -> AnyPublisher<[String: String], Never> { taskListRepository.titlesPublisher() }
-    func detail(_ id: String) -> TaskInfo? { taskListRepository.detail(id) }
+    func detail(_ id: String) -> TaskInfo? {
+        guard let listed = taskListRepository.task(id) else { return taskListRepository.detail(id) }
+        return WorkflowNodePresentation.merged(taskListRepository.detail(id), with: listed)
+    }
+
     func task(_ id: String) -> TaskInfo? { taskListRepository.task(id) }
     func title(_ id: String) -> String { taskListRepository.title(id) }
     func ancestors(of id: String) -> [TaskInfo] { Lineage.ancestors(of: id, in: taskListRepository.tasks) }
@@ -68,7 +79,8 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func siblings(of id: String) -> [TaskInfo] { Lineage.siblings(of: id, in: taskListRepository.tasks) }
 
     func conversationMembers(of id: String) -> [TaskInfo] {
-        Lineage.conversation(containing: id, in: taskListRepository.tasks)?.members ?? []
+        WorkflowOrchestratorConversation.members(containing: id, in: conversationInventory)
+            ?? Lineage.conversation(containing: id, in: conversationInventory)?.members ?? []
     }
 
     func cancelScope(of id: String) -> Set<String> { Lineage.cancelScope(of: id, in: taskListRepository.tasks) }
@@ -82,15 +94,61 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func outcomesPublisher() -> AnyPublisher<[String: String], Never> { taskActionRepository.outcomesPublisher() }
     
     @discardableResult func cancel(_ id: String) async throws -> Bool { try await taskActionRepository.cancel(id) }
-    @discardableResult func send(_ id: String, text: String) async throws -> Bool { try await taskActionRepository.send(id, text: text) }
+    @discardableResult func send(_ id: String, text: String) async throws -> Bool {
+        if builderRunID != nil { _ = try await builderFollowup(id, text: text); return true }
+        return try await taskActionRepository.send(id, text: text)
+    }
+
     @discardableResult func resume(_ id: String, text: String, onResumed: @escaping @Sendable (String) async -> Void) async throws -> String? {
-        try await taskActionRepository.resume(id, text: text, onResumed: onResumed)
+        if builderRunID != nil {
+            return try await builderFollowup(id, text: text)
+        }
+        return try await taskActionRepository.resume(id, text: text, onResumed: onResumed)
     }
     
+    private func builderFollowup(_ id: String, text: String) async throws -> String? {
+        guard let builderRunID else { return nil }
+        let response = try await workflowRepository.command("builder-followup", options: ["--prompt=\(text)"], positionals: [builderRunID])
+        let state = response["status"]?.stringValue ?? "queued"
+        taskActionRepository.setOutcome(id, state == "queued_next_turn" ? "Queued for the next builder turn." : "Queued for the workflow builder.")
+        await taskListRepository.refresh()
+        return nil
+    }
+
+    func allowPolybridgeTools(backend: String) async throws -> [String: JSONValue] {
+        let ctl = try toolEnvironmentRepository.ctl().get()
+        return try await ctl.mcpAllowlist(backend: backend, allow: "polybridge/*").get()
+    }
+
     func beginTakeover(taskID: String) { takeoverService.beginTakeover(taskID: taskID) }
     func setOutcome(_ id: String, _ text: String?) { taskActionRepository.setOutcome(id, text) }
 
     func acquireEventLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquire(id) }
+    private var conversationInventory: [TaskInfo] {
+        var tasks = relatedMembers
+        for task in taskListRepository.tasks { tasks[task.taskID] = task }
+        return Array(tasks.values)
+    }
+
+    func resolveTask(_ id: String) async -> TaskInfo? {
+        let task = await taskListRepository.resolve(id)
+        if let task { relatedMembers[id] = task }
+        return task
+    }
+
+    func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage? {
+        let page = try await taskListRepository.conversationPage(sessionID: sessionID, cursor: cursor, limit: 100)
+        for task in page.items { relatedMembers[task.taskID] = task }
+        return page
+    }
+
+    func acquireSummaryLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquireSummary(id) }
+    func loadMoreSummaryFiles(_ id: String) { eventStreamRepository.loadMoreSummaryFiles(id) }
+    func loadMoreEvents(_ id: String) { eventStreamRepository.loadMore(id) }
+    func eventHistory(for id: String) -> EventHistoryState { eventStreamRepository.history(for: id) }
+    func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { eventStreamRepository.historyPublisher(for: id) }
+    func eventSummary(for id: String) -> EventSummary { eventStreamRepository.summary(for: id) }
+    func eventSummaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never> { eventStreamRepository.summaryPublisher(for: id) }
     func events(for id: String) -> [TaskEvent] { eventStreamRepository.events(for: id) }
     func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never> { eventStreamRepository.eventsPublisher(for: id) }
     func items(for id: String) -> [TimelineItem] { eventStreamRepository.items(for: id) }

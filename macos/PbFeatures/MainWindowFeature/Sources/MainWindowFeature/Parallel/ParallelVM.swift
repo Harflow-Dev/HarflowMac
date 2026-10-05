@@ -36,6 +36,7 @@ protocol ParallelUseCase: Sendable {
 
     /// Decision 6: one lease per member, acquired while its column is on screen.
     func acquireEventLease(_ taskID: String) -> any EventStreamLease
+    func events(for taskID: String) -> [TaskEvent]
     func items(for taskID: String) -> [TimelineItem]
     func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never>
     func prompt(for taskID: String) -> String?
@@ -140,6 +141,9 @@ final class ParallelVM: ParallelViewModel {
     /// only. `recompute()` always re-reads each member's own `useCase.task(_:)` before building a
     /// column (F4-40), never a `TaskInfo` cached here.
     @ObservationIgnored private var conversations: [Conversation] = []
+    @ObservationIgnored private var workflowTaskIDs: [String]?
+    @ObservationIgnored private var workflowFocusedTaskIDs: Set<String>?
+    @ObservationIgnored private var workflowTitles: [String: String] = [:]
     
     // MARK: - Init
     
@@ -153,6 +157,15 @@ final class ParallelVM: ParallelViewModel {
     
     func didAppear() {
         subscribeIfNeeded()
+    }
+
+    /// Workflow membership comes from persisted dispatch associations, never group names. The
+    /// existing Parallel feed, actions and per-member leases remain the activity implementation.
+    func setWorkflowTaskIDs(_ ids: [String], focusedTaskIDs: Set<String>? = nil, titles: [String: String] = [:]) {
+        workflowTaskIDs = ids
+        workflowFocusedTaskIDs = focusedTaskIDs
+        workflowTitles = titles
+        if didSubscribe { recomputeMembersAndLeases() }
     }
     
     /// Idempotent teardown (root AGENTS.md rule 7): releases every outstanding lease, cancels every
@@ -246,7 +259,16 @@ final class ParallelVM: ParallelViewModel {
     /// conversation rather than one task per column.
     private func recomputeMembersAndLeases() {
         let group = Lineage.sections(latestTasks).parallel.first { $0.name == groupName }
-        let groupConversations = group?.conversations ?? []
+        let groupConversations: [Conversation]
+        if let workflowTaskIDs {
+            let byID = Dictionary(uniqueKeysWithValues: latestTasks.map { ($0.taskID, $0) })
+            let associated = workflowTaskIDs.compactMap { byID[$0] }
+            groupConversations = WorkflowOrchestratorConversation.conversations(associated).filter { conversation in
+                workflowFocusedTaskIDs.map { focus in conversation.members.contains { focus.contains($0.taskID) } } ?? true
+            }
+        } else {
+            groupConversations = WorkflowOrchestratorConversation.conversations(group?.conversations.flatMap(\.members) ?? [])
+        }
         let newIDs = groupConversations.flatMap { $0.members.map(\.taskID) }
         let newIDSet = Set(newIDs)
         let oldIDSet = Set(memberIDs)
@@ -325,17 +347,22 @@ final class ParallelVM: ParallelViewModel {
     /// all act on the CURRENT (newest) member; `title` names the conversation from its FIRST member
     /// — the same current-vs-first split `TaskDetailVM.recompute()` uses.
     private func makeColumnModel(for conversation: Conversation) -> ParallelColumnModel {
-        let current = conversation.current
+        let current = WorkflowNodePresentation.merged(latestSnapshots[conversation.current.taskID], with: conversation.current)
         let currentID = current.taskID
         let firstID = conversation.first.taskID
         let subtitle = ParallelColumnModel.subtitle(
             repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count
         )
 
-        let itemMembers = conversation.members.map {
-            ConversationItemMember(task: $0, items: itemsByTask[$0.taskID] ?? [], prompt: useCase.prompt(for: $0.taskID))
+        let itemMembers = conversation.members.map { member in
+            let snapshot = WorkflowNodePresentation.merged(latestSnapshots[member.taskID], with: member)
+            let prompt = snapshot.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID)
+            return ConversationItemMember(task: snapshot, items: itemsByTask[member.taskID] ?? [], prompt: prompt)
         }
-        let rows = ConversationTimeline.rows(itemMembers: itemMembers)
+        let rawRows = ConversationTimeline.rows(itemMembers: itemMembers)
+        let isWorker = WorkflowNodePresentation.isWorker(current)
+        let rowTasks = Dictionary(uniqueKeysWithValues: itemMembers.map { ($0.task.taskID, $0.task) })
+        let rows = WorkflowNodePresentation.visibleRows(rawRows, tasks: rowTasks, compact: true)
         // Monitor piece 12, Design point 4's rule, extended across every member (piece 13): a
         // shimmer only while NO member has any real content yet AND at least one member's own event
         // stream is still `.loading`; never once any member has items, and never for `.unavailable`
@@ -346,18 +373,20 @@ final class ParallelVM: ParallelViewModel {
         return ParallelColumnModel(
             id: conversation.id,
             task: current,
-            title: useCase.title(firstID),
+            title: workflowTitles[currentID] ?? useCase.title(firstID),
             subtitle: subtitle,
             isBusy: latestBusy.contains(currentID),
             outcomeMessage: latestOutcomes[currentID],
             showPrompt: showPrompt,
-            prompt: useCase.prompt(for: firstID),
+            prompt: isWorker ? current.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: currentID) : itemMembers.first?.prompt,
             rows: rows,
             activityRows: ActivityRowsBuilder.build(from: rows),
-            liveStep: LiveStep(rows: rows),
+            liveStep: LiveStep(rows: rows, isRunning: current.status.isRunning),
+            pendingMessages: PendingMessage.visible(snapshot: latestSnapshots[currentID], events: useCase.events(for: currentID)),
             isLoading: isLoading,
             // F4-40: the snapshot only — no fallback to `task.summary`, unlike `ChangesPane`.
-            summary: latestSnapshots[currentID]?.summary,
+            summary: (WorkflowNodePresentation.isManaged(current) || WorkflowNodePresentation.resultError(current) != nil)
+                ? WorkflowNodePresentation.summary(latestSnapshots[currentID]?.summary, task: current) : latestSnapshots[currentID]?.summary,
             onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: currentID) },
             onTapOpenTask: { [weak self] in self?.routing.selectTask(currentID) },
             start: conversation.first.startedAt
@@ -365,6 +394,7 @@ final class ParallelVM: ParallelViewModel {
     }
     
     private func didTapTakeover(taskID: String) {
+        guard WorkflowNodePresentation.allowsTerminal(latestSnapshots[taskID] ?? useCase.task(taskID)) else { return }
         guard let task = useCase.task(taskID) else { return }
         let isRunning = task.status.isRunning
         let title = isRunning ? "Take over this task?" : "Continue this session in a terminal?"

@@ -48,5 +48,6 @@ public final class Module: PbModule {
             .environment(\.takeoverService, takeover)
             .environment(\.backendsRepository, backends)
             .environment(\.modelCatalogRepository, modelCatalog)
+            .environment(\.workflowRepository, WorkflowRepositoryImpl(toolEnvironment: toolEnvironment))
     }
 }

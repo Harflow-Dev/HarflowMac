@@ -74,7 +74,8 @@ public final class MenuBarCoordinator: MenuBarNavigationCoordinator {
     private func sharedVM() -> MenuBarVM {
         if let vm { return vm }
         let useCase = MenuBarViewRepository()
-        let newVM = MenuBarVM(useCase: useCase, routing: self)
+        let status = WorkflowMenuBarStatusVM(useCase: WorkflowMenuBarViewRepository())
+        let newVM = MenuBarVM(useCase: useCase, routing: self, workflowStatus: status)
         vm = newVM
         return newVM
     }

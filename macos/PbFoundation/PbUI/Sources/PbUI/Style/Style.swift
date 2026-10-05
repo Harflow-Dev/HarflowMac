@@ -228,7 +228,7 @@ public struct StatusPill: View {
         if task.status.isRunning {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 HStack(spacing: 5) {
-                    ProgressView().controlSize(.mini)
+                    RunningSpinner(size: 12)
                     Text("Running · \(Format.clock(task.elapsed(now: context.date)))").monospacedDigit()
                 }
                 .font(.pb(.secondary, weight: .medium))
