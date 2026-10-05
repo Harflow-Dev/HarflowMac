@@ -118,6 +118,7 @@ struct WorkflowCanvasNode: View {
                     BackendLabel(backend: node.backend).font(.pb(.caption))
                 } else {
                     Text(node.type == "workflow" ? (node.workflowName.isEmpty ? "Select workflow" : node.workflowName) : node.type.capitalized)
+                        .lineLimit(1)
                         .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
                 }

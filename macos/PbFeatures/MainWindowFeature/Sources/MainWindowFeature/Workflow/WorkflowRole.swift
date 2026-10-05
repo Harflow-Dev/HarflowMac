@@ -21,7 +21,7 @@ enum WorkflowRole {
         case "implementation": "hammer"
         case "review": "checkmark.bubble"
         case "task": "terminal"
-        case "workflow": "rectangle.3.group"
+        case "workflow": "point.3.connected.trianglepath.dotted"
         case "start": "play"
         case "join", "parallel_end": "arrow.triangle.merge"
         case "parallel_start", "parallel_group": "arrow.triangle.branch"
