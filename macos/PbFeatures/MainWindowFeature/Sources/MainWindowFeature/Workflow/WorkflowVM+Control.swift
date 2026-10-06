@@ -18,7 +18,7 @@ extension WorkflowVM {
     }
 
     func control(_ command: String, allowOptionalReviewSkip: Bool) {
-        guard let run = selectedRun, run.allowsMonitorControl else { return }
+        guard !isBusy, let run = selectedRun, command == "cancel" ? run.canCancelFromMonitor : run.allowsMonitorControl else { return }
         guard !allowOptionalReviewSkip || (command == "resume" && run.canSkipOptionalReview) else { return }
         if ["resume", "recover"].contains(command) {
             guard !run.isSettling,
@@ -27,7 +27,7 @@ extension WorkflowVM {
         }
         // Capture the displayed checkpoint and answer before scheduling asynchronous work.
         let runID = run.id
-        var options: [String] = run.raw["interaction_owner"]?.stringValue == "monitor" ? ["--monitor"] : []
+        var options: [String] = command == "cancel" || run.raw["interaction_owner"]?.stringValue == "monitor" ? ["--monitor"] : []
         if command == "resume" || command == "recover" {
             let reasonFlag = command == "recover" ? "--reason" : "--instructions"
             options += ["\(reasonFlag)=\(instructions)", "--additional-attempts=\(additionalAttempts)"]
@@ -41,7 +41,12 @@ extension WorkflowVM {
         let capturedOptions = options
         perform { [weak self] in
             guard let self else { return }
-            _ = try await useCase.command(command, options: capturedOptions, positionals: [runID])
+            do {
+                _ = try await useCase.command(command, options: capturedOptions, positionals: [runID])
+            } catch {
+                await refresh()
+                throw error
+            }
             await refresh()
         }
     }

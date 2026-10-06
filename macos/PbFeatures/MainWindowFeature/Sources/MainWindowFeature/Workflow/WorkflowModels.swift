@@ -95,6 +95,13 @@ struct WorkflowRunModel: Identifiable, Equatable {
         return raw["interaction_owner"]?.stringValue != "caller"
     }
 
+    var canCancelFromMonitor: Bool {
+        guard parentRunID == nil, !["completed", "failed", "cancelled", "cancelling"].contains(status) else { return false }
+        if let eligibility = raw["can_cancel_from_monitor"]?.boolValue { return eligibility }
+        // Older ctl versions can safely control their own Monitor-owned runs.
+        return allowsMonitorControl
+    }
+
     var isSettling: Bool { raw["settling"]?.boolValue ?? false }
     var canSkipOptionalReview: Bool {
         isDelegation && allowsMonitorControl && status == "needs_input" && !isSettling

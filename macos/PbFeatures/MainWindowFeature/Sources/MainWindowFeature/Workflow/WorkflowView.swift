@@ -227,8 +227,16 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 if run.allowsMonitorControl, ["running", "starting"].contains(run.status) {
                     Button("Pause") { viewModel.control("pause") }.buttonStyle(QuietButtonStyle())
                 }
-                if run.allowsMonitorControl, !["completed", "failed", "cancelled"].contains(run.status) {
-                    Button("Cancel", role: .destructive) { viewModel.control("cancel") }.buttonStyle(QuietButtonStyle())
+                if run.canCancelFromMonitor {
+                    Button("Cancel", role: .destructive) { viewModel.control("cancel") }
+                        .buttonStyle(QuietButtonStyle())
+.disabled(viewModel.isBusy)
+                } else if run.status == "cancelling" {
+                    Text("Cancelling…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                }
+                if run.parentRunID != nil {
+                    Button("Open root to cancel") { viewModel.openRun(run.rootRunID) }
+                        .buttonStyle(QuietButtonStyle())
                 }
             } else if viewModel.isEditing {
                 Button("Edit with agent", systemImage: "sparkles") { viewModel.prepareGeneration(refining: true) }

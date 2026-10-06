@@ -52,6 +52,19 @@ import Testing
         #expect(raw["status"]?.stringValue == "needs_input")
     }
 
+    @Test func givenDescendantStarts_whenRootDigestsUnchanged_thenCancellationCapabilityRefreshes() async throws {
+        // given
+        let useCase = PollingUseCase()
+        useCase.snapshotMode = true
+        let loader = WorkflowRunPolling()
+        _ = try await loader.load(id: "run", useCase: useCase)
+        useCase.canCancel = false
+        // when
+        let raw = try await loader.load(id: "run", useCase: useCase)
+        // then
+        #expect(raw["can_cancel_from_monitor"]?.boolValue == false)
+    }
+
     @Test func givenUnchangedSnapshot_whenPolling_thenOnlyCompactStatusIsRead() async throws {
         // given
         let useCase = PollingUseCase()
@@ -129,6 +142,7 @@ private final class PollingUseCase: WorkflowUseCase, @unchecked Sendable {
     var detailCalls = 0
     var snapshotMode = false
     var snapshotStatus = "running"
+    var canCancel = true
     var changeDuringPaging = false
     var frozenContent = ""
     var editingContent = "null"
@@ -139,10 +153,11 @@ private final class PollingUseCase: WorkflowUseCase, @unchecked Sendable {
             statusOptions.append(options)
             if snapshotMode {
                 if !options.contains("--snapshot") {
-                    return ["workflow_run_id": .string("run"), "status": .string(snapshotStatus),
+                    return ["workflow_run_id": .string("run"), "status": .string(snapshotStatus), "can_cancel_from_monitor": .bool(canCancel),
                             "monitor_digests": .object(["constant": .string("constant")])]
                 }
                 let current = "{\"workflow_run_id\":\"run\",\"status\":\"\(snapshotStatus)\","
+                    + "\"can_cancel_from_monitor\":\(canCancel),"
                     + "\"summary\":\"\(String(repeating: "x", count: 9000))\","
                     + "\"monitor_digests\":{\"constant\":\"constant\"}}"
                 let offset = options.contains("--cursor=page-two") ? 8000 : 0
