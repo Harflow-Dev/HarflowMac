@@ -20,7 +20,8 @@ struct WorkflowOptionalReviewConsentTests {
     }
 
     @Test(arguments: [false, true])
-    func resumeCapturesDisplayedCheckpointAndAnswerWithoutTransferringConsent(explicitConsent: Bool) async {
+    func givenDisplayedCheckpoint_whenResumingThenChangingSelection_thenCapturesAnswerAndConsent(explicitConsent: Bool) async {
+        // given
         let harness = WorkflowTests().makeVM()
         let vm = harness.sut
         defer { vm.didDisappear() }
@@ -29,6 +30,7 @@ struct WorkflowOptionalReviewConsentTests {
         vm.instructions = "Keep the required review"
         vm.additionalAttempts = 2
 
+        // when
         if explicitConsent {
             vm.control("resume", allowOptionalReviewSkip: true)
         } else {
@@ -41,6 +43,7 @@ struct WorkflowOptionalReviewConsentTests {
         vm.instructions = "Different answer"
         vm.additionalAttempts = 9
 
+        // then
         var options = ["--monitor", "--instructions=Keep the required review", "--additional-attempts=2",
                        "--decision-id=child-question"]
         if explicitConsent { options.append("--allow-optional-review-skip") }
@@ -50,20 +53,25 @@ struct WorkflowOptionalReviewConsentTests {
     }
 
     @Test(arguments: ["paused", "needs_attention", "failed", "running", "completed"])
-    func explicitConsentRefusesOtherStatuses(status: String) {
+    func givenIneligibleStatus_whenResumingWithExplicitConsent_thenRefusesCommand(status: String) {
+        // given
         let harness = WorkflowTests().makeVM()
         defer { harness.sut.didDisappear() }
         var run = inputRun()
         run.raw["status"] = .string(status)
         harness.sut.selectedRun = run
         harness.sut.instructions = "Continue"
-        #expect(!run.canSkipOptionalReview)
+        // when
         harness.sut.control("resume", allowOptionalReviewSkip: true)
+
+        // then
+        #expect(!run.canSkipOptionalReview)
         verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
     }
 
     @Test(arguments: ["hint", "decision", "delegation", "settling", "caller", "child", "answer", "command"])
-    func explicitConsentRefusesMissingEligibilityOrAnswer(condition: String) {
+    func givenMissingEligibilityOrAnswer_whenResumingWithExplicitConsent_thenRefusesCommand(condition: String) {
+        // given
         let harness = WorkflowTests().makeVM()
         defer { harness.sut.didDisappear() }
         var run = inputRun()
@@ -79,7 +87,9 @@ struct WorkflowOptionalReviewConsentTests {
         default: break
         }
         harness.sut.selectedRun = run
+        // when
         harness.sut.control(condition == "command" ? "recover" : "resume", allowOptionalReviewSkip: true)
+        // then
         verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
     }
 }
