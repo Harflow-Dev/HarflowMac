@@ -93,6 +93,12 @@ struct SidebarView<VM: SidebarViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.defaultMinListRowHeight) private var minimumRowHeight
+    @State private var seenRowIDs: Set<String> = []
+    @State private var displayedSections: [SidebarSection]?
+    @State private var fadingRowIDs: Set<String> = []
+    @State private var disclosureTask: Task<Void, Never>?
     @State private var workflowsExpanded = true
     
     // MARK: - Init
@@ -202,7 +208,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
 .foregroundStyle(Color.secondaryText)
             }
             if state.isLoading {
-                ProgressView("Loading \(source.lowercased())…")
+                LoadingLabel("Loading \(source.lowercased())…")
             } else if let error = state.error {
                 Text(error.message).font(.pb(.caption)).foregroundStyle(Color.failedRed)
                 Button("Retry \(source.lowercased())", action: action)
@@ -216,11 +222,13 @@ struct SidebarView<VM: SidebarViewModel>: View {
             } else {
                 Text("End of loaded \(source.lowercased()) history").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             }
-        }
+        }.frame(minHeight: max(20, minimumRowHeight), alignment: .leading)
     }
 
     private var list: some View {
-        List(selection: Binding(get: { viewModel.selection }, set: { viewModel.didSelect($0) })) {
+        List(selection: Binding(get: { viewModel.selection }, set: { destination in
+            withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { viewModel.didSelect(destination) }
+        })) {
             workflowDefinitions
             if let bannerModel = viewModel.installBannerModel {
                 Section {
@@ -239,10 +247,16 @@ struct SidebarView<VM: SidebarViewModel>: View {
             if viewModel.showsLoadingSkeleton {
                 Section { SkeletonRows() }
             } else {
-                ForEach(viewModel.sections) { section in
+                ForEach(displayedSections ?? viewModel.sections) { section in
                     Section {
                         ForEach(section.items) { item in
-                            itemView(item)
+                            SidebarDisclosureRow(isVisible: !fadingRowIDs.contains(item.id), animate: !seenRowIDs.contains(item.id), minimumHeight: minimumRowHeight) {
+                                itemView(item)
+                            }
+                                .transition(.identity)
+                                .allowsHitTesting(!fadingRowIDs.contains(item.id))
+                                .accessibilityHidden(fadingRowIDs.contains(item.id))
+                                .onAppear { seenRowIDs.insert(item.id) }
                                 .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                         }
                     } header: {
@@ -267,7 +281,19 @@ struct SidebarView<VM: SidebarViewModel>: View {
         // The first section header ("Running" whenever anything runs) otherwise sits flush against
         // the list's top edge and is clipped under the filter row.
         .contentMargins(.top, 8, for: .scrollContent)
-        .onMoveCommand { viewModel.didPressMoveCommand($0) }
+        // Native List otherwise keeps closed rows at its minimum height until deletion.
+        .environment(\.defaultMinListRowHeight, 0)
+        .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: expansionToken)
+        .pbFadeIn()
+        .onChange(of: viewModel.sections) { old, new in reconcileRows(from: old, to: new) }
+        .onDisappear {
+            disclosureTask?.cancel()
+            displayedSections = nil
+            fadingRowIDs = []
+        }
+        .onMoveCommand { direction in
+            withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { viewModel.didPressMoveCommand(direction) }
+        }
     }
 
     @ViewBuilder
@@ -277,16 +303,22 @@ struct SidebarView<VM: SidebarViewModel>: View {
             TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion(row.id) } : nil)
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
-            HStack(spacing: 4) {
-                if viewModel.groupConversations(group).count > 1 {
-                Button { withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: group.id) } } label: {
-                    Image(systemName: viewModel.isExecutionParentExpanded(group.id) ? "chevron.down" : "chevron.right")
-                        .font(.pb(.caption))
-                }
-.buttonStyle(.plain)
-.accessibilityLabel("Expand or collapse \(group.name)")
-                }
+            HStack(spacing: 8) {
                 GroupRow(group: group, conversations: viewModel.groupConversations(group))
+                if viewModel.groupConversations(group).count > 1 {
+                    Button { toggleExpansion(group.id) } label: {
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(viewModel.isExecutionParentExpanded(group.id) ? 90 : 0))
+                            .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: viewModel.isExecutionParentExpanded(group.id))
+                            .font(.pb(.caption, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16, height: 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Expand or collapse \(group.name)")
+                    .accessibilityValue(viewModel.isExecutionParentExpanded(group.id) ? "Expanded" : "Collapsed")
+                }
             }.tag(MonitorDestination.group(group.name))
         case .workflow(let row):
             TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion("workflow:\(row.id)") } : nil)
@@ -294,25 +326,56 @@ struct SidebarView<VM: SidebarViewModel>: View {
         }
     }
 
+    private var expansionToken: [String] {
+        viewModel.sections.flatMap(\.items).compactMap { item in
+            switch item {
+            case .task(let row), .workflow(let row):
+                row.hasChildren ? "\(item.id):\(row.isExpanded)" : nil
+            case .group(let group):
+                "\(item.id):\(viewModel.isExecutionParentExpanded(group.id))"
+            }
+        }
+    }
+
+    private func reconcileRows(from old: [SidebarSection], to new: [SidebarSection]) {
+        disclosureTask?.cancel()
+        let newIDs = Set(new.flatMap(\.items).map(\.id))
+        let current = displayedSections ?? old
+        let removed = Set(current.flatMap(\.items).map(\.id)).subtracting(newIDs)
+        seenRowIDs.formIntersection(newIDs)
+        // List retains outgoing cells during its deletion animation. Keep their closed
+        // presentation until that identity is explicitly reintroduced by a new snapshot.
+        fadingRowIDs.formUnion(removed)
+        fadingRowIDs.subtract(newIDs)
+        displayedSections = SidebarSection.retainingRemovedRows(from: current, in: new)
+        guard !removed.isEmpty else { return }
+        // Native List removal is immediate. Keep outgoing cells while their disclosure closes,
+        // then remove them; a newer snapshot cancels this pending removal.
+        disclosureTask = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(reduceMotion ? 180 : 200)) } catch { return }
+            withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { displayedSections = new }
+        }
+    }
+
     private func toggleExpansion(_ id: String) {
-        withAnimation(.easeInOut(duration: 0.2)) { viewModel.didToggleExpansion(taskID: id) }
+        withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { viewModel.didToggleExpansion(taskID: id) }
     }
 
     private var workflowDefinitions: some View {
-        Section {
-            if workflowsExpanded {
+        Section(isExpanded: $workflowsExpanded.animation(PbMotion.disclosure(reduceMotion: reduceMotion))) {
                 ForEach(viewModel.savedWorkflows) { workflow in
                     Label(workflow.id, systemImage: "point.3.connected.trianglepath.dotted")
                         .font(.pb(.body))
+                        .frame(minHeight: minimumRowHeight)
                         .tag(MonitorDestination.workflow(workflow.id))
+                        .pbFadeIn()
                 }
                 if let error = viewModel.workflowErrorMessage {
                     Text(error).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                 }
-            }
         } header: {
             HStack(spacing: 8) {
-                Button { workflowsExpanded.toggle() } label: {
+                Button { withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { workflowsExpanded.toggle() } } label: {
                     SectionLabel(text: "Workflows")
                 }
                 .buttonStyle(.plain)
@@ -325,7 +388,6 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 Spacer()
             }
         }
-        .collapsible(false)
     }
 
     private var footer: some View {

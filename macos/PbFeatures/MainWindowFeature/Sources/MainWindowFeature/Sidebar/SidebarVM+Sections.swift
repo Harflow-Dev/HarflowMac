@@ -27,12 +27,12 @@ enum SidebarEntry {
         }
     }
 
-    /// A tree's root current-run start; a group's earliest member start.
-    var startedAt: Date? {
+    /// Recency for sorting and day buckets, independent of the original run's age label.
+    var latestRunAt: Date? {
         switch self {
         case .tree(let node): node.conversation.current.startedAt
-        case .group(let group): group.startedAt
-        case .workflow(let run): run.startedAt
+        case .group(let group): group.members.flatMap { $0.flattened().compactMap(\.node.task.startedAt) }.max()
+        case .workflow(let run): run.latestRunAt
         }
     }
 
@@ -72,7 +72,7 @@ extension SidebarVM {
 
     private func bucket(for entry: SidebarEntry, now: Date) -> SidebarSection.Bucket {
         if entry.isRunning { return .running }
-        guard let startedAt = entry.startedAt, Calendar.current.isDate(startedAt, inSameDayAs: now) else { return .earlier }
+        guard let startedAt = entry.latestRunAt, Calendar.current.isDate(startedAt, inSameDayAs: now) else { return .earlier }
         return .today
     }
 
@@ -87,7 +87,7 @@ extension SidebarVM {
     }
 
     private static func newestFirst(_ lhs: SidebarEntry, _ rhs: SidebarEntry) -> Bool {
-        switch (lhs.startedAt, rhs.startedAt) {
+        switch (lhs.latestRunAt, rhs.latestRunAt) {
         case let (left?, right?) where left != right: left > right
         case (.some, nil): true
         case (nil, .some): false

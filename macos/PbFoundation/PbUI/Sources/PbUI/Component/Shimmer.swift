@@ -36,18 +36,17 @@ private struct ShimmerModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.shimmerReduceMotionOverride) private var reduceMotionOverride
     private var reduceMotion: Bool { reduceMotionOverride ?? systemReduceMotion }
-    @State private var phase: CGFloat = -1
-    @State private var isDim = false
 
     func body(content: Content) -> some View {
-        if reduceMotion {
-            content
-                .opacity(isDim ? 0.55 : 1)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { isDim = true }
-                }
-        } else {
-            content
+        // Drawing from a clock avoids a repeating animation transaction escaping into
+        // resizable panes when SwiftUI replaces a placeholder with loaded content.
+        TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            if reduceMotion {
+                content.opacity(0.775 + 0.225 * cos(time * .pi * 2 / 1.6))
+            } else {
+                let phase = -cos(time.truncatingRemainder(dividingBy: 1.4) / 1.4 * .pi)
+                content
                 .overlay {
                     GeometryReader { proxy in
                         LinearGradient(colors: [.clear, .skeletonSheen, .clear], startPoint: .leading, endPoint: .trailing)
@@ -57,9 +56,7 @@ private struct ShimmerModifier: ViewModifier {
                     .allowsHitTesting(false)
                 }
                 .clipped()
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) { phase = 1 }
-                }
+            }
         }
     }
 }

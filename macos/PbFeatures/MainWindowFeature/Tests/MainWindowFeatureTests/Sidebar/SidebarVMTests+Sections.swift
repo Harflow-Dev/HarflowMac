@@ -114,7 +114,7 @@ extension SidebarVMTests {
         #expect(sut.rows(in: .earlier).map(\.id) == ["root", "child"])
     }
 
-    @Test func givenParallelGroups_whenListed_thenTheyBucketByRunningThenEarliestMemberStart() async {
+    @Test func givenParallelGroups_whenListed_thenTheyBucketByRunningThenLatestMemberStart() async {
         // given
         let harness = makeBucketSUT()
         let sut = harness.sut
@@ -136,6 +136,44 @@ extension SidebarVMTests {
         #expect(sut.groups(in: .today).map(\.name) == ["today-run"])
         #expect(sut.groups(in: .earlier).map(\.name) == ["old-run"])
         #expect(sut.runningRows.isEmpty)
+    }
+
+    @Test func givenYesterdayGroupRunAgainToday_whenNewestRunStops_thenGroupStaysFirstInToday() async {
+        // given
+        let harness = makeBucketSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        defer { sut.didDisappear() }
+        let old = task(id: "old-run", status: "completed", startedAt: noon.addingTimeInterval(-86400), group: "repeat")
+        let other = task(id: "other", status: "completed", startedAt: noon.addingTimeInterval(-3600))
+        harness.tasksSubject.send([old, other, task(id: "rerun", status: "running", startedAt: noon.addingTimeInterval(-60), group: "repeat")])
+        await waitUntil { sut.groups(in: .running).count == 1 }
+        // when
+        harness.tasksSubject.send([old, other, task(id: "rerun", status: "completed", startedAt: noon.addingTimeInterval(-60), group: "repeat")])
+        // then
+        await waitUntil { sut.items(in: .running).isEmpty && sut.items(in: .today).count == 2 }
+        #expect(sut.items(in: .today).map(\.id) == ["group:repeat", "task:other"])
+        #expect(sut.groups(in: .earlier).isEmpty)
+    }
+
+    @Test func givenYesterdayWorkflowContinuedToday_whenItStops_thenItStaysFirstInToday() {
+        // given
+        let harness = makeBucketSUT()
+        let sut = harness.sut
+        var run: [String: JSONValue] = ["workflow_run_id": .string("repeat"), "status": .string("running"),
+                                      "created_at": .number(noon.addingTimeInterval(-86400).timeIntervalSince1970),
+                                      "updated_at": .number(noon.addingTimeInterval(-60).timeIntervalSince1970)]
+        let older = SidebarWorkflowRun(raw: ["workflow_run_id": .string("older"), "status": .string("completed"),
+                                            "created_at": .number(noon.addingTimeInterval(-3600).timeIntervalSince1970)])
+        sut.workflowRuns = [SidebarWorkflowRun(raw: run), older]
+        #expect(sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: []).first?.bucket == .running)
+        // when
+        run["status"] = .string("completed")
+        sut.workflowRuns = [SidebarWorkflowRun(raw: run), older]
+        // then
+        let sections = sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: [])
+        #expect(sections.map(\.bucket) == [.today])
+        #expect(sections.first?.items.map(\.id) == ["workflow:repeat", "workflow:older"])
     }
 
     @Test func givenAGroupAndTasksInOneBucket_whenListed_thenTheyInterleaveNewestStartFirst() async {

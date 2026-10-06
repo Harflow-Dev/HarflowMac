@@ -29,6 +29,11 @@ struct SidebarWorkflowRun {
     var name: String { raw["name"]?.stringValue ?? "Workflow" }
     var parentRunID: String? { raw["parent_workflow_run_id"]?.stringValue ?? raw["parent_link"]?["workflow_run_id"]?.stringValue }
     var startedAt: Date? { raw["created_at"]?.doubleValue.map(Date.init(timeIntervalSince1970:)) }
+    /// The persisted run update reflects continuation and completion of an existing invocation.
+    var latestRunAt: Date? {
+        [startedAt, raw["updated_at"]?.doubleValue.map(Date.init(timeIntervalSince1970:))].compactMap(\.self).max()
+    }
+
     var isActive: Bool {
         raw["settling"]?.boolValue == true
             || ["starting", "running", "paused", "needs_input", "needs_attention", "cancelling"].contains(raw["status"]?.stringValue ?? "")

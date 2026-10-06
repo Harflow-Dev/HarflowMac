@@ -87,6 +87,8 @@ struct ParallelColumnView: View {
     let model: ParallelColumnModel
     @State private var showAll = false
     @State private var expandedGroups: Set<String> = []
+    @State private var seenRowIDs: Set<String> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var followLive = true
 
     var body: some View {
@@ -105,10 +107,11 @@ struct ParallelColumnView: View {
                     .padding(.top, 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                feed(shown)
+                feed(shown).pbFadeIn()
             }
         }
         .padding(16)
+        .frame(maxHeight: .infinity, alignment: .top)
         .opensFileLinks(repoPath: model.task.repoPath)
     }
 
@@ -126,13 +129,13 @@ struct ParallelColumnView: View {
                 TaskStatusLabel(task: model.task).fixedSize()
             }
             HStack(spacing: 10) {
+                Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
+                Spacer(minLength: 8)
                 if model.isBusy { ProgressView().controlSize(.small) }
                 if WorkflowNodePresentation.allowsTerminal(model.task) {
-                Button(model.task.status.isRunning ? "Take over" : "Continue in terminal") { model.onTapTakeover() }
-                    .buttonStyle(QuietButtonStyle())
+                TerminalActionButton(model.task.status.isRunning ? "Take over" : "Continue in terminal", action: model.onTapTakeover)
                     .disabled(model.task.sessionID == nil || model.isBusy)
                 }
-                Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
             }
             .font(.pb(.secondary))
         }
@@ -164,9 +167,13 @@ struct ParallelColumnView: View {
             VStack(alignment: .leading, spacing: 20) {
                 ForEach(shown) { row in
                     rowView(row)
+                        .pbFadeIn(animate: !seenRowIDs.contains(row.id))
+                        .onAppear { seenRowIDs.insert(row.id) }
                 }
                 if model.activityRows.count > shown.count {
-                    Button("Show all \(ParallelColumnModel.itemCount(model.rows)) steps") { showAll = true }
+                    Button("Show all \(ParallelColumnModel.itemCount(model.rows)) steps") {
+                        withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { showAll = true }
+                    }
                         .buttonStyle(.link)
                         .font(.pb(.secondary))
                 }
@@ -187,7 +194,9 @@ struct ParallelColumnView: View {
         switch row {
         case .toolGroup(let group):
             ToolGroupCardView(group: group, start: model.start, isExpanded: expandedGroups.contains(group.id)) {
-                if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
+                withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) {
+                    if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
+                }
             }
         case .single(let row):
             switch row.kind {
