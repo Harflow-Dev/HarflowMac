@@ -161,3 +161,44 @@ extension SidebarVMTests {
         }
     }
 }
+
+extension SidebarVMTests {
+    @Test(arguments: ["running", "completed"], [true, false])
+    func givenNativeControlTransport_whenWorkflowExpanded_thenInternalTaskIsHiddenAndOwnershipRetained(status: String, decorated: Bool) throws {
+        // given
+        let harness = makeSUT()
+        var transport: [String: JSONValue] = ["task_id": .string("transport"), "backend": .string("claude"), "status": .string(status)]
+        if decorated { transport["workflow_role"] = .string("native_control"); transport["workflow_run_id"] = .string("run") }
+        let ordinary = try ["node", "orchestrator"].map { role in
+            try #require(TaskInfo(.object(["task_id": .string(role), "backend": .string("claude"), "status": .string("running"),
+                "workflow_role": .string(role), "workflow_run_id": .string("run")])))
+        }
+        harness.sut.latestTasks = ordinary + [try #require(TaskInfo(.object(transport)))]
+        harness.sut.workflowRuns = [SidebarWorkflowRun(raw: ["workflow_run_id": .string("run"), "status": .string("running"),
+            "activations": .array([.object(["role": .string("native_control"), "tasks": .array([.object(["task_id": .string("transport")])])])])])]
+        harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
+        // when
+        harness.sut.didToggleExpansion(taskID: "workflow:run")
+        harness.sut.recompute()
+        // then
+        #expect(harness.sut.workflowTaskOwners["transport"] == "run")
+        #expect(Set(harness.sut.workflowChildren("run").map(\.taskID)) == ["node", "orchestrator"])
+        #expect(!harness.sut.sections.flatMap(\.items).contains { $0.id == "task:transport" })
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenNativeControlBeforeWorkflowMetadata_whenListed_thenItNeverAppearsAsStandaloneTask() throws {
+        // given
+        let harness = makeSUT()
+        let control = try #require(TaskInfo(.object(["task_id": .string("transport"), "status": .string("running"),
+            "workflow_role": .string("native_control")])))
+        harness.sut.latestTasks = [control, task(id: "ordinary")]
+        harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
+        // when
+        harness.sut.recompute()
+        // then
+        #expect(!harness.sut.sections.flatMap(\.items).contains { $0.id == "task:transport" })
+        #expect(harness.sut.sections.flatMap(\.items).contains { $0.id == "task:ordinary" })
+    }
+}

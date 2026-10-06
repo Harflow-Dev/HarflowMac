@@ -15,6 +15,10 @@ enum WorkflowNodePresentation {
         return TaskInfo(.object(raw)) ?? listed
     }
 
+    static func isNativeControl(_ task: TaskInfo?) -> Bool {
+        task?.raw["workflow_role"]?.stringValue == "native_control"
+    }
+
     static func isWorker(_ task: TaskInfo) -> Bool {
         task.raw["workflow_role"]?.stringValue == "node" && task.raw["execution_contract"]?.stringValue == "delegation"
     }
@@ -30,7 +34,7 @@ enum WorkflowNodePresentation {
 
     static func allowsTerminal(_ task: TaskInfo?) -> Bool {
         guard let task else { return true }
-        if task.raw["execution_kind"]?.stringValue == "native_subagent" { return false }
+        if isNativeControl(task) || task.raw["execution_kind"]?.stringValue == "native_subagent" { return false }
         if task.raw["workflow_run_id"]?.stringValue == nil { return true }
         return ["completed", "failed", "cancelled"].contains(task.raw["workflow_tree_status"]?.stringValue ?? task.raw["workflow_status"]?.stringValue ?? "")
             && (task.raw["workflow_tree_settling"]?.boolValue ?? task.raw["workflow_settling"]?.boolValue) == false
