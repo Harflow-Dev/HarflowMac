@@ -147,6 +147,7 @@ public struct TaskRow: View {
 /// `accessibilityHidden`; the chevron button is a real, independently-focusable control with its
 /// own hit area, so tapping it toggles expansion without selecting the row.
 private struct TreeGutter: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let model: TaskRowModel
     let onToggleExpansion: (() -> Void)?
 
@@ -202,7 +203,9 @@ private struct TreeGutter: View {
             }
             if model.hasChildren, let onToggleExpansion {
                 Button(action: onToggleExpansion) {
-                    Image(systemName: model.isExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(model.isExpanded ? 90 : 0))
+                        .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: model.isExpanded)
                         .font(.pb(.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .frame(width: Self.columnWidth, height: Self.columnWidth)

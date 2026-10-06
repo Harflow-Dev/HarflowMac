@@ -123,7 +123,7 @@ struct WorkflowCanvasNode: View {
                 } else {
                     Text(node.type == "workflow" ? (node.workflowName.isEmpty ? "Select workflow" : node.workflowName) : node.type.capitalized)
                         .lineLimit(1)
-                        .help(node.workflowName.isEmpty ? "Select workflow" : node.workflowName)
+                        .help(node.type == "workflow" ? (node.workflowName.isEmpty ? "Select workflow" : node.workflowName) : node.type.capitalized)
                         .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
                 }

@@ -24,10 +24,12 @@ private struct ContentFadeIn: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(appeared ? 1 : 0)
+            .animation(PbMotion.arrival) { view in
+                view.opacity(appeared ? 1 : 0)
+            }
             .onAppear {
                 guard !appeared else { return }
-                withAnimation(PbMotion.arrival) { appeared = true }
+                appeared = true
             }
     }
 }

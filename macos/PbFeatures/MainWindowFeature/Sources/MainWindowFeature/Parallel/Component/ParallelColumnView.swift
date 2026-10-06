@@ -111,6 +111,7 @@ struct ParallelColumnView: View {
             }
         }
         .padding(16)
+        .frame(maxHeight: .infinity, alignment: .top)
         .opensFileLinks(repoPath: model.task.repoPath)
     }
 
@@ -128,13 +129,13 @@ struct ParallelColumnView: View {
                 TaskStatusLabel(task: model.task).fixedSize()
             }
             HStack(spacing: 10) {
+                Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
+                Spacer(minLength: 8)
                 if model.isBusy { ProgressView().controlSize(.small) }
                 if WorkflowNodePresentation.allowsTerminal(model.task) {
-                Button(model.task.status.isRunning ? "Take over" : "Continue in terminal") { model.onTapTakeover() }
-                    .buttonStyle(QuietButtonStyle())
+                TerminalActionButton(model.task.status.isRunning ? "Take over" : "Continue in terminal", action: model.onTapTakeover)
                     .disabled(model.task.sessionID == nil || model.isBusy)
                 }
-                Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
             }
             .font(.pb(.secondary))
         }
