@@ -253,6 +253,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                             SidebarDisclosureRow(isVisible: !fadingRowIDs.contains(item.id), animate: !seenRowIDs.contains(item.id), minimumHeight: minimumRowHeight) {
                                 itemView(item)
                             }
+                                .transition(.identity)
                                 .allowsHitTesting(!fadingRowIDs.contains(item.id))
                                 .accessibilityHidden(fadingRowIDs.contains(item.id))
                                 .onAppear { seenRowIDs.insert(item.id) }

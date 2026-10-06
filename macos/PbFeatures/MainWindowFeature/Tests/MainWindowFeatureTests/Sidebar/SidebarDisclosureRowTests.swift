@@ -33,6 +33,52 @@ import Testing
         #expect(host.fittingSize.height > 59)
     }
 
+    @Test func givenChildRow_whenCollapsedAndExpanded_thenContentRetractsUpAndEntersDown() async {
+        // given
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        _ = NSApplication.shared
+        let state = DisclosureFixtureState()
+        let marker = NSView()
+        let host = NSHostingView(rootView: DisclosureDirectionFixture(state: state, marker: marker))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 300, height: 240),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.contentView = nil; window.close() }
+        await waitUntil { host.layoutSubtreeIfNeeded(); return marker.window != nil && marker.bounds.height > 59 }
+        let opened = marker.convert(marker.bounds, to: nil).minY
+        // when — window coordinates increase upward.
+        state.visible = false
+        // then
+        await waitUntil { host.layoutSubtreeIfNeeded(); return marker.convert(marker.bounds, to: nil).minY > opened + 50 }
+        #expect(marker.convert(marker.bounds, to: nil).minY > opened + 50)
+        // when
+        state.visible = true
+        // then
+        await waitUntil { host.layoutSubtreeIfNeeded(); return abs(marker.convert(marker.bounds, to: nil).minY - opened) < 1 }
+        #expect(abs(marker.convert(marker.bounds, to: nil).minY - opened) < 1)
+    }
+
+    @Test func givenFreshChildRow_whenMounted_thenItEntersFromAboveItsFinalSlot() async {
+        // given — the parent is 40 points tall, followed by a 60-point child in a 240-point host.
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        _ = NSApplication.shared
+        let state = DisclosureFixtureState()
+        let marker = NSView()
+        let host = NSHostingView(rootView: DisclosureDirectionFixture(animate: true, state: state, marker: marker))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 300, height: 240),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.contentView = nil; window.close() }
+        // when — wait for the measured hidden position, with window coordinates increasing up.
+        await waitUntil { host.layoutSubtreeIfNeeded(); return marker.window != nil && marker.convert(marker.bounds, to: nil).minY > 190 }
+        // then — the row moves down into its final slot, whose lower edge is 140.
+        #expect(marker.convert(marker.bounds, to: nil).minY > 190)
+        await waitUntil { host.layoutSubtreeIfNeeded(); return abs(marker.convert(marker.bounds, to: nil).minY - 140) < 1 }
+        #expect(abs(marker.convert(marker.bounds, to: nil).minY - 140) < 1)
+    }
+
     @Test func givenRowInNativeSidebarList_whenCollapsedAndRemoved_thenFollowingRowMovesUp() async {
         // given
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
@@ -101,4 +147,19 @@ private struct DisclosureMarker: NSViewRepresentable {
     let view: NSView
     func makeNSView(context: Context) -> NSView { view }
     func updateNSView(_ view: NSView, context: Context) {}
+}
+
+private struct DisclosureDirectionFixture: View {
+    var animate = false
+    let state: DisclosureFixtureState
+    let marker: NSView
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Parent").frame(height: 40)
+            SidebarDisclosureRow(isVisible: state.visible, animate: animate) {
+                DisclosureMarker(view: marker).frame(height: 60)
+            }
+            Spacer(minLength: 0)
+        }.frame(maxHeight: .infinity, alignment: .top)
+    }
 }

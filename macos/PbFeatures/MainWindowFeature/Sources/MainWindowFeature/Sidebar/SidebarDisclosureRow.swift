@@ -35,12 +35,23 @@ struct SidebarDisclosureRow<Content: View>: View {
                     }
                 }
                 .animation(PbMotion.disclosure(reduceMotion: false)) { row in
-                    row.frame(height: isVisible && appeared ? height : 0, alignment: .top)
+                    // Enter from above the child slot and retract toward the parent. The
+                    // top clip keeps this movement aligned with the shrinking List row.
+                    row.offset(y: isVisible && appeared ? 0 : -(height ?? 0))
+                        .frame(height: isVisible && appeared ? height : 0, alignment: .top)
                         .opacity(isVisible && appeared ? 1 : 0)
                         .clipped()
                 }
                 .onPreferenceChange(SidebarRowHeight.self) { measured in
-                    height = measured
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { height = measured }
+                }
+                .task(id: height) {
+                    guard height != nil, !appeared else { return }
+                    // Mount at the measured hidden position for one frame before revealing.
+                    // The view task cancels automatically if this row disappears meanwhile.
+                    do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
                     appeared = true
                 }
         }
