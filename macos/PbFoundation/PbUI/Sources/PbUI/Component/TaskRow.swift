@@ -101,6 +101,7 @@ public struct TaskRow: View {
     /// has no children, or on MenuBar's plain rows, which never render one.
     public let onToggleExpansion: (() -> Void)?
     @Environment(\.backgroundProminence) private var prominence
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(model: TaskRowModel, onToggleExpansion: (() -> Void)? = nil) {
         self.model = model
@@ -109,7 +110,7 @@ public struct TaskRow: View {
 
     public var body: some View {
         HStack(spacing: 8) {
-            TreeGutter(model: model, onToggleExpansion: onToggleExpansion)
+            TreeGutter(guides: model.guides)
                 // Continue guides through the row’s vertical content padding.
                 .padding(.vertical, -6)
             StatusIcon(status: model.status)
@@ -121,6 +122,20 @@ public struct TaskRow: View {
                 Text(model.subtitle).font(.pb(.caption)).foregroundStyle(Color.secondaryText(on: prominence)).lineLimit(1)
             }
             Spacer(minLength: 4)
+            if model.hasChildren, let onToggleExpansion {
+                Button(action: onToggleExpansion) {
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(model.isExpanded ? 90 : 0))
+                        .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: model.isExpanded)
+                        .font(.pb(.caption, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(model.chevronAccessibilityLabel)
+                .accessibilityValue(model.chevronAccessibilityValue)
+            }
             if model.isRunning {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     // Mirrors `TaskInfo.elapsed(now:)`'s own fallback: `startedAt` first, else the
@@ -141,29 +156,17 @@ public struct TaskRow: View {
 
 // MARK: - TreeGutter
 
-/// The sidebar tree's indent gutter: one 16pt column per ancestor level (a hairline continuation
-/// line, or blank), followed by this row's own connector column — which, on a row with children,
-/// overlays the disclosure chevron in place of a static connector glyph. Decorative lines are
-/// `accessibilityHidden`; the chevron button is a real, independently-focusable control with its
-/// own hit area, so tapping it toggles expansion without selecting the row.
+/// Decorative ancestor guides keep children indented while root rows stay flush.
+/// The disclosure control lives on the trailing side of TaskRow, before its clock.
 private struct TreeGutter: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let model: TaskRowModel
-    let onToggleExpansion: (() -> Void)?
-
+    let guides: [TreeGuide]
     private static let columnWidth: CGFloat = 16
 
-    /// The gutter's own column list: `model.guides` as-is, except a root row (`guides` empty) that
-    /// has children still needs exactly one column to host its chevron.
-    private var columns: [TreeGuide?] {
-        model.guides.isEmpty ? (model.hasChildren ? [nil] : []) : model.guides
-    }
-
     var body: some View {
-        if !columns.isEmpty {
+        if !guides.isEmpty {
             HStack(spacing: 0) {
-                ForEach(Array(columns.enumerated()), id: \.offset) { index, guide in
-                    if index == columns.count - 1 {
+                ForEach(Array(guides.enumerated()), id: \.offset) { index, guide in
+                    if index == guides.count - 1 {
                         ownColumn(guide)
                     } else {
                         ancestorColumn(guide)
@@ -184,8 +187,7 @@ private struct TreeGutter: View {
         .accessibilityHidden(true)
     }
 
-    /// This row's own column: the connector's vertical/horizontal stubs, with the chevron button
-    /// overlaid when the row has children.
+    /// This row's own column draws the connector's vertical and horizontal stubs.
     @ViewBuilder
     private func ownColumn(_ guide: TreeGuide?) -> some View {
         ZStack {
@@ -200,20 +202,6 @@ private struct TreeGutter: View {
                     Rectangle().fill(Color.hairline).frame(width: Self.columnWidth / 2, height: 1)
                 }
                 .accessibilityHidden(true)
-            }
-            if model.hasChildren, let onToggleExpansion {
-                Button(action: onToggleExpansion) {
-                    Image(systemName: "chevron.right")
-                        .rotationEffect(.degrees(model.isExpanded ? 90 : 0))
-                        .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: model.isExpanded)
-                        .font(.pb(.caption, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: Self.columnWidth, height: Self.columnWidth)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(model.chevronAccessibilityLabel)
-                .accessibilityValue(model.chevronAccessibilityValue)
             }
         }
         .frame(width: Self.columnWidth)
