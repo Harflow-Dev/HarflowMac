@@ -20,6 +20,7 @@ struct WorkflowNodeModel: Identifiable, Equatable {
     var name: String { raw["title"]?.stringValue ?? id }
     var type: String { raw["type"]?.stringValue ?? "agent" }
     var role: String { raw["role"]?.stringValue ?? "task" }
+    var executionMode: String { raw["execution_mode"]?.stringValue ?? "headless" }
     var instructions: String { raw["instructions"]?.stringValue ?? "" }
     var isParallelBoundary: Bool { ["parallel_start", "parallel_end"].contains(type) }
     var parallelGroupID: String? { raw["parallel_group_id"]?.stringValue }
@@ -58,6 +59,12 @@ struct WorkflowRunModel: Identifiable, Equatable {
     var status: String { raw["status"]?.stringValue ?? "unknown" }
     var reason: String { raw["attention_reason"]?.stringValue ?? raw["reason"]?.stringValue ?? "" }
     var isDelegation: Bool { raw["execution_contract"]?.stringValue == "delegation" }
+    var schedulingPolicyDescription: String? {
+        guard raw["scheduling_policy"]?.stringValue == "native_workers_plus_control_v1" else { return nil }
+        let workers = definition["max_parallel"]?.intValue ?? 4
+        return "Up to \(workers) \(workers == 1 ? "worker" : "workers") + one shared orchestrator turn"
+    }
+
     var parentRunID: String? { raw["parent_workflow_run_id"]?.stringValue ?? raw["parent_link"]?["workflow_run_id"]?.stringValue }
     var rootRunID: String { raw["root_workflow_run_id"]?.stringValue ?? raw["parent_link"]?["root_workflow_run_id"]?.stringValue ?? id }
     var sessionOwnerRunID: String { raw["orchestrator_session_owner_run_id"]?.stringValue ?? id }

@@ -11,6 +11,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if let policy = viewModel.selectedRun?.schedulingPolicyDescription {
+                    Text(policy).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                }
                 if let node = viewModel.selectedNode {
                     if node.isParallelBoundary {
                         parallelEditor(node)
@@ -225,6 +228,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     modelChoices: viewModel.modelChoices,
                     loadModels: viewModel.loadModels
                 )
+                executionSetting(node)
                 sessionSetting(node)
                 timeoutSetting(node)
                 Stepper("Attempts per visit: \(node.raw["max_attempts"]?.intValue ?? 3)", value: Binding(get: {
@@ -240,6 +244,21 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 }
             }
         }.font(.pb(.body))
+    }
+
+    private func executionSetting(_ node: WorkflowNodeModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Execution", selection: nodeString(node, "execution_mode", default: "headless")) {
+                Text("Headless").tag("headless")
+                Text("Prefer orchestrator subagent")
+.tag("prefer_subagent")
+            }
+            Text(viewModel.nativeSubagentsAvailable
+                 ? "Uses the owning orchestrator when the harness and settings are supported; otherwise starts Headless."
+                 : "No certified native adapter is available. This preference falls back to Headless.")
+                .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+        }
     }
 
     private func sessionSetting(_ node: WorkflowNodeModel) -> some View {
@@ -424,6 +443,21 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
 
     @ViewBuilder
     private func executionSessionDetails(_ activation: [String: JSONValue]) -> some View {
+        let execution = WorkflowExecutionPresentation(raw: activation)
+        Text(execution.label).font(.pb(.caption, weight: .semibold))
+        if let reason = execution.fallbackReason {
+            Text(reason).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+        }
+        if execution.isSubagent {
+            if let owner = execution.ownerTaskID {
+                Button("Open owning orchestrator") { viewModel.openOwnerTask(owner) }.buttonStyle(QuietButtonStyle())
+            } else {
+                Text("Owning orchestrator history unavailable").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+            }
+            if execution.activityLimited {
+                Text("Activity limited").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+            }
+        }
         if let mode = activation["execution_session_mode"]?.stringValue {
             Text("Session: " + mode.replacingOccurrences(of: "_", with: " "))
                 .font(.pb(.caption))

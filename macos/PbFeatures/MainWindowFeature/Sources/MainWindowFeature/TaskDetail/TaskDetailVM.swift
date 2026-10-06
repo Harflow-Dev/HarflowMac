@@ -416,6 +416,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             openParentTaskID = nil
         }
         canCancel = !isWorkflowBuilder && detail.status.isRunning
+            && detail.raw["execution_kind"]?.stringValue != "native_subagent"
 
         // Read from the snapshot explicitly, not `detail` (which came from `detail(_:)` and can
         // briefly be the brief listing when statuses disagree — that shape has no `resume_command`

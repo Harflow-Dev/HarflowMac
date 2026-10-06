@@ -4,13 +4,13 @@ import Foundation
 /// with a message naming the tool and the versions understood, never guessed at. v2 added
 /// `resume_command` to `status`'s `task`/`list`'s `tasks[]` snapshot documents (Monitor piece 3/3);
 /// v3 adds pending messages and workflow ownership/status fields; v4 adds workflow result errors; v5 adds nested workflow ownership.
-/// Older versions remain accepted.
+/// v6 adds native subagent execution identity and capability fields. Older versions remain accepted.
 /// `polybridge-setup --json` and
 /// `events.jsonl` are separate contracts with their own single-version constants — see
 /// `setupContractVersion` (`SetupClient.swift`) and `eventLogVersion` (`Events.swift`) — because a
 /// shape change to one of the three must never silently widen what the app accepts from the
 /// others.
-public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5]
+public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6]
 
 public enum TaskStatus: Equatable, Hashable, Sendable {
     case running, completed, failed, timedOut, cancelled

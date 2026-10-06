@@ -137,6 +137,18 @@ import Testing
         #expect(harness.sut.nodes.last?.position == CGPoint(x: 210, y: 270))
     }
 
+    @Test func givenNewAgentNodes_whenCreated_thenPreferSubagentsWithoutMigratingHistoricalNodes() {
+        // given
+        let harness = makeVM()
+        harness.sut.definition = WorkflowVM.starterDefinition()
+        // when
+        harness.sut.addNode("task")
+        // then
+        #expect(harness.sut.nodes.filter { $0.type == "agent" }.allSatisfy { $0.executionMode == "prefer_subagent" })
+        #expect(harness.sut.nodes.filter { $0.type != "agent" }.allSatisfy { $0.raw["execution_mode"] == nil })
+        #expect(WorkflowNodeModel(raw: ["type": .string("agent")]).executionMode == "headless")
+    }
+
     @Test func givenInputPorts_whenFindingDropTarget_thenUsesToleranceAndRejectsStartAndSelf() {
         // given
         let nodes = WorkflowJSON.nodes(WorkflowVM.starterDefinition())

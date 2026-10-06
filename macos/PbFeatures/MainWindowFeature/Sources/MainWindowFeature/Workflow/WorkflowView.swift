@@ -26,6 +26,8 @@ protocol WorkflowViewModel: ViewModel {
     var errorText: String? { get }
     var validationMessage: String? { get }
     var validationDependencies: [String: JSONValue] { get }
+    var nativeSubagentsAvailable: Bool { get }
+    var nativeActivity: WorkflowNativeActivityModel? { get }
     var branchSelection: WorkflowBranchSelection { get }
     var repo: String { get set }
     var prompt: String { get set }
@@ -55,6 +57,7 @@ protocol WorkflowViewModel: ViewModel {
     func didDisappear()
     func selectWorkflow(_ workflow: WorkflowRecord)
     func selectRun(_ run: WorkflowRunModel)
+    func openOwnerTask(_ id: String)
     func openRun(_ id: String)
     func newWorkflow()
     func openWorkflowEditor(_ name: String)
@@ -447,8 +450,13 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         }
     }
 
+    @ViewBuilder
     private var activity: some View {
-        WorkflowActivityColumns(columns: viewModel.parallel.columns, selectedTaskID: selectedTaskID)
+        if let native = viewModel.nativeActivity {
+            WorkflowNativeActivityView(model: native)
+        } else {
+            WorkflowActivityColumns(columns: viewModel.parallel.columns, selectedTaskID: selectedTaskID)
+        }
     }
 
     private var selectedTaskID: String? {
