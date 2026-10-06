@@ -336,7 +336,10 @@ struct SidebarView<VM: SidebarViewModel>: View {
         let current = displayedSections ?? old
         let removed = Set(current.flatMap(\.items).map(\.id)).subtracting(newIDs)
         seenRowIDs.formIntersection(newIDs)
-        fadingRowIDs = removed
+        // List retains outgoing cells during its deletion animation. Keep their closed
+        // presentation until that identity is explicitly reintroduced by a new snapshot.
+        fadingRowIDs.formUnion(removed)
+        fadingRowIDs.subtract(newIDs)
         displayedSections = SidebarSection.retainingRemovedRows(from: current, in: new)
         guard !removed.isEmpty else { return }
         // Native List removal is immediate. Keep outgoing cells while their disclosure closes,
@@ -344,7 +347,6 @@ struct SidebarView<VM: SidebarViewModel>: View {
         disclosureTask = Task { @MainActor in
             do { try await Task.sleep(for: .milliseconds(reduceMotion ? 180 : 200)) } catch { return }
             withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { displayedSections = new }
-            fadingRowIDs = []
         }
     }
 

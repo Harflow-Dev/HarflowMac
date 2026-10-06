@@ -20,14 +20,21 @@ struct ToolGroupCardView: View {
     @State private var seenMemberIDs: Set<String> = []
 
     var body: some View {
-        ActivityCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Button(action: onToggle) { header }
-                    .buttonStyle(.plain)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-                    .accessibilityHint(isExpanded ? "Hides the individual calls" : "Shows the individual calls")
-                if isExpanded {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onToggle) {
+                header
+                    .textSelection(.disabled)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(isExpanded ? "Hides the individual calls" : "Shows the individual calls")
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 12) {
                     if !group.pillNames.isEmpty {
                         FilePillsView(names: group.pillNames, paths: group.pillPaths, overflowCount: group.overflowCount)
                     }
@@ -39,8 +46,13 @@ struct ToolGroupCardView: View {
                         }
                     }.pbFadeIn()
                 }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.cardFill))
+        .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(Color.cardBorder, lineWidth: 1).allowsHitTesting(false))
     }
 
     private var header: some View {

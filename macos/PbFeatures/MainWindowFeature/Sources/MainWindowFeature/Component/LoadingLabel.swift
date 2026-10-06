@@ -1,14 +1,15 @@
+import PbUI
 import SwiftUI
 
 // MARK: - LoadingLabel
 
 /// A compact loading indicator with the same footprint as a quiet action label.
-public struct LoadingLabel: View {
-    public let text: String
+struct LoadingLabel: View {
+    let text: String
 
-    public init(_ text: String) { self.text = text }
+    init(_ text: String) { self.text = text }
 
-    public var body: some View {
+    var body: some View {
         HStack(spacing: 6) {
             RunningSpinner(size: 12, tint: .secondaryText).accessibilityHidden(true)
             Text(text).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
