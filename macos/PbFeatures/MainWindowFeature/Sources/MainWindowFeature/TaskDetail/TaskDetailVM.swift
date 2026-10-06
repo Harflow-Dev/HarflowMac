@@ -416,11 +416,14 @@ final class TaskDetailVM: TaskDetailViewModel {
             openParentTaskID = nil
         }
         canCancel = !isWorkflowBuilder && detail.status.isRunning
+            && detail.raw["execution_kind"]?.stringValue != "native_subagent"
+            && !WorkflowNodePresentation.isNativeControl(detail)
 
         // Read from the snapshot explicitly, not `detail` (which came from `detail(_:)` and can
         // briefly be the brief listing when statuses disagree — that shape has no `resume_command`
         // at all).
-        resumeCommand = isWorkflowBuilder ? nil : useCase.snapshot(currentTaskID)?.resumeCommand
+        resumeCommand = isWorkflowBuilder || WorkflowNodePresentation.isNativeControl(detail)
+            ? nil : useCase.snapshot(currentTaskID)?.resumeCommand
         copyResumeCommandHelp = detail.status.isRunning
         ? "Copies a command that resumes this session in your own terminal. This task is still "
         + "running — resuming it now puts two writers on one conversation; prefer Take over."

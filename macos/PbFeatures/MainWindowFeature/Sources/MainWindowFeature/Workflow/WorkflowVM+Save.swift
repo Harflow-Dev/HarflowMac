@@ -22,6 +22,7 @@ extension WorkflowVM {
         validationID = UUID()
         validatedDefinition = nil
         validationDependencies = [:]
+        nativeSubagentsAvailable = false
         if canonicalValidationSource.map({ WorkflowRetryMetadata.topology($0) != WorkflowRetryMetadata.topology(definition) }) == true {
             canonicalValidationDefinition = nil
             canonicalValidationSource = nil
@@ -41,6 +42,7 @@ extension WorkflowVM {
             do {
                 let response = try await useCase.validate(definition: .object(snapshot))
                 guard !Task.isCancelled, requestID == validationID, snapshot == effectiveDefinition, selectedRun == nil else { return }
+                nativeSubagentsAvailable = response["native_subagents_available"]?.boolValue ?? false
                 if response["valid"]?.boolValue == true {
                     validationDependencies = response["dependencies"]?.objectValue ?? [:]
                     validatedDefinition = snapshot

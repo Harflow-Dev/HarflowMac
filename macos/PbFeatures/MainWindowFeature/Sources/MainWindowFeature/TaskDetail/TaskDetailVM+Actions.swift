@@ -66,7 +66,7 @@ extension TaskDetailVM {
     /// captures the task this dialog's own copy described, and the confirm action refuses rather
     /// than cancelling whatever the conversation's new current member is if it moved on first.
     func didTapCancel() {
-        guard !isWorkflowBuilder else { return }
+        guard !isWorkflowBuilder, !WorkflowNodePresentation.isNativeControl(task) else { return }
         let dialogTaskID = currentTaskID
         var description = "polybridge stops the run and, best-effort, every live sub-task it started."
         let notCancelled = notCancelledByThisTitles()

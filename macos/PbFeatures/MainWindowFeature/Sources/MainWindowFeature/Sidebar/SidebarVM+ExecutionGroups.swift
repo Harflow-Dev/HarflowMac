@@ -34,7 +34,13 @@ extension SidebarVM {
 
     func workflowChildren(_ runID: String) -> [TaskInfo] {
         let owners = workflowTaskOwners
-        let all = latestTasks.filter { owners[$0.taskID] == runID }.sorted(by: executionOrder)
+        let transportIDs = Set(workflowRuns.flatMap { WorkflowJSON.objects($0.raw["activations"]) }
+            .filter { $0["role"]?.stringValue == "native_control" }
+            .flatMap { WorkflowJSON.objects($0["tasks"]).compactMap { $0["task_id"]?.stringValue } })
+        let all = latestTasks.filter {
+            owners[$0.taskID] == runID && !WorkflowNodePresentation.isNativeControl($0) && !transportIDs.contains($0.taskID)
+        }
+.sorted(by: executionOrder)
         var seen: Set<String> = []
         return all.compactMap { task in
             let members = WorkflowOrchestratorConversation.members(containing: task.taskID, in: all) ?? [task]

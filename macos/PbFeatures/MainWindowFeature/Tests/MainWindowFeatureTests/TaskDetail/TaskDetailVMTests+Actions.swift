@@ -493,3 +493,30 @@ extension TaskDetailVMTests {
     }
 
 }
+
+@MainActor
+extension TaskDetailVMTests {
+    @Test(arguments: ["running", "completed"])
+    func givenNativeControlDirectDetail_whenRenderedOrActionsInvoked_thenNoIndependentProcessControls(status: String) async throws {
+        // given
+        let harness = makeSUT()
+        var raw = task(status: status, resumeCommand: "claude --resume shared").raw
+        raw["workflow_role"] = .string("native_control")
+        let control = try #require(TaskInfo(.object(raw)))
+        harness.detailBox.value = control
+        harness.snapshotBox.value = control
+        harness.sut.didAppear()
+        // when
+        harness.tasksSubject.send([control])
+        await waitUntil { harness.sut.task != nil }
+        harness.sut.didTapCancel()
+        harness.sut.didTapTakeover()
+        // then
+        #expect(!harness.sut.canCancel)
+        #expect(!harness.sut.canTakeover)
+        #expect(harness.sut.resumeCommand == nil)
+        #expect(!WorkflowNodePresentation.allowsTerminal(control))
+        verify(harness.useCase).cancel(.any).called(0)
+        verify(harness.useCase).beginTakeover(taskID: .any).called(0)
+    }
+}

@@ -68,6 +68,10 @@ final class WorkflowVM: WorkflowViewModel {
 
     var errorText: String?
     var validationDependencies: [String: JSONValue] = [:]
+    var nativeSubagentsAvailable = false
+    var nativeActivity: WorkflowNativeActivityModel?
+    @ObservationIgnored var nativeActivityTask: Task<Void, Never>?
+
     var validationMessage: String?
     var repo = ""
     var prompt = ""
@@ -213,6 +217,8 @@ final class WorkflowVM: WorkflowViewModel {
         poll?.cancel()
         poll = nil
         generationID = UUID()
+        nativeActivityTask?.cancel()
+        nativeActivityTask = nil
         parallel.didDisappear()
         didSubscribe = false
     }
@@ -348,6 +354,8 @@ final class WorkflowVM: WorkflowViewModel {
         }
         selectedNodeID = id
         selectedEdgeID = nil
+        selectedActivationID = nil
+        updateNativeActivity()
     }
 
     func selectNodes(_ ids: Set<String>, primary: String? = nil) {
@@ -356,6 +364,8 @@ final class WorkflowVM: WorkflowViewModel {
         primaryNodeID = primary.flatMap { valid.contains($0) ? $0 : nil } ?? valid.sorted().first
         selectedEdgeID = nil
         connectionSourceID = nil
+        selectedActivationID = nil
+        updateNativeActivity()
     }
 
     func toggleNode(_ id: String) {
@@ -374,11 +384,6 @@ final class WorkflowVM: WorkflowViewModel {
         let value = JSONValue.array(entries.map(JSONValue.object))
         guard definition["nodes"] != value else { return }
         definition["nodes"] = value
-    }
-
-    func selectActivation(_ id: String?) {
-        selectedActivationID = id
-        updateActivityMembership()
     }
 
     func updateNode(_ id: String, key: String, value: JSONValue?) {
@@ -431,6 +436,7 @@ final class WorkflowVM: WorkflowViewModel {
             candidate["fallbacks"] = .array([])
             node["agent"] = .object(candidate)
             node["session_mode"] = .string("agent_decides")
+            node["execution_mode"] = .string("prefer_subagent")
             node["max_attempts"] = .number(3)
             node["freedom"] = .string(WorkflowAccess.defaultLevel(for: kind))
             node["branch_mode"] = .string("auto")
@@ -529,31 +535,6 @@ final class WorkflowVM: WorkflowViewModel {
             "backward": .bool(false)
         ])
         definition["connections"] = .array(entries.map(JSONValue.object))
-    }
-
-    func updateActivityMembership() {
-        let activations = selectedRun?.activations ?? []
-        let relevant = activations.filter { ["node", "builder"].contains($0["role"]?.stringValue ?? "") }
-        var latestByNode: [String: [String: JSONValue]] = [:]
-        for activation in relevant { latestByNode[activation["node_id"]?.stringValue ?? "builder"] = activation }
-        let visible = selectedActivationID.map { selected in relevant.filter { $0["id"]?.stringValue == selected } } ?? Array(latestByNode.values)
-        let tasks = relevant.flatMap { WorkflowJSON.objects($0["tasks"]).compactMap { $0["task_id"]?.stringValue } }
-        let focused = Set(visible.flatMap { WorkflowJSON.objects($0["tasks"]).compactMap { $0["task_id"]?.stringValue } })
-        var titles: [String: String] = [:]
-        for activation in relevant {
-            let nodeID = activation["node_id"]?.stringValue ?? ""
-            let title = nodes.first { $0.id == nodeID }?.name ?? "Workflow builder"
-            let index = relevant.filter { $0["node_id"]?.stringValue == nodeID }.firstIndex { $0["id"] == activation["id"] }.map { $0 + 1 } ?? 1
-            let fallbackIndices = WorkflowExecutionAttempts.fallbackIndices(activation)
-            for task in WorkflowJSON.objects(activation["tasks"]) {
-                if let id = task["task_id"]?.stringValue {
-                    let fallback = fallbackIndices[id] ?? 0
-                    titles[id] = "\(title) · \(index)\(fallback > 0 ? " · Fallback \(fallback)" : "")"
-                }
-            }
-        }
-        var seen = Set<String>()
-        parallel.setWorkflowTaskIDs(tasks.filter { seen.insert($0).inserted }, focusedTaskIDs: focused, titles: titles)
     }
 
     func perform(_ work: @escaping @MainActor () async throws -> Void) {

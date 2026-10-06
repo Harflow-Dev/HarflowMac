@@ -40,6 +40,7 @@ extension WorkflowVM {
                 node["agent"] = .object(["backend": .string("codex"), "fallbacks": .array([])])
                 node["freedom"] = .string(WorkflowAccess.defaultLevel(for: role))
                 node["session_mode"] = .string("agent_decides")
+                node["execution_mode"] = .string("prefer_subagent")
                 node["branch_mode"] = .string("auto")
                 node["max_attempts"] = .number(3)
             }

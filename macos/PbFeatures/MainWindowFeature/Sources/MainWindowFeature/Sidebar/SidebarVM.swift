@@ -453,7 +453,8 @@ final class SidebarVM: SidebarViewModel {
         let isFilterActive = !query.isEmpty || backend != "all"
         let builderIDs = Set(workflowTaskOwners.keys)
         func matches(_ task: TaskInfo) -> Bool {
-            !builderIDs.contains(task.taskID) && (backend == "all" || task.backend == backend)
+            !WorkflowNodePresentation.isNativeControl(task) && !builderIDs.contains(task.taskID)
+            && (backend == "all" || task.backend == backend)
             && (query.isEmpty
                 || useCase.title(task.taskID).lowercased().contains(query)
                 || task.taskID.lowercased().contains(query)
