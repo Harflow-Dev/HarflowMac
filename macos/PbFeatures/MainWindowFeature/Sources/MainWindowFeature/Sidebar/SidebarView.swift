@@ -303,16 +303,22 @@ struct SidebarView<VM: SidebarViewModel>: View {
             TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion(row.id) } : nil)
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
-            HStack(spacing: 4) {
-                if viewModel.groupConversations(group).count > 1 {
-                Button { withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { viewModel.didToggleExpansion(taskID: group.id) } } label: {
-                    Image(systemName: viewModel.isExecutionParentExpanded(group.id) ? "chevron.down" : "chevron.right")
-                        .font(.pb(.caption))
-                }
-.buttonStyle(.plain)
-.accessibilityLabel("Expand or collapse \(group.name)")
-                }
+            HStack(spacing: 8) {
                 GroupRow(group: group, conversations: viewModel.groupConversations(group))
+                if viewModel.groupConversations(group).count > 1 {
+                    Button { toggleExpansion(group.id) } label: {
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(viewModel.isExecutionParentExpanded(group.id) ? 90 : 0))
+                            .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: viewModel.isExecutionParentExpanded(group.id))
+                            .font(.pb(.caption, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16, height: 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Expand or collapse \(group.name)")
+                    .accessibilityValue(viewModel.isExecutionParentExpanded(group.id) ? "Expanded" : "Collapsed")
+                }
             }.tag(MonitorDestination.group(group.name))
         case .workflow(let row):
             TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion("workflow:\(row.id)") } : nil)
