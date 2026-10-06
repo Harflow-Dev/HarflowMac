@@ -91,6 +91,23 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
         return mock
     }
 
+    /// Exercises title wrapping beside repository metadata, a notice and the toolbar actions.
+    static func longTitle(unbroken: Bool = false) -> TaskDetailViewModelMock {
+        let mock = TaskDetailViewModelMock()
+        mock.title = unbroken
+            ? String(repeating: "LongUnbrokenTaskIdentifier", count: 8)
+            : "Investigate the intermittent authentication failure and repair the session refresh flow across all supported application entry points"
+        mock.loadingHeader = TaskLoadingHeader(title: mock.title, repoName: "repo")
+        mock.turnsText = "3 turns"
+        mock.inspectorModel = InspectorModel(
+            task: sampleTask(), current: nil, stepCount: 1, activity: ActivityCounts(),
+            subtaskCount: 0, ancestors: [], siblings: [], detail: sampleTask(), hasSnapshot: true,
+            notices: ["Approaching the turn limit."], startedBy: "Top-level task",
+            resumeCommand: mock.resumeCommand, onCopyResumeCommand: {}, onCopyTaskID: {}, onSelectTask: { _ in }
+        )
+        return mock
+    }
+
     static func sampleTask(status: String = "running", takenOver: Bool = false, spawnedBy: String? = nil) -> TaskInfo {
         var object: [String: JSONValue] = [
             "task_id": .string("abc12345"), "backend": .string("claude"), "status": .string(status),

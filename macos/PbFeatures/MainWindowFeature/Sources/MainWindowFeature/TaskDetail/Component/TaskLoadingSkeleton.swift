@@ -3,7 +3,7 @@
 //  MainWindowFeature
 //
 //  The task screen while its data is still arriving (the design's "Task loading — shimmer"
-//  artboards). It mirrors the loaded layout block for block — toolbar row, tab switcher, the 720 pt
+//  artboards). It mirrors the loaded layout block for block — content header, action toolbar, tab switcher, the 720 pt
 //  reading column, the composer — so nothing jumps when the content replaces it.
 //
 
@@ -22,14 +22,18 @@ struct TaskLoadingHeader: Equatable {
 
 struct TaskLoadingSkeleton: View {
     let header: TaskLoadingHeader?
+    var isEmbedded = false
 
     var body: some View {
         VStack(spacing: 0) {
+            title
+                .padding(.horizontal, isEmbedded ? 16 : 24)
+                .padding(.top, 12)
             SlidingSegmentedControl(options: TaskTab.allCases.map { ($0, $0.rawValue) }, selection: .constant(.activity))
                 .disabled(true)
                 .opacity(0.6)
-                .padding(.top, 16)
-                .padding(.bottom, 16)
+                .padding(.top, isEmbedded ? 8 : 16)
+                .padding(.bottom, isEmbedded ? 8 : 16)
             feed
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
@@ -43,7 +47,26 @@ struct TaskLoadingSkeleton: View {
         .background(Color.windowBG)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading task")
-        .modifier(LoadingToolbar(header: header))
+        .modifier(LoadingToolbar(isEmbedded: isEmbedded))
+    }
+
+    @ViewBuilder
+    private var title: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let header {
+                Text(header.title)
+                    .font(.pb(.headline, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .help(header.title)
+                Text(header.repoName).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).lineLimit(1)
+            } else {
+                SkeletonBlock(width: 220, height: 15)
+                SkeletonBlock(width: 90, height: 12)
+            }
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .accessibilityHidden(true)
     }
 
     // MARK: Feed
@@ -136,39 +159,33 @@ struct TaskLoadingSkeleton: View {
 
 // MARK: - LoadingToolbar
 
-/// The toolbar row while loading: the real title and repo name when known, else bars; shimmer
-/// blocks where the status, primary button and the two icon buttons will be.
+/// Shimmer blocks where the status, primary button and the two icon buttons will be.
+/// Embedded details keep these inside their own pane instead of changing the window toolbar.
 private struct LoadingToolbar: ViewModifier {
-    let header: TaskLoadingHeader?
+    let isEmbedded: Bool
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
+        if isEmbedded {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer(minLength: 0)
+                    actions
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                Divider()
+                content
+            }
+        } else if #available(macOS 26.0, *) {
             content.toolbar {
-                ToolbarItem(placement: .navigation) { title }.sharedBackgroundVisibility(.hidden)
                 ToolbarSpacer(.flexible)
                 ToolbarItem(placement: .primaryAction) { actions }.sharedBackgroundVisibility(.hidden)
             }
         } else {
             content.toolbar {
-                ToolbarItem(placement: .navigation) { title }
                 ToolbarItem(placement: .primaryAction) { actions }
             }
         }
-    }
-
-    @ViewBuilder
-    private var title: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let header {
-                Text(header.title).font(.pb(.headline, weight: .semibold)).lineLimit(1)
-                Text(header.repoName).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).lineLimit(1)
-            } else {
-                SkeletonBlock(width: 220, height: 15)
-                SkeletonBlock(width: 90, height: 12)
-            }
-        }
-        .frame(maxWidth: 440, alignment: .leading)
-        .accessibilityHidden(true)
     }
 
     private var actions: some View {
@@ -185,6 +202,24 @@ private struct LoadingToolbar: ViewModifier {
 #if DEBUG
 private func skeletonPreview(_ header: TaskLoadingHeader?) -> some View {
     NavigationStack { TaskLoadingSkeleton(header: header) }.frame(width: 1000, height: 700)
+}
+
+#Preview("Loading, long title - narrow") {
+    NavigationStack {
+        TaskLoadingSkeleton(header: TaskLoadingHeader(
+            title: "Investigate the intermittent authentication failure and repair the session refresh flow across all application entry points",
+            repoName: "repo"
+        ))
+    }
+    .frame(width: 480, height: 700)
+}
+
+#Preview("Loading, unbroken title - embedded") {
+    TaskLoadingSkeleton(
+        header: TaskLoadingHeader(title: String(repeating: "LongUnbrokenTaskIdentifier", count: 8), repoName: "repo"),
+        isEmbedded: true
+    )
+    .frame(width: 480, height: 700)
 }
 
 #Preview("Loading, title known - dark") {
