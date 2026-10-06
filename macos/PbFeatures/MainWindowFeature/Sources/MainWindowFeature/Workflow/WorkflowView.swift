@@ -76,6 +76,7 @@ protocol WorkflowViewModel: ViewModel {
     func returnToCanvas()
     func applyAgentProposal()
     func control(_ command: String)
+    func control(_ command: String, allowOptionalReviewSkip: Bool)
     func continueWithOneMoreRetry()
     func selectNodes(_ ids: Set<String>, primary: String?)
     func toggleNode(_ id: String)
@@ -92,6 +93,14 @@ protocol WorkflowViewModel: ViewModel {
     func loadModels(_ backend: String)
     func nodeStatus(_ id: String) -> String
     func nodeAttempt(_ id: String) -> Int
+}
+
+extension WorkflowViewModel {
+    func control(_ command: String, allowOptionalReviewSkip: Bool) {
+        // Preview and other conformers that do not support this action never grant consent.
+        guard !allowOptionalReviewSkip else { return }
+        control(command)
+    }
 }
 
 // MARK: - WorkflowView

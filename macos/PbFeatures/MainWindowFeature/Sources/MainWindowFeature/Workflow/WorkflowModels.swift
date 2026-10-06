@@ -96,6 +96,12 @@ struct WorkflowRunModel: Identifiable, Equatable {
     }
 
     var isSettling: Bool { raw["settling"]?.boolValue ?? false }
+    var canSkipOptionalReview: Bool {
+        isDelegation && allowsMonitorControl && status == "needs_input" && !isSettling
+            && raw["optional_review_skip_available"]?.boolValue == true
+            && !(raw["input_decision_id"]?.stringValue ?? "").isEmpty
+    }
+
     var canRecover: Bool { isDelegation && status == "failed" && !isSettling }
     var requiresAnswer: Bool { isDelegation && ["needs_input", "needs_attention", "failed"].contains(status) }
     var question: String { raw["input_question"]?.stringValue ?? raw["question"]?.stringValue ?? reason }
