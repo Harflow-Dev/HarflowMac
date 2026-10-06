@@ -95,6 +95,13 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
                         .buttonStyle(QuietButtonStyle())
 .disabled(viewModel.isBusy || run.isSettling || missingAnswer)
                 }
+                if run.canSkipOptionalReview {
+                    Button("Proceed without optional reviewer") {
+                        viewModel.control("resume", allowOptionalReviewSkip: true)
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(viewModel.isBusy || run.isSettling || missingAnswer)
+                }
                 Button(run.status == "failed" ? "Recover" : "Resume") { viewModel.control(run.status == "failed" ? "recover" : "resume") }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(viewModel.isBusy || run.isSettling || missingAnswer)
