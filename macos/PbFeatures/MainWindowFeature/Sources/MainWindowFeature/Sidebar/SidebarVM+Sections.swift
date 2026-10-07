@@ -51,7 +51,8 @@ extension SidebarVM {
     /// start time sorts last, ties broken by id), then flattens every entry into items. Empty
     /// buckets are omitted.
     func bucketedSections(trees: [ConversationNode], groups: [ParallelGroup], forcedExpandedIDs: Set<String>) -> [SidebarSection] {
-        let entries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group) + workflowRootRuns().map(SidebarEntry.workflow)
+        let taskEntries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group)
+        let entries = taskEntries + workflowRootRuns().map(SidebarEntry.workflow)
         let now = currentDate()
         var buckets: [SidebarSection.Bucket: [SidebarEntry]] = [:]
         for entry in entries {
@@ -64,11 +65,7 @@ extension SidebarVM {
         }
     }
 
-    private func workflowRootRuns() -> [SidebarWorkflowRun] {
-        let runs = filteredWorkflowRuns()
-        let ids = Set(runs.map(\.id))
-        return runs.filter { $0.parentRunID == nil || !ids.contains($0.parentRunID ?? "") }
-    }
+    private func workflowRootRuns() -> [SidebarWorkflowRun] { filteredWorkflowRuns() }
 
     private func bucket(for entry: SidebarEntry, now: Date) -> SidebarSection.Bucket {
         if entry.isRunning { return .running }

@@ -17,7 +17,7 @@ extension SidebarVM {
             }
         }
         for task in latestTasks {
-            if let runID = task.raw["workflow_session_owner_run_id"]?.stringValue ?? task.raw["workflow_run_id"]?.stringValue,
+            if let runID = task.raw["workflow_run_id"]?.stringValue ?? task.raw["workflow_session_owner_run_id"]?.stringValue,
                WorkflowRunIdentity.isValid(runID) { owners[task.taskID] = runID }
         }
         var changed = true
@@ -93,7 +93,7 @@ extension SidebarVM {
 
     func isExecutionParentExpanded(_ id: String) -> Bool { expandedExecutionParents.contains(id) }
 
-    func executionRows(_ tasks: [TaskInfo], depth: Int = 1) -> [SidebarItem] {
+    func executionRows(_ tasks: [TaskInfo], depth: Int = 1, hasFollowingSiblings: Bool = false) -> [SidebarItem] {
         let owners = workflowTaskOwners
         let rows = tasks.contains(where: { owners[$0.taskID] != nil }) ? tasks
             : WorkflowOrchestratorConversation.conversations(tasks).compactMap { WorkflowOrchestratorConversation.representative($0.members) }
@@ -102,7 +102,7 @@ extension SidebarVM {
                                repoName: Format.repoName(task.repoPath), ageText: Format.age(task.startedAt),
                                detailLabel: workflowChildLabel(task), indent: depth,
                                startedAt: task.startedAt, durationSeconds: task.durationSeconds,
-                               guides: [index == rows.count - 1 ? .last : .branch]))
+                               guides: [index == rows.count - 1 && !hasFollowingSiblings ? .last : .branch]))
         }
     }
 

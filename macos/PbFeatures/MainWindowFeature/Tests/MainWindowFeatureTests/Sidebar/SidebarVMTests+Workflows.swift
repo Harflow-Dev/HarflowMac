@@ -140,10 +140,10 @@ extension SidebarVMTests {
         let items = harness.sut.workflowTreeItems(harness.sut.workflowRuns[0])
         harness.sut.didChangeSearchQuery("Nested")
         // then
-        #expect(items.map(\.id) == ["workflow:root", "workflow:child"])
-        if case .workflow(let child) = items.last { #expect(child.indent == 1) }
+        #expect(items.map(\.id) == ["workflow:root", "workflow-shortcut:root:child"])
+        if case .workflowShortcut(let child, _) = items.last { #expect(child.indent == 1); #expect(child.guides == [.last]) }
         #expect(harness.sut.filteredWorkflowRuns().map(\.id) == ["root", "child"])
-        #expect(harness.sut.items(in: .running).map(\.id) == ["workflow:root", "workflow:child"])
+        #expect(Set(harness.sut.items(in: .running).map(\.id)) == ["workflow:root", "workflow:child", "workflow-shortcut:root:child"])
     }
 }
 
@@ -185,5 +185,162 @@ extension SidebarVMTests {
         #expect(harness.sut.workflowTaskOwners.isEmpty)
         #expect(harness.sut.executionParent(of: "empty-owner") == nil)
         #expect(harness.sut.executionParent(of: "invalid-owner") == nil)
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenChildInvocation_whenParentExpanded_thenShortcutIsSiblingOfParentTasks() throws {
+        // given
+        let harness = makeSUT()
+        let parent = SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running")])
+        let child = SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "name": .string("Review"),
+            "parent_link": .object(["workflow_run_id": .string("parent"), "execution_id": .string("invoke")])])
+        harness.sut.workflowRuns = [parent, child]
+        harness.sut.latestTasks = [try #require(TaskInfo(.object(["task_id": .string("invoker"), "workflow_run_id": .string("parent"),
+            "workflow_execution_id": .string("invoke"), "status": .string("running")])))]
+        harness.sut.expandedExecutionParents.insert("workflow:parent")
+        // when
+        let items = harness.sut.workflowTreeItems(parent)
+        // then
+        #expect(items.map(\.id) == ["workflow:parent", "task:invoker", "workflow-shortcut:parent:child"])
+        if case .workflowShortcut(let row, _) = items[2] { #expect(row.indent == 1); #expect(row.guides == [.last]); #expect(!row.hasChildren) }
+    }
+
+    @Test func givenCanonicalChild_whenBucketed_thenStandaloneRootExpandsItsOwnTasks() throws {
+        // given
+        let harness = makeSUT()
+        harness.sut.workflowRuns = [
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent")]),
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "parent_workflow_run_id": .string("parent")])
+        ]
+        harness.sut.latestTasks = [try #require(TaskInfo(.object(["task_id": .string("worker"), "workflow_run_id": .string("child")])))]
+        harness.sut.expandedExecutionParents.insert("workflow:child")
+        // when
+        let sections = harness.sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: [])
+        // then
+        #expect(Set(sections.flatMap(\.items).map(\.id)) == ["workflow:parent", "workflow:child", "task:worker"])
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenFinishedInvokingTaskAndRunningChild_whenAliasSelected_thenBothEntriesHighlightActualRunningWorkflow() throws {
+        // given
+        let harness = makeSUT()
+        let parent = SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running")])
+        let child = SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "status": .string("running"),
+            "parent_link": .object(["workflow_run_id": .string("parent"), "execution_id": .string("invoke")])])
+        harness.sut.workflowRuns = [parent, child]
+        harness.sut.latestTasks = [try #require(TaskInfo(.object(["task_id": .string("invoker"), "workflow_run_id": .string("parent"),
+            "workflow_execution_id": .string("invoke"), "status": .string("completed")])))]
+        harness.sut.expandedExecutionParents.insert("workflow:parent")
+        // when
+        let items = harness.sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: []).flatMap(\.items)
+        let alias = try #require(items.first { if case .workflowShortcut = $0 { return true }; return false })
+        harness.sut.didSelect(alias.destination)
+        // then
+        #expect(alias.destination == .workflowRun("child"))
+        #expect(items.filter { $0.isSelected(harness.sut.selection) }.map(\.id) == ["workflow:child", "workflow-shortcut:parent:child"])
+        #expect(Set(items.map(\.id)).count == items.count)
+        if case .workflowShortcut(let row, _) = alias { #expect(row.status == .running) }
+        if let canonical = items.first(where: { $0.id == "workflow:child" }), case .workflow(let row) = canonical { #expect(row.status == .running) }
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenRootHeaderReferencesChildButHistoryOmitsIt_whenResolved_thenVisibleShortcutUsesUnknownThenActualChildStatus() async throws {
+        // given
+        let harness = makeSUT()
+        let parent = SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running"),
+            "child_invocations": .array([.object(["execution_id": .string("invoke"), "child_workflow_run_id": .string("child")])])])
+        harness.sut.workflowRuns = [parent]
+        harness.sut.latestTasks = [try #require(TaskInfo(.object(["task_id": .string("chat"), "workflow_run_id": .string("parent"),
+            "workflow_role": .string("orchestrator"), "status": .string("completed")])))]
+        harness.sut.expandedExecutionParents.insert("workflow:parent")
+        // when
+        await harness.sut.refreshChildInvocationHeaders()
+        let preparing = harness.sut.workflowTreeItems(parent)
+        harness.sut.mergeWorkflowHeaders([["workflow_run_id": .string("child"), "parent_workflow_run_id": .string("parent"),
+            "name": .string("Child"), "status": .string("running")]])
+        let running = harness.sut.workflowTreeItems(parent)
+        // then
+        #expect(preparing.map(\.id) == ["workflow:parent", "task:chat", "workflow-shortcut:parent:child"])
+        if case .workflowShortcut(let row, _) = preparing[2] { #expect(row.status != .completed) }
+        if case .workflowShortcut(let row, _) = running[2] { #expect(row.status == .running) }
+        #expect(running[2].destination == .workflowRun("child"))
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenRecursiveChildRuns_whenExpanded_thenEachCanonicalRootOwnsOnlyImmediateNodesAndGuidedShortcuts() throws {
+        // given
+        let harness = makeSUT()
+        harness.sut.workflowRuns = [
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running")]),
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "status": .string("running"), "parent_workflow_run_id": .string("parent")]),
+            SidebarWorkflowRun(raw: ["workflow_run_id": .string("grandchild"), "status": .string("running"), "parent_workflow_run_id": .string("child")])
+        ]
+        harness.sut.latestTasks = [try #require(TaskInfo(.object(["task_id": .string("worker"), "workflow_run_id": .string("child")])))]
+        harness.sut.expandedExecutionParents = ["workflow:parent", "workflow:child", "workflow:grandchild"]
+        // when
+        let parentItems = harness.sut.workflowTreeItems(harness.sut.workflowRuns[0])
+        let childItems = harness.sut.workflowTreeItems(harness.sut.workflowRuns[1])
+        let all = harness.sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: []).flatMap(\.items)
+        // then
+        #expect(parentItems.map(\.id) == ["workflow:parent", "workflow-shortcut:parent:child"])
+        #expect(childItems.map(\.id) == ["workflow:child", "task:worker", "workflow-shortcut:child:grandchild"])
+        #expect(all.filter { if case .workflow = $0 { return true }; return false }.count == 3)
+        #expect(Set(all.map(\.id)).count == all.count)
+        if case .task(let row) = childItems[1] { #expect(row.guides == [.branch]) }
+        if case .workflowShortcut(let row, _) = childItems[2] {
+            #expect(row.guides == [.last])
+            #expect(row.detailLabel == "Child workflow")
+        }
+        #expect(childItems[2].destination == .workflowRun("grandchild"))
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenChildOrchestratorSharingParentSession_whenCanonicalChildExpanded_thenItsOwnTaskRemainsUnderChildRoot() throws {
+        // given
+        let harness = makeSUT()
+        let child = SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "parent_workflow_run_id": .string("parent")])
+        harness.sut.workflowRuns = [child]
+        harness.sut.latestTasks = [try #require(TaskInfo(.object(["task_id": .string("child-chat"), "workflow_run_id": .string("child"),
+            "workflow_session_owner_run_id": .string("parent"), "workflow_role": .string("orchestrator"), "session_id": .string("shared")])))]
+        harness.sut.expandedExecutionParents.insert("workflow:child")
+        // when
+        let items = harness.sut.workflowTreeItems(child)
+        // then
+        #expect(items.map(\.id) == ["workflow:child", "task:child-chat"])
+        #expect(harness.sut.workflowChildren("parent").isEmpty)
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenStaleCachedParentDetailsAndFreshInvocationHeader_whenRefreshing_thenNewChildIsVisibleAndCachedOverlapKeepsDetail() async {
+        // given
+        let harness = makeSUT()
+        let parent = SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running"),
+            "child_invocations": .array([
+                .object(["child_workflow_run_id": .string("existing"), "execution_id": .string("existing-execution")]),
+                .object(["child_workflow_run_id": .string("new-child"), "execution_id": .string("new-execution")])
+            ])])
+        harness.sut.workflowRuns = [parent]
+        harness.sut.invocationDetails = { id in
+            guard id == "parent" else { return nil }
+            return ["workflow_run_id": .string("parent"), "activations": .array([
+                .object(["id": .string("existing-execution"), "invocation": .object([
+                    "child_workflow_run_id": .string("existing"), "workflow_name": .string("Existing child name")])])
+            ])]
+        }
+        harness.sut.expandedExecutionParents.insert("workflow:parent")
+        // when
+        await harness.sut.refreshChildInvocationHeaders()
+        let items = harness.sut.workflowTreeItems(parent)
+        // then
+        #expect(Set(harness.sut.workflowRuns.map(\.id)) == ["parent", "existing", "new-child"])
+        #expect(harness.sut.workflowRuns.first { $0.id == "existing" }?.name == "Existing child name")
+        #expect(Set(items.map(\.id)) == ["workflow:parent", "workflow-shortcut:parent:existing", "workflow-shortcut:parent:new-child"])
+        #expect(items.contains { $0.destination == .workflowRun("new-child") })
     }
 }

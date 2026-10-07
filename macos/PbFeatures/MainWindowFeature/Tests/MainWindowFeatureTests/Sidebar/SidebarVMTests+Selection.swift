@@ -42,7 +42,7 @@ extension SidebarVMTests {
         // then
         #expect(harness.sut.expandedExecutionParents.contains("workflow:root"))
         #expect(!harness.sut.expandedExecutionParents.contains("workflow:child"))
-        #expect(harness.sut.items(in: .running).map(\.id) == ["workflow:root", "workflow:child"])
+        #expect(Set(harness.sut.items(in: .running).map(\.id)) == ["workflow:root", "workflow:child", "workflow:grandchild", "workflow-shortcut:root:child"])
         harness.sut.didToggleExpansion(taskID: "workflow:root")
         harness.sut.recompute()
         #expect(!harness.sut.expandedExecutionParents.contains("workflow:root"))

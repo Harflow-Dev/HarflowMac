@@ -472,11 +472,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                         .buttonStyle(QuietButtonStyle())
 .padding(.horizontal, 16)
                 }
-                ForEach(run.childRunIDs, id: \.self) { childID in
-                    Button("Open \(run.childRunLabel(childID))") { viewModel.openRun(childID) }
-                        .buttonStyle(QuietButtonStyle())
-.padding(.horizontal, 16)
-                }
+                WorkflowChildLinks(groups: WorkflowChildLinkGroup.build(run: run), onOpen: viewModel.openRun)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
                 if let assignment = run.raw["prompt"]?.stringValue, !assignment.isEmpty {
                     DisclosureGroup(run.parentRunID == nil ? "Original request" : "Assignment for this child") {
                         ScrollView {

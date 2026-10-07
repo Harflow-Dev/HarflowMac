@@ -105,6 +105,8 @@ protocol SidebarRouting: Sendable {
 @MainActor
 final class SidebarVM: SidebarViewModel {
     var workflowDefinitions: [WorkflowRecord] = []
+    @ObservationIgnored var invocationDetails: (String) -> [String: JSONValue]? = { _ in nil }
+    var childInvocationRefreshOffset = 0
     var workflowRuns: [SidebarWorkflowRun] = []
     var workflowErrorMessage: String?
     @ObservationIgnored var workflowPoll: Task<Void, Never>?

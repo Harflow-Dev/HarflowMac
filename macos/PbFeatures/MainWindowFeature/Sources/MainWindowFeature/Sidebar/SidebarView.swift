@@ -326,14 +326,19 @@ struct SidebarView<VM: SidebarViewModel>: View {
             }.tag(MonitorDestination.group(group.name))
         case .workflow(let row):
             TaskRow(model: row, onToggleExpansion: row.hasChildren ? { toggleExpansion("workflow:\(row.id)") } : nil)
-                .tag(MonitorDestination.workflowRun(row.id))
+                .tag(item.destination)
+                .listRowBackground(item.isSelected(viewModel.selection) ? Color.accentColor.opacity(0.18) : Color.clear)
+        case .workflowShortcut(let row, _):
+            TaskRow(model: row)
+                .tag(item.destination)
+                .listRowBackground(item.isSelected(viewModel.selection) ? Color.accentColor.opacity(0.18) : Color.clear)
         }
     }
 
     private var expansionToken: [String] {
         viewModel.sections.flatMap(\.items).compactMap { item in
             switch item {
-            case .task(let row), .workflow(let row):
+            case .task(let row), .workflow(let row), .workflowShortcut(let row, _):
                 row.hasChildren ? "\(item.id):\(row.isExpanded)" : nil
             case .group(let group):
                 "\(item.id):\(viewModel.isExecutionParentExpanded(group.id))"
