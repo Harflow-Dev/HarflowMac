@@ -408,6 +408,7 @@ final class WorkflowVM: WorkflowViewModel {
         if type == "workflow" {
             node["workflow_ref"] = .object(["workflow_id": .string("")])
             node["orchestrator_mode"] = .string("child")
+            node["child_session_policy"] = .string("agent_decides")
             node["instructions"] = .string("")
             node["max_attempts"] = .number(3)
             node["optional"] = .bool(false)

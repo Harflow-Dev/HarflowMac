@@ -164,6 +164,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 Text("Child orchestrator").tag("child")
                 Text("Current orchestrator").tag("current")
             }
+            childSessionSetting(node)
             Text(node.orchestratorMode == "current"
                 ? "The current orchestrator directs the child's nodes in its own workflow boundary."
                 : "The child uses its saved orchestrator and its own planning context.")
@@ -420,10 +421,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     if let error = activation["result_error"]?.stringValue {
                         Text(error).font(.pb(.secondary)).foregroundStyle(Color.warningFG).textSelection(.enabled)
                     }
-                    if let retryOf = activation["retry_of_execution_id"]?.stringValue {
-                        Text("Retry of execution " + retryOf).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-                    }
-                    executionSessionDetails(activation)
+                    invocationSessionDetails(activation)
                     if let assignment = activation["assignment_prompt"]?.stringValue {
                         Text("Assignment").font(.pb(.secondary, weight: .semibold))
                         Text(assignment).font(.pb(.secondary)).textSelection(.enabled)
@@ -504,6 +502,41 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     guard viewModel.selectedRun == nil else { return }
                     viewModel.definition[key] = .number(Double($0))
                 })
+    }
+}
+
+// MARK: - Child conversation settings and invocation details
+
+extension WorkflowInspector {
+    @ViewBuilder
+    private func childSessionSetting(_ node: WorkflowNodeModel) -> some View {
+        if node.showsChildSessionPolicy {
+            Picker("Child conversation", selection: nodeString(node, "child_session_policy", default: "agent_decides")) {
+                Text("Fresh").tag("fresh")
+                Text("Resume").tag("resume")
+                Text("Agent decides").tag("agent_decides")
+            }
+            Text("Resume reuses the latest compatible completed conversation from this step in this parent run. "
+                + "Each invocation starts a new workflow. Explicit Resume refuses when reuse is unavailable.")
+                .font(.pb(.secondary))
+                .foregroundStyle(Color.secondaryText)
+        }
+    }
+
+    private func childSessionDetails(_ activation: [String: JSONValue]) -> some View {
+        let details = WorkflowChildSessionDetails(invocation: activation["invocation"]?.objectValue ?? [:])
+        return ForEach(Array(details.lines.enumerated()), id: \.offset) { _, line in
+            Text(line).font(.pb(.caption)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
+        }
+    }
+
+    @ViewBuilder
+    private func invocationSessionDetails(_ activation: [String: JSONValue]) -> some View {
+        if let retryOf = activation["retry_of_execution_id"]?.stringValue {
+            Text("Retry of execution " + retryOf).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+        }
+        executionSessionDetails(activation)
+        childSessionDetails(activation)
     }
 }
 
