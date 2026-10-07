@@ -51,14 +51,17 @@ struct WorkflowChildLinkGroup: Identifiable, Equatable {
 struct WorkflowChildLinks: View {
     let groups: [WorkflowChildLinkGroup]
     let onOpen: (String) -> Void
-    @State private var collapsedIDs: Set<String> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expandedIDs: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(groups) { group in
                 if group.runs.count > 1 {
-                    DisclosureGroup(isExpanded: Binding(get: { !collapsedIDs.contains(group.id) }, set: { expanded in
-                        if expanded { collapsedIDs.remove(group.id) } else { collapsedIDs.insert(group.id) }
+                    DisclosureGroup(isExpanded: Binding(get: { expandedIDs.contains(group.id) }, set: { expanded in
+                        withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) {
+                            if expanded { expandedIDs.insert(group.id) } else { expandedIDs.remove(group.id) }
+                        }
                     })) {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(group.runs) { link in row(link, repeated: true) }
