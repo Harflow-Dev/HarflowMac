@@ -4,24 +4,39 @@
 //
 
 import MonitorCore
+import PbCommon
 import PbUI
 
 // MARK: - SidebarItem
 
 /// One selectable entry in a sidebar section: a task row (a root tree's flattened rows, sub-tasks
-/// included) or a parallel-run group row. The list tags stay `.task(id)` / `.group(name)`.
+/// included), workflow run, invocation shortcut, or parallel group. Workflow shortcuts and real
+/// rows share one navigation destination while retaining independent presentation identities.
 enum SidebarItem: Identifiable, Equatable {
     case task(TaskRowModel)
     case group(ParallelGroup)
     case workflow(TaskRowModel)
+    case workflowShortcut(TaskRowModel, parentRunID: String)
 
     var id: String {
         switch self {
         case .task(let row): "task:\(row.id)"
         case .group(let group): group.id
         case .workflow(let row): "workflow:\(row.id)"
+        case .workflowShortcut(let row, let parentID): "workflow-shortcut:\(parentID):\(row.id)"
         }
     }
+
+    var destination: MonitorDestination {
+        switch self {
+        case .task(let row): .task(row.id)
+        case .group(let group): .group(group.name)
+        case .workflow(let row), .workflowShortcut(let row, _): .workflowRun(row.id)
+        }
+    }
+
+    func isSelected(_ selection: MonitorDestination?) -> Bool { destination == selection }
+
 }
 
 // MARK: - SidebarSection

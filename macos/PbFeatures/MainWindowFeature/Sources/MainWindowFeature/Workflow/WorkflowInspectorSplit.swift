@@ -12,7 +12,9 @@ enum WorkflowInspectorWidth {
 
 // MARK: - WorkflowInspectorSplit
 
-struct WorkflowInspectorSplit<Content: View, Inspector: View>: View {
+/// A bounded native split: SwiftUI's HSplitView can attach to the navigation host's
+/// whole window instead of its detail pane, hiding the left graph under the sidebar.
+struct WorkflowInspectorSplit<Content: View, Inspector: View>: NSViewRepresentable {
     let content: Content
     let inspector: Inspector
 
@@ -21,57 +23,65 @@ struct WorkflowInspectorSplit<Content: View, Inspector: View>: View {
         self.inspector = inspector()
     }
 
-    var body: some View {
-        HSplitView {
-            content.frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
-            inspector.frame(minWidth: 220, idealWidth: WorkflowInspectorWidth.initial, maxWidth: 500)
-                .background(WorkflowSplitInitialSize())
-        }
+    func makeNSView(context: Context) -> WorkflowInspectorNativeSplit {
+        WorkflowInspectorNativeSplit(content: AnyView(content.environment(\.self, context.environment)),
+                                     inspector: AnyView(inspector.environment(\.self, context.environment)))
+    }
+
+    func updateNSView(_ split: WorkflowInspectorNativeSplit, context: Context) {
+        // Each native hosting root needs the parent environment, including routing,
+        // file-link actions, app storage defaults, and accessibility preferences.
+        split.contentHost.rootView = AnyView(content.environment(\.self, context.environment))
+        split.inspectorHost.rootView = AnyView(inspector.environment(\.self, context.environment))
     }
 }
 
-// MARK: - WorkflowSplitInitialSize
+// MARK: - WorkflowInspectorNativeSplit
 
-private struct WorkflowSplitInitialSize: NSViewRepresentable {
-    func makeNSView(context _: Context) -> WorkflowSplitSizeProbe { WorkflowSplitSizeProbe() }
-    func updateNSView(_: WorkflowSplitSizeProbe, context _: Context) {}
-}
+final class WorkflowInspectorNativeSplit: NSSplitView, NSSplitViewDelegate {
+    let contentHost: NSHostingView<AnyView>
+    let inspectorHost: NSHostingView<AnyView>
+    private var inspectorWidth = WorkflowInspectorWidth.initial
 
-// MARK: - WorkflowSplitSizeProbe
-
-private final class WorkflowSplitSizeProbe: NSView {
-    private weak var initializedSplit: NSSplitView?
-    private var sizingPending = false
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        scheduleInitialSize()
+    init(content: AnyView, inspector: AnyView) {
+        self.contentHost = NSHostingView(rootView: content)
+        self.inspectorHost = NSHostingView(rootView: inspector)
+        super.init(frame: .zero)
+        isVertical = true
+        dividerStyle = .thin
+        delegate = self
+        contentHost.sizingOptions = []
+        inspectorHost.sizingOptions = []
+        addArrangedSubview(contentHost)
+        addArrangedSubview(inspectorHost)
     }
 
-    override func layout() {
-        super.layout()
-        scheduleInitialSize()
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func splitView(_: NSSplitView, resizeSubviewsWithOldSize _: NSSize) {
+        guard bounds.width > 0 else { return }
+        let width = WorkflowInspectorWidth.clamped(inspectorWidth, available: bounds.width)
+        let contentWidth = max(0, bounds.width - width - dividerThickness)
+        contentHost.frame = CGRect(x: 0, y: 0, width: contentWidth, height: bounds.height)
+        inspectorHost.frame = CGRect(x: contentWidth + dividerThickness, y: 0, width: width, height: bounds.height)
+        inspectorWidth = width
     }
 
-    private func scheduleInitialSize() {
-        guard window != nil, !sizingPending else { return }
-        var ancestor = superview
-        while let view = ancestor {
-            if let split = view as? NSSplitView, split.isVertical, split.arrangedSubviews.count == 2 {
-                guard initializedSplit !== split, split.bounds.width > 0 else { return }
-                sizingPending = true
-                DispatchQueue.main.async { [weak self, weak split] in
-                    guard let self else { return }
-                    sizingPending = false
-                    guard window != nil, let split, split.bounds.width > 0, initializedSplit !== split else { return }
-                    let width = WorkflowInspectorWidth.clamped(WorkflowInspectorWidth.initial, available: split.bounds.width)
-                    split.setPosition(split.bounds.width - width - split.dividerThickness, ofDividerAt: 0)
-                    initializedSplit = split
-                }
-                return
-            }
-            ancestor = view.superview
-        }
+    func splitView(_ splitView: NSSplitView, constrainMinCoordinate _: CGFloat, ofSubviewAt _: Int) -> CGFloat { 400 }
+
+    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate _: CGFloat, ofSubviewAt _: Int) -> CGFloat {
+        max(400, splitView.bounds.width - 220 - splitView.dividerThickness)
+    }
+
+    func splitView(_ splitView: NSSplitView, constrainSplitPosition proposedPosition: CGFloat, ofSubviewAt _: Int) -> CGFloat {
+        let width = WorkflowInspectorWidth.clamped(bounds.width - proposedPosition - dividerThickness, available: bounds.width)
+        return bounds.width - width - dividerThickness
+    }
+
+    func splitViewDidResizeSubviews(_ notification: Notification) {
+        guard notification.object as? NSSplitView === self, inspectorHost.frame.width > 0 else { return }
+        inspectorWidth = inspectorHost.frame.width
     }
 }
 

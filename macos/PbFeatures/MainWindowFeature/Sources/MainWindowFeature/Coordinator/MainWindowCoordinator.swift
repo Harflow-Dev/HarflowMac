@@ -234,6 +234,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         if let sidebarVM { return sidebarVM }
         let useCase = SidebarViewRepository()
         let newVM = SidebarVM(useCase: useCase, routing: self, workflowUseCase: useCase)
+        newVM.invocationDetails = { [weak self] id in self?.workflowRunPolling.cached(id: id) }
         sidebarVM = newVM
         return newVM
     }

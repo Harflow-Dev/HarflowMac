@@ -294,17 +294,19 @@ struct WorkflowCanvas: View {
 
     private var zoomControls: some View {
         HStack(spacing: 4) {
-            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: -1) } label: { Image(systemName: "minus") }
+            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: -1) } label: { Image(systemName: "minus").frame(width: 14, height: 18) }
                 .disabled(zoom <= WorkflowCanvasZoom.minimum)
                 .accessibilityLabel("Zoom out")
                 .help("Zoom out")
-            Button("\(Int((zoom * 100).rounded()))%") { zoom = 1 }
-                .font(.pb(.caption))
-                .monospacedDigit()
-                .frame(minWidth: 44)
+            Button { zoom = 1 } label: {
+                Text("\(Int((zoom * 100).rounded()))%")
+                    .font(.pb(.caption))
+                    .monospacedDigit()
+                    .frame(width: 44, height: 18)
+            }
                 .accessibilityLabel("Reset zoom, currently \(Int((zoom * 100).rounded())) percent")
                 .help("Reset zoom to 100%")
-            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: 1) } label: { Image(systemName: "plus") }
+            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: 1) } label: { Image(systemName: "plus").frame(width: 14, height: 18) }
                 .disabled(zoom >= WorkflowCanvasZoom.maximum)
                 .accessibilityLabel("Zoom in")
                 .help("Zoom in")

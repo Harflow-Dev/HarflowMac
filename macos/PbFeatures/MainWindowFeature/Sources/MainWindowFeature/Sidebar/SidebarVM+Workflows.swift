@@ -80,6 +80,7 @@ extension SidebarVM {
                     workflowDefinitions = snapshot.definitions.map { WorkflowRecord(raw: $0) }
                     mergeWorkflowHeaders(snapshot.runs, replacing: snapshot.page == nil)
                     if let page = snapshot.page { updateWorkflowHistory(page, advancing: false) }
+                    await refreshChildInvocationHeaders()
                     workflowErrorMessage = nil
                     publishViewEvent(.incidentResolved(source: "workflow-list"))
                     await refreshLoadedWorkflowStatus(excluding: Set(snapshot.runs.compactMap { $0["workflow_run_id"]?.stringValue }))
@@ -108,6 +109,51 @@ extension SidebarVM {
         workflowPoll?.cancel()
         workflowPoll = nil
         workflowHistoryState.isLoading = false
+    }
+
+    static func invocationHeaders(parent: SidebarWorkflowRun) -> [[String: JSONValue]] {
+        let compact = WorkflowJSON.objects(parent.raw["child_invocations"])
+        let expanded = WorkflowJSON.objects(parent.raw["activations"]).compactMap { activation -> [String: JSONValue]? in
+            guard let invocation = activation["invocation"]?.objectValue else { return nil }
+            return ["child_workflow_run_id": invocation["child_workflow_run_id"] ?? .null,
+                "execution_id": activation["id"] ?? .null, "name": invocation["workflow_name"] ?? .string("Child workflow")]
+        }
+        var seen: Set<String> = []
+        return (compact + expanded).compactMap { reference in
+            guard let id = reference["child_workflow_run_id"]?.stringValue, WorkflowRunIdentity.isValid(id), seen.insert(id).inserted else { return nil }
+            return ["workflow_run_id": .string(id), "name": reference["name"] ?? .string("Child workflow"),
+                "status": .string("unknown"), "invocation_placeholder": .bool(true),
+                "parent_workflow_run_id": .string(parent.id), "parent_link": .object([
+                    "workflow_run_id": .string(parent.id), "execution_id": reference["execution_id"] ?? .null])]
+        }
+    }
+
+    func refreshChildInvocationHeaders() async {
+        let generation = workflowGeneration
+        let known = Set(workflowRuns.map(\.id))
+        let missing = workflowRuns.flatMap { run in
+            Self.invocationHeaders(parent: SidebarWorkflowRun(raw: invocationDetails(run.id) ?? run.raw))
+        }
+.filter { !known.contains($0["workflow_run_id"]?.stringValue ?? "") }
+        mergeWorkflowHeaders(missing)
+        guard let history = historyUseCase else { return }
+        let ids = workflowRuns.filter { $0.raw["invocation_placeholder"]?.boolValue == true }.map(\.id).sorted()
+        guard !ids.isEmpty else { childInvocationRefreshOffset = 0; return }
+        let offset = childInvocationRefreshOffset % ids.count
+        let batch = Array((Array(ids[offset...]) + Array(ids[..<offset])).prefix(100))
+        childInvocationRefreshOffset = (offset + batch.count) % ids.count
+        do {
+            let page = try await history.workflowBatch(runIDs: batch)
+            guard !Task.isCancelled, workflowGeneration == generation else { return }
+            if page.catalogState.isReady {
+                mergeWorkflowHeaders(page.items + page.relatedHeaders)
+                publishViewEvent(.incidentResolved(source: "workflow-child-status"))
+            }
+        } catch {
+            guard !Task.isCancelled, workflowGeneration == generation else { return }
+            // Keep unknown references selectable while bounded child header resolution retries.
+            publishWorkflowIncident(source: "workflow-child-status", message: "Child workflow status unavailable: \(error.localizedDescription)")
+        }
     }
 
     func filteredWorkflowRuns() -> [SidebarWorkflowRun] {
@@ -147,15 +193,16 @@ extension SidebarVM {
 
     func workflowTreeItems(_ run: SidebarWorkflowRun, depth: Int = 0, visited: Set<String> = []) -> [SidebarItem] {
         guard !visited.contains(run.id) else { return [] }
-        let runs = filteredWorkflowRuns()
-        let children = runs.filter { $0.parentRunID == run.id }
+        let children = filteredWorkflowRuns().filter { $0.parentRunID == run.id }
         let expanded = expandedExecutionParents.contains("workflow:\(run.id)") || !searchQuery.isEmpty || selectedBackend != "all"
         let row = workflowRow(run, depth: depth, expanded: expanded)
         guard expanded else { return [.workflow(row)] }
-        var seen = visited
-        seen.insert(run.id)
-        return [.workflow(row)] + executionRows(workflowChildren(run.id), depth: depth + 1)
-            + children.flatMap { workflowTreeItems($0, depth: depth + 1, visited: seen) }
+        let tasks = workflowChildren(run.id)
+        let shortcuts = children.enumerated().map { index, child in
+            SidebarItem.workflowShortcut(workflowRow(child, depth: depth + 1, expanded: false, shortcut: true,
+                guides: [index == children.count - 1 ? .last : .branch]), parentRunID: run.id)
+        }
+        return [.workflow(row)] + executionRows(tasks, depth: depth + 1, hasFollowingSiblings: !children.isEmpty) + shortcuts
     }
 
     private func workflowBackends(_ definition: [String: JSONValue]) -> Set<String> {
@@ -167,15 +214,16 @@ extension SidebarVM {
         })
     }
 
-    func workflowRow(_ run: SidebarWorkflowRun, depth: Int = 0, expanded: Bool? = nil) -> TaskRowModel {
+    func workflowRow(_ run: SidebarWorkflowRun, depth: Int = 0, expanded: Bool? = nil, shortcut: Bool = false, guides: [TreeGuide] = []) -> TaskRowModel {
         let rawStatus = run.raw["status"]?.stringValue ?? "unknown"
         let specialStatus = ["paused", "needs_input", "needs_attention", "starting", "cancelling"].contains(rawStatus)
         let status: TaskStatus = run.raw["settling"]?.boolValue == true ? .other("Settling") : specialStatus
             ? .other(rawStatus.replacingOccurrences(of: "_", with: " ").capitalized) : TaskStatus(rawStatus)
         return TaskRowModel(id: run.id, backend: "workflow", title: run.name, status: status,
                             repoName: Format.repoName(run.raw["repo_path"]?.stringValue ?? ""), ageText: Format.age(run.startedAt),
+                            detailLabel: shortcut ? "Child workflow" : nil,
                             indent: depth, subTaskSummary: run.raw["attention_reason"]?.stringValue, startedAt: run.startedAt,
-                            hasChildren: !workflowChildren(run.id).isEmpty || workflowRuns.contains { $0.parentRunID == run.id },
-                            isExpanded: expanded ?? expandedExecutionParents.contains("workflow:\(run.id)"))
+                            hasChildren: !shortcut && (!workflowChildren(run.id).isEmpty || workflowRuns.contains { $0.parentRunID == run.id }),
+                            isExpanded: expanded ?? expandedExecutionParents.contains("workflow:\(run.id)"), guides: guides)
     }
 }

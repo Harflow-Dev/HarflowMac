@@ -1,3 +1,4 @@
+import Foundation
 @testable import MainWindowFeature
 import MonitorCore
 import Testing
@@ -83,6 +84,66 @@ import Testing
         #expect(activityRows.count == 4)
         #expect(shown.count == 4)
         #expect(ParallelColumnModel.itemCount(raw) == 13)
+    }
+
+    @Test func givenMeasuredShortHistory_whenCellGrowsAndNewActivityArrives_thenOlderRowsRemainUntilSpaceIsNeeded() {
+        // given
+        let all = activity(12)
+        let heights = Dictionary(uniqueKeysWithValues: all.map { ($0.id, CGFloat(20)) })
+        // when / then
+        let roomy = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: heights)
+        #expect(roomy.map(\.id) == all.map(\.id))
+        let smaller = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 300, heights: heights)
+        #expect(smaller.count == 8)
+        let arrivals = activity(13)
+        let awaitingMeasurement = ParallelColumnModel.visibleRows(arrivals, showAll: false, availableHeight: 500,
+                                                                  heights: heights, previousFirstID: roomy.first?.id)
+        #expect(awaitingMeasurement.first?.id == roomy.first?.id)
+        #expect(awaitingMeasurement.count == 13)
+        let updatedHeights = Dictionary(uniqueKeysWithValues: arrivals.map { ($0.id, CGFloat(20)) })
+        let updated = ParallelColumnModel.visibleRows(arrivals, showAll: false, availableHeight: 500, heights: updatedHeights)
+        #expect(updated.count == 13)
+        #expect(updated.first?.id == all.first?.id)
+    }
+
+    @Test func givenTallRows_whenCellCannotFitMinimum_thenSixRowsRemainScrollable() {
+        // given
+        let all = activity(10)
+        let heights = Dictionary(uniqueKeysWithValues: all.map { ($0.id, CGFloat(180)) })
+        // when
+        let shown = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 400, heights: heights)
+        // then
+        #expect(shown.count == 6)
+        #expect(ParallelColumnModel.measurementCandidate(all, shown: shown, availableHeight: 400, heights: heights)?.id == nil)
+    }
+
+    @Test func givenUnknownOlderRow_whenMeasuring_thenOneCandidateFillsRemainingSpaceEvenWhenPartiallyVisible() {
+        // given
+        let all = activity(10)
+        let heights = Dictionary(uniqueKeysWithValues: all.suffix(6).map { ($0.id, CGFloat(20)) })
+        let shown = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: heights)
+        // when
+        let candidate = ParallelColumnModel.measurementCandidate(all, shown: shown, availableHeight: 500, heights: heights)
+        // then
+        #expect(candidate?.id == all[3].id)
+        var measured = heights
+        measured[all[3].id] = 600
+        #expect(ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: measured).count == 7)
+        let adapted = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: measured)
+        #expect(ParallelColumnModel.measurementCandidate(all, shown: adapted,
+                                                       availableHeight: 500, heights: measured)?.id == nil)
+    }
+
+    @Test func givenReaderAwayFromBottom_whenNewRowsArriveOrCellShrinks_thenOldestVisibleIdentityIsRetained() {
+        // given
+        let all = activity(12)
+        let heights = Dictionary(uniqueKeysWithValues: all.map { ($0.id, CGFloat(20)) })
+        // when
+        let shown = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 100,
+                                                   heights: heights, retainedFirstID: all[2].id)
+        // then
+        #expect(shown.map(\.id) == Array(all[2...]).map(\.id))
+        #expect(ParallelColumnModel.visibleRows(all, showAll: true, availableHeight: 100, heights: heights).count == 12)
     }
 
     // MARK: - Subtitle

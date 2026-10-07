@@ -9,17 +9,18 @@ import Testing
 // MARK: - WorkflowCanvasViewportTests
 
 @MainActor @Suite(.serialized) struct WorkflowCanvasViewportTests {
-    @Test(arguments: ["Graph", "Parallel"])
+    @Test(arguments: ["Graph", "Parallel", "Editor"])
     func givenLargeRun_whenSidebarAndWindowChange_thenPanesRemainInsideDetail(mode: String) async throws {
         // given
         _ = NSApplication.shared
         let layout = CanvasViewportState()
         let nodes = fixtureNodes()
-        let vm = WorkflowPreview.make(run: true)
+        let vm = WorkflowPreview.make(run: mode != "Editor")
         var definition = vm.definition
         definition["nodes"] = .array(nodes.map { .object($0.raw) })
-        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("canvas-fixture"), "name": .string("Canvas fixture"),
-                                             "status": .string("running"), "definition": .object(definition)])
+        vm.definition = definition
+        if mode != "Editor" { vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("canvas-fixture"), "name": .string("Canvas fixture"),
+                                             "status": .string("running"), "definition": .object(definition)]) }
         let domain = "polybridge-canvas-fixture-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: domain))
         defaults.set(mode, forKey: "workflowViewMode")
@@ -47,6 +48,7 @@ import Testing
         let cases: [(CGSize, NavigationSplitViewVisibility)] = [
             (size, .all), (CGSize(width: 1000, height: 620), .all), (size, .detailOnly), (size, .all)
         ]
+        var checkedInitialInspector = false
         for (size, visibility) in cases {
             // when
             layout.visibility = visibility
@@ -59,19 +61,28 @@ import Testing
                     && abs(layout.detail.maxX - host.bounds.maxX) < 1
             }
             let split = try #require(descendants(of: host).compactMap { $0 as? NSSplitView }.last { $0.isVertical })
-            let paneViewport = host.convert(split.bounds, from: split)
             // then
-            #expect(abs(layout.detail.maxX - host.bounds.maxX) < 1)
-            #expect(abs(paneViewport.minX - layout.detail.minX) < 1)
-            #expect(abs(paneViewport.maxX - layout.detail.maxX) < 1)
-            #expect(paneViewport.height > 100)
-            #expect(split.arrangedSubviews.count == 2)
-            for pane in split.arrangedSubviews {
-                #expect(split.bounds.contains(pane.frame))
-                #expect(pane.frame.width > 100)
+            assertPanesInsideDetail(split: split, host: host, detail: layout.detail)
+            if mode == "Editor", !checkedInitialInspector {
+                let inspector = try #require(split.arrangedSubviews.last)
+                #expect(abs(inspector.frame.width - WorkflowInspectorWidth.initial) < 1)
+                checkedInitialInspector = true
             }
-            guard mode == "Graph" else { continue }
+            guard mode != "Parallel" else { continue }
             try assertStartVisible(in: host, nodes: nodes, detail: layout.detail, visibility: visibility)
+        }
+    }
+
+    private func assertPanesInsideDetail(split: NSSplitView, host: NSView, detail: CGRect) {
+        let paneViewport = host.convert(split.bounds, from: split)
+        #expect(abs(detail.maxX - host.bounds.maxX) < 1)
+        #expect(abs(paneViewport.minX - detail.minX) < 1)
+        #expect(abs(paneViewport.maxX - detail.maxX) < 1)
+        #expect(paneViewport.height > 100)
+        #expect(split.arrangedSubviews.count == 2)
+        for pane in split.arrangedSubviews {
+            #expect(split.bounds.contains(pane.frame))
+            #expect(pane.frame.width > 100)
         }
     }
 
