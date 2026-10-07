@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - WorkflowScreenLayout
 
-/// Keeps the header at the top when failed content has only an intrinsic height.
+/// Keeps the header visible and lets panes use the window's remaining viewport.
+/// Split panes and long run details must not enlarge the navigation host's minimum height.
 struct WorkflowScreenLayout<Header: View, Content: View>: View {
     @ViewBuilder let header: () -> Header
     @ViewBuilder let content: () -> Content
@@ -10,7 +11,11 @@ struct WorkflowScreenLayout<Header: View, Content: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             header().fixedSize(horizontal: false, vertical: true)
-            content().frame(maxWidth: .infinity, maxHeight: .infinity)
+            GeometryReader { viewport in
+                content()
+                    .frame(width: viewport.size.width, height: viewport.size.height, alignment: .top)
+                    .clipped()
+            }
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

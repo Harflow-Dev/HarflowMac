@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import PbCommon
 @testable import PbUI
 import Testing
@@ -106,4 +107,64 @@ import Testing
         #expect(retries == 1)
     }
 
+    @Test(arguments: ["unknown", "resolved", "unrelated"])
+    func givenSourceWithoutFailure_whenResolved_thenDoesNotNotifyPresentationObservers(scenario: String) {
+        // given
+        let state = IncidentPresentation()
+        if scenario == "resolved" {
+            state.report(source: "list", message: "List failed")
+            state.resolve(source: "list")
+        } else if scenario == "unrelated" {
+            state.report(source: "detail", message: "Detail failed")
+        }
+        let before = state.failures
+        let current = state.current
+        let notifications = observe(state)
+        // when
+        state.resolve(source: "list")
+        state.resolve(source: "list")
+        // then
+        #expect(notifications.current == 0)
+        #expect(notifications.failures == 0)
+        #expect(state.current == current)
+        #expect(state.failures == before)
+    }
+
+    @Test(arguments: [false, true])
+    func givenMatchingFailure_whenResolved_thenNotifiesRecoveryAndAllowsSameFailureToReappear(dismissed: Bool) {
+        // given
+        let state = IncidentPresentation()
+        state.report(source: "list", message: "List failed")
+        if dismissed { state.dismiss() }
+        let notifications = observe(state)
+        // when
+        state.resolve(source: "list")
+        // then
+        #expect(notifications.failures == 1)
+        #expect(notifications.current == (dismissed ? 0 : 1))
+        #expect(state.current == nil)
+        #expect(state.failures.isEmpty)
+        #expect(state.report(source: "list", message: "List failed"))
+        #expect(state.current?.source == "list")
+        #expect(state.failures.count == 1)
+    }
+
+    private func observe(_ state: IncidentPresentation) -> IncidentObserverNotifications {
+        let notifications = IncidentObserverNotifications()
+        withObservationTracking { _ = state.current } onChange: {
+            MainActor.assumeIsolated { notifications.current += 1 }
+        }
+        withObservationTracking { _ = state.failures } onChange: {
+            MainActor.assumeIsolated { notifications.failures += 1 }
+        }
+        return notifications
+    }
+
+}
+
+// MARK: - IncidentObserverNotifications
+
+@MainActor private final class IncidentObserverNotifications {
+    var current = 0
+    var failures = 0
 }

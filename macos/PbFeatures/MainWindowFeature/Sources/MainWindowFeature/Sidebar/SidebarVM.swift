@@ -432,7 +432,9 @@ final class SidebarVM: SidebarViewModel {
     /// `collapsedTaskIDs` itself — an ordinary recompute (a new listing, a search keystroke) must
     /// never re-expand a row the person collapsed.
     private func applyExternalSelection(_ destination: MonitorDestination?) {
-        selection = normalized(destination)
+        let destination = normalized(destination)
+        guard destination != selection else { return }
+        selection = destination
         requestWorkflowReveal(selection)
         resolveUnloadedSelection(selection)
         recompute()

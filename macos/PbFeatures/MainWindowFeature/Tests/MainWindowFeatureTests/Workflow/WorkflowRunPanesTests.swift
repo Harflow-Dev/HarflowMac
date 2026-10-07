@@ -31,6 +31,11 @@ struct WorkflowRunPanesTests {
         await Task.yield()
         host.layoutSubtreeIfNeeded()
         // then
+        await waitUntil {
+            host.layoutSubtreeIfNeeded()
+            guard let current = findSplit(in: host, vertical: false) else { return false }
+            return zip(before, current.arrangedSubviews.map(\.frame)).allSatisfy { abs($0.height - $1.height) < 2 }
+        }
         let afterSplit = try #require(findSplit(in: host, vertical: false))
         #expect(afterSplit === split)
         for (old, new) in zip(before, afterSplit.arrangedSubviews.map(\.frame)) {

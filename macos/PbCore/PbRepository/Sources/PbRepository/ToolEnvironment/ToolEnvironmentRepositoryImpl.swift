@@ -48,7 +48,7 @@ public final class ToolEnvironmentRepositoryImpl: ToolEnvironmentRepository, @un
     }
 
     public var discovery: DiscoveryResult { discoveryValue }
-    public func discoveryPublisher() -> AnyPublisher<DiscoveryResult, Never> { $discoveryValue.eraseToAnyPublisher() }
+    public func discoveryPublisher() -> AnyPublisher<DiscoveryResult, Never> { $discoveryValue.removeDuplicates().eraseToAnyPublisher() }
 
     public func discoverEnvironment() async -> DiscoveryResult {
         guard let waited = await discoveryCoordinator.waitOrClaim() else {

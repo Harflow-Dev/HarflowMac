@@ -112,6 +112,7 @@ extension WorkflowViewModel {
 struct WorkflowView<VM: WorkflowViewModel>: View {
     @Environment(\.viewEvent) var viewEvent
     @State var viewModel: VM
+    @State private var runStatusHeight: CGFloat?
     private let builderTaskView: ((String, String) -> AnyView)?
     @AppStorage("workflowViewMode") private var viewMode = "Graph"
 
@@ -434,14 +435,22 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 
     private var runContent: some View {
         let isLoading = viewModel.initialLoadingKind == "run"
-        return VStack(spacing: 0) {
+        return GeometryReader { viewport in
+            VStack(spacing: 0) {
             if isLoading {
                 HStack { SkeletonBlock(height: 14); Spacer(minLength: 60) }
                     .frame(height: 27)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
             } else {
-                WorkflowRunStatus(viewModel: viewModel).pbFadeIn()
+                ScrollView {
+                    WorkflowRunStatus(viewModel: viewModel)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { runStatusHeight = $0 }
+                }
+                .accessibilityIdentifier("workflow-run-diagnostics")
+                .frame(height: min(runStatusHeight ?? 180, min(180, viewport.size.height * 0.3)))
+                .pbFadeIn()
             }
             Divider()
             WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading) {
@@ -451,11 +460,13 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             } activity: {
                 if isLoading { WorkflowLoadingActivity() } else { activity.pbFadeIn() }
             }
+            }
         }
     }
 
     @ViewBuilder private var runSidebar: some View {
         if let run = viewModel.selectedRun {
+            ScrollView {
             VStack(spacing: 0) {
                 if run.parentRunID != nil {
                     Text("Child workflow · Plan and checklist belong to this run").font(.pb(.caption)).foregroundStyle(Color.secondaryText).padding(16)
@@ -491,11 +502,13 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 }
                 Divider()
                 if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
-                    WorkflowInspector(viewModel: viewModel)
+                    WorkflowInspector(viewModel: viewModel, isScrollable: false)
                 } else {
                     Spacer(minLength: 0)
                 }
             }
+            }
+.accessibilityIdentifier("workflow-run-inspector")
 .background(Color.cardFill)
         }
     }

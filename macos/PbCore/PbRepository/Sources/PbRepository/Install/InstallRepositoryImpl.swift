@@ -57,11 +57,13 @@ public final class InstallRepositoryImpl: InstallRepository, @unchecked Sendable
     // MARK: Published state
 
     public var state: InstallState { stateValue }
-    public func statePublisher() -> AnyPublisher<InstallState, Never> { $stateValue.eraseToAnyPublisher() }
+    public func statePublisher() -> AnyPublisher<InstallState, Never> { $stateValue.removeDuplicates().eraseToAnyPublisher() }
     public var lastCheckMessage: String? { lastCheckMessageValue }
-    public func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { $lastCheckMessageValue.eraseToAnyPublisher() }
+    public func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { $lastCheckMessageValue.removeDuplicates().eraseToAnyPublisher() }
     public var installAnywayBlockedMessage: String? { installAnywayBlockedMessageValue }
-    public func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> { $installAnywayBlockedMessageValue.eraseToAnyPublisher() }
+    public func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> {
+        $installAnywayBlockedMessageValue.removeDuplicates().eraseToAnyPublisher()
+    }
 
     /// While `unresolved`, `installAnyway()` reinstalls into the captured destination, so that is the
     /// one the dialog must name; otherwise the next `install()` re-discovers, so the live one is.

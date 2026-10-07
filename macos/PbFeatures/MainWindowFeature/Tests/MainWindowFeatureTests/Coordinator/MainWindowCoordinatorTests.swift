@@ -92,14 +92,18 @@ import Testing
         let sut = MainWindowCoordinator(parent: parent)
         var received: [MonitorDestination?] = []
         let cancellable = sut.selectionPublisher().sink { received.append($0) }
+        #expect(received == [nil])
         
         // when
         sut.selection = .task("abc123")
         sut.selection = .task("abc123") // no change — must not emit again
+        sut.selection = .group("abc123") // complete destination equality, not identifier-only
+        sut.selection = .task("abc123") // returning to a previous state must emit
+        sut.selection = nil
         sut.selection = nil
         
         // then
-        #expect(received == [.task("abc123"), nil])
+        #expect(received == [nil, .task("abc123"), .group("abc123"), .task("abc123"), nil])
         cancellable.cancel()
     }
     
@@ -109,15 +113,37 @@ import Testing
         let sut = MainWindowCoordinator(parent: parent)
         var received: [Bool] = []
         let cancellable = sut.isNewSessionPresentedPublisher().sink { received.append($0) }
+        #expect(received == [false])
         
         // when
         sut.isNewSessionPresented = true
         sut.isNewSessionPresented = true
         sut.isNewSessionPresented = false
+        sut.isNewSessionPresented = false
+        sut.isNewSessionPresented = true
         
         // then
-        #expect(received == [true, false])
+        #expect(received == [false, true, false, true])
         cancellable.cancel()
+    }
+
+    @Test func givenStateChangesBeforeSubscription_whenSubscribed_thenEachPublisherReplaysTheLatestState() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        let selectionPublisher = sut.selectionPublisher()
+        let sheetPublisher = sut.isNewSessionPresentedPublisher()
+        sut.selection = .workflowRun("current-run")
+        sut.isNewSessionPresented = true
+        var selections: [MonitorDestination?] = []
+        var presentations: [Bool] = []
+        // when
+        let selectionToken = selectionPublisher.sink { selections.append($0) }
+        let sheetToken = sheetPublisher.sink { presentations.append($0) }
+        // then — replay is subscription-time state, not a getter-time captured default.
+        #expect(selections == [.workflowRun("current-run")])
+        #expect(presentations == [true])
+        selectionToken.cancel()
+        sheetToken.cancel()
     }
     
     // MARK: - SidebarRouting
@@ -314,6 +340,8 @@ import Testing
         let sut = MainWindowCoordinator(parent: parent)
         var published: [PendingReveal] = []
         let cancellable = sut.revealPublisher().sink { published.append($0) }
+        var selections: [MonitorDestination?] = []
+        let selectionToken = sut.selectionPublisher().sink { selections.append($0) }
 
         // when
         sut.handle(path: MonitorDestination.task("child"))
@@ -321,12 +349,14 @@ import Testing
         sut.handle(path: MonitorDestination.task("child"))
         let second = sut.pendingReveal
         cancellable.cancel()
+        selectionToken.cancel()
 
         // then — a repeat is a new request (so it reveals again), and both were published
         #expect(first?.taskID == "child")
         #expect(second?.taskID == "child")
         #expect(first?.requestID != second?.requestID)
         #expect(published.map(\.requestID) == [first?.requestID, second?.requestID].compactMap(\.self))
+        #expect(selections == [nil, .task("child")])
     }
 
     @Test func givenASupersededRequest_whenItIsConsumed_thenTheNewerRequestStaysPendingUntilItIsConsumed() {

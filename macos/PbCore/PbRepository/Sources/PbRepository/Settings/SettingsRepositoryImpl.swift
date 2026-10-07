@@ -39,9 +39,9 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
     public var openWindowOnStart: Bool { openWindowOnStartValue }
     public var notifyOnFinish: Bool { notifyOnFinishValue }
 
-    public func toolDirectoryPublisher() -> AnyPublisher<String, Never> { $toolDirectoryValue.eraseToAnyPublisher() }
-    public func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { $openWindowOnStartValue.eraseToAnyPublisher() }
-    public func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { $notifyOnFinishValue.eraseToAnyPublisher() }
+    public func toolDirectoryPublisher() -> AnyPublisher<String, Never> { $toolDirectoryValue.removeDuplicates().eraseToAnyPublisher() }
+    public func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { $openWindowOnStartValue.removeDuplicates().eraseToAnyPublisher() }
+    public func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { $notifyOnFinishValue.removeDuplicates().eraseToAnyPublisher() }
 
     public func setToolDirectory(_ value: String) {
         defaults.set(value, forKey: Self.toolDirectoryKey)

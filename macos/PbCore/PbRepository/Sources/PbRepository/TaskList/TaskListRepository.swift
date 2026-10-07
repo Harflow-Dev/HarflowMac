@@ -23,6 +23,8 @@ public protocol TaskListRepository: Sendable {
     var hasListed: Bool { get }
     var titles: [String: String] { get }
 
+    /// Also supplies a successful-refresh pulse for time-derived labels and environment checks.
+    /// Preserve equal snapshots until those consumers have an independent refresh input.
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never>
     func listErrorPublisher() -> AnyPublisher<ToolError?, Never>
     func hasListedPublisher() -> AnyPublisher<Bool, Never>

@@ -82,4 +82,31 @@ import Testing
         // then
         #expect(sut.toolDirectory == "/usr/local/bin")
     }
+
+    @Test func givenSettingsSubscribers_whenIdenticalValuesRepeat_thenInitialAndChangedValuesRemain() {
+        // given
+        let defaults = freshDefaults()
+        let sut = SettingsRepositoryImpl(defaults: defaults)
+        var directories: [String] = []
+        var openings: [Bool] = []
+        var notifications: [Bool] = []
+        let subscriptions = [
+            sut.toolDirectoryPublisher().sink { directories.append($0) },
+            sut.openWindowOnStartPublisher().sink { openings.append($0) },
+            sut.notifyOnFinishPublisher().sink { notifications.append($0) }
+        ]
+        // when
+        for value in ["", "/fixture/tools", "/fixture/tools", ""] { sut.setToolDirectory(value) }
+        for value in [true, false, false, true] {
+            sut.setOpenWindowOnStart(value)
+            sut.setNotifyOnFinish(value)
+        }
+        // then
+        #expect(directories == ["", "/fixture/tools", ""])
+        #expect(openings == [true, false, true])
+        #expect(notifications == [true, false, true])
+        #expect(defaults.string(forKey: SettingsRepositoryImpl.toolDirectoryKey) == "")
+        withExtendedLifetime(subscriptions) {}
+    }
+
 }

@@ -80,9 +80,9 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     public var titles: [String: String] { titlesValue }
 
     public func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { $tasksValue.eraseToAnyPublisher() }
-    public func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { $listErrorValue.eraseToAnyPublisher() }
-    public func hasListedPublisher() -> AnyPublisher<Bool, Never> { $hasListedValue.eraseToAnyPublisher() }
-    public func titlesPublisher() -> AnyPublisher<[String: String], Never> { $titlesValue.eraseToAnyPublisher() }
+    public func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { $listErrorValue.removeDuplicates().eraseToAnyPublisher() }
+    public func hasListedPublisher() -> AnyPublisher<Bool, Never> { $hasListedValue.removeDuplicates().eraseToAnyPublisher() }
+    public func titlesPublisher() -> AnyPublisher<[String: String], Never> { $titlesValue.removeDuplicates().eraseToAnyPublisher() }
 
     // MARK: Startup (MS-LIST-1/F4-01)
 
@@ -291,7 +291,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     }
 
     public var historyState: HistoryLoadingState { historyStateValue }
-    public func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { $historyStateValue.eraseToAnyPublisher() }
+    public func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { $historyStateValue.removeDuplicates().eraseToAnyPublisher() }
 
     private func mergeHistory(_ page: TaskHistoryPage, active: TaskHistoryPage? = nil, updates: TaskHistoryPage? = nil,
                               terminalPage: TaskHistoryPage? = nil, terminalIDs: [String] = [], advancing: Bool = false) -> [TaskInfo] {

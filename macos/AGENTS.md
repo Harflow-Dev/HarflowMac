@@ -58,6 +58,21 @@ synchronous snapshots with `@Subjected`. VMs are `@MainActor`. Ordering guarante
 contract (busy check-and-insert is atomic, events apply in arrival order, routing to a new task
 waits until the refreshed listing has reached the main queue).
 
+## Rendering publisher equality
+
+Publishers that drive rendering must emit the initial state, then emit again only when their
+content changes. Make published state models `Equatable` where possible and apply
+`removeDuplicates()` at the state-producing boundary; forwarding repositories inherit that
+contract. Equality must include every field consumers use, including progress, elapsed values,
+readiness, errors, ordering and retry availability. Do not compare only identifiers or counts.
+
+Keep clock/freshness inputs explicit when rendering depends on time; do not suppress an existing
+refresh pulse until its time-derived UI has an independent update path. Commands and disposable
+events such as notifications are exceptions when identical emissions represent separate actions.
+Preserve their delivery, dismissal and recovery semantics rather than applying state deduplication.
+Observable recovery handlers must also avoid writes when the retained state has not changed.
+Verify that duplicate snapshots stay quiet while real changes and repeated actions still arrive.
+
 ## Scope exceptions (decision 14)
 
 No logging protocol and no localization: the Monitor has neither today, and adding either would be

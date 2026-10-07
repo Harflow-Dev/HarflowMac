@@ -24,7 +24,7 @@ public final class TaskSnapshotRepositoryImpl: TaskSnapshotRepository, @unchecke
     }
 
     public var snapshots: [String: TaskInfo] { snapshotsValue }
-    public func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never> { $snapshotsValue.eraseToAnyPublisher() }
+    public func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never> { $snapshotsValue.removeDuplicates().eraseToAnyPublisher() }
     public func snapshot(_ id: String) -> TaskInfo? { snapshotsValue[id] }
 
     public func refresh(_ id: String) async {

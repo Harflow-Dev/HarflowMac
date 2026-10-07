@@ -280,7 +280,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
         .listStyle(.sidebar)
         // The first section header ("Running" whenever anything runs) otherwise sits flush against
         // the list's top edge and is clipped under the filter row.
-        .contentMargins(.top, 8, for: .scrollContent)
+        .padding(.top, 8)
         // Native List otherwise keeps closed rows at its minimum height until deletion.
         .environment(\.defaultMinListRowHeight, 0)
         .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: expansionToken)

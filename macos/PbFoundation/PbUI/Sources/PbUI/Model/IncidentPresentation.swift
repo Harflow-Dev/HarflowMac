@@ -42,6 +42,7 @@ public final class IncidentPresentation {
     }
 
     public func resolve(source: String) {
+        guard identities[source] != nil else { return }
         identities.removeValue(forKey: source)
         failures.removeAll { $0.source == source }
         if current?.source == source { dismiss() }

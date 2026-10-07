@@ -10,6 +10,12 @@ enum WorkflowRunLayout {
     static let inspectorMinimum: CGFloat = 220
     static let inspectorIdeal: CGFloat = 260
     static let inspectorMaximum: CGFloat = 500
+
+    static func minimums(height: CGFloat) -> (canvas: CGFloat, activity: CGFloat) {
+        let available = max(0, height - 2)
+        let scale = min(1, available / (canvasMinimum + activityMinimum))
+        return (canvasMinimum * scale, activityMinimum * scale)
+    }
 }
 
 // MARK: - WorkflowRunPanes
@@ -25,15 +31,22 @@ struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
 
     var body: some View {
         if isGraph {
-            VSplitView {
-                HSplitView {
+            GeometryReader { viewport in
+                let minimums = WorkflowRunLayout.minimums(height: viewport.size.height)
+                WorkflowPaneViewport {
+                VSplitView {
+                    HSplitView {
                     canvas().frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity).clipped()
                     sidebar
-                }.frame(minHeight: WorkflowRunLayout.canvasMinimum, idealHeight: WorkflowRunLayout.canvasIdeal)
-                activity().frame(minHeight: WorkflowRunLayout.activityMinimum)
+                    }.frame(minHeight: minimums.canvas, idealHeight: min(WorkflowRunLayout.canvasIdeal, viewport.size.height * 0.6))
+                    activity().frame(minHeight: minimums.activity)
+                }
+                }
+                .frame(width: viewport.size.width, height: viewport.size.height)
+                .clipped()
             }
         } else {
-            HSplitView { activity(); sidebar }
+            WorkflowPaneViewport { HSplitView { activity(); sidebar } }
         }
     }
 

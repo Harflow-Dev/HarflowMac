@@ -6,10 +6,20 @@ import SwiftUI
 
 struct WorkflowInspector<VM: WorkflowViewModel>: View {
     var viewModel: VM
+    var isScrollable = true
     @State private var timeoutUnit: WorkflowTimeoutUnit = .minutes
 
     var body: some View {
-        ScrollView {
+        Group {
+            if isScrollable {
+                ScrollView { content }
+            } else {
+                content
+            }
+        }.background(Color.cardFill)
+    }
+
+    private var content: some View {
             VStack(alignment: .leading, spacing: 16) {
                 if let policy = viewModel.selectedRun?.schedulingPolicyDescription {
                     Text(policy).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
@@ -32,7 +42,6 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     workflowEditor.disabled(viewModel.selectedRun != nil)
                 }
             }.padding(16)
-        }.background(Color.cardFill)
     }
 
     var inspectorDefinition: [String: JSONValue] {
