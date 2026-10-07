@@ -433,4 +433,32 @@ import Testing
         await waitUntil { sut.catalog.entries.map(\.backend) == ["claude"] }
         #expect(sut.catalog.state == .available)
     }
+
+    @Test func givenCatalogSubscriber_whenEqualRefreshesRepeat_thenChangesAndRecoveryRemainVisible() async {
+        // given
+        let environment = MockToolEnvironmentRepository()
+        let result = LockedBox<Result<CtlClient, ToolError>>(.success(ctlClient(backends: [("fixture", false)])))
+        given(environment).ctl().willProduce { result.value }
+        let sut = makeSUT(toolEnvironment: environment)
+        let received = LockedBox<[BackendCatalog]>([])
+        let token = sut.catalogPublisher().sink { value in received.mutate { $0.append(value) } }
+        // when
+        await sut.refresh()
+        await sut.refresh()
+        result.mutate { $0 = .success(ctlClient(backends: [("fixture", true)])) }
+        await sut.refresh()
+        result.mutate { $0 = .success(ctlClient(backends: [("fixture", false)])) }
+        await sut.refresh()
+        result.mutate { $0 = .failure(.notFound(tool: "polybridge-ctl", searched: [])) }
+        await sut.refresh()
+        await sut.refresh()
+        result.mutate { $0 = .success(ctlClient(backends: [("fixture", false)])) }
+        await sut.refresh()
+        // then
+        #expect(received.value.map(\.state) == [.loading, .available, .available, .available, .degraded, .available])
+        #expect(received.value.dropFirst().map { $0.entries.first?.installed } == [false, true, false, nil, false])
+        verify(environment).ctl().called(7)
+        withExtendedLifetime(token) {}
+    }
+
 }

@@ -14,6 +14,10 @@ import SwiftUI
 public enum ViewEvent: Hashable, Sendable {
     case alert(AlertContent)
     case dialog(AlertContent)
+    /// Actionable read failure; its source identifies independent recovery.
+    case incident(source: String, message: String, retry: AlertAction? = nil)
+    /// A successful authoritative read clears only this source.
+    case incidentResolved(source: String)
     case none
     
     /// The payload when this event is `.alert`.

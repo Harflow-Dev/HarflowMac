@@ -85,6 +85,8 @@ struct ParallelView<VM: ParallelViewModel>: View {
                         HStack(alignment: .top, spacing: 0) {
                             ForEach(viewModel.columns) { column in
                                 ParallelColumnView(model: column)
+                                    .modifier(PanelArrival(animate: column.animatesArrival))
+                                    .onAppear(perform: column.onDidPresent)
                                     .frame(
                                         width: ParallelLayout.columnWidth(memberCount: viewModel.columns.count, availableWidth: proxy.size.width),
                                         height: max(0, proxy.size.height)

@@ -92,8 +92,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     // MARK: - Private Properties
 
-    @ObservationIgnored private let selectionSubject = PassthroughSubject<MonitorDestination?, Never>()
-    @ObservationIgnored private let isNewSessionPresentedSubject = PassthroughSubject<Bool, Never>()
+    @ObservationIgnored private let selectionSubject = CurrentValueSubject<MonitorDestination?, Never>(nil)
+    @ObservationIgnored private let isNewSessionPresentedSubject = CurrentValueSubject<Bool, Never>(false)
     @ObservationIgnored let workflowRunPolling = WorkflowRunPolling()
     @ObservationIgnored private var sidebarVM: SidebarVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
@@ -133,8 +133,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         }
     }
 
-    public func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never> { selectionSubject.eraseToAnyPublisher() }
-    public func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never> { isNewSessionPresentedSubject.eraseToAnyPublisher() }
+    public func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never> { selectionSubject.removeDuplicates().eraseToAnyPublisher() }
+    public func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never> { isNewSessionPresentedSubject.removeDuplicates().eraseToAnyPublisher() }
 
     // MARK: - Pending reveal (settled plan, Design point 5)
 

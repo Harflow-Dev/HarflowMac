@@ -72,31 +72,31 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
 
     public func eventsPublisher(for taskID: String) -> AnyPublisher<[TaskEvent], Never> {
         guard let stream = stream(taskID) else { return Just([]).eraseToAnyPublisher() }
-        return stream.$events.eraseToAnyPublisher()
+        return stream.$events.removeDuplicates().eraseToAnyPublisher()
     }
 
     public func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never> {
         guard let stream = stream(taskID) else { return Just([]).eraseToAnyPublisher() }
-        return stream.$items.eraseToAnyPublisher()
+        return stream.$items.removeDuplicates().eraseToAnyPublisher()
     }
 
     public func eventsAvailability(for taskID: String) -> EventAvailability { stream(taskID)?.eventsAvailability ?? .loading }
 
     public func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never> {
         guard let stream = stream(taskID) else { return Just(.loading).eraseToAnyPublisher() }
-        return stream.$eventsAvailability.eraseToAnyPublisher()
+        return stream.$eventsAvailability.removeDuplicates().eraseToAnyPublisher()
     }
 
     public func loadMoreSummaryFiles(_ taskID: String) { stream(taskID)?.loadMoreSummaryFiles() }
     public func loadMore(_ taskID: String) { stream(taskID)?.loadMore() }
     public func history(for taskID: String) -> EventHistoryState { stream(taskID)?.history ?? EventHistoryState() }
     public func historyPublisher(for taskID: String) -> AnyPublisher<EventHistoryState, Never> {
-        stream(taskID)?.$history.eraseToAnyPublisher() ?? Just(EventHistoryState()).eraseToAnyPublisher()
+        stream(taskID)?.$history.removeDuplicates().eraseToAnyPublisher() ?? Just(EventHistoryState()).eraseToAnyPublisher()
     }
 
     public func summary(for taskID: String) -> EventSummary { stream(taskID)?.summary ?? EventSummary() }
     public func summaryPublisher(for taskID: String) -> AnyPublisher<EventSummary, Never> {
-        stream(taskID)?.$summary.eraseToAnyPublisher() ?? Just(EventSummary()).eraseToAnyPublisher()
+        stream(taskID)?.$summary.removeDuplicates().eraseToAnyPublisher() ?? Just(EventSummary()).eraseToAnyPublisher()
     }
 
     public func current(for taskID: String) -> TimelineItem? { Timeline.current(in: items(for: taskID)) }

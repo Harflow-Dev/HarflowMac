@@ -2,6 +2,7 @@ import Foundation
 
 /// One bounded catalog page. Cursor identity belongs to the CLI, never to a row offset.
 public struct HistoryPage: Equatable, Sendable {
+    public let catalogState: CatalogState
     public let items: [[String: JSONValue]]
     public let relatedHeaders: [[String: JSONValue]]
     public let nextCursor: String?
@@ -26,6 +27,7 @@ public struct HistoryPage: Equatable, Sendable {
         }
         let cursor = raw["next_cursor"]?.stringValue
         guard !hasMore || cursor?.isEmpty == false || bootstrap else { return nil }
+        catalogState = CatalogState(raw: raw)
         self.items = items
         let related = raw["related_headers"]?.arrayValue ?? []
         guard related.count <= 100 else { return nil }

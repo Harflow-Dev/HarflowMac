@@ -9,7 +9,7 @@ extension SidebarVM {
     /// Propagate it through follow-ups and spawned descendants without assuming list order.
     var workflowTaskOwners: [String: String] {
         var owners: [String: String] = [:]
-        for run in workflowRuns {
+        for run in workflowRuns where WorkflowRunIdentity.isValid(run.id) {
             for activation in WorkflowJSON.objects(run.raw["activations"]) {
                 for task in WorkflowJSON.objects(activation["tasks"]) {
                     if let id = task["task_id"]?.stringValue { owners[id] = run.id }
@@ -17,7 +17,8 @@ extension SidebarVM {
             }
         }
         for task in latestTasks {
-            if let runID = task.raw["workflow_session_owner_run_id"]?.stringValue ?? task.raw["workflow_run_id"]?.stringValue { owners[task.taskID] = runID }
+            if let runID = task.raw["workflow_session_owner_run_id"]?.stringValue ?? task.raw["workflow_run_id"]?.stringValue,
+               WorkflowRunIdentity.isValid(runID) { owners[task.taskID] = runID }
         }
         var changed = true
         while changed {

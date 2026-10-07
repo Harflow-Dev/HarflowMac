@@ -1,5 +1,6 @@
 import Foundation
 import MonitorCore
+import PbCommon
 
 // MARK: - WorkflowVM editor lifecycle
 
@@ -35,10 +36,11 @@ extension WorkflowVM {
             }
             let response: [String: JSONValue]
             do {
-                response = try await useCase.command("get", options: [], positionals: [workflow.id])
+                response = try await readEditor(workflow, draftID: loadingDraftID, loadID: loadingID)
             } catch {
                 guard draftID == loadingDraftID, editorLoadID == loadingID, !Task.isCancelled else { return }
-                errorText = Self.message(error)
+                reportReadFailure(Self.message(error), source: "workflow-editor:" + workflow.id,
+                                  retry: editorRetry(workflow, loadID: loadingID))
                 return
             }
             guard !Task.isCancelled, draftID == loadingDraftID, editorLoadID == loadingID,
@@ -56,7 +58,28 @@ extension WorkflowVM {
             isEditing = true
             parallel.setWorkflowTaskIDs([])
             loaded = true
+            resolveReadFailure(source: "workflow-editor:" + workflow.id)
             draftPersistenceSuspended = false
+        }
+    }
+
+    private func readEditor(_ workflow: WorkflowRecord, draftID: UUID, loadID: UUID) async throws -> [String: JSONValue] {
+        while true {
+            let response = try await useCase.command("get", options: [], positionals: [workflow.id])
+            guard !Task.isCancelled, self.draftID == draftID, editorLoadID == loadID else { throw CancellationError() }
+            let state = CatalogState(raw: response)
+            switch state.status {
+            case .ready: return response
+            case .blocked: throw WorkflowReadError.blocked(state.reason ?? "Workflow catalog is blocked.")
+            case .preparing: try await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private func editorRetry(_ workflow: WorkflowRecord, loadID: UUID) -> AlertAction {
+        AlertAction(title: "Reload workflow") { [weak self] in
+            guard let self, editorLoadID == loadID else { return }
+            selectWorkflow(workflow)
         }
     }
 
@@ -124,4 +147,9 @@ extension WorkflowVM {
 
     func openWorkflowEditor(_ name: String) { routing.openWorkflowEditor(name: name) }
 
+}
+
+private enum WorkflowReadError: LocalizedError {
+    case blocked(String)
+    var errorDescription: String? { if case .blocked(let message) = self { message } else { nil } }
 }

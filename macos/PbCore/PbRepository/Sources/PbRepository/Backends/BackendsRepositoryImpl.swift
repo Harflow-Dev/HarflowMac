@@ -65,7 +65,7 @@ public final class BackendsRepositoryImpl: BackendsRepository, @unchecked Sendab
     // MARK: Published state
 
     public var catalog: BackendCatalog { catalogValue }
-    public func catalogPublisher() -> AnyPublisher<BackendCatalog, Never> { $catalogValue.eraseToAnyPublisher() }
+    public func catalogPublisher() -> AnyPublisher<BackendCatalog, Never> { $catalogValue.removeDuplicates().eraseToAnyPublisher() }
 
     // MARK: Startup
 

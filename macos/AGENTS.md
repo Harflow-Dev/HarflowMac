@@ -45,10 +45,11 @@ view-local functions.
 
 ## ViewEvent (decision 10)
 
-Trimmed to the case names actually used: `alert(AlertContent)`, `dialog(AlertContent)`, `none`.
-**No toast** — the Monitor has none today, and adding one would be a behaviour change. The outcome
-line (refusal text, "queued", cascade summaries) is durable VM/repository state shown in the header,
-never a `ViewEvent`.
+Presentation events include `alert`, `dialog`, `incident(source:message:)`, `incidentResolved(source:)`, and `none`.
+Actionable workflow read failures use source-scoped incidents rendered as a dismissible top overlay
+by the window presentation context. Preparation is neutral state, never an incident. Dismissal leaves
+failure details accessible; a successful read resolves only its own source. Outcome lines (refusal
+text, "queued", cascade summaries) remain durable VM/repository state.
 
 ## Repository concurrency (decision 12)
 
@@ -56,6 +57,26 @@ Repositories are `nonisolated` and `Sendable`. They keep async state in private 
 synchronous snapshots with `@Subjected`. VMs are `@MainActor`. Ordering guarantees are part of the
 contract (busy check-and-insert is atomic, events apply in arrival order, routing to a new task
 waits until the refreshed listing has reached the main queue).
+
+## Rendering publisher equality
+
+Publishers that drive rendering must emit the initial state, then emit again only when their
+content changes. Make published state models `Equatable` where possible and apply
+`removeDuplicates()` at the state-producing boundary; forwarding repositories inherit that
+contract. Equality must include every field consumers use, including progress, elapsed values,
+readiness, errors, ordering and retry availability. Do not compare only identifiers or counts.
+
+Keep clock/freshness inputs explicit when rendering depends on time; do not suppress an existing
+refresh pulse until its time-derived UI has an independent update path. Commands and disposable
+events such as notifications are exceptions when identical emissions represent separate actions.
+Preserve their delivery, dismissal and recovery semantics rather than applying state deduplication.
+Observable recovery handlers must also avoid writes when the retained state has not changed.
+Verify that duplicate snapshots stay quiet while real changes and repeated actions still arrive.
+
+Keep native task-window toolbar presentation behind its own complete equality boundary. Activity
+metadata and feed updates must not regenerate unchanged toolbar preferences; task identity,
+action owner, status, action availability and inspector changes must still refresh them. Keep
+live clocks and motion inside their child views, and leave activity content outside this boundary.
 
 ## Scope exceptions (decision 14)
 

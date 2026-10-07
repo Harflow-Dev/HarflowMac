@@ -29,6 +29,53 @@ struct SidebarHistoryTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func givenTaskCatalogBlock_whenPresentedAndRecovered_thenSidebarExposesRowsDiagnosticsAndReadRetry(initiallyLoaded: Bool) async {
+        // given
+        let harness = SidebarVMTests().makeSUT()
+        let history = History()
+        let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history)
+        vm.didAppear()
+        defer { vm.didDisappear() }
+        if initiallyLoaded {
+            harness.tasksSubject.send([SidebarVMTests().task(id: "loaded", status: "completed")])
+            harness.hasListedSubject.send(true)
+            await waitUntil { !vm.showsLoadingSkeleton }
+            vm.didSelect(.task("loaded"))
+        } else {
+            harness.hasListedSubject.send(false)
+            await waitUntil { vm.showsLoadingSkeleton }
+        }
+        var blocked = HistoryLoadingState()
+        blocked.historyIncomplete = true
+        blocked.catalogState = CatalogState(raw: ["catalog_state": .object([
+            "status": .string("blocked"), "source": .string("task_catalog"), "reason": .string("Unsupported caller identity")
+        ])])
+        // when: a blocked response completes initial presentation without complete authority.
+        history.state.send(blocked)
+        harness.tasksSubject.send([SidebarVMTests().task(id: initiallyLoaded ? "loaded" : "placeholder", status: "completed")])
+        harness.hasListedSubject.send(true)
+        // then
+        await waitUntil { !vm.showsLoadingSkeleton && vm.taskHistoryState.catalogState.status == .blocked }
+        #expect(!vm.sections.isEmpty)
+        #expect(vm.taskHistoryState.catalogState.reason == "Unsupported caller identity")
+        #expect(vm.taskHistoryState.historyIncomplete)
+        #expect(!vm.taskHistoryState.countsComplete)
+        if initiallyLoaded { #expect(vm.selection == .task("loaded")) }
+        // when: the visible retry is a read operation through the existing history seam.
+        vm.didTapLoadMoreTasks()
+        await waitUntil { history.taskLoads == 1 }
+        var ready = HistoryLoadingState()
+        ready.countsComplete = true
+        history.state.send(ready)
+        // then
+        await waitUntil { vm.taskHistoryState.catalogState.isReady }
+        #expect(!vm.showsLoadingSkeleton)
+        #expect(!vm.sections.isEmpty)
+        #expect(!vm.taskHistoryState.historyIncomplete)
+        if initiallyLoaded { #expect(vm.selection == .task("loaded")) }
+    }
+
     private func page(_ ids: [String], next: String? = nil, status: String = "completed") throws -> HistoryPage {
         try #require(HistoryPage(raw: ["items": .array(ids.map {
             .object(["workflow_run_id": .string($0), "status": .string(status)])

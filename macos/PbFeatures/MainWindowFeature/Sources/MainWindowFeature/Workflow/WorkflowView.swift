@@ -24,6 +24,8 @@ protocol WorkflowViewModel: ViewModel {
     var initialLoadingKind: String? { get }
     var initialLoadFailed: Bool { get }
     var errorText: String? { get }
+    var readFailureText: String? { get }
+    func retryReadFailure()
     var validationMessage: String? { get }
     var validationDependencies: [String: JSONValue] { get }
     var nativeSubagentsAvailable: Bool { get }
@@ -96,6 +98,8 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
+    var readFailureText: String? { nil }
+    func retryReadFailure() {}
     func control(_ command: String, allowOptionalReviewSkip: Bool) {
         // Preview and other conformers that do not support this action never grant consent.
         guard !allowOptionalReviewSkip else { return }
@@ -117,6 +121,33 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     }
 
     var body: some View {
+        WorkflowScreenLayout {
+            screenHeader
+        } content: {
+            screenContent
+        }
+        .background(Color.windowBG)
+        .sheet(isPresented: Binding(get: { viewModel.showsRunSheet }, set: { viewModel.showsRunSheet = $0 })) {
+            WorkflowLaunchSheet(viewModel: viewModel, isGenerating: false)
+        }
+        .sheet(isPresented: Binding(get: { viewModel.showsGenerateSheet }, set: { viewModel.showsGenerateSheet = $0 })) {
+            WorkflowLaunchSheet(viewModel: viewModel, isGenerating: true)
+        }
+        .onAppear { viewModel.didAppear() }
+        .onDisappear { viewModel.didDisappear() }
+        .publishViewEvent(from: viewModel, to: viewEvent)
+        .toolbar {
+            if let error = viewModel.readFailureText {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Refresh workflow", systemImage: "arrow.clockwise") { viewModel.retryReadFailure() }
+                        .help(error)
+                }
+            }
+        }
+        .publishViewEvent(from: viewModel.parallel, to: viewEvent)
+    }
+
+    private var screenHeader: some View {
         VStack(spacing: 0) {
             if viewModel.initialLoadingKind != nil {
                 HStack {
@@ -132,15 +163,19 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 header.disabled(viewModel.initialLoadFailed).pbFadeIn()
             }
             Divider()
-            if let error = viewModel.errorText {
+            if let error = viewModel.errorText, error != viewModel.readFailureText {
                 Text(error)
 .font(.pb(.secondary))
 .foregroundStyle(Color.failedRed)
-.textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+.frame(maxWidth: .infinity, alignment: .leading)
 .padding(12)
                 Divider()
             }
+        }
+    }
+
+    @ViewBuilder private var screenContent: some View {
             if viewModel.initialLoadingKind == "run" ||
                 (viewModel.initialLoadingKind == nil && !viewModel.initialLoadFailed
                     && viewModel.selectedRun != nil && viewModel.selectedRun?.isBuilder != true) {
@@ -154,18 +189,6 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             } else {
                 editor.pbFadeIn()
             }
-        }
-        .background(Color.windowBG)
-        .sheet(isPresented: Binding(get: { viewModel.showsRunSheet }, set: { viewModel.showsRunSheet = $0 })) {
-            WorkflowLaunchSheet(viewModel: viewModel, isGenerating: false)
-        }
-        .sheet(isPresented: Binding(get: { viewModel.showsGenerateSheet }, set: { viewModel.showsGenerateSheet = $0 })) {
-            WorkflowLaunchSheet(viewModel: viewModel, isGenerating: true)
-        }
-        .onAppear { viewModel.didAppear() }
-        .onDisappear { viewModel.didDisappear() }
-        .publishViewEvent(from: viewModel, to: viewEvent)
-        .publishViewEvent(from: viewModel.parallel, to: viewEvent)
     }
 
     private var header: some View {
@@ -411,14 +434,19 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 
     private var runContent: some View {
         let isLoading = viewModel.initialLoadingKind == "run"
-        return VStack(spacing: 0) {
+        return GeometryReader { viewport in
+            VStack(spacing: 0) {
             if isLoading {
                 HStack { SkeletonBlock(height: 14); Spacer(minLength: 60) }
                     .frame(height: 27)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
             } else {
-                WorkflowRunStatus(viewModel: viewModel).pbFadeIn()
+                WorkflowDiagnosticsViewport(maximumHeight: min(180, viewport.size.height * 0.3)) {
+                    WorkflowRunStatus(viewModel: viewModel)
+                }
+                .accessibilityIdentifier("workflow-run-diagnostics")
+                .pbFadeIn()
             }
             Divider()
             WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading) {
@@ -428,11 +456,13 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             } activity: {
                 if isLoading { WorkflowLoadingActivity() } else { activity.pbFadeIn() }
             }
+            }
         }
     }
 
     @ViewBuilder private var runSidebar: some View {
         if let run = viewModel.selectedRun {
+            ScrollView {
             VStack(spacing: 0) {
                 if run.parentRunID != nil {
                     Text("Child workflow · Plan and checklist belong to this run").font(.pb(.caption)).foregroundStyle(Color.secondaryText).padding(16)
@@ -468,11 +498,13 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 }
                 Divider()
                 if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
-                    WorkflowInspector(viewModel: viewModel)
+                    WorkflowInspector(viewModel: viewModel, isScrollable: false)
                 } else {
                     Spacer(minLength: 0)
                 }
             }
+            }
+.accessibilityIdentifier("workflow-run-inspector")
 .background(Color.cardFill)
         }
     }
@@ -519,18 +551,20 @@ struct WorkflowActivityColumns: View {
                         HStack(alignment: .top, spacing: 0) {
                             ForEach(columns) { column in
                                 ParallelColumnView(model: column)
+                                    .modifier(PanelArrival(animate: column.animatesArrival))
+                                    .onAppear(perform: column.onDidPresent)
                                     .frame(
                                         width: ParallelLayout.columnWidth(memberCount: columns.count, availableWidth: proxy.size.width),
                                         height: max(0, proxy.size.height)
                                     )
-                                    .id(column.task.taskID)
+                                    .id(column.id)
                                 Divider()
                             }
                         }
                     }
                 }
                 .onChange(of: selectedTaskID) { _, id in if let id {
-                    scroll.scrollTo(id, anchor: .leading)
+                    scroll.scrollTo(columns.first { $0.memberTaskIDs.contains(id) || $0.task.taskID == id }?.id ?? id, anchor: .leading)
                 } }
             }
         }

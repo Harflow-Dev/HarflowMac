@@ -46,9 +46,10 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private var terminalRefreshOffset = 0
     private var snapshotRefreshOffset = 0
 
-    private let refreshCoordinator = RefreshCoordinator()
+    private let refreshCoordinator = TaskHistoryRefreshCoordinator()
     private let throttleLock = NSLock()
     private var pendingRefreshToken: AnyCancellable?
+    private var preparationRefreshToken: AnyCancellable?
 
     private let lastRefreshLock = NSLock()
     private var lastRefreshValue: Date = .distantPast
@@ -79,9 +80,9 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     public var titles: [String: String] { titlesValue }
 
     public func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { $tasksValue.eraseToAnyPublisher() }
-    public func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { $listErrorValue.eraseToAnyPublisher() }
-    public func hasListedPublisher() -> AnyPublisher<Bool, Never> { $hasListedValue.eraseToAnyPublisher() }
-    public func titlesPublisher() -> AnyPublisher<[String: String], Never> { $titlesValue.eraseToAnyPublisher() }
+    public func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { $listErrorValue.removeDuplicates().eraseToAnyPublisher() }
+    public func hasListedPublisher() -> AnyPublisher<Bool, Never> { $hasListedValue.removeDuplicates().eraseToAnyPublisher() }
+    public func titlesPublisher() -> AnyPublisher<[String: String], Never> { $titlesValue.removeDuplicates().eraseToAnyPublisher() }
 
     // MARK: Startup (MS-LIST-1/F4-01)
 
@@ -148,6 +149,23 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         }
         pendingRefreshToken = token
         throttleLock.unlock()
+    }
+
+    /// Bounded indexing progresses without waiting for a task or filesystem event.
+    private func updatePreparationRefresh() {
+        throttleLock.lock()
+        defer { throttleLock.unlock() }
+        guard historyStateValue.bootstrapPending || historyStateValue.catalogState.status == .preparing else {
+            preparationRefreshToken?.cancel()
+            preparationRefreshToken = nil
+            return
+        }
+        guard preparationRefreshToken == nil else { return }
+        preparationRefreshToken = scheduler.schedule(after: 2) { [weak self] in
+            guard let self else { return }
+            throttleLock.withLock { preparationRefreshToken = nil }
+            Task { await self.refresh() }
+        }
     }
 
     public func settingsChanged() {
@@ -218,8 +236,16 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             switch first {
             case .failure(let error): result = .failure(error)
             case .success(let page):
+                if !page.page.catalogState.isReady || page.page.bootstrapPending || page.page.authorityIncomplete {
+                    result = .success(mergeHistory(page))
+                    break
+                }
                 do {
                     let activePage = try await client.taskHistoryPage(activeOnly: true).get()
+                    if !activePage.page.catalogState.isReady || activePage.page.bootstrapPending || activePage.page.authorityIncomplete {
+                        result = .success(mergeHistory(page, active: activePage))
+                        break
+                    }
                     let visible = Set(page.items.map(\.taskID) + activePage.items.map(\.taskID))
                     let stale = nextActiveRefreshBatch(excluding: visible)
                     let updates = stale.isEmpty ? nil : try await client.taskHistoryPage(taskIDs: stale).get()
@@ -246,8 +272,14 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             snapshotRepository.evict(keeping: listedIDs.union(eventStreamRepository.leasedTaskIDs).union(historyLock.withLock { Set(relatedTasks.keys) }))
             // Before notifications: their title closure must already see an explicit title.
             seedExplicitTitles(from: listed)
-            if !historyStateValue.bootstrapPending { updateNotificationBaseline(listed) }
-            hasListedValue = true
+            if !historyStateValue.bootstrapPending, !historyStateValue.authorityIncomplete, historyStateValue.catalogState.isReady {
+                updateNotificationBaseline(listed)
+                hasListedValue = true
+            } else if historyStateValue.catalogState.status == .blocked {
+                // A durable blocker completes initial presentation, but cannot establish authority.
+                hasListedValue = true
+            }
+            updatePreparationRefresh()
             // Catalog titles are bounded summaries; row population never scans event logs.
             for id in nextSnapshotRefreshBatch() { await snapshotRepository.refresh(id) }
             return .success(())
@@ -262,7 +294,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     }
 
     public var historyState: HistoryLoadingState { historyStateValue }
-    public func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { $historyStateValue.eraseToAnyPublisher() }
+    public func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { $historyStateValue.removeDuplicates().eraseToAnyPublisher() }
 
     private func mergeHistory(_ page: TaskHistoryPage, active: TaskHistoryPage? = nil, updates: TaskHistoryPage? = nil,
                               terminalPage: TaskHistoryPage? = nil, terminalIDs: [String] = [], advancing: Bool = false) -> [TaskInfo] {
@@ -279,15 +311,20 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             let countPage = active?.page ?? page.page
             if !advancing, countPage.countsComplete { totalActiveCount = countPage.totalActiveCount }
             var state = historyStateValue
-            if advancing || !historyInitialized {
+            let pages = [page.page] + [active?.page, updates?.page, terminalPage?.page].compactMap(\.self)
+            let ready = pages.allSatisfy { $0.catalogState.isReady && !$0.bootstrapPending && !$0.authorityIncomplete }
+            if ready, advancing || !historyInitialized {
                 state.nextCursor = page.page.nextCursor
                 state.hasMore = page.page.hasMore
             }
-            if !page.page.bootstrapPending { historyInitialized = true }
-            state.bootstrapPending = page.page.bootstrapPending || (active?.page.bootstrapPending ?? false)
-            state.historyIncomplete = page.page.historyIncomplete
-            state.authorityIncomplete = page.page.authorityIncomplete
-            if !advancing { state.countsComplete = countPage.countsComplete && !page.page.bootstrapPending }
+            if ready { historyInitialized = true }
+            state.bootstrapPending = pages.contains { $0.bootstrapPending }
+            state.historyIncomplete = pages.contains { $0.historyIncomplete }
+            state.authorityIncomplete = pages.contains { $0.authorityIncomplete }
+            state.catalogState = pages.first { $0.catalogState.status == .blocked }?.catalogState
+                ?? pages.first { $0.catalogState.status == .preparing }?.catalogState
+                ?? page.page.catalogState
+            if !advancing { state.countsComplete = countPage.countsComplete && ready && state.catalogState.isReady }
             if advancing { state.error = nil }
             historyStateValue = state
             return historyTasks.values.sorted {
@@ -335,7 +372,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     }
 
     private func pruneTerminalHistory(_ terminalPage: TaskHistoryPage?, ids terminalIDs: [String]) {
-    if let terminalPage, ![terminalPage.page.hasMore, terminalPage.page.bootstrapPending,
+    if let terminalPage, terminalPage.page.catalogState.isReady, ![terminalPage.page.hasMore, terminalPage.page.bootstrapPending,
                            terminalPage.page.authorityIncomplete, terminalPage.page.historyIncomplete].contains(true) {
         let present = Set(terminalPage.items.map(\.taskID))
         for id in terminalIDs where !present.contains(id) {
@@ -384,7 +421,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     }
 
     public func loadMoreHistory() async {
-        if historyLock.withLock({ historyRefreshFailed || historyStateValue.authorityIncomplete }) {
+        if historyLock.withLock({ historyRefreshFailed || historyStateValue.authorityIncomplete || historyStateValue.catalogState.status == .blocked }) {
             await refresh()
             return
         }
@@ -408,6 +445,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             let client = try toolEnvironment.ctl().get()
             let page = try await client.taskHistoryPage(cursor: state.nextCursor).get()
             _ = mergeHistory(page, advancing: true)
+            updatePreparationRefresh()
             publishHistory()
             seedExplicitTitles(from: page.items)
         } catch {
@@ -536,65 +574,5 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         }
         let backends = Set(tasksValue.map(\.backend)).sorted()
         return hasListedValue ? "polybridge connected" + (backends.isEmpty ? "" : " · " + backends.joined(separator: ", ")) : "connecting…"
-    }
-}
-
-// MARK: - RefreshCoordinator
-
-/// The `refreshing`/`refreshAgain` coalescing pair from `AppModel.refresh` (`AppModel.swift:139-167`),
-/// as a private actor so the check-and-set is atomic without a manual lock (decision 12: async
-/// mutable state lives in a private actor). Extended for R2-3 (`refreshAndWait()`) with a second,
-/// waiter-based entry: `begin()` stays exactly `refresh()`'s original fire-and-forget coalescing
-/// (a coalesced caller just returns without waiting), while `registerWaiter(_:)` additionally
-/// registers a continuation so its caller is resolved once a **specific** pass — one that starts
-/// after its own registration — completes, without waiting for the whole coalescing chain to go
-/// idle. `beginPass()`/`endPass(owed:result:)` are what make that per-registration promise hold:
-/// each iteration only ever owes a result to whoever registered *before that iteration started*,
-/// never to someone who registers while it is running (they land in the next iteration's batch).
-private actor RefreshCoordinator {
-    private var refreshing = false
-    private var again = false
-    private var pendingWaiters: [CheckedContinuation<Result<Void, ToolError>, Never>] = []
-
-    /// Returns `true` if the caller should run a refresh round now; `false` if one was already in
-    /// flight (in which case another pass is armed instead — MS-LIST-4). Unchanged from before
-    /// `refreshAndWait()` existed: a coalesced `refresh()` caller never waits.
-    func begin() -> Bool {
-        if refreshing { again = true; return false }
-        refreshing = true
-        return true
-    }
-
-    /// `refreshAndWait()`'s entry: one atomic actor call that registers the waiter and arms a pass
-    /// for it — so no pass can complete in the gap between "a run is in flight" and "I'm registered
-    /// for the next one." Returns `true` when nothing was in flight, so the caller must start the
-    /// loop (whose first pass then owes this waiter its result).
-    func registerWaiter(_ continuation: CheckedContinuation<Result<Void, ToolError>, Never>) -> Bool {
-        pendingWaiters.append(continuation)
-        if refreshing {
-            again = true
-            return false
-        }
-        refreshing = true
-        return true
-    }
-
-    /// One iteration boundary: hands back every waiter registered *before* this pass starts — it
-    /// now owes them its result — and clears `again`, so a fire-and-forget `begin()` call that
-    /// arrived before this point is also satisfied by this very pass.
-    func beginPass() -> [CheckedContinuation<Result<Void, ToolError>, Never>] {
-        again = false
-        let owed = pendingWaiters
-        pendingWaiters = []
-        return owed
-    }
-
-    /// Resolves everyone this pass owed, then reports whether another iteration is needed — true
-    /// when `again` was (re-)armed, or a new waiter registered, while this pass was running.
-    func endPass(owed: [CheckedContinuation<Result<Void, ToolError>, Never>], result: Result<Void, ToolError>) -> Bool {
-        for continuation in owed { continuation.resume(returning: result) }
-        if again || !pendingWaiters.isEmpty { return true }
-        refreshing = false
-        return false
     }
 }

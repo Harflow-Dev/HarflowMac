@@ -67,6 +67,10 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     var errorText: String?
+    var readFailures: [String: String] = [:]
+    @ObservationIgnored var readRetries: [String: AlertAction] = [:]
+    var currentReadFailureSource: String?
+    var readFailureText: String? { errorText.flatMap { readFailures.values.contains($0) ? $0 : nil } }
     var validationDependencies: [String: JSONValue] = [:]
     var nativeSubagentsAvailable = false
     var nativeActivity: WorkflowNativeActivityModel?
@@ -101,7 +105,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored var refreshErrorText: String?
     @ObservationIgnored var runPolling = WorkflowRunPolling()
-    @ObservationIgnored private var generationID = UUID()
+    @ObservationIgnored var generationID = UUID()
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored var editorReadTask: Task<Void, Never>?
     @ObservationIgnored var editorLoadID = UUID()
@@ -221,46 +225,6 @@ final class WorkflowVM: WorkflowViewModel {
         nativeActivityTask = nil
         parallel.didDisappear()
         didSubscribe = false
-    }
-
-    func refresh(generation: UUID? = nil) async {
-        reconnectBuilderSession()
-        let refreshRunID = selectedRun?.id
-        let loadingID = initialLoadingID
-        let loadingRunID = initialLoadingKind == "run" ? selectedRun?.id : nil
-        defer {
-            if let loadingRunID, selectedRun?.id == loadingRunID, initialLoadingKind == "run", initialLoadingID == loadingID {
-                initialLoadingKind = nil
-                initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
-            }
-        }
-        do {
-            if selectedRun == nil {
-                let list = try await useCase.command("list", options: [], positionals: [])
-                guard !Task.isCancelled, generation == nil || generation == generationID else { return }
-                workflows = WorkflowJSON.objects(list["workflows"]).map { WorkflowRecord(raw: $0) }
-            }
-            guard selectedRun?.id == refreshRunID else { return }
-            if let run = selectedRun {
-                let response = try await runPolling.load(id: run.id, useCase: useCase)
-                guard !Task.isCancelled, selectedRun?.id == run.id, initialLoadingID == loadingID,
-                      generation == nil || generation == generationID else {
-                          return
-                      }
-                selectedRun = WorkflowRunModel(raw: response["run"]?.objectValue ?? response)
-                initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
-                if errorText == refreshErrorText || errorText == WorkflowRunPolling.staleDetailMessage { errorText = nil }
-                refreshErrorText = nil
-                updateActivityMembership()
-            }
-        } catch {
-            guard !Task.isCancelled, selectedRun?.id == refreshRunID,
-                  initialLoadingID == loadingID,
-                  generation == nil || generation == generationID else { return }
-            let message = Self.message(error)
-            refreshErrorText = message
-            errorText = message
-        }
     }
 
     func duplicate() {

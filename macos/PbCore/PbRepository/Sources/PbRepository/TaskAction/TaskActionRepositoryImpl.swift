@@ -29,9 +29,9 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
     }
 
     public var busy: Set<String> { busyValue }
-    public func busyPublisher() -> AnyPublisher<Set<String>, Never> { $busyValue.eraseToAnyPublisher() }
+    public func busyPublisher() -> AnyPublisher<Set<String>, Never> { $busyValue.removeDuplicates().eraseToAnyPublisher() }
     public func outcome(_ taskID: String) -> String? { outcomesValue[taskID] }
-    public func outcomesPublisher() -> AnyPublisher<[String: String], Never> { $outcomesValue.eraseToAnyPublisher() }
+    public func outcomesPublisher() -> AnyPublisher<[String: String], Never> { $outcomesValue.removeDuplicates().eraseToAnyPublisher() }
 
     @discardableResult
     public func tryBeginBusy(_ taskID: String) -> Bool {

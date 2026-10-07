@@ -57,6 +57,9 @@ struct ParallelColumnModel: Identifiable {
     /// When the conversation's FIRST turn started — every row's elapsed time counts from here, as
     /// TaskDetail's Timeline does; the current turn's own start would clamp earlier turns to 0.
     var start: Date?
+    var animatesArrival = false
+    var onDidPresent: () -> Void = {}
+    var memberTaskIDs: Set<String> = []
 
     /// "<repo name> · <Backend>" plus "· N turns" when `turns > 1` — the task header's subtitle,
     /// without the session id.

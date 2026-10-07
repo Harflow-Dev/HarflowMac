@@ -1,6 +1,7 @@
 import Foundation
 import MonitorCore
 @testable import PbRepository
+import PbTestUtilities
 import Testing
 
 @Suite struct ToolEnvironmentRepositoryImplTests {
@@ -92,4 +93,37 @@ import Testing
             return
         }
     }
+
+    @Test(arguments: ["path", "uv"])
+    func givenDiscoverySubscriber_whenEqualProbesRepeat_thenPathAndUvChangesStillArrive(field: String) async {
+        // given
+        let path = LockedBox("/usr/bin:/bin")
+        let bin = LockedBox("/fixture/tools-a")
+        let runner = StubProcessRunner { call in
+            .success(stdout(call.arguments.first == "tool" ? bin.value : path.value))
+        }
+        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let sut = ToolEnvironmentRepositoryImpl(home: "/fixture", baseEnvironment: [:], runner: runner,
+                                               settings: settings, isExecutable: { _ in true })
+        let received = LockedBox<[DiscoveryResult]>([])
+        let token = sut.discoveryPublisher().sink { value in received.mutate { $0.append(value) } }
+        // when
+        let first = await sut.discoverEnvironment()
+        _ = await sut.discoverEnvironment()
+        if field == "path" {
+            path.mutate { $0 = "/fixture/bin:/usr/bin:/bin" }
+        } else {
+            bin.mutate { $0 = "/fixture/tools-b" }
+        }
+        let changed = await sut.discoverEnvironment()
+        path.mutate { $0 = "/usr/bin:/bin" }
+        bin.mutate { $0 = "/fixture/tools-a" }
+        _ = await sut.discoverEnvironment()
+        // then
+        #expect(first != changed)
+        #expect(received.value == [DiscoveryResult(loginPath: nil, uv: nil), first, changed, first])
+        #expect(runner.calls.count == 12)
+        withExtendedLifetime(token) {}
+    }
+
 }

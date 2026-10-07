@@ -4,11 +4,45 @@ import Foundation
 import Mockable
 import MonitorCore
 import PbRepository
+import PbTestUtilities
 import Testing
 
 @MainActor
 @Suite struct ParallelViewRepositoryTests {
     
+    @Test func givenBackgroundCatalogPublications_whenReadinessChanges_thenMainActorConsumerReceivesEveryTransition() async {
+        // given
+        let taskList = MockTaskListRepository()
+        let subjects = ReadinessSubjects()
+        given(taskList).hasListedPublisher().willReturn(subjects.listed.eraseToAnyPublisher())
+        given(taskList).historyStatePublisher().willReturn(subjects.history.eraseToAnyPublisher())
+        let sut = ParallelViewRepository(taskListRepository: taskList)
+        var received: [Bool] = []
+        let subscription = sut.activityReadyPublisher().sink { ready in
+            #expect(Thread.isMainThread)
+            received.append(ready)
+        }
+        await waitUntil { received == [false] }
+        // when: the real TaskList repository sends these snapshots from background refresh work.
+        await Task.detached {
+            subjects.listed.send(true)
+            subjects.history.send(HistoryLoadingState())
+        }
+.value
+        await waitUntil { received == [false, true] }
+        await Task.detached {
+            var preparing = HistoryLoadingState()
+            preparing.bootstrapPending = true
+            subjects.history.send(preparing)
+            subjects.history.send(HistoryLoadingState())
+        }
+.value
+        // then: this MainActor sink and the repository's MainActor map must never run on that worker.
+        await waitUntil { received.count == 4 }
+        #expect(received == [false, true, false, true])
+        subscription.cancel()
+    }
+
     @Test func givenTaskListQueries_whenCalled_thenTheyForwardToTaskListRepository() {
         // given
         let taskList = MockTaskListRepository()
@@ -176,4 +210,12 @@ import Testing
         // then
         verify(takeover).beginTakeover(taskID: .value("abc123")).called(1)
     }
+}
+
+// MARK: - ReadinessSubjects
+
+/// Combine subjects serialize their own sends; this holder transfers them into a background task.
+private final class ReadinessSubjects: @unchecked Sendable {
+    let listed = CurrentValueSubject<Bool, Never>(false)
+    let history = CurrentValueSubject<HistoryLoadingState, Never>(HistoryLoadingState())
 }

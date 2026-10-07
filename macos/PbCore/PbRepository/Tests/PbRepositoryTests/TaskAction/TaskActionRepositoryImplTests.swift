@@ -449,4 +449,42 @@ import Testing
         #expect(received.last?["t1"] == "Copied resume command.")
         #expect(sut.outcome("t1") == "Copied resume command.")
     }
+
+    @Test func givenActionStateSubscribers_whenEqualStateIsWritten_thenBusyAndOutcomeChangesStillArrive() {
+        // given
+        let sut = makeSUT()
+        var busy: [Set<String>] = []
+        var outcomes: [[String: String]] = []
+        let subscriptions = [sut.busyPublisher().sink { busy.append($0) }, sut.outcomesPublisher().sink { outcomes.append($0) }]
+        // when
+        sut.endBusy("task")
+        #expect(sut.tryBeginBusy("task"))
+        #expect(!sut.tryBeginBusy("task"))
+        sut.endBusy("task")
+        sut.endBusy("task")
+        for value: String? in ["First", "First", "Second", "First", nil, nil] { sut.setOutcome("task", value) }
+        // then
+        #expect(busy == [[], ["task"], []])
+        #expect(outcomes == [[:], ["task": "First"], ["task": "Second"], ["task": "First"], [:]])
+        withExtendedLifetime(subscriptions) {}
+    }
+
+    @Test func givenIdenticalCommands_whenSentTwice_thenBothExecuteDespiteEqualOutcomeSnapshot() async throws {
+        // given
+        let environment = MockToolEnvironmentRepository()
+        let runner = StubProcessRunner(output: stdout(#"{"v":2,"result":{}}"#))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let sut = makeSUT(toolEnvironment: environment)
+        let outcomes = LockedBox<[[String: String]]>([])
+        let token = sut.outcomesPublisher().sink { value in outcomes.mutate { $0.append(value) } }
+        // when
+        #expect(try await sut.send("task", text: "Repeat"))
+        #expect(try await sut.send("task", text: "Repeat"))
+        // then
+        #expect(runner.calls.count == 2)
+        #expect(outcomes.value.count == 2)
+        #expect(sut.busy.isEmpty)
+        withExtendedLifetime(token) {}
+    }
+
 }

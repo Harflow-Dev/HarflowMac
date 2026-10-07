@@ -18,10 +18,16 @@ final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, Sideb
 
     func workflowSnapshot() async throws -> SidebarWorkflowSnapshot {
         let definitions = try await workflowRepository.command("list", options: [], positionals: [])
+        let definitionState = CatalogState(raw: definitions)
+        if !definitionState.isReady { return SidebarWorkflowSnapshot(definitions: [], runs: [], catalogState: definitionState) }
         let page = try await workflowRepository.historyPage(cursor: nil, activeOnly: false, relatedRunID: nil)
+        if !page.catalogState.isReady {
+            return SidebarWorkflowSnapshot(definitions: [], runs: [], page: page, catalogState: page.catalogState)
+        }
         let active = try await workflowRepository.historyPage(cursor: nil, activeOnly: true, relatedRunID: nil)
         return SidebarWorkflowSnapshot(definitions: WorkflowJSON.objects(definitions["workflows"]),
-                                       runs: page.items + active.items + page.relatedHeaders + active.relatedHeaders, page: page)
+                                       runs: page.items + active.items + page.relatedHeaders + active.relatedHeaders,
+                                       page: page, catalogState: active.catalogState)
     }
 
     func taskHistoryStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { taskListRepository.historyStatePublisher() }

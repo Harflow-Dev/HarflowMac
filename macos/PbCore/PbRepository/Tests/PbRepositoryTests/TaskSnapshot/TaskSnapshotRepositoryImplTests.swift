@@ -165,4 +165,35 @@ import Testing
         // then — the late `running` answer belongs to a superseded refresh and is dropped
         #expect(sut.snapshot("task-1")?.status.isTerminal == true)
     }
+
+    @Test func givenSnapshotSubscriber_whenEqualReadsRepeat_thenDurationAndEnforcementChangesStillArrive() async {
+        // given
+        let environment = MockToolEnvironmentRepository()
+        let payload = LockedBox(#"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":1,"enforcement":{"sandbox":"read-only"}}}"#)
+        let runner = StubProcessRunner { _ in .success(stdout(payload.value)) }
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let sut = TaskSnapshotRepositoryImpl(toolEnvironment: environment)
+        let received = LockedBox<[[String: TaskInfo]]>([])
+        let token = sut.snapshotsPublisher().sink { value in received.mutate { $0.append(value) } }
+        // when
+        await sut.refresh("task")
+        await sut.refresh("task")
+        payload.mutate { $0 = #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":2,"enforcement":{"sandbox":"read-only"}}}"# }
+        await sut.refresh("task")
+        payload.mutate { $0 = #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":2,"enforcement":{"sandbox":"workspace-write"}}}"# }
+        await sut.refresh("task")
+        payload.mutate { $0 = #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":1,"enforcement":{"sandbox":"read-only"}}}"# }
+        await sut.refresh("task")
+        sut.evict(keeping: ["task"])
+        sut.evict(keeping: [])
+        sut.evict(keeping: [])
+        // then
+        #expect(runner.calls.count == 5)
+        #expect(received.value.count == 6)
+        #expect(received.value.map { $0["task"]?.durationSeconds } == [nil, 1, 2, 2, 1, nil])
+        #expect(received.value[3]["task"]?.enforcement?["sandbox"]?.stringValue == "workspace-write")
+        #expect(received.value.first?.isEmpty == true && received.value.last?.isEmpty == true)
+        withExtendedLifetime(token) {}
+    }
+
 }

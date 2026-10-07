@@ -198,7 +198,11 @@ struct SidebarView<VM: SidebarViewModel>: View {
 
     private func historyControl(_ source: String, state: HistoryLoadingState, action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            if state.authorityIncomplete {
+            if state.catalogState.status == .blocked {
+                Text(state.catalogState.reason ?? "History indexing is blocked. Resolve the reported record issue, then retry.")
+                    .font(.pb(.caption))
+.foregroundStyle(Color.warningFG)
+            } else if state.authorityIncomplete {
                 Text("History is blocked by a large legacy record. Inspect a known task directly to restore access.")
                     .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
@@ -212,7 +216,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
             } else if let error = state.error {
                 Text(error.message).font(.pb(.caption)).foregroundStyle(Color.failedRed)
                 Button("Retry \(source.lowercased())", action: action)
-            } else if state.authorityIncomplete {
+            } else if state.authorityIncomplete || state.catalogState.status == .blocked {
                 Button("Retry \(source.lowercased())", action: action)
             } else if state.bootstrapPending {
                 Text("Preparing \(source.lowercased()) history…").font(.pb(.caption))
@@ -280,7 +284,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
         .listStyle(.sidebar)
         // The first section header ("Running" whenever anything runs) otherwise sits flush against
         // the list's top edge and is clipped under the filter row.
-        .contentMargins(.top, 8, for: .scrollContent)
+        .padding(.top, 8)
         // Native List otherwise keeps closed rows at its minimum height until deletion.
         .environment(\.defaultMinListRowHeight, 0)
         .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: expansionToken)
@@ -370,9 +374,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                         .tag(MonitorDestination.workflow(workflow.id))
                         .pbFadeIn()
                 }
-                if let error = viewModel.workflowErrorMessage {
-                    Text(error).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-                }
+
         } header: {
             HStack(spacing: 8) {
                 Button { withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { workflowsExpanded.toggle() } } label: {
