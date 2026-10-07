@@ -95,6 +95,23 @@ struct WorkflowRunModel: Identifiable, Equatable {
         return raw["interaction_owner"]?.stringValue != "caller"
     }
 
+    var canCancelFromMonitor: Bool {
+        guard parentRunID == nil, !["completed", "failed", "cancelled", "cancelling"].contains(status) else { return false }
+        if let eligibility = raw["can_cancel_from_monitor"]?.boolValue { return eligibility }
+        // Older ctl versions can safely control their own Monitor-owned runs.
+        return allowsMonitorControl
+    }
+
+    /// The backend's durable explanation for an unavailable root cancellation action.
+    /// Children and settled runs already have separate guidance in the header.
+    var monitorCancelRefusalReason: String? {
+        guard parentRunID == nil, !canCancelFromMonitor,
+              !["completed", "failed", "cancelled", "cancelling"].contains(status),
+              let reason = raw["monitor_cancel_reason"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !reason.isEmpty else { return nil }
+        return reason
+    }
+
     var isSettling: Bool { raw["settling"]?.boolValue ?? false }
     var canSkipOptionalReview: Bool {
         isDelegation && allowsMonitorControl && status == "needs_input" && !isSettling

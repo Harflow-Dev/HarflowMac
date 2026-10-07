@@ -154,7 +154,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 .padding(.horizontal, 16)
 .padding(.vertical, 8)
                         }
-                        if hasHeaderContent { header(task) }
+                        header(task)
                         tabPicker
                         column
                     }
@@ -193,22 +193,16 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     /// mirrors the loaded screen (see `TaskLoadingSkeleton`). Never shown once `hasListed` is true —
     /// then either the task exists or it genuinely is not in polybridge's records.
     private var loadingSkeleton: some View {
-        TaskLoadingSkeleton(header: viewModel.loadingHeader)
+        TaskLoadingSkeleton(header: viewModel.loadingHeader, isEmbedded: isEmbedded)
     }
 
     // MARK: Header
 
-    /// Whatever the toolbar row can't carry: breadcrumbs, the outcome line, banners and the
-    /// notice count. Empty (and so taking no space) for most tasks.
-    private var hasHeaderContent: Bool {
-        !viewModel.ancestorCrumbs.isEmpty || viewModel.outcomeMessage != nil || viewModel.takenOverBannerText != nil
-            || viewModel.spawnedByBannerText != nil || !(viewModel.inspectorModel?.notices.isEmpty ?? true)
-    }
-
     @ViewBuilder
     private func header(_ task: TaskInfo) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             if !viewModel.ancestorCrumbs.isEmpty { breadcrumbs }
+            titleBlock(task)
             if let message = viewModel.outcomeMessage {
                 Text(message).font(.pb(.secondary)).foregroundStyle(OutcomeColor.of(message)).textSelection(.enabled)
             }
@@ -231,7 +225,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, isEmbedded ? 16 : 24)
         .padding(.top, 12)
     }
 
@@ -241,7 +235,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         if isEmbedded {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    titleBlock(task).frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 0)
                     statusAndActions(task)
                 }
 .padding(.horizontal, 16)
@@ -256,10 +250,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }
     }
 
-    /// The design's toolbar row: title and repo leading; status and actions trailing.
+    /// Status and actions stay in the toolbar; the content header gives the title room to wrap.
     @ToolbarContentBuilder
     private func toolbarContent(_ task: TaskInfo) -> some ToolbarContent {
-        ToolbarItem(placement: .navigation) { titleBlock(task) }
         ToolbarItem(placement: .primaryAction) { statusAndActions(task) }
     }
 
@@ -278,33 +271,36 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(viewModel.title).font(.pb(.headline, weight: .semibold)).lineLimit(1).truncationMode(.tail).help(viewModel.title)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(viewModel.title)
+                .font(.pb(.headline, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .help(viewModel.title)
             HStack(spacing: 6) {
                 repoMenu(task)
-                if let turnsText = viewModel.turnsText { Text("· \(turnsText)") }
+                if let turnsText = viewModel.turnsText { Text("· \(turnsText)").fixedSize() }
             }
             .font(.pb(.secondary))
             .foregroundStyle(Color.secondaryText)
             .lineLimit(1)
         }
-        // Capped so a long title truncates in the toolbar row instead of pushing the actions off it.
-        .frame(maxWidth: 440, alignment: .leading)
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
 
     /// The repository's name; clicking it offers to show the folder in Finder or copy its path.
     /// The path is the task's own recorded working directory, not agent text, so it goes to the
-    /// system as a directory URL (Finder); toolbar items don't inherit the content's link rules.
+    /// system as a directory URL (Finder).
     private func repoMenu(_ task: TaskInfo) -> some View {
         Menu {
             Button("Open in Finder") { openURL(URL(fileURLWithPath: task.repoPath, isDirectory: true)) }
             Button("Copy path") { viewModel.didTapCopyRepoPath() }
         } label: {
-            Text(Format.repoName(task.repoPath))
+            Text(Format.repoName(task.repoPath)).lineLimit(1).truncationMode(.middle)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .fixedSize()
         .help(task.repoPath)
         .accessibilityLabel("Repository \(Format.repoName(task.repoPath))")
     }
@@ -320,15 +316,10 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         .fixedSize()
     }
 
-    /// macOS 26 draws each toolbar item in a glass capsule, which turned the title and the whole
-    /// action row into pills. Here the title, status and primary button sit on the bare toolbar, a
-    /// flexible spacer pushes the actions to the trailing edge, and only "…" and the inspector
-    /// toggle share one native glass group.
+    /// macOS 26 gives the status and actions separate toolbar items on the bare toolbar.
     @available(macOS 26.0, *)
     @ToolbarContentBuilder
     private func glassFreeToolbarContent(_ task: TaskInfo) -> some ToolbarContent {
-        ToolbarItem(placement: .navigation) { titleBlock(task) }
-            .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItem(placement: .primaryAction) { statusLabel(task) }
             .sharedBackgroundVisibility(.hidden)
@@ -470,7 +461,26 @@ enum NoticeSummary {
 #if DEBUG
 @MainActor
 private func previewDetail(_ mock: TaskDetailViewModelMock = TaskDetailViewModelMock()) -> some View {
-    TaskDetailView(mock).frame(width: 1000, height: 620)
+    NavigationStack { TaskDetailView(mock) }.frame(width: 1000, height: 620)
+}
+
+#Preview("Long title - narrow") {
+    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle()) }
+        .frame(width: 480, height: 700)
+}
+
+#Preview("Long title - wide") {
+    previewDetail(.longTitle())
+}
+
+#Preview("Unbroken title - narrow") {
+    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle(unbroken: true)) }
+        .frame(width: 480, height: 700)
+}
+
+#Preview("Long title - embedded") {
+    TaskDetailView(TaskDetailViewModelMock.longTitle(), isEmbedded: true)
+        .frame(width: 480, height: 700)
 }
 
 #Preview("Running - light") {

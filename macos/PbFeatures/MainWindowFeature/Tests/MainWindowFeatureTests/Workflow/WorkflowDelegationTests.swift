@@ -117,7 +117,7 @@ struct WorkflowDelegationTests {
         harness.sut.control("cancel")
         // then
         await verify(harness.useCase)
-.command(.value("cancel"), options: .value([]), positionals: .value(["run"]))
+.command(.value("cancel"), options: .value(["--monitor"]), positionals: .value(["run"]))
             .calledEventually(1, before: .seconds(5))
     }
 

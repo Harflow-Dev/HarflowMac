@@ -48,7 +48,10 @@ final class WorkflowRunPolling {
         let hasDigests = previous?["monitor_digests"]?.objectValue != nil
         let options = hasDigests ? ["--monitor-view"] : ["--monitor-view", "--snapshot"]
         let response = try await useCase.command("status", options: options, positionals: [id])
-        let stateKeys = ["status", "updated_at", "settling", "draft_revision", "input_decision_id", "revision", "interaction_owner"]
+        let stateKeys = [
+            "status", "updated_at", "settling", "draft_revision", "input_decision_id", "revision",
+            "interaction_owner", "can_cancel_from_monitor", "monitor_cancel_reason"
+        ]
         if hasDigests, let previous, stateKeys.allSatisfy({ response[$0] == previous[$0] }),
            let advertised = response["monitor_digests"], advertised == previous["monitor_digests"] {
             return (previous, true)

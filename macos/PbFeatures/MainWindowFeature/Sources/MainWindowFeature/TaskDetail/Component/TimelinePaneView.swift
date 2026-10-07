@@ -2,7 +2,7 @@
 //  TimelinePaneView.swift
 //  MainWindowFeature
 //
-//  The Activity tab's feed. Follow-live defaults to on and stays local `@State` per the screen
+//  The Activity tab's feed. Bottom-aware following stays local `@State` per the screen
 //  shape's own allowance — the VM never owns it, nor which tool cards are expanded (keyed by the
 //  card's stable group id). Plain rows render through the package-root `TimelineRow` shared with the
 //  Parallel screen; adjacent tool calls render as `ToolGroupCardView`s.
@@ -83,7 +83,7 @@ struct TimelinePaneModel {
 
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
-    @State private var followLive = true
+    @State private var followLive = FollowLiveScrollState()
     @State private var olderAnchor: String?
     @State private var expandedGroups: Set<String> = []
     @State private var seenRowIDs: Set<String> = []
@@ -94,7 +94,6 @@ struct TimelinePaneView: View {
             HStack {
                 Text(model.stepCountText).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 Spacer()
-                Toggle("Follow live", isOn: $followLive).toggleStyle(.checkbox).font(.pb(.secondary))
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 8)
@@ -116,6 +115,7 @@ struct TimelinePaneView: View {
                 LazyVStack(alignment: .leading, spacing: 20) {
                     if let onLoadMore = model.onLoadMore, model.history.hasMore || model.history.error != nil {
                         Button {
+                            followLive.suspend()
                             olderAnchor = model.activityRows.first?.id
                             onLoadMore()
                         } label: {
@@ -155,8 +155,12 @@ struct TimelinePaneView: View {
                 }
                 .padding(24)
                 .readingColumn()
+                .background(LiveScrollPositionObserver { offset, contentHeight, viewportHeight in
+                    guard olderAnchor == nil else { return }
+                    followLive.observe(offset: offset, contentHeight: contentHeight, viewportHeight: viewportHeight)
+                })
             }
-            .followLiveScroll(token: model.updateToken, enabled: followLive && olderAnchor == nil, proxy: proxy, target: "bottom")
+            .followLiveScroll(token: model.updateToken, enabled: followLive.isFollowing && olderAnchor == nil, proxy: proxy, target: "bottom")
             .onChange(of: model.activityRows.first?.id) { _, _ in
                 if let olderAnchor { proxy.scrollTo(olderAnchor, anchor: .top); self.olderAnchor = nil }
             }

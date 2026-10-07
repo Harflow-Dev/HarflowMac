@@ -169,7 +169,8 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 if viewModel.selectedRun == nil, viewModel.isEditing, viewModel.loadedName.isEmpty {
                     TextField("Workflow name", text: $viewModel.name, prompt: Text("New workflow"))
@@ -227,8 +228,16 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 if run.allowsMonitorControl, ["running", "starting"].contains(run.status) {
                     Button("Pause") { viewModel.control("pause") }.buttonStyle(QuietButtonStyle())
                 }
-                if run.allowsMonitorControl, !["completed", "failed", "cancelled"].contains(run.status) {
-                    Button("Cancel", role: .destructive) { viewModel.control("cancel") }.buttonStyle(QuietButtonStyle())
+                if run.canCancelFromMonitor {
+                    Button("Cancel", role: .destructive) { viewModel.control("cancel") }
+                        .buttonStyle(QuietButtonStyle())
+.disabled(viewModel.isBusy)
+                } else if run.status == "cancelling" {
+                    Text("Cancelling…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                }
+                if run.parentRunID != nil {
+                    Button("Open root to cancel") { viewModel.openRun(run.rootRunID) }
+                        .buttonStyle(QuietButtonStyle())
                 }
             } else if viewModel.isEditing {
                 Button("Edit with agent", systemImage: "sparkles") { viewModel.prepareGeneration(refining: true) }
@@ -249,6 +258,15 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             } else {
                 Button("Generate", systemImage: "sparkles") { viewModel.prepareGeneration(refining: false) }.buttonStyle(QuietButtonStyle())
                 Button("New workflow", systemImage: "plus") { viewModel.newWorkflow() }.buttonStyle(QuietButtonStyle())
+            }
+            }
+            if let reason = viewModel.selectedRun?.monitorCancelRefusalReason {
+                Text("Cancellation unavailable: \(reason)")
+                    .font(.pb(.secondary))
+                    .foregroundStyle(Color.warningFG)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
             }
         }
         .padding(.horizontal, 16)

@@ -89,7 +89,7 @@ struct ParallelColumnView: View {
     @State private var expandedGroups: Set<String> = []
     @State private var seenRowIDs: Set<String> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var followLive = true
+    @State private var followLive = FollowLiveScrollState()
 
     var body: some View {
         let shown = ParallelColumnModel.visibleRows(model.activityRows, showAll: showAll)
@@ -145,17 +145,15 @@ struct ParallelColumnView: View {
 
     private func feed(_ shown: [ActivityRow]) -> some View {
         VStack(spacing: 8) {
-            // Same row as the task feed: step count, and a follow toggle that keeps the column at
-            // its newest step while the agent works.
+            // Same step count as the task feed; scrolling follows only while at the bottom.
             HStack {
                 Text("\(ParallelColumnModel.itemCount(model.rows)) steps").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 Spacer()
-                Toggle("Follow live", isOn: $followLive).toggleStyle(.checkbox).font(.pb(.secondary))
             }
             ScrollViewReader { proxy in
                 scrollingFeed(shown)
                     .followLiveScroll(token: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep, pendingMessages: model.pendingMessages),
-                                      enabled: followLive, proxy: proxy, target: Self.bottomID)
+                                      enabled: followLive.isFollowing, proxy: proxy, target: Self.bottomID)
             }
         }
     }
@@ -172,6 +170,7 @@ struct ParallelColumnView: View {
                 }
                 if model.activityRows.count > shown.count {
                     Button("Show all \(ParallelColumnModel.itemCount(model.rows)) steps") {
+                        followLive.suspend()
                         withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { showAll = true }
                     }
                         .buttonStyle(.link)
@@ -186,6 +185,9 @@ struct ParallelColumnView: View {
                 Color.clear.frame(height: 1).id(Self.bottomID)
             }
             .padding(.bottom, 12)
+            .background(LiveScrollPositionObserver { offset, contentHeight, viewportHeight in
+                followLive.observe(offset: offset, contentHeight: contentHeight, viewportHeight: viewportHeight)
+            })
         }
     }
 
