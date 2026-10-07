@@ -1,5 +1,7 @@
 import MonitorCore
 
+// MARK: - WorkflowContextDelivery
+
 /// Observed prompt delivery sizes; these are not model token measurements.
 struct WorkflowContextDelivery {
     let task: [String: JSONValue]
