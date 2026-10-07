@@ -45,10 +45,11 @@ view-local functions.
 
 ## ViewEvent (decision 10)
 
-Trimmed to the case names actually used: `alert(AlertContent)`, `dialog(AlertContent)`, `none`.
-**No toast** — the Monitor has none today, and adding one would be a behaviour change. The outcome
-line (refusal text, "queued", cascade summaries) is durable VM/repository state shown in the header,
-never a `ViewEvent`.
+Presentation events include `alert`, `dialog`, `incident(source:message:)`, `incidentResolved(source:)`, and `none`.
+Actionable workflow read failures use source-scoped incidents rendered as a dismissible top overlay
+by the window presentation context. Preparation is neutral state, never an incident. Dismissal leaves
+failure details accessible; a successful read resolves only its own source. Outcome lines (refusal
+text, "queued", cascade summaries) remain durable VM/repository state.
 
 ## Repository concurrency (decision 12)
 

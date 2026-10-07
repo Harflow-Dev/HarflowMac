@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Mockable
 import MonitorCore
@@ -244,6 +245,78 @@ struct TaskHistoryPaginationTests {
         // then
         #expect(sut.task("older")?.status == .completed)
         #expect(runner.calls.filter { $0.arguments.contains("--task-ids=older") }.count == 1)
+    }
+
+    @Test func givenLoadedHistory_whenAuthorityPrepares_thenRowsCursorAndCountsSurviveUntilRecovery() async {
+        // given
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
+        let preparing = LockedBox(false)
+        let runner = StubProcessRunner { call in
+            if preparing.value {
+                let result: [String: JSONValue] = ["items": .array([]), "next_cursor": .null,
+                    "has_more": .bool(false), "bootstrap_pending": .bool(true), "counts_complete": .bool(false),
+                    "catalog_state": .object(["status": .string("preparing"), "source": .string("task"), "pending_records": .number(150)])]
+                return .success(stdout(JSONValue.object(["v": .number(5), "result": .object(result)]).rendered()))
+            }
+            if call.arguments.contains("--active-only") { return .success(response([], activeCount: 4)) }
+            if call.arguments.contains("--cursor=page2") { return .success(response(["older"], cursor: "page3")) }
+            if let ids = call.arguments.first(where: { $0.hasPrefix("--task-ids=") }) {
+                return .success(response(ids.dropFirst("--task-ids=".count).split(separator: ",").map(String.init)))
+            }
+            return .success(response(["newest"], cursor: "page2"))
+        }
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
+        await sut.refresh()
+        await sut.loadMoreHistory()
+        // when
+        preparing.mutate { $0 = true }
+        await sut.refresh()
+        // then
+        #expect(Set(sut.tasks.map(\.taskID)) == ["newest", "older"])
+        #expect(sut.historyState.nextCursor == "page3")
+        #expect(sut.historyState.hasMore)
+        #expect(sut.historyState.catalogState.status == .preparing)
+        #expect(!sut.historyState.countsComplete)
+        #expect(sut.runningCount == 4)
+        #expect(sut.listError == nil)
+        // when / then
+        preparing.mutate { $0 = false }
+        await sut.refresh()
+        #expect(sut.historyState.catalogState.isReady)
+        #expect(sut.historyState.nextCursor == "page3")
+    }
+
+    @Test func givenColdPreparation_whenTwoSecondRetryFires_thenAuthoritativeBaselineLoadsAutomatically() async {
+        // given
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
+        let preparing = LockedBox(true)
+        let runner = StubProcessRunner { _ in .success(response(preparing.value ? [] : ["historical"], pending: preparing.value)) }
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let scheduler = MockScheduling()
+        let retry = LockedBox<(@Sendable () -> Void)?>(nil)
+        given(scheduler).now().willReturn(Date())
+        given(scheduler).schedule(after: .value(2), execute: .any).willProduce { _, work in
+            retry.mutate { $0 = work }
+            return AnyCancellable {}
+        }
+        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment, scheduler: scheduler)
+        // when
+        await sut.refresh()
+        // then
+        #expect(!sut.hasListed)
+        #expect(retry.value != nil)
+        #expect(sut.listError == nil)
+        // when
+        preparing.mutate { $0 = false }
+        retry.value?()
+        await waitUntil { sut.hasListed }
+        // then
+        #expect(sut.tasks.map(\.taskID) == ["historical"])
+        #expect(!sut.historyState.bootstrapPending)
+        verify(scheduler).schedule(after: .value(2), execute: .any).called(1)
     }
 
 }

@@ -10,9 +10,15 @@ final class WorkflowRunPolling {
     private var snapshots: [String: [String: JSONValue]] = [:]
     private var recentRuns: [String] = []
 
-    func cached(id: String) -> [String: JSONValue]? { snapshots[id] }
+    func cached(id: String) -> [String: JSONValue]? {
+        guard WorkflowRunIdentity.isValid(id), let raw = snapshots[id],
+              raw["workflow_run_id"]?.stringValue == id, raw["status"]?.stringValue?.isEmpty == false else { return nil }
+        return raw
+    }
 
     private func remember(_ raw: [String: JSONValue], id: String) {
+        guard WorkflowRunIdentity.isValid(id), raw["workflow_run_id"]?.stringValue == id,
+              raw["status"]?.stringValue?.isEmpty == false else { return }
         snapshots[id] = raw
         recentRuns.removeAll { $0 == id }
         recentRuns.append(id)
@@ -31,6 +37,7 @@ final class WorkflowRunPolling {
         loadID = generation
         let (response, isCached) = try await status(id: id, useCase: useCase)
         guard loadID == generation else { throw CancellationError() }
+        if !CatalogState(raw: response).isReady { return response }
         if isCached { return response }
         if response["monitor_snapshot"]?.boolValue == true {
             let raw = try await WorkflowMonitorSnapshot.read(first: response, id: id, useCase: useCase)

@@ -58,6 +58,12 @@ protocol ParallelUseCase: Sendable {
     func beginTakeover(taskID: String)
 }
 
+/// Optional readiness seam keeps existing previews and isolated use cases independent of storage.
+@MainActor
+protocol ParallelActivityReadiness {
+    func activityReadyPublisher() -> AnyPublisher<Bool, Never>
+}
+
 // MARK: - ParallelRouting
 
 /// Navigation the Parallel screen performs: routing to a member's own task screen, either from
@@ -144,6 +150,9 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var workflowTaskIDs: [String]?
     @ObservationIgnored private var workflowFocusedTaskIDs: Set<String>?
     @ObservationIgnored private var workflowTitles: [String: String] = [:]
+    @ObservationIgnored private var initialMembershipResolved = false
+    @ObservationIgnored private var activityReady = false
+    @ObservationIgnored private var arrivalTracker = PanelArrivalTracker()
     
     // MARK: - Init
     
@@ -181,6 +190,9 @@ final class ParallelVM: ParallelViewModel {
         availabilityByTask.removeAll()
         memberIDs.removeAll()
         didSubscribe = false
+        activityReady = false
+        initialMembershipResolved = false
+        arrivalTracker = PanelArrivalTracker()
     }
     
     func didTapViewPrompt() {
@@ -207,11 +219,21 @@ final class ParallelVM: ParallelViewModel {
     private func subscribeIfNeeded() {
         guard !didSubscribe else { return }
         didSubscribe = true
+        if let readiness = useCase as? any ParallelActivityReadiness {
+            readiness.activityReadyPublisher()
+.receive(on: DispatchQueue.main)
+.sink { [weak self] ready in
+                self?.activityReady = ready
+                self?.recompute()
+            }
+.store(in: &cancellables)
+        } else { activityReady = true }
         
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] tasks in
                 guard let self else { return }
+                initialMembershipResolved = true
                 latestTasks = tasks
                 recomputeMembersAndLeases()
             }
@@ -337,7 +359,19 @@ final class ParallelVM: ParallelViewModel {
             Conversation(members: conversation.members.map { useCase.task($0.taskID) ?? $0 })
         }
         let ordered = Lineage.parallelColumnOrder(freshened)
-        columns = ordered.map(makeColumnModel)
+        let resolved = workflowTaskIDs.map { ids in
+            let known = Set(latestTasks.map(\.taskID))
+            return ids.allSatisfy { known.contains($0) }
+        } ?? true
+        let arrivals = arrivalTracker.update(ordered.map { (id: $0.id, startedAt: $0.first.startedAt) },
+                                             authoritative: activityReady && initialMembershipResolved && resolved)
+        columns = ordered.map { conversation in
+            var column = makeColumnModel(for: conversation)
+            column.animatesArrival = arrivals.contains(column.id)
+            column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }
+            column.memberTaskIDs = Set(conversation.members.map(\.taskID))
+            return column
+        }
 
         let footerTasks = ordered.map { latestSnapshots[$0.current.taskID] ?? $0.current }
         footerText = EnforcementText.common(footerTasks) ?? Self.fallbackFooter

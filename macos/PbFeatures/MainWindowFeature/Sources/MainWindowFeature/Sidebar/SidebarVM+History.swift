@@ -35,14 +35,19 @@ extension SidebarVM {
     func refreshLoadedWorkflowStatus(excluding ids: Set<String>) async {
         guard let history = historyUseCase else { return }
         let active = workflowRuns.filter { $0.isActive && !ids.contains($0.id) }.map(\.id).sorted()
-        guard !active.isEmpty else { workflowRefreshOffset = 0; return }
+        guard !active.isEmpty else { workflowRefreshOffset = 0; publishViewEvent(.incidentResolved(source: "workflow-status")); return }
         let offset = workflowRefreshOffset % active.count
         let batch = Array((Array(active[offset...]) + Array(active[..<offset])).prefix(100))
         workflowRefreshOffset = (offset + batch.count) % active.count
         do {
             let page = try await history.workflowBatch(runIDs: batch)
+            guard page.catalogState.isReady else { return }
+            publishViewEvent(.incidentResolved(source: "workflow-status"))
             mergeWorkflowHeaders(page.items + page.relatedHeaders)
-        } catch { workflowErrorMessage = "Workflow status update unavailable" }
+        } catch {
+            workflowErrorMessage = "Workflow status update unavailable: \((error as? ToolError)?.message ?? error.localizedDescription)"
+            publishWorkflowIncident(source: "workflow-status", message: workflowErrorMessage ?? "Workflow status unavailable")
+        }
     }
 
     func subscribeToHistory() {
@@ -70,10 +75,14 @@ extension SidebarVM {
             do {
                 let page = try await history.workflowPage(cursor: workflowHistoryState.nextCursor, relatedRunID: nil)
                 guard !Task.isCancelled, workflowGeneration == token else { return }
+                guard page.catalogState.isReady else { workflowHistoryState.isLoading = false; return }
+                publishViewEvent(.incidentResolved(source: "workflow-history"))
                 mergeWorkflowHeaders(page.items + page.relatedHeaders)
                 updateWorkflowHistory(page, advancing: true)
                 recompute()
             } catch {
+                publishViewEvent(.incident(source: "workflow-history", message: (error as? ToolError)?.message ?? error.localizedDescription,
+                    retry: AlertAction(title: "Refresh history") { [weak self] in self?.didTapLoadMoreWorkflows() }))
                 workflowHistoryState.error = error as? ToolError ?? .unreadable(tool: "polybridge-ctl", exitCode: 0, stderr: String(describing: error))
             }
             workflowHistoryState.isLoading = false
@@ -84,7 +93,7 @@ extension SidebarVM {
         var indexed = replacing ? [:] : Dictionary(workflowRuns.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         for raw in headers {
             let run = SidebarWorkflowRun(raw: raw)
-            if !run.id.isEmpty { indexed[run.id] = run }
+            if WorkflowRunIdentity.isValid(run.id) { indexed[run.id] = run }
         }
         workflowRuns = indexed.values.sorted {
             let lhs = $0.startedAt ?? .distantPast
@@ -94,6 +103,8 @@ extension SidebarVM {
     }
 
     func updateWorkflowHistory(_ page: HistoryPage, advancing: Bool) {
+        workflowHistoryState.catalogState = page.catalogState
+        guard page.catalogState.isReady else { return }
         if advancing || !workflowHistoryInitialized {
             workflowHistoryState.nextCursor = page.nextCursor
             workflowHistoryState.hasMore = page.hasMore
@@ -114,9 +125,15 @@ extension SidebarVM {
                 guard let self, !workflowRuns.contains(where: { $0.id == id }) else { return }
                 do {
                     let page = try await history.workflowPage(cursor: nil, relatedRunID: id)
+                    guard page.catalogState.isReady else { return }
+                    publishViewEvent(.incidentResolved(source: "workflow-lookup"))
                     mergeWorkflowHeaders(page.items + page.relatedHeaders)
                     recompute()
-                } catch { workflowErrorMessage = "Workflow lookup unavailable" }
+                } catch {
+                    workflowErrorMessage = "Workflow lookup unavailable: \((error as? ToolError)?.message ?? error.localizedDescription)"
+                    publishViewEvent(.incident(source: "workflow-lookup", message: workflowErrorMessage ?? "Workflow lookup unavailable",
+                        retry: AlertAction(title: "Retry workflow lookup") { [weak self] in self?.resolveUnloadedSelection(.workflowRun(id)) }))
+                }
             default: break
             }
         }

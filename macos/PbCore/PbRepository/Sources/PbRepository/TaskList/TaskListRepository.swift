@@ -58,6 +58,7 @@ public protocol TaskListRepository: Sendable {
 }
 
 public struct HistoryLoadingState: Equatable, Sendable {
+    public var catalogState = CatalogState(raw: [:])
     public var nextCursor: String?
     public var hasMore = false
     public var bootstrapPending = false

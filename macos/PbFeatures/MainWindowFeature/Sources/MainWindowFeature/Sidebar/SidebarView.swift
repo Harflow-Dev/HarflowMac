@@ -370,9 +370,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                         .tag(MonitorDestination.workflow(workflow.id))
                         .pbFadeIn()
                 }
-                if let error = viewModel.workflowErrorMessage {
-                    Text(error).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-                }
+
         } header: {
             HStack(spacing: 8) {
                 Button { withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { workflowsExpanded.toggle() } } label: {

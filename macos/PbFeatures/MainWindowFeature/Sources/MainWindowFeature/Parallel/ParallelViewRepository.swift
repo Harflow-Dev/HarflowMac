@@ -14,7 +14,7 @@ import SwiftEnvironment
 /// Concrete `ParallelUseCase` backed by `TaskListRepository`, `TaskSnapshotRepository`,
 /// `TaskActionRepository`, `EventStreamRepository` and `TakeoverService`.
 @MainActor
-final class ParallelViewRepository: ParallelUseCase, @unchecked Sendable {
+final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, @unchecked Sendable {
 
     // MARK: - Private Properties
 
@@ -41,6 +41,15 @@ final class ParallelViewRepository: ParallelUseCase, @unchecked Sendable {
     }
 
     // MARK: - ParallelUseCase Methods
+
+    func activityReadyPublisher() -> AnyPublisher<Bool, Never> {
+        taskListRepository.hasListedPublisher()
+.combineLatest(taskListRepository.historyStatePublisher())
+            .receive(on: DispatchQueue.main)
+            .map { listed, state in listed && state.catalogState.isReady && !state.bootstrapPending && !state.authorityIncomplete }
+            .removeDuplicates()
+.eraseToAnyPublisher()
+    }
 
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never> { taskSnapshotRepository.snapshotsPublisher() }

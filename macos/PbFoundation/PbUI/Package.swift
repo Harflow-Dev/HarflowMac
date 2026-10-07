@@ -27,7 +27,8 @@ let package = Package(
         .testTarget(
             name: "PbUITests",
             dependencies: [
-                "PbUI"
+                "PbUI", "PbCommon",
+                .product(name: "PbTestUtilities", package: "PbUtilities")
             ],
             swiftSettings: [
                 .define("MOCKING")

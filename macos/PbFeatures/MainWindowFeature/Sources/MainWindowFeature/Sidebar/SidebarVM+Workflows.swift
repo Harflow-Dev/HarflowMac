@@ -16,10 +16,12 @@ struct SidebarWorkflowSnapshot: Sendable {
     let definitions: [[String: JSONValue]]
     let runs: [[String: JSONValue]]
     let page: HistoryPage?
-    init(definitions: [[String: JSONValue]], runs: [[String: JSONValue]], page: HistoryPage? = nil) {
+    let catalogState: CatalogState
+    init(definitions: [[String: JSONValue]], runs: [[String: JSONValue]], page: HistoryPage? = nil, catalogState: CatalogState = CatalogState(raw: [:])) {
         self.definitions = definitions
         self.runs = runs
         self.page = page
+        self.catalogState = catalogState
     }
 }
 
@@ -67,20 +69,38 @@ extension SidebarVM {
                 do {
                     let snapshot = try await workflowUseCase.workflowSnapshot()
                     guard let self, !Task.isCancelled, workflowGeneration == token else { return }
+                    if !snapshot.catalogState.isReady {
+                        if snapshot.catalogState.status == .blocked {
+                            workflowErrorMessage = snapshot.catalogState.reason ?? "Workflow catalog is blocked."
+                            publishWorkflowIncident(source: "workflow-list", message: workflowErrorMessage ?? "Workflow list unavailable")
+                        }
+                        try await Task.sleep(for: .seconds(2))
+                        continue
+                    }
                     workflowDefinitions = snapshot.definitions.map { WorkflowRecord(raw: $0) }
                     mergeWorkflowHeaders(snapshot.runs, replacing: snapshot.page == nil)
                     if let page = snapshot.page { updateWorkflowHistory(page, advancing: false) }
                     workflowErrorMessage = nil
+                    publishViewEvent(.incidentResolved(source: "workflow-list"))
                     await refreshLoadedWorkflowStatus(excluding: Set(snapshot.runs.compactMap { $0["workflow_run_id"]?.stringValue }))
                     guard !Task.isCancelled, workflowGeneration == token else { return }
                     recompute()
                 } catch {
                     guard let self, !Task.isCancelled, workflowGeneration == token else { return }
-                    workflowErrorMessage = "Workflow list unavailable"
+                    workflowErrorMessage = "Workflow list unavailable: \((error as? ToolError)?.message ?? error.localizedDescription)"
+                    publishWorkflowIncident(source: "workflow-list", message: workflowErrorMessage ?? "Workflow list unavailable")
                 }
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
             }
         }
+    }
+
+    func publishWorkflowIncident(source: String, message: String) {
+        publishViewEvent(.incident(source: source, message: message,
+                                  retry: AlertAction(title: "Refresh workflows") { [weak self] in
+            self?.stopWorkflowPolling()
+            self?.startWorkflowPolling()
+        }))
     }
 
     func stopWorkflowPolling() {
@@ -92,10 +112,10 @@ extension SidebarVM {
 
     func filteredWorkflowRuns() -> [SidebarWorkflowRun] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        var runs = workflowRuns
+        var runs = workflowRuns.filter { WorkflowRunIdentity.isValid($0.id) }
         let known = Set(runs.map(\.id))
         for task in latestTasks {
-            guard let id = task.raw["workflow_run_id"]?.stringValue, !known.contains(id), !runs.contains(where: { $0.id == id }),
+            guard let id = task.raw["workflow_run_id"]?.stringValue, WorkflowRunIdentity.isValid(id), !known.contains(id), !runs.contains(where: { $0.id == id }),
                   task.raw["workflow_builder"]?.boolValue != true else { continue }
             runs.append(SidebarWorkflowRun(raw: ["workflow_run_id": .string(id),
                 "name": task.raw["workflow_name"] ?? .string("Workflow"),

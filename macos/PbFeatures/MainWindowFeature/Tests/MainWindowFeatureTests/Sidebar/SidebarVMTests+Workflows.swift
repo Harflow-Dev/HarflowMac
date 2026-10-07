@@ -105,7 +105,7 @@ extension SidebarVMTests {
         await waitUntil { harness.sut.workflowErrorMessage != nil && !harness.sut.sections.isEmpty }
         // then
         #expect(harness.sut.items(in: .running).map(\.id) == ["task:task"])
-        #expect(harness.sut.workflowErrorMessage == "Workflow list unavailable")
+        #expect(harness.sut.workflowErrorMessage?.hasPrefix("Workflow list unavailable:") == true)
         harness.sut.didDisappear()
     }
 
@@ -161,5 +161,29 @@ extension SidebarVMTests {
         harness.sut.expandExecutionParent(of: "nested-task")
         // then
         #expect(harness.sut.expandedExecutionParents == ["workflow:root", "workflow:child", "workflow:grandchild"])
+    }
+}
+
+extension SidebarVMTests {
+    @Test func givenMalformedWorkflowHeadersAndTaskOwners_whenListed_thenCannotBecomeSelectableRunRows() {
+        // given
+        let harness = makeSUT()
+        harness.sut.mergeWorkflowHeaders([
+            ["workflow_run_id": .string("valid"), "status": .string("running")],
+            ["workflow_run_id": .string("workflow:bad"), "status": .string("running")],
+            ["workflow_run_id": .string(""), "status": .string("running")]
+        ])
+        harness.sut.latestTasks = [
+            TaskInfo(.object(["task_id": .string("empty-owner"), "workflow_run_id": .string("")]))!,
+            TaskInfo(.object(["task_id": .string("invalid-owner"), "workflow_run_id": .string("bad owner")]))!
+        ]
+        // when
+        let rows = harness.sut.filteredWorkflowRuns()
+        // then
+        #expect(rows.map(\.id) == ["valid"])
+        #expect(harness.sut.workflowRuns.map(\.id) == ["valid"])
+        #expect(harness.sut.workflowTaskOwners.isEmpty)
+        #expect(harness.sut.executionParent(of: "empty-owner") == nil)
+        #expect(harness.sut.executionParent(of: "invalid-owner") == nil)
     }
 }
