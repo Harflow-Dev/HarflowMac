@@ -73,6 +73,11 @@ Preserve their delivery, dismissal and recovery semantics rather than applying s
 Observable recovery handlers must also avoid writes when the retained state has not changed.
 Verify that duplicate snapshots stay quiet while real changes and repeated actions still arrive.
 
+Keep native task-window toolbar presentation behind its own complete equality boundary. Activity
+metadata and feed updates must not regenerate unchanged toolbar preferences; task identity,
+action owner, status, action availability and inspector changes must still refresh them. Keep
+live clocks and motion inside their child views, and leave activity content outside this boundary.
+
 ## Scope exceptions (decision 14)
 
 No logging protocol and no localization: the Monitor has neither today, and adding either would be

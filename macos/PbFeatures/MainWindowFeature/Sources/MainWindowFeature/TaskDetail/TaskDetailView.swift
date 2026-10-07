@@ -102,6 +102,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     
     @State var viewModel: VM
     private let isEmbedded: Bool
+    private let onToolbarEvaluation: (() -> Void)?
     @State private var embeddedInspectorVisible = false
     @State private var isRawEventsPresented = false
     @AppStorage("monitor.inspectorVisible") private var isInspectorVisible = false
@@ -109,7 +110,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     
     // MARK: - Init
     
-    init(_ viewModel: VM, isEmbedded: Bool = false) {
+    init(_ viewModel: VM, isEmbedded: Bool = false, onToolbarEvaluation: (() -> Void)? = nil) {
+        self.onToolbarEvaluation = onToolbarEvaluation
         self.isEmbedded = isEmbedded
         _viewModel = State(initialValue: viewModel)
     }
@@ -243,17 +245,20 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 Divider()
                 content().frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             }
-        } else if #available(macOS 26.0, *) {
-            content().toolbar { glassFreeToolbarContent(task) }
         } else {
-            content().toolbar { toolbarContent(task) }
+            content().background {
+                TaskDetailToolbar(
+                    snapshot: TaskDetailToolbarSnapshot(viewModel, task: task, showsInspector: showsInspector),
+                    actions: TaskDetailToolbarActions(
+                        takeover: viewModel.didTapTakeover, cancel: viewModel.didTapCancel,
+                        copyResumeCommand: viewModel.didTapCopyResumeCommand, openTask: viewModel.didTapTask,
+                        showRawEvents: { isRawEventsPresented = true },
+                        toggleInspector: { setInspectorVisible(!showsInspector) }
+                    ),
+                    onEvaluation: onToolbarEvaluation
+                ).equatable()
+            }
         }
-    }
-
-    /// Status and actions stay in the toolbar; the content header gives the title room to wrap.
-    @ToolbarContentBuilder
-    private func toolbarContent(_ task: TaskInfo) -> some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) { statusAndActions(task) }
     }
 
     private var breadcrumbs: some View {
@@ -314,32 +319,6 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             inspectorToggle
         }
         .fixedSize()
-    }
-
-    /// macOS 26 gives the status and actions separate toolbar items on the bare toolbar.
-    @available(macOS 26.0, *)
-    @ToolbarContentBuilder
-    private func glassFreeToolbarContent(_ task: TaskInfo) -> some ToolbarContent {
-        ToolbarSpacer(.flexible)
-        ToolbarItem(placement: .primaryAction) { statusLabel(task) }
-            .sharedBackgroundVisibility(.hidden)
-        // The design's quiet buttons, each on the bare toolbar (no glass capsules): the primary
-        // action and the inspector toggle draw their own QuietButtonStyle background, the "…" menu
-        // is a plain icon.
-        ToolbarItem(placement: .primaryAction) { takeoverButton }
-            .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                moreMenuItems
-            } label: {
-                Label("More actions", systemImage: "ellipsis")
-            }
-            .menuIndicator(.hidden)
-            .help("More actions")
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { inspectorToggle }
-            .sharedBackgroundVisibility(.hidden)
     }
 
     private var showsInspector: Bool { isEmbedded ? embeddedInspectorVisible : isInspectorVisible }
