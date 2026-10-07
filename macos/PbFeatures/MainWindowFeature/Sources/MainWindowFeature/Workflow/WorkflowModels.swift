@@ -33,6 +33,8 @@ struct WorkflowNodeModel: Identifiable, Equatable {
     var workflowID: String { raw["workflow_ref"]?["workflow_id"]?.stringValue ?? "" }
     var workflowName: String { raw["workflow_name"]?.stringValue ?? "" }
     var orchestratorMode: String { raw["orchestrator_mode"]?.stringValue ?? "child" }
+    var childSessionPolicy: String { raw["child_session_policy"]?.stringValue ?? "agent_decides" }
+    var showsChildSessionPolicy: Bool { type == "workflow" && orchestratorMode == "child" }
 
     var backend: String { raw["agent"]?["backend"]?.stringValue ?? "" }
 }
