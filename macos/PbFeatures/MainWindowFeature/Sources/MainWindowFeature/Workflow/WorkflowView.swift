@@ -112,7 +112,6 @@ extension WorkflowViewModel {
 struct WorkflowView<VM: WorkflowViewModel>: View {
     @Environment(\.viewEvent) var viewEvent
     @State var viewModel: VM
-    @State private var runStatusHeight: CGFloat?
     private let builderTaskView: ((String, String) -> AnyView)?
     @AppStorage("workflowViewMode") private var viewMode = "Graph"
 
@@ -443,13 +442,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
             } else {
-                ScrollView {
+                WorkflowDiagnosticsViewport(maximumHeight: min(180, viewport.size.height * 0.3)) {
                     WorkflowRunStatus(viewModel: viewModel)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { runStatusHeight = $0 }
                 }
                 .accessibilityIdentifier("workflow-run-diagnostics")
-                .frame(height: min(runStatusHeight ?? 180, min(180, viewport.size.height * 0.3)))
                 .pbFadeIn()
             }
             Divider()
