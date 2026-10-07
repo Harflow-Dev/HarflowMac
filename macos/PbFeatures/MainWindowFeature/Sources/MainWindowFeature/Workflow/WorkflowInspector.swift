@@ -84,6 +84,18 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
 .foregroundStyle(Color.secondaryText)
             }
             SectionLabel(text: "Orchestrator")
+            Picker("Context delivery", selection: Binding(get: {
+                inspectorDefinition["context_delivery"]?.stringValue ?? "legacy"
+            }, set: {
+                guard viewModel.selectedRun == nil else { return }
+                viewModel.definition["context_delivery"] = .string($0)
+            })) {
+                Text("Full context").tag("legacy")
+                Text("Bounded context with resume deltas").tag("optimized_v1")
+            }
+            Text("Resume deltas require acknowledged context. Full context is used when compatibility requires it.")
+                .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
             WorkflowAgentEditor(
                 candidate: Binding(
                     get: { inspectorDefinition["orchestrator"]?.objectValue ?? ["backend": .string("codex")] },
@@ -439,6 +451,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                                 Text(task["status"]?.stringValue ?? "").foregroundStyle(Color.secondaryText)
                                 if let reason = task["reason"]?.stringValue {
                                     Text(reason).foregroundStyle(Color.secondaryText)
+                                }
+                                ForEach(Array(WorkflowContextDelivery(task: task).lines.enumerated()), id: \.offset) { _, line in
+                                    Text(line).foregroundStyle(Color.secondaryText).textSelection(.enabled)
                                 }
                             }.font(.pb(.caption))
                         }
