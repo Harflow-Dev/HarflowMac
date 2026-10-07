@@ -275,6 +275,9 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             if !historyStateValue.bootstrapPending, !historyStateValue.authorityIncomplete, historyStateValue.catalogState.isReady {
                 updateNotificationBaseline(listed)
                 hasListedValue = true
+            } else if historyStateValue.catalogState.status == .blocked {
+                // A durable blocker completes initial presentation, but cannot establish authority.
+                hasListedValue = true
             }
             updatePreparationRefresh()
             // Catalog titles are bounded summaries; row population never scans event logs.
@@ -418,7 +421,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     }
 
     public func loadMoreHistory() async {
-        if historyLock.withLock({ historyRefreshFailed || historyStateValue.authorityIncomplete }) {
+        if historyLock.withLock({ historyRefreshFailed || historyStateValue.authorityIncomplete || historyStateValue.catalogState.status == .blocked }) {
             await refresh()
             return
         }
