@@ -315,3 +315,32 @@ extension SidebarVMTests {
         #expect(harness.sut.workflowChildren("parent").isEmpty)
     }
 }
+
+extension SidebarVMTests {
+    @Test func givenStaleCachedParentDetailsAndFreshInvocationHeader_whenRefreshing_thenNewChildIsVisibleAndCachedOverlapKeepsDetail() async {
+        // given
+        let harness = makeSUT()
+        let parent = SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running"),
+            "child_invocations": .array([
+                .object(["child_workflow_run_id": .string("existing"), "execution_id": .string("existing-execution")]),
+                .object(["child_workflow_run_id": .string("new-child"), "execution_id": .string("new-execution")])
+            ])])
+        harness.sut.workflowRuns = [parent]
+        harness.sut.invocationDetails = { id in
+            guard id == "parent" else { return nil }
+            return ["workflow_run_id": .string("parent"), "activations": .array([
+                .object(["id": .string("existing-execution"), "invocation": .object([
+                    "child_workflow_run_id": .string("existing"), "workflow_name": .string("Existing child name")])])
+            ])]
+        }
+        harness.sut.expandedExecutionParents.insert("workflow:parent")
+        // when
+        await harness.sut.refreshChildInvocationHeaders()
+        let items = harness.sut.workflowTreeItems(parent)
+        // then
+        #expect(Set(harness.sut.workflowRuns.map(\.id)) == ["parent", "existing", "new-child"])
+        #expect(harness.sut.workflowRuns.first { $0.id == "existing" }?.name == "Existing child name")
+        #expect(Set(items.map(\.id)) == ["workflow:parent", "workflow-shortcut:parent:existing", "workflow-shortcut:parent:new-child"])
+        #expect(items.contains { $0.destination == .workflowRun("new-child") })
+    }
+}

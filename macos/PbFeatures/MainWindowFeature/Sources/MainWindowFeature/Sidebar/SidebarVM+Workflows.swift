@@ -111,15 +111,20 @@ extension SidebarVM {
         workflowHistoryState.isLoading = false
     }
 
-    static func invocationHeaders(parent: SidebarWorkflowRun) -> [[String: JSONValue]] {
-        let compact = WorkflowJSON.objects(parent.raw["child_invocations"])
-        let expanded = WorkflowJSON.objects(parent.raw["activations"]).compactMap { activation -> [String: JSONValue]? in
-            guard let invocation = activation["invocation"]?.objectValue else { return nil }
-            return ["child_workflow_run_id": invocation["child_workflow_run_id"] ?? .null,
-                "execution_id": activation["id"] ?? .null, "name": invocation["workflow_name"] ?? .string("Child workflow")]
+    static func invocationHeaders(parent: SidebarWorkflowRun, cachedDetails: [String: JSONValue]? = nil) -> [[String: JSONValue]] {
+        // Full details enrich existing invocations, while newer compact headers can introduce
+        // children launched since that snapshot. Neither source may hide the other's IDs.
+        let sources = cachedDetails.map { [$0, parent.raw] } ?? [parent.raw]
+        let references = sources.flatMap { raw in
+            let expanded = WorkflowJSON.objects(raw["activations"]).compactMap { activation -> [String: JSONValue]? in
+                guard let invocation = activation["invocation"]?.objectValue else { return nil }
+                return ["child_workflow_run_id": invocation["child_workflow_run_id"] ?? .null,
+                    "execution_id": activation["id"] ?? .null, "name": invocation["workflow_name"] ?? .string("Child workflow")]
+            }
+            return expanded + WorkflowJSON.objects(raw["child_invocations"])
         }
         var seen: Set<String> = []
-        return (compact + expanded).compactMap { reference in
+        return references.compactMap { reference in
             guard let id = reference["child_workflow_run_id"]?.stringValue, WorkflowRunIdentity.isValid(id), seen.insert(id).inserted else { return nil }
             return ["workflow_run_id": .string(id), "name": reference["name"] ?? .string("Child workflow"),
                 "status": .string("unknown"), "invocation_placeholder": .bool(true),
@@ -132,7 +137,7 @@ extension SidebarVM {
         let generation = workflowGeneration
         let known = Set(workflowRuns.map(\.id))
         let missing = workflowRuns.flatMap { run in
-            Self.invocationHeaders(parent: SidebarWorkflowRun(raw: invocationDetails(run.id) ?? run.raw))
+            Self.invocationHeaders(parent: run, cachedDetails: invocationDetails(run.id))
         }
 .filter { !known.contains($0["workflow_run_id"]?.stringValue ?? "") }
         mergeWorkflowHeaders(missing)
