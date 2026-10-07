@@ -94,7 +94,8 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 Text("Bounded context with resume deltas").tag("optimized_v1")
             }
             Text("Resume deltas require acknowledged context. Full context is used when compatibility requires it.")
-                .font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
             WorkflowAgentEditor(
                 candidate: Binding(
                     get: { inspectorDefinition["orchestrator"]?.objectValue ?? ["backend": .string("codex")] },
