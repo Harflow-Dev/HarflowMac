@@ -61,6 +61,10 @@ struct WorkflowRunModel: Identifiable, Equatable {
     var status: String { raw["status"]?.stringValue ?? "unknown" }
     var reason: String { raw["attention_reason"]?.stringValue ?? raw["reason"]?.stringValue ?? "" }
     var isDelegation: Bool { raw["execution_contract"]?.stringValue == "delegation" }
+    var orchestratorPermissions: WorkflowPermissionsModel? {
+        raw["owner_contracts"]?.objectValue.flatMap(WorkflowPermissionsModel.init)
+    }
+
     var schedulingPolicyDescription: String? {
         guard raw["scheduling_policy"]?.stringValue == "native_workers_plus_control_v1" else { return nil }
         let workers = definition["max_parallel"]?.intValue ?? 4

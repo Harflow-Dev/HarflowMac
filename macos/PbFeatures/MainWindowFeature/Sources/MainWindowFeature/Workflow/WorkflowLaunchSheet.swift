@@ -20,7 +20,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
     }
 
     private var canSubmit: Bool {
-        WorkflowBuilderLayout.canSubmit(isGenerating: isGenerating, isBusy: viewModel.isBusy,
+        (isGenerating || viewModel.canStartWithPreview) && WorkflowBuilderLayout.canSubmit(isGenerating: isGenerating, isBusy: viewModel.isBusy,
                                         name: viewModel.name, repo: viewModel.repo, prompt: viewModel.prompt)
     }
 
@@ -65,6 +65,11 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             loadModels: viewModel.loadModels
                         )
                     } else {
+                        if let preview = viewModel.launchPreview {
+                            WorkflowPermissionsView(model: preview.permissions)
+                        } else if let message = viewModel.launchPreviewMessage {
+                            Text(message).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                        }
                         Toggle(
                             "Override orchestrator agent",
                             isOn: Binding(get: { viewModel.overrideOrchestrator }, set: { viewModel.overrideOrchestrator = $0 })

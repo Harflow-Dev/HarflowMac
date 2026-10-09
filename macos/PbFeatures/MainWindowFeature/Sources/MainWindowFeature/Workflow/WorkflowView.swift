@@ -30,6 +30,9 @@ protocol WorkflowViewModel: ViewModel {
     var validationDependencies: [String: JSONValue] { get }
     var nativeSubagentsAvailable: Bool { get }
     var nativeActivity: WorkflowNativeActivityModel? { get }
+    var launchPreview: WorkflowPermissionPreview? { get }
+    var launchPreviewMessage: String? { get }
+    var canStartWithPreview: Bool { get }
     var branchSelection: WorkflowBranchSelection { get }
     var repo: String { get set }
     var prompt: String { get set }

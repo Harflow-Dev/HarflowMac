@@ -21,6 +21,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
 
     private var content: some View {
             VStack(alignment: .leading, spacing: 16) {
+                if let permissions = viewModel.selectedRun?.orchestratorPermissions {
+                    WorkflowPermissionsView(model: permissions)
+                }
                 if let policy = viewModel.selectedRun?.schedulingPolicyDescription {
                     Text(policy).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 }
@@ -84,18 +87,6 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
 .foregroundStyle(Color.secondaryText)
             }
             SectionLabel(text: "Orchestrator")
-            Picker("Context delivery", selection: Binding(get: {
-                inspectorDefinition["context_delivery"]?.stringValue ?? "legacy"
-            }, set: {
-                guard viewModel.selectedRun == nil else { return }
-                viewModel.definition["context_delivery"] = .string($0)
-            })) {
-                Text("Full context").tag("legacy")
-                Text("Bounded context with resume deltas").tag("optimized_v1")
-            }
-            Text("Resume deltas require acknowledged context. Full context is used when compatibility requires it.")
-                .font(.pb(.caption))
-.foregroundStyle(Color.secondaryText)
             WorkflowAgentEditor(
                 candidate: Binding(
                     get: { inspectorDefinition["orchestrator"]?.objectValue ?? ["backend": .string("codex")] },

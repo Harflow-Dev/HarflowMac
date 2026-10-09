@@ -17,6 +17,7 @@ extension WorkflowVM {
     }
 
     func scheduleValidation() {
+        scheduleLaunchPreview()
         validationTask?.cancel()
         validationTask = nil
         validationID = UUID()

@@ -41,12 +41,12 @@ final class WorkflowVM: WorkflowViewModel {
     var runs: [WorkflowRunModel] = []
     var definition: [String: JSONValue] = [:] { didSet { recordEdit(name: name, definition: oldValue); scheduleValidation(); scheduleDraftPersistence() } }
     var name = "" { didSet { recordEdit(name: oldValue, definition: definition); scheduleValidation(); scheduleDraftPersistence() } }
-    var loadedName = ""
+    var loadedName = "" { didSet { if loadedName != oldValue { scheduleLaunchPreview() } } }
     var initialLoadingID = UUID()
     var initialLoadingKind: String? { didSet { initialLoadingID = UUID() } }
     var initialLoadFailed = false
     var revision = 0
-    var savedDefinition: [String: JSONValue] = [:]
+    var savedDefinition: [String: JSONValue] = [:] { didSet { if savedDefinition != oldValue { scheduleLaunchPreview() } } }
     private var primaryNodeID: String?
     private(set) var selectedNodeIDs: Set<String> = []
     var selectedNodeID: String? {
@@ -77,17 +77,21 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var nativeActivityTask: Task<Void, Never>?
 
     var validationMessage: String?
-    var repo = ""
+    var repo = "" { didSet { if repo != oldValue { scheduleLaunchPreview() } } }
     var prompt = ""
     var freedom = "write_in_repo"
     var instructions = ""
     var additionalAttempts = 0
-    var launchAgent: [String: JSONValue] = [:]
-    var overrideOrchestrator = false
+    var launchAgent: [String: JSONValue] = [:] { didSet { if launchAgent != oldValue { scheduleLaunchPreview() } } }
+    var overrideOrchestrator = false { didSet { if overrideOrchestrator != oldValue { scheduleLaunchPreview() } } }
     var generationAgent: [String: JSONValue] = ["backend": .string("codex")]
     var generationFallbacks: [[String: JSONValue]] = []
     var modelChoices: [String: [ModelChoiceModel]] = [:]
-    var showsRunSheet = false
+    var showsRunSheet = false { didSet { if showsRunSheet != oldValue { scheduleLaunchPreview() } } }
+    var launchPreview: WorkflowPermissionPreview?
+    var launchPreviewMessage: String?
+    @ObservationIgnored var launchPreviewTask: Task<Void, Never>?
+    @ObservationIgnored var launchPreviewID = UUID()
     var showsGenerateSheet = false
     var isRefining = false
     var refinementContext: WorkflowRefinementContext?
@@ -221,6 +225,10 @@ final class WorkflowVM: WorkflowViewModel {
         poll?.cancel()
         poll = nil
         generationID = UUID()
+        launchPreviewTask?.cancel()
+        launchPreviewTask = nil
+        launchPreviewID = UUID()
+        launchPreview = nil
         nativeActivityTask?.cancel()
         nativeActivityTask = nil
         parallel.didDisappear()
@@ -289,15 +297,22 @@ final class WorkflowVM: WorkflowViewModel {
         guard !hasUnsavedChanges else {
             errorText = "Save your changes before running this workflow."; return
         }
+        guard let preview = launchPreview, canStartWithPreview else {
+            errorText = "Wait for the orchestrator permission preview before running."
+            return
+        }
+        let capturedName = loadedName
+        let capturedOptions = launchPreviewOptions + ["--monitor", "--prompt=\(prompt)", "--expected-preview-hash=\(preview.hash)"]
         perform { [weak self] in
-            guard let self else {
-                return
+            guard let self else { return }
+            let options = capturedOptions
+            let response: [String: JSONValue]
+            do {
+                response = try await useCase.command("start", options: options, positionals: [capturedName])
+            } catch {
+                scheduleLaunchPreview()
+                throw error
             }
-            var options = ["--monitor", "--repo=\(repo)", "--prompt=\(prompt)"]
-            if overrideOrchestrator {
-                options += Self.candidateOptions(launchAgent)
-            }
-            let response = try await useCase.command("start", options: options, positionals: [loadedName])
             guard let id = response["workflow_run_id"]?.stringValue else {
                 throw WorkflowUIError.missingRun
             }

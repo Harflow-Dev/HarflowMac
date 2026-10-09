@@ -10,6 +10,9 @@ struct WorkflowRunDiagnostics: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let permissions = run.orchestratorPermissions {
+                WorkflowPermissionsView(model: permissions)
+            }
             if let wait = run.raw["checkout_wait"]?.objectValue {
                 Label(wait["reason"]?.stringValue ?? "Waiting for another workflow to release the checkout", systemImage: "clock")
             }
