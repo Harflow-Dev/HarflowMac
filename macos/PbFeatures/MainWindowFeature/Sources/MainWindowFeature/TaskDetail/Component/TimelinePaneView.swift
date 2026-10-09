@@ -43,12 +43,13 @@ struct TimelinePaneModel {
     let updateToken: ActivityUpdateToken
     let pendingMessages: [PendingMessage]
     let history: EventHistoryState
-    let onLoadMore: (() -> Void)?
+    let paginationRevision: Int
+    let onLoadMore: (() -> Bool)?
 
     init(
         stepCountText: String, rows: [ConversationTimelineRow], activityRows: [ActivityRow], start: Date?, emptyText: String?,
         subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken,
-        pendingMessages: [PendingMessage] = [], history: EventHistoryState = EventHistoryState(), onLoadMore: (() -> Void)? = nil
+        pendingMessages: [PendingMessage] = [], history: EventHistoryState = EventHistoryState(), paginationRevision: Int = 0, onLoadMore: (() -> Bool)? = nil
     ) {
         self.stepCountText = stepCountText
         self.rows = rows
@@ -61,6 +62,7 @@ struct TimelinePaneModel {
         self.updateToken = updateToken
         self.pendingMessages = pendingMessages
         self.history = history
+        self.paginationRevision = paginationRevision
         self.onLoadMore = onLoadMore
     }
 
@@ -83,11 +85,7 @@ struct TimelinePaneModel {
 
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
-    @State private var followLive = FollowLiveScrollState()
-    @State private var olderAnchor: String?
-    @State private var expandedGroups: Set<String> = []
-    @State private var seenRowIDs: Set<String> = []
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var state = ParallelColumnUIState()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -110,83 +108,18 @@ struct TimelinePaneView: View {
     }
 
     private var feed: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    if let onLoadMore = model.onLoadMore, model.history.hasMore || model.history.error != nil {
-                        Button {
-                            followLive.suspend()
-                            olderAnchor = model.activityRows.first?.id
-                            onLoadMore()
-                        } label: {
-                            if model.history.isLoading {
-                                LoadingLabel("Loading activity…")
-                            } else {
-                                Text(model.history.error == nil ? "Load more activity" : "Retry older activity")
-                                    .font(.pb(.secondary))
-.frame(minHeight: 20)
-                            }
-                        }
-.buttonStyle(.plain)
-.disabled(model.history.isLoading)
-                        if let error = model.history.error { Text(error).font(.pb(.secondary)) }
-                    } else if !model.rows.isEmpty {
-                        Text("Beginning of loaded activity").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
-                    }
-                    if let emptyText = model.emptyText {
-                        Text(emptyText).font(.pb(.body)).foregroundStyle(Color.secondaryText)
-                    }
-                    ForEach(model.activityRows) { row in
-                        rowView(row)
-.id(row.id)
-                            .pbFadeIn(animate: !seenRowIDs.contains(row.id))
-                            .onAppear { seenRowIDs.insert(row.id) }
-                    }
-                    if let subTaskStrip = model.subTaskStrip {
-                        SubTaskStripView(model: subTaskStrip)
-                    }
-                    ForEach(model.pendingMessages) { message in
-                        PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
-                    }
-                    if let liveStep = model.liveStep {
-                        LiveStepLineView(text: liveStep.text)
-                    }
-                    Color.clear.frame(height: 1).id("bottom")
-                }
-                .padding(24)
-                .readingColumn()
-                .background(LiveScrollPositionObserver { offset, contentHeight, viewportHeight in
-                    guard olderAnchor == nil else { return }
-                    followLive.observe(offset: offset, contentHeight: contentHeight, viewportHeight: viewportHeight)
-                })
+        ActivityFeedView(rows: model.activityRows, start: model.start, history: model.history,
+                         isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages,
+                            children: model.subTaskStrip?.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) } ?? []),
+                         paginationRevision: model.paginationRevision, emptyText: model.emptyText, horizontalPadding: 24,
+                         state: state, onLoadMore: model.onLoadMore) {
+            if let subTaskStrip = model.subTaskStrip { SubTaskStripView(model: subTaskStrip) }
+            ForEach(model.pendingMessages) { message in
+                PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
             }
-            .followLiveScroll(token: model.updateToken, enabled: followLive.isFollowing && olderAnchor == nil, proxy: proxy, target: "bottom")
-            .onChange(of: model.activityRows.first?.id) { _, _ in
-                if let olderAnchor { proxy.scrollTo(olderAnchor, anchor: .top); self.olderAnchor = nil }
-            }
-            .onChange(of: model.history.isLoading) { _, loading in
-                if !loading, let olderAnchor { proxy.scrollTo(olderAnchor, anchor: .top); self.olderAnchor = nil }
-            }
+            if let liveStep = model.liveStep { LiveStepLineView(text: liveStep.text) }
         }
-    }
-
-    @ViewBuilder
-    private func rowView(_ row: ActivityRow) -> some View {
-        switch row {
-        case .toolGroup(let group):
-            ToolGroupCardView(group: group, start: model.start, isExpanded: expandedGroups.contains(group.id)) {
-                withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) {
-                    if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
-                }
-            }
-        case .single(let row):
-            switch row.kind {
-            case .separator(let text):
-                TurnSeparatorRow(text: text, timestamp: row.timestamp)
-            case .item(let item):
-                TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live))
-            }
-        }
+        .readingColumn()
     }
 }
 

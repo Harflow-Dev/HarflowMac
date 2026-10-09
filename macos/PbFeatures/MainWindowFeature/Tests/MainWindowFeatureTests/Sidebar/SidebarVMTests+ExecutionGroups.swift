@@ -6,21 +6,24 @@ import Testing
 // MARK: - Execution hierarchy tests
 
 extension SidebarVMTests {
-    @Test func givenSingleTaskGroup_whenExpansionRequested_thenNoChildRowsOrExpansion() {
+    @Test func givenSingleTaskGroup_whenExpansionRequested_thenNoChildRowsOrExpansion() async {
         // given
         let harness = makeSUT()
         harness.sut.latestTasks = [task(id: "only", group: "Solo")]
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // when
         harness.sut.didToggleExpansion(taskID: "group:Solo")
+        await harness.sut.waitForPresentation()
         harness.sut.didSelect(.task("only"))
+        await harness.sut.waitForPresentation()
         // then
         #expect(!harness.sut.isExecutionParentExpanded("group:Solo"))
         #expect(harness.sut.sections.flatMap(\.items).map(\.id) == ["group:Solo"])
     }
 
-    @Test func givenWorkflowMetadataBeforePoll_whenListed_thenOneParentAndExpandableChildren() throws {
+    @Test func givenWorkflowMetadataBeforePoll_whenListed_thenOneParentAndExpandableChildren() async throws {
         // given
         let harness = makeSUT()
         let child = try #require(TaskInfo(.object(["task_id": .string("worker"), "backend": .string("codex"),
@@ -30,17 +33,20 @@ extension SidebarVMTests {
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         // when
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.sections.flatMap(\.items).map(\.id) == ["workflow:run"])
         harness.sut.didToggleExpansion(taskID: "workflow:run")
+        await harness.sut.waitForPresentation()
         #expect(Set(harness.sut.sections.flatMap(\.items).map(\.id)) == ["workflow:run", "task:worker", "task:followup"])
         harness.sut.selectedBackend = "codex"
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         #expect(harness.sut.sections.flatMap(\.items).contains { $0.id == "workflow:run" })
         #expect(harness.sut.isExecutionParentExpanded("workflow:run"))
     }
 
-    @Test func givenCollapsedWorkflow_whenChildSelected_thenParentExpandsAndExactExecutionSelected() throws {
+    @Test func givenCollapsedWorkflow_whenChildSelected_thenParentExpandsAndExactExecutionSelected() async throws {
         // given
         let harness = makeSUT()
         let child = try #require(TaskInfo(.object(["task_id": .string("worker"), "workflow_run_id": .string("run"),
@@ -49,29 +55,32 @@ extension SidebarVMTests {
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         // when
         harness.sut.didSelect(.task("retry"))
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.selection == .task("retry"))
         #expect(harness.sut.isExecutionParentExpanded("workflow:run"))
         #expect(harness.sut.sections.flatMap(\.items).contains { $0.id == "task:retry" })
     }
 
-    @Test func givenParallelGroup_whenExpanded_thenMembersAppearOnlyUnderParent() {
+    @Test func givenParallelGroup_whenExpanded_thenMembersAppearOnlyUnderParent() async {
         // given
         let harness = makeSUT()
         harness.sut.latestTasks = [task(id: "a", group: "Review"), task(id: "b", group: "Review")]
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         // when
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.sections.flatMap(\.items).map(\.id) == ["group:Review"])
         harness.sut.didSelect(.task("b"))
+        await harness.sut.waitForPresentation()
         #expect(harness.sut.sections.flatMap(\.items).map(\.id).count == 3)
         #expect(harness.sut.selection == .task("b"))
     }
 }
 
 extension SidebarVMTests {
-    @Test func givenMultipleOrchestratorDecisions_whenWorkflowExpanded_thenOneLogicalChildWithCurrentStatus() throws {
+    @Test func givenMultipleOrchestratorDecisions_whenWorkflowExpanded_thenOneLogicalChildWithCurrentStatus() async throws {
         // given
         let harness = makeSUT()
         let turns = try ["a", "b"].enumerated().map { index, id in
@@ -86,7 +95,9 @@ extension SidebarVMTests {
         harness.sut.conversationIndex = ConversationIndex(turns)
         // when
         harness.sut.didSelect(.task("b"))
+        await harness.sut.waitForPresentation()
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.workflowChildren("run").map(\.taskID) == ["a"])
         #expect(harness.sut.workflowChildren("run").first?.status.isRunning == true)
@@ -96,7 +107,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenSameSessionNodeResumes_whenExpanded_thenEachNodeSessionHasOneChild() throws {
+    @Test func givenSameSessionNodeResumes_whenExpanded_thenEachNodeSessionHasOneChild() async throws {
         // given
         let harness = makeSUT()
         harness.sut.latestTasks = try (0 ..< 4).map { index in
@@ -110,14 +121,16 @@ extension SidebarVMTests {
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         // when
         harness.sut.didSelect(.task("attempt-3"))
+        await harness.sut.waitForPresentation()
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.workflowChildren("run").map(\.taskID) == ["attempt-0", "attempt-2"])
         #expect(harness.sut.selection == .task("attempt-2"))
         #expect(Set(harness.sut.sections.flatMap(\.items).map(\.id)) == ["workflow:run", "task:attempt-0", "task:attempt-2"])
     }
 
-    @Test func givenParallelMemberWithFollowup_whenExpanded_thenFollowupUsesOriginalLogicalRow() {
+    @Test func givenParallelMemberWithFollowup_whenExpanded_thenFollowupUsesOriginalLogicalRow() async {
         // given
         let harness = makeSUT()
         harness.sut.latestTasks = [task(id: "a", group: "Review"), task(id: "b", group: "Review"),
@@ -129,8 +142,11 @@ extension SidebarVMTests {
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         // when
         harness.sut.didToggleExpansion(taskID: "group:Review")
+        await harness.sut.waitForPresentation()
         harness.sut.didSelect(.task("a-followup"))
+        await harness.sut.waitForPresentation()
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.selection == .task("a"))
         #expect(Set(harness.sut.sections.flatMap(\.items).map(\.id)) == ["group:Review", "task:a", "task:b"])
@@ -139,7 +155,7 @@ extension SidebarVMTests {
 
 extension SidebarVMTests {
     @Test(arguments: [true, false])
-    func givenOneParallelLineage_whenSessionsDiffer_thenExpansionMatchesActualSessionCount(sameSession: Bool) throws {
+    func givenOneParallelLineage_whenSessionsDiffer_thenExpansionMatchesActualSessionCount(sameSession: Bool) async throws {
         // given
         let harness = makeSUT()
         harness.sut.latestTasks = try ["first", "followup"].enumerated().map { index, id in
@@ -149,9 +165,11 @@ extension SidebarVMTests {
         }
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         let group = try #require(Lineage.sections(harness.sut.latestTasks).parallel.first)
         // when
         harness.sut.didToggleExpansion(taskID: group.id)
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.groupConversations(group).count == (sameSession ? 1 : 2))
         #expect(harness.sut.isExecutionParentExpanded(group.id) == !sameSession)
@@ -164,7 +182,7 @@ extension SidebarVMTests {
 
 extension SidebarVMTests {
     @Test(arguments: ["running", "completed"], [true, false])
-    func givenNativeControlTransport_whenWorkflowExpanded_thenInternalTaskIsHiddenAndOwnershipRetained(status: String, decorated: Bool) throws {
+    func givenNativeControlTransport_whenWorkflowExpanded_thenInternalTaskIsHiddenAndOwnershipRetained(status: String, decorated: Bool) async throws {
         // given
         let harness = makeSUT()
         var transport: [String: JSONValue] = ["task_id": .string("transport"), "backend": .string("claude"), "status": .string(status)]
@@ -179,7 +197,9 @@ extension SidebarVMTests {
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         // when
         harness.sut.didToggleExpansion(taskID: "workflow:run")
+        await harness.sut.waitForPresentation()
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.workflowTaskOwners["transport"] == "run")
         #expect(Set(harness.sut.workflowChildren("run").map(\.taskID)) == ["node", "orchestrator"])
@@ -188,7 +208,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenNativeControlBeforeWorkflowMetadata_whenListed_thenItNeverAppearsAsStandaloneTask() throws {
+    @Test func givenNativeControlBeforeWorkflowMetadata_whenListed_thenItNeverAppearsAsStandaloneTask() async throws {
         // given
         let harness = makeSUT()
         let control = try #require(TaskInfo(.object(["task_id": .string("transport"), "status": .string("running"),
@@ -197,6 +217,7 @@ extension SidebarVMTests {
         harness.sut.conversationIndex = ConversationIndex(harness.sut.latestTasks)
         // when
         harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         // then
         #expect(!harness.sut.sections.flatMap(\.items).contains { $0.id == "task:transport" })
         #expect(harness.sut.sections.flatMap(\.items).contains { $0.id == "task:ordinary" })

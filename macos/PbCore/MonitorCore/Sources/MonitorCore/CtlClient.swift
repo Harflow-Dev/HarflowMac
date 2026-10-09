@@ -34,9 +34,16 @@ public struct CtlClient: Sendable {
 
     func call(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout) async -> Result<CtlDocument, ToolError> {
         let argv = Self.argv(command, options: options, positionals: positionals)
+        let transportStart = MonitorMetrics.begin()
         let output = await runner.run(executable: executable, arguments: argv, environment: environment, currentDirectory: nil, timeout: timeout)
+        if let transportStart {
+            let bytes = (try? output.get().stdout.count) ?? 0
+            MonitorMetrics.end(transportStart, stage: .transport, bytes: bytes, stderrBytes: (try? output.get().stderr.utf8.count) ?? 0)
+        }
         return output.flatMap { output in
             if output.timedOut { return .failure(.timedOut(tool: "polybridge-ctl \(command)", seconds: timeout)) }
+            let decodeStart = MonitorMetrics.begin()
+            defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
             return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode, command: command)
         }
     }

@@ -39,6 +39,8 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
 
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         await waitUntil { !harness.sut.timelineModel.rows.isEmpty }
         let texts = harness.sut.timelineModel.rows.compactMap { row -> String? in
@@ -80,6 +82,8 @@ extension TaskDetailVMTests {
         ])
         harness.itemsSubject.send(published)
 
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         await waitUntil { !harness.sut.timelineModel.rows.isEmpty }
         let texts = harness.sut.timelineModel.rows.compactMap { row -> String? in
@@ -104,6 +108,8 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
+
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
 
         // then
         await waitUntil { harness.sut.task != nil }
@@ -130,6 +136,8 @@ extension TaskDetailVMTests {
             TaskEvent(line: #"{"v":1,"seq":0,"kind":"assistant_text","text":"hello"}"#)!
         ]))
 
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         await waitUntil { !harness.sut.timelineModel.rows.isEmpty }
         #expect(!harness.sut.timelineModel.isLoading)
@@ -148,6 +156,8 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
+
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
 
         // then
         await waitUntil { harness.sut.task != nil }
@@ -184,6 +194,8 @@ extension TaskDetailVMTests {
 
         // when — switching TO Summary recomputes it immediately from the data already gathered.
         harness.sut.didSelectTab(.summary)
+
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
 
         // then
         #expect(harness.sut.summaryModel.editedFiles == [EditedFile(path: "a.swift", status: .edited)])

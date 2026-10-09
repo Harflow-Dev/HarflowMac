@@ -13,6 +13,7 @@ extension TaskDetailVM {
             if initial { recomputeMembersAndLeases() }
             guard let session = (resolved ?? task)?.sessionID else {
                 conversationLoading = false
+                olderActivityReady = true
                 recompute()
                 return
             }
@@ -26,22 +27,25 @@ extension TaskDetailVM {
                 conversationError = "Conversation history could not be loaded. Retry to continue."
             }
             conversationLoading = false
+            olderActivityReady = true
             recompute()
         }
     }
 
     func applyConversationPage(_ page: TaskHistoryPage, initial: Bool) {
-                    conversationCursor = page.page.nextCursor
-                    conversationHasMore = page.page.hasMore || page.page.bootstrapPending
-                    conversationHistoryIncomplete = page.page.historyIncomplete
-                    if page.page.bootstrapPending {
-                        conversationError = "Conversation history is still indexing. Load more to continue."
-                    }
-                    recomputeMembersAndLeases()
-                    if !initial, let older = conversationMembers.last(where: { !loadedActivityMembers.contains($0.taskID) }) {
-                        loadedActivityMembers.insert(older.taskID)
-                        acquireMemberLease(older.taskID)
-                    }
+        if !initial, conversationCursor == page.page.nextCursor, page.page.hasMore, !page.page.bootstrapPending {
+            conversationError = "Conversation history did not advance. Retry to continue."
+        }
+        conversationCursor = page.page.nextCursor
+        conversationHasMore = page.page.hasMore || page.page.bootstrapPending
+        conversationHistoryIncomplete = page.page.historyIncomplete
+        if page.page.bootstrapPending {
+            conversationError = "Conversation history is still indexing. Retry to continue."
+        }
+        recomputeMembersAndLeases()
+        if !initial, let older = conversationMembers.last(where: { !loadedActivityMembers.contains($0.taskID) }) {
+            loadedActivityMembers.insert(older.taskID)
+            acquireMemberLease(older.taskID)
+        }
     }
-
 }

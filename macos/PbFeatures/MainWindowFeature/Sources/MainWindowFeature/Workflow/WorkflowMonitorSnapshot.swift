@@ -24,6 +24,8 @@ struct WorkflowMonitorSnapshot {
             guard let cursor = page["next_cursor"]?.stringValue else { break }
             page = try await useCase.command("status", options: ["--monitor-view", "--snapshot", "--cursor=\(cursor)"], positionals: [id])
         } while true
+        let reconciliationStart = MonitorMetrics.begin()
+        defer { MonitorMetrics.end(reconciliationStart, stage: .workflowReconciliation) }
         guard text.utf8.count == total, let raw = JSONValue.parse(Data(text.utf8))?.objectValue,
               raw["workflow_run_id"]?.stringValue == id else { throw SnapshotError.invalidPage }
         return raw

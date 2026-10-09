@@ -527,12 +527,13 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([taskA, taskB])
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
         harness.sut.timelineModel.onLoadMore?()
+        await waitUntil { harness.sut.timelineWorker == nil && !harness.sut.olderActivityRequest }
         await waitUntil { harness.sut.task != nil }
 
         // then
-        let rows = harness.sut.timelineModel.rows
-        await waitUntil { rows.count >= 5 }
+        await waitUntil { harness.sut.timelineModel.rows.count >= 5 }
         let taskIDs = harness.sut.timelineModel.rows.map(\.taskID)
         #expect(taskIDs.prefix(2) == ["a", "a"], "the first member's own turn comes first")
         let separatorIndex = harness.sut.timelineModel.rows.firstIndex { if case .separator = $0.kind { return true }; return false }
@@ -578,7 +579,7 @@ extension TaskDetailVMTests {
 // MARK: - Exact execution detail
 
 extension TaskDetailVMTests {
-    @Test func givenWorkflowResumeChain_whenOlderChildOpened_thenShowsThatExecutionOnly() throws {
+    @Test func givenWorkflowResumeChain_whenOlderChildOpened_thenShowsThatExecutionOnly() async throws {
         // given
         var oldRaw = conversationTask("old").raw
         oldRaw["workflow_run_id"] = .string("workflow")

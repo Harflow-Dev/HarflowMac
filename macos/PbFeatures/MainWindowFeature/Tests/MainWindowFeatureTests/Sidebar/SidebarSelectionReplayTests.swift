@@ -21,6 +21,7 @@ import Testing
         defer { history.release(); vm.didDisappear() }
         // when — keep lookups suspended so the initial replay cannot be masked by a cached header.
         vm.didAppear()
+        await vm.waitForPresentation()
         await waitUntil { history.requests.contains("initial-run") }
         routing.selection = .workflowRun("next-run")
         await waitUntil { history.requests.contains("next-run") }

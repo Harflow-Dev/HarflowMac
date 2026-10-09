@@ -21,7 +21,7 @@ enum ActivityRowsBuilder {
     /// The initial prompt is rendered once, from `task_started.prompt` (`TimelineRow` shows the started row's prompt as a bubble): only
     /// the matching `user_message(source: "initial")` of the first member is dropped here, so a
     /// mid-run message that happens to repeat the prompt still shows.
-    static func build(from rows: [ConversationTimelineRow]) -> [ActivityRow] {
+    static func build(from rows: [ConversationTimelineRow], cancellationAware: Bool = false) -> [ActivityRow] {
         var result: [ActivityRow] = []
         result.reserveCapacity(rows.count)
         var open: OpenGroup?
@@ -29,6 +29,7 @@ enum ActivityRowsBuilder {
         var initialSuppressed = false
 
         for row in rows {
+            if cancellationAware, Task.isCancelled { return [] }
             guard case .item(let item) = row.kind else {
                 closeGroup(&open, into: &result)
                 result.append(.single(row))

@@ -32,6 +32,28 @@ import Testing
         #"{"v":1,"seq":1,"kind":"task_started","prompt":"\#(prompt)","backend":"claude"}"#
     }
 
+    @Test func givenDuplicateSequencesWithinOneSeedBatch_whenFolded_thenOnlyFirstPayloadIsKeptInOrder() async {
+        // given
+        let first = #"{"v":1,"seq":2,"kind":"assistant_text","text":"first payload"}"#
+        let duplicate = #"{"v":1,"seq":2,"kind":"assistant_text","text":"duplicate payload"}"#
+        let last = #"{"v":1,"seq":3,"kind":"assistant_text","text":"last payload"}"#
+        let uniqueLines = [taskStartedLine(), first, last]
+        let (dir, id, tasksDir) = writeEventsFile(lines: [taskStartedLine(), first, duplicate, last])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(tasksDir)
+        let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).refresh(.any).willReturn()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        // when
+        let lease = sut.acquire(id)
+        defer { lease.release() }
+        await waitUntil { !sut.history(for: id).isLoading }
+        // then — same-batch duplicates cannot create duplicate row identities or replace content.
+        #expect(sut.events(for: id).map(\.seq) == [1, 2, 3])
+        #expect(sut.items(for: id) == Timeline.items(from: uniqueLines.compactMap(TaskEvent.init(line:))))
+    }
+
     @Test func givenLongLog_whenPaging_thenSummaryRemainsCumulativeAndPairingCrossesPages() async {
         let lines = (1 ... 250).map { seq -> String in
             if seq == 150 { return #"{"v":1,"seq":150,"kind":"tool_call","call_id":"edit","tool":"Edit","category":"edit", "#
@@ -47,18 +69,76 @@ import Testing
         let snapshots = MockTaskSnapshotRepository()
         given(snapshots).refresh(.any).willReturn()
         let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let unleased = sut.loadMore(id)
+        #expect(!unleased)
         let lease = sut.acquire(id)
         defer { lease.release() }
         await waitUntil { sut.events(for: id).count == 100 && sut.summary(for: id).availability == .available }
         #expect(sut.events(for: id).map(\.seq) == Array(151 ... 250))
         #expect(sut.summary(for: id).files == [EditedFile(path: "/repo/a.swift", status: .edited)])
-        sut.loadMore(id)
+        let accepted = sut.loadMore(id)
+        #expect(accepted)
+        let duplicate = sut.loadMore(id)
+        #expect(!duplicate)
         await waitUntil { sut.events(for: id).count == 200 }
         #expect(sut.items(for: id) == Timeline.items(from: lines.dropFirst(50).compactMap(TaskEvent.init(line:))))
         #expect(sut.summary(for: id).activity.edits == 1)
         sut.loadMore(id)
         await waitUntil { !sut.history(for: id).hasMore && sut.events(for: id).count == 250 }
         #expect(sut.events(for: id).map(\.seq) == Array(1 ... 250))
+        let exhausted = sut.loadMore(id)
+        #expect(!exhausted)
+    }
+
+    @Test func givenTwoWindowsRequestOlderHistory_whenRequestsOverlap_thenOnePageCommitsBeforeLoadingClears() async {
+        // given
+        let lines = (1 ... 350).map { #"{"v":1,"seq":\#($0),"kind":"assistant_text","text":"row"}"# }
+        let (dir, id, tasksDir) = writeEventsFile(lines: lines)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(tasksDir)
+        let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).refresh(.any).willReturn()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let firstLease = sut.acquire(id)
+        let secondLease = sut.acquire(id)
+        defer { firstLease.release(); secondLease.release() }
+        await waitUntil { !sut.history(for: id).isLoading && sut.events(for: id).count == 100 }
+        let completedCounts = LockedBox<[Int]>([])
+        let subscription = sut.historyPublisher(for: id).dropFirst().sink { state in
+            if !state.isLoading { completedCounts.mutate { $0.append(sut.items(for: id).count) } }
+        }
+        // when — both views repeatedly observe the threshold before callbacks return.
+        for _ in 0 ..< 20 { sut.loadMore(id) }
+        await waitUntil { !sut.history(for: id).isLoading && sut.events(for: id).count == 200 && completedCounts.value.count == 1 }
+        // then — no extra page and completed history never leads the folded items.
+        #expect(sut.events(for: id).map(\.seq) == Array(151 ... 350))
+        #expect(completedCounts.value == [200])
+        subscription.cancel()
+    }
+
+    @Test func givenSummaryLeaseSurvivesActivityEviction_whenReacquired_thenHeavySnapshotsAreDiscardedAndSeededAgain() async {
+        // given
+        let (dir, id, tasksDir) = writeEventsFile(lines: [taskStartedLine()])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn(tasksDir)
+        let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).refresh(.any).willReturn()
+        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let summaryLease = sut.acquireSummary(id)
+        defer { summaryLease.release() }
+        let activityLease = sut.acquire(id)
+        await waitUntil { sut.items(for: id).count == 1 && !sut.history(for: id).isLoading }
+        // when
+        activityLease.release()
+        await waitUntil { sut.items(for: id).isEmpty && sut.events(for: id).isEmpty }
+        let replacement = sut.acquire(id)
+        defer { replacement.release() }
+        // then
+        await waitUntil { sut.items(for: id).count == 1 && !sut.history(for: id).isLoading }
+        #expect(sut.events(for: id).map(\.seq) == [1])
+        #expect(sut.summary(for: id).prompt == "hello")
     }
 
     @Test func givenOnlySummaryInterest_whenAcquired_thenActivityIsNotSeeded() async {
@@ -360,6 +440,7 @@ import Testing
 
         // when — the coalescing window "fires".
         capturedFlush.value?()
+        await waitUntil { sut.items(for: taskID).count == 2 }
 
         // then — one rebuild reflects both chunks, merged into a single in-progress item.
         let items = sut.items(for: taskID)
@@ -426,7 +507,7 @@ import Testing
         // dropping "STALE" — not before it.
         let handle = try? FileHandle(forWritingTo: eventsPath)
         try? handle?.truncate(atOffset: 0)
-        try? handle?.write(contentsOf: Data((taskStartedLine(prompt: "second") + "\n" + deltaLine(seq: 1, messageID: "m2", text: "FRESH") + "\n").utf8))
+        try? handle?.write(contentsOf: Data((taskStartedLine(prompt: "second") + "\n" + deltaLine(seq: 2, messageID: "m2", text: "FRESH") + "\n").utf8))
         try? handle?.close()
 
         // then — flushed immediately (a reset is never a pure-delta burst), reflecting only the

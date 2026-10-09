@@ -512,7 +512,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         if let native = viewModel.nativeActivity {
             WorkflowNativeActivityView(model: native)
         } else {
-            WorkflowActivityColumns(columns: viewModel.parallel.columns, selectedTaskID: selectedTaskID)
+            WorkflowActivityColumns(viewModel: viewModel.parallel, selectedTaskID: selectedTaskID)
         }
     }
 
@@ -535,6 +535,23 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 struct WorkflowActivityColumns: View {
     let columns: [ParallelColumnModel]
     let selectedTaskID: String?
+    private let onViewport: (CGFloat, CGFloat) -> Void
+    private let stateForColumn: (String) -> ParallelColumnUIState
+
+    init(viewModel: any ParallelViewModel, selectedTaskID: String?) {
+        self.columns = viewModel.columns
+        self.selectedTaskID = selectedTaskID
+        self.onViewport = { viewModel.updateViewport(offset: $0, width: $1) }
+        self.stateForColumn = viewModel.columnState(for:)
+    }
+
+    init(columns: [ParallelColumnModel], selectedTaskID: String?) {
+        self.columns = columns
+        self.selectedTaskID = selectedTaskID
+        self.onViewport = { _, _ in }
+        let states = Dictionary(uniqueKeysWithValues: columns.map { ($0.id, ParallelColumnUIState()) })
+        self.stateForColumn = { states[$0] ?? ParallelColumnUIState() }
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -546,19 +563,8 @@ struct WorkflowActivityColumns: View {
 .foregroundStyle(Color.secondaryText)
                             .frame(width: proxy.size.width, height: proxy.size.height)
                     } else {
-                        HStack(alignment: .top, spacing: 0) {
-                            ForEach(columns) { column in
-                                ParallelColumnView(model: column)
-                                    .modifier(PanelArrival(animate: column.animatesArrival))
-                                    .onAppear(perform: column.onDidPresent)
-                                    .frame(
-                                        width: ParallelLayout.columnWidth(memberCount: columns.count, availableWidth: proxy.size.width),
-                                        height: max(0, proxy.size.height)
-                                    )
-                                    .id(column.id)
-                                Divider()
-                            }
-                        }
+                        ParallelColumnsContent(columns: columns, availableSize: proxy.size,
+                                               stateForColumn: stateForColumn, onViewport: onViewport)
                     }
                 }
                 .onChange(of: selectedTaskID) { _, id in if let id {

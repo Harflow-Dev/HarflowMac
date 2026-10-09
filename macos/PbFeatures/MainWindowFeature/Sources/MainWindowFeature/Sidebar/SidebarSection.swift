@@ -12,11 +12,16 @@ import PbUI
 /// One selectable entry in a sidebar section: a task row (a root tree's flattened rows, sub-tasks
 /// included), workflow run, invocation shortcut, or parallel group. Workflow shortcuts and real
 /// rows share one navigation destination while retaining independent presentation identities.
-enum SidebarItem: Identifiable, Equatable {
+enum SidebarItem: Identifiable, Equatable, Sendable {
     case task(TaskRowModel)
-    case group(ParallelGroup)
+    case group(SidebarGroupPresentation)
     case workflow(TaskRowModel)
     case workflowShortcut(TaskRowModel, parentRunID: String)
+
+    /// Plain group construction remains convenient for previews and static fixtures.
+    static func group(_ group: ParallelGroup) -> Self {
+        .group(SidebarGroupPresentation(group: group, conversations: group.conversations, isExpanded: false))
+    }
 
     var id: String {
         switch self {
@@ -42,8 +47,8 @@ enum SidebarItem: Identifiable, Equatable {
 // MARK: - SidebarSection
 
 /// A titled bucket of the sidebar list (settled plan D10): Running, Today or Earlier.
-struct SidebarSection: Identifiable, Equatable {
-    enum Bucket: String, CaseIterable {
+struct SidebarSection: Identifiable, Equatable, Sendable {
+    enum Bucket: String, CaseIterable, Sendable {
         case running, today, earlier
 
         var title: String {

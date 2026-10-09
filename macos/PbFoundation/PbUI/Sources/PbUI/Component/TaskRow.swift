@@ -17,7 +17,7 @@ import SwiftUI
 /// Presentation data for one row representing a task: status, title, repo and backend, plus the
 /// optional tree fields Sidebar needs (indent, sub-task summary, chevron state, guides). Built by
 /// a VM from `TaskInfo`/`TaskNode`/`TaskListRepository.title(_:)`.
-public struct TaskRowModel: Identifiable, Equatable {
+public struct TaskRowModel: Identifiable, Equatable, Sendable {
     public let id: String
     public let backend: String
     public let title: String

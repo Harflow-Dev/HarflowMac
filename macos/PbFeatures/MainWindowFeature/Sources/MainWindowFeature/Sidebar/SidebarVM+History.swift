@@ -60,32 +60,75 @@ extension SidebarVM {
 .store(in: &cancellables)
     }
 
-    func didTapLoadMoreTasks() {
-        guard !taskHistoryState.isLoading, let history = historyUseCase else { return }
-        Task { await history.loadMoreTaskHistory() }
+    /// A viewport measurement, rather than row appearance, grants one automatic page request.
+    func didChangeHistoryBottomVisibility(_ visible: Bool, revision: Int) {
+        historyViewportRevision = revision
+        historyBottomVisible = visible
+        continueVisibleHistoryLoading()
     }
 
-    func didTapLoadMoreWorkflows() {
-        guard !workflowHistoryState.isLoading, let history = historyUseCase else { return }
+    func continueVisibleHistoryLoading() {
+        guard presentationEnabled, historyBottomVisible, historyViewportRevision == historyPresentationRevision,
+              pendingPresentationInput == nil, activePresentationInput == nil else { return }
+        let tasksReady = canAutomaticallyLoad(taskHistoryState, lastCursor: taskHistoryRequestedCursor)
+        let workflowsReady = canAutomaticallyLoad(workflowHistoryState, lastCursor: workflowHistoryRequestedCursor)
+        guard tasksReady || workflowsReady else { return }
+        // New rows invalidate this viewport measurement. A subsequent layout must grant another.
+        historyBottomVisible = false
+        if tasksReady { loadMoreTasks(automatic: true) }
+        if workflowsReady { loadMoreWorkflows(automatic: true) }
+    }
+
+    private func canAutomaticallyLoad(_ state: HistoryLoadingState, lastCursor: String?) -> Bool {
+        state.catalogState.isReady && state.hasMore && state.nextCursor != nil
+            && state.nextCursor != lastCursor && !state.isLoading && state.error == nil
+            && !state.bootstrapPending && !state.authorityIncomplete
+    }
+
+    func didTapLoadMoreTasks() { loadMoreTasks(automatic: false) }
+
+    private func loadMoreTasks(automatic: Bool) {
+        guard taskHistoryLoadTask == nil, !taskHistoryState.isLoading, let history = historyUseCase else { return }
+        let epoch = presentationEpoch
+        if automatic { taskHistoryRequestedCursor = taskHistoryState.nextCursor }
+        taskHistoryLoadTask = Task { [weak self] in
+            await history.loadMoreTaskHistory()
+            guard let self, !Task.isCancelled, presentationEpoch == epoch else { return }
+            taskHistoryLoadTask = nil
+            recompute()
+        }
+    }
+
+    func didTapLoadMoreWorkflows() { loadMoreWorkflows(automatic: false) }
+
+    private func loadMoreWorkflows(automatic: Bool) {
+        guard workflowHistoryLoadTask == nil, !workflowHistoryState.isLoading, let history = historyUseCase else { return }
         let token = workflowGeneration
+        let epoch = presentationEpoch
+        let cursor = workflowHistoryState.nextCursor
+        if automatic { workflowHistoryRequestedCursor = cursor }
         workflowHistoryState.isLoading = true
         workflowHistoryState.error = nil
-        Task { [weak self] in
+        workflowHistoryLoadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let page = try await history.workflowPage(cursor: workflowHistoryState.nextCursor, relatedRunID: nil)
-                guard !Task.isCancelled, workflowGeneration == token else { return }
-                guard page.catalogState.isReady else { workflowHistoryState.isLoading = false; return }
-                publishViewEvent(.incidentResolved(source: "workflow-history"))
-                mergeWorkflowHeaders(page.items + page.relatedHeaders)
+                let page = try await history.workflowPage(cursor: cursor, relatedRunID: nil)
+                guard !Task.isCancelled, workflowGeneration == token, presentationEpoch == epoch else { return }
+                // Publish preparation/blocked diagnostics too, without advancing an opaque cursor.
                 updateWorkflowHistory(page, advancing: true)
-                recompute()
+                if page.catalogState.isReady {
+                    publishViewEvent(.incidentResolved(source: "workflow-history"))
+                    mergeWorkflowHeaders(page.items + page.relatedHeaders)
+                }
             } catch {
+                guard !Task.isCancelled, workflowGeneration == token, presentationEpoch == epoch else { return }
                 publishViewEvent(.incident(source: "workflow-history", message: (error as? ToolError)?.message ?? error.localizedDescription,
                     retry: AlertAction(title: "Refresh history") { [weak self] in self?.didTapLoadMoreWorkflows() }))
                 workflowHistoryState.error = error as? ToolError ?? .unreadable(tool: "polybridge-ctl", exitCode: 0, stderr: String(describing: error))
             }
             workflowHistoryState.isLoading = false
+            workflowHistoryLoadTask = nil
+            recompute()
         }
     }
 

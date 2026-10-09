@@ -33,6 +33,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         tasksSubject.send([
@@ -52,6 +53,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when — vibe 3, codex 2, claude 1, opencode 0
         tasksSubject.send([
@@ -73,6 +75,7 @@ extension SidebarVMTests {
         let harness = makeSUT(catalog: catalog([("claude", true), ("codex", false)]))
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then
         await waitUntil { sut.backendTabs.count == 3 }
@@ -85,6 +88,7 @@ extension SidebarVMTests {
         let harness = makeSUT(catalog: BackendCatalog(entries: [], state: .degraded))
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then
         await waitUntil { sut.catalogUnavailableNote != nil }
@@ -100,9 +104,11 @@ extension SidebarVMTests {
         let catalogSubject = harness.catalogSubject
         let catalogBox = harness.catalogBox
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "t1", backend: "codex", status: "completed")])
         await waitUntil { sut.backendTabs.count == 2 }
         sut.didSelectBackendFilter("codex")
+        await sut.waitForPresentation()
         #expect(sut.selectedBackend == "codex")
 
         // when — codex disappears from both the catalog and history.
@@ -124,11 +130,13 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
         await waitUntil { sut.backendTabs.count == 2 }
 
         // when
         sut.didSelectBackendFilter("claude")
+        await sut.waitForPresentation()
         tasksSubject.send([])
 
         // then
@@ -143,11 +151,13 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
         await waitUntil { sut.backendTabs.count == 2 }
 
         // when
         sut.didSelectBackendFilter("codex")
+        await sut.waitForPresentation()
         tasksSubject.send([])
 
         // then
@@ -164,11 +174,13 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
         await waitUntil { sut.backendTabs.count == 2 }
 
         // when
         sut.didSelectBackendFilter("claude")
+        await sut.waitForPresentation()
         tasksSubject.send([])
 
         // then
@@ -184,13 +196,16 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
         sut.didSelectBackendFilter("codex")
+        await sut.waitForPresentation()
         tasksSubject.send([])
         await waitUntil { sut.emptyStateMessage != nil }
 
         // when
         sut.didChangeSearchQuery("hello")
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.emptyStateMessage == "No tasks match \"hello\".")
@@ -203,12 +218,14 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
         tasksSubject.send([])
         await waitUntil { sut.emptyStateMessage != nil }
 
         // when
         sut.didChangeSearchQuery("   ")
+        await sut.waitForPresentation()
 
         // then — falls through to the "All" copy, not a search-shaped one.
         #expect(sut.emptyStateMessage == "No tasks yet. Tasks started through polybridge appear here.")
@@ -222,6 +239,7 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
 
         // when — two tasks sharing a group, neither running, form a parallel group with no

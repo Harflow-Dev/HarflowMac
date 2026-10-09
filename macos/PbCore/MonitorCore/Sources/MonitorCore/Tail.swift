@@ -166,11 +166,21 @@ public final class EventFileTailer {
 
     public func loadMore() {
         queue.async { [self] in
-            guard !stopped, !history.isLoading, let cursor = olderCursor else { return }
+            guard !stopped else { return }
+            guard !history.isLoading, let cursor = olderCursor else {
+                publishHistory()
+                return
+            }
             history.isLoading = true
             publishHistory()
             do {
                 let page = try EventPages.read(path: path, before: cursor)
+                guard page.next != cursor else {
+                    history.isLoading = false
+                    history.error = "The older activity page made no progress."
+                    publishHistory()
+                    return
+                }
                 olderCursor = page.next
                 history = EventHistoryState(hasMore: page.next != nil, generation: history.generation)
                 if let handler {

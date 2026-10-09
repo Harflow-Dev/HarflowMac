@@ -28,12 +28,14 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
 
         // then
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
         let rootRow = sut.recentRows.first { $0.id == "root" }
         #expect(rootRow?.hasChildren == true)
@@ -46,11 +48,14 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
 
         // when
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
 
         // then — the parent's own row stays, only the descendant hides
         #expect(sut.recentRows.map(\.id) == ["root"])
@@ -59,6 +64,7 @@ extension SidebarVMTests {
 
         // when — toggled back
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
@@ -72,6 +78,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "root", status: "completed"),
             task(id: "c1", status: "running", spawnedBy: "root"),
@@ -79,9 +86,11 @@ extension SidebarVMTests {
             task(id: "c3", status: "completed", spawnedBy: "c2")
         ])
         await waitUntil { sut.runningRows.count == 4 }
+        await sut.waitForPresentation()
 
         // when
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.runningRows.map(\.id) == ["root"])
@@ -94,15 +103,18 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "root", status: "completed"),
             task(id: "c1", status: "completed", spawnedBy: "root"),
             task(id: "c2", status: "completed", spawnedBy: "root")
         ])
         await waitUntil { sut.recentRows.count == 3 }
+        await sut.waitForPresentation()
 
         // when
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.first?.subTaskSummary == "2 sub-tasks")
@@ -115,13 +127,17 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("root"))
         await waitUntil { sut.selection == .task("root") }
+        await sut.waitForPresentation()
 
         // when
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.selection == .task("root"))
@@ -135,13 +151,17 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("child"))
         await waitUntil { sut.selection == .task("child") }
+        await sut.waitForPresentation()
 
         // when
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["root"])
@@ -154,18 +174,23 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when
         sut.didDisappear()
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
 
         // then
         await waitUntil { sut.recentRows.count == 1 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
     }
 
@@ -179,22 +204,27 @@ extension SidebarVMTests {
         let titlesBox = harness.titlesBox
         titlesBox.value = ["root": "Root task", "child": "Child task", "grandchild": "Fix the login bug"]
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root"),
             task(id: "grandchild", status: "completed", spawnedBy: "child")
         ])
         await waitUntil { sut.recentRows.count == 3 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when
         sut.didChangeSearchQuery("login")
+        await sut.waitForPresentation()
 
         // then — the match's ancestors display expanded, without touching the collapsed set
         #expect(sut.recentRows.map(\.id) == ["root", "child", "grandchild"])
 
         // when — clearing the filter
         sut.didChangeSearchQuery("")
+        await sut.waitForPresentation()
 
         // then — the person's own collapse is restored exactly
         #expect(sut.recentRows.map(\.id) == ["root"])
@@ -210,9 +240,12 @@ extension SidebarVMTests {
         let revealSubject = harness.revealSubject
         let routing = harness.routing
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when
@@ -221,6 +254,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
         verify(routing).consumeReveal(requestID: .value(reveal.requestID)).called(1)
     }
@@ -233,12 +267,17 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let revealSubject = harness.revealSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         revealSubject.send(PendingReveal(taskID: "child", requestID: UUID()))
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root") // the person re-collapses it, deliberately
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when — navigating again to the same hidden task
@@ -246,6 +285,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
     }
 
@@ -257,9 +297,12 @@ extension SidebarVMTests {
         let revealSubject = harness.revealSubject
         let routing = harness.routing
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when — the reveal targets a grandchild that isn't listed yet
@@ -282,6 +325,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { sut.recentRows.count == 3 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root", "child", "grandchild"])
         verify(routing).consumeReveal(requestID: .value(reveal.requestID)).called(1)
     }
@@ -293,13 +337,16 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         let earlier = Date.now.addingTimeInterval(-100)
         tasksSubject.send([
             task(id: "root", status: "completed", startedAt: earlier),
             task(id: "child", status: "completed", startedAt: earlier, spawnedBy: "root")
         ])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when — an unrelated task joins the listing
@@ -310,6 +357,7 @@ extension SidebarVMTests {
 
         // then — "other" started later, so it sorts first; "root" stays collapsed
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["other", "root"])
     }
 
@@ -321,15 +369,19 @@ extension SidebarVMTests {
         let routing = harness.routing
         let pendingRevealBox = harness.pendingRevealBox
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         sut.didDisappear()
 
         // when — a reveal arrives while unsubscribed; the coordinator still records it
         let reveal = PendingReveal(taskID: "child", requestID: UUID())
         pendingRevealBox.value = reveal
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
@@ -343,20 +395,26 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let pendingRevealBox = harness.pendingRevealBox
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         sut.didDisappear()
         pendingRevealBox.value = PendingReveal(taskID: "child", requestID: UUID())
         sut.didAppear()
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
         sut.didToggleExpansion(taskID: "root") // re-collapse, a deliberate user action
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
         sut.didDisappear()
 
         // when — navigated to again while closed, a fresh requestID
         pendingRevealBox.value = PendingReveal(taskID: "child", requestID: UUID())
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
@@ -370,20 +428,26 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let pendingRevealBox = harness.pendingRevealBox
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         sut.didDisappear()
         pendingRevealBox.value = PendingReveal(taskID: "child", requestID: UUID())
         sut.didAppear()
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
         sut.didToggleExpansion(taskID: "root") // re-collapse, a deliberate user action
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
         pendingRevealBox.value = nil // the coordinator has cleared it; no new navigation happened
         sut.didDisappear()
 
         // when
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then — stays collapsed
         #expect(sut.recentRows.map(\.id) == ["root"])
@@ -399,13 +463,17 @@ extension SidebarVMTests {
         let selectionSubject = harness.selectionSubject
         let routing = harness.routing
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("root"))
         await waitUntil { sut.selection == .task("root") }
+        await sut.waitForPresentation()
 
         // when
         sut.didPressMoveCommand(.left)
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["root"])
@@ -420,13 +488,17 @@ extension SidebarVMTests {
         let selectionSubject = harness.selectionSubject
         let routing = harness.routing
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("child"))
         await waitUntil { sut.selection == .task("child") }
+        await sut.waitForPresentation()
 
         // when — "child" is a leaf
         sut.didPressMoveCommand(.left)
+        await sut.waitForPresentation()
 
         // then
         verify(routing).select(.value(.task("root"))).called(1)
@@ -440,17 +512,22 @@ extension SidebarVMTests {
         let selectionSubject = harness.selectionSubject
         let routing = harness.routing
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "root", status: "completed"), task(id: "mid", status: "completed", spawnedBy: "root"),
             task(id: "leaf", status: "completed", spawnedBy: "mid")
         ])
         await waitUntil { sut.recentRows.count == 3 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "mid")
+        await sut.waitForPresentation()
         selectionSubject.send(.task("mid"))
         await waitUntil { sut.selection == .task("mid") }
+        await sut.waitForPresentation()
 
         // when — "mid" is already collapsed
         sut.didPressMoveCommand(.left)
+        await sut.waitForPresentation()
 
         // then — moves to its parent instead of trying to collapse it again
         verify(routing).select(.value(.task("root"))).called(1)
@@ -463,15 +540,20 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         selectionSubject.send(.task("root"))
         await waitUntil { sut.selection == .task("root") }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when
         sut.didPressMoveCommand(.right)
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["root", "child"])
@@ -485,14 +567,19 @@ extension SidebarVMTests {
         let selectionSubject = harness.selectionSubject
         let routing = harness.routing
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "root", status: "completed"), task(id: "child", status: "completed", spawnedBy: "root")])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("root"))
         await waitUntil { sut.selection == .task("root") }
+        await sut.waitForPresentation()
 
         // when
         sut.didPressMoveCommand(.up)
+        await sut.waitForPresentation()
         sut.didPressMoveCommand(.down)
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["root", "child"])

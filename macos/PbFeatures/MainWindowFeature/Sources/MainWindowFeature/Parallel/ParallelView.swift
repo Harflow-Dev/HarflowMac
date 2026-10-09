@@ -30,6 +30,13 @@ protocol ParallelViewModel: ViewModel {
     func didDisappear()
     func didTapViewPrompt()
     func didTapCancelAll()
+    func updateViewport(offset: CGFloat, width: CGFloat)
+    func columnState(for id: String) -> ParallelColumnUIState
+}
+
+extension ParallelViewModel {
+    func updateViewport(offset: CGFloat, width: CGFloat) {}
+    func columnState(for id: String) -> ParallelColumnUIState { ParallelColumnUIState() }
 }
 
 // MARK: - ParallelView
@@ -82,18 +89,9 @@ struct ParallelView<VM: ParallelViewModel>: View {
                 // are too many members for the window to fit.
                 GeometryReader { proxy in
                     ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: 0) {
-                            ForEach(viewModel.columns) { column in
-                                ParallelColumnView(model: column)
-                                    .modifier(PanelArrival(animate: column.animatesArrival))
-                                    .onAppear(perform: column.onDidPresent)
-                                    .frame(
-                                        width: ParallelLayout.columnWidth(memberCount: viewModel.columns.count, availableWidth: proxy.size.width),
-                                        height: max(0, proxy.size.height)
-                                    )
-                                Divider()
-                            }
-                        }
+                        ParallelColumnsContent(columns: viewModel.columns, availableSize: proxy.size,
+                                               stateForColumn: viewModel.columnState(for:),
+                                               onViewport: { viewModel.updateViewport(offset: $0, width: $1) })
                     }
                 }
             }
@@ -170,7 +168,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
             Divider()
             GeometryReader { proxy in
                 ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 0) {
+                    LazyHStack(alignment: .top, spacing: 0) {
                         ForEach(0 ..< columnCount, id: \.self) { _ in
                             columnPlaceholder
                                 .frame(

@@ -16,7 +16,7 @@ extension ParallelVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([first, resumed, unrelated])
-        await waitUntil { harness.sut.columns.count == 1 }
+        await waitUntil { harness.sut.columns.count == 1 && harness.sut.isPresentationSettled }
         // then
         #expect(harness.sut.columns.first?.task.taskID == "resumed")
         #expect(harness.sut.columns.first?.title == "Implement · 2")
@@ -37,9 +37,10 @@ extension ParallelVMTests {
         harness.sut.setWorkflowTaskIDs(["member"])
         // then
         #expect(harness.leasesBox.value.isEmpty)
+        harness.sut.updateViewport(offset: 0, width: 100_000)
         harness.sut.didAppear()
         harness.tasksSubject.send([member])
-        await waitUntil { harness.sut.columns.count == 1 }
+        await waitUntil { harness.sut.columns.count == 1 && harness.sut.isPresentationSettled }
         #expect(harness.leasesBox.value["member"] != nil)
         harness.sut.didDisappear()
     }
@@ -92,7 +93,7 @@ extension ParallelVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([first, current])
-        await waitUntil { harness.sut.columns.count == 1 }
+        await waitUntil { harness.sut.columns.count == 1 && harness.sut.isPresentationSettled }
         // then
         #expect(harness.sut.columns.first?.prompt == "Current answer")
         harness.sut.didDisappear()

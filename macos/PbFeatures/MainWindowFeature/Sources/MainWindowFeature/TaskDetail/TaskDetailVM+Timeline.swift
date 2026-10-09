@@ -23,7 +23,7 @@ import MonitorCore
 
 extension TaskDetailVM {
 
-    private func activityHistory(_ members: [TaskInfo]) -> EventHistoryState {
+    func activityHistory(_ members: [TaskInfo]) -> EventHistoryState {
         let states = members.map { useCase.eventHistory(for: $0.taskID) }
         return EventHistoryState(
             hasMore: states.contains(where: \.hasMore) || conversationHasMore
@@ -34,21 +34,46 @@ extension TaskDetailVM {
         )
     }
 
-    private func loadMoreConversationActivity() {
+    @discardableResult func loadMoreConversationActivity() -> Bool {
+        guard !olderActivityRequest, !conversationLoading else { return false }
         let loaded = conversationMembers.filter { loadedActivityMembers.contains($0.taskID) }
-        guard !loaded.contains(where: { useCase.eventHistory(for: $0.taskID).isLoading }) else { return }
+        guard !loaded.contains(where: { useCase.eventHistory(for: $0.taskID).isLoading }) else { return false }
+        let hasCandidate = loaded.contains { let state = useCase.eventHistory(for: $0.taskID); return state.hasMore || state.error != nil }
+            || conversationMembers.contains { !loadedActivityMembers.contains($0.taskID) }
+            || conversationHasMore || conversationError != nil
+        guard hasCandidate else { return false }
+        olderActivityRequest = true
+        olderActivityObservedLoading = false
+        olderActivityMember = nil
+        olderActivityReady = false
         if let member = loaded.first(where: {
             let state = useCase.eventHistory(for: $0.taskID)
             return state.hasMore || state.error != nil
         }) {
-            useCase.loadMoreEvents(member.taskID)
+            olderActivityMember = member.taskID
+            olderActivityHistory = useCase.eventHistory(for: member.taskID)
+            guard useCase.loadMoreEvents(member.taskID) else {
+                olderActivityRequest = false
+                olderActivityMember = nil
+                olderActivityHistory = nil
+                recompute()
+                return false
+            }
         } else if let previous = conversationMembers.last(where: { !loadedActivityMembers.contains($0.taskID) }) {
             loadedActivityMembers.insert(previous.taskID)
             acquireMemberLease(previous.taskID)
+            olderActivityReady = true
             recompute()
         } else if conversationHasMore || conversationError != nil {
             loadConversationHistory(initial: false)
+        } else {
+            olderActivityRequest = false
         }
+        if olderActivityRequest, let presentation = appliedTimelinePresentation {
+            applyTimeline(presentation.loadingHistory())
+        }
+        recompute()
+        return olderActivityRequest
     }
 
     /// Rebuilds the Timeline tab's model: the concatenated conversation rows, whether the task is
@@ -57,53 +82,34 @@ extension TaskDetailVM {
     /// `allChildren` is `recompute()`'s own `allConversationChildren()` result (Monitor piece 11) —
     /// shared with `recomputeInspector`'s subtask count instead of each recomputing it separately.
     func recomputeTimeline(task: TaskInfo, allChildren: [TaskInfo]) {
+        let preparation = MonitorMetrics.begin()
+        defer { MonitorMetrics.end(preparation, stage: .detailPreparation) }
         let members = conversationMembers.filter { loadedActivityMembers.contains($0.taskID) }
-        let start = conversationMembers.first?.startedAt
-        let conversationTimelineMembers = members.map { member in
-            let prompt = member.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID)
-            return WorkflowBuilderPresentation.conversationMember(
-                task: member, items: itemsByMember[member.taskID] ?? [], prompt: prompt, isBuilder: isWorkflowBuilder
-            )
+        if let id = olderActivityMember, let previous = olderActivityHistory {
+            let current = useCase.eventHistory(for: id)
+            if !current.isLoading, current != previous { olderActivityReady = true }
         }
-        let allRows = ConversationTimeline.rows(itemMembers: conversationTimelineMembers)
-        let rows = isWorkflowBuilder ? WorkflowBuilderPresentation.visibleRows(allRows)
-        : WorkflowNodePresentation.visibleRows(allRows, tasks: Dictionary(uniqueKeysWithValues: members.map { ($0.taskID, $0) }))
-        let subTaskStrip: SubTaskStripModel? = allChildren.isEmpty ? nil : SubTaskStripModel(
-            children: allChildren.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
-            start: start,
-            onSelectTask: { [weak self] id in self?.didTapTask(id) }
-        )
-        let itemCount = rows.filter { if case .item = $0.kind { return true }; return false }.count
-        // Plan review round 1, item 4: a shimmer only while no member has any REAL content yet
-        // (ignoring synthetic separator rows — `itemCount`, not `rows.count`) AND at least one
-        // member's own event stream is still `.loading` — never once real content exists, and never
-        // for `.unavailable` (that keeps today's honest empty-log message).
-        let isLoading = itemCount == 0 && members.contains { (eventsAvailabilityByMember[$0.taskID] ?? .loading) == .loading }
-        let liveStep = LiveStep(rows: rows, isRunning: task.status.isRunning)
-        let pendingMessages = PendingMessage.visible(snapshot: useCase.snapshot(currentTaskID), events: eventsByMember[currentTaskID] ?? [])
-        timelineModel = TimelinePaneModel(
-            stepCountText: "\(itemCount) steps",
-            rows: rows,
-            activityRows: ActivityRowsBuilder.build(from: rows),
-            start: start,
-            emptyText: rows.isEmpty
-            ? (task.status.isRunning ? "Waiting for the first event…" : "This task's event log is empty or was not found.")
-            : nil,
-            subTaskStrip: subTaskStrip,
-            isLoading: isLoading,
-            liveStep: liveStep,
-            updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep, pendingMessages: pendingMessages),
-            pendingMessages: pendingMessages,
-            history: activityHistory(members),
-            onLoadMore: { [weak self] in self?.loadMoreConversationActivity() }
-        )
+        let history = activityHistory(members)
+        if history.isLoading { olderActivityObservedLoading = true }
+        let input = TaskDetailTimelineInput(
+            task: task, members: members.map { member in
+                ParallelMemberInput(task: member, items: itemsByMember[member.taskID] ?? [],
+                    prompt: member.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID),
+                    availability: eventsAvailabilityByMember[member.taskID] ?? .loading)
+            }, children: allChildren.map { TaskDetailTimelineChild(task: $0, title: useCase.title($0.taskID)) },
+            start: conversationMembers.first?.startedAt, isBuilder: isWorkflowBuilder,
+            events: eventsByMember[currentTaskID] ?? [], snapshot: useCase.snapshot(currentTaskID), history: history)
+        enqueueTimeline(input)
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
         let visiblePrompt = WorkflowNodePresentation.isWorker(task)
         ? task.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: currentTaskID)
         : conversationMembers.first?.raw["display_prompt"]?.stringValue ?? conversationMembers.first.flatMap { useCase.prompt(for: $0.taskID) }
-        promptText = visiblePrompt
+        let nextPrompt = visiblePrompt
         ?? "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
-        rawEventsPath = useCase.eventsPath(for: currentTaskID)
-        rawEvents = eventsByMember[currentTaskID] ?? []
+        if promptText != nextPrompt { promptText = nextPrompt }
+        let nextPath = useCase.eventsPath(for: currentTaskID)
+        if rawEventsPath != nextPath { rawEventsPath = nextPath }
+        let nextEvents = eventsByMember[currentTaskID] ?? []
+        if rawEvents != nextEvents { rawEvents = nextEvents }
     }
 }

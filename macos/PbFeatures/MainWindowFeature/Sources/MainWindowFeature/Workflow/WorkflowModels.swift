@@ -3,7 +3,7 @@ import MonitorCore
 
 // MARK: - WorkflowRecord
 
-struct WorkflowRecord: Identifiable, Equatable {
+struct WorkflowRecord: Identifiable, Equatable, Sendable {
     var raw: [String: JSONValue]
     var id: String { raw["name"]?.stringValue ?? "" }
     var workflowID: String { raw["workflow_id"]?.stringValue ?? definition["workflow_id"]?.stringValue ?? "" }

@@ -144,7 +144,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
 
     func acquireSummaryLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquireSummary(id) }
     func loadMoreSummaryFiles(_ id: String) { eventStreamRepository.loadMoreSummaryFiles(id) }
-    func loadMoreEvents(_ id: String) { eventStreamRepository.loadMore(id) }
+    @discardableResult func loadMoreEvents(_ id: String) -> Bool { eventStreamRepository.loadMore(id) }
     func eventHistory(for id: String) -> EventHistoryState { eventStreamRepository.history(for: id) }
     func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { eventStreamRepository.historyPublisher(for: id) }
     func eventSummary(for id: String) -> EventSummary { eventStreamRepository.summary(for: id) }

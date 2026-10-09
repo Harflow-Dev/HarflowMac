@@ -29,10 +29,14 @@ extension TaskDetailVMTests {
         harness.tasksSubject.send([taskA, taskB])
         await waitUntil { harness.sut.task != nil }
 
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         verify(harness.useCase).acquireEventLease(.value("a")).called(0)
         #expect(harness.sut.timelineModel.history.hasMore)
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
         harness.sut.timelineModel.onLoadMore?()
+        await waitUntil { harness.sut.timelineWorker == nil && !harness.sut.olderActivityRequest }
         verify(harness.useCase).acquireEventLease(.value("a")).called(1)
         verify(harness.useCase).acquireEventLease(.value("b")).called(1)
 
@@ -58,6 +62,8 @@ extension TaskDetailVMTests {
         // when — "b" appears as a follow-up (a resume of "a").
         harness.membersBox.value = [taskA, taskB]
         harness.tasksSubject.send([taskA, taskB])
+
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
 
         // then
         await waitUntil { harness.sut.task?.taskID == "b" }

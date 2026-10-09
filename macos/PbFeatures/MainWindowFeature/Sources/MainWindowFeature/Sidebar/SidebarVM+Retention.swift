@@ -38,7 +38,7 @@ extension SidebarVM {
         if latestTasks.contains(where: { $0.taskID == id }) {
             if executionParent(of: id) != nil {
                 expandExecutionParent(of: id)
-                return .task(WorkflowOrchestratorConversation.members(containing: id, in: latestTasks)?.first?.taskID
+                return .task(indexedRepresentatives[id]
                     ?? (workflowTaskOwners[id] == nil ? conversationIndex.conversationID(of: id) : id))
             }
             return .task(conversationIndex.conversationID(of: id))
@@ -50,37 +50,4 @@ extension SidebarVM {
         return .task(id)
     }
 
-    /// Records every current conversation's member set against each of its own members (Review
-    /// round 1, item 4), so a later id that disappears (retention) can still be resolved through a
-    /// sibling that survives it. Walks the WHOLE tree via `flattened()` (Codex review round 1,
-    /// finding 2) — not just the top-level roots in `sections.running`/`sections.recent` — so a
-    /// NESTED conversation (one attached under another, e.g. `P → conv(A,B)`) is remembered too, and
-    /// hands off correctly when its own first member (`A`) is pruned. Only `running`/`recent` —
-    /// Parallel groups are unaffected by this feature (Review round 1, item 3) and keep no such
-    /// history.
-    func recordMembership(_ sections: ConversationSections) {
-        for root in sections.running + sections.recent {
-            for (node, _) in root.flattened() {
-                let ids = Set(node.conversation.members.map(\.taskID))
-                for id in ids { lastKnownSiblingsByMember[id] = ids }
-            }
-        }
-    }
-
-    /// Carries a collapsed conversation's state to its new identity when its own first member is
-    /// pruned by retention: if a previously-collapsed id is no longer present at all, but one of its
-    /// remembered siblings still is, the collapse moves to that conversation's current id — through
-    /// the same deterministic `oldestSurvivor` rule `normalized(_:)` uses.
-    func migrateCollapsedIDsForRetention() {
-        // Snapshot first: this mutates `collapsedTaskIDs` inside the loop, which is unsafe to do
-        // while iterating the live set directly.
-        for oldID in Array(collapsedTaskIDs) where !latestTasks.contains(where: { $0.taskID == oldID }) {
-            guard let siblings = lastKnownSiblingsByMember[oldID],
-                  let survivor = Lineage.oldestSurvivor(among: siblings, in: latestTasks) else { continue }
-            let newID = conversationIndex.conversationID(of: survivor)
-            guard newID != oldID else { continue }
-            collapsedTaskIDs.remove(oldID)
-            collapsedTaskIDs.insert(newID)
-        }
-    }
 }

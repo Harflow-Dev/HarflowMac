@@ -468,6 +468,25 @@ struct LineTailTests {
     }
 
     @Test @MainActor
+    func givenExhaustedTailer_whenQueuedOlderRequestIsDeclined_thenCurrentHistoryAcknowledgesCompletion() async throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("t.events.jsonl").path
+        try Data((eventLine(0, "notice", #""text":"synthetic""#) + "\n").utf8).write(to: URL(fileURLWithPath: path))
+        var histories: [EventHistoryState] = []
+        let tailer = EventFileTailer(path: path, historyHandler: { histories.append($0) }) { _, _, _ in }
+        tailer.start()
+        defer { tailer.stop() }
+        #expect(await waitUntil { histories.last?.isLoading == false && histories.last?.hasMore == false })
+        let count = histories.count
+        tailer.loadMore()
+        #expect(await waitUntil { histories.count > count })
+        #expect(histories.last?.isLoading == false)
+        #expect(histories.last?.hasMore == false)
+        #expect(histories.last?.error == nil)
+    }
+
+    @Test @MainActor
     func givenAFileBeingAppendedTo_whenTailed_thenDeliveriesArriveInOrderAndIgnoreNonEvents() async throws {
         // given
         let dir = try makeTempDir()

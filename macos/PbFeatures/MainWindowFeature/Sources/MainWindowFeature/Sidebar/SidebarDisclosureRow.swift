@@ -38,7 +38,7 @@ struct SidebarDisclosureRow<Content: View>: View {
                     // Enter from above the child slot and retract toward the parent. The
                     // top clip keeps this movement aligned with the shrinking List row.
                     row.offset(y: isVisible && appeared ? 0 : -(height ?? 0))
-                        .frame(height: isVisible && appeared ? height : 0, alignment: .top)
+                        .frame(height: isVisible && appeared ? nil : 0, alignment: .top)
                         .opacity(isVisible && appeared ? 1 : 0)
                         .clipped()
                 }

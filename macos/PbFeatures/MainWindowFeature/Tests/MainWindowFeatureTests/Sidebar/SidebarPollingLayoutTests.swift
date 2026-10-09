@@ -29,9 +29,11 @@ import Testing
         let window = makeWindow(host)
         defer { harness.sut.didDisappear(); window.contentView = nil; window.close() }
         harness.sut.didAppear()
+        await harness.sut.waitForPresentation()
         harness.hasListedSubject.send(true)
         harness.tasksSubject.send(tasks)
         await waitUntil { host.layoutSubtreeIfNeeded(); return harness.sut.sections.flatMap(\.items).count == 29 }
+        await harness.sut.waitForPresentation()
         workflow.didDisappear()
         workflow.selectedRun = WorkflowRunModel(raw: raw)
         let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
@@ -55,6 +57,7 @@ import Testing
             await waitUntil { clockDuration(harness.sut) == elapsed }
             harness.sut.mergeWorkflowHeaders([raw])
             harness.sut.recompute()
+            await harness.sut.waitForPresentation()
             publishRecoveries(harness.sut, enabled: emitRecovery)
             for _ in 0 ..< 4 {
                 await Task.yield()

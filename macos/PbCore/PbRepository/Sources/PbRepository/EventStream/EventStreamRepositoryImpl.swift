@@ -13,12 +13,19 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
 
     private let lock = NSRecursiveLock()
     private var streams: [String: TaskStream] = [:]
+    private let initialLoads: EventInitialLoadQueue
 
     /// `EventStreamRepository → TaskSnapshotRepository`, never the reverse (F6/decision 6).
-    public init(toolEnvironment: any ToolEnvironmentRepository, snapshotRepository: any TaskSnapshotRepository, scheduler: any Scheduling) {
+    public convenience init(toolEnvironment: any ToolEnvironmentRepository, snapshotRepository: any TaskSnapshotRepository, scheduler: any Scheduling) {
+        self.init(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler, initialLoads: EventInitialLoadQueue())
+    }
+
+    init(toolEnvironment: any ToolEnvironmentRepository, snapshotRepository: any TaskSnapshotRepository,
+         scheduler: any Scheduling, initialLoads: EventInitialLoadQueue) {
         self.toolEnvironment = toolEnvironment
         self.snapshotRepository = snapshotRepository
         self.scheduler = scheduler
+        self.initialLoads = initialLoads
     }
 
     public func acquire(_ taskID: String) -> any EventStreamLease { acquire(taskID, activity: true) }
@@ -33,7 +40,7 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
             isFirst = false
         } else {
             let path = TaskTitle.eventsPath(tasksDirectory: toolEnvironment.tasksDirectory, taskID: taskID) ?? "/dev/null"
-            stream = TaskStream(taskID: taskID, path: path, scheduler: scheduler)
+            stream = TaskStream(taskID: taskID, path: path, scheduler: scheduler, initialLoads: initialLoads)
             stream.refCount = 1
             streams[taskID] = stream
             isFirst = true
@@ -72,26 +79,26 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
 
     public func eventsPublisher(for taskID: String) -> AnyPublisher<[TaskEvent], Never> {
         guard let stream = stream(taskID) else { return Just([]).eraseToAnyPublisher() }
-        return stream.$events.removeDuplicates().eraseToAnyPublisher()
+        return stream.$events.removeDuplicates().receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 
     public func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never> {
         guard let stream = stream(taskID) else { return Just([]).eraseToAnyPublisher() }
-        return stream.$items.removeDuplicates().eraseToAnyPublisher()
+        return stream.$items.removeDuplicates().receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 
     public func eventsAvailability(for taskID: String) -> EventAvailability { stream(taskID)?.eventsAvailability ?? .loading }
 
     public func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never> {
         guard let stream = stream(taskID) else { return Just(.loading).eraseToAnyPublisher() }
-        return stream.$eventsAvailability.removeDuplicates().eraseToAnyPublisher()
+        return stream.$eventsAvailability.removeDuplicates().receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 
     public func loadMoreSummaryFiles(_ taskID: String) { stream(taskID)?.loadMoreSummaryFiles() }
-    public func loadMore(_ taskID: String) { stream(taskID)?.loadMore() }
+    @discardableResult public func loadMore(_ taskID: String) -> Bool { stream(taskID)?.loadMore() ?? false }
     public func history(for taskID: String) -> EventHistoryState { stream(taskID)?.history ?? EventHistoryState() }
     public func historyPublisher(for taskID: String) -> AnyPublisher<EventHistoryState, Never> {
-        stream(taskID)?.$history.removeDuplicates().eraseToAnyPublisher() ?? Just(EventHistoryState()).eraseToAnyPublisher()
+        stream(taskID)?.$history.removeDuplicates().receive(on: DispatchQueue.main).eraseToAnyPublisher() ?? Just(EventHistoryState()).eraseToAnyPublisher()
     }
 
     public func summary(for taskID: String) -> EventSummary { stream(taskID)?.summary ?? EventSummary() }
@@ -111,9 +118,8 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
 
 // MARK: - TaskStream
 
-/// One task's live events, tailed while at least one lease is outstanding. `apply` runs
-/// synchronously on whatever queue the tailer calls back on (the main queue — `Tail.swift:187`),
-/// under `@Subjected`'s own lock, so resets and appends can never interleave out of order.
+/// One task's live events, folded on a serial utility queue while activity leases exist.
+/// Tailer callbacks enqueue in arrival order; completed history publishes after folded items.
 private final class TaskStream: @unchecked Sendable {
     /// Review round 1, item 4: a burst of `assistant_delta`-only callbacks is batched for up to this
     /// long before the timeline is rebuilt and published, rather than once per delta. Chosen as the
@@ -123,6 +129,9 @@ private final class TaskStream: @unchecked Sendable {
     let taskID: String
     let path: String
     let scheduler: any Scheduling
+    private let initialLoads: EventInitialLoadQueue
+    private var initialActivityID: UUID?
+    private var initialSummaryID: UUID?
     @Subjected var history = EventHistoryState(isLoading: true)
     @Subjected var summary = EventSummary()
     private let summaryQueue = DispatchQueue(label: "dev.polybridge.monitor.summary")
@@ -142,35 +151,89 @@ private final class TaskStream: @unchecked Sendable {
     /// stream. Kept across flushes and appended to with only that flush's own new events; replaced
     /// outright (never told to "forget") on a tailer reset.
     private var timelineBuilder = TimelineBuilder()
+    private let activityQueue = DispatchQueue(label: "dev.polybridge.monitor.activity", qos: .utility)
+    private var activityEpoch = 0
+    private var activityStopped = true
+    private var pageRequested = false
 
     /// One buffered tailer callback, applied in arrival order by `applyPending()` — preserved as a
     /// queue (not merged eagerly) so a `reset` batch still clears exactly what came before it and
     /// nothing after, even though several callbacks may be sitting in the buffer at once.
-    private struct PendingBatch {
+    private struct PendingBatch: Sendable {
         let events: [TaskEvent]
         let reset: Bool
     }
 
-    private let bufferLock = NSLock()
+    private let bufferLock = NSRecursiveLock()
     private var pendingBatches: [PendingBatch] = []
     private var pendingAvailability: EventAvailability?
     private var flushToken: AnyCancellable?
 
-    init(taskID: String, path: String, scheduler: any Scheduling) {
+    init(taskID: String, path: String, scheduler: any Scheduling, initialLoads: EventInitialLoadQueue) {
         self.taskID = taskID
         self.path = path
         self.scheduler = scheduler
+        self.initialLoads = initialLoads
     }
 
     func start() {
-        let tailer = EventFileTailer(path: path, historyHandler: { [weak self] in self?.history = $0 }) { [weak self] newEvents, reset, availability in
-            self?.enqueue(newEvents, reset: reset, availability: availability)
+        bufferLock.lock()
+        activityEpoch += 1
+        let epoch = activityEpoch
+        activityStopped = false
+        pageRequested = false
+        history = EventHistoryState(isLoading: true)
+        let id = UUID()
+        initialActivityID = id
+        initialLoads.submit(id: id) { [weak self] completion in
+            guard let self else { completion(); return }
+            startActivityRead(epoch: epoch, completion: completion)
         }
-        tailer.start()
-        self.tailer = tailer
+        bufferLock.unlock()
     }
 
-    func loadMore() { tailer?.loadMore() }
+    private func startActivityRead(epoch: Int, completion: @escaping @Sendable () -> Void) {
+        bufferLock.lock()
+        defer { bufferLock.unlock() }
+        guard !activityStopped, activityEpoch == epoch else { completion(); return }
+        let tailer = EventFileTailer(path: path, historyHandler: { [weak self] value in
+            guard let self else { if !value.isLoading { completion() }; return }
+            enqueueHistory(value, epoch: epoch, completion: !value.isLoading ? completion : nil)
+        }) { [weak self] newEvents, reset, availability in
+            self?.enqueue(newEvents, reset: reset, availability: availability, epoch: epoch)
+        }
+        self.tailer = tailer
+        tailer.start()
+    }
+
+    @discardableResult func loadMore() -> Bool {
+        bufferLock.lock()
+        guard !activityStopped, !pageRequested, !history.isLoading, history.hasMore, let tailer else {
+            bufferLock.unlock()
+            return false
+        }
+        pageRequested = true
+        var value = history
+        value.isLoading = true
+        value.error = nil
+        history = value
+        bufferLock.unlock()
+        tailer.loadMore()
+        return true
+    }
+
+    private func enqueueHistory(_ value: EventHistoryState, epoch: Int, completion: (@Sendable () -> Void)? = nil) {
+        activityQueue.async { [weak self] in
+            defer { completion?() }
+            guard let self else { return }
+            bufferLock.lock()
+            defer { bufferLock.unlock() }
+            guard !activityStopped, activityEpoch == epoch else { return }
+            if !value.isLoading { pageRequested = false }
+            if history != value { history = value }
+        }
+    }
+
     func loadMoreSummaryFiles() {
         summaryQueue.async { [weak self] in
             guard let self else { return }
@@ -180,16 +243,27 @@ private final class TaskStream: @unchecked Sendable {
     }
 
     func startSummary() {
-        summaryQueue.async { [weak self] in self?.readSummary(tail: LineTail(maxChunk: 64 << 10)) }
+        bufferLock.lock()
+        let id = UUID()
+        initialSummaryID = id
+        initialLoads.submit(id: id) { [weak self] completion in
+            guard let self else { completion(); return }
+            summaryQueue.async { [weak self] in
+                guard let self else { completion(); return }
+                readSummary(tail: LineTail(maxChunk: 64 << 10), completion: completion)
+            }
+        }
+        bufferLock.unlock()
     }
 
-    private func readSummary(tail initial: LineTail) {
-        guard !summaryStopped else { return }
+    private func readSummary(tail initial: LineTail, completion: (@Sendable () -> Void)? = nil) {
+        guard !summaryStopped else { completion?(); return }
         var tail = initial
         tail.maxLines = EventPages.pageSize
         guard let step = tail.read(path: path) else {
             summaryBuilder.setAvailability(.unavailable)
             summary = summaryBuilder.snapshot(fileLimit: summaryFileLimit)
+            completion?()
             // read(path:) can mutate its cursor before a seek/read fails. Commit only successful reads.
             scheduleSummaryRetry(tail: initial)
             return
@@ -202,8 +276,13 @@ private final class TaskStream: @unchecked Sendable {
             lastSummaryPublish = Date()
         }
         if step.more {
-            summaryQueue.async { [weak self] in self?.readSummary(tail: tail) }
+            let nextTail = tail
+            summaryQueue.async { [weak self] in
+                guard let self else { completion?(); return }
+                readSummary(tail: nextTail, completion: completion)
+            }
         } else {
+            completion?()
             scheduleSummaryRetry(tail: tail)
         }
     }
@@ -215,16 +294,43 @@ private final class TaskStream: @unchecked Sendable {
         summaryQueue.asyncAfter(deadline: .now() + 1, execute: retry)
     }
 
-    func stopActivity() { tailer?.stop(); tailer = nil }
+    func stopActivity() {
+        bufferLock.lock()
+        if let initialActivityID { initialLoads.cancel(initialActivityID) }
+        initialActivityID = nil
+        activityStopped = true
+        activityEpoch += 1
+        pageRequested = false
+        flushToken?.cancel()
+        flushToken = nil
+        pendingBatches = []
+        pendingAvailability = nil
+        let epoch = activityEpoch
+        activityQueue.async { [weak self] in
+            guard let self else { return }
+            bufferLock.lock()
+            defer { bufferLock.unlock() }
+            guard activityStopped, activityEpoch == epoch else { return }
+            timelineBuilder = TimelineBuilder()
+            if !events.isEmpty { events = [] }
+            if !items.isEmpty { items = [] }
+        }
+        bufferLock.unlock()
+        tailer?.stop()
+        tailer = nil
+    }
 
     func stop() {
+        bufferLock.lock()
+        if let initialSummaryID { initialLoads.cancel(initialSummaryID) }
+        initialSummaryID = nil
+        bufferLock.unlock()
         summaryQueue.async { [weak self] in
             self?.summaryStopped = true
             self?.summaryRetry?.cancel()
             self?.summaryRetry = nil
         }
-        tailer?.stop()
-        tailer = nil
+        stopActivity()
         bufferLock.lock()
         flushToken?.cancel()
         flushToken = nil
@@ -240,15 +346,16 @@ private final class TaskStream: @unchecked Sendable {
     /// were already buffered with it — this is the "final flush on terminal" half of the design; the
     /// debounce timer itself is the "final flush on idle" half, since it fires on a fixed schedule
     /// regardless of whether the stream keeps producing deltas.
-    private func enqueue(_ newEvents: [TaskEvent], reset: Bool, availability: EventAvailability) {
+    private func enqueue(_ newEvents: [TaskEvent], reset: Bool, availability: EventAvailability, epoch: Int) {
         let isPureDeltaBurst = !reset && !newEvents.isEmpty && newEvents.allSatisfy(\.isAssistantDelta)
         bufferLock.lock()
+        guard !activityStopped, activityEpoch == epoch else { bufferLock.unlock(); return }
         pendingBatches.append(PendingBatch(events: newEvents, reset: reset))
         pendingAvailability = availability
         if isPureDeltaBurst {
             if flushToken == nil {
                 flushToken = scheduler.schedule(after: Self.coalesceWindow) { [weak self] in
-                    self?.applyPending()
+                    self?.applyPending(expectedEpoch: epoch)
                 }
             }
             bufferLock.unlock()
@@ -257,44 +364,66 @@ private final class TaskStream: @unchecked Sendable {
         flushToken?.cancel()
         flushToken = nil
         bufferLock.unlock()
-        applyPending()
+        applyPending(expectedEpoch: epoch)
     }
 
-    /// Held for the whole apply, not just the buffer drain: an immediate flush (the tailer's own
-    /// queue) and a debounced one (the scheduler's own queue, a *different* queue for
-    /// `SystemScheduler`) can otherwise race each other's read-modify-write of `events`, each
-    /// computing `next` from a stale read and one's update silently overwriting the other's. Serial
-    /// application under one lock is what actually gives "the timeline is rebuilt at most once per
-    /// window" its ordering guarantee, not just the buffer bookkeeping.
-    private func applyPending() {
+    /// Drain under the buffer lock and enqueue in that same critical section. The serial worker
+    /// orders timer and terminal flushes while expensive folding leaves the main actor free.
+    private func applyPending(expectedEpoch: Int) {
         bufferLock.lock()
-        defer { bufferLock.unlock() }
+        guard activityEpoch == expectedEpoch else { bufferLock.unlock(); return }
         let batches = pendingBatches
         let availability = pendingAvailability
+        let epoch = activityEpoch
         pendingBatches = []
         pendingAvailability = nil
         flushToken = nil
-        guard !batches.isEmpty else { return }
+        guard !activityStopped, !batches.isEmpty else { bufferLock.unlock(); return }
+        // Enqueue while holding the buffer lock so timer and immediate flushes retain order.
+        activityQueue.async { [weak self] in
+            self?.fold(batches, availability: availability, epoch: epoch)
+        }
+        bufferLock.unlock()
+    }
+
+    private func fold(_ batches: [PendingBatch], availability: EventAvailability?, epoch: Int) {
+        bufferLock.lock()
+        let valid = !activityStopped && activityEpoch == epoch
+        bufferLock.unlock()
+        guard valid else { return }
+        let started = MonitorMetrics.begin()
         var next = events
+        var builder = timelineBuilder
         for batch in batches {
             if batch.reset {
                 next = []
-                timelineBuilder = TimelineBuilder()
+                builder = TimelineBuilder()
             }
-            // Unknown kinds are kept for Raw events but never shown on the timeline (F4-27).
-            let known = Set(next.map(\.seq))
-            let additions = batch.events.filter { !known.contains($0.seq) }
+            var known = Set(next.map(\.seq))
+            let additions = batch.events.filter { known.insert($0.seq).inserted }
             let prepend = additions.first.map { first in next.first.map { first.seq < $0.seq } ?? false } ?? false
             next.append(contentsOf: additions)
-            if prepend { next.sort { $0.seq < $1.seq }; timelineBuilder = TimelineBuilder(); timelineBuilder.append(next) }
-            // Only THIS batch's own new events — never `next`, the whole accumulated history — is
-            // what makes this incremental (Codex review round 1, finding 1).
-            if !prepend { timelineBuilder.append(additions) }
+            if prepend {
+                next.sort { $0.seq < $1.seq }
+                builder = TimelineBuilder()
+                builder.append(next)
+            } else {
+                builder.append(additions)
+            }
         }
-        events = next
-        items = timelineBuilder.items
-        if let availability { eventsAvailability = availability }
+        let nextItems = builder.items
+        let eventsChanged = events != next
+        let itemsChanged = items != nextItems
+        MonitorMetrics.end(started, stage: .activityFold, backgroundThread: !Thread.isMainThread)
+        bufferLock.lock()
+        defer { bufferLock.unlock() }
+        guard !activityStopped, activityEpoch == epoch else { return }
+        timelineBuilder = builder
+        if eventsChanged { events = next }
+        if itemsChanged { items = nextItems }
+        if let availability, eventsAvailability != availability { eventsAvailability = availability }
     }
+
 }
 
 extension TaskEvent {

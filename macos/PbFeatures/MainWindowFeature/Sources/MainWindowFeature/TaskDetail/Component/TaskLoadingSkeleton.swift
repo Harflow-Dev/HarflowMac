@@ -34,11 +34,13 @@ struct TaskLoadingSkeleton: View {
                 .opacity(0.6)
                 .padding(.top, isEmbedded ? 8 : 16)
                 .padding(.bottom, isEmbedded ? 8 : 16)
-            feed
-                .padding(.horizontal, 24)
-                .padding(.top, 12)
-                .readingColumn()
-                .frame(maxHeight: .infinity, alignment: .top)
+            ScrollView {
+                feed
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
+                    .readingColumn()
+            }
+            .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
             composer
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)

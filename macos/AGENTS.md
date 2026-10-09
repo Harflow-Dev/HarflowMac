@@ -58,6 +58,20 @@ synchronous snapshots with `@Subjected`. VMs are `@MainActor`. Ordering guarante
 contract (busy check-and-insert is atomic, events apply in arrival order, routing to a new task
 waits until the refreshed listing has reached the main queue).
 
+## Background computation and UI application
+
+Run routine I/O, decoding, filtering, indexing, grouping, sorting and reconciliation off the main
+actor wherever possible. Capture immutable, `Sendable` inputs, compute the presentation in a
+background isolation domain, then apply only changed presentation fields on the main actor.
+Keep UI interactions and access to actor-isolated UI state on the main actor; never move mutable
+VM state across isolation boundaries. `async` and a `Task` created in a main-actor context do not
+by themselves move synchronous work into the background.
+
+Cancel superseded work and check its generation before applying results, including changes to
+data, search and selection. An older result must never overwrite a newer presentation. Preserve
+ordering, freshness and bounded resource use. For performance changes, verify that expensive
+computation runs outside the main actor and unchanged polling produces no rendering publications.
+
 ## Rendering publisher equality
 
 Publishers that drive rendering must emit the initial state, then emit again only when their

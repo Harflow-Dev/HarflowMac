@@ -31,7 +31,7 @@ extension SidebarVM {
     }
 
     func groups(in bucket: SidebarSection.Bucket) -> [ParallelGroup] {
-        items(in: bucket).compactMap { if case .group(let group) = $0 { group } else { nil } }
+        items(in: bucket).compactMap { if case .group(let group) = $0 { group.group } else { nil } }
     }
 
     var runningRows: [TaskRowModel] { rows(in: .running) }
@@ -62,6 +62,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         harness.tasksSubject.send([
@@ -72,6 +73,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { sut.sections.count == 3 }
+        await sut.waitForPresentation()
         #expect(sut.sections.map(\.bucket) == [.running, .today, .earlier])
         #expect(sut.runningRows.map(\.id) == ["run"])
         #expect(sut.rows(in: .today).map(\.id) == ["today"])
@@ -83,6 +85,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         harness.tasksSubject.send([
@@ -92,6 +95,7 @@ extension SidebarVMTests {
 
         // then — the root stays Running even though it is old and finished; nothing is split off.
         await waitUntil { !sut.sections.isEmpty }
+        await sut.waitForPresentation()
         #expect(sut.sections.map(\.bucket) == [.running])
         #expect(sut.runningRows.map(\.id) == ["root", "child"])
     }
@@ -101,6 +105,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when — the child started today, but bucketing follows the root's start.
         harness.tasksSubject.send([
@@ -110,6 +115,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { !sut.sections.isEmpty }
+        await sut.waitForPresentation()
         #expect(sut.sections.map(\.bucket) == [.earlier])
         #expect(sut.rows(in: .earlier).map(\.id) == ["root", "child"])
     }
@@ -119,6 +125,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         harness.tasksSubject.send([
@@ -143,6 +150,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
         defer { sut.didDisappear() }
         let old = task(id: "old-run", status: "completed", startedAt: noon.addingTimeInterval(-86400), group: "repeat")
         let other = task(id: "other", status: "completed", startedAt: noon.addingTimeInterval(-3600))
@@ -156,7 +164,7 @@ extension SidebarVMTests {
         #expect(sut.groups(in: .earlier).isEmpty)
     }
 
-    @Test func givenYesterdayWorkflowContinuedToday_whenItStops_thenItStaysFirstInToday() {
+    @Test func givenYesterdayWorkflowContinuedToday_whenItStops_thenItStaysFirstInToday() async {
         // given
         let harness = makeBucketSUT()
         let sut = harness.sut
@@ -181,6 +189,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         harness.tasksSubject.send([
@@ -200,6 +209,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         harness.tasksSubject.send([
@@ -217,6 +227,7 @@ extension SidebarVMTests {
         let harness = makeBucketSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         harness.tasksSubject.send([])
@@ -234,15 +245,19 @@ extension SidebarVMTests {
         let harness = makeSUT(catalog: catalog([("claude", true), ("codex", true)]))
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
         harness.hasListedSubject.send(true)
         harness.tasksSubject.send([task(id: "t1", status: "completed")])
         await waitUntil { !sut.sections.isEmpty }
+        await sut.waitForPresentation()
 
         // when
         sut.didChangeSearchQuery("zzz-no-match")
+        await sut.waitForPresentation()
 
         // then
         await waitUntil { sut.sections.isEmpty }
+        await sut.waitForPresentation()
         #expect(sut.emptyStateMessage == "No tasks match \"zzz-no-match\".")
         #expect(sut.backendTabs.map(\.id).contains("codex"))
         #expect(sut.selectedBackend == "all")
@@ -253,14 +268,17 @@ extension SidebarVMTests {
         let harness = makeSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
         harness.hasListedSubject.send(true)
         await waitUntil { sut.isConnected }
+        await sut.waitForPresentation()
 
         // when
         harness.listErrorSubject.send(ToolError.refused(code: "unreadable", message: "boom"))
 
         // then
         await waitUntil { !sut.isConnected }
+        await sut.waitForPresentation()
         #expect(!sut.isConnected)
     }
 }

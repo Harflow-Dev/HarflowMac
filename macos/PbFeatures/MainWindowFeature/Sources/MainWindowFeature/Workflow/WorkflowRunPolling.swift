@@ -33,6 +33,8 @@ final class WorkflowRunPolling {
     private var executionDigests: [String: String] = [:]
 
     func load(id: String, useCase: any WorkflowUseCase) async throws -> [String: JSONValue] {
+        let metricStart = MonitorMetrics.begin()
+        defer { MonitorMetrics.end(metricStart, stage: .workflowLoad) }
         let generation = UUID()
         loadID = generation
         let (response, isCached) = try await status(id: id, useCase: useCase)
@@ -113,6 +115,8 @@ final class WorkflowRunPolling {
             digests[field] = digest
         }
         let ordered = try await loadExecutions(id: id, generation: generation, useCase: useCase)
+        let reconciliationStart = MonitorMetrics.begin()
+        defer { MonitorMetrics.end(reconciliationStart, stage: .workflowReconciliation) }
         var result = metadata
         for (field, value) in values where field != "execution_index" {
             if value == .null { result.removeValue(forKey: field) } else { result[field] = value }

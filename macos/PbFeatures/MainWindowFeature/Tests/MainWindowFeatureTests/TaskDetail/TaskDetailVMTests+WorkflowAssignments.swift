@@ -28,9 +28,15 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
-        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
+        for _ in 1 ..< members.count {
+            await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+            harness.sut.timelineModel.onLoadMore?()
+            await waitUntil { harness.sut.timelineWorker == nil && !harness.sut.olderActivityRequest }
+        }
         let expected = sameSession ? members : [members[0]]
         await waitUntil { harness.sut.timelineModel.rows.filter { if case .item = $0.kind { return true }; return false }.count == expected.count }
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         #expect(harness.sut.conversationMembers.map(\.taskID) == expected.map(\.taskID))
         #expect(Set(harness.sut.timelineModel.rows.map(\.taskID)) == Set(expected.map(\.taskID)))
@@ -58,8 +64,14 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
-        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
+        for _ in 1 ..< members.count {
+            await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+            harness.sut.timelineModel.onLoadMore?()
+            await waitUntil { harness.sut.timelineWorker == nil && !harness.sut.olderActivityRequest }
+        }
         await waitUntil { harness.sut.conversationMembers.count == 2 }
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         let displayed = harness.sut.timelineModel.rows.compactMap { row -> String? in
             if case .separator(let text) = row.kind { return text }
@@ -93,8 +105,12 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([first, current])
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
         harness.sut.timelineModel.onLoadMore?()
+        await waitUntil { harness.sut.timelineWorker == nil && !harness.sut.olderActivityRequest }
         await waitUntil { harness.sut.task != nil }
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         #expect(harness.sut.promptText == "Answer to the worker question")
         let messages = harness.sut.timelineModel.rows.compactMap { row -> String? in
@@ -128,8 +144,14 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
-        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
+        for _ in 1 ..< members.count {
+            await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+            harness.sut.timelineModel.onLoadMore?()
+            await waitUntil { harness.sut.timelineWorker == nil && !harness.sut.olderActivityRequest }
+        }
         await waitUntil { harness.sut.task?.taskID == "attempt-1" }
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         #expect(harness.sut.conversationMembers.map(\.taskID) == ["attempt-0", "attempt-1"])
         #expect(harness.sut.promptText == "Assignment 1")
@@ -149,8 +171,14 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
-        for _ in 1 ..< members.count { harness.sut.timelineModel.onLoadMore?() }
+        for _ in 1 ..< members.count {
+            await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+            harness.sut.timelineModel.onLoadMore?()
+            await waitUntil { harness.sut.timelineWorker == nil && !harness.sut.olderActivityRequest }
+        }
         await waitUntil { harness.sut.task?.taskID == "builder-1" }
+        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
+
         // then
         #expect(harness.sut.conversationMembers.count == 2)
         harness.sut.didDisappear()

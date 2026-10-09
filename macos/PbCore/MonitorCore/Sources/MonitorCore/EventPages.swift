@@ -35,6 +35,8 @@ public enum EventPages {
     /// Reads backward at most one byte budget; only complete newline-terminated records count.
     public static func read(path: String, before cursor: EventPageCursor? = nil,
                             limit: Int = pageSize, byteLimit: Int = byteLimit) throws -> EventPage {
+        let started = MonitorMetrics.begin()
+        defer { MonitorMetrics.end(started, stage: .activityPageRead, backgroundThread: !Thread.isMainThread) }
         guard let handle = FileHandle(forReadingAtPath: path) else { throw EventPageError.unavailable }
         defer { try? handle.close() }
         var info = stat()

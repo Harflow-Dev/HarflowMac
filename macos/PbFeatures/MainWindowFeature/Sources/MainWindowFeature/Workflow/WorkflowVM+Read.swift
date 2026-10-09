@@ -85,6 +85,8 @@ extension WorkflowVM {
     }
 
     private func applyWorkflowRead(_ response: [String: JSONValue], context: WorkflowReadContext) throws {
+        let metricStart = MonitorMetrics.begin()
+        defer { MonitorMetrics.end(metricStart, stage: .workflowViewUpdate) }
         guard context.runID != nil else {
             workflows = WorkflowJSON.objects(response["workflows"]).map { WorkflowRecord(raw: $0) }
             return
@@ -97,6 +99,7 @@ extension WorkflowVM {
         selectedRun = WorkflowRunModel(raw: raw)
         initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
         updateActivityMembership()
+        MonitorMetrics.end(metricStart, stage: .workflowContentReady)
     }
 
     private func finishRunRead(_ context: WorkflowReadContext, preparing: Bool) {

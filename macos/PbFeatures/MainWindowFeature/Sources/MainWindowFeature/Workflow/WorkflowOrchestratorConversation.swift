@@ -32,14 +32,73 @@ enum WorkflowOrchestratorConversation {
         }
     }
 
+    /// Resolve ancestry and harness buckets once. Resolving each member independently rebuilt
+    /// every ancestry component for every record in a large Parallel group.
     static func conversations(_ tasks: [TaskInfo]) -> [Conversation] {
+        let canonical = Lineage.conversations(tasks)
+        var lineageByID: [String: Conversation] = [:]
+        var hasGroup: Set<String> = []
+        var buckets: [HarnessKey: [TaskInfo]] = [:]
+        let firstByID = Dictionary(tasks.map { ($0.taskID, $0) }, uniquingKeysWith: { first, _ in first })
+        for conversation in canonical {
+            if conversation.members.contains(where: { $0.group != nil }) { hasGroup.insert(conversation.id) }
+            for member in conversation.members {
+                lineageByID[member.taskID] = conversation
+                if let session = member.sessionID, !session.isEmpty, member.backend != "unknown" {
+                    buckets[.lineage(conversation.id, session, member.backend), default: []].append(member)
+                }
+            }
+        }
+        for task in tasks {
+            guard let key = workflowKey(task) else { continue }
+            buckets[key, default: []].append(task)
+        }
+        for key in buckets.keys { buckets[key]?.sort(by: oldestFirst) }
         var seen: Set<String> = []
         return tasks.compactMap { task in
-            let members = members(containing: task.taskID, in: tasks)
-                ?? Lineage.conversation(containing: task.taskID, in: tasks)?.members ?? [task]
+            let selected = firstByID[task.taskID] ?? task
+            let lineage = lineageByID[selected.taskID] ?? Conversation(members: [selected])
+            let members = indexedMembers(selected, lineage: lineage, hasGroup: hasGroup.contains(lineage.id), buckets: buckets)
             guard let first = members.first, seen.insert(first.taskID).inserted else { return nil }
             return Conversation(members: members)
         }
+    }
+
+    private static func indexedMembers(_ selected: TaskInfo, lineage: Conversation, hasGroup: Bool,
+                                       buckets: [HarnessKey: [TaskInfo]]) -> [TaskInfo] {
+        if selected.raw["workflow_run_id"]?.stringValue == nil, !hasGroup { return lineage.members }
+        guard let session = selected.sessionID, !session.isEmpty, selected.backend != "unknown" else { return [selected] }
+        if selected.raw["workflow_run_id"]?.stringValue != nil {
+            return workflowKey(selected).flatMap { buckets[$0] } ?? [selected]
+        }
+        return buckets[.lineage(lineage.id, session, selected.backend)] ?? [selected]
+    }
+
+    private enum HarnessKey: Hashable {
+        case lineage(String, String, String)
+        case orchestrator(String, String, String)
+        case builder(String, String, String)
+        case node(String, String, String, String)
+    }
+
+    private static func workflowKey(_ task: TaskInfo) -> HarnessKey? {
+        guard let session = task.sessionID, !session.isEmpty, task.backend != "unknown" else { return nil }
+        let role = task.raw["workflow_role"]?.stringValue ?? (task.raw["workflow_builder"]?.boolValue == true ? "builder" : "")
+        let runID = task.raw["workflow_run_id"]?.stringValue
+        let owner = task.raw["workflow_session_owner_run_id"]?.stringValue ?? runID
+        switch role {
+        case "orchestrator": return owner.map { .orchestrator($0, session, task.backend) }
+        case "builder": return runID.map { .builder($0, session, task.backend) }
+        case "node":
+            guard let runID, let nodeID = task.raw["workflow_node_id"]?.stringValue else { return nil }
+            return .node(runID, nodeID, session, task.backend)
+        default: return nil
+        }
+    }
+
+    private static func oldestFirst(_ lhs: TaskInfo, _ rhs: TaskInfo) -> Bool {
+        if lhs.startedAt != rhs.startedAt { return (lhs.startedAt ?? .distantPast) < (rhs.startedAt ?? .distantPast) }
+        return lhs.taskID < rhs.taskID
     }
 
     static func representative(_ members: [TaskInfo]) -> TaskInfo? {

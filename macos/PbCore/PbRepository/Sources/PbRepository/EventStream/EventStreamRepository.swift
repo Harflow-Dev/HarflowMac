@@ -21,15 +21,14 @@ public protocol EventStreamLease: AnyObject, Sendable {
 /// (the menu bar, TaskDetail, a Parallel column) — decision 6. One `EventFileTailer` per task,
 /// however many leases are outstanding. The first lease on a task triggers
 /// `TaskSnapshotRepository.refresh(id)` (F4-13); the last release stops the tailer. A missing events
-/// path falls back to `/dev/null` (F4-13). Tailer callbacks are applied synchronously, in arrival
-/// order, under the per-task `@Subjected` lock — never as one `Task` per callback, which could
-/// reorder a reset ahead of an append.
+/// path falls back to `/dev/null` (F4-13). Tailer callbacks are folded on a serial background queue in arrival order.
+/// Completed history publishes only after its item snapshot; concurrent `loadMore` calls coalesce.
 @Mockable
 public protocol EventStreamRepository: Sendable {
 
     func acquireSummary(_ taskID: String) -> any EventStreamLease
     func loadMoreSummaryFiles(_ taskID: String)
-    func loadMore(_ taskID: String)
+    @discardableResult func loadMore(_ taskID: String) -> Bool
     func history(for taskID: String) -> EventHistoryState
     func historyPublisher(for taskID: String) -> AnyPublisher<EventHistoryState, Never>
     func summary(for taskID: String) -> EventSummary
@@ -62,7 +61,7 @@ public protocol EventStreamRepository: Sendable {
 public extension EventStreamRepository {
     func acquireSummary(_ id: String) -> any EventStreamLease { acquire(id) }
     func loadMoreSummaryFiles(_: String) {}
-    func loadMore(_: String) {}
+    @discardableResult func loadMore(_: String) -> Bool { false }
     func history(for _: String) -> EventHistoryState { EventHistoryState() }
     func historyPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { Just(history(for: id)).eraseToAnyPublisher() }
     func summary(for id: String) -> EventSummary {

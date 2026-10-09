@@ -79,7 +79,7 @@ protocol TaskDetailUseCase: Sendable {
     func acquireSummaryLease(_ id: String) -> any EventStreamLease
     func acquireEventLease(_ id: String) -> any EventStreamLease
     func loadMoreSummaryFiles(_ id: String)
-    func loadMoreEvents(_ id: String)
+    @discardableResult func loadMoreEvents(_ id: String) -> Bool
     func eventHistory(for id: String) -> EventHistoryState
     func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never>
     func eventSummary(for id: String) -> EventSummary
@@ -103,7 +103,7 @@ extension TaskDetailUseCase {
     func conversationHistory(sessionID _: String, cursor _: String?) async throws -> TaskHistoryPage? { nil }
     func acquireSummaryLease(_ id: String) -> any EventStreamLease { acquireEventLease(id) }
     func loadMoreSummaryFiles(_: String) {}
-    func loadMoreEvents(_: String) {}
+    @discardableResult func loadMoreEvents(_: String) -> Bool { false }
     func eventHistory(for _: String) -> EventHistoryState { EventHistoryState() }
     func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { Just(eventHistory(for: id)).eraseToAnyPublisher() }
     func eventSummary(for id: String) -> EventSummary {
@@ -186,6 +186,24 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored let routing: any TaskDetailRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
     @ObservationIgnored var didSubscribe = false
+    @ObservationIgnored var memberLeaseAcquisition: Task<Void, Never>?
+    @ObservationIgnored var timelineEpoch = UUID()
+    @ObservationIgnored var timelineRevision: UInt64 = 0
+    @ObservationIgnored var timelineBuild: @Sendable (TaskDetailTimelineInput) async -> TaskDetailTimelinePresentation? = {
+        try? TaskDetailTimelineBuilder.build($0)
+    }
+
+    @ObservationIgnored var timelineWorker: Task<Void, Never>?
+    @ObservationIgnored var pendingTimelineInput: TaskDetailTimelineInput?
+    @ObservationIgnored var latestTimelineInput: TaskDetailTimelineInput?
+    @ObservationIgnored var appliedTimelinePresentation: TaskDetailTimelinePresentation?
+    @ObservationIgnored var activityPaginationRevision = 0
+    @ObservationIgnored var olderActivityRequest = false
+    @ObservationIgnored var olderActivityObservedLoading = false
+    @ObservationIgnored var olderActivityMember: String?
+    @ObservationIgnored var olderActivityHistory: EventHistoryState?
+    @ObservationIgnored var olderActivityReady = false
+
     /// The conversation's own members, oldest to newest — resolved from `taskID` (any member) on
     /// every membership change. Never empty once the task is known at all.
     @ObservationIgnored var conversationMembers: [TaskInfo] = []
@@ -204,6 +222,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored var loadedActivityMembers: Set<String> = []
     @ObservationIgnored var summaryLeases: [String: any EventStreamLease] = [:]
     @ObservationIgnored var summaryCancellables: [String: AnyCancellable] = [:]
+    @ObservationIgnored var memberLeaseTokens: [String: UUID] = [:]
     @ObservationIgnored var leases: [String: any EventStreamLease] = [:]
     @ObservationIgnored var memberCancellables: [String: [AnyCancellable]] = [:]
     /// Kept only for Summary/"Files the agent edited" (`+Summary.swift`), which still pairs
@@ -265,6 +284,15 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// every subscription, and resets `didSubscribe` so a reappearing screen subscribes and
     /// re-acquires leases fresh.
     func didDisappear() {
+        memberLeaseAcquisition?.cancel()
+        memberLeaseAcquisition = nil
+        timelineEpoch = UUID()
+        timelineRevision &+= 1
+        timelineWorker?.cancel()
+        pendingTimelineInput = nil
+        latestTimelineInput = nil
+        appliedTimelinePresentation = nil
+        olderActivityRequest = false
         conversationLookup?.cancel()
         conversationLookup = nil
         conversationLoading = false
@@ -273,6 +301,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         memberCancellables.removeAll()
         for lease in leases.values { lease.release() }
         leases.removeAll()
+        memberLeaseTokens.removeAll()
         for lease in summaryLeases.values { lease.release() }
         summaryLeases.removeAll()
         summaryCancellables.removeAll()
@@ -333,11 +362,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         conversationMembers = members
         if let newest = members.last { loadedActivityMembers.insert(newest.taskID) }
         let allIDs = Set(members.map(\.taskID))
-        for member in members where summaryLeases[member.taskID] == nil {
-            let id = member.taskID
-            summaryLeases[id] = useCase.acquireSummaryLease(id)
-            summaryCancellables[id] = useCase.eventSummaryPublisher(for: id).receive(on: DispatchQueue.main).sink { [weak self] _ in self?.recompute() }
-        }
+        acquireSummaryMembers(members.map(\.taskID))
         for id in Set(summaryLeases.keys).subtracting(allIDs) {
             summaryLeases.removeValue(forKey: id)?.release()
             summaryCancellables[id] = nil
@@ -452,6 +477,12 @@ final class TaskDetailVM: TaskDetailViewModel {
     }
 
     private func resetForMissingTask() {
+        timelineRevision &+= 1
+        timelineWorker?.cancel()
+        pendingTimelineInput = nil
+        latestTimelineInput = nil
+        appliedTimelinePresentation = nil
+        olderActivityRequest = false
         title = ""
         ancestorCrumbs = []
         isBusy = false

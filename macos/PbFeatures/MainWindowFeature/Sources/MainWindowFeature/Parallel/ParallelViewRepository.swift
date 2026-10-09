@@ -65,6 +65,16 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
     func items(for taskID: String) -> [TimelineItem] { eventStreamRepository.items(for: taskID) }
     func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never> { eventStreamRepository.itemsPublisher(for: taskID) }
     func prompt(for taskID: String) -> String? { eventStreamRepository.prompt(for: taskID) }
+    func eventHistory(for taskID: String) -> EventHistoryState { eventStreamRepository.history(for: taskID) }
+    func eventHistoryPublisher(for taskID: String) -> AnyPublisher<EventHistoryState, Never> {
+        eventStreamRepository.historyPublisher(for: taskID)
+    }
+
+    func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage? {
+        try await taskListRepository.conversationPage(sessionID: sessionID, cursor: cursor, limit: 100)
+    }
+
+    @discardableResult func loadMoreEvents(_ taskID: String) -> Bool { eventStreamRepository.loadMore(taskID) }
     func eventsAvailability(for taskID: String) -> EventAvailability { eventStreamRepository.eventsAvailability(for: taskID) }
     func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never> {
         eventStreamRepository.eventsAvailabilityPublisher(for: taskID)

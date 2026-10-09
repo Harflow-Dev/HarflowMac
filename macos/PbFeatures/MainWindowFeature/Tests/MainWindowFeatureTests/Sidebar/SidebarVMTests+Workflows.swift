@@ -15,9 +15,11 @@ extension SidebarVMTests {
         let builder = TaskInfo(.object(["task_id": .string("edit"), "backend": .string("codex"), "status": .string("running"),
             "workflow_builder": .bool(true)]))!
         harness.sut.didAppear()
+        await harness.sut.waitForPresentation()
         // when
         harness.tasksSubject.send([builder, task(id: "legacy"), task(id: "execution")])
         await waitUntil { harness.sut.runningRows.map(\.id) == ["execution"] }
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.filteredWorkflowRuns().isEmpty)
         #expect(harness.sut.latestTasks.contains { $0.taskID == "execution" })
@@ -38,9 +40,11 @@ extension SidebarVMTests {
                                      "created_at": .number(now.addingTimeInterval(-172800).timeIntervalSince1970)])
         ]
         harness.sut.didAppear()
+        await harness.sut.waitForPresentation()
         // when
         harness.tasksSubject.send([task(id: "same", status: "running")])
-        await waitUntil { harness.sut.sections.count == 3 }
+        await waitUntil { harness.sut.latestTasks.count == 1 && harness.sut.sections.count == 3 }
+        await harness.sut.waitForPresentation()
         // then
         #expect(Set(harness.sut.items(in: .running).map(\.id)) == ["task:same", "workflow:same"])
         #expect(harness.sut.items(in: .today).map(\.id) == ["workflow:today"])
@@ -48,7 +52,7 @@ extension SidebarVMTests {
         harness.sut.didDisappear()
     }
 
-    @Test func givenSavedDefinitionsAndRunHistory_whenSearching_thenNamesAndRepositoryAreSearchable() {
+    @Test func givenSavedDefinitionsAndRunHistory_whenSearching_thenNamesAndRepositoryAreSearchable() async {
         // given
         let harness = makeSUT()
         harness.sut.workflowDefinitions = [WorkflowRecord(raw: ["name": .string("ship-release")]), WorkflowRecord(raw: ["name": .string("code-review")])]
@@ -56,15 +60,17 @@ extension SidebarVMTests {
                                                            "repo_path": .string("/tmp/release"), "status": .string("needs_attention")])]
         // when
         harness.sut.didChangeSearchQuery("release")
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.savedWorkflows.map(\.id) == ["ship-release"])
         #expect(harness.sut.items(in: .running).map(\.id) == ["workflow:run"])
         harness.sut.didChangeSearchQuery("absent")
+        await harness.sut.waitForPresentation()
         #expect(harness.sut.savedWorkflows.isEmpty)
         #expect(harness.sut.sections.isEmpty)
     }
 
-    @Test func givenRepeatedAddActions_whenTapped_thenEachRequestsAFreshEditorIdentity() {
+    @Test func givenRepeatedAddActions_whenTapped_thenEachRequestsAFreshEditorIdentity() async {
         // given
         var destinations: [MonitorDestination?] = []
         let harness = makeSUT(onSelect: { destinations.append($0) })
@@ -82,7 +88,9 @@ extension SidebarVMTests {
         let useCase = SuspendedSidebarWorkflows()
         let harness = makeSUT(workflowUseCase: useCase)
         harness.sut.didAppear()
+        await harness.sut.waitForPresentation()
         harness.sut.didAppear()
+        await harness.sut.waitForPresentation()
         await waitUntil { useCase.continuation != nil }
         #expect(useCase.requests == 1)
         // when
@@ -100,9 +108,11 @@ extension SidebarVMTests {
         given(useCase).workflowSnapshot().willThrow(WorkflowSidebarError.unavailable)
         let harness = makeSUT(workflowUseCase: useCase)
         harness.sut.didAppear()
+        await harness.sut.waitForPresentation()
         harness.tasksSubject.send([task(id: "task", status: "running")])
         // when
         await waitUntil { harness.sut.workflowErrorMessage != nil && !harness.sut.sections.isEmpty }
+        await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.items(in: .running).map(\.id) == ["task:task"])
         #expect(harness.sut.workflowErrorMessage?.hasPrefix("Workflow list unavailable:") == true)
@@ -127,7 +137,7 @@ private final class SuspendedSidebarWorkflows: SidebarWorkflowUseCase {
 }
 
 extension SidebarVMTests {
-    @Test func givenNestedRuns_whenExpanded_thenChildAppearsUnderParentAndSearchKeepsAncestor() {
+    @Test func givenNestedRuns_whenExpanded_thenChildAppearsUnderParentAndSearchKeepsAncestor() async {
         // given
         let harness = makeSUT()
         harness.sut.workflowRuns = [
@@ -139,6 +149,7 @@ extension SidebarVMTests {
         // when
         let items = harness.sut.workflowTreeItems(harness.sut.workflowRuns[0])
         harness.sut.didChangeSearchQuery("Nested")
+        await harness.sut.waitForPresentation()
         // then
         #expect(items.map(\.id) == ["workflow:root", "workflow-shortcut:root:child"])
         if case .workflowShortcut(let child, _) = items.last { #expect(child.indent == 1); #expect(child.guides == [.last]) }
@@ -148,7 +159,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenNestedTask_whenRevealed_thenAllWorkflowAncestorsExpand() {
+    @Test func givenNestedTask_whenRevealed_thenAllWorkflowAncestorsExpand() async {
         // given
         let harness = makeSUT()
         harness.sut.workflowRuns = [
@@ -158,6 +169,8 @@ extension SidebarVMTests {
         ]
         harness.sut.latestTasks = [TaskInfo(.object(["task_id": .string("nested-task"), "workflow_run_id": .string("grandchild")]))!]
         // when
+        harness.sut.recompute()
+        await harness.sut.waitForPresentation()
         harness.sut.expandExecutionParent(of: "nested-task")
         // then
         #expect(harness.sut.expandedExecutionParents == ["workflow:root", "workflow:child", "workflow:grandchild"])
@@ -165,7 +178,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenMalformedWorkflowHeadersAndTaskOwners_whenListed_thenCannotBecomeSelectableRunRows() {
+    @Test func givenMalformedWorkflowHeadersAndTaskOwners_whenListed_thenCannotBecomeSelectableRunRows() async {
         // given
         let harness = makeSUT()
         harness.sut.mergeWorkflowHeaders([
@@ -189,7 +202,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenChildInvocation_whenParentExpanded_thenShortcutIsSiblingOfParentTasks() throws {
+    @Test func givenChildInvocation_whenParentExpanded_thenShortcutIsSiblingOfParentTasks() async throws {
         // given
         let harness = makeSUT()
         let parent = SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running")])
@@ -206,7 +219,7 @@ extension SidebarVMTests {
         if case .workflowShortcut(let row, _) = items[2] { #expect(row.indent == 1); #expect(row.guides == [.last]); #expect(!row.hasChildren) }
     }
 
-    @Test func givenCanonicalChild_whenBucketed_thenStandaloneRootExpandsItsOwnTasks() throws {
+    @Test func givenCanonicalChild_whenBucketed_thenStandaloneRootExpandsItsOwnTasks() async throws {
         // given
         let harness = makeSUT()
         harness.sut.workflowRuns = [
@@ -223,7 +236,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenFinishedInvokingTaskAndRunningChild_whenAliasSelected_thenBothEntriesHighlightActualRunningWorkflow() throws {
+    @Test func givenFinishedInvokingTaskAndRunningChild_whenAliasSelected_thenBothEntriesHighlightActualRunningWorkflow() async throws {
         // given
         let harness = makeSUT()
         let parent = SidebarWorkflowRun(raw: ["workflow_run_id": .string("parent"), "status": .string("running")])
@@ -237,6 +250,7 @@ extension SidebarVMTests {
         let items = harness.sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: []).flatMap(\.items)
         let alias = try #require(items.first { if case .workflowShortcut = $0 { return true }; return false })
         harness.sut.didSelect(alias.destination)
+        await harness.sut.waitForPresentation()
         // then
         #expect(alias.destination == .workflowRun("child"))
         #expect(items.filter { $0.isSelected(harness.sut.selection) }.map(\.id) == ["workflow:child", "workflow-shortcut:parent:child"])
@@ -271,7 +285,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenRecursiveChildRuns_whenExpanded_thenEachCanonicalRootOwnsOnlyImmediateNodesAndGuidedShortcuts() throws {
+    @Test func givenRecursiveChildRuns_whenExpanded_thenEachCanonicalRootOwnsOnlyImmediateNodesAndGuidedShortcuts() async throws {
         // given
         let harness = makeSUT()
         harness.sut.workflowRuns = [
@@ -300,7 +314,7 @@ extension SidebarVMTests {
 }
 
 extension SidebarVMTests {
-    @Test func givenChildOrchestratorSharingParentSession_whenCanonicalChildExpanded_thenItsOwnTaskRemainsUnderChildRoot() throws {
+    @Test func givenChildOrchestratorSharingParentSession_whenCanonicalChildExpanded_thenItsOwnTaskRemainsUnderChildRoot() async throws {
         // given
         let harness = makeSUT()
         let child = SidebarWorkflowRun(raw: ["workflow_run_id": .string("child"), "parent_workflow_run_id": .string("parent")])

@@ -38,7 +38,7 @@ extension ParallelVMTests {
         let joined = task(id: "t2", status: "running")
         tasksBox.value["t2"] = joined
         tasksSubject.send([first, joined])
-        await waitUntil { sut.columns.count == 2 }
+        await waitUntil { sut.columns.count == 2 && sut.isPresentationSettled }
         dialog.actions.first?.action()
 
         // then — the member that joined is cancelled as well, not just the captured snapshot
@@ -97,7 +97,7 @@ extension ParallelVMTests {
         tasksBox.value["t1"] = firstTurn
         sut.didAppear()
         tasksSubject.send([firstTurn])
-        await waitUntil { sut.columns.count == 1 }
+        await waitUntil { sut.columns.count == 1 && sut.isPresentationSettled }
         var capturedEvent: ViewEvent?
         let cancellable = sut.objectDidPublishViewEvent.publisher.sink { capturedEvent = $0 }
         sut.columns.first?.onTapTakeover()

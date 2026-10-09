@@ -31,6 +31,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let useCase = harness.useCase
         sut.didAppear()
+        await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.installBannerModel?.title == "git is needed to install polybridge")
         #expect(sut.installBannerModel?.primaryTitle == "Try again")
@@ -48,6 +49,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let useCase = harness.useCase
         sut.didAppear()
+        await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.installBannerModel?.primaryTitle == "Install uv")
 
@@ -67,6 +69,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let useCase = harness.useCase
         sut.didAppear()
+        await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.installBannerModel?.errorText == "Installing polybridge failed.")
         #expect(sut.installBannerModel?.canDismiss == true)
@@ -84,6 +87,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let useCase = harness.useCase
         sut.didAppear()
+        await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.installBannerModel?.primaryTitle == "Check again")
         #expect(sut.installBannerModel?.secondaryTitle == "Install anyway")
@@ -102,6 +106,7 @@ extension SidebarVMTests {
         let useCase = harness.useCase
         harness.installDestinationBox.value = "/Users/x/.local/bin"
         sut.didAppear()
+        await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel != nil }
 
         // when
@@ -122,6 +127,7 @@ extension SidebarVMTests {
         let lastCheckMessageSubject = harness.lastCheckMessageSubject
         let installAnywayBlockedMessageSubject = harness.installAnywayBlockedMessageSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         lastCheckMessageSubject.send("The install may still be finishing.")
         await waitUntil { sut.installBannerModel?.errorText == "The install may still be finishing." }
 
@@ -138,6 +144,7 @@ extension SidebarVMTests {
         let harness = makeSUT(installState: .running(.polybridge))
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then
         await waitUntil { sut.installBannerModel != nil }
@@ -157,6 +164,7 @@ extension SidebarVMTests {
         harness.installNeedBox.value = .incomplete
         harness.installDestinationBox.value = "/Users/x/.local/bin"
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
         listErrorSubject.send(.notFound(tool: "polybridge-setup", searched: []))
         tasksSubject.send([])
@@ -185,6 +193,7 @@ extension SidebarVMTests {
         let installStateSubject = harness.installStateSubject
         harness.installNeedBox.value = .missing
         sut.didAppear()
+        await sut.waitForPresentation()
         hasListedSubject.send(true)
         listErrorSubject.send(.notFound(tool: "polybridge-ctl", searched: []))
         tasksSubject.send([])
@@ -206,6 +215,7 @@ extension SidebarVMTests {
         let harness = makeSUT(installState: .installed)
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then
         await waitUntil { sut.installBannerModel != nil }
@@ -225,10 +235,12 @@ extension SidebarVMTests {
         let hasListedSubject = harness.hasListedSubject
         let installStateSubject = harness.installStateSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel != nil }
         hasListedSubject.send(true)
         tasksSubject.send([])
         await waitUntil { sut.isConnected }
+        await sut.waitForPresentation()
         #expect(sut.emptyStateMessage == nil, "the success banner still owns the space")
 
         // when — dismissing resets the install state to `.idle` (mirroring what
@@ -251,6 +263,7 @@ extension SidebarVMTests {
         let listErrorSubject = harness.listErrorSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel?.title == "polybridge is installed" }
 
         // when — a listing error that is not an install need arrives after completion.
@@ -265,7 +278,7 @@ extension SidebarVMTests {
         #expect(sut.installBannerModel == nil)
     }
 
-    @Test func givenDismissTapped_whenCalled_thenResetIsCalled() {
+    @Test func givenDismissTapped_whenCalled_thenResetIsCalled() async {
         // given
         let harness = makeSUT(installState: .installed)
         let sut = harness.sut

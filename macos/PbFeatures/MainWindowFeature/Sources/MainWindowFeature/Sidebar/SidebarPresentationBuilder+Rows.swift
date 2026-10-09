@@ -1,19 +1,11 @@
-//
-//  SidebarVM+Rows.swift
-//  MainWindowFeature
-//
-//  Split out of SidebarVM.swift purely to keep that file under the swiftlint length budget — same
-//  VM, same behaviour. `recompute()` (SidebarVM.swift) calls `flattenedRows(_:forcedExpandedIDs:)`
-//  for both `sections.running` and `sections.recent`; the rest of this file supports it. `private`
-//  is file-scoped in Swift, so these are plain (internal) methods, same reasoning as
-//  `SidebarVM+Retention.swift`'s own cross-file members.
-//
-
 import Foundation
 import MonitorCore
+import PbCommon
 import PbUI
 
-extension SidebarVM {
+// MARK: - Sidebar Rows presentation
+
+extension SidebarPresentationBuilder {
 
     /// Flattens one conversation tree into rows, hiding the descendants of a collapsed node (unless
     /// `forcedExpandedIDs` overrides it for the current filter) — a node's own row is always kept,
@@ -35,10 +27,10 @@ extension SidebarVM {
             rows.append(TaskRowModel(
                 id: conversation.id,
                 backend: current.backend,
-                title: useCase.title(conversation.first.taskID),
+                title: title(conversation.first.taskID),
                 status: current.status,
                 repoName: Format.repoName(current.repoPath),
-                ageText: Format.age(current.startedAt),
+                ageText: Format.age(current.startedAt, now: input.now),
                 indent: entry.indent,
                 subTaskSummary: subTaskSummary(for: node, isCollapsed: isCollapsed),
                 startedAt: current.startedAt,

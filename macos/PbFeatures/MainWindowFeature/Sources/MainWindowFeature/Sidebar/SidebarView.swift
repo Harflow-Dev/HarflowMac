@@ -24,6 +24,8 @@ protocol SidebarViewModel: ViewModel {
     var sections: [SidebarSection] { get }
     var taskHistoryState: HistoryLoadingState { get }
     var workflowHistoryState: HistoryLoadingState { get }
+    var historyPresentationRevision: Int { get }
+    func didChangeHistoryBottomVisibility(_ visible: Bool, revision: Int)
     func didTapLoadMoreTasks()
     func didTapLoadMoreWorkflows()
     var listErrorMessage: String? { get }
@@ -78,6 +80,8 @@ extension SidebarViewModel {
 extension SidebarViewModel {
     var taskHistoryState: HistoryLoadingState { HistoryLoadingState() }
     var workflowHistoryState: HistoryLoadingState { HistoryLoadingState() }
+    var historyPresentationRevision: Int { 0 }
+    func didChangeHistoryBottomVisibility(_: Bool, revision _: Int) {}
     func didTapLoadMoreTasks() {}
     func didTapLoadMoreWorkflows() {}
 }
@@ -220,9 +224,9 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 Button("Retry \(source.lowercased())", action: action)
             } else if state.bootstrapPending {
                 Text("Preparing \(source.lowercased()) history…").font(.pb(.caption))
-                Button("Continue loading \(source.lowercased())", action: action)
+                Button("Retry \(source.lowercased())", action: action)
             } else if state.hasMore {
-                Button("Load more \(source.lowercased())", action: action)
+                Text("Scroll to load more \(source.lowercased())").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             } else {
                 Text("End of loaded \(source.lowercased()) history").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             }
@@ -231,7 +235,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
 
     private var list: some View {
         List(selection: Binding(get: { viewModel.selection }, set: { destination in
-            withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { viewModel.didSelect(destination) }
+            viewModel.didSelect(destination)
         })) {
             workflowDefinitions
             if let bannerModel = viewModel.installBannerModel {
@@ -279,7 +283,23 @@ struct SidebarView<VM: SidebarViewModel>: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                Color.clear
+.frame(height: 1)
+                    .background(GeometryReader { geometry in
+                        Color.clear.preference(key: SidebarHistoryViewportKey.self,
+                            value: SidebarHistoryViewport(bottom: geometry.frame(in: .global),
+                                token: historyLayoutToken, revision: viewModel.historyPresentationRevision))
+                    })
+                    .listRowInsets(EdgeInsets())
+                    .accessibilityHidden(true)
             }
+        }
+        .background(GeometryReader { geometry in
+            Color.clear.preference(key: SidebarHistoryViewportKey.self,
+                value: SidebarHistoryViewport(viewport: geometry.frame(in: .global)))
+        })
+        .onPreferenceChange(SidebarHistoryViewportKey.self) { geometry in
+            viewModel.didChangeHistoryBottomVisibility(geometry.isBottomVisible, revision: geometry.revision)
         }
         .listStyle(.sidebar)
         // The first section header ("Running" whenever anything runs) otherwise sits flush against
@@ -300,6 +320,17 @@ struct SidebarView<VM: SidebarViewModel>: View {
         }
     }
 
+    /// A content change requests a fresh layout even when the trailing frame is unchanged.
+    private var historyLayoutToken: String {
+        let sections = displayedSections ?? viewModel.sections
+        let rowCount = sections.reduce(0) { $0 + $1.items.count }
+        let lastRow = sections.last?.items.last?.id ?? ""
+        let taskCursor = viewModel.taskHistoryState.nextCursor ?? ""
+        let workflowCursor = viewModel.workflowHistoryState.nextCursor ?? ""
+        return "\(rowCount):\(lastRow):\(taskCursor):\(workflowCursor)"
+            + ":\(viewModel.taskHistoryState.isLoading):\(viewModel.workflowHistoryState.isLoading)"
+    }
+
     @ViewBuilder
     private func itemView(_ item: SidebarItem) -> some View {
         switch item {
@@ -308,12 +339,12 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 .tag(MonitorDestination.task(row.id))
         case .group(let group):
             HStack(spacing: 8) {
-                GroupRow(group: group, conversations: viewModel.groupConversations(group))
-                if viewModel.groupConversations(group).count > 1 {
+                GroupRow(group: group.group, conversations: group.conversations)
+                if group.conversations.count > 1 {
                     Button { toggleExpansion(group.id) } label: {
                         Image(systemName: "chevron.right")
-                            .rotationEffect(.degrees(viewModel.isExecutionParentExpanded(group.id) ? 90 : 0))
-                            .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: viewModel.isExecutionParentExpanded(group.id))
+                            .rotationEffect(.degrees(group.isExpanded ? 90 : 0))
+                            .animation(PbMotion.disclosure(reduceMotion: reduceMotion), value: group.isExpanded)
                             .font(.pb(.caption, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .frame(width: 16, height: 16)
@@ -321,7 +352,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Expand or collapse \(group.name)")
-                    .accessibilityValue(viewModel.isExecutionParentExpanded(group.id) ? "Expanded" : "Collapsed")
+                    .accessibilityValue(group.isExpanded ? "Expanded" : "Collapsed")
                 }
             }.tag(MonitorDestination.group(group.name))
         case .workflow(let row):
@@ -341,7 +372,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
             case .task(let row), .workflow(let row), .workflowShortcut(let row, _):
                 row.hasChildren ? "\(item.id):\(row.isExpanded)" : nil
             case .group(let group):
-                "\(item.id):\(viewModel.isExecutionParentExpanded(group.id))"
+                "\(item.id):\(group.isExpanded)"
             }
         }
     }
@@ -518,3 +549,24 @@ private func threeLevelTreeRows(collapsed: Bool) -> [SidebarItem] {
     ]
 }
 #endif
+
+/// List may construct rows before they enter the viewport. Geometry, not onAppear, gates paging.
+private struct SidebarHistoryViewport: Equatable, Sendable {
+    var viewport: CGRect = .null
+    var bottom: CGRect = .null
+    var token = ""
+    var revision = -1
+    var isBottomVisible: Bool {
+        !viewport.isNull && !bottom.isNull && viewport.height > 0
+            && bottom.maxY >= viewport.minY && bottom.minY <= viewport.maxY
+    }
+}
+
+private struct SidebarHistoryViewportKey: PreferenceKey {
+    static let defaultValue = SidebarHistoryViewport()
+    static func reduce(value: inout SidebarHistoryViewport, nextValue: () -> SidebarHistoryViewport) {
+        let next = nextValue()
+        if !next.viewport.isNull { value.viewport = next.viewport }
+        if !next.bottom.isNull { value.bottom = next.bottom; value.token = next.token; value.revision = next.revision }
+    }
+}

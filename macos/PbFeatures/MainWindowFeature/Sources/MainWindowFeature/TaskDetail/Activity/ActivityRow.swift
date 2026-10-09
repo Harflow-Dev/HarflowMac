@@ -14,7 +14,7 @@ import PbUI
 // MARK: - ActivityRow
 
 /// One entry of the Activity feed: a row rendered on its own, or a card folding adjacent tool calls.
-enum ActivityRow: Equatable, Identifiable {
+enum ActivityRow: Equatable, Identifiable, Sendable {
     case single(ConversationTimelineRow)
     case toolGroup(ToolGroup)
 
@@ -59,7 +59,7 @@ enum ToolBucket: Equatable, Sendable {
 // MARK: - ToolGroupMember
 
 /// One tool call inside a card: the canonical call/result pair of its own timeline row.
-struct ToolGroupMember: Equatable, Identifiable {
+struct ToolGroupMember: Equatable, Identifiable, Sendable {
     let id: String
     let call: TaskEvent.ToolCall
     let result: TaskEvent.ToolResult?
@@ -75,7 +75,7 @@ struct ToolGroupMember: Equatable, Identifiable {
 
 /// A card folding adjacent tool calls of one bucket. Everything the card shows is derived once,
 /// when the builder closes the group, so rendering it is free.
-struct ToolGroup: Equatable, Identifiable {
+struct ToolGroup: Equatable, Identifiable, Sendable {
     /// The first member's row id: stable while the group grows, so expansion state can key off it.
     let id: String
     let taskID: String

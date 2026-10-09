@@ -11,7 +11,7 @@ import MonitorCore
 
 // MARK: - LiveStep
 
-struct LiveStep: Equatable {
+struct LiveStep: Equatable, Sendable {
     let text: String
 
     /// The latest tool call still waiting for its result in the running turn; `nil` for a terminal

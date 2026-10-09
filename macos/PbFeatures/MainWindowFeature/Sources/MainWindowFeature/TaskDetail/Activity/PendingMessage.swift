@@ -1,7 +1,7 @@
 import Foundation
 import MonitorCore
 
-struct PendingMessage: Identifiable, Equatable {
+struct PendingMessage: Identifiable, Equatable, Sendable {
     let id: String
     let text: String
 

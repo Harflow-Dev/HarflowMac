@@ -1,15 +1,9 @@
-//
-//  SidebarVM+Sections.swift
-//  MainWindowFeature
-//
-//  Settled plan D10: whole root trees and parallel-group entries are bucketed into Running / Today /
-//  Earlier BEFORE flattening, so a finished root with a running descendant stays in Running and a
-//  group sits inline among the tasks. `private` is file-scoped in Swift, hence the internal members.
-//
-
 import Foundation
 import MonitorCore
+import PbCommon
 import PbUI
+
+// MARK: - Sidebar Sections presentation
 
 // MARK: - SidebarEntry
 
@@ -45,7 +39,7 @@ enum SidebarEntry {
     }
 }
 
-extension SidebarVM {
+extension SidebarPresentationBuilder {
 
     /// Buckets `trees` and `groups` (D10), orders each bucket newest start first (an entry with no
     /// start time sorts last, ties broken by id), then flattens every entry into items. Empty
@@ -53,7 +47,7 @@ extension SidebarVM {
     func bucketedSections(trees: [ConversationNode], groups: [ParallelGroup], forcedExpandedIDs: Set<String>) -> [SidebarSection] {
         let taskEntries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group)
         let entries = taskEntries + workflowRootRuns().map(SidebarEntry.workflow)
-        let now = currentDate()
+        let now = input.now
         var buckets: [SidebarSection.Bucket: [SidebarEntry]] = [:]
         for entry in entries {
             buckets[bucket(for: entry, now: now), default: []].append(entry)
@@ -65,21 +59,24 @@ extension SidebarVM {
         }
     }
 
-    private func workflowRootRuns() -> [SidebarWorkflowRun] { filteredWorkflowRuns() }
+    private func workflowRootRuns() -> [SidebarWorkflowRun] { visibleRuns }
 
     private func bucket(for entry: SidebarEntry, now: Date) -> SidebarSection.Bucket {
         if entry.isRunning { return .running }
-        guard let startedAt = entry.latestRunAt, Calendar.current.isDate(startedAt, inSameDayAs: now) else { return .earlier }
+        guard let startedAt = entry.latestRunAt, input.calendar.isDate(startedAt, inSameDayAs: now) else { return .earlier }
         return .today
     }
 
     private func items(for entry: SidebarEntry, forcedExpandedIDs: Set<String>) -> [SidebarItem] {
         switch entry {
-        case .tree(let node): flattenedRows(node, forcedExpandedIDs: forcedExpandedIDs).map(SidebarItem.task)
+        case .tree(let node): return flattenedRows(node, forcedExpandedIDs: forcedExpandedIDs).map(SidebarItem.task)
         case .group(let group):
-            [.group(group)] + (groupConversations(group).count > 1 && expandedExecutionParents.contains(group.id) ? executionRows(groupChildren(group.name)) : [])
+            let conversations = groupConversations(group)
+            let row = SidebarGroupPresentation(group: group, conversations: conversations,
+                                               isExpanded: expandedExecutionParents.contains(group.id))
+            return [.group(row)] + (conversations.count > 1 && row.isExpanded ? executionRows(groupChildren(group.name)) : [])
         case .workflow(let run):
-            workflowTreeItems(run)
+            return workflowTreeItems(run)
         }
     }
 

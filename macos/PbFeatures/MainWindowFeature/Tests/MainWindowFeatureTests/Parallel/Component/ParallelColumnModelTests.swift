@@ -18,132 +18,40 @@ import Testing
         ActivityRowsBuilder.build(from: rows(count))
     }
 
-    // MARK: - Last 6 / Show all (MS-SIDE-5/F4-40, Monitor piece 13: counts rows, not items)
-
-    @Test func givenMoreThanSixRows_whenShown_thenOnlyTheLastSixAppearUntilShowAllIsTapped() {
+    @Test func givenLoadedActivity_whenRevealingOlderRows_thenEachBatchIsBoundedAndTheBoundaryPersists() {
         // given
-        let all = activity(9)
-
-        // when — not expanded
-        let collapsed = ParallelColumnModel.visibleRows(all, showAll: false)
-
-        // then
-        #expect(collapsed.count == ParallelColumnModel.windowSize)
-        #expect(collapsed.map(\.id) == Array(all.suffix(6)).map(\.id))
-
-        // when — "Show all" tapped
-        let expanded = ParallelColumnModel.visibleRows(all, showAll: true)
-
-        // then
-        #expect(expanded.count == 9)
-        #expect(expanded.map(\.id) == all.map(\.id))
-    }
-
-    @Test func givenSixOrFewerRows_whenShown_thenAllOfThemAppearEvenWhenNotExpanded() {
-        // given
-        let all = activity(4)
-
-        // when
-        let shown = ParallelColumnModel.visibleRows(all, showAll: false)
-
-        // then
-        #expect(shown.count == 4)
-    }
-
-    @Test func givenASeparatorAmongTheRows_whenCountingSteps_thenTheSeparatorIsExcluded() {
-        // given — a follow-up's turn separator is a row but never a "step".
-        let all = rows(5) + [
-            ConversationTimelineRow(id: "sep:t2", taskID: "t2", timestamp: nil, kind: .separator(text: "go on"), live: false)
-        ]
-
-        // when
-        let count = ParallelColumnModel.itemCount(all)
-
-        // then
-        #expect(count == 5)
-    }
-
-    @Test func givenToolCallsFoldedIntoCards_whenWindowing_thenTheWindowCountsCardsNotItems() {
-        // given — 10 adjacent reads fold into ONE card, followed by 3 text rows.
-        let reads = (0 ..< 10).map { index in
-            ConversationTimelineRow(
-                id: "t1#r\(index)", taskID: "t1", timestamp: nil,
-                kind: .item(PreviewFixtures.toolItem(
-                    tool: "Read", category: "read", command: nil, path: "/repo/F\(index).swift", seq: index * 2, callID: "r\(index)"
-                )), live: false
-            )
-        }
-        let texts = rows(3)
-        let raw = reads + texts
-        let activityRows = ActivityRowsBuilder.build(from: raw)
-
-        // when
-        let shown = ParallelColumnModel.visibleRows(activityRows, showAll: false)
-
-        // then — the card plus 3 texts all fit the window, and the step count stays the real item count
-        #expect(activityRows.count == 4)
-        #expect(shown.count == 4)
-        #expect(ParallelColumnModel.itemCount(raw) == 13)
-    }
-
-    @Test func givenMeasuredShortHistory_whenCellGrowsAndNewActivityArrives_thenOlderRowsRemainUntilSpaceIsNeeded() {
-        // given
-        let all = activity(12)
-        let heights = Dictionary(uniqueKeysWithValues: all.map { ($0.id, CGFloat(20)) })
+        let ids = activity(250).map(\.id)
         // when / then
-        let roomy = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: heights)
-        #expect(roomy.map(\.id) == all.map(\.id))
-        let smaller = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 300, heights: heights)
-        #expect(smaller.count == 8)
-        let arrivals = activity(13)
-        let awaitingMeasurement = ParallelColumnModel.visibleRows(arrivals, showAll: false, availableHeight: 500,
-                                                                  heights: heights, previousFirstID: roomy.first?.id)
-        #expect(awaitingMeasurement.first?.id == roomy.first?.id)
-        #expect(awaitingMeasurement.count == 13)
-        let updatedHeights = Dictionary(uniqueKeysWithValues: arrivals.map { ($0.id, CGFloat(20)) })
-        let updated = ParallelColumnModel.visibleRows(arrivals, showAll: false, availableHeight: 500, heights: updatedHeights)
-        #expect(updated.count == 13)
-        #expect(updated.first?.id == all.first?.id)
+        #expect(ActivityFeedWindow.firstIndex(ids: ids, retainedID: nil) == 150)
+        let older = ActivityFeedWindow.olderBoundary(ids: ids, retainedID: nil)
+        #expect(older == ids[50])
+        #expect(ActivityFeedWindow.olderBoundary(ids: ids, retainedID: older) == ids[0])
+        #expect(ActivityFeedWindow.olderBoundary(ids: ids, retainedID: ids[0]) == nil)
+        #expect(ActivityFeedWindow.firstIndex(ids: ids + ["new"], retainedID: ids[50]) == 50)
     }
 
-    @Test func givenTallRows_whenCellCannotFitMinimum_thenSixRowsRemainScrollable() {
-        // given
-        let all = activity(10)
-        let heights = Dictionary(uniqueKeysWithValues: all.map { ($0.id, CGFloat(180)) })
-        // when
-        let shown = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 400, heights: heights)
-        // then
-        #expect(shown.count == 6)
-        #expect(ParallelColumnModel.measurementCandidate(all, shown: shown, availableHeight: 400, heights: heights)?.id == nil)
+    @Test func givenNearTopViewport_whenLoadingEligibilityChanges_thenMountRestorationNeighborsErrorsAndBusyAreExcluded() {
+        // given / when / then
+        func eligible(_ positioned: Bool = true, _ restoring: Bool = false, _ visible: Bool = true,
+                      _ loading: Bool = false, _ error: String? = nil, _ offset: CGFloat = 199) -> Bool {
+            ActivityFeedWindow.shouldLoad(offset: offset, viewport: 400,
+                eligibility: ActivityFeedEligibility(positioned: positioned, restoring: restoring, visible: visible, loading: loading, error: error))
+        }
+        #expect(eligible())
+        #expect(!eligible(false))
+        #expect(!eligible(true, true))
+        #expect(!eligible(true, false, false))
+        #expect(!eligible(true, false, true, true))
+        #expect(!eligible(true, false, true, false, "retry"))
+        #expect(!eligible(true, false, true, false, nil, 201))
     }
 
-    @Test func givenUnknownOlderRow_whenMeasuring_thenOneCandidateFillsRemainingSpaceEvenWhenPartiallyVisible() {
+    @Test func givenASeparator_whenCountingSteps_thenItDoesNotCountAsActivity() {
         // given
-        let all = activity(10)
-        let heights = Dictionary(uniqueKeysWithValues: all.suffix(6).map { ($0.id, CGFloat(20)) })
-        let shown = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: heights)
-        // when
-        let candidate = ParallelColumnModel.measurementCandidate(all, shown: shown, availableHeight: 500, heights: heights)
-        // then
-        #expect(candidate?.id == all[3].id)
-        var measured = heights
-        measured[all[3].id] = 600
-        #expect(ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: measured).count == 7)
-        let adapted = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 500, heights: measured)
-        #expect(ParallelColumnModel.measurementCandidate(all, shown: adapted,
-                                                       availableHeight: 500, heights: measured)?.id == nil)
-    }
-
-    @Test func givenReaderAwayFromBottom_whenNewRowsArriveOrCellShrinks_thenOldestVisibleIdentityIsRetained() {
-        // given
-        let all = activity(12)
-        let heights = Dictionary(uniqueKeysWithValues: all.map { ($0.id, CGFloat(20)) })
-        // when
-        let shown = ParallelColumnModel.visibleRows(all, showAll: false, availableHeight: 100,
-                                                   heights: heights, retainedFirstID: all[2].id)
-        // then
-        #expect(shown.map(\.id) == Array(all[2...]).map(\.id))
-        #expect(ParallelColumnModel.visibleRows(all, showAll: true, availableHeight: 100, heights: heights).count == 12)
+        let values = rows(5) + [ConversationTimelineRow(id: "sep:t2", taskID: "t2", timestamp: nil,
+            kind: .separator(text: "continue"), live: false)]
+        // when / then
+        #expect(ParallelColumnModel.itemCount(values) == 5)
     }
 
     // MARK: - Subtitle

@@ -36,7 +36,7 @@ extension ParallelVMTests {
         tasksSubject.send(members)
 
         // then — two columns, one per agent conversation, never six
-        await waitUntil { sut.columns.count == 2 }
+        await waitUntil { sut.columns.count == 2 && sut.isPresentationSettled }
         #expect(sut.headerSubtitle.hasPrefix("2 agents"))
         #expect(
             Set(leasesBox.value.keys) == ["a1", "a2", "a3", "b1", "b2", "b3"],
@@ -46,6 +46,12 @@ extension ParallelVMTests {
         // then — the still-running conversation sorts first (`Lineage.parallelColumnOrder`), its
         // column's `task` is the CURRENT (newest) member, and its timeline carries a separator ahead
         // of each of its 2 follow-ups
+        #expect(sut.columns.first?.rows.filter { if case .separator = $0.kind { return true }; return false }.isEmpty == true,
+            "only the newest contiguous activity suffix is initially rendered")
+        sut.columns.first?.onLoadMore?()
+        await waitUntil { sut.columns.first?.paginationRevision == 1 && sut.isPresentationSettled }
+        sut.columns.first?.onLoadMore?()
+        await waitUntil { sut.columns.first?.paginationRevision == 2 && sut.isPresentationSettled }
         let runningColumn = sut.columns.first
         #expect(runningColumn?.task.taskID == "a3")
         #expect(runningColumn?.start == agentATurn1.startedAt, "rows time from the first turn, not the current one")
@@ -77,7 +83,7 @@ extension ParallelVMTests {
         for member in members { tasksBox.value[member.taskID] = member }
         sut.didAppear()
         tasksSubject.send(members)
-        await waitUntil { sut.columns.count == 1 }
+        await waitUntil { sut.columns.count == 1 && sut.isPresentationSettled }
 
         // when
         sut.didDisappear()

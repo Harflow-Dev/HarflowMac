@@ -45,6 +45,8 @@ extension WorkflowVM {
             }
             guard !Task.isCancelled, draftID == loadingDraftID, editorLoadID == loadingID,
                   definition == loadingDefinition, name == loadingName else { return }
+            let metricStart = MonitorMetrics.begin()
+            defer { MonitorMetrics.end(metricStart, stage: .workflowViewUpdate) }
             let record = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
             draftPersistenceSuspended = true
             definition = record.definition
@@ -60,6 +62,7 @@ extension WorkflowVM {
             loaded = true
             resolveReadFailure(source: "workflow-editor:" + workflow.id)
             draftPersistenceSuspended = false
+            MonitorMetrics.end(metricStart, stage: .workflowContentReady)
         }
     }
 
@@ -84,9 +87,11 @@ extension WorkflowVM {
     }
 
     func prepareRun(id: String, polling: WorkflowRunPolling) {
+        let metricStart = MonitorMetrics.begin()
         runPolling = polling
         selectedRun = WorkflowRunModel(raw: polling.cached(id: id) ?? ["workflow_run_id": .string(id)])
         initialLoadingKind = polling.cached(id: id) == nil ? "run" : nil
+        if initialLoadingKind == nil { MonitorMetrics.end(metricStart, stage: .workflowContentReady) }
     }
 
     func selectRun(_ run: WorkflowRunModel) {

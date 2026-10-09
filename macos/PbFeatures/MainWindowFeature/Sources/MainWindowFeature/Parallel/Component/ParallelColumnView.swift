@@ -2,9 +2,8 @@
 //  ParallelColumnView.swift
 //  MainWindowFeature
 //
-//  Dumb component: a Model plus two action closures the VM supplies; the "show all" and tool-card
-//  expansion are local `@State`, allowed per the root AGENTS.md's Component Models section
-//  ("components may hold local @State").
+//  Presentation and action closures come from the VM. Lightweight reading and disclosure state
+//  survives viewport eviction; measured row geometry stays local to this mounted activity view.
 //
 //  Monitor piece 13: a column is one agent CONVERSATION (a resume chain), not one task — `rows` is
 //  the whole conversation's concatenated timeline (`MonitorCore.ConversationTimeline`, the same
@@ -25,9 +24,6 @@ import SwiftUI
 /// take-over and buttons all act on it), everything today's outcome line/busy state/event stream say
 /// about it, and the two actions its buttons perform.
 struct ParallelColumnModel: Identifiable {
-    /// Minimum recent activity rows; taller cells reveal additional history.
-    static let windowSize = 6
-
     let id: String
     let task: TaskInfo
     let title: String
@@ -37,7 +33,7 @@ struct ParallelColumnModel: Identifiable {
     let outcomeMessage: String?
     let showPrompt: Bool
     let prompt: String?
-    /// The raw rows, one per timeline item (and separator) — what the "Show all N steps" count reads.
+    /// Raw timeline items and separators for the complete step count.
     let rows: [ConversationTimelineRow]
     /// What the feed renders: `rows` with adjacent tool calls folded into cards.
     let activityRows: [ActivityRow]
@@ -49,6 +45,7 @@ struct ParallelColumnModel: Identifiable {
     /// across every member for piece 13) — the column shows `SkeletonRows` instead of the empty
     /// timeline while this holds.
     let isLoading: Bool
+    var emptyText: String?
     /// From the current member's snapshot only — no fallback to `task.summary` (F4-40, a deliberate
     /// difference from `ChangesPane`).
     let summary: String?
@@ -60,6 +57,11 @@ struct ParallelColumnModel: Identifiable {
     var animatesArrival = false
     var onDidPresent: () -> Void = {}
     var memberTaskIDs: Set<String> = []
+    var isResident = true
+    var isVisible = true
+    var history = EventHistoryState()
+    var paginationRevision = 0
+    var onLoadMore: (() -> Bool)?
 
     /// "<repo name> · <Backend>" plus "· N turns" when `turns > 1` — the task header's subtitle,
     /// without the session id.
@@ -69,131 +71,42 @@ struct ParallelColumnModel: Identifiable {
         return parts.joined(separator: " · ")
     }
 
-    /// At least `windowSize` recent rows, growing to fit measured available space; Show all bypasses the window. A pure
-    /// function so it is directly testable without a SwiftUI rendering harness. Counting rows
-    /// (separators and tool cards included) rather than items keeps the newest turn separator in
-    /// view naturally, without a special case.
-    static func visibleRows(_ rows: [ActivityRow], showAll: Bool, availableHeight: CGFloat = 0,
-                            heights: [String: CGFloat] = [:], retainedFirstID: String? = nil, previousFirstID: String? = nil) -> [ActivityRow] {
-        if showAll { return rows }
-        if let retainedFirstID, let first = rows.firstIndex(where: { $0.id == retainedFirstID }) {
-            return Array(rows[first...])
-        }
-        // An arriving/rewrapped row has not been measured yet. Keep the established
-        // history boundary until its true size is known, rather than briefly pruning it.
-        if rows.suffix(windowSize).contains(where: { heights[$0.id] == nil }),
-           let previousFirstID, let first = rows.firstIndex(where: { $0.id == previousFirstID }) {
-            return Array(rows[first...])
-        }
-        var count = min(windowSize, rows.count)
-        var used = rows.suffix(count).reduce(CGFloat(0)) { $0 + (heights[$1.id] ?? availableHeight) }
-            + CGFloat(max(0, count - 1)) * 20
-        while count < rows.count {
-            let next = rows[rows.count - count - 1]
-            guard let height = heights[next.id], used + 20 < availableHeight else { break }
-            used += 20 + height
-            count += 1
-        }
-        return Array(rows.suffix(count))
-    }
-
-    /// Measure only the next older row, rather than mounting the entire hidden history.
-    static func measurementCandidate(_ rows: [ActivityRow], shown: [ActivityRow], availableHeight: CGFloat,
-                                     heights: [String: CGFloat]) -> ActivityRow? {
-        guard shown.count < rows.count, !shown.isEmpty,
-              shown.allSatisfy({ heights[$0.id] != nil }) else { return nil }
-        let used = shown.reduce(CGFloat(0)) { $0 + (heights[$1.id] ?? 0) } + CGFloat(shown.count - 1) * 20
-        let next = rows[rows.count - shown.count - 1]
-        return used + 20 < availableHeight && heights[next.id] == nil ? next : nil
-    }
-
-    /// The real step count behind `rows` — every `.item` row, separators excluded — for the "Show
-    /// all N steps" label, matching `TimelinePaneModel`'s own `stepCountText` convention.
+    /// Raw item count excludes conversation separators.
     static func itemCount(_ rows: [ConversationTimelineRow]) -> Int {
         rows.filter { if case .item = $0.kind { return true }; return false }.count
     }
-}
-
-// MARK: - ParallelRowMeasurement
-
-struct ParallelRowMeasurement: Equatable {
-    let size: CGSize
-    let viewportWidth: CGFloat
-}
-
-// MARK: - ParallelColumnScrollKey
-
-struct ParallelColumnScrollKey: Equatable {
-    let rowIDs: [String]
-    let viewport: CGSize
 }
 
 // MARK: - ParallelColumnView
 
 struct ParallelColumnView: View {
     let model: ParallelColumnModel
-    @State private var showAll = false
-    @State private var expandedGroups: Set<String> = []
-    @State private var seenRowIDs: Set<String> = []
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var followLive = FollowLiveScrollState()
-    @State private var rowHeights: [String: CGFloat] = [:]
-    @State private var rowWidths: [String: CGFloat] = [:]
-    @State private var viewportHeight: CGFloat = 0
-    @State private var viewportWidth: CGFloat = 0
-    @State private var tailHeight: CGFloat = 0
-    @State private var retainedFirstID: String?
-    @State private var recentFirstID: String?
-    @State private var adaptingToBottom = false
+    @State private var state: ParallelColumnUIState
 
-    init(model: ParallelColumnModel) {
+    init(model: ParallelColumnModel, state: ParallelColumnUIState? = nil) {
         self.model = model
-        // Revealing older history is not a new activity arrival.
-        _seenRowIDs = State(initialValue: Set(model.activityRows.map(\.id)))
+        _state = State(initialValue: state ?? ParallelColumnUIState())
     }
-
-    // The native scroll document can be narrower than its SwiftUI proposal (scroller
-    // gutters/rounding). Cache against the proposal used to measure, not that child width.
-    private var measuredHeights: [String: CGFloat] {
-        rowHeights.filter { abs((rowWidths[$0.key] ?? 0) - viewportWidth) < 1 }
-    }
-
-    private var availableHeight: CGFloat { max(0, viewportHeight - tailHeight - 53) }
 
     var body: some View {
-        let shown = ParallelColumnModel.visibleRows(model.activityRows, showAll: showAll, availableHeight: availableHeight,
-                                                   heights: measuredHeights, retainedFirstID: retainedFirstID, previousFirstID: recentFirstID)
         VStack(alignment: .leading, spacing: 10) {
             header
             if let message = model.outcomeMessage {
                 Text(message).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             }
-            if model.showPrompt, let prompt = model.prompt {
-                PromptBubbleView(text: prompt)
-            }
+            if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
             Divider()
             if model.isLoading, model.liveStep == nil {
                 SkeletonRows(count: 4, showsBadge: false)
-                    .padding(.top, 4)
+.padding(.top, 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                feed(shown).pbFadeIn()
+                feed.pbFadeIn()
             }
         }
         .padding(16)
         .frame(maxHeight: .infinity, alignment: .top)
         .opensFileLinks(repoPath: model.task.repoPath)
-        .onChange(of: measuredHeights) { _, _ in
-            if !showAll, retainedFirstID == nil, shown.allSatisfy({ measuredHeights[$0.id] != nil }) {
-                recentFirstID = shown.first?.id
-            }
-        }
-        .onChange(of: shown.map(\.id)) { _, _ in
-            if followLive.isFollowing { adaptingToBottom = true }
-            if !showAll, retainedFirstID == nil, shown.allSatisfy({ measuredHeights[$0.id] != nil }) {
-                recentFirstID = shown.first?.id
-            }
-        }
     }
 
     // MARK: Header
@@ -224,136 +137,20 @@ struct ParallelColumnView: View {
 
     // MARK: Feed
 
-    private func feed(_ shown: [ActivityRow]) -> some View {
+    private var feed: some View {
         VStack(spacing: 8) {
-            // Same step count as the task feed; scrolling follows only while at the bottom.
             HStack {
                 Text("\(ParallelColumnModel.itemCount(model.rows)) steps").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 Spacer()
             }
-            ScrollViewReader { proxy in
-                GeometryReader { viewport in
-                    let measurementWidth = viewport.size.width
-                    scrollingFeed(shown, width: viewport.size.width)
-                        .frame(width: viewport.size.width, height: viewport.size.height)
-                        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-                            if followLive.isFollowing,
-                               size != CGSize(width: viewportWidth, height: viewportHeight) {
-                                adaptingToBottom = true
-                            }
-                            viewportHeight = size.height
-                            viewportWidth = size.width
-                        }
-                        .overlay(alignment: .topLeading) {
-                            if !showAll, retainedFirstID == nil,
-                               let candidate = ParallelColumnModel.measurementCandidate(model.activityRows, shown: shown,
-                                                                                         availableHeight: availableHeight, heights: measuredHeights) {
-                                rowView(candidate)
-                                    .frame(width: viewport.size.width, alignment: .leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .onGeometryChange(for: ParallelRowMeasurement.self) {
-                                        ParallelRowMeasurement(size: $0.size, viewportWidth: measurementWidth)
-                                    } action: { measurement in
-                                        rowHeights[candidate.id] = measurement.size.height
-                                        rowWidths[candidate.id] = measurement.viewportWidth
-                                    }
-                                    .onAppear { seenRowIDs.insert(candidate.id) }
-                                    .hidden()
-                                    .allowsHitTesting(false)
-                                    .accessibilityHidden(true)
-                                    .id(candidate.id)
-                            }
-                        }
+            ActivityFeedView(rows: model.activityRows, start: model.start, history: model.history,
+                             isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages),
+                             paginationRevision: model.paginationRevision, isVisible: model.isVisible,
+                             emptyText: model.emptyText, showsPromptBubble: false, state: state, onLoadMore: model.onLoadMore) {
+                ForEach(model.pendingMessages) { message in
+                    PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
                 }
-                    .task(id: ParallelColumnScrollKey(rowIDs: shown.map(\.id),
-                                                     viewport: CGSize(width: viewportWidth, height: viewportHeight))) {
-                        await Task.yield()
-                        guard !Task.isCancelled else { return }
-                        guard followLive.isFollowing else { adaptingToBottom = false; return }
-                        var transaction = Transaction()
-                        transaction.disablesAnimations = true
-                        withTransaction(transaction) { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
-                        adaptingToBottom = false
-                    }
-                    .followLiveScroll(token: ActivityUpdateToken(rows: model.rows, liveStep: model.liveStep, pendingMessages: model.pendingMessages),
-                                      enabled: followLive.isFollowing, proxy: proxy, target: Self.bottomID)
-            }
-        }
-    }
-
-    private static let bottomID = "column-bottom"
-
-    private func scrollingFeed(_ shown: [ActivityRow], width: CGFloat) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                ForEach(shown) { row in
-                    rowView(row)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .onGeometryChange(for: ParallelRowMeasurement.self) {
-                            ParallelRowMeasurement(size: $0.size, viewportWidth: width)
-                        } action: { measurement in
-                            rowHeights[row.id] = measurement.size.height
-                            rowWidths[row.id] = measurement.viewportWidth
-                        }
-                        .pbFadeIn(animate: !seenRowIDs.contains(row.id))
-                        .onAppear { seenRowIDs.insert(row.id) }
-                }
-                VStack(alignment: .leading, spacing: 20) {
-                    if model.activityRows.count > ParallelColumnModel.windowSize, !showAll {
-                        Button("Show all \(ParallelColumnModel.itemCount(model.rows)) steps") {
-                            followLive.suspend()
-                            withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) { showAll = true }
-                        }
-                        .buttonStyle(.link)
-                        .font(.pb(.secondary))
-                        // Reserve this slot while adapting so removing the button cannot
-                        // alternate between two different history windows.
-                        .opacity(model.activityRows.count > shown.count ? 1 : 0)
-                        .disabled(model.activityRows.count <= shown.count)
-                        .accessibilityHidden(model.activityRows.count <= shown.count)
-                    }
-                    ForEach(model.pendingMessages) { message in
-                        PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
-                    }
-                    if let liveStep = model.liveStep {
-                        LiveStepLineView(text: liveStep.text)
-                    }
-                }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tailHeight = $0 }
-                Color.clear.frame(height: 1).id(Self.bottomID)
-            }
-            .padding(.bottom, 12)
-            .background(LiveScrollPositionObserver { offset, contentHeight, viewportHeight in
-                if adaptingToBottom {
-                    // Native layout can report a temporary upward offset while history is
-                    // prepended. Keep the bottom baseline until scroll restoration completes.
-                    followLive.observe(offset: max(0, contentHeight - viewportHeight),
-                                       contentHeight: contentHeight, viewportHeight: viewportHeight)
-                    return
-                }
-                let wasFollowing = followLive.isFollowing
-                followLive.observe(offset: offset, contentHeight: contentHeight, viewportHeight: viewportHeight)
-                if wasFollowing, !followLive.isFollowing { retainedFirstID = shown.first?.id }
-                if followLive.isFollowing { retainedFirstID = nil }
-            })
-        }
-    }
-
-    @ViewBuilder
-    private func rowView(_ row: ActivityRow) -> some View {
-        switch row {
-        case .toolGroup(let group):
-            ToolGroupCardView(group: group, start: model.start, isExpanded: expandedGroups.contains(group.id)) {
-                withAnimation(PbMotion.disclosure(reduceMotion: reduceMotion)) {
-                    if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
-                }
-            }
-        case .single(let row):
-            switch row.kind {
-            case .separator(let text):
-                TurnSeparatorRow(text: text, timestamp: row.timestamp)
-            case .item(let item):
-                TimelineRow(model: TimelineRowModel(item: item, start: model.start, live: row.live, showsPromptBubble: false))
+                if let liveStep = model.liveStep { LiveStepLineView(text: liveStep.text) }
             }
         }
     }

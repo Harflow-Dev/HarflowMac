@@ -36,6 +36,7 @@ struct SidebarHistoryTests {
         let history = History()
         let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history)
         vm.didAppear()
+        await vm.waitForPresentation()
         defer { vm.didDisappear() }
         if initiallyLoaded {
             harness.tasksSubject.send([SidebarVMTests().task(id: "loaded", status: "completed")])
@@ -91,10 +92,12 @@ struct SidebarHistoryTests {
         vm.mergeWorkflowHeaders(try page(["current"], next: "page2").items)
         vm.updateWorkflowHistory(try page(["current"], next: "page2"), advancing: false)
         vm.didSelect(.workflowRun("current"))
+        await vm.waitForPresentation()
         vm.collapsedTaskIDs = ["collapsed"]
         // when
         vm.didTapLoadMoreWorkflows()
         await waitUntil { !vm.workflowHistoryState.isLoading }
+        await vm.waitForPresentation()
         vm.updateWorkflowHistory(try page(["newest"], next: "page2"), advancing: false)
         // then
         #expect(history.cursors.count == 1)

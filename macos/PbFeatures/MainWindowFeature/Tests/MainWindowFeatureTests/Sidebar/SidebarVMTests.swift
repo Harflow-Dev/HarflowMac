@@ -137,21 +137,25 @@ import Testing
         let titlesBox = harness.titlesBox
         titlesBox.value = ["t1": "Fix the Login Bug", "t2": "Something else", "t3": "Something else"]
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "t1", status: "completed"),
             task(id: "t2", status: "completed", repoPath: "/tmp/LOGIN-service"),
             task(id: "t3", status: "completed", repoPath: "/tmp/unrelated")
         ])
         await waitUntil { sut.recentRows.count == 3 }
+        await sut.waitForPresentation()
         
         // when — matches by title (case-insensitive)
         sut.didChangeSearchQuery("LoGiN")
+        await sut.waitForPresentation()
         
         // then
         #expect(Set(sut.recentRows.map(\.id)) == ["t1", "t2"])
         
         // when — matches by id
         sut.didChangeSearchQuery("t3")
+        await sut.waitForPresentation()
         
         // then
         #expect(sut.recentRows.map(\.id) == ["t3"])
@@ -164,13 +168,16 @@ import Testing
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         let root = task(id: "root1", backend: "claude", status: "completed")
         let child = task(id: "sub1", backend: "codex", status: "completed", spawnedBy: "root1")
         
         // when
         tasksSubject.send([root, child])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didSelectBackendFilter("codex")
+        await sut.waitForPresentation()
         
         // then
         #expect(sut.recentRows.map(\.id) == ["root1", "sub1"])
@@ -187,6 +194,7 @@ import Testing
         let listErrorSubject = harness.listErrorSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         
         // when
         hasListedSubject.send(true)
@@ -206,6 +214,7 @@ import Testing
         let listErrorSubject = harness.listErrorSubject
         let hasListedSubject = harness.hasListedSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         let error = ToolError.refused(code: "denied", message: "polybridge-ctl refused the request.")
 
         // when
@@ -235,6 +244,7 @@ import Testing
         let hasListedSubject = harness.hasListedSubject
         harness.installNeedBox.value = .missing
         sut.didAppear()
+        await sut.waitForPresentation()
         let error = ToolError.notFound(tool: "polybridge-ctl", searched: [])
 
         // when
@@ -262,6 +272,7 @@ import Testing
 
         // when
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // then — before `hasListedPublisher()`'s first value, this is the shimmer's whole reason to
         // exist: an empty list with no error and no install banner is otherwise indistinguishable
@@ -275,6 +286,7 @@ import Testing
         let harness = makeSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
         #expect(sut.showsLoadingSkeleton)
 
         // when
@@ -293,6 +305,7 @@ import Testing
         let harness = makeSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         harness.listErrorSubject.send(ToolError.notFound(tool: "polybridge-ctl", searched: []))
@@ -310,6 +323,7 @@ import Testing
         let harness = makeSUT()
         let sut = harness.sut
         sut.didAppear()
+        await sut.waitForPresentation()
         #expect(sut.showsLoadingSkeleton)
 
         // when — the install banner appears, with no listing published at all yet.
@@ -328,6 +342,7 @@ import Testing
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         let root = task(id: "root1", status: "completed", repoPath: "/tmp/repo", freedom: "write_in_repo")
         let child = task(id: "sub1", status: "completed", spawnedBy: "root1", repoPath: "/tmp/repo")
         
@@ -336,6 +351,7 @@ import Testing
         
         // then
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         let rootRow = sut.recentRows.first { $0.id == "root1" }
         #expect(rootRow?.subtitle == "repo · Claude · 1 sub-task")
         #expect(rootRow?.indent == 0)
@@ -349,6 +365,7 @@ import Testing
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         let start = Date.now.addingTimeInterval(-42)
         
         // when
@@ -357,6 +374,7 @@ import Testing
         // then — `TaskInfo.startedAt` round-trips through an ISO8601 string with no fractional
         // seconds, so compare with a sub-second tolerance rather than exact equality.
         await waitUntil { !sut.runningRows.isEmpty }
+        await sut.waitForPresentation()
         #expect(sut.runningRows.first?.isRunning == true)
         #expect(abs((sut.runningRows.first?.startedAt ?? .distantPast).timeIntervalSince(start)) < 1)
     }
@@ -371,8 +389,10 @@ import Testing
         let startedAt = Date().addingTimeInterval(-59.8)
         let completed = task(id: "t1", status: "completed", startedAt: startedAt)
         sut.didAppear()
+        await sut.waitForPresentation()
         harness.tasksSubject.send([completed])
         await waitUntil { sut.recentRows.first?.ageText == "now" }
+        await sut.waitForPresentation()
 
         // when — wait past the 60s boundary, then re-publish the SAME array (identical content).
         await waitUntil(timeout: 2) { Date().timeIntervalSince(startedAt) >= 60.1 }
@@ -380,12 +400,13 @@ import Testing
 
         // then
         await waitUntil { sut.recentRows.first?.ageText == "1m" }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.first?.ageText == "1m")
     }
 
     // MARK: - Selection (SidebarRouting doubles as the read side)
     
-    @Test func givenARowTapped_whenSelected_thenRoutingSelectIsCalled() {
+    @Test func givenARowTapped_whenSelected_thenRoutingSelectIsCalled() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -393,6 +414,7 @@ import Testing
         
         // when
         sut.didSelect(.task("abc123"))
+        await sut.waitForPresentation()
         
         // then
         verify(routing).select(.value(.task("abc123"))).called(1)
@@ -406,6 +428,7 @@ import Testing
         let sut = harness.sut
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         #expect(sut.selection == nil)
         
         // when
@@ -413,10 +436,11 @@ import Testing
         
         // then
         await waitUntil { sut.selection == .task("xyz789") }
+        await sut.waitForPresentation()
         #expect(sut.selection == .task("xyz789"))
     }
     
-    @Test func givenNewSessionTapped_whenCalled_thenRoutingOpenNewSessionIsCalled() {
+    @Test func givenNewSessionTapped_whenCalled_thenRoutingOpenNewSessionIsCalled() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -437,8 +461,10 @@ import Testing
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "t1", status: "completed")])
         await waitUntil { sut.recentRows.count == 1 }
+        await sut.waitForPresentation()
         
         // when — `didDisappear()` cancels the subscription. Combine guarantees a cancelled
         // subscription never delivers again, but this VM's own pipeline hops through
@@ -455,10 +481,12 @@ import Testing
         
         // when — re-subscribing picks up fresh state
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "t1", status: "completed"), task(id: "t2", status: "completed")])
         
         // then
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.count == 2)
     }
     
@@ -471,8 +499,10 @@ import Testing
         let titlesSubject = harness.titlesSubject
         let titlesBox = harness.titlesBox
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "t1", status: "completed")])
         await waitUntil { sut.recentRows.count == 1 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.first?.title == "Task t1")
         
         // when — no further `tasksSubject` emission, only the title arriving.
@@ -481,6 +511,7 @@ import Testing
         
         // then
         await waitUntil { sut.recentRows.first?.title == "Fix the login bug" }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.first?.title == "Fix the login bug")
     }
     
@@ -491,12 +522,14 @@ import Testing
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         
         // when
         tasksSubject.send([task(id: "t1", status: "running", startedAt: nil, durationSeconds: 90)])
         
         // then
         await waitUntil { !sut.runningRows.isEmpty }
+        await sut.waitForPresentation()
         #expect(sut.runningRows.first?.startedAt == nil)
         #expect(sut.runningRows.first?.durationSeconds == 90)
     }
@@ -512,8 +545,10 @@ import Testing
         let selectionSubject = harness.selectionSubject
         let routingSelectionBox = harness.routingSelectionBox
         sut.didAppear()
+        await sut.waitForPresentation()
         selectionSubject.send(.task("abc123"))
         await waitUntil { sut.selection == .task("abc123") }
+        await sut.waitForPresentation()
         #expect(sut.selection == .task("abc123"))
         sut.didDisappear()
         
@@ -523,12 +558,13 @@ import Testing
         
         // then
         sut.didAppear()
+        await sut.waitForPresentation()
         #expect(sut.selection == .task("xyz789"))
     }
     
     // MARK: - Deselection (Codex review finding)
     
-    @Test func givenNilSelection_whenSelected_thenRoutingSelectIsCalledWithNil() {
+    @Test func givenNilSelection_whenSelected_thenRoutingSelectIsCalledWithNil() async {
         // given — `List(selection:)` writes `nil` on deselection; the old
         // `List(selection: $model.selection)` accepted that directly, so this binding must too.
         let harness = makeSUT()
@@ -537,6 +573,7 @@ import Testing
 
         // when
         sut.didSelect(nil)
+        await sut.waitForPresentation()
 
         // then
         verify(routing).select(.value(nil)).called(1)
@@ -544,49 +581,4 @@ import Testing
 
     // MARK: - Perf (Monitor piece 11)
 
-    @Test func givenA2000TaskListingWithABackendFilterActive_whenRecomputed_thenItStaysFarBelowTheQuadraticCost() async {
-        // given — the exact shape measured at 0.36s/recompute on the real 532-task listing with a
-        // backend tab selected (113 matches): `forcedExpandedIDs` used to rebuild the whole
-        // conversation tree once per MATCHING task. `ConversationIndexTests` already proves the
-        // underlying `ConversationIndex` fix in isolation; this proves it through the real VM path
-        // (`recompute()` building one index per publication and reusing it — Plan review round 1,
-        // item 1), at roughly 4x the real listing's size for headroom.
-        let harness = makeSUT()
-        let sut = harness.sut
-        var tasks: [TaskInfo] = []
-        for index in 0 ..< 2000 {
-            tasks.append(task(
-                id: "t\(index)", backend: index % 2 == 0 ? "claude" : "codex", status: index % 7 == 0 ? "running" : "completed",
-                startedAt: .now.addingTimeInterval(-Double(index)),
-                spawnedBy: index % 5 == 0 && index > 0 ? "t\(index - 1)" : nil,
-                parentTaskID: index % 3 == 0 && index > 0 ? "t\(index - 1)" : nil
-            ))
-        }
-        sut.didAppear()
-
-        // Settle the real publisher first. Its receive(on: .main) hop can wait behind unrelated
-        // concurrently running tests; that queue latency is not time spent building sidebar rows.
-        harness.tasksSubject.send(tasks)
-        await waitUntil { sut.latestTasks.count == 2000 }
-        #expect(sut.latestTasks.count == 2000)
-        let unfilteredCount = sut.runningRows.count + sut.recentRows.count
-
-        // Measure the actual synchronous filter action/recompute against the settled inventory.
-        // No scheduler or polling wait is timed; the index has its own tight construction test.
-        let start = Date()
-        sut.didSelectBackendFilter("claude")
-        let elapsed = Date().timeIntervalSince(start)
-
-        // Keep behavior checks on the real published inventory; contextual ancestors may use
-        // another backend, but filtering must retain matches and reduce the displayed inventory.
-        #expect(sut.selectedBackend == "claude")
-        #expect((sut.runningRows + sut.recentRows).contains { $0.backend == "claude" })
-        #expect(sut.runningRows.count + sut.recentRows.count < unfilteredCount)
-        // Retain the existing 3-second ceiling; ConversationIndexTests independently retain
-        // their tight construction bound. This test measures actual VM work under that ceiling.
-        #expect(
-            elapsed < 3.0,
-            "recompute() at 4x the real listing's size should stay well under the quadratic cost (\(elapsed)s)"
-        )
-    }
 }

@@ -13,7 +13,7 @@ extension ParallelVMTests {
         harness.sut.didAppear()
         // when
         harness.tasksSubject.send([completed])
-        await waitUntil { harness.sut.columns.count == 1 }
+        await waitUntil { harness.sut.columns.count == 1 && harness.sut.isPresentationSettled }
         // then
         #expect(harness.sut.columns.first?.liveStep == nil)
     }

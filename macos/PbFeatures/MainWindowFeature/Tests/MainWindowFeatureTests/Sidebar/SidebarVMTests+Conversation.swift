@@ -26,6 +26,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         tasksSubject.send([
@@ -35,6 +36,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { !sut.recentRows.isEmpty }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["a"], "one row, tagged by the conversation's first id")
         #expect(sut.recentRows.first?.title == "Task a", "the title comes from the first member")
     }
@@ -45,6 +47,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         tasksSubject.send([
@@ -54,6 +57,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { !sut.runningRows.isEmpty }
+        await sut.waitForPresentation()
         #expect(sut.runningRows.map(\.id) == ["a"])
         #expect(sut.runningRows.first?.status == .running, "status comes from the CURRENT member")
         #expect(sut.runningRows.first?.isRunning == true)
@@ -67,11 +71,13 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100)),
             task(id: "b", status: "completed", startedAt: .now, parentTaskID: "a")
         ])
         await waitUntil { !sut.recentRows.isEmpty }
+        await sut.waitForPresentation()
 
         // when — the newest member ("b") is selected, e.g. via a URL or notification
         selectionSubject.send(.task("b"))
@@ -79,6 +85,7 @@ extension SidebarVMTests {
         // then — the row (tagged `.task("a")`) is what the sidebar's `List(selection:)` compares
         // against, so normalising to "a" is what makes the row actually highlight.
         await waitUntil { sut.selection == .task("a") }
+        await sut.waitForPresentation()
         #expect(sut.selection == .task("a"))
     }
 
@@ -92,13 +99,16 @@ extension SidebarVMTests {
         let revealSubject = harness.revealSubject
         let routing = harness.routing
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "root", status: "completed"),
             task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100), spawnedBy: "root"),
             task(id: "b", status: "completed", startedAt: .now, parentTaskID: "a")
         ])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "root")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root"])
 
         // when
@@ -107,6 +117,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["root", "a"])
         verify(routing).consumeReveal(requestID: .value(reveal.requestID)).called(1)
     }
@@ -117,6 +128,7 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
 
         // when
         tasksSubject.send([
@@ -127,6 +139,7 @@ extension SidebarVMTests {
 
         // then
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["a", "child"])
         #expect(sut.recentRows.first?.hasChildren == true)
     }
@@ -139,17 +152,21 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100)),
             task(id: "b", status: "completed", startedAt: .now, parentTaskID: "a"),
             task(id: "child", status: "completed", startedAt: .now.addingTimeInterval(50), spawnedBy: "b")
         ])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("a"))
         await waitUntil { sut.selection == .task("a") }
+        await sut.waitForPresentation()
 
         // when
         sut.didPressMoveCommand(.left)
+        await sut.waitForPresentation()
 
         // then
         #expect(sut.recentRows.map(\.id) == ["a"])
@@ -165,13 +182,16 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100)),
             task(id: "b", status: "completed", startedAt: .now, parentTaskID: "a")
         ])
         await waitUntil { !sut.recentRows.isEmpty }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("a"))
         await waitUntil { sut.selection == .task("a") }
+        await sut.waitForPresentation()
 
         // when — retention prunes "a"'s own record; only "b" remains, which becomes its own new
         // conversation identity ("b") since its former parent is now missing from the listing.
@@ -180,6 +200,7 @@ extension SidebarVMTests {
         // then — the selection follows the conversation to its new identity, so the surviving row
         // still highlights (nothing new was ever selected — this happens on the recompute alone).
         await waitUntil { sut.recentRows.map(\.id) == ["b"] }
+        await sut.waitForPresentation()
         #expect(sut.selection == .task("b"))
     }
 
@@ -195,6 +216,7 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "p", status: "completed", startedAt: .now.addingTimeInterval(-200)),
             task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100), spawnedBy: "p"),
@@ -204,10 +226,13 @@ extension SidebarVMTests {
         // conv(a,b) NESTS under "p" (a.spawnedBy == "p"), so it is "p"'s own child row, not a
         // separate top-level entry sorted against it.
         await waitUntil { sut.recentRows.map(\.id) == ["p", "a", "child"] }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "a")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["p", "a"], "collapsing conv(a,b) hides its own child")
         selectionSubject.send(.task("a"))
         await waitUntil { sut.selection == .task("a") }
+        await sut.waitForPresentation()
 
         // when — retention prunes "a"; "b" becomes conv(a,b)'s new identity (and, losing "a"'s own
         // `spawned_by` link to "p", surfaces as its own top-level row rather than staying nested).
@@ -219,9 +244,11 @@ extension SidebarVMTests {
 
         // then — the selection follows to the new id...
         await waitUntil { sut.selection == .task("b") }
+        await sut.waitForPresentation()
         // ...and the collapse carried too: "b"'s own row is still collapsed, so "child" stays
         // hidden rather than reappearing because "b" was never itself collapsed.
         await waitUntil { sut.recentRows.map(\.id) == ["b", "p"] }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.first { $0.id == "b" }?.isExpanded == false)
     }
 
@@ -232,13 +259,16 @@ extension SidebarVMTests {
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100)),
             task(id: "b", status: "completed", startedAt: .now, parentTaskID: "a"),
             task(id: "child", status: "completed", startedAt: .now.addingTimeInterval(50), spawnedBy: "b")
         ])
         await waitUntil { sut.recentRows.count == 2 }
+        await sut.waitForPresentation()
         sut.didToggleExpansion(taskID: "a")
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["a"])
 
         // when — retention prunes "a"; "b" becomes the conversation's new (singleton, for now) id.
@@ -250,6 +280,7 @@ extension SidebarVMTests {
         // then — the collapse carried across: "child" stays hidden under the NEW id "b", rather
         // than reappearing because "b" was never itself collapsed.
         await waitUntil { sut.recentRows.map(\.id) == ["b"] }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.first?.isExpanded == false)
     }
 
@@ -264,14 +295,17 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([
             task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100)),
             task(id: "b", status: "completed", startedAt: .now.addingTimeInterval(-50), parentTaskID: "a"),
             task(id: "c", status: "completed", startedAt: .now, parentTaskID: "a")
         ])
         await waitUntil { !sut.recentRows.isEmpty }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("a"))
         await waitUntil { sut.selection == .task("a") }
+        await sut.waitForPresentation()
 
         // when — retention prunes "a"; "b" and "c" both survive as candidates, each now its own
         // singleton conversation (their shared link to "a" is gone with it).
@@ -282,6 +316,7 @@ extension SidebarVMTests {
 
         // then — the deterministic rule always resolves the stale selection to "b", never "c".
         await waitUntil { sut.selection == .task("b") }
+        await sut.waitForPresentation()
         #expect(sut.selection == .task("b"))
     }
 
@@ -297,14 +332,19 @@ extension SidebarVMTests {
         let tasksSubject = harness.tasksSubject
         let selectionSubject = harness.selectionSubject
         sut.didAppear()
+        await sut.waitForPresentation()
         tasksSubject.send([task(id: "a", status: "completed", startedAt: .now.addingTimeInterval(-100))])
         await waitUntil { !sut.recentRows.isEmpty }
+        await sut.waitForPresentation()
         selectionSubject.send(.task("a"))
         await waitUntil { sut.selection == .task("a") }
+        await sut.waitForPresentation()
 
         // when — a search that matches neither "a" nor "b" hides the whole conversation.
         sut.didChangeSearchQuery("zzz-does-not-match-anything")
+        await sut.waitForPresentation()
         await waitUntil { sut.recentRows.isEmpty }
+        await sut.waitForPresentation()
 
         // "b" arrives as "a"'s follow-up, then "a" is pruned by retention — both while still
         // hidden by the search.
@@ -317,7 +357,9 @@ extension SidebarVMTests {
         // then — clearing the search reveals "b" as the survivor, and the stale selection on "a"
         // resolves to it, rather than staying stuck on "a" (which no longer identifies anything).
         sut.didChangeSearchQuery("")
+        await sut.waitForPresentation()
         await waitUntil { sut.selection == .task("b") }
+        await sut.waitForPresentation()
         #expect(sut.recentRows.map(\.id) == ["b"])
     }
 }
