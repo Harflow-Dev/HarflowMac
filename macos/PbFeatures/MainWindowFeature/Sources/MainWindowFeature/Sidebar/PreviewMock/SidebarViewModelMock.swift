@@ -18,6 +18,7 @@ import SwiftUI
 final class SidebarViewModelMock: SidebarViewModel {
     
     var sections: [SidebarSection]
+    var savedWorkflows: [WorkflowRecord] = []
     var listErrorMessage: String?
     var emptyStateMessage: String?
     var showsLoadingSkeleton: Bool

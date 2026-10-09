@@ -114,12 +114,17 @@ struct SidebarView<VM: SidebarViewModel>: View {
     // MARK: - View Body
     
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            filterRow
-            list
-            footer
-        }
+        list
+            // Let the native sidebar List own the titlebar safe area. A surrounding VStack
+            // can be extended underneath the unified toolbar when leaving full screen.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    header
+                    filterRow
+                }
+                .background(.bar)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) { footer.background(.bar) }
         // New session lives in the sidebar column's toolbar, beside the show/hide-sidebar button.
         .toolbar {
             ToolbarItem(placement: .automatic) {

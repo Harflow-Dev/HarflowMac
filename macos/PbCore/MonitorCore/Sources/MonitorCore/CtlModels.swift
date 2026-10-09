@@ -6,13 +6,14 @@ import Foundation
 /// v3 adds pending messages and workflow ownership/status fields; v4 adds workflow result errors; v5 adds nested workflow ownership.
 /// v6 adds native subagent execution identity and capability fields.
 /// v7 adds human Monitor workflow cancellation eligibility and refusal metadata.
-/// v8 adds native owner permission plans and launch preview contracts. Older versions remain accepted.
+/// v8 adds native owner permission plans and launch preview contracts.
+/// v9 adds durable usage-limit diagnostics and workflow recovery choices. Older versions remain accepted.
 /// `polybridge-setup --json` and
 /// `events.jsonl` are separate contracts with their own single-version constants — see
 /// `setupContractVersion` (`SetupClient.swift`) and `eventLogVersion` (`Events.swift`) — because a
 /// shape change to one of the three must never silently widen what the app accepts from the
 /// others.
-public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6, 7, 8]
+public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 public enum TaskStatus: Equatable, Hashable, Sendable {
     case running, completed, failed, timedOut, cancelled
@@ -46,6 +47,30 @@ public enum TaskStatus: Equatable, Hashable, Sendable {
         case .cancelled: return "Cancelled"
         case .other(let raw): return raw
         }
+    }
+}
+
+/// Provider-confirmed failure evidence, available in task briefs and full snapshots.
+/// Keep reset values in their provider-supplied shape (ISO text or numeric timestamp).
+public struct TaskFailureDiagnostic: Equatable, Sendable {
+    public let category: String
+    public let reason: String
+    public let source: String
+    public let resetAt: JSONValue?
+    public let settlement: String?
+
+    public init?(_ value: JSONValue) {
+        guard let object = value.objectValue,
+              let category = object["category"]?.stringValue,
+              let reason = object["reason"]?.stringValue,
+              let source = object["source"]?.stringValue else { return nil }
+        self.category = category
+        self.reason = reason
+        self.source = source
+        resetAt = object["reset_at"].flatMap { value in
+            value.stringValue != nil || value.doubleValue != nil ? value : nil
+        }
+        settlement = object["settlement"]?.stringValue
     }
 }
 
@@ -92,6 +117,7 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     public var takenOverNote: String? { string("taken_over_note") }
     public var ownedByLiveServer: Bool? { raw["owned_by_live_server"]?.boolValue }
     public var recovered: Bool { raw["recovered"]?.boolValue ?? false }
+    public var failureDiagnostic: TaskFailureDiagnostic? { raw["failure_diagnostic"].flatMap(TaskFailureDiagnostic.init) }
 
     // Snapshot-only fields (nil in a `list` brief).
     public var summary: String? { string("summary") }
