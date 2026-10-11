@@ -24,6 +24,10 @@ struct WorkflowCanvasNode: View {
     let isConnectionTarget: Bool
     let connectionDrag: GestureState<WorkflowConnectionDrag?>
     let onDropConnectionAt: (CGPoint) -> Void
+    /// True on a run canvas, where "pending" is an execution state that earns the dashed
+    /// 75% treatment (SPEC §6.4). The editor's identically-named placeholder status stays a
+    /// plain solid card. A defaulted presentation input; call sites without a run keep it off.
+    var showsExecutionStates = false
     @GestureState private var dragOrigin: CGPoint?
 
     private var nodeSize: CGSize { WorkflowCanvasGeometry.size(node) }
@@ -31,10 +35,57 @@ struct WorkflowCanvasNode: View {
     private var displayTitle: String { ["agent", "workflow"].contains(node.type) ? node.name : WorkflowRole.title(node.type) }
     private var isCompact: Bool { ["start", "end", "parallel_start", "parallel_end"].contains(node.type) }
     private var isRunning: Bool { status == "running" }
+    private var statusPresentation: StatusBadgePresentation { WorkflowNodeStatusPresentation.presentation(status: status) }
+    private var isAttention: Bool { statusPresentation.tint == .warning }
+    private var isFailed: Bool { statusPresentation.tint == .danger }
+    /// Preserve the original rounded rectangular click and drag footprint, including capsule corners.
+    static var hitShape: RoundedRectangle { RoundedRectangle(cornerRadius: PbRadius.card) }
     private var outline: WorkflowNodeOutline { WorkflowNodeOutline(status: status, isSelected: isSelected) }
+    /// Start/End draw as capsules (SPEC §6.3) inside their unchanged 72 pt square footprint;
+    /// every other node keeps the 12 pt card.
+    private var shape: AnyShape {
+        ["start", "end"].contains(node.type)
+            ? AnyShape(Capsule())
+            : AnyShape(RoundedRectangle(cornerRadius: PbRadius.card))
+    }
+
     private var border: Color {
         if isSelected || status == "reserved" { return .accentLink }
+        if isAttention { return .warningFG }
+        if isFailed { return .failedRed }
         return outline.isExecuting ? .accentLink.opacity(0.25) : .cardBorder
+    }
+
+    private var borderStyle: StrokeStyle {
+        let width = isSelected
+            ? PbRadius.Metrics.workflowNodeSelectedBorderWidth
+            : (isAttention || isFailed
+                ? PbRadius.Metrics.workflowNodeAttentionBorderWidth
+                : (outline.isEmphasized ? PbRadius.Metrics.workflowConnectionHighlightedLineWidth : PbRadius.Metrics.hairlineStroke))
+        return StrokeStyle(
+            lineWidth: width,
+            dash: showsExecutionStates && status == "pending" && !isSelected ? PbRadius.Metrics.workflowPendingDash : []
+        )
+    }
+
+    /// Only an excluded branch dims the whole node; execution pending dims its border alone.
+    private var opacity: Double {
+        if status == "not_selected" { return 0.4 }
+        return 1
+    }
+
+    /// The selected ring (`runningBG`) and the attention ring (`warningBG`), both 4 pt and
+    /// non-interactive; the running pulse stays with `WorkflowRunningOutline`.
+    @ViewBuilder
+    private var ringOverlay: some View {
+        let ring: Color? = isSelected ? .runningBG : (isAttention ? .warningBG : (isFailed ? .dangerBG : nil))
+        if let ring {
+            shape
+                .stroke(ring, lineWidth: PbRadius.Metrics.workflowNodeRingWidth)
+                .padding(-PbRadius.Metrics.workflowNodeRingInset)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     var body: some View {
@@ -50,7 +101,7 @@ struct WorkflowCanvasNode: View {
             }
         }
         .frame(width: nodeSize.width, height: nodeSize.height)
-        .opacity(status == "not_selected" ? 0.4 : 1)
+        .opacity(opacity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(displayTitle), \(status)")
         .help(node.raw["group_label"]?.stringValue ?? displayTitle)
@@ -65,9 +116,13 @@ struct WorkflowCanvasNode: View {
         Button(action: isOutput ? onConnect : onSelect) {
             Circle()
                 .fill(isConnectionTarget && !isOutput ? Color.accentLink : Color.cardFill)
-                .overlay(Circle().stroke(isConnectionTarget && !isOutput ? Color.accentLink : Color.secondaryText, lineWidth: 1.5))
-                .frame(width: isConnectionTarget && !isOutput ? 12 : 9, height: isConnectionTarget && !isOutput ? 12 : 9)
-                .frame(width: 28, height: 28)
+                .overlay(Circle().stroke(
+                    isConnectionTarget && !isOutput ? Color.accentLink : Color.secondaryText,
+                    lineWidth: PbRadius.Metrics.workflowConnectionLineWidth
+                ))
+        .frame(width: isConnectionTarget && !isOutput ? PbRadius.Metrics.spacing12 : PbRadius.Metrics.workflowPortDiameter,
+                height: isConnectionTarget && !isOutput ? PbRadius.Metrics.spacing12 : PbRadius.Metrics.workflowPortDiameter)
+                .frame(width: PbRadius.Metrics.spacing28, height: PbRadius.Metrics.spacing28)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -88,9 +143,15 @@ struct WorkflowCanvasNode: View {
     @ViewBuilder
     private var cardContent: some View {
         if isCompact {
-            VStack(spacing: 8) {
+            VStack(spacing: PbRadius.Metrics.spacing8) {
                 if isRunning {
                     RunningSpinner()
+                } else if ["completed", "failed", "uncertain", "needs_attention", "needs_input"].contains(status),
+                          case let .symbol(symbol) = statusPresentation.indicator {
+                    Image(systemName: symbol).foregroundStyle(statusPresentation.tint.foreground)
+                } else if node.type == "start" {
+                    Image(systemName: "play.fill")
+                        .foregroundStyle(Color.doneGreen)
                 } else {
                     Image(systemName: WorkflowRole.symbol(node.type))
                         .foregroundStyle(isSelected ? Color.accentLink : Color.secondaryText)
@@ -102,34 +163,53 @@ struct WorkflowCanvasNode: View {
         }
     }
 
+    /// The 24 pt neutral role tile (SPEC §6.3): the agent's role glyph, never an agent colour.
+    private var iconTile: some View {
+        Image(systemName: WorkflowRole.symbol(node.type == "agent" ? node.role : node.type))
+            .font(.pb(.body))
+            .foregroundStyle(isSelected ? Color.accentLink : Color.secondaryText)
+            .frame(width: PbRadius.Metrics.workflowNodeIconTileSize, height: PbRadius.Metrics.workflowNodeIconTileSize)
+            .background(RoundedRectangle(cornerRadius: PbRadius.Metrics.workflowNodeIconTileCornerRadius)
+                .fill(Color.neutralFill))
+            .accessibilityHidden(true)
+    }
+
     private var regularContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: WorkflowRole.symbol(node.type == "agent" ? node.role : node.type))
-                    .foregroundStyle(Color.secondaryText)
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+            HStack(spacing: PbRadius.Metrics.spacing8) {
+                iconTile
                 titleView
                 Spacer(minLength: 0)
                 if isRunning {
                     RunningSpinner()
-                } else if status == "completed" {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.doneGreen)
-                } else if ["failed", "uncertain"].contains(status) {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.failedRed)
+                } else if ["completed", "failed", "uncertain", "needs_attention", "needs_input"].contains(status),
+                          case let .symbol(symbol) = statusPresentation.indicator {
+                    Image(systemName: symbol).foregroundStyle(statusPresentation.tint.foreground)
                 }
             }
-            HStack {
+            HStack(spacing: PbRadius.Metrics.spacing4) {
                 if node.type == "agent" {
                     BackendLabel(backend: node.backend).font(.pb(.caption))
+                    if let model = node.raw["agent"]?.objectValue?["model"]?.stringValue, !model.isEmpty {
+                        Text("· \(model)")
+                            .font(.pb(.caption))
+                            .foregroundStyle(Color.tertiaryText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .layoutPriority(-1)
+                            .help(model)
+                            .accessibilityLabel(model)
+                    }
                 } else {
                     Text(node.type == "workflow" ? (node.workflowName.isEmpty ? "Select workflow" : node.workflowName) : node.type.capitalized)
                         .lineLimit(1)
                         .help(node.type == "workflow" ? (node.workflowName.isEmpty ? "Select workflow" : node.workflowName) : node.type.capitalized)
                         .font(.pb(.caption))
-.foregroundStyle(Color.secondaryText)
+.foregroundStyle(Color.tertiaryText)
                 }
                 Spacer(minLength: 0)
                 if attempt > 0 {
-                    Text("Attempt \(attempt)").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+                    Text("Attempt \(attempt)").font(.pb(.caption)).foregroundStyle(Color.tertiaryText).monospacedDigit()
                 }
             }
             WorkflowNodeDetail(node: node, status: status, isEditable: isEditable, childRunID: childRunID, onOpenRun: onOpenRun)
@@ -179,23 +259,34 @@ struct WorkflowCanvasNode: View {
     }
 
     private var card: some View {
-        cardContent.padding(12)
-        .frame(width: nodeSize.width, height: nodeSize.height)
-        .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(isRunning ? Color.accentLink.opacity(0.08) : Color.cardFill))
-        .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(border, lineWidth: outline.isEmphasized ? 2 : 1))
-        .overlay {
-            if outline.isExecuting {
-                WorkflowRunningOutline(isSelected: isSelected)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+        cardContent
+            .padding(PbRadius.Metrics.workflowNodePadding)
+            .frame(width: nodeSize.width, height: nodeSize.height)
+            .background(shape.fill(Color.cardFill))
+            .overlay(shape.stroke(border, style: borderStyle)
+                .opacity(showsExecutionStates && status == "pending" && !isSelected
+                    ? PbRadius.Metrics.workflowNodePendingOpacity : 1))
+            .overlay(ringOverlay)
+            .overlay {
+                if outline.isExecuting {
+                    WorkflowRunningOutline(isSelected: isSelected)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
             }
-        }
-        .contentShape(RoundedRectangle(cornerRadius: PbRadius.card))
-        .onTapGesture {
-            if editedTitle == nil { onSelect() }
-        }
-        .transaction { $0.animation = nil }
-        .gesture(moveGesture)
+            // The design's two elevation shadows (§6.3), tokenized.
+            .shadow(color: Color.shadow.opacity(PbRadius.Metrics.workflowNodeShadowNearOpacity),
+                    radius: PbRadius.Metrics.workflowNodeShadowNearRadius,
+                    y: PbRadius.Metrics.workflowNodeShadowNearY)
+            .shadow(color: Color.shadow.opacity(PbRadius.Metrics.workflowNodeShadowFarOpacity),
+                    radius: PbRadius.Metrics.workflowNodeShadowFarRadius,
+                    y: PbRadius.Metrics.workflowNodeShadowFarY)
+            .contentShape(Self.hitShape)
+            .onTapGesture {
+                if editedTitle == nil { onSelect() }
+            }
+            .transaction { $0.animation = nil }
+            .gesture(moveGesture)
     }
 
     private var moveGesture: some Gesture {
@@ -213,13 +304,43 @@ struct WorkflowCanvasNode: View {
 }
 
 #if DEBUG
-#Preview("Run workflow node") {
-    WorkflowCanvasNode(
-        node: WorkflowNodeModel(raw: ["id": .string("call"), "type": .string("workflow"), "workflow_name": .string("Review")]),
-        status: "running", attempt: 1, isSelected: false, isEditable: false, zoom: 1,
-        childRunID: "child", onOpenRun: { _ in }, onSelect: {}, onMove: { _ in }, onDragEnded: {}, onConnect: {},
-        onRename: { _ in }, onTitleEditingChanged: { _ in }, isConnectionTarget: false,
-        connectionDrag: GestureState(initialValue: nil), onDropConnectionAt: { _ in }
-    ).padding(40)
+private struct WorkflowCanvasNodePreview: View {
+    var status = "running"
+    var isSelected = false
+    var type = "agent"
+    var showsExecutionStates = false
+    var body: some View {
+        WorkflowCanvasNode(
+            node: WorkflowNodeModel(raw: [
+                "id": .string("call"), "type": .string(type),
+                "role": .string("implementation"), "title": .string("Implementation"),
+                "agent": .object(["backend": .string("codex"), "model": .string("gpt-5")])
+            ]),
+            status: status, attempt: 1, isSelected: isSelected, isEditable: false, zoom: 1,
+            childRunID: nil, onOpenRun: { _ in }, onSelect: {}, onMove: { _ in }, onDragEnded: {}, onConnect: {},
+            onRename: { _ in }, onTitleEditingChanged: { _ in }, isConnectionTarget: false,
+            connectionDrag: GestureState(initialValue: nil), onDropConnectionAt: { _ in },
+            showsExecutionStates: showsExecutionStates
+        )
+        .padding(PbRadius.Metrics.workflowNodePreviewInset)
+    }
+}
+
+#Preview("Workflow node - running, light") { WorkflowCanvasNodePreview().preferredColorScheme(.light) }
+#Preview("Workflow node - selected") { WorkflowCanvasNodePreview(status: "running", isSelected: true).preferredColorScheme(.dark) }
+#Preview("Workflow node - attention") { WorkflowCanvasNodePreview(status: "failed").preferredColorScheme(.light) }
+#Preview("Workflow node - done") { WorkflowCanvasNodePreview(status: "completed").preferredColorScheme(.dark) }
+#Preview("Workflow node - editor placeholder") { WorkflowCanvasNodePreview(status: "pending", isSelected: false).preferredColorScheme(.light) }
+#Preview("Workflow node - run pending, dashed") {
+    WorkflowCanvasNodePreview(status: "pending", showsExecutionStates: true).preferredColorScheme(.dark)
+}
+
+#Preview("Start and end capsules") {
+    HStack(spacing: PbRadius.Metrics.workflowNodePreviewInset) {
+        WorkflowCanvasNodePreview(status: "pending", type: "start")
+        WorkflowCanvasNodePreview(status: "pending", type: "end")
+    }
+    .padding(PbRadius.Metrics.workflowNodePreviewInset)
+    .preferredColorScheme(.light)
 }
 #endif

@@ -368,7 +368,7 @@ extension TaskDetailVMTests {
 
         // then
         let expected = "Copied. This task is still running — resuming it now would put two writers "
-        + "on one conversation; prefer Take over."
+        + "on one conversation; prefer Take over in terminal."
         await verify(useCase).setOutcome(.value("abc12345"), .value(expected)).calledEventually(1, before: .seconds(5))
     }
 
@@ -457,6 +457,62 @@ extension TaskDetailVMTests {
         harness.tasksSubject.send([done])
         await waitUntil { fresh.outcomeMessage != nil }
         #expect(fresh.outcomeMessage == "Copied resume command.")
+    }
+
+    // MARK: - Take over naming (§4): one action, one name per state
+
+    @Test func givenARunningTask_whenRenderingActions_thenTheTakeoverButtonSaysTakeOverInTerminal() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { sut.task != nil }
+
+        // when / then
+        #expect(sut.takeoverButtonLabel == "Take over in terminal")
+    }
+
+    @Test func givenASettledTask_whenRenderingActions_thenTheTakeoverButtonSaysOpenInTerminal() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let done = task(status: "completed")
+        harness.detailBox.value = done
+        sut.didAppear()
+        harness.tasksSubject.send([done])
+        await waitUntil { sut.task != nil }
+
+        // when / then
+        #expect(sut.takeoverButtonLabel == "Open in terminal")
+    }
+
+    @Test(arguments: ["running", "completed"])
+    func givenTheTakeoverDialog_whenPublished_thenItsConfirmTitleMatchesTheButtonThatOpenedIt(status: String) async {
+        // given — the confirmation names the same action as the button that opened it.
+        let harness = makeSUT()
+        let sut = harness.sut
+        let task = task(status: status)
+        harness.detailBox.value = task
+        sut.didAppear()
+        harness.tasksSubject.send([task])
+        await waitUntil { sut.task != nil }
+
+        // when
+        var capturedEvent: ViewEvent?
+        let cancellable = sut.objectDidPublishViewEvent.publisher.sink { capturedEvent = $0 }
+        sut.didTapTakeover()
+        await waitUntil { capturedEvent?.dialog != nil }
+        defer { cancellable.cancel() }
+
+        // then
+        guard case .dialog(let dialog) = capturedEvent else {
+            Issue.record("expected a .dialog event")
+            return
+        }
+        #expect(dialog.actions.first?.title == sut.takeoverButtonLabel)
     }
 
     // MARK: - Teardown (root AGENTS.md rule 7)

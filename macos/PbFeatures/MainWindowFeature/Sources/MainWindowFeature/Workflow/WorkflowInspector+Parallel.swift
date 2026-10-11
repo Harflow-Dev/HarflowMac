@@ -11,7 +11,7 @@ extension WorkflowInspector {
         let partner = WorkflowParallelGroup.partner(of: node, nodes: nodes)
         let start = node.type == "parallel_start" ? node : partner
         let branches = edges.filter { $0.source == start?.id && !$0.isBackward }.count
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             SectionLabel(text: WorkflowRole.title(node.type))
             TextField("Group name", text: Binding(get: { node.raw["group_label"]?.stringValue ?? "" }, set: { label in
                 guard viewModel.selectedRun == nil, !viewModel.isBusy else { return }
@@ -24,7 +24,10 @@ extension WorkflowInspector {
             }))
 .textFieldStyle(.roundedBorder)
 .disabled(viewModel.selectedRun != nil || viewModel.isBusy)
-            Text("\(branches) branches").font(.pb(.secondary))
+            Text("\(branches) \(branches == 1 ? "branch" : "branches")")
+                .font(.pb(.secondary))
+                .monospacedDigit()
+                .foregroundStyle(Color.secondaryText)
             if node.type == "parallel_start", let start { branchSelectionEditor(start) }
             if let run = viewModel.selectedRun, let start { branchSelectionHistory(start, run: run) }
             if let partner {

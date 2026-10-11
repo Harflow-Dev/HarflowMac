@@ -162,11 +162,15 @@ final class NewSessionVM: NewSessionViewModel {
     // MARK: - Constants
 
     static let recentRepoLimit = 5
+    /// The four real access options, in increasing order of power. Each description states the
+    /// authority the dispatch REQUESTS — never a restriction guarantee for a harness that does
+    /// not enforce one; the single verbatim enforcement caveat in the view carries how strictly
+    /// any of it is actually enforced, and there is deliberately no second VM caption.
     private static let freedomLevels: [(id: String, detail: String)] = [
-        ("read_only", "Reads the code and answers. Doesn't change any files. Good for questions and reviews."),
-        ("write_in_repo", "Edits files in the repo. Commits and pushes are blocked, so you review before anything leaves."),
-        ("publish", "Edits files and may also commit, push and open a PR, if your git and GitHub setup allow it."),
-        ("unrestricted", "No limits from polybridge. The agent can touch anything your user account can. Use sparingly.")
+        ("read_only", "Requests read-only repo review."),
+        ("write_in_repo", "Requests repo edits, no publishing."),
+        ("publish", "Requests edits and publish attempts."),
+        ("unrestricted", "Requests broad access; use sparingly.")
     ]
 
     // MARK: - Private Properties

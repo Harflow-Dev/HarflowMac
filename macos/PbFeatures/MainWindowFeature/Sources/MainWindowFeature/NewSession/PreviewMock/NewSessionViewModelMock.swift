@@ -32,10 +32,10 @@ final class NewSessionViewModelMock: NewSessionViewModel {
 
     var accessOptions: [AccessOptionModel] {
         [
-            ("read_only", "Reads the code and answers. Doesn't change any files. Good for questions and reviews."),
-            ("write_in_repo", "Edits files in the repo. Commits and pushes are blocked, so you review before anything leaves."),
-            ("publish", "Edits files and may also commit, push and open a PR, if your git and GitHub setup allow it."),
-            ("unrestricted", "No limits from polybridge. The agent can touch anything your user account can. Use sparingly.")
+            ("read_only", "Requests read-only repo review."),
+            ("write_in_repo", "Requests repo edits, no publishing."),
+            ("publish", "Requests edits and publish attempts."),
+            ("unrestricted", "Requests broad access; use sparingly.")
         ].map {
             AccessOptionModel(
                 id: $0.0, title: AccessLabel.text(freedom: $0.0), detail: $0.1,

@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PbUtilities",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     products: [
         .library(name: "PbUtilities", targets: ["PbUtilities"]),
         .library(name: "PbTestUtilities", targets: ["PbTestUtilities"])

@@ -53,6 +53,6 @@ import Testing
 
 private struct LayoutHiddenTitle: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) { content.toolbar(removing: .title) } else { content }
+        content.toolbar(removing: .title)
     }
 }

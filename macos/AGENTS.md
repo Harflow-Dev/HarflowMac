@@ -99,7 +99,7 @@ a behaviour change. These are intentional deviations, not oversights.
 
 ## Language modes
 
-Every package targets tools 6.2 / macOS 14. Every package **except** `MonitorCore` builds in Swift 6
+Every package targets tools 6.2 / macOS 26. Every package **except** `MonitorCore` builds in Swift 6
 mode, including the root `PolybridgeMonitor` package since Phase 5. **`MonitorCore` uses
 `swiftLanguageModes: [.v5]`** — its tailing/process-table internals do not compile under Swift 6's
 strict concurrency checking, and moving it is separate work, not part of this refactor. The root

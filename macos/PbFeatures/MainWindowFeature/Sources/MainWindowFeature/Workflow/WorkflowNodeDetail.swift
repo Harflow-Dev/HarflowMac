@@ -11,9 +11,9 @@ struct WorkflowNodeDetail: View {
     var onOpenRun: (String) -> Void = { _ in }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: PbRadius.Metrics.spacing4) {
         if !isEditable {
-            let statusLabel = status == "not_selected" ? "Not selected" : status.replacingOccurrences(of: "_", with: " ").capitalized
+            let statusLabel = WorkflowNodeStatusPresentation.presentation(status: status).label
             let fullStatus = statusLabel + (node.isOptional ? " · Optional" : "")
             Text(fullStatus)
                 .lineLimit(1)
@@ -26,7 +26,7 @@ struct WorkflowNodeDetail: View {
             Text("Optional").lineLimit(1).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
         }
             if node.type == "workflow", let childRunID {
-                Spacer(minLength: 0)
+                Spacer(minLength: PbRadius.Metrics.zero)
                 Button("Open workflow") { onOpenRun(childRunID) }
                     .font(.pb(.caption))
                     .lineLimit(1)
@@ -39,7 +39,18 @@ struct WorkflowNodeDetail: View {
 }
 
 #if DEBUG
-#Preview("Optional node detail") {
+#Preview("Optional node detail - light") {
     WorkflowNodeDetail(node: WorkflowNodeModel(raw: ["type": .string("agent"), "optional": .bool(true)]), status: "pending", isEditable: true)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Node detail - dark, failed") {
+    WorkflowNodeDetail(node: WorkflowNodeModel(raw: ["type": .string("agent"), "optional": .bool(true)]), status: "failed", isEditable: false)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Node detail - unknown, light") {
+    WorkflowNodeDetail(node: WorkflowNodeModel(raw: ["type": .string("agent")]), status: "waiting_for_owner", isEditable: false)
+        .preferredColorScheme(.light)
 }
 #endif

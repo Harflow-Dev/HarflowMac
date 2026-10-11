@@ -155,7 +155,9 @@ final class TaskDetailVM: TaskDetailViewModel {
     private(set) var takenOverBannerText: String?
     private(set) var spawnedByBannerText: String?
     private(set) var canTakeover = false
-    private(set) var takeoverButtonLabel = "Take over"
+    /// "Take over in terminal" while the task runs, "Open in terminal" once it settled (§4: one
+    /// name per state for the same action; the hand-off itself still opens Terminal.app).
+    private(set) var takeoverButtonLabel = "Take over in terminal"
     private(set) var takeoverHelp = ""
     private(set) var openParentTaskID: String?
     private(set) var canCancel = false
@@ -431,7 +433,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         }
 
         canTakeover = !isWorkflowBuilder && WorkflowNodePresentation.allowsTerminal(detail) && !isBusy && detail.sessionID != nil
-        takeoverButtonLabel = detail.status.isRunning ? "Take over" : "Continue in terminal"
+        takeoverButtonLabel = detail.status.isRunning ? "Take over in terminal" : "Open in terminal"
         takeoverHelp = detail.sessionID == nil
         ? "The task has not reported a session yet."
         : "Stop the headless run and resume the session interactively."
@@ -451,7 +453,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             ? nil : useCase.snapshot(currentTaskID)?.resumeCommand
         copyResumeCommandHelp = detail.status.isRunning
         ? "Copies a command that resumes this session in your own terminal. This task is still "
-        + "running — resuming it now puts two writers on one conversation; prefer Take over."
+        + "running — resuming it now puts two writers on one conversation; prefer Take over in terminal."
         : "Copies a command that resumes this session in your own terminal."
 
         // Computed once and shared by `recomputeTimeline`/`recomputeInspector` (Monitor piece 11):

@@ -1,18 +1,26 @@
 import Foundation
+import PbUI
 
 // MARK: - WorkflowCanvasGeometry
 
 enum WorkflowCanvasGeometry {
-    static let gridSpacing: CGFloat = 10
-    static let portOuterRadius: CGFloat = 5.25
+    static var gridSpacing: CGFloat { PbRadius.Metrics.workflowSnapSpacing }
+    static var portOuterRadius: CGFloat { PbRadius.Metrics.workflowPortOuterRadius }
 
     static func snapped(_ point: CGPoint) -> CGPoint {
         CGPoint(x: max(0, (point.x / gridSpacing).rounded() * gridSpacing), y: max(0, (point.y / gridSpacing).rounded() * gridSpacing))
     }
 
     static func size(_ node: WorkflowNodeModel) -> CGSize {
-        if node.isParallelBoundary { return CGSize(width: 110, height: 72) }
-        return ["start", "end"].contains(node.type) ? CGSize(width: 72, height: 72) : CGSize(width: 200, height: 92)
+        if node.isParallelBoundary {
+            return CGSize(width: PbRadius.Metrics.workflowParallelBoundarySize.width,
+                          height: PbRadius.Metrics.workflowParallelBoundarySize.height)
+        }
+        return ["start", "end"].contains(node.type)
+            ? CGSize(width: PbRadius.Metrics.workflowCompactNodeSize.width,
+                     height: PbRadius.Metrics.workflowCompactNodeSize.height)
+            : CGSize(width: PbRadius.Metrics.workflowNodeSize.width,
+                     height: PbRadius.Metrics.workflowNodeSize.height)
     }
 
     static func center(_ node: WorkflowNodeModel) -> CGPoint {
@@ -24,7 +32,7 @@ enum WorkflowCanvasGeometry {
 
     static func connectionInput(_ node: WorkflowNodeModel, highlighted: Bool = false) -> CGPoint {
         let center = input(node)
-        return CGPoint(x: center.x - (highlighted ? 6.75 : portOuterRadius), y: center.y)
+        return CGPoint(x: center.x - (highlighted ? PbRadius.Metrics.workflowPortHighlightRadius : portOuterRadius), y: center.y)
     }
 
     static func connectionOutput(_ node: WorkflowNodeModel) -> CGPoint {
@@ -37,7 +45,7 @@ enum WorkflowCanvasGeometry {
             .map { ($0, hypot(input($0).x - point.x, input($0).y - point.y)) }
             .filter { $0.1 <= 22 }
             .min { $0.1 < $1.1 }?
-.0
+            .0
     }
 }
 

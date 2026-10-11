@@ -74,8 +74,10 @@ struct MessageBoxModel {
 // MARK: - MessageBoxView
 
 /// "Message this task" while a live-input run is going; "Continue" (a resume) once it settled.
-/// Rendered as a floating rounded field at the foot of the centred column. The hint is the field's
-/// accessibility hint and ⌘↩ is in the send button's tooltip; nothing is printed under the field.
+/// The redesign's composer (§3/§6.2): a rounded-18 Liquid Glass capsule with a circular 32 pt
+/// `accentFill` send button. The submit decision and every guard stay with the VM; this component
+/// still owns only its own text field. The printed hint is the guaranteed ⌘↩ shortcut the send
+/// button already declares — it must not imply a new key behavior.
 struct MessageBoxView: View {
     let model: MessageBoxModel
     let onSubmit: (String) -> Bool
@@ -84,37 +86,44 @@ struct MessageBoxView: View {
     private var isEnabled: Bool { model.canSend || model.canContinue }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .bottom, spacing: 10) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+            HStack(alignment: .bottom, spacing: PbRadius.Metrics.spacing10) {
                 field
                 sendButton
             }
-            .padding(.leading, 16)
-            .padding(.trailing, 16)
-            .padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.composerFill))
-            .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(isEnabled ? Color.liveDot.opacity(0.4) : Color.cardBorder, lineWidth: 1))
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            .padding(.leading, PbRadius.Metrics.spacing16)
+            .padding(.trailing, PbRadius.Metrics.spacing16)
+            .padding(.vertical, PbRadius.Metrics.spacing12)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: PbRadius.Metrics.composerCornerRadius))
+            if isEnabled {
+                Text("⌘↩ to send")
+                    .font(.pb(.caption))
+                    .foregroundStyle(Color.tertiaryText)
+                    .padding(.leading, PbRadius.Metrics.spacing16)
+            }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 20)
+        .padding(.horizontal, PbRadius.Metrics.spacing24)
+        .padding(.top, PbRadius.Metrics.spacing12)
+        .padding(.bottom, PbRadius.Metrics.spacing20)
     }
 
     private var canSubmit: Bool {
         isEnabled && !model.isBusy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// An up-arrow in a filled rounded square; `buttonLabel` ("Send"/"Continue") is its tooltip and
-    /// accessibility label.
+    /// A circular 32 pt `accentFill` button (§6.2); `buttonLabel` ("Send"/"Continue") is its tooltip
+    /// and accessibility label, and the printed ⌘↩ hint matches the shortcut it declares.
     private var sendButton: some View {
         Button(action: submit) {
             Image(systemName: "arrow.up")
                 .font(.pb(.body, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(canSubmit ? Color.accentColor : Color.secondaryText.opacity(0.35)))
-                .contentShape(RoundedRectangle(cornerRadius: PbRadius.button))
+                .foregroundStyle(Color.onAccent)
+                .frame(
+                    width: PbRadius.Metrics.composerSendButtonSize,
+                    height: PbRadius.Metrics.composerSendButtonSize
+                )
+                .background(Circle().fill(canSubmit ? Color.accentFill : Color.secondaryText.opacity(0.35)))
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .keyboardShortcut(.return, modifiers: .command)
@@ -126,23 +135,27 @@ struct MessageBoxView: View {
     @ViewBuilder
     private var field: some View {
         if model.isLocked {
-            HStack(spacing: 8) {
+            HStack(spacing: PbRadius.Metrics.spacing8) {
                 Image(systemName: "lock.fill").accessibilityHidden(true)
                 Text(model.placeholder)
             }
             .font(.pb(.body))
             .foregroundStyle(Color.secondaryText)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 4)
+            .padding(.vertical, PbRadius.Metrics.spacing4)
             .accessibilityElement(children: .combine)
         } else {
             TextField(model.placeholder, text: $text, axis: .vertical)
+                // Bounded scope (§6.2): the multiline composer's own dedicated scroll view, when
+                // one exists, carries thin overlay chrome; a field with none stays a quiet no-op,
+                // and the shared field editor is never targeted. The outer pane is untouched.
+                .scrollChromeScope()
                 .accessibilityHint(model.hint)
                 .lineLimit(1 ... 6)
                 .textFieldStyle(.plain)
                 .disabled(!isEnabled)
                 .onSubmit(submit)
-                .padding(.vertical, 4)
+                .padding(.vertical, PbRadius.Metrics.spacing4)
         }
     }
 
@@ -154,9 +167,14 @@ struct MessageBoxView: View {
 #if DEBUG
 @MainActor
 private func previewStack() -> some View {
-    VStack(spacing: 8) {
+    VStack(spacing: PbRadius.Metrics.spacing8) {
         MessageBoxView(model: MessageBoxModel(
             canSend: true, canContinue: false, isBusy: false, label: "Message this task",
+            hint: "Queued; folded into the current turn or sent after it", placeholder: "Message this task while it runs…",
+            buttonLabel: "Send"
+        )) { _ in true }
+        MessageBoxView(model: MessageBoxModel(
+            canSend: true, canContinue: false, isBusy: true, label: "Message this task",
             hint: "Queued; folded into the current turn or sent after it", placeholder: "Message this task while it runs…",
             buttonLabel: "Send"
         )) { _ in true }
@@ -175,8 +193,8 @@ private func previewStack() -> some View {
         )) { _ in true }
         MessageBoxView(model: .disabled) { _ in true }
     }
-    .frame(width: 560)
-    .padding(.vertical)
+    .frame(width: PbRadius.Metrics.taskComponentPreviewWidth)
+    .padding(.vertical, PbRadius.Metrics.spacing16)
     .background(Color.windowBG)
 }
 

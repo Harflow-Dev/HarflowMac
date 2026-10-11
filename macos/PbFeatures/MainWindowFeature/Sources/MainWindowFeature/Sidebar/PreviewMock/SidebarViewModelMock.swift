@@ -8,6 +8,7 @@
 import Foundation
 import MonitorCore
 import PbCommon
+import PbRepository
 import PbUI
 import SwiftUI
 
@@ -16,7 +17,7 @@ import SwiftUI
 /// Preview mock for `SidebarView`.
 @MainActor
 final class SidebarViewModelMock: SidebarViewModel {
-    
+
     var sections: [SidebarSection]
     var savedWorkflows: [WorkflowRecord] = []
     var listErrorMessage: String?
@@ -30,6 +31,14 @@ final class SidebarViewModelMock: SidebarViewModel {
     var searchQuery: String
     var selection: MonitorDestination?
     var installBannerModel: InstallBanner.Model?
+    /// Dummy preview inputs (Phase 1, §8): history surfaces, the workflow error line, and tap
+    /// counters so render previews and tests can show and drive every state. No production data.
+    var taskHistoryState: HistoryLoadingState
+    var workflowHistoryState: HistoryLoadingState
+    var workflowErrorMessage: String?
+    var newSessionTapCount = 0
+    var loadOlderTasksTapCount = 0
+    var loadOlderWorkflowsTapCount = 0
 
     init(
         sections: [SidebarSection] = SidebarViewModelMock.defaultSections,
@@ -43,7 +52,10 @@ final class SidebarViewModelMock: SidebarViewModel {
         catalogUnavailableNote: String? = nil,
         searchQuery: String = "",
         selection: MonitorDestination? = nil,
-        installBannerModel: InstallBanner.Model? = nil
+        installBannerModel: InstallBanner.Model? = nil,
+        taskHistoryState: HistoryLoadingState = HistoryLoadingState(),
+        workflowHistoryState: HistoryLoadingState = HistoryLoadingState(),
+        workflowErrorMessage: String? = nil
     ) {
         self.sections = sections
         self.listErrorMessage = listErrorMessage
@@ -57,6 +69,9 @@ final class SidebarViewModelMock: SidebarViewModel {
         self.searchQuery = searchQuery
         self.selection = selection
         self.installBannerModel = installBannerModel
+        self.taskHistoryState = taskHistoryState
+        self.workflowHistoryState = workflowHistoryState
+        self.workflowErrorMessage = workflowErrorMessage
     }
 
     /// A Running tree (expanded, with a running child), a parallel run and finished Today/Earlier rows.
@@ -99,12 +114,14 @@ final class SidebarViewModelMock: SidebarViewModel {
     func didChangeSearchQuery(_ text: String) { searchQuery = text }
     func didSelectBackendFilter(_ backend: String) { selectedBackend = backend }
     func didSelect(_ destination: MonitorDestination?) { selection = destination }
-    func didTapNewSession() {}
+    func didTapNewSession() { newSessionTapCount += 1 }
     func didTapInstallBannerPrimary() {}
     func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}
     func didToggleExpansion(taskID: String) {}
     func didPressMoveCommand(_ direction: MoveCommandDirection) {}
+    func didTapLoadMoreTasks() { loadOlderTasksTapCount += 1 }
+    func didTapLoadMoreWorkflows() { loadOlderWorkflowsTapCount += 1 }
 }
 
 #endif

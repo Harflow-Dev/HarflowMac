@@ -82,14 +82,9 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
 
 /// Drops the window title SwiftUI draws in the toolbar — the task header already names what is on
 /// screen. The window keeps its title, so the Window menu and Mission Control still name it.
-/// `ToolbarDefaultItemKind.title` needs macOS 15; on macOS 14 the title stays.
 private struct HiddenWindowTitle: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) {
-            content.toolbar(removing: .title)
-        } else {
-            content
-        }
+        content.toolbar(removing: .title)
     }
 }
 

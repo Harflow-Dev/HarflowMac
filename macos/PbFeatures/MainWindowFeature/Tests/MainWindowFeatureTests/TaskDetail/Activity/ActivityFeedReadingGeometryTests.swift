@@ -99,6 +99,155 @@ import Testing
         #expect(!visibleRows.isEmpty, "Partially visible feed must realize row content before any user scrolling")
     }
 
+    @Test func givenAPausedActivityFeed_whenLegacyChromeIsReasserted_thenReadingAnchorAndFollowStateSurvive() async throws {
+        // given — this is the real ActivityFeedView used by Task detail, Parallel lanes and
+        // Workflow activity. Start paused so the test checks semantic reading, not live-bottom.
+        _ = NSApplication.shared
+        let state = ParallelColumnUIState()
+        state.followLive.suspend()
+        let host = NSHostingView(rootView: feed(rows(prepending: false), state: state))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil(timeout: 5) { @MainActor in state.viewportPositioned }
+        let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.hasVerticalScroller })
+
+        // when — establish a paused, scrolled-away reading anchor before native chrome changes.
+        let targetOffset = max(1, scroll.documentVisibleRect.minY + 180)
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: targetOffset))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await waitUntil(timeout: 5) { @MainActor in !state.followLive.isFollowing && state.anchor != nil }
+        let anchor = try #require(state.anchor)
+        let offsetBeforeChrome = scroll.documentVisibleRect.minY
+
+        // when — exercise the production lifecycle after the existing viewport observer is live.
+        scroll.scrollerStyle = .legacy
+        NotificationCenter.default.post(name: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil)
+        await waitUntil(timeout: 5) { @MainActor in scroll.scrollerStyle == .overlay }
+
+        // when — a prepend and width reflow happen through the existing observer path.
+        window.setContentSize(CGSize(width: 340, height: 450))
+        host.rootView = feed(rows(prepending: true), state: state)
+        await waitUntil(timeout: 5) { @MainActor in
+            host.layoutSubtreeIfNeeded()
+            return state.viewportPositioned && state.anchor?.id == anchor.id && !state.followLive.isFollowing
+        }
+
+        // then — the scrollbar presentation change did not replace the feed, consume a page, or
+        // turn a paused reader back into live-follow.
+        #expect(scroll.scrollerStyle == .overlay)
+        #expect(state.anchor?.id == anchor.id)
+        #expect(!state.followLive.isFollowing)
+        #expect(state.scrollOffset.isFinite)
+        #expect(abs(offsetBeforeChrome - targetOffset) < 2)
+    }
+
+    @Test func givenLiveBottomActivityFeed_whenLegacyChromeIsReasserted_thenBottomFollowRemainsLive() async throws {
+        // given — live-follow is intentionally retained at the bottom of a real overflowing feed.
+        _ = NSApplication.shared
+        let state = ParallelColumnUIState()
+        let host = NSHostingView(rootView: feed(rows(prepending: false), state: state))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil(timeout: 5) { @MainActor in state.viewportPositioned }
+        let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.hasVerticalScroller })
+        let document = try #require(scroll.documentView)
+        // Native AppKit scrolling uses the clip view's legal origin, not the document's maxY
+        // directly. Scrolling to document.maxY can leave the viewport short of the true bottom.
+        let requestedBottom = document.bounds.maxY - scroll.contentView.bounds.height
+        let legalBottom = scroll.contentView
+.constrainBoundsRect(
+            CGRect(origin: CGPoint(x: scroll.contentView.bounds.minX, y: requestedBottom),
+                   size: scroll.contentView.bounds.size)
+        )
+.origin
+        scroll.contentView.scroll(to: legalBottom)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await waitUntil(timeout: 5) { @MainActor in
+            state.followLive.isFollowing
+                && scroll.documentVisibleRect.maxY >= document.bounds.maxY - 2
+        }
+        let visibleBottomBeforeChrome = scroll.documentVisibleRect.maxY
+        let bottomGapBeforeChrome = document.bounds.maxY - visibleBottomBeforeChrome
+        #expect(abs(bottomGapBeforeChrome) < 2)
+
+        // when
+        scroll.scrollerStyle = .legacy
+        NotificationCenter.default.post(name: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil)
+        await waitUntil(timeout: 5) { @MainActor in
+            scroll.scrollerStyle == .overlay
+                && scroll.documentVisibleRect.maxY >= document.bounds.maxY - 2
+        }
+
+        // then — chrome reassertion does not turn live-follow into a paused reading state.
+        #expect(state.followLive.isFollowing)
+        #expect(scroll.scrollerStyle == .overlay)
+        let currentDocument = try #require(scroll.documentView)
+        let visibleBottomAfterChrome = scroll.documentVisibleRect.maxY
+        let bottomGapAfterChrome = currentDocument.bounds.maxY - visibleBottomAfterChrome
+        // Lazy content may reflow and realize rows while chrome changes, so absolute document
+        // coordinates are not stable. The native viewport must still be at the current bottom.
+        #expect(abs(bottomGapAfterChrome) < 2)
+    }
+
+    @Test func givenPausedReadingAnchor_whenScrollbarChromeTransitions_thenPageCallCountAndRelativeAnchorRemainStable() async throws {
+        // given — instrument the real pagination callback so a preserved anchor cannot be
+        // mistaken for a feed that simply never asked for another page.
+        _ = NSApplication.shared
+        let requests = PageRequests()
+        let state = ParallelColumnUIState()
+        state.followLive.suspend()
+        let host = NSHostingView(rootView: feed(rows(prepending: false), state: state,
+            history: EventHistoryState(hasMore: true), onLoadMore: { requests.total += 1; return true }))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil(timeout: 5) { @MainActor in state.viewportPositioned }
+        let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.hasVerticalScroller })
+
+        // when — move to a stable reading position, then transition only the scrollbar chrome.
+        var requestedBounds = scroll.contentView.bounds
+        requestedBounds.origin.y = 205
+        let legalBounds = scroll.contentView.constrainBoundsRect(requestedBounds)
+        #expect(abs(legalBounds.minY - 205) < 2)
+        scroll.contentView.scroll(to: legalBounds.origin)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await waitUntil(timeout: 5) { @MainActor in
+            !state.followLive.isFollowing && state.anchor != nil
+                && abs(state.scrollOffset - 205) < 2 && abs(scroll.documentVisibleRect.minY - 205) < 2
+        }
+        let beforeAnchor = try #require(state.anchor)
+        let beforeOffset = state.scrollOffset
+        let beforeCalls = requests.total
+        scroll.scrollerStyle = .legacy
+        NotificationCenter.default.post(name: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil)
+
+        await waitUntil(timeout: 5) { @MainActor in
+            host.layoutSubtreeIfNeeded()
+            return scroll.scrollerStyle == .overlay && state.viewportPositioned
+                && state.anchor?.id == beforeAnchor.id && !state.followLive.isFollowing
+                && abs(state.scrollOffset - beforeOffset) < 3
+        }
+
+        // then — chrome-only reassertion preserves reading identity and relative position without
+        // issuing an extra page request or silently returning to live-bottom.
+        #expect(requests.total == beforeCalls)
+        #expect(state.anchor?.id == beforeAnchor.id)
+        #expect(abs(state.anchor!.relativeOffset - beforeAnchor.relativeOffset) < 3)
+        #expect(abs(state.scrollOffset - beforeOffset) < 3)
+        #expect(!state.followLive.isFollowing)
+    }
+
     private func recapture(scroll: NSScrollView, state: ParallelColumnUIState,
                            expected: ParallelVerticalAnchor) async throws -> ParallelVerticalAnchor {
         let previous = state.anchor
@@ -115,10 +264,14 @@ import Testing
         return measured
     }
 
-    private func feed(_ rows: [ActivityRow], state: ParallelColumnUIState) -> some View {
-        ActivityFeedView(rows: rows, start: nil, history: EventHistoryState(), isLoading: false,
-                         horizontalPadding: 24, state: state, onLoadMore: nil) { EmptyView() }.readingColumn()
+    private func feed(_ rows: [ActivityRow], state: ParallelColumnUIState,
+                      history: EventHistoryState = EventHistoryState(),
+                      onLoadMore: (() -> Bool)? = nil) -> some View {
+        ActivityFeedView(rows: rows, start: nil, history: history, isLoading: false,
+                         horizontalPadding: 24, state: state, onLoadMore: onLoadMore) { EmptyView() }.readingColumn()
     }
+
+    private final class PageRequests { var total = 0 }
 
     private func rows(prepending: Bool) -> [ActivityRow] {
         let before = ConversationTimelineRow(id: "before", taskID: "synthetic", timestamp: nil,

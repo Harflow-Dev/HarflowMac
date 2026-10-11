@@ -75,15 +75,14 @@ struct PendingReveal: Equatable, Sendable {
 
 /// Navigation the sidebar performs, plus the read side of the same selection state
 /// `MainWindowCoordinator` owns (decision in this dispatch's `AGENTS.md`): the sidebar's
-/// `List(selection:)` binding needs to reflect a selection made elsewhere (e.g. "Open parent" in
-/// the still-app-target `TaskDetailView`), not just its own taps.
+/// native alias selection needs to reflect a selection made elsewhere (e.g. "Open parent" in
+/// `TaskDetailView`), not just its own taps.
 @Mockable
 @MainActor
 protocol SidebarRouting: Sendable {
     var selection: MonitorDestination? { get }
     func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never>
-    /// `nil` clears the selection — `List(selection:)` writes `nil` on deselection, and the old
-    /// `List(selection: $model.selection)` accepted that directly.
+    /// `nil` clears native selection and every alias highlight for the logical destination.
     func select(_ destination: MonitorDestination?)
     func openNewSession()
 

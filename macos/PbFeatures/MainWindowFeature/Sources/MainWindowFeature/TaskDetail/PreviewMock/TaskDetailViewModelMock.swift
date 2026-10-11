@@ -29,7 +29,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var takenOverBannerText: String?
     var spawnedByBannerText: String?
     var canTakeover = true
-    var takeoverButtonLabel = "Take over"
+    var takeoverButtonLabel = "Take over in terminal"
     var takeoverHelp = "Stop the headless run and resume the session interactively."
     var openParentTaskID: String?
     var canCancel = true
@@ -77,11 +77,11 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var loadingHeader: TaskLoadingHeader? = TaskLoadingHeader(title: "Fix the login bug", repoName: "repo")
     @discardableResult func submitMessage(_: String) -> Bool { true }
 
-    /// A finished task: "Continue in terminal", the composer offering a follow-up, no cancel.
+    /// A finished task: "Open in terminal", the composer offering a follow-up, no cancel.
     static func finished() -> TaskDetailViewModelMock {
         let mock = TaskDetailViewModelMock()
         mock.task = sampleTask(status: "completed")
-        mock.takeoverButtonLabel = "Continue in terminal"
+        mock.takeoverButtonLabel = "Open in terminal"
         mock.canCancel = false
         mock.messageBoxModel = MessageBoxModel(
             canSend: false, canContinue: true, isBusy: false, label: "Continue this session",

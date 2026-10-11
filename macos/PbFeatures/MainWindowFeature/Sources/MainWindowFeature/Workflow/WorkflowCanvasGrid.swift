@@ -1,4 +1,5 @@
 import Foundation
+import PbUI
 
 // MARK: - WorkflowCanvasGrid
 
@@ -7,7 +8,7 @@ enum WorkflowCanvasGrid {
     static func spacing(scale: CGFloat) -> CGFloat {
         let scale = max(0.01, scale)
         var spacing = WorkflowCanvasGeometry.gridSpacing
-        while spacing * scale < 20 { spacing *= 2 }
+        while spacing * scale < PbRadius.Metrics.workflowGridMinimumScreenSpacing { spacing *= 2 }
         return spacing
     }
 
@@ -33,5 +34,7 @@ enum WorkflowCanvasGrid {
         return points
     }
 
-    static func diameter(scale: CGFloat) -> CGFloat { 1.7 / max(0.01, scale) }
+    static func diameter(scale: CGFloat) -> CGFloat {
+        PbRadius.Metrics.workflowGridDotDiameter / max(0.01, scale)
+    }
 }

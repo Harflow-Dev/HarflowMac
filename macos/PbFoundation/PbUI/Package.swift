@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PbUI",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     products: [
         .library(name: "PbUI", targets: ["PbUI"])
     ],

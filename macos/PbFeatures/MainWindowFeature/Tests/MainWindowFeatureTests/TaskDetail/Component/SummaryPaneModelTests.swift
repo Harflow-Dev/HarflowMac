@@ -1,5 +1,6 @@
 @testable import MainWindowFeature
 @testable import MonitorCore
+import PbUI
 import Testing
 
 @Suite struct SummaryPaneModelTests {
@@ -134,7 +135,7 @@ import Testing
         #expect(model.editedFiles.isEmpty)
     }
 
-    // MARK: - Hero (D9)
+    // MARK: - Hero (D9) and the shared settled duration (§1.6)
 
     private func build(_ fields: [String: JSONValue]) -> SummaryPaneModel {
         SummaryPaneModel.build(task: task(fields), summary: nil, events: [], eventsAvailability: .available)
@@ -144,29 +145,46 @@ import Testing
         ("completed", "Done in 21 min"), ("failed", "Failed after 21 min"),
         ("cancelled", "Cancelled after 21 min"), ("timed_out", "Timed out after 21 min")
     ])
-    func givenASettledTaskWithAnExitCode_whenBuilt_thenTheHeadlineCarriesTheDurationAndThereIsNoDurationTile(
+    func givenASettledTaskWithAnExitAndARecordedDuration_whenBuilt_thenTheHeadlineAndDurationTileCarryTheSameReliableValue(
         status: String, headline: String
     ) {
-        // given — duration alone must not produce a tile (item 9): the hero already says it twice.
+        // given — duration + observed exit: the reliable value `TaskSettledDuration` shares between
+        // the headline, the Duration tile and the header badge.
         let fields: [String: JSONValue] = ["status": .string(status), "exit_code": .number(0), "duration_seconds": .number(1260)]
         // when
         let model = build(fields)
         // then
         #expect(model.hero?.headline == headline)
         #expect(model.hero?.isRunning == false)
-        #expect(model.statTiles.isEmpty)
+        #expect(model.hero?.settledDuration == 1260)
+        #expect(model.statTiles.contains(SummaryStatTile(title: "Duration", value: Format.clock(1260))))
     }
 
     @Test(arguments: [("completed", "Done"), ("failed", "Failed"), ("cancelled", "Cancelled"), ("timed_out", "Timed out")])
-    func givenASettledTaskWithoutAnExitCode_whenBuilt_thenTheHeadlineIsStatusOnlyAndThereIsNoDurationTile(
+    func givenASettledTaskWithoutAnExitCode_whenBuilt_thenTheHeadlineIsStatusOnlyWithNoDurationAnywhere(
         status: String, headline: String
     ) {
-        // given
+        // given — a recorded duration without an observed exit proves nothing about when the run
+        // ended, so no surface may show an elapsed value.
         let fields: [String: JSONValue] = ["status": .string(status), "duration_seconds": .number(1260)]
         // when
         let model = build(fields)
         // then
         #expect(model.hero?.headline == headline)
+        #expect(model.hero?.settledDuration == nil)
+        #expect(!model.statTiles.contains { $0.title == "Duration" })
+    }
+
+    @Test func givenASettledTaskWithAnExitButNoRecordedDuration_whenBuilt_thenTheHeadlineStaysStatusOnly() {
+        // given — the exact case the old `task.elapsed()` fallback fabricated an ever-growing
+        // finished duration for (§1.6).
+        let fields: [String: JSONValue] = ["status": .string("completed"), "exit_code": .number(0)]
+        // when
+        let model = build(fields)
+        // then — status only, now and at any later moment: the mapping reads no clock at all.
+        #expect(model.hero?.headline == "Done")
+        #expect(model.hero?.settledDuration == nil)
+        #expect(SummaryPaneModel.heroParts(task: task(fields)) == SummaryPaneModel.heroParts(task: task(fields)))
         #expect(!model.statTiles.contains { $0.title == "Duration" })
     }
 
@@ -179,16 +197,18 @@ import Testing
         // then
         #expect(model.hero?.isRunning == true)
         #expect(model.hero?.startedAt != nil)
+        #expect(model.hero?.settledDuration == nil)
         #expect(model.statTiles.isEmpty)
     }
 
-    @Test func givenTurnsReported_whenBuilt_thenTheSublineCarriesThem() {
+    @Test func givenTurnsReported_whenBuilt_thenTheSublineNamesTheCurrentAgentRun() {
         // given / when
         let many = build(["num_turns": .number(3)])
         let one = build(["num_turns": .number(1)])
-        // then
-        #expect(many.hero?.turnsText == "3 turns")
-        #expect(one.hero?.turnsText == "1 turn")
+        // then — "Agent turns: N" is the backend's own reported count, deliberately distinct from
+        // the conversation-turn counts the header and Activity tab show.
+        #expect(many.hero?.turnsText == "Agent turns: 3")
+        #expect(one.hero?.turnsText == "Agent turns: 1")
         #expect(many.hero?.backend == "claude")
     }
 
@@ -199,6 +219,20 @@ import Testing
         #expect(model.hero?.turnsText == nil)
     }
 
+    @Test(arguments: [
+        ["total_cost_usd": JSONValue.number(0.25)],
+        ["usage": JSONValue.object(["input_tokens": .number(123)])],
+        ["status": JSONValue.string("completed"), "exit_code": .number(0), "duration_seconds": .number(30)]
+    ])
+    func givenMetricsWithoutReportedAgentTurns_whenBuilt_thenTheirCurrentRunScopeStillShows(fields: [String: JSONValue]) {
+        // given / when
+        let model = build(fields)
+        // then
+        #expect(model.hero?.turnsText == nil)
+        #expect(!model.statTiles.isEmpty)
+        #expect(model.metricScopeText == "Reported by current agent run")
+    }
+
     @Test func givenSecondsAndHours_whenFormatted_thenTheDurationIsHumanReadable() {
         // given / when / then
         #expect(SummaryPaneModel.durationText(45) == "45 sec")
@@ -207,7 +241,7 @@ import Testing
         #expect(SummaryPaneModel.durationText(3900) == "1 h 5 min")
     }
 
-    // MARK: - Stat tiles (item 9/item 10): Tokens / Cost only, each only when reported
+    // MARK: - Stat tiles (§6.2): Duration / Agent turns / Tokens / Cost, each only when reported
 
     @Test func givenNoMetricsAtAll_whenBuilt_thenThereAreNoTilesAndNoTurns() {
         // given / when
@@ -220,13 +254,14 @@ import Testing
         #expect(model.costUSD == nil)
     }
 
-    @Test func givenADurationButNeitherTokensNorCost_whenBuilt_thenTheTileRowIsHidden() {
-        // given — the hero already reports the duration; without tokens or cost there is no row.
+    @Test func givenADurationButNeitherTokensNorCostNorTurns_whenBuilt_thenOnlyTheDurationTileAppears() {
+        // given — the reliable settled duration alone still earns its tile (§6.2); the headline
+        // and the tile read the same recorded value.
         let fields: [String: JSONValue] = ["status": .string("completed"), "exit_code": .number(0), "duration_seconds": .number(1260)]
         // when
-        let model = build(fields)
+        let tiles = build(fields).statTiles
         // then
-        #expect(model.statTiles.isEmpty)
+        #expect(tiles == [SummaryStatTile(title: "Duration", value: Format.clock(1260))])
     }
 
     @Test func givenTokensAndCostReported_whenBuilt_thenBothTilesAppear() {
@@ -267,12 +302,27 @@ import Testing
         #expect(tiles == [SummaryStatTile(title: "Cost", value: "$0.0500")])
     }
 
-    @Test func givenOnlyTurnsReported_whenBuilt_thenNoTileRowAppears() {
+    @Test func givenOnlyTurnsReported_whenBuilt_thenOnlyTheAgentTurnsTileAppears() {
         // given / when
-        let model = build(["num_turns": .number(3)])
+        let tiles = build(["num_turns": .number(3)]).statTiles
+        // then — the tile names the CURRENT agent run's own turns, never the conversation's
+        // member count (which lives in the header's "N turns", not here).
+        #expect(tiles == [SummaryStatTile(title: "Agent turns", value: "3")])
+    }
+
+    @Test func givenEveryReportedMetric_whenBuilt_thenTheTilesComeInOrder() {
+        // given — duration, turns, tokens and cost all reported by the current agent run.
+        let fields: [String: JSONValue] = [
+            "status": .string("completed"), "exit_code": .number(0), "duration_seconds": .number(1260),
+            "num_turns": .number(3),
+            "usage": .object(["input_tokens": .number(48210), "output_tokens": .number(3150)]),
+            "total_cost_usd": .number(0.4213)
+        ]
+        // when
+        let tiles = build(fields).statTiles
         // then
-        #expect(model.statTiles.isEmpty)
-        #expect(model.numTurns == 3)
+        #expect(tiles.map(\.title) == ["Duration", "Agent turns", "Tokens (in / out)", "Cost"])
+        #expect(tiles.map(\.value) == [Format.clock(1260), "3", "48210 / 3150", "$0.4213"])
     }
 
     // MARK: - Edited file rows (D8, item 13)

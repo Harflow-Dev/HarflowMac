@@ -98,7 +98,8 @@ extension TaskDetailVM {
                     availability: eventsAvailabilityByMember[member.taskID] ?? .loading)
             }, children: allChildren.map { TaskDetailTimelineChild(task: $0, title: useCase.title($0.taskID)) },
             start: conversationMembers.first?.startedAt, isBuilder: isWorkflowBuilder,
-            events: eventsByMember[currentTaskID] ?? [], snapshot: useCase.snapshot(currentTaskID), history: history)
+            events: eventsByMember[currentTaskID] ?? [], snapshot: useCase.snapshot(currentTaskID), history: history,
+            turnsText: turnsText)
         enqueueTimeline(input)
         // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
         let visiblePrompt = WorkflowNodePresentation.isWorker(task)

@@ -3,6 +3,7 @@ import AppKit
 import MonitorCore
 import Observation
 import PbTestUtilities
+import PbUI
 import SwiftUI
 import Testing
 
@@ -69,7 +70,7 @@ import Testing
                 checkedInitialInspector = true
             }
             guard mode != "Parallel" else { continue }
-            try assertStartVisible(in: host, nodes: nodes, detail: layout.detail, visibility: visibility)
+            try assertStartVisible(in: host, nodes: nodes, detail: layout.detail, visibility: visibility, mode: mode)
         }
     }
 
@@ -95,7 +96,7 @@ import Testing
     }
 
     private func assertStartVisible(in host: NSView, nodes: [WorkflowNodeModel], detail: CGRect,
-                                    visibility: NavigationSplitViewVisibility) throws {
+                                    visibility: NavigationSplitViewVisibility, mode: String) throws {
         let probe = try #require(descendants(of: host).compactMap { $0 as? WorkflowCanvasScrollProbe }.first)
         let scroll = try #require(probe.enclosingScrollView)
         let document = try #require(scroll.documentView)
@@ -105,7 +106,10 @@ import Testing
         let startFrame = host.convert(CGRect(origin: start.position, size: WorkflowCanvasGeometry.size(start)), from: probe)
         // then
         #expect(visibility == .detailOnly ? detail.minX < 1 : detail.minX > 100)
-        #expect(abs(viewport.minX - detail.minX) < 1)
+        // The flush-pane amendment removes only the editor's new outer inset; the canvas remains
+        // edge-to-edge in every workflow mode. Native scroll borders are measured separately.
+        let expectedInset = PbRadius.Metrics.zero
+        #expect(abs(viewport.minX - detail.minX - expectedInset) < 1)
         #expect(viewport.contains(startFrame), "Start must be fully visible at logical (50, 50), beside the sidebar")
         #expect(viewport.maxX <= host.bounds.maxX)
         #expect(abs(probe.convert(scroll.contentView.bounds, from: scroll.contentView).minX) < 1)

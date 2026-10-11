@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MonitorCore",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     products: [
         .library(name: "MonitorCore", targets: ["MonitorCore"])
     ],

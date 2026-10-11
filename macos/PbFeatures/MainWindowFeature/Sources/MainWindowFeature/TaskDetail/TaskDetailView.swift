@@ -2,9 +2,10 @@
 //  TaskDetailView.swift
 //  MainWindowFeature
 //
-//  Ported from the app target's `TaskDetailView.swift`/`TaskDetailContent`/`MessageBox`. No
-//  behaviour change: strings, sizes, fonts, colours and enable/disable rules stay exactly as they
-//  were. `.id(taskID)` (F4-35) is applied by the caller (`MainWindowCoordinator.buildTaskDetailView`),
+//  Ported from the app target's `TaskDetailView.swift`/`TaskDetailContent`/`MessageBox`. The
+//  redesign (§6.2) restyles the header (title 18 semibold, agent/repo/turns/access meta line),
+//  left-aligns the segmented tabs and keeps every action, route and guard unchanged. `.id(taskID)`
+//  (F4-35) is applied by the caller (`MainWindowCoordinator.buildTaskDetailView`),
 //  never inside this view's own body — see that method's header comment and the phase-4 brief's
 //  binding Lesson.
 //
@@ -107,6 +108,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @State private var isRawEventsPresented = false
     @AppStorage("monitor.inspectorVisible") private var isInspectorVisible = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.pbReduceMotionOverride) private var reduceMotionOverride
     
     // MARK: - Init
     
@@ -141,49 +144,50 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var realContent: some View {
         if let task = viewModel.task {
             withToolbar(task: task) {
-                HStack(spacing: 0) {
-                    VStack(spacing: 0) {
+                HStack(spacing: PbRadius.Metrics.zero) {
+                    VStack(spacing: PbRadius.Metrics.zero) {
                         if let backend = viewModel.polybridgeApprovalBackend {
-                            HStack(spacing: 12) {
+                            HStack(spacing: PbRadius.Metrics.spacing12) {
                                 Text("\(backend.capitalized) needs approval to update this canvas.")
                                     .font(.pb(.secondary))
 .foregroundStyle(Color.warningFG)
-                                Spacer(minLength: 0)
+                                Spacer(minLength: PbRadius.Metrics.zero)
                                 Button("Always allow Polybridge tools") { viewModel.didTapAllowPolybridgeTools() }
                                     .buttonStyle(QuietButtonStyle())
 .disabled(viewModel.isBusy)
                             }
-.padding(.horizontal, 16)
-.padding(.vertical, 8)
+.padding(.horizontal, PbRadius.Metrics.spacing16)
+.padding(.vertical, PbRadius.Metrics.spacing8)
                         }
                         header(task)
                         tabPicker
                         column
                     }
-                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                    .frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity, minHeight: PbRadius.Metrics.zero, maxHeight: .infinity)
                     .background(Color.windowBG)
                     if showsInspector {
-                        HStack(spacing: 0) {
+                        HStack(spacing: PbRadius.Metrics.zero) {
                             Divider()
                             InspectorView(model: viewModel.inspectorModel)
-                                .frame(width: 280)
+                                .frame(width: PbRadius.Metrics.taskInspectorWidth)
                         }
                         .transition(.move(edge: .trailing))
                     }
                 }
                 // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
-                // change can land outside the tap's transaction and would then not animate.
-                .animation(.easeInOut(duration: 0.25), value: showsInspector)
+                // change can land outside the tap's transaction and would then not animate. Reduce
+                // Motion drops the slide (§8); the pane still appears and disappears without motion.
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showsInspector)
                 .opensFileLinks(repoPath: task.repoPath)
                 .sheet(isPresented: $isRawEventsPresented) {
                     RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
                 }
             }
         } else if viewModel.hasListed {
-            VStack(spacing: 8) {
+            VStack(spacing: PbRadius.Metrics.spacing8) {
                 Text("Task \(viewModel.taskID)").font(.pb(.headline, weight: .bold))
                 Text("This task is not in polybridge's records (it may have been removed by retention).")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -202,7 +206,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     @ViewBuilder
     private func header(_ task: TaskInfo) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             if !viewModel.ancestorCrumbs.isEmpty { breadcrumbs }
             titleBlock(task)
             if let message = viewModel.outcomeMessage {
@@ -220,6 +224,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 } label: {
                     Label(noticeText, systemImage: "exclamationmark.triangle")
                         .font(.pb(.secondary))
+                        .monospacedDigit()
                         .foregroundStyle(Color.warningFG)
                 }
                 .buttonStyle(.borderless)
@@ -227,23 +232,23 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, isEmbedded ? 16 : 24)
-        .padding(.top, 12)
+        .padding(.horizontal, isEmbedded ? PbRadius.Metrics.spacing16 : PbRadius.Metrics.spacing24)
+        .padding(.top, PbRadius.Metrics.spacing12)
     }
 
     /// Attaches the toolbar layout the running OS supports; the glass-free one needs macOS 26 APIs.
     @ViewBuilder
     private func withToolbar(task: TaskInfo, @ViewBuilder content: () -> some View) -> some View {
         if isEmbedded {
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Spacer(minLength: 0)
+            VStack(spacing: PbRadius.Metrics.zero) {
+                HStack(spacing: PbRadius.Metrics.spacing12) {
+                    Spacer(minLength: PbRadius.Metrics.zero)
                     statusAndActions(task)
                 }
-.padding(.horizontal, 16)
-.padding(.vertical, 10)
+.padding(.horizontal, PbRadius.Metrics.spacing16)
+.padding(.vertical, PbRadius.Metrics.spacing10)
                 Divider()
-                content().frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                content().frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity, minHeight: PbRadius.Metrics.zero, maxHeight: .infinity)
             }
         } else {
             content().background {
@@ -262,7 +267,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     }
 
     private var breadcrumbs: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: PbRadius.Metrics.spacing4) {
             ForEach(viewModel.ancestorCrumbs) { crumb in
                 Button(crumb.title) { viewModel.didTapTask(crumb.id) }
                     .buttonStyle(.link)
@@ -274,24 +279,32 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         .font(.pb(.secondary))
     }
 
+    /// The redesign's title block (§6.2): the page title at `.title` semibold in primary text, over
+    /// a meta line of the agent label · repository menu · conversation turns · access — every value
+    /// the header already carried, now all in one line.
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
             Text(viewModel.title)
-                .font(.pb(.headline, weight: .semibold))
+                .font(.pb(.title, weight: .semibold))
+                .foregroundStyle(Color.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
                 .help(viewModel.title)
-            HStack(spacing: 6) {
+            HStack(spacing: PbRadius.Metrics.spacing6) {
+                BackendLabel(backend: task.backend)
                 repoMenu(task)
-                if let turnsText = viewModel.turnsText { Text("· \(turnsText)").fixedSize() }
+                if let turnsText = viewModel.turnsText { Text("· \(turnsText)").monospacedDigit().fixedSize() }
+                if let freedom = task.freedom {
+                    Text("· \(AccessLabel.text(freedom: freedom))").lineLimit(1)
+                }
             }
             .font(.pb(.secondary))
             .foregroundStyle(Color.secondaryText)
             .lineLimit(1)
         }
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity, alignment: .leading)
     }
 
     /// The repository's name; clicking it offers to show the folder in Finder or copy its path.
@@ -312,13 +325,19 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     @ViewBuilder
     private func statusAndActions(_ task: TaskInfo) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: PbRadius.Metrics.spacing10) {
             statusLabel(task)
             takeoverButton
             moreMenu
             inspectorToggle
         }
         .fixedSize()
+    }
+
+    /// Reduce Motion for the inspector transition: the presentation-only override wins over the
+    /// system setting (`PbMotion.reduceMotion`), the same resolution shared components use.
+    private var reduceMotion: Bool {
+        PbMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion)
     }
 
     private var showsInspector: Bool { isEmbedded ? embeddedInspectorVisible : isInspectorVisible }
@@ -332,7 +351,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     }
 
     private func statusLabel(_ task: TaskInfo) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: PbRadius.Metrics.spacing8) {
             TaskStatusLabel(task: task).fixedSize()
             if viewModel.isBusy { ProgressView().controlSize(.small) }
         }
@@ -377,7 +396,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         Menu {
             moreMenuItems
         } label: {
-            Image(systemName: "ellipsis.circle").frame(width: 24, height: 24).contentShape(Rectangle())
+            Image(systemName: "ellipsis.circle").frame(width: PbRadius.Metrics.spacing24, height: PbRadius.Metrics.spacing24).contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -388,19 +407,23 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     // MARK: Tabs and content
 
+    /// The redesign places the segmented control left-aligned under the header (§6.2), inset to
+    /// the content column's own padding; the tabs, binding and `didSelectTab` routing are today's.
     private var tabPicker: some View {
         SlidingSegmentedControl(
             options: viewModel.tabs.map { ($0, $0.rawValue) },
             selection: Binding(get: { viewModel.tab }, set: { viewModel.didSelectTab($0) })
         )
-        .padding(.top, isEmbedded ? 8 : 16)
-        .padding(.bottom, isEmbedded ? 8 : 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, isEmbedded ? PbRadius.Metrics.spacing16 : PbRadius.Metrics.spacing24)
+        .padding(.top, isEmbedded ? PbRadius.Metrics.spacing8 : PbRadius.Metrics.spacing16)
+        .padding(.bottom, isEmbedded ? PbRadius.Metrics.spacing8 : PbRadius.Metrics.spacing16)
     }
 
     /// Content over the composer. Each tab centres its own content with `readingColumn()` inside its
     /// scroll view (settled plan D13), so scrollbars sit at the pane's edge.
     private var column: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: PbRadius.Metrics.zero) {
             content
             MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
                 .readingColumn()
@@ -418,11 +441,14 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             ScrollView {
                 Text(viewModel.promptText)
                     .font(.pb(.reading))
-                    .lineSpacing(6)
+                    .lineSpacing(PbRadius.Metrics.spacing6)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(24)
+                    .padding(PbRadius.Metrics.spacing24)
                     .readingColumn()
+                    // The document probe (§6.2): inside the prompt pane's own document, so it
+                    // can only ever target this scroll view.
+                    .background(ScrollChrome())
             }
         }
     }
@@ -440,12 +466,20 @@ enum NoticeSummary {
 #if DEBUG
 @MainActor
 private func previewDetail(_ mock: TaskDetailViewModelMock = TaskDetailViewModelMock()) -> some View {
-    NavigationStack { TaskDetailView(mock) }.frame(width: 1000, height: 620)
+    NavigationStack { TaskDetailView(mock) }
+        .frame(width: PbRadius.Metrics.taskDetailPreviewWidth, height: PbRadius.Metrics.taskDetailPreviewHeight)
 }
 
 #Preview("Long title - narrow") {
     NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle()) }
-        .frame(width: 480, height: 700)
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth, height: PbRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Long title - narrow dark") {
+    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle()) }
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth, height: PbRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Long title - wide") {
@@ -454,12 +488,26 @@ private func previewDetail(_ mock: TaskDetailViewModelMock = TaskDetailViewModel
 
 #Preview("Unbroken title - narrow") {
     NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle(unbroken: true)) }
-        .frame(width: 480, height: 700)
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth, height: PbRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Unbroken title - narrow dark") {
+    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle(unbroken: true)) }
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth, height: PbRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Long title - embedded") {
     TaskDetailView(TaskDetailViewModelMock.longTitle(), isEmbedded: true)
-        .frame(width: 480, height: 700)
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth, height: PbRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Long title - embedded dark") {
+    TaskDetailView(TaskDetailViewModelMock.longTitle(), isEmbedded: true)
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth, height: PbRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Running - light") {

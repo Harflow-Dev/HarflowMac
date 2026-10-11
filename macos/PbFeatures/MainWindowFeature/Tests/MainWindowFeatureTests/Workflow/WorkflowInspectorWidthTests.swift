@@ -4,9 +4,10 @@ import Testing
 // MARK: - WorkflowInspectorWidthTests
 
 @Suite struct WorkflowInspectorWidthTests {
-    @Test func givenLargeWindow_whenUsingInitialWidth_thenInspectorStartsAt320() {
-        // given / when / then
-        #expect(WorkflowInspectorWidth.clamped(WorkflowInspectorWidth.initial, available: 1400) == 320)
+    @Test func givenLargeWindow_whenUsingInitialWidth_thenInspectorStartsAt288() {
+        // given / when / then — the Phase 3 visual adjustment: the initial ideal width is 288.
+        #expect(WorkflowInspectorWidth.initial == 288)
+        #expect(WorkflowInspectorWidth.clamped(WorkflowInspectorWidth.initial, available: 1400) == 288)
     }
 
     @Test func givenResizeRequest_whenClamping_thenInspectorStaysBetween220And500() {

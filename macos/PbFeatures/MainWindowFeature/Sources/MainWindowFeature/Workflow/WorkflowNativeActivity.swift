@@ -22,7 +22,7 @@ struct WorkflowNativeActivityView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
                 Text(model.title + " · Subagent").font(.pb(.body, weight: .semibold))
                 Text(model.status).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                 if model.limited { Text("Activity limited").font(.pb(.caption)).foregroundStyle(Color.secondaryText) }
@@ -32,8 +32,14 @@ struct WorkflowNativeActivityView: View {
                     TimelineRow(model: TimelineRowModel(item: item, start: nil, live: ["running", "launch_requested"].contains(model.status)))
                 }
             }
-.padding(16)
+.padding(PbRadius.Metrics.spacing16)
 .frame(maxWidth: .infinity, alignment: .leading)
+            // The user-authorized scrollbar amendment: this alternate feed bypasses
+            // ActivityFeedView, so the shared thin, auto-hiding native chrome is attached to
+            // its own enclosing vertical scroll view here — inside the document, exactly as
+            // ActivityFeedView does, with no interaction or accessibility footprint and no
+            // observer, paging or data change.
+.background(ActivityScrollChrome())
         }
     }
 }
@@ -113,7 +119,38 @@ extension WorkflowVM {
 }
 
 #if DEBUG
-#Preview("Native subagent activity") {
-    WorkflowNativeActivityView(model: .init(executionID: "example", title: "Review", status: "running", limited: true))
+private struct WorkflowNativeActivityPreview: View {
+    var body: some View {
+        WorkflowNativeActivityView(model: .init(
+            executionID: "example",
+            title: "Review",
+            status: "running",
+            limited: true,
+            error: "Showing the latest 200 activity events.",
+            hasEarlierActivity: true
+        ))
+        .background(Color.cardFill)
+    }
+}
+
+#Preview("Native subagent activity - light") {
+    WorkflowNativeActivityPreview()
+        .frame(width: PbRadius.Metrics.workflowPreviewHeight,
+                height: PbRadius.Metrics.activityPreviewWidth)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Native subagent activity - dark") {
+    WorkflowNativeActivityPreview()
+        .frame(width: PbRadius.Metrics.workflowPreviewHeight,
+                height: PbRadius.Metrics.activityPreviewWidth)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Native subagent activity - narrow") {
+    WorkflowNativeActivityPreview()
+        .frame(width: PbRadius.Metrics.activityPreviewWidth,
+                height: PbRadius.Metrics.activityPreviewWidth)
+        .preferredColorScheme(.light)
 }
 #endif

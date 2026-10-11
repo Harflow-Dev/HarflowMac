@@ -25,10 +25,10 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: PbRadius.Metrics.zero) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing24) {
+                    VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing6) {
                         Text(sheetTitle).font(.pb(.headline, weight: .semibold))
                         Text(sheetDescription)
                             .font(.pb(.secondary))
@@ -39,15 +39,18 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                     } else {
                         Text(viewModel.loadedName).font(.pb(.body, weight: .semibold))
                     }
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
                         SectionLabel(text: isGenerating ? (viewModel.isRefining ? "Describe the changes" : "Describe the workflow") : "Task")
                         TextEditor(text: Binding(get: { viewModel.prompt }, set: { viewModel.prompt = $0 }))
 .font(.pb(.body))
-.frame(minHeight: 120)
+                            // Bounded scope (§6.3): the prompt editor's own scroll view, if one
+                            // exists; a quiet no-op otherwise.
+                            .scrollChromeScope()
+.frame(minHeight: PbRadius.Metrics.sidebarSearchMinimumWidth)
                             .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                             .accessibilityLabel(isGenerating ? "Workflow request" : "Workflow task")
                     }
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
                         SectionLabel(text: isGenerating ? "Repository (optional)" : "Repository")
                         HStack {
                             TextField(isGenerating ? "Optional repository for context" : "/path/to/repository",
@@ -85,7 +88,11 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             Text("Saved fallback agents remain in effect.").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                         }
                     }
-                }.padding(28)
+                }
+.padding(PbRadius.Metrics.spacing28)
+                // The document probe (§6.3): inside the sheet's own document, so it can only ever
+                // target this outer scroll view — never the prompt editor's.
+                .background(ScrollChrome())
             }
             if let error = viewModel.errorText {
                 Text(error)
@@ -93,8 +100,8 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
 .foregroundStyle(Color.failedRed)
 .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-.padding(.horizontal, 28)
-.padding(.bottom, 12)
+.padding(.horizontal, PbRadius.Metrics.spacing28)
+.padding(.bottom, PbRadius.Metrics.spacing12)
             }
             Divider()
             HStack {
@@ -115,12 +122,25 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                 }
 .buttonStyle(.borderedProminent)
 .disabled(!canSubmit)
-            }.padding(20)
-        }.frame(width: 580, height: 650)
+            }.padding(PbRadius.Metrics.spacing20)
+        }.frame(width: PbRadius.Metrics.workflowLaunchSheetWidth, height: PbRadius.Metrics.workflowLaunchSheetHeight)
     }
 
 }
 
 #if DEBUG
 #Preview("Workflow launch") { WorkflowLaunchSheet(viewModel: WorkflowPreview.make(), isGenerating: false) }
+#Preview("Workflow launch - orchestrator override, dark") {
+    let vm = WorkflowPreview.make()
+    vm.overrideOrchestrator = true
+    return WorkflowLaunchSheet(viewModel: vm, isGenerating: false).preferredColorScheme(.dark)
+}
+
+#Preview("Workflow generation - light") {
+    WorkflowLaunchSheet(viewModel: WorkflowPreview.make(), isGenerating: true).preferredColorScheme(.light)
+}
+
+#Preview("Workflow generation - fixed 580-point sheet") {
+    WorkflowLaunchSheet(viewModel: WorkflowPreview.make(), isGenerating: true)
+}
 #endif

@@ -13,17 +13,14 @@ import PbUtilities
 @Mockable
 @MainActor
 protocol ParallelUseCase: Sendable {
-
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never>
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never>
     func busyPublisher() -> AnyPublisher<Set<String>, Never>
     func outcomesPublisher() -> AnyPublisher<[String: String], Never>
     func titlesPublisher() -> AnyPublisher<[String: String], Never>
-
     /// Returns the fresh listing entry.
     func task(_ id: String) -> TaskInfo?
     func title(_ taskID: String) -> String
-
     func acquireEventLease(_ taskID: String) -> any EventStreamLease
     func events(for taskID: String) -> [TaskEvent]
     func items(for taskID: String) -> [TimelineItem]
@@ -36,25 +33,11 @@ protocol ParallelUseCase: Sendable {
     /// Distinguishes pending activity from a missing or unreadable log.
     func eventsAvailability(for taskID: String) -> EventAvailability
     func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never>
-
     func runningInSubtrees(of ids: [String]) -> [String]
     func cancelAll(_ ids: [String]) async
     func setOutcome(_ id: String, _ text: String?)
-
     /// Starts Terminal takeover synchronously before routing.
     func beginTakeover(taskID: String)
-}
-
-extension ParallelUseCase {
-    func eventHistory(for _: String) -> EventHistoryState { EventHistoryState() }
-    func eventHistoryPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { Just(eventHistory(for: id)).eraseToAnyPublisher() }
-    @discardableResult func loadMoreEvents(_: String) -> Bool { false }
-    func conversationHistory(sessionID _: String, cursor _: String?) async throws -> TaskHistoryPage? { nil }
-}
-
-@MainActor
-protocol ParallelActivityReadiness {
-    func activityReadyPublisher() -> AnyPublisher<Bool, Never>
 }
 
 // MARK: - ParallelRouting
@@ -67,8 +50,7 @@ protocol ParallelRouting: Sendable {
 
 // MARK: - ParallelVM
 
-/// Presents complete conversation membership with bounded resident activity leases.
-/// Immutable value inputs build off-main; complete equality guards UI publication.
+/// Presents complete membership with bounded leases and equality-guarded off-main presentation.
 @Observable
 @MainActor
 final class ParallelVM: ParallelViewModel {
@@ -77,16 +59,20 @@ final class ParallelVM: ParallelViewModel {
     
     let groupName: String
     private(set) var headerSubtitle = ""
+    /// Truthful counts from complete current membership, independent of the static subtitle.
+    private(set) var statusSummary: String?
+    /// Common enforced claims from every current member; empty input produces no pills.
+    private(set) var headerPills: [String] = []
+    /// Remaining common clauses, or the unchanged common/fallback sentence when no pills exist.
+    private(set) var headerClaimCaption = ""
     private(set) var showPrompt = false
     private(set) var canCancelAll = false
     private(set) var isEmpty = false
     private(set) var columns: [ParallelColumnModel] = []
-    private(set) var footerText = ParallelVM.fallbackFooter
     
     // MARK: - Private Properties
     
     static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
-    
     @ObservationIgnored private let useCase: any ParallelUseCase
     @ObservationIgnored private let routing: any ParallelRouting
     @ObservationIgnored private let buildColumns: ParallelColumnsBuild
@@ -121,7 +107,6 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private lazy var history = ParallelActivityHistory(useCase: useCase,
         onInventory: { [weak self] in self?.recomputeMembersAndLeases() },
         onChange: { [weak self] memberID in self?.historyDidChange(memberID) })
-
     @ObservationIgnored private lazy var acquisition = ParallelLeaseAcquisition(acquire: { [weak self] id in
         guard let self, didSubscribe, neededMemberIDs.contains(id), leases[id] == nil else { return false }
         acquireLease(id)
@@ -150,7 +135,6 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private(set) var presentationWriteCount = 0
     @ObservationIgnored private(set) var builtColumnCount = 0
     @ObservationIgnored private(set) var sourceUpdateCount = 0
-
     func columnState(for id: String) -> ParallelColumnUIState {
         if let state = uiStates[id] { return state }
         let state = ParallelColumnUIState()
@@ -275,7 +259,6 @@ final class ParallelVM: ParallelViewModel {
             }
 .store(in: &cancellables)
         } else { activityReady = true }
-        
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] tasks in
@@ -287,7 +270,6 @@ final class ParallelVM: ParallelViewModel {
                 recomputeMembersAndLeases()
             }
             .store(in: &cancellables)
-        
         useCase.snapshotsPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snapshots in
@@ -296,7 +278,6 @@ final class ParallelVM: ParallelViewModel {
                 recompute()
             }
             .store(in: &cancellables)
-        
         useCase.busyPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] busy in
@@ -305,7 +286,6 @@ final class ParallelVM: ParallelViewModel {
                 recompute()
             }
             .store(in: &cancellables)
-        
         useCase.outcomesPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] outcomes in
@@ -314,9 +294,7 @@ final class ParallelVM: ParallelViewModel {
                 recompute()
             }
             .store(in: &cancellables)
-        
-        // Titles load independently of the listing (Codex review finding): a column must refresh
-        // when it changes on its own, not only when an unrelated publisher happens to fire afterward.
+        // Independent title updates refresh the column without waiting for another publisher.
         useCase.titlesPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -354,10 +332,8 @@ final class ParallelVM: ParallelViewModel {
         if canCancelAll != cancellable { canCancelAll = cancellable }
         let empty = groupConversations.isEmpty
         if isEmpty != empty { isEmpty = empty }
-
         let subtitle = ParallelHeader.subtitle(groupConversations, startedAt: group?.startedAt)
         if headerSubtitle != subtitle { headerSubtitle = subtitle }
-
         MonitorMetrics.end(preparation, stage: .parallelPreparation, residentColumns: residentIDs.count, leasedMembers: leases.count)
         recompute()
     }
@@ -424,10 +400,17 @@ final class ParallelVM: ParallelViewModel {
         descriptors = Dictionary(uniqueKeysWithValues: orderedConversations.map { ($0.id, basePresentation($0, includePrompt: false)) })
         let inputs = updateResidency()
         publishColumns()
-        let footerTasks = orderedConversations.map { latestSnapshots[$0.current.taskID] ?? $0.current }
-        let footer = EnforcementText.common(footerTasks) ?? Self.fallbackFooter
-        if footerText != footer { footerText = footer }
+        publishHeaderClaims()
         schedule(inputs)
+    }
+
+    /// Apply complete-membership header values without publishing unchanged presentation.
+    private func publishHeaderClaims() {
+        let tasks = orderedConversations.map { latestSnapshots[$0.current.taskID] ?? $0.current }
+        let header = ParallelHeaderPresentation(tasks: tasks, fallback: Self.fallbackFooter)
+        if statusSummary != header.statusSummary { statusSummary = header.statusSummary }
+        if headerPills != header.pills { headerPills = header.pills }
+        if headerClaimCaption != header.caption { headerClaimCaption = header.caption }
     }
 
     private func updateResidency() -> [String: ParallelColumnInput] {
@@ -478,7 +461,6 @@ final class ParallelVM: ParallelViewModel {
 
     private func historyDidChange(_ memberID: String) {
         guard leases[memberID] != nil else { return }
-        // History completion follows repository folding; capture its committed items directly.
         itemsByTask[memberID] = useCase.items(for: memberID)
         availabilityByTask[memberID] = useCase.eventsAvailability(for: memberID)
         refreshActivity(memberID: memberID)
@@ -496,8 +478,7 @@ final class ParallelVM: ParallelViewModel {
 
     private func readyToRefresh(_ conversation: Conversation) -> Bool {
         guard refreshingRetainedIDs.contains(conversation.id) else { return true }
-        // Reacquisition may initially expose an empty tail. Keep the retained snapshot until
-        // the requested history boundary has been reconstructed and the stream is ready.
+        // Preserve retained content until reacquisition reconstructs its history and ready stream.
         let ready = conversation.members.allSatisfy { member in
             leases[member.taskID] != nil
                 && (availabilityByTask[member.taskID] != .loading || !(itemsByTask[member.taskID] ?? []).isEmpty)
@@ -547,21 +528,13 @@ final class ParallelVM: ParallelViewModel {
         let next = orderedConversations.map { conversation in
             let presentation = presentations[conversation.id] ?? descriptors[conversation.id] ?? basePresentation(conversation, includePrompt: false)
             let metadata = descriptors[conversation.id] ?? presentation
-            var column = ParallelColumnModel(id: presentation.id, task: metadata.task, title: metadata.title,
-                subtitle: metadata.subtitle, isBusy: metadata.isBusy, outcomeMessage: metadata.outcomeMessage,
-                showPrompt: metadata.showPrompt, prompt: presentation.prompt, rows: presentation.rows,
-                activityRows: presentation.activityRows, liveStep: presentation.liveStep,
-                pendingMessages: presentation.pendingMessages, isLoading: presentation.isLoading, summary: presentation.summary,
+            var column = ParallelColumnModelBuilder.build(presentation: presentation, metadata: metadata,
                 onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: metadata.task.taskID) },
-                onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) }, start: presentation.start)
+                onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) })
             column.animatesArrival = arrivals.contains(column.id)
-            column.emptyText = presentation.emptyText
             column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }
-            column.memberTaskIDs = metadata.memberTaskIDs
             column.isResident = presentations[column.id] != nil || residentIDs.contains(column.id)
             column.isVisible = visibleIDs.contains(column.id)
-            column.history = presentation.history
-            column.paginationRevision = presentation.paginationRevision
             column.onLoadMore = column.isVisible && (column.history.hasMore || column.history.error != nil)
                 ? { [weak self] in self?.loadOlder(conversation.id) ?? false } : nil
             return column
@@ -583,7 +556,6 @@ final class ParallelVM: ParallelViewModel {
     }
 
     private nonisolated static func isBackgroundThread() -> Bool { !Thread.isMainThread }
-
     private func startPending() {
         guard didSubscribe, let inputs = pendingInputs else { return }
         pendingInputs = nil

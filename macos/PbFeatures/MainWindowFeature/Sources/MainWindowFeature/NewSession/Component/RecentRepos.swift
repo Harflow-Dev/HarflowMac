@@ -29,16 +29,18 @@ struct RecentRepos: View {
 
     var body: some View {
         if !repos.isEmpty {
-            HStack(spacing: 6) {
+            HStack(spacing: PbRadius.Metrics.spacing6) {
                 Text("Recent").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 ForEach(repos) { repo in
                     Button { onSelect(repo.path) } label: {
                         Text(repo.name)
                             .font(.pb(.secondary))
-                            .foregroundStyle(repo.isSelected ? Color.accentLink : Color.primary.opacity(0.85))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(repo.isSelected ? Color.accentLink.opacity(0.12) : Color.pillFill))
+                            .foregroundStyle(repo.isSelected ? Color.accentLink : Color.primaryText)
+                            .padding(.horizontal, PbRadius.Metrics.spacing8)
+                            .padding(.vertical, PbRadius.Metrics.rowLineSpacing)
+                            // The selected chip is the design's tinted treatment: a running-tint
+                            // fill with accent text, in a capsule.
+                            .background(Capsule().fill(repo.isSelected ? Color.runningBG : Color.pillFill))
                     }
                     .buttonStyle(.plain)
                     .help(repo.path)
@@ -46,7 +48,7 @@ struct RecentRepos: View {
                     .accessibilityHint(repo.path)
                     .accessibilityAddTraits(repo.isSelected ? .isSelected : [])
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: PbRadius.Metrics.zero)
             }
         }
     }
@@ -61,17 +63,17 @@ private let previewRepos = [
 
 #Preview("RecentRepos - light") {
     RecentRepos(repos: previewRepos, onSelect: { _ in })
-        .padding(20)
-.frame(width: 600)
-.background(Color.windowBG)
-.preferredColorScheme(.light)
+        .padding(PbRadius.Metrics.spacing20)
+        .frame(width: PbRadius.Metrics.newSessionSheetWidth - 2 * PbRadius.Metrics.spacing28)
+        .background(Color.windowBG)
+        .preferredColorScheme(.light)
 }
 
 #Preview("RecentRepos - dark") {
     RecentRepos(repos: previewRepos, onSelect: { _ in })
-        .padding(20)
-.frame(width: 600)
-.background(Color.windowBG)
-.preferredColorScheme(.dark)
+        .padding(PbRadius.Metrics.spacing20)
+        .frame(width: PbRadius.Metrics.newSessionSheetWidth - 2 * PbRadius.Metrics.spacing28)
+        .background(Color.windowBG)
+        .preferredColorScheme(.dark)
 }
 #endif

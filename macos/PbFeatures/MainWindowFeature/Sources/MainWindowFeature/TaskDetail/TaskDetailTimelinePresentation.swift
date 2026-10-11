@@ -15,6 +15,10 @@ struct TaskDetailTimelineInput: Equatable, Sendable {
     let events: [TaskEvent]
     let snapshot: TaskInfo?
     let history: EventHistoryState
+    /// The header's existing conversation-turn text ("N turns"/"N decisions", `nil` for a plain
+    /// never-followed-up task), passed through to the pane — conversation members, never the
+    /// backend's own `numTurns`.
+    var turnsText: String?
 }
 
 struct TaskDetailTimelinePresentation: Equatable, Sendable {
@@ -23,6 +27,16 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
     let children: [TaskDetailTimelineChild]
     let start: Date?
     let stepCount: Int
+    /// The header's step count copy ("1 step"/"N steps"), `nil` while no item row is loaded — a
+    /// zero or still-loading count is omitted rather than claimed as "0 steps".
+    let stepCountText: String?
+    /// The header's conversation-turn text, passed through from the input.
+    let turnsText: String?
+    /// "No tool calls recorded", proven only for a terminal task from the UNFILTERED member inputs (a nonempty
+    /// member set, every member's own log read completely, no more/loading/error history, and no
+    /// tool item anywhere) — never from the filtered display rows alone, which managed/builder
+    /// presentation may intentionally hide calls from.
+    let noToolCallsText: String?
     let emptyText: String?
     let isLoading: Bool
     let liveStep: LiveStep?
@@ -31,8 +45,26 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
 
     func loadingHistory() -> Self {
         Self(rows: rows, activityRows: activityRows, children: children, start: start, stepCount: stepCount,
+            stepCountText: stepCountText, turnsText: turnsText, noToolCallsText: nil,
             emptyText: emptyText, isLoading: isLoading, liveStep: liveStep, pendingMessages: pendingMessages,
             history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation))
+    }
+
+    /// The history half of the no-tool proof (§4/§8); the builder separately requires a terminal task.
+    /// The claim needs a nonempty member input set, ALL of those
+    /// members' own logs read completely (`.available`), a settled history window (no error, no
+    /// more pages, not loading) and no tool item in the unfiltered member inputs. Filtered display
+    /// rows alone can never prove it.
+    nonisolated static func noToolCallsRecorded(members: [ParallelMemberInput], history: EventHistoryState) -> Bool {
+        guard !members.isEmpty else { return false }
+        guard members.allSatisfy({ $0.availability == .available }) else { return false }
+        guard history.error == nil, !history.hasMore, !history.isLoading else { return false }
+        return members.allSatisfy { member in
+            member.items.allSatisfy { item in
+                if case .tool = item.body { return false }
+                return true
+            }
+        }
     }
 }
 
@@ -53,10 +85,15 @@ enum TaskDetailTimelineBuilder {
         try Task.checkCancellation()
         let count = rows.filter { if case .item = $0.kind { return true }; return false }.count
         let activity = ActivityRowsBuilder.build(from: rows, cancellationAware: true)
+        let noTools = input.task.status.isTerminal
+            && TaskDetailTimelinePresentation.noToolCallsRecorded(members: input.members, history: input.history)
         try Task.checkCancellation()
         return TaskDetailTimelinePresentation(rows: rows, activityRows: activity, children: input.children,
             start: input.start, stepCount: count,
-            emptyText: rows.isEmpty ? (input.task.status.isRunning ? "Waiting for the first event…"
+            stepCountText: count > 0 ? "\(count) \(count == 1 ? "step" : "steps")" : nil,
+            turnsText: input.turnsText,
+            noToolCallsText: noTools ? "No tool calls recorded" : nil,
+            emptyText: rows.isEmpty && !noTools ? (input.task.status.isRunning ? "Waiting for the first event…"
                 : "This task's event log is empty or was not found.") : nil,
             isLoading: count == 0 && input.members.contains { $0.availability == .loading },
             liveStep: LiveStep(rows: rows, isRunning: input.task.status.isRunning),
@@ -118,7 +155,8 @@ extension TaskDetailVM {
         let strip: SubTaskStripModel? = value.children.isEmpty ? nil : SubTaskStripModel(
             children: value.children.map { SubTaskEntry(task: $0.task, title: $0.title) }, start: value.start,
             onSelectTask: { [weak self] id in self?.didTapTask(id) })
-        timelineModel = TimelinePaneModel(stepCountText: "\(value.stepCount) steps", rows: value.rows,
+        timelineModel = TimelinePaneModel(stepCountText: value.stepCountText, turnsText: value.turnsText,
+            noToolCallsText: value.noToolCallsText, rows: value.rows,
             activityRows: value.activityRows, start: value.start, emptyText: value.emptyText,
             subTaskStrip: strip, isLoading: value.isLoading, liveStep: value.liveStep,
             updateToken: ActivityUpdateToken(rows: value.rows, liveStep: value.liveStep, pendingMessages: value.pendingMessages),

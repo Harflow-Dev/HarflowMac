@@ -45,18 +45,6 @@ extension Font {
     }
 }
 
-// MARK: - PbRadius
-
-/// The Monitor's corner radii.
-public enum PbRadius {
-    /// Cards and bubbles.
-    public static let card: CGFloat = 10
-    /// List rows and selection highlights.
-    public static let row: CGFloat = 8
-    /// Buttons and fields.
-    public static let button: CGFloat = 7
-}
-
 /// Display styling only. Every fact about a backend comes from polybridge; this just picks colours
 /// and a letter, falling back to neutral for a backend the app has never heard of.
 public enum BackendStyle {
@@ -225,29 +213,22 @@ public struct StatusPill: View {
     }
 
     public var body: some View {
+        // The live clock stays owned here: the pill ticks while running and hands the badge a
+        // formatted elapsed string, so the badge itself stays a pure presentation of one moment.
         if task.status.isRunning {
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                HStack(spacing: 5) {
-                    RunningSpinner(size: 12)
-                    Text("Running · \(Format.clock(task.elapsed(now: context.date)))").monospacedDigit()
-                }
-                .font(.pb(.secondary, weight: .medium))
-                .foregroundStyle(Color.runningFG)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color.runningBG))
+                StatusBadge(
+                    status: task.status,
+                    elapsedText: Format.clock(task.elapsed(now: context.date)),
+                    isTakenOver: task.takenOver
+                )
             }
         } else {
-            HStack(spacing: 4) {
-                Text(task.status.label)
-                if let elapsed = task.elapsed() { Text("· \(Format.clock(elapsed))").monospacedDigit() }
-                if task.takenOver { Text("· taken over") }
-            }
-            .font(.pb(.secondary, weight: .medium))
-            .foregroundStyle(StatusColor.of(task.status))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(StatusColor.of(task.status).opacity(0.1)))
+            StatusBadge(
+                status: task.status,
+                elapsedText: task.elapsed().map(Format.clock),
+                isTakenOver: task.takenOver
+            )
         }
     }
 }

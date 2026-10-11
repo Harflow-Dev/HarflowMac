@@ -34,6 +34,9 @@ struct WorkflowCanvas: View {
     var onOpenRun: (String) -> Void = { _ in }
     var selectedBranchEdgeIDs: Set<String> = []
     var excludedBranchEdgeIDs: Set<String> = []
+    /// A defaulted presentation input: true on a run canvas, so "pending" nodes earn the
+    /// dashed 75% execution treatment instead of the editor's solid placeholder card.
+    var showsExecutionStates = false
     @State private var scrollController = WorkflowCanvasScrollController()
     @State private var routeCache = WorkflowRouteCache()
     @State private var groupOrigins: [String: CGPoint] = [:]
@@ -43,7 +46,7 @@ struct WorkflowCanvas: View {
     @State private var marqueeOriginal: Set<String>?
     @State private var marqueePrimary: String?
     @State private var hoveredArrow: WorkflowArrowHoverState?
-    @State private var tooltipSize = CGSize(width: 260, height: 40)
+    @State private var tooltipSize = CGSize(width: PbRadius.Metrics.taskSkeletonStartWidth, height: PbRadius.Metrics.workflowNodePreviewInset)
     @State private var zoom: CGFloat = 1
     @State private var editingTitleNodeID: String?
     @FocusState var isCanvasFocused: Bool
@@ -113,14 +116,15 @@ struct WorkflowCanvas: View {
         let visible = scrollController.visibleRect.isEmpty ? CGRect(origin: .zero, size: viewport.size) : scrollController.visibleRect
         ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
-                Color.clear
+                Color.cardFill
+.opacity(0)
                     .contentShape(Rectangle())
                     .gesture(marqueeGesture)
                     .onTapGesture { isCanvasFocused = true; onSelectNodes([], nil) }
                 if let marquee {
                     Rectangle()
-.fill(Color.accentLink.opacity(0.08))
-                        .overlay(Rectangle().stroke(Color.accentLink, lineWidth: 1))
+                .fill(Color.workflowMarqueeFill)
+                        .overlay(Rectangle().stroke(Color.accentLink, lineWidth: PbRadius.Metrics.hairlineStroke))
                         .frame(width: marquee.width, height: marquee.height)
                         .position(x: marquee.midX, y: marquee.midY)
                         .allowsHitTesting(false)
@@ -130,7 +134,10 @@ struct WorkflowCanvas: View {
                     let target = WorkflowCanvasGeometry.target(at: drag.location, sourceID: drag.sourceID, nodes: nodes)
                     let endpoint = target.map { WorkflowCanvasGeometry.connectionInput($0, highlighted: true) } ?? drag.location
                     connectionPath(routeCache.route(id: "preview", source: source, target: target, endpoint: endpoint, nodes: nodes))
-                        .stroke(Color.accentLink, style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                        .stroke(Color.accentLink, style: StrokeStyle(
+                            lineWidth: PbRadius.Metrics.workflowConnectionHighlightedLineWidth,
+                            dash: PbRadius.Metrics.workflowConnectionDash
+                        ))
                         .allowsHitTesting(false)
                 }
                 ForEach(nodes) { node in
@@ -167,7 +174,8 @@ struct WorkflowCanvas: View {
                             isCanvasFocused = true
                             onConnect(node.id)
                             onSelectNode(target.id)
-                        }
+                        },
+                        showsExecutionStates: showsExecutionStates
                     )
                         .position(WorkflowCanvasGeometry.center(node))
                 }
@@ -177,6 +185,11 @@ struct WorkflowCanvas: View {
             .frame(width: contentSize.width * zoom, height: contentSize.height * zoom, alignment: .topLeading)
             .contentShape(Rectangle())
             .coordinateSpace(name: "workflow-canvas")
+            // The document probe (§6.3): inside the canvas's own document, so both of ITS axes
+            // carry thin overlay chrome — never an outer lane's or the inspector's. Presentation
+            // only: the controller, document size, offsets, zoom, geometry, snapping and callbacks
+            // are unchanged.
+            .background(ScrollChrome())
             .background(WorkflowCanvasScrollBridge(controller: scrollController))
             .onContinuousHover(coordinateSpace: .named("workflow-canvas")) { phase in
                 switch phase {
@@ -199,12 +212,17 @@ struct WorkflowCanvas: View {
                 let points = WorkflowCanvasGrid.screenDots(viewport: visible, scale: zoom, content: contentSize)
                 var dots = Path()
                 for point in points {
-                    dots.addEllipse(in: CGRect(x: point.x - 0.85, y: point.y - 0.85, width: 1.7, height: 1.7))
+                    dots.addEllipse(in: CGRect(
+                        x: point.x - PbRadius.Metrics.workflowGridDotDiameter / 2,
+                        y: point.y - PbRadius.Metrics.workflowGridDotDiameter / 2,
+                        width: PbRadius.Metrics.workflowGridDotDiameter,
+                        height: PbRadius.Metrics.workflowGridDotDiameter
+                    ))
                 }
-                context.fill(dots, with: .color(Color.secondaryText.opacity(0.30)))
+                context.fill(dots, with: .color(Color.hairline))
             }.allowsHitTesting(false)
         }
-        .background(Color.windowBG)
+        .background(Color.inspectorFill)
         .focusable(isEditable)
         .focusEffectDisabled()
         .focused($isCanvasFocused)
@@ -272,18 +290,20 @@ struct WorkflowCanvas: View {
             let center = WorkflowArrowHover.tooltipCenter(cursor: cursor, size: tooltipSize, viewport: viewport)
             Text(edge.condition)
                 .font(.pb(.caption))
-                .foregroundStyle(.primary)
-                .frame(width: min(240, max(0, viewport.width - 36)), alignment: .leading)
+                .foregroundStyle(Color.primaryText)
+                .frame(width: min(PbRadius.Metrics.workflowTooltipMaximumWidth,
+                                  max(0, viewport.width - PbRadius.Metrics.workflowTooltipHorizontalClearance)),
+                       alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .frame(maxHeight: max(0, viewport.height - 16), alignment: .topLeading)
+                .padding(.horizontal, PbRadius.Metrics.spacing10)
+                .padding(.vertical, PbRadius.Metrics.spacing8)
+                .frame(maxHeight: max(0, viewport.height - PbRadius.Metrics.workflowTooltipVerticalClearance), alignment: .topLeading)
                 .fixedSize(horizontal: false, vertical: true)
                 .clipped()
                 .background(Color.cardFill, in: RoundedRectangle(cornerRadius: PbRadius.row))
                 .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                 .background(GeometryReader { geometry in
-                    Color.clear.preference(key: WorkflowTooltipSizePreference.self, value: geometry.size)
+                    Color.cardFill.opacity(0).preference(key: WorkflowTooltipSizePreference.self, value: geometry.size)
                 })
                 .onPreferenceChange(WorkflowTooltipSizePreference.self) { tooltipSize = $0 }
                 .position(center)
@@ -293,8 +313,12 @@ struct WorkflowCanvas: View {
     }
 
     private var zoomControls: some View {
-        HStack(spacing: 4) {
-            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: -1) } label: { Image(systemName: "minus").frame(width: 14, height: 18) }
+        HStack(spacing: PbRadius.Metrics.spacing4) {
+            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: -1) } label: {
+                Image(systemName: "minus")
+                    .frame(width: PbRadius.Metrics.workflowZoomSymbolSize.width,
+                           height: PbRadius.Metrics.workflowZoomSymbolSize.height)
+            }
                 .disabled(zoom <= WorkflowCanvasZoom.minimum)
                 .accessibilityLabel("Zoom out")
                 .help("Zoom out")
@@ -302,21 +326,25 @@ struct WorkflowCanvas: View {
                 Text("\(Int((zoom * 100).rounded()))%")
                     .font(.pb(.caption))
                     .monospacedDigit()
-                    .frame(width: 44, height: 18)
+                    .frame(width: PbRadius.Metrics.workflowZoomResetWidth,
+                           height: PbRadius.Metrics.workflowZoomSymbolSize.height)
             }
                 .accessibilityLabel("Reset zoom, currently \(Int((zoom * 100).rounded())) percent")
                 .help("Reset zoom to 100%")
-            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: 1) } label: { Image(systemName: "plus").frame(width: 14, height: 18) }
+            Button { zoom = WorkflowCanvasZoom.adjusted(zoom, steps: 1) } label: {
+                Image(systemName: "plus")
+                    .frame(width: PbRadius.Metrics.workflowZoomSymbolSize.width,
+                           height: PbRadius.Metrics.workflowZoomSymbolSize.height)
+            }
                 .disabled(zoom >= WorkflowCanvasZoom.maximum)
                 .accessibilityLabel("Zoom in")
                 .help("Zoom in")
         }
         .buttonStyle(QuietButtonStyle())
         .disabled(scrollController.isDragging)
-        .padding(6)
-        .background(Color.cardFill, in: RoundedRectangle(cornerRadius: PbRadius.row))
-        .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
-        .padding(12)
+        .padding(PbRadius.Metrics.workflowZoomPadding)
+        .glassEffect(.regular, in: Capsule())
+        .padding(PbRadius.Metrics.workflowZoomInset)
     }
 
     private func isConnectionTarget(_ node: WorkflowNodeModel) -> Bool {
@@ -350,15 +378,51 @@ struct WorkflowCanvas: View {
     private func arrowPath(_ points: [CGPoint], finish: CGPoint) -> Path {
         Path { path in
             path.addPath(connectionPath(points))
-            path.move(to: CGPoint(x: finish.x - 7, y: finish.y - 5))
+            path.move(to: CGPoint(x: finish.x - PbRadius.Metrics.workflowArrowheadLength,
+                                  y: finish.y - PbRadius.Metrics.workflowArrowheadHalfWidth))
             path.addLine(to: finish)
-            path.addLine(to: CGPoint(x: finish.x - 7, y: finish.y + 5))
+            path.addLine(to: CGPoint(x: finish.x - PbRadius.Metrics.workflowArrowheadLength,
+                                     y: finish.y + PbRadius.Metrics.workflowArrowheadHalfWidth))
         }
     }
 
     private func isHighlighted(_ edge: WorkflowEdgeModel) -> Bool {
-        edge.id == selectedEdgeID || selectedBranchEdgeIDs.contains(edge.id) || takenEdgeIDs.contains(edge.id)
+        edge.id == selectedEdgeID || selectedBranchEdgeIDs.contains(edge.id)
             || (parallelRegion.contains(edge.source) && parallelRegion.contains(edge.target))
+    }
+
+    /// A traversed connection is tinted doneGreen (SPEC §6.4); selection and branch paths stay
+    /// accent. Stroke widths keep their existing emphasis weights.
+    private func edgeColor(_ edge: WorkflowEdgeModel) -> Color {
+        if takenEdgeIDs.contains(edge.id) { return .doneGreen }
+        return isHighlighted(edge) ? .accentLink : .tertiaryText
+    }
+
+    private func edgeWidth(_ edge: WorkflowEdgeModel) -> CGFloat {
+        (isHighlighted(edge) || takenEdgeIDs.contains(edge.id))
+            ? PbRadius.Metrics.workflowConnectionHighlightedLineWidth
+            : PbRadius.Metrics.workflowConnectionLineWidth
+    }
+
+    /// The condition pill sits on the edge's middle segment, offset clear of the line. Purely
+    /// decorative: the edge's own accessibility label already carries the condition.
+    private func conditionLabelPosition(_ points: [CGPoint]) -> CGPoint? {
+        guard points.count >= 2 else { return nil }
+        let middle = points.count / 2
+        let from = points[middle - 1]
+        let to = points[middle]
+        let midpoint = CGPoint(x: (from.x + to.x) / 2, y: (from.y + to.y) / 2)
+        if abs(to.y - from.y) < abs(to.x - from.x) {
+            return CGPoint(x: midpoint.x, y: midpoint.y - PbRadius.Metrics.workflowConditionPillOffset)
+        }
+        return CGPoint(x: midpoint.x - PbRadius.Metrics.workflowConditionPillOffset, y: midpoint.y)
+    }
+
+    private func conditionPill(_ edge: WorkflowEdgeModel, points: [CGPoint]) -> some View {
+        WorkflowConditionPill(condition: edge.condition)
+            .position(conditionLabelPosition(points) ?? .zero)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder
@@ -369,41 +433,59 @@ struct WorkflowCanvas: View {
             let connection = arrowPath(points, finish: finish)
             let label = "Connection from \(source.name) to \(target.name)"
                 + (edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : ": \(edge.condition)")
-            connection.stroke(
-                isHighlighted(edge) ? Color.accentLink : Color.secondaryText.opacity(0.7),
-                style: StrokeStyle(
-                    lineWidth: isHighlighted(edge) ? 2 : 1.5,
-                    dash: edge.isBackward ? [5, 3] : []
+            ZStack {
+                connection.stroke(
+                    edgeColor(edge),
+                    style: StrokeStyle(
+                        lineWidth: edgeWidth(edge),
+                        dash: edge.isBackward ? PbRadius.Metrics.workflowConnectionDash : []
+                    )
                 )
-            )
-            .opacity(excludedBranchEdgeIDs.contains(edge.id) ? 0.25
-                : !isEditable && !selectedBranchEdgeIDs.contains(edge.id) && !takenEdgeIDs.isEmpty && !takenEdgeIDs.contains(edge.id) ? 0.5 : 1)
-            .contentShape(connection.strokedPath(StrokeStyle(lineWidth: 18)))
-            .onTapGesture { isCanvasFocused = true; onSelectEdge(edge.id) }
-            .accessibilityLabel(label)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { isCanvasFocused = true; onSelectEdge(edge.id) }
+                .opacity(excludedBranchEdgeIDs.contains(edge.id) ? 0.25
+                    : !isEditable && !selectedBranchEdgeIDs.contains(edge.id) && !takenEdgeIDs.isEmpty && !takenEdgeIDs.contains(edge.id) ? 0.5 : 1)
+                .contentShape(connection.strokedPath(StrokeStyle(lineWidth: PbRadius.Metrics.workflowConnectionHitWidth)))
+                .onTapGesture { isCanvasFocused = true; onSelectEdge(edge.id) }
+                .accessibilityLabel(label)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { isCanvasFocused = true; onSelectEdge(edge.id) }
+                if !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    conditionPill(edge, points: points)
+                }
+            }
         }
     }
 }
 
 #if DEBUG
-#Preview {
-    let definition = WorkflowVM.starterDefinition()
-    WorkflowCanvas(
-        nodes: WorkflowJSON.nodes(definition),
-        edges: WorkflowJSON.edges(definition),
-        selectedNodeID: "task",
-        selectedEdgeID: nil,
-        isEditable: true,
-        status: { _ in "pending" },
-        attempt: { _ in 0 },
-        onSelectNode: { _ in },
-        onSelectEdge: { _ in },
-        onMove: { _, _ in },
-        onConnect: { _ in },
-        onDrop: { _, _ in }
-    )
-        .frame(width: 900, height: 360)
+private struct WorkflowCanvasPreview: View {
+    var withConditions = false
+    var body: some View {
+        let definition = WorkflowVM.starterDefinition()
+        WorkflowCanvas(
+            nodes: WorkflowJSON.nodes(definition),
+            edges: WorkflowJSON.edges(definition),
+            selectedNodeID: "task",
+            selectedEdgeID: nil,
+            isEditable: true,
+            takenEdgeIDs: withConditions
+                ? Set(WorkflowJSON.edges(definition).filter { !$0.condition.isEmpty }.map(\.id))
+                : [],
+            status: { _ in withConditions ? "completed" : "pending" },
+            attempt: { _ in 0 },
+            onSelectNode: { _ in },
+            onSelectEdge: { _ in },
+            onMove: { _, _ in },
+            onConnect: { _ in },
+            onDrop: { _, _ in },
+            showsExecutionStates: withConditions
+        )
+        .frame(width: PbRadius.Metrics.toolbarPreviewWidth, height: PbRadius.Metrics.workflowCanvasPreviewHeight)
+    }
+}
+
+#Preview("Workflow canvas - light") { WorkflowCanvasPreview().preferredColorScheme(.light) }
+#Preview("Workflow canvas - dark") { WorkflowCanvasPreview().preferredColorScheme(.dark) }
+#Preview("Workflow canvas - traversed conditions") {
+    WorkflowCanvasPreview(withConditions: true).preferredColorScheme(.dark)
 }
 #endif

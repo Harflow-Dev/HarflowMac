@@ -72,7 +72,7 @@ extension TaskDetailVMTests {
         }
         #expect(dialog.title == "Take over this task?")
         #expect(dialog.actions.count == 2)
-        #expect(dialog.actions.first?.title == "Stop it and take over")
+        #expect(dialog.actions.first?.title == "Take over in terminal")
         #expect(dialog.actions.first?.role == nil)
         #expect(dialog.actions.last?.title == "Cancel")
         #expect(dialog.actions.last?.role == .cancel) // the original had an explicit Cancel button
@@ -111,7 +111,7 @@ extension TaskDetailVMTests {
             return
         }
         #expect(dialog.title == "Continue this session in a terminal?")
-        #expect(dialog.actions.first?.title == "Continue in terminal")
+        #expect(dialog.actions.first?.title == "Open in terminal")
         #expect(
             dialog.description
             == "The same conversation opens in Terminal.app. It runs under your own default permissions, not this task's read_only level. While the"
@@ -135,7 +135,7 @@ extension TaskDetailVMTests {
 
         // then
         await waitUntil { harness.sut.task != nil }
-        #expect(harness.sut.takeoverButtonLabel == "Take over")
+        #expect(harness.sut.takeoverButtonLabel == "Take over in terminal")
     }
 
     @Test func givenAFinishedTask_whenRenderingTheTakeoverButton_thenTheLabelIsContinueInTerminal() async {
@@ -150,7 +150,7 @@ extension TaskDetailVMTests {
 
         // then
         await waitUntil { harness.sut.task != nil }
-        #expect(harness.sut.takeoverButtonLabel == "Continue in terminal")
+        #expect(harness.sut.takeoverButtonLabel == "Open in terminal")
     }
     
     // MARK: - Item o: the outcome line's colour rule

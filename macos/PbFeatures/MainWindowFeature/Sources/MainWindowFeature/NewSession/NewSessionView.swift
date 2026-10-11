@@ -83,9 +83,12 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     // MARK: - View Body
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: PbRadius.Metrics.zero) {
+            // The compact default (collapsed Advanced) fits a 900 pt window without scrolling;
+            // the ScrollView stays as the fallback for an expanded Advanced, errors, long text, a
+            // larger catalog or a narrow window — nothing is clipped or removed.
             ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing20) {
                     header
                     taskSection
                     agentSection
@@ -93,9 +96,12 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                     accessSection
                     advancedSection
                 }
-                .padding(.horizontal, 28)
-                .padding(.top, 32)
-                .padding(.bottom, 24)
+                .padding(.horizontal, PbRadius.Metrics.spacing28)
+                .padding(.top, PbRadius.Metrics.spacing24)
+                .padding(.bottom, PbRadius.Metrics.spacing16)
+                // The document probe (§6.6): inside the fallback scroll's own document, so it can
+                // only ever target this outer scroll view — never the prompt editor's.
+                .background(ScrollChrome())
             }
             if let errorText = viewModel.errorText {
                 Text(errorText)
@@ -103,14 +109,15 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                     .foregroundStyle(Color.failedRed)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, PbRadius.Metrics.spacing28)
+                    .padding(.bottom, PbRadius.Metrics.spacing8)
             }
             footer
         }
-        .frame(width: 600)
-        .frame(minHeight: 420, idealHeight: 860, maxHeight: 920)
-        .background(Color.windowBG)
+        .frame(width: PbRadius.Metrics.newSessionSheetWidth)
+        .frame(minHeight: PbRadius.Metrics.newSessionMinimumHeight,
+               idealHeight: PbRadius.Metrics.newSessionIdealHeight, maxHeight: PbRadius.Metrics.newSessionMaximumHeight)
+        .background(Color.cardFill)
         .onAppear {
             viewModel.didAppear()
             isPromptFocused = true
@@ -122,9 +129,8 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     // MARK: - Sections
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // swiftlint:disable:next no_literal_font_size - the design's 20 pt sheet title sits between the scale's title (18) and hero (22).
-            Text("New session").font(.system(size: 20, weight: .semibold))
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+            Text("New session").font(.pb(.title, weight: .semibold))
             Text("Start an agent on one of your repos. It runs in the background and shows up in the sidebar.")
                 .font(.pb(.secondary))
                 .foregroundStyle(Color.secondaryText)
@@ -132,10 +138,10 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var taskSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             sectionTitle("What should it do?")
             promptEditor
-            HStack(spacing: 12) {
+            HStack(spacing: PbRadius.Metrics.spacing12) {
                 Text("Name").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 TextField("Optional — shown in the sidebar, e.g. MT-2477 iOS review", text: binding(\.name, viewModel.didChangeName))
                     .textFieldStyle(.roundedBorder)
@@ -147,32 +153,37 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     private var promptEditor: some View {
         TextEditor(text: binding(\.message, viewModel.didChangeMessage))
             .font(.pb(.body))
+            // Bounded scope (§6.6): the task editor's own scroll view, if one exists; a quiet
+            // no-op otherwise, with the shared field editor never targeted.
+            .scrollChromeScope()
             .scrollContentBackground(.hidden)
             .focused($isPromptFocused)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            .frame(height: 112)
-            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.composerFill))
+            .padding(.horizontal, PbRadius.Metrics.spacing8)
+            .padding(.vertical, PbRadius.Metrics.spacing8)
+            .frame(height: PbRadius.Metrics.newSessionPromptEditorHeight)
+            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.windowBG))
             .overlay(alignment: .topLeading) {
                 if viewModel.message.isEmpty {
                     Text("Describe the task, like you would to a colleague…")
                         .font(.pb(.body))
                         .foregroundStyle(Color.secondaryText)
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, PbRadius.Metrics.newSessionPromptPlaceholderInset)
+                        .padding(.vertical, PbRadius.Metrics.spacing8)
                         .allowsHitTesting(false)
                 }
             }
+            // §6.6: the focus ring is a 1.5 pt accent stroke plus a 4 pt running-tint glow.
             .overlay(
                 RoundedRectangle(cornerRadius: PbRadius.card)
-                    .stroke(isPromptFocused ? Color.accentLink.opacity(0.6) : Color.cardBorder, lineWidth: 1)
+                    .stroke(isPromptFocused ? Color.accentLink : Color.cardBorder,
+                            lineWidth: isPromptFocused ? PbRadius.Metrics.newSessionPromptFocusBorderWidth : PbRadius.Metrics.hairlineStroke)
             )
-            .shadow(color: isPromptFocused ? Color.accentLink.opacity(0.18) : .clear, radius: 3)
+            .shadow(color: isPromptFocused ? Color.runningBG : .clear, radius: PbRadius.Metrics.newSessionPromptFocusGlowRadius)
             .accessibilityLabel("What should it do?")
     }
 
     private var agentSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             sectionTitle("Agent")
             AgentGrid(cards: viewModel.agentCards, onSelect: viewModel.didChangeBackend)
             if let note = viewModel.agentListUnavailableNote {
@@ -184,17 +195,18 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var repositorySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             sectionTitle("Repository")
-            HStack(spacing: 8) {
-                HStack(spacing: 8) {
+            HStack(spacing: PbRadius.Metrics.spacing8) {
+                HStack(spacing: PbRadius.Metrics.spacing8) {
                     Image(systemName: "folder").foregroundStyle(Color.secondaryText)
                     TextField("/path/to/repo", text: binding(\.repo, viewModel.didChangeRepo))
                         .textFieldStyle(.plain)
+                        .font(.pb(.secondary, design: .monospaced))
                         .accessibilityLabel("Repository path")
                 }
-                .padding(.horizontal, 10)
-                .frame(height: 32)
+                .padding(.horizontal, PbRadius.Metrics.spacing10)
+                .frame(height: PbRadius.Metrics.segmentedHeight)
                 .background(RoundedRectangle(cornerRadius: PbRadius.row).fill(Color.composerFill))
                 .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                 Button("Choose…") { viewModel.didTapChooseDirectory() }
@@ -205,9 +217,13 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var accessSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             sectionTitle("What can it change?")
-            VStack(spacing: 12) {
+            // Side-by-side radio cards: 2×2 at the default 760 sheet, wrapping to one column when
+            // four cannot readably fit. The ONLY caption is the existing enforcement caveat.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: PbRadius.Metrics.newSessionAccessCardMinimumWidth),
+                                         spacing: PbRadius.Metrics.spacing12)],
+                      spacing: PbRadius.Metrics.spacing12) {
                 ForEach(viewModel.accessOptions) { option in
                     AccessOptionRow(model: option) { viewModel.didChangeFreedom(option.id) }
                 }
@@ -221,14 +237,14 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var advancedSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { isAdvancedExpanded.toggle() }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: PbRadius.Metrics.spacing6) {
                     Image(systemName: "chevron.right")
                         .font(.pb(.caption, weight: .semibold))
-                        .rotationEffect(.degrees(isAdvancedExpanded ? 90 : 0))
+                        .rotationEffect(.degrees(isAdvancedExpanded ? PbRadius.Metrics.newSessionDisclosureAngle : 0))
                     Text("Advanced — model, effort, turn limit").font(.pb(.secondary))
                 }
                 .foregroundStyle(Color.secondaryText)
@@ -243,7 +259,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var advancedFields: some View {
-        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 16) {
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: PbRadius.Metrics.spacing12, verticalSpacing: PbRadius.Metrics.spacing16) {
             if viewModel.showsEffort {
                 GridRow {
                     Text("Reasoning effort").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
@@ -252,7 +268,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                         ForEach(viewModel.effortOptions, id: \.self) { Text($0).tag($0) }
                     }
                     .labelsHidden()
-                    .frame(width: 160, alignment: .leading)
+                    .frame(width: PbRadius.Metrics.newSessionAdvancedFieldWidth, alignment: .leading)
                 }
             }
             if viewModel.showsModel {
@@ -270,10 +286,10 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             if viewModel.showsTurnLimit {
                 GridRow {
                     Text("Turn limit").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
                         TextField("Empty uses the default", text: binding(\.turnLimit, viewModel.didChangeTurnLimit))
                             .textFieldStyle(.roundedBorder)
-                            .frame(width: 160)
+                            .frame(width: PbRadius.Metrics.newSessionAdvancedFieldWidth)
                             .accessibilityLabel("Turn limit")
                         if let error = viewModel.turnLimitError {
                             Text(error).font(.pb(.caption)).foregroundStyle(Color.failedRed)
@@ -282,25 +298,29 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                 }
             }
         }
-        .padding(.leading, 15)
+        .padding(.leading, PbRadius.Metrics.newSessionAdvancedLeadingInset)
     }
 
     private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Color.hairline).frame(height: 1)
-            HStack(spacing: 10) {
+        VStack(spacing: PbRadius.Metrics.zero) {
+            Rectangle().fill(Color.hairline).frame(height: PbRadius.Metrics.hairlineStroke)
+            HStack(spacing: PbRadius.Metrics.spacing10) {
                 Text("⌘↩ to start").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 Spacer()
                 Button("Cancel") { viewModel.didTapCancel() }
                     .keyboardShortcut(.cancelAction)
-                Button(viewModel.isStarting ? "Starting…" : "Start session") { viewModel.didTapStart() }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!viewModel.canStart)
+                Button {
+                    viewModel.didTapStart()
+                } label: {
+                    Label(viewModel.isStarting ? "Starting…" : "Start session", systemImage: "play.fill")
+                }
+                .buttonStyle(MonitorButtonStyle(.primary))
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(!viewModel.canStart)
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 20)
-            .padding(.bottom, 24)
+            .padding(.horizontal, PbRadius.Metrics.spacing28)
+            .padding(.top, PbRadius.Metrics.spacing12)
+            .padding(.bottom, PbRadius.Metrics.spacing16)
         }
     }
 

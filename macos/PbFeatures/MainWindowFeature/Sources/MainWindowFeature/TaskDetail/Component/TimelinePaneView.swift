@@ -24,7 +24,16 @@ import SwiftUI
 // MARK: - TimelinePaneModel
 
 struct TimelinePaneModel {
-    let stepCountText: String
+    /// The header's step count copy ("1 step"/"N steps"), `nil` while no item row is loaded — the
+    /// redesign omits a zero count rather than printing "0 steps".
+    let stepCountText: String?
+    /// The header's conversation-turn text ("N turns"/"N decisions"), `nil` for a plain,
+    /// never-followed-up task — passed through from the VM's own `turnsText`.
+    var turnsText: String?
+    /// "No tool calls recorded", present only when the builder proved it from the unfiltered
+    /// member inputs (complete, settled, tool-free); `nil` otherwise — never claimed from an
+    /// incomplete or unreadable feed.
+    var noToolCallsText: String?
     /// The raw rows, one per timeline item — what the inspector's step count reads.
     let rows: [ConversationTimelineRow]
     /// What the feed renders: `rows` with adjacent tool calls folded into cards.
@@ -47,11 +56,14 @@ struct TimelinePaneModel {
     let onLoadMore: (() -> Bool)?
 
     init(
-        stepCountText: String, rows: [ConversationTimelineRow], activityRows: [ActivityRow], start: Date?, emptyText: String?,
-        subTaskStrip: SubTaskStripModel?, isLoading: Bool, liveStep: LiveStep?, updateToken: ActivityUpdateToken,
-        pendingMessages: [PendingMessage] = [], history: EventHistoryState = EventHistoryState(), paginationRevision: Int = 0, onLoadMore: (() -> Bool)? = nil
+        stepCountText: String?, turnsText: String? = nil, noToolCallsText: String? = nil, rows: [ConversationTimelineRow],
+        activityRows: [ActivityRow], start: Date?, emptyText: String?, subTaskStrip: SubTaskStripModel?, isLoading: Bool,
+        liveStep: LiveStep?, updateToken: ActivityUpdateToken, pendingMessages: [PendingMessage] = [],
+        history: EventHistoryState = EventHistoryState(), paginationRevision: Int = 0, onLoadMore: (() -> Bool)? = nil
     ) {
         self.stepCountText = stepCountText
+        self.turnsText = turnsText
+        self.noToolCallsText = noToolCallsText
         self.rows = rows
         self.activityRows = activityRows
         self.start = start
@@ -68,7 +80,7 @@ struct TimelinePaneModel {
 
     /// Derives the feed rows, live step and update token from `rows` — for previews and tests; the
     /// VM builds them itself in `recomputeTimeline`.
-    init(stepCountText: String, rows: [ConversationTimelineRow], start: Date?, emptyText: String?, subTaskStrip: SubTaskStripModel?, isLoading: Bool) {
+    init(stepCountText: String?, rows: [ConversationTimelineRow], start: Date?, emptyText: String?, subTaskStrip: SubTaskStripModel?, isLoading: Bool) {
         let liveStep = LiveStep(rows: rows)
         self.init(
             stepCountText: stepCountText, rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), start: start,
@@ -78,7 +90,15 @@ struct TimelinePaneModel {
     }
 
     @MainActor
-    static let empty = TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
+    static let empty = TimelinePaneModel(stepCountText: nil, rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
+
+    /// The header's one line: steps · turns · no-tool note, each part only when present, with
+    /// tabular digits. Hidden entirely while nothing is loaded (a zero count is omitted, never
+    /// printed as "0 steps").
+    var headerText: String? {
+        let parts = [stepCountText, turnsText, noToolCallsText].compactMap(\.self)
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }
 
 // MARK: - TimelinePaneView
@@ -88,17 +108,19 @@ struct TimelinePaneView: View {
     @State private var state = ParallelColumnUIState()
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(model.stepCountText).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
-                Spacer()
+        VStack(spacing: PbRadius.Metrics.zero) {
+            if let headerText = model.headerText {
+                HStack {
+                    Text(headerText).font(.pb(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText)
+                    Spacer()
+                }
+                .padding(.horizontal, PbRadius.Metrics.spacing24)
+                .padding(.vertical, PbRadius.Metrics.spacing8)
+                .readingColumn()
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 8)
-            .readingColumn()
             if model.isLoading, model.liveStep == nil {
                 SkeletonRows(count: 5, showsBadge: false)
-                    .padding(24)
+                    .padding(PbRadius.Metrics.spacing24)
                     .readingColumn()
                     .frame(maxHeight: .infinity, alignment: .top)
             } else {
@@ -111,7 +133,7 @@ struct TimelinePaneView: View {
         ActivityFeedView(rows: model.activityRows, start: model.start, history: model.history,
                          isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages,
                             children: model.subTaskStrip?.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) } ?? []),
-                         paginationRevision: model.paginationRevision, emptyText: model.emptyText, horizontalPadding: 24,
+                         paginationRevision: model.paginationRevision, emptyText: model.emptyText, horizontalPadding: PbRadius.Metrics.spacing24,
                          state: state, onLoadMore: model.onLoadMore) {
             if let subTaskStrip = model.subTaskStrip { SubTaskStripView(model: subTaskStrip) }
             ForEach(model.pendingMessages) { message in
@@ -148,14 +170,15 @@ struct SubTaskStripView: View {
 
     var body: some View {
         ActivityCard {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
                 Text("Started \(model.children.count) sub-task\(model.children.count == 1 ? "" : "s") via polybridge")
                     .font(.pb(.body, weight: .medium))
+                    .monospacedDigit()
                 ForEach(model.children) { entry in
                     Button {
                         model.onSelectTask(entry.task.taskID)
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: PbRadius.Metrics.spacing8) {
                             StatusIcon(status: entry.task.status)
                             BackendLabel(backend: entry.task.backend)
                             Text(entry.title).lineLimit(1)
@@ -169,7 +192,7 @@ struct SubTaskStripView: View {
                             Image(systemName: "chevron.right").foregroundStyle(Color.secondaryText)
                         }
                         .font(.pb(.secondary))
-                        .padding(8)
+                        .padding(PbRadius.Metrics.spacing8)
                         .background(RoundedRectangle(cornerRadius: PbRadius.row).fill(Color.pillFill))
                         .contentShape(Rectangle())
                     }
@@ -184,7 +207,7 @@ struct SubTaskStripView: View {
 @MainActor
 private func previewPane(_ model: TimelinePaneModel) -> some View {
     TimelinePaneView(model: model)
-        .frame(width: 640, height: 620)
+        .frame(width: PbRadius.Metrics.timelinePanePreviewWidth, height: PbRadius.Metrics.taskDetailPreviewHeight)
         .background(Color.windowBG)
 }
 
@@ -228,20 +251,62 @@ private var followUpModel: TimelinePaneModel {
     )
 }
 
+/// A conversation whose turns recorded prose only: the header shows the steps and conversation
+/// turns plus the proven "No tool calls recorded" note (§4).
+@MainActor
+private var proseOnlyModel: TimelinePaneModel {
+    let rows = [PreviewFixtures.row(PreviewFixtures.textItem("Looked at the failing test."), taskID: "t1", live: false)]
+    let liveStep = LiveStep(rows: rows)
+    return TimelinePaneModel(
+        stepCountText: "3 steps", turnsText: "2 turns", noToolCallsText: "No tool calls recorded",
+        rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), start: .now.addingTimeInterval(-90),
+        emptyText: nil, subTaskStrip: nil, isLoading: false, liveStep: liveStep,
+        updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep)
+    )
+}
+
 #Preview("Running - light") { previewPane(runningModel).preferredColorScheme(.light) }
 #Preview("Running - dark") { previewPane(runningModel).preferredColorScheme(.dark) }
 #Preview("Finished - light") { previewPane(finishedModel).preferredColorScheme(.light) }
 #Preview("Finished - dark") { previewPane(finishedModel).preferredColorScheme(.dark) }
 #Preview("With a follow-up turn - light") { previewPane(followUpModel).preferredColorScheme(.light) }
 #Preview("With a follow-up turn - dark") { previewPane(followUpModel).preferredColorScheme(.dark) }
+#Preview("Prose only, no tools - light") { previewPane(proseOnlyModel).preferredColorScheme(.light) }
+#Preview("Prose only, no tools - dark") { previewPane(proseOnlyModel).preferredColorScheme(.dark) }
+
+#Preview("Sub-task strip - light") {
+    SubTaskStripView(model: SubTaskStripModel(children: [previewChild("running"), previewChild("failed")], start: .now, onSelectTask: { _ in }))
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth)
+.preferredColorScheme(.light)
+}
+
+#Preview("Sub-task strip - dark") {
+    SubTaskStripView(model: SubTaskStripModel(children: [previewChild("running"), previewChild("failed")], start: .now, onSelectTask: { _ in }))
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth)
+.preferredColorScheme(.dark)
+}
 
 #Preview("Loading - light") {
-    previewPane(TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
+    previewPane(TimelinePaneModel(stepCountText: nil, rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
         .preferredColorScheme(.light)
 }
 
 #Preview("Loading - dark") {
-    previewPane(TimelinePaneModel(stepCountText: "0 steps", rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
+    previewPane(TimelinePaneModel(stepCountText: nil, rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: true))
         .preferredColorScheme(.dark)
 }
+
+@MainActor
+private func historyPreview(complete: Bool) -> some View {
+    previewPane(TimelinePaneModel(stepCountText: nil, noToolCallsText: complete ? "No tool calls recorded" : nil,
+        rows: [], activityRows: [], start: nil,
+        emptyText: complete ? nil : "This task's event log is empty or was not found.", subTaskStrip: nil,
+        isLoading: false, liveStep: nil, updateToken: ActivityUpdateToken(rows: [], liveStep: nil),
+        history: complete ? EventHistoryState() : EventHistoryState(hasMore: true, error: "Synthetic history read error")))
+}
+
+#Preview("Complete empty history - light") { historyPreview(complete: true).preferredColorScheme(.light) }
+#Preview("Complete empty history - dark") { historyPreview(complete: true).preferredColorScheme(.dark) }
+#Preview("History unavailable, retry - light") { historyPreview(complete: false).preferredColorScheme(.light) }
+#Preview("History unavailable, retry - dark") { historyPreview(complete: false).preferredColorScheme(.dark) }
 #endif

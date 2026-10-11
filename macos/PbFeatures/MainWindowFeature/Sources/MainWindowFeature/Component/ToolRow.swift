@@ -32,30 +32,34 @@ struct ToolRow: View {
     @Environment(\.openURL) private var openURL
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
+            HStack(spacing: PbRadius.Metrics.spacing6) {
             Button {
                 expanded.toggle()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: PbRadius.Metrics.spacing6) {
                     Image(systemName: icon)
-.frame(width: 14)
+                        .font(.pb(.headline))
+                        .frame(width: PbRadius.Metrics.activityIconSize)
                         .foregroundStyle(model.call.category == "workflow_protocol_error" ? Color.failedRed : Color.secondaryText)
-                    Text(model.call.tool).font(.pb(.body, weight: .medium))
+                    Text(model.call.tool).font(.pb(.body, weight: .bold))
                     Text(model.call.headline)
                         .font(.pb(.secondary, design: .monospaced))
                         .foregroundStyle(Color.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Spacer(minLength: 4)
+                    Spacer(minLength: PbRadius.Metrics.spacing4)
                     if let result = model.result {
                         if let code = result.exitCode {
-                            Text("exit \(code)").font(.pb(.caption)).foregroundStyle(code == 0 ? Color.doneGreen : Color.failedRed)
+                            Text("exit \(code)")
+.font(.pb(.caption))
+.monospacedDigit()
+                                .foregroundStyle(code == 0 ? Color.doneGreen : Color.failedRed)
                         } else if !result.ok, model.call.category != "workflow_protocol_error" {
                             Text("failed").font(.pb(.caption)).foregroundStyle(Color.failedRed)
                         }
                     } else if model.live {
-                        RunningSpinner(size: 12)
+                        RunningSpinner(size: PbRadius.Metrics.spacing12)
                     } else {
                         Text("no result").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                     }
@@ -86,14 +90,14 @@ struct ToolRow: View {
             if expanded || (model.result == nil && model.live && model.call.category == "shell") {
                 if let output = model.result?.outputTail, !output.isEmpty {
                     Text(output)
-                        .font(.pb(.caption, design: .monospaced))
+                        .font(.pb(.secondary, design: .monospaced))
                         .lineLimit(expanded ? nil : 6)
                         .textSelection(.enabled)
-                        .padding(6)
+                        .padding(PbRadius.Metrics.spacing6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(Color.codeFill))
                 } else if expanded {
-                    Text(model.call.inputPreview).font(.pb(.caption, design: .monospaced)).textSelection(.enabled).foregroundStyle(Color.secondaryText)
+                    Text(model.call.inputPreview).font(.pb(.secondary, design: .monospaced)).textSelection(.enabled).foregroundStyle(Color.secondaryText)
                 }
             }
         }
@@ -116,38 +120,49 @@ struct ToolRow: View {
 // MARK: - EditPreview
 
 /// A trivial value view (plain values, per the root AGENTS.md's Component Models section) showing
-/// an edit's old/new lines as a diff-style preview. No Model needed.
+/// an edit's old/new lines as a diff-style preview (§5.4): each line carries its own tinted
+/// background — `diffRemovedFill` for removed, `diffAddedFill` for added — on a `codeFill` body.
+/// No Model needed, and no `+N −M` counts: the events carry none, so none are invented.
 struct EditPreview: View {
     let old: String
     let new: String
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.zero) {
             ForEach(Array(old.split(separator: "\n", omittingEmptySubsequences: false).prefix(8).enumerated()), id: \.offset) { _, line in
-                Text("− " + line).foregroundStyle(Color.failedRed)
+                diffLine("− " + line, tint: Color.diffRemovedFill, foreground: Color.failedRed)
             }
             ForEach(Array(new.split(separator: "\n", omittingEmptySubsequences: false).prefix(8).enumerated()), id: \.offset) { _, line in
-                Text("+ " + line).foregroundStyle(Color.doneGreen)
+                diffLine("+ " + line, tint: Color.diffAddedFill, foreground: Color.doneGreen)
             }
         }
-        .font(.pb(.caption, design: .monospaced))
-        .padding(6)
+        .font(.pb(.secondary, design: .monospaced))
+        .padding(PbRadius.Metrics.spacing6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(Color.editPreviewFill))
+        .background(RoundedRectangle(cornerRadius: PbRadius.button).fill(Color.codeFill))
+    }
+
+    private func diffLine(_ text: String, tint: Color, foreground: Color) -> some View {
+        Text(text)
+            .foregroundStyle(foreground)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, PbRadius.Metrics.spacing4)
+            .padding(.vertical, PbRadius.Metrics.spacing2)
+            .background(tint)
     }
 }
 
 #if DEBUG
 private struct ToolRowPreview: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing10) {
             row(PreviewFixtures.toolItem(), live: false)
             row(PreviewFixtures.toolItem(command: "swift test --filter LoginTests", pending: true), live: true)
             row(PreviewFixtures.toolItem(outputTail: "error: build failed", exitCode: 1, ok: false), live: false)
             row(PreviewFixtures.editItem(path: "/repo/A.swift", old: "let a = 1", new: "let a = 2", seq: 1), live: false)
         }
-        .padding()
-        .frame(width: 420)
+        .padding(PbRadius.Metrics.spacing16)
+        .frame(width: PbRadius.Metrics.toolRowPreviewWidth)
         .background(Color.windowBG)
     }
 
@@ -161,4 +176,16 @@ private struct ToolRowPreview: View {
 
 #Preview("Tool row - light") { ToolRowPreview().preferredColorScheme(.light) }
 #Preview("Tool row - dark") { ToolRowPreview().preferredColorScheme(.dark) }
+
+#Preview("Edit preview - light") {
+    EditPreview(old: "let cached = false\nreturn cached", new: "let cached = true\nreturn cached")
+        .frame(width: PbRadius.Metrics.activityPreviewWidth)
+.preferredColorScheme(.light)
+}
+
+#Preview("Edit preview - dark") {
+    EditPreview(old: "let cached = false\nreturn cached", new: "let cached = true\nreturn cached")
+        .frame(width: PbRadius.Metrics.activityPreviewWidth)
+.preferredColorScheme(.dark)
+}
 #endif

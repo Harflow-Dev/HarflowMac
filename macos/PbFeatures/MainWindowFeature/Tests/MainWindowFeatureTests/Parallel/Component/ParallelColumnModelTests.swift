@@ -61,7 +61,7 @@ import Testing
         let subtitle = ParallelColumnModel.subtitle(repoPath: "/Users/me/Code/polybridge/", backend: "claude", turns: 1)
 
         // then
-        #expect(subtitle == "polybridge · Claude")
+        #expect(subtitle == "Claude · polybridge")
     }
 
     @Test func givenAMultiTurnConversation_whenBuildingTheSubtitle_thenTheTurnCountIsAppended() {
@@ -69,6 +69,6 @@ import Testing
         let subtitle = ParallelColumnModel.subtitle(repoPath: "/Users/me/Code/polybridge", backend: "codex", turns: 3)
 
         // then
-        #expect(subtitle == "polybridge · Codex · 3 turns")
+        #expect(subtitle == "Codex · polybridge · 3 turns")
     }
 }

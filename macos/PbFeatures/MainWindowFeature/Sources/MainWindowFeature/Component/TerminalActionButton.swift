@@ -20,11 +20,19 @@ struct TerminalActionButton: View {
 }
 
 #if DEBUG
-#Preview {
-    HStack {
-        Button("Open task") {}.buttonStyle(.link)
-        Spacer()
-        TerminalActionButton("Take over") {}
-    }.padding()
+private struct TerminalActionButtonPreview: View {
+    var body: some View {
+        HStack {
+            Button("Open task") {}.buttonStyle(.link)
+            Spacer()
+            TerminalActionButton("Take over in terminal") {}
+        }
+        .padding()
+        .frame(width: PbRadius.Metrics.toolRowPreviewWidth)
+        .background(Color.windowBG)
+    }
 }
+
+#Preview("TerminalActionButton - light") { TerminalActionButtonPreview().preferredColorScheme(.light) }
+#Preview("TerminalActionButton - dark") { TerminalActionButtonPreview().preferredColorScheme(.dark) }
 #endif

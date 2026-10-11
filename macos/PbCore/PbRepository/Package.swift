@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PbRepository",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     products: [
         .library(name: "PbRepository", targets: ["PbRepository"])
     ],

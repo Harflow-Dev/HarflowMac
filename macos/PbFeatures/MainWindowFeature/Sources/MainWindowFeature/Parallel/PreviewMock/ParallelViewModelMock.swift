@@ -17,28 +17,34 @@ final class ParallelViewModelMock: ParallelViewModel {
     
     var groupName: String
     var headerSubtitle: String
+    var statusSummary: String?
+    var headerPills: [String]
+    var headerClaimCaption: String
     var showPrompt: Bool
     var canCancelAll: Bool
     var isEmpty: Bool
     var columns: [ParallelColumnModel]
-    var footerText: String
-    
+
     init(
         groupName: String = "release-notes",
         headerSubtitle: String = "2 agents · read_only, write_in_repo · ~/repo · started 10:02 AM",
+        statusSummary: String? = "1 running · 1 done",
+        headerPills: [String] = ["No network"],
+        headerClaimCaption: String = "",
         showPrompt: Bool = false,
         canCancelAll: Bool = true,
         isEmpty: Bool = false,
-        columns: [ParallelColumnModel] = ParallelViewModelMock.sampleColumns(),
-        footerText: String = "Enforced for every agent here: Network: blocked."
+        columns: [ParallelColumnModel] = ParallelViewModelMock.sampleColumns()
     ) {
         self.groupName = groupName
         self.headerSubtitle = headerSubtitle
+        self.statusSummary = statusSummary
+        self.headerPills = headerPills
+        self.headerClaimCaption = headerClaimCaption
         self.showPrompt = showPrompt
         self.canCancelAll = canCancelAll
         self.isEmpty = isEmpty
         self.columns = columns
-        self.footerText = footerText
     }
     
     func didAppear() {}
@@ -66,13 +72,15 @@ final class ParallelViewModelMock: ParallelViewModel {
                 isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
                 rows: sampleRows, activityRows: ActivityRowsBuilder.build(from: sampleRows), liveStep: nil,
                 isLoading: false,
-                summary: nil, onTapTakeover: {}, onTapOpenTask: {}
+                summary: nil, stepCountText: "1 step", noToolCallsText: nil,
+                onTapTakeover: {}, onTapOpenTask: {}
             ),
             ParallelColumnModel(
                 id: "def456", task: done, title: "Refactor the parser", subtitle: "repo · Codex",
                 isBusy: false, outcomeMessage: "Refused: read-only freedom.", showPrompt: false, prompt: nil,
                 rows: [], activityRows: [], liveStep: nil, isLoading: false,
-                summary: "Refactored the parser into smaller functions.", onTapTakeover: {}, onTapOpenTask: {}
+                summary: "Refactored the parser into smaller functions.", stepCountText: nil, noToolCallsText: nil,
+                onTapTakeover: {}, onTapOpenTask: {}
             )
         ]
     }

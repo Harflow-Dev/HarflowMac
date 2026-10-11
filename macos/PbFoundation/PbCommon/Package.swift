@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "PbCommon",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     products: [
         .library(name: "PbCommon", targets: ["PbCommon"]),
         .library(name: "PbCommonTestMock", targets: ["PbCommonTestMock"])

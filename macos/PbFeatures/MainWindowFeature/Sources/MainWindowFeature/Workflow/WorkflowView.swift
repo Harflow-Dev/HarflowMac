@@ -3,113 +3,6 @@ import PbCommon
 import PbUI
 import SwiftUI
 
-// MARK: - WorkflowViewModel
-
-@MainActor
-protocol WorkflowViewModel: ViewModel {
-    var workflows: [WorkflowRecord] { get }
-    var runs: [WorkflowRunModel] { get }
-    var definition: [String: JSONValue] { get set }
-    var name: String { get set }
-    var loadedName: String { get }
-    var revision: Int { get }
-    var selectedNodeID: String? { get set }
-    var selectedNodeIDs: Set<String> { get }
-    var selectedEdgeID: String? { get set }
-    var connectionSourceID: String? { get set }
-    var selectedRun: WorkflowRunModel? { get }
-    var selectedActivationID: String? { get }
-    var isEditing: Bool { get }
-    var isBusy: Bool { get }
-    var initialLoadingKind: String? { get }
-    var initialLoadFailed: Bool { get }
-    var errorText: String? { get }
-    var readFailureText: String? { get }
-    func retryReadFailure()
-    var validationMessage: String? { get }
-    var validationDependencies: [String: JSONValue] { get }
-    var nativeSubagentsAvailable: Bool { get }
-    var nativeActivity: WorkflowNativeActivityModel? { get }
-    var launchPreview: WorkflowPermissionPreview? { get }
-    var launchPreviewMessage: String? { get }
-    var canStartWithPreview: Bool { get }
-    var branchSelection: WorkflowBranchSelection { get }
-    var repo: String { get set }
-    var prompt: String { get set }
-    var freedom: String { get set }
-    var instructions: String { get set }
-    var additionalAttempts: Int { get set }
-    var launchAgent: [String: JSONValue] { get set }
-    var overrideOrchestrator: Bool { get set }
-    var generationAgent: [String: JSONValue] { get set }
-    var generationFallbacks: [[String: JSONValue]] { get set }
-    var modelChoices: [String: [ModelChoiceModel]] { get }
-    var showsRunSheet: Bool { get set }
-    var showsGenerateSheet: Bool { get set }
-    var isRefining: Bool { get }
-    var canReturnToCanvas: Bool { get }
-    var parallel: ParallelVM { get }
-    var nodes: [WorkflowNodeModel] { get }
-    var edges: [WorkflowEdgeModel] { get }
-    var backendIDs: [String] { get }
-    var selectedNode: WorkflowNodeModel? { get }
-    var selectedEdge: WorkflowEdgeModel? { get }
-    var canSave: Bool { get }
-    var canDiscard: Bool { get }
-    var canUndo: Bool { get }
-    var hasUnsavedChanges: Bool { get }
-    func didAppear()
-    func didDisappear()
-    func selectWorkflow(_ workflow: WorkflowRecord)
-    func selectRun(_ run: WorkflowRunModel)
-    func openOwnerTask(_ id: String)
-    func openRun(_ id: String)
-    func newWorkflow()
-    func openWorkflowEditor(_ name: String)
-    func discardChanges()
-    func undoWorkflowEdit()
-    func beginNodeDrag()
-    func endNodeDrag()
-    func save()
-    func duplicate()
-    func deleteWorkflow()
-    func chooseRepo()
-    func prepareLaunch()
-    func start()
-    func generate()
-    func prepareGeneration(refining: Bool)
-    func returnToCanvas()
-    func applyAgentProposal()
-    func control(_ command: String)
-    func control(_ command: String, allowOptionalReviewSkip: Bool)
-    func continueWithOneMoreRetry()
-    func selectNodes(_ ids: Set<String>, primary: String?)
-    func toggleNode(_ id: String)
-    func moveNodes(_ positions: [String: CGPoint])
-    func selectNode(_ id: String)
-    func selectActivation(_ id: String?)
-    func updateNode(_ id: String, key: String, value: JSONValue?)
-    func updateEdge(_ id: String, key: String, value: JSONValue?)
-    func moveNode(_ id: String, to point: CGPoint)
-    func addNode(_ kind: String, at point: CGPoint?)
-    func copySelectedNodes()
-    func pasteNodes()
-    func deleteSelected()
-    func loadModels(_ backend: String)
-    func nodeStatus(_ id: String) -> String
-    func nodeAttempt(_ id: String) -> Int
-}
-
-extension WorkflowViewModel {
-    var readFailureText: String? { nil }
-    func retryReadFailure() {}
-    func control(_ command: String, allowOptionalReviewSkip: Bool) {
-        // Preview and other conformers that do not support this action never grant consent.
-        guard !allowOptionalReviewSkip else { return }
-        control(command)
-    }
-}
-
 // MARK: - WorkflowView
 
 struct WorkflowView<VM: WorkflowViewModel>: View {
@@ -117,7 +10,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     @State var viewModel: VM
     private let builderTaskView: ((String, String) -> AnyView)?
     @AppStorage("workflowViewMode") private var viewMode = "Graph"
-
+    /// Local presentation state for the non-blocking recovery overlay; never VM state.
+    @State private var recoveryOverlay = WorkflowRecoveryOverlayPresentation()
+    /// Focus return to the eligible badge after an explicit dismissal only (best effort).
+    @FocusState private var recoveryBadgeFocused: Bool
     init(_ viewModel: VM, builderTaskView: ((String, String) -> AnyView)? = nil) {
         _viewModel = State(initialValue: viewModel)
         self.builderTaskView = builderTaskView
@@ -130,6 +26,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             screenContent
         }
         .background(Color.windowBG)
+        .modifier(WorkflowRecoveryOverlayLifecycle(presentation: $recoveryOverlay, eligibleRunID: recoveryEligibleRunID))
         .sheet(isPresented: Binding(get: { viewModel.showsRunSheet }, set: { viewModel.showsRunSheet = $0 })) {
             WorkflowLaunchSheet(viewModel: viewModel, isGenerating: false)
         }
@@ -151,17 +48,17 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     }
 
     private var screenHeader: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: PbRadius.Metrics.zero) {
             if viewModel.initialLoadingKind != nil {
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        SkeletonBlock(width: 220, height: 20)
-                        SkeletonBlock(width: 140, height: 14)
+                    VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing2) {
+                        SkeletonBlock(width: PbRadius.Metrics.workflowInspectorMinimumWidth, height: PbRadius.Metrics.spacing20)
+                        SkeletonBlock(width: PbRadius.Metrics.taskSkeletonTitleWidth, height: PbRadius.Metrics.spacing14)
                     }
                     Spacer()
                 }
-.padding(.horizontal, 16)
-.padding(.vertical, 12)
+.padding(.horizontal, PbRadius.Metrics.spacing16)
+.padding(.vertical, PbRadius.Metrics.spacing12)
             } else {
                 header.disabled(viewModel.initialLoadFailed).pbFadeIn()
             }
@@ -172,7 +69,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 .foregroundStyle(Color.failedRed)
                     .textSelection(.enabled)
 .frame(maxWidth: .infinity, alignment: .leading)
-.padding(12)
+.padding(PbRadius.Metrics.spacing12)
                 Divider()
             }
         }
@@ -195,96 +92,35 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                if viewModel.selectedRun == nil, viewModel.isEditing, viewModel.loadedName.isEmpty {
-                    TextField("Workflow name", text: $viewModel.name, prompt: Text("New workflow"))
-                        .textFieldStyle(.roundedBorder)
-                        .font(.pb(.headline, weight: .semibold))
-                        .frame(minWidth: 160, idealWidth: 220, maxWidth: 300)
-                        .accessibilityLabel("Workflow name")
-                        .help("Enter a workflow name to save")
-                } else {
-                    Text(viewModel.selectedRun?.name ?? (viewModel.isEditing ? viewModel.name : "Workflows"))
-                        .font(.pb(.headline, weight: .semibold))
-                }
-                HStack(spacing: 6) {
-                    if let run = viewModel.selectedRun, run.isSettling || ["starting", "running"].contains(run.status) {
-                        RunningSpinner()
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+            HStack(spacing: PbRadius.Metrics.spacing12) {
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing2) {
+                    HStack(spacing: PbRadius.Metrics.spacing10) {
+                    if viewModel.selectedRun == nil, viewModel.isEditing, viewModel.loadedName.isEmpty {
+                        TextField("Workflow name", text: $viewModel.name, prompt: Text("New workflow"))
+                            .textFieldStyle(.roundedBorder)
+                            .font(.pb(.title, weight: .semibold))
+        .frame(minWidth: PbRadius.Metrics.summaryTileWidth,
+                idealWidth: PbRadius.Metrics.workflowInspectorMinimumWidth,
+                maxWidth: PbRadius.Metrics.formPreviewWidth)
+                            .accessibilityLabel("Workflow name")
+                            .help("Enter a workflow name to save")
+                    } else {
+                        Text(viewModel.selectedRun?.name ?? (viewModel.isEditing ? viewModel.name : "Workflows"))
+                            .font(.pb(.title, weight: .semibold))
                     }
-                Text(viewModel.selectedRun.map { $0.isSettling ? "Settling" : $0.status.replacingOccurrences(of: "_", with: " ").capitalized }
-                     ?? (viewModel.isEditing
-                         ? "Revision \(viewModel.revision) · Workflow editor\(viewModel.hasUnsavedChanges ? " · Draft" : "")"
-                         : "Build reusable agent workflows"))
-                    .font(.pb(.secondary))
-.foregroundStyle(Color.secondaryText)
-                }
-            }
-            Spacer()
-            if viewModel.isBusy {
-                ProgressView().controlSize(.small)
-            }
-            if let run = viewModel.selectedRun {
-                if let parentID = run.parentRunID {
-                    Button("Open parent") { viewModel.openRun(parentID) }
-                        .buttonStyle(QuietButtonStyle())
-                }
-                if run.isBuilder {
-                    if run.status == "completed" {
-                        Button(run.isBuilderProposal ? "Apply proposal" : "Open generated draft") {
-                            if run.isBuilderProposal {
-                                viewModel.applyAgentProposal()
-                            } else {
-                                viewModel.openWorkflowEditor(run.name)
-                            }
-                        }.buttonStyle(QuietButtonStyle())
+                    if let run = viewModel.selectedRun {
+                        WorkflowRecoveryBadge(run: run, isEligible: recoveryEligibleRunID != nil,
+                                              focus: $recoveryBadgeFocused, onOpen: { recoveryOverlay.openFromBadge() })
                     }
-                    if viewModel.canReturnToCanvas {
-                        Button("Return to canvas") { viewModel.returnToCanvas() }.buttonStyle(QuietButtonStyle())
                     }
-                } else {
-                Picker("View", selection: $viewMode) {
-                    Text("Graph").tag("Graph")
-                    Text("Parallel").tag("Parallel")
+                    stateLine
                 }
-.pickerStyle(.segmented)
-.frame(width: 170)
+                Spacer()
+                if viewModel.isBusy {
+                    ProgressView().controlSize(.small)
                 }
-                if run.allowsMonitorControl, ["running", "starting"].contains(run.status) {
-                    Button("Pause") { viewModel.control("pause") }.buttonStyle(QuietButtonStyle())
-                }
-                if run.canCancelFromMonitor {
-                    Button("Cancel", role: .destructive) { viewModel.control("cancel") }
-                        .buttonStyle(QuietButtonStyle())
-.disabled(viewModel.isBusy)
-                } else if run.status == "cancelling" {
-                    Text("Cancelling…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
-                }
-                if run.parentRunID != nil {
-                    Button("Open root to cancel") { viewModel.openRun(run.rootRunID) }
-                        .buttonStyle(QuietButtonStyle())
-                }
-            } else if viewModel.isEditing {
-                Button("Edit with agent", systemImage: "sparkles") { viewModel.prepareGeneration(refining: true) }
-                    .buttonStyle(QuietButtonStyle())
-.disabled(viewModel.isBusy)
-                Menu {
-                    Button("Generate with agent…") { viewModel.prepareGeneration(refining: false) }
-                    Button("Duplicate") { viewModel.duplicate() }
-                    Button("Delete", role: .destructive) { viewModel.deleteWorkflow() }.disabled(viewModel.loadedName.isEmpty)
-                } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton)
-                Button("Discard Changes") { viewModel.discardChanges() }.buttonStyle(QuietButtonStyle()).disabled(!viewModel.canDiscard)
-                Button("Save") { viewModel.save() }.buttonStyle(QuietButtonStyle()).disabled(!viewModel.canSave)
-                Button("Run", systemImage: "play") {
-                    viewModel.prepareLaunch()
-                }
-.buttonStyle(QuietButtonStyle())
-                    .disabled(viewModel.hasUnsavedChanges || viewModel.isBusy)
-            } else {
-                Button("Generate", systemImage: "sparkles") { viewModel.prepareGeneration(refining: false) }.buttonStyle(QuietButtonStyle())
-                Button("New workflow", systemImage: "plus") { viewModel.newWorkflow() }.buttonStyle(QuietButtonStyle())
-            }
+                headerActions
             }
             if let reason = viewModel.selectedRun?.monitorCancelRefusalReason {
                 Text("Cancellation unavailable: \(reason)")
@@ -295,64 +131,237 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     .textSelection(.enabled)
             }
         }
-        .padding(.horizontal, 16)
-.padding(.vertical, 12)
+        .padding(.horizontal, PbRadius.Metrics.spacing16)
+        .padding(.vertical, PbRadius.Metrics.spacing12)
+    }
+
+    /// The honest state line under the title. A run reports its badge state separately, so the
+    /// line carries only metadata the run record already has (started time, repository) — no
+    /// invented "step N of M" and no elapsed value.
+    @ViewBuilder
+    private var stateLine: some View {
+        HStack(spacing: PbRadius.Metrics.spacing6) {
+            if let run = viewModel.selectedRun {
+                if let started = WorkflowRunMetadata.startedAt(run) {
+                    Text("Run started \(started.formatted(date: .omitted, time: .shortened))")
+                        .monospacedDigit()
+                }
+                if let repo = WorkflowRunMetadata.repoName(run) {
+                    if WorkflowRunMetadata.startedAt(run) != nil { Text("·") }
+                    Text(repo)
+                        .help(run.raw["repo_path"]?.stringValue ?? repo)
+                }
+            } else if viewModel.isEditing {
+                if viewModel.hasUnsavedChanges {
+                    Circle()
+                        .fill(Color.warningFG)
+                        .frame(width: PbRadius.Metrics.workflowUnsavedDotSize, height: PbRadius.Metrics.workflowUnsavedDotSize)
+                    Text("Unsaved changes · Revision \(viewModel.revision) · Workflow editor")
+                        .monospacedDigit()
+                } else {
+                    Text("Revision \(viewModel.revision) · Workflow editor")
+                        .monospacedDigit()
+                }
+            } else {
+                Text("Build reusable agent workflows")
+            }
+        }
+        .font(.pb(.secondary))
+        .foregroundStyle(Color.secondaryText)
+    }
+
+    /// The header's action group: the original actions, order and guards, restyled per SPEC
+    /// §5.3/§6.3 — tinted Edit with agent, an inline glass group [⋯ | Discard | Save], the
+    /// primary Run, secondary glass for the run/builder actions, and the destructive Cancel run
+    /// capsule. The Refresh workflow toolbar action stays separate and untouched.
+    @ViewBuilder
+    private var headerActions: some View {
+        if let run = viewModel.selectedRun {
+            if let parentID = run.parentRunID {
+                Button("Open parent") { viewModel.openRun(parentID) }
+                    .buttonStyle(MonitorButtonStyle(.glass))
+            }
+            if run.isBuilder {
+                if run.status == "completed" {
+                    Button(run.isBuilderProposal ? "Apply proposal" : "Open generated draft") {
+                        if run.isBuilderProposal {
+                            viewModel.applyAgentProposal()
+                        } else {
+                            viewModel.openWorkflowEditor(run.name)
+                        }
+                    }.buttonStyle(MonitorButtonStyle(.glass))
+                }
+                if viewModel.canReturnToCanvas {
+                    Button("Return to canvas") { viewModel.returnToCanvas() }.buttonStyle(MonitorButtonStyle(.glass))
+                }
+            } else {
+                Picker("View", selection: $viewMode) {
+                    Text("Graph").tag("Graph")
+                    Text("Parallel").tag("Parallel")
+                }
+                .pickerStyle(.segmented)
+                .frame(width: PbRadius.Metrics.workflowRunCanvasMinimumHeight)
+            }
+            if run.allowsMonitorControl, ["running", "starting"].contains(run.status) {
+                Button("Pause") { viewModel.control("pause") }.buttonStyle(MonitorButtonStyle(.glass))
+            }
+            if run.canCancelFromMonitor {
+                Button("Cancel run", role: .destructive) { viewModel.control("cancel") }
+                    .buttonStyle(MonitorButtonStyle(.destructive))
+                    .disabled(viewModel.isBusy)
+            } else if run.status == "cancelling" {
+                Text("Cancelling…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+            }
+            if run.parentRunID != nil {
+                Button("Open root to cancel") { viewModel.openRun(run.rootRunID) }
+                    .buttonStyle(MonitorButtonStyle(.glass))
+            }
+        } else if viewModel.isEditing {
+            Button("Edit with agent", systemImage: "sparkles") { viewModel.prepareGeneration(refining: true) }
+                .buttonStyle(MonitorButtonStyle(.tinted))
+                .disabled(viewModel.isBusy)
+            HStack(spacing: PbRadius.Metrics.spacing2) {
+                Menu {
+                    Button("Generate with agent…") { viewModel.prepareGeneration(refining: false) }
+                    Button("Duplicate") { viewModel.duplicate() }
+                    Button("Delete", role: .destructive) { viewModel.deleteWorkflow() }.disabled(viewModel.loadedName.isEmpty)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: PbRadius.Metrics.workflowHeaderMenuWidth,
+                               height: PbRadius.Metrics.compactControlHeight)
+                }
+                .menuStyle(.borderlessButton)
+                .accessibilityLabel("More workflow actions")
+                Rectangle()
+                    .fill(Color.hairline)
+                    .frame(width: PbRadius.Metrics.hairlineStroke,
+                           height: PbRadius.Metrics.workflowHeaderDividerHeight)
+                Button("Discard") { viewModel.discardChanges() }
+                    .buttonStyle(QuietButtonStyle(isFilled: false))
+                    .disabled(!viewModel.canDiscard)
+                Button("Save") { viewModel.save() }
+                    .buttonStyle(QuietButtonStyle(isFilled: false))
+                    .disabled(!viewModel.canSave)
+            }
+            .glassEffect(.regular, in: Capsule())
+            Button("Run", systemImage: "play") {
+                viewModel.prepareLaunch()
+            }
+                .buttonStyle(MonitorButtonStyle(.primary))
+                .disabled(viewModel.hasUnsavedChanges || viewModel.isBusy)
+        } else {
+            Button("Generate", systemImage: "sparkles") { viewModel.prepareGeneration(refining: false) }
+                .buttonStyle(MonitorButtonStyle(.glass))
+            Button("New workflow", systemImage: "plus") { viewModel.newWorkflow() }
+                .buttonStyle(MonitorButtonStyle(.glass))
+        }
     }
 
     private var editor: some View {
         WorkflowInspectorSplit {
-            VStack(spacing: 0) {
-                canvas.frame(maxWidth: .infinity, maxHeight: .infinity)
-                Divider()
+            // The native adaptation of the mockup's floating overlay: the tray, the validation
+            // row and the Cancel connection action sit in a measured chrome band below the
+            // canvas — outside its scroll and hit-test region — over one continuous canvas
+            // background, so the glass controls read as floating while covering no node, port
+            // or drop target. The band reserves its own intrinsic height (it grows when the
+            // chips wrap), so the canvas keeps exactly the viewport it is given; no fixed
+            // overlap clearance is ever guessed.
+            VStack(spacing: PbRadius.Metrics.zero) {
+                // The flush-pane amendment (user override of SPEC §6.3) drops the canvas's outer
+                // workflowCanvasInset: it sits edge-to-edge as before the redesign. The token
+                // still pads the tray's own horizontal chrome below.
+                canvas
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 stepTray
+                    .padding(.horizontal, PbRadius.Metrics.workflowCanvasInset)
+                    .padding(.bottom, PbRadius.Metrics.spacing12)
             }
+            .background(Color.inspectorFill)
         } inspector: {
             WorkflowInspector(viewModel: viewModel)
         }
     }
 
     private var stepTray: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    SectionLabel(text: "Steps")
-                    ForEach(WorkflowRole.palette, id: \.self) { role in
-                        if ["start", "end"].contains(role), viewModel.nodes.contains(where: { $0.type == role }) {
-                            stepChip(role).opacity(0.4).help("\(WorkflowRole.title(role)) is already on the canvas")
-                        } else {
-                            stepChip(role).help("Drag \(WorkflowRole.title(role)) onto the canvas").draggable(role)
-                        }
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+            HStack(alignment: .center, spacing: PbRadius.Metrics.spacing8) {
+                Text("Add")
+                    .font(.pb(.caption, weight: .semibold))
+                    .foregroundStyle(Color.tertiaryText)
+                WorkflowStepFlowLayout(spacing: PbRadius.Metrics.spacing8) {
+                    ForEach(WorkflowStepPalette.items()) { item in
+                        stepItem(item)
                     }
                 }
             }
-            .scrollIndicators(.hidden)
-            HStack(spacing: 12) {
-                Text(viewModel.validationMessage ?? "Drag steps onto the canvas; connect their dots.")
+            .padding(PbRadius.Metrics.workflowTrayPadding)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: PbRadius.Metrics.workflowTrayCornerRadius))
+            validationRow
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Workflow steps")
+    }
+
+    /// The tray's items are drag-only: every chip keeps its existing `.draggable` payload and
+    /// the already-present structural restriction (a Start/End already on the canvas is shown
+    /// dimmed with its help text and cannot be dropped again). No chip gains a tap action.
+    @ViewBuilder
+    private func stepItem(_ item: WorkflowStepPalette.Item) -> some View {
+        switch item {
+        case .divider:
+            Rectangle()
+                .fill(Color.hairline)
+                .frame(width: PbRadius.Metrics.hairlineStroke, height: PbRadius.Metrics.workflowTrayDividerHeight)
+                .accessibilityHidden(true)
+        case let .role(role):
+            if ["start", "end"].contains(role), viewModel.nodes.contains(where: { $0.type == role }) {
+                stepChip(role).opacity(0.4).help("\(WorkflowRole.title(role)) is already on the canvas")
+            } else {
+                stepChip(role).help("Drag \(WorkflowRole.title(role)) onto the canvas").draggable(role)
+            }
+        }
+    }
+
+    /// The validation/hint row. Only a supplied `validationMessage` populates the glass pill —
+    /// nil or empty never proves "Workflow is valid" (it also occurs before checking and after
+    /// resets), so the absent case keeps the existing drag hint and its exact connect/delete
+    /// help. The supplied message stays neutral, single-line, with its full text as help; no
+    /// state icon and no Valid invention. The Cancel connection action keeps its callback and
+    /// guards while a source is set.
+    private var validationRow: some View {
+        HStack(spacing: PbRadius.Metrics.spacing12) {
+            if let message = viewModel.validationMessage, !message.isEmpty {
+                Text(message)
                     .font(.pb(.caption))
                     .foregroundStyle(Color.secondaryText)
                     .lineLimit(1)
-                    .help(viewModel.validationMessage ?? "Drag an output dot to an input, or click the output then the destination. "
+                    .help(message)
+                    .padding(.horizontal, PbRadius.Metrics.spacing12)
+                    .padding(.vertical, PbRadius.Metrics.spacing6)
+                    .glassEffect(.regular, in: Capsule())
+            } else {
+                Text("Drag steps onto the canvas; connect their dots.")
+                    .font(.pb(.caption))
+                    .foregroundStyle(Color.secondaryText)
+                    .lineLimit(1)
+                    .help("Drag an output dot to an input, or click the output then the destination. "
                           + "Select a step and press Delete to remove it.")
-                Spacer(minLength: 0)
-                if viewModel.connectionSourceID != nil {
-                    Button("Cancel connection") { viewModel.connectionSourceID = nil }
-                        .buttonStyle(QuietButtonStyle())
-                }
+            }
+            Spacer(minLength: PbRadius.Metrics.zero)
+            if viewModel.connectionSourceID != nil {
+                Button("Cancel connection") { viewModel.connectionSourceID = nil }
+                    .buttonStyle(MonitorButtonStyle(.glass))
             }
         }
-        .padding(12)
-        .background(Color.windowBG)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Workflow steps")
     }
 
     private func stepChip(_ role: String) -> some View {
         Label(WorkflowRole.title(role), systemImage: WorkflowRole.symbol(role))
             .font(.pb(.secondary))
             .fixedSize()
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color.cardFill, in: RoundedRectangle(cornerRadius: PbRadius.row))
+            .padding(.horizontal, PbRadius.Metrics.spacing10)
+            .padding(.vertical, PbRadius.Metrics.spacing6)
+            .background(Color.cardFill, in: RoundedRectangle(cornerRadius: PbRadius.button))
     }
 
     private var canvas: some View {
@@ -387,12 +396,13 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             childRunID: { viewModel.selectedRun?.latestChildRunID(for: $0, selection: viewModel.branchSelection) },
             onOpenRun: viewModel.openRun,
             selectedBranchEdgeIDs: viewModel.branchSelection.selectedEdgeIDs,
-            excludedBranchEdgeIDs: viewModel.branchSelection.excludedEdgeIDs
+            excludedBranchEdgeIDs: viewModel.branchSelection.excludedEdgeIDs,
+            showsExecutionStates: viewModel.selectedRun != nil
         )
     }
 
     private var builderContent: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: PbRadius.Metrics.zero) {
             if let run = viewModel.selectedRun, ["needs_input", "needs_attention", "failed", "paused"].contains(run.status),
                !run.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(run.reason)
@@ -400,21 +410,24 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     .foregroundStyle(Color.warningFG)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, PbRadius.Metrics.spacing16)
+                    .padding(.vertical, PbRadius.Metrics.spacing10)
                 Divider()
             }
             GeometryReader { viewport in
                 let minimums = WorkflowBuilderLayout.minimums(height: viewport.size.height)
                 VSplitView {
                     HSplitView {
-                        canvas.frame(minWidth: 0, maxWidth: .infinity)
+                        canvas.frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity)
                         if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
                             WorkflowInspector(viewModel: viewModel)
-                                .frame(minWidth: 220, idealWidth: 260, maxWidth: 500)
+
+        .frame(minWidth: PbRadius.Metrics.workflowInspectorMinimumWidth,
+                idealWidth: PbRadius.Metrics.taskSkeletonStartWidth,
+                maxWidth: PbRadius.Metrics.workflowInspectorMaximumWidth)
                         }
                     }
-                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: minimums.canvas, idealHeight: viewport.size.height * 0.42)
+                    .frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity, minHeight: minimums.canvas, idealHeight: viewport.size.height * 0.42)
                     .clipped()
                     GeometryReader { taskPane in
                         if let run = viewModel.selectedRun, let taskID = run.builderTaskID, let builderTaskView {
@@ -422,7 +435,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                                 .frame(width: taskPane.size.width, height: taskPane.size.height)
                                 .clipped()
                         } else {
-                            HStack(spacing: 8) {
+                            HStack(spacing: PbRadius.Metrics.spacing8) {
                                 ProgressView().controlSize(.small)
                                 Text("Starting workflow builder…").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                             }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -435,18 +448,113 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         }
     }
 
-    private var runContent: some View {
-        let isLoading = viewModel.initialLoadingKind == "run"
-        return GeometryReader { viewport in
-            VStack(spacing: 0) {
-            if isLoading {
-                HStack { SkeletonBlock(height: 14); Spacer(minLength: 60) }
-                    .frame(height: 27)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+    @ViewBuilder private var runSidebar: some View {
+        if let run = viewModel.selectedRun {
+            ScrollView {
+            VStack(spacing: PbRadius.Metrics.zero) {
+                if run.parentRunID != nil {
+                    Text("Child workflow · Plan and checklist belong to this run")
+.font(.pb(.caption))
+.foregroundStyle(Color.tertiaryText)
+        .padding(PbRadius.Metrics.spacing16)
+                }
+                if run.sessionOwnerRunID != run.id {
+                    Button("Open owning orchestrator") { viewModel.openRun(run.sessionOwnerRunID) }
+                        .buttonStyle(QuietButtonStyle())
+.padding(.horizontal, PbRadius.Metrics.spacing16)
+                }
+                WorkflowChildLinks(groups: WorkflowChildLinkGroup.build(run: run), onOpen: viewModel.openRun)
+                    .padding(.horizontal, PbRadius.Metrics.spacing16)
+                    .padding(.vertical, PbRadius.Metrics.spacing4)
+                if let assignment = run.raw["prompt"]?.stringValue, !assignment.isEmpty {
+                    DisclosureGroup(run.parentRunID == nil ? "Original request" : "Assignment for this child") {
+                        ScrollView {
+                            ReadingMarkdownView(text: assignment)
+.frame(maxWidth: .infinity, alignment: .leading)
+.padding(.vertical, PbRadius.Metrics.spacing6)
+                                // The document probe (§6.4): inside this nested disclosure's own
+                                // document, never the outer run inspector's.
+                                .background(ScrollChrome())
+                        }.frame(maxHeight: PbRadius.Metrics.workflowRunActivityMinimumHeight)
+                    }
+.font(.pb(.secondary, weight: .medium))
+.padding(PbRadius.Metrics.spacing16)
+                    // Native disclosure triangles extend before their label's layout origin.
+                    .padding(.leading, PbRadius.Metrics.spacing8)
+                }
+                WorkflowRunPlan(run: run)
+                    .padding(PbRadius.Metrics.spacing16)
+                    .padding(.leading, PbRadius.Metrics.spacing8)
+                if let plan = run.technicalPlan {
+                    DisclosureGroup("Technical plan") {
+                        ScrollView {
+                            ReadingMarkdownView(text: plan)
+.frame(maxWidth: .infinity, alignment: .leading)
+.padding(.vertical, PbRadius.Metrics.spacing6)
+                                // The document probe (§6.4): inside this nested disclosure's own
+                                // document, never the outer run inspector's.
+                                .background(ScrollChrome())
+                        }.frame(maxHeight: PbRadius.Metrics.formPreviewWidth)
+                    }
+.font(.pb(.secondary, weight: .medium))
+.padding(PbRadius.Metrics.spacing16)
+                    .padding(.leading, PbRadius.Metrics.spacing8)
+                }
+                Divider()
+                if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
+                    WorkflowInspector(viewModel: viewModel, isScrollable: false)
+                } else {
+                    Spacer(minLength: PbRadius.Metrics.zero)
+                }
+            }
+            // The document probe (§6.4): inside the run inspector's own document, so it can only
+            // ever target this outer scroll view — never a nested disclosure's.
+            .background(ScrollChrome())
+            }
+.accessibilityIdentifier("workflow-run-inspector")
+.background(Color.cardFill)
+        }
+    }
+
+    @ViewBuilder
+    private var activity: some View {
+        Group {
+            if let native = viewModel.nativeActivity {
+                WorkflowNativeActivityView(model: native)
             } else {
-                WorkflowDiagnosticsViewport(maximumHeight: min(180, viewport.size.height * 0.3)) {
-                    WorkflowRunStatus(viewModel: viewModel)
+                WorkflowActivityColumns(
+                    viewModel: viewModel.parallel,
+                    selectedTaskID: selectedTaskID,
+                    showsPrestartPlaceholder: WorkflowExecutionPresentation.showsPrestartPlaceholder(
+                        activations: viewModel.selectedRun?.activations ?? []
+                    )
+                )
+            }
+        }
+        .background(Color.cardFill)
+    }
+
+}
+
+// MARK: - Workflow activity selection
+
+private extension WorkflowView {
+    var runContent: some View {
+        let isLoading = viewModel.initialLoadingKind == "run"
+        let recoveryRunID = recoveryEligibleRunID
+        return GeometryReader { viewport in
+            VStack(spacing: PbRadius.Metrics.zero) {
+            if isLoading {
+                HStack { SkeletonBlock(height: PbRadius.Metrics.spacing14); Spacer(minLength: PbRadius.Metrics.workflowLoadingSpacer) }
+                    .frame(height: PbRadius.Metrics.workflowLoadingStatusHeight)
+                    .padding(.horizontal, PbRadius.Metrics.spacing16)
+                    .padding(.vertical, PbRadius.Metrics.spacing10)
+            } else {
+                WorkflowDiagnosticsViewport(maximumHeight: min(PbRadius.Metrics.workflowDiagnosticsMaximumHeight, viewport.size.height * 0.3)) {
+                    WorkflowRunStatus(
+                        viewModel: viewModel,
+                        isRecoveryPanelVisible: recoveryOverlay.isVisible(runID: recoveryRunID)
+                    )
                 }
                 .accessibilityIdentifier("workflow-run-diagnostics")
                 .pbFadeIn()
@@ -459,134 +567,15 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             } activity: {
                 if isLoading { WorkflowLoadingActivity() } else { activity.pbFadeIn() }
             }
-            }
-        }
-    }
-
-    @ViewBuilder private var runSidebar: some View {
-        if let run = viewModel.selectedRun {
-            ScrollView {
-            VStack(spacing: 0) {
-                if run.parentRunID != nil {
-                    Text("Child workflow · Plan and checklist belong to this run").font(.pb(.caption)).foregroundStyle(Color.secondaryText).padding(16)
-                }
-                if run.sessionOwnerRunID != run.id {
-                    Button("Open owning orchestrator") { viewModel.openRun(run.sessionOwnerRunID) }
-                        .buttonStyle(QuietButtonStyle())
-.padding(.horizontal, 16)
-                }
-                WorkflowChildLinks(groups: WorkflowChildLinkGroup.build(run: run), onOpen: viewModel.openRun)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 4)
-                if let assignment = run.raw["prompt"]?.stringValue, !assignment.isEmpty {
-                    DisclosureGroup(run.parentRunID == nil ? "Original request" : "Assignment for this child") {
-                        ScrollView {
-                            ReadingMarkdownView(text: assignment).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
-                        }.frame(maxHeight: 240)
-                    }
-.font(.pb(.secondary, weight: .medium))
-.padding(16)
-                }
-                WorkflowRunPlan(run: run).padding(16)
-                if let plan = run.technicalPlan {
-                    DisclosureGroup("Technical plan") {
-                        ScrollView {
-                            ReadingMarkdownView(text: plan).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
-                        }.frame(maxHeight: 300)
-                    }
-.font(.pb(.secondary, weight: .medium))
-.padding(16)
-                }
-                Divider()
-                if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
-                    WorkflowInspector(viewModel: viewModel, isScrollable: false)
-                } else {
-                    Spacer(minLength: 0)
-                }
+            .overlay(alignment: .topTrailing) {
+                WorkflowRecoveryOverlayHost(
+                    viewModel: viewModel,
+                    presentation: $recoveryOverlay,
+                    onExplicitClose: { recoveryBadgeFocused = true }
+                )
             }
             }
-.accessibilityIdentifier("workflow-run-inspector")
-.background(Color.cardFill)
         }
     }
 
-    @ViewBuilder
-    private var activity: some View {
-        if let native = viewModel.nativeActivity {
-            WorkflowNativeActivityView(model: native)
-        } else {
-            WorkflowActivityColumns(viewModel: viewModel.parallel, selectedTaskID: selectedTaskID)
-        }
-    }
-
-    private var selectedTaskID: String? {
-        guard let nodeID = viewModel.selectedNodeID else {
-            return nil
-        }
-        return viewModel.selectedRun?
-.activations
-.last { $0["node_id"]?.stringValue == nodeID && $0["role"]?.stringValue == "node" }?["tasks"]?
-.arrayValue?
-            .last?["task_id"]?
-.stringValue
-    }
-}
-
-// MARK: - WorkflowActivityColumns
-
-/// Reuses the actual Parallel renderer and models; workflow task associations only choose members.
-struct WorkflowActivityColumns: View {
-    let columns: [ParallelColumnModel]
-    let selectedTaskID: String?
-    private let onViewport: (CGFloat, CGFloat) -> Void
-    private let stateForColumn: (String) -> ParallelColumnUIState
-
-    init(viewModel: any ParallelViewModel, selectedTaskID: String?) {
-        self.columns = viewModel.columns
-        self.selectedTaskID = selectedTaskID
-        self.onViewport = { viewModel.updateViewport(offset: $0, width: $1) }
-        self.stateForColumn = viewModel.columnState(for:)
-    }
-
-    init(columns: [ParallelColumnModel], selectedTaskID: String?) {
-        self.columns = columns
-        self.selectedTaskID = selectedTaskID
-        self.onViewport = { _, _ in }
-        let states = Dictionary(uniqueKeysWithValues: columns.map { ($0.id, ParallelColumnUIState()) })
-        self.stateForColumn = { states[$0] ?? ParallelColumnUIState() }
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            ScrollViewReader { scroll in
-                ScrollView(.horizontal) {
-                    if columns.isEmpty {
-                        Text("Agent activity appears here when a step starts.")
-.font(.pb(.body))
-.foregroundStyle(Color.secondaryText)
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                    } else {
-                        ParallelColumnsContent(columns: columns, availableSize: proxy.size,
-                                               stateForColumn: stateForColumn, onViewport: onViewport)
-                    }
-                }
-                .onChange(of: selectedTaskID) { _, id in if let id {
-                    scroll.scrollTo(columns.first { $0.memberTaskIDs.contains(id) || $0.task.taskID == id }?.id ?? id, anchor: .leading)
-                } }
-            }
-        }
-    }
-}
-
-#if DEBUG
-#Preview("Workflow activity uses Parallel") {
-    WorkflowActivityColumns(columns: ParallelViewModelMock().columns, selectedTaskID: nil).frame(width: 1000, height: 500)
-}
-#endif
-
-// MARK: - WorkflowViewModel defaults
-
-extension WorkflowViewModel {
-    var validationDependencies: [String: JSONValue] { [:] }
-    var branchSelection: WorkflowBranchSelection { WorkflowBranchSelection() }
 }

@@ -307,6 +307,44 @@ import Testing
         #expect(sut.agentCards[0].accessibilityText == "Claude, Claude Code CLI")
     }
 
+    @Test func givenTheDefaultNewSession_whenAccessOptionsAreRead_thenAllFourRequestedAuthoritiesArePresent() {
+        // given / when
+        let (sut, _, _, _) = makeSUT()
+
+        // then — the sheet keeps the complete existing freedom set, including publish between
+        // repository writes and unrestricted access.
+        #expect(sut.accessOptions.map(\.id) == ["read_only", "write_in_repo", "publish", "unrestricted"])
+        #expect(sut.accessOptions.map(\.isSelected) == [true, false, false, false])
+        #expect(sut.accessOptions.allSatisfy { !$0.detail.isEmpty })
+        #expect(sut.accessOptions.last?.isWarning == true)
+    }
+
+    @Test func givenPublishSelected_whenAccessOptionsAreRead_thenOnlyPublishIsSelected() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+
+        // when
+        sut.didChangeFreedom("publish")
+
+        // then
+        #expect(sut.accessOptions.map(\.isSelected) == [false, false, true, false])
+        #expect(sut.accessOptions.first?.detail == "Requests read-only repo review.")
+    }
+
+    @Test func givenTheFourAccessAuthorities_whenTheirDetailsAreRead_thenEachUsesTheCurrentCopy() {
+        // given / when
+        let (sut, _, _, _) = makeSUT()
+
+        // then — the copy explains the requested authority without changing the existing IDs or
+        // selection semantics.
+        #expect(sut.accessOptions.map(\.detail) == [
+            "Requests read-only repo review.",
+            "Requests repo edits, no publishing.",
+            "Requests edits and publish attempts.",
+            "Requests broad access; use sparingly."
+        ])
+    }
+
     // MARK: - Recent repositories
 
     @Test func givenTasksInManyRepos_whenTheSheetOpens_thenRecentsAreDistinctNewestFirstAndCappedAtFive() {

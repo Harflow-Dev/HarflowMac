@@ -17,9 +17,11 @@ import Testing
         raw["usage"] = .object(["output_tokens": .number(900)])
         raw["num_turns"] = .number(7)
         #expect(baseline == TaskDetailToolbarSnapshot(vm, task: try #require(TaskInfo(.object(raw))), showsInspector: false))
-        // when / then
+        // when / then — every field the status projection reads refreshes the snapshot, including
+        // the observed exit the shared settled-duration guard needs (`TaskSettledDuration`).
         for (key, value) in ["task_id": JSONValue.string("resumed"), "status": .string("completed"),
-                             "started_at": .string("2026-10-07T00:00:00Z"), "duration_seconds": .number(42), "taken_over": .bool(true)] {
+                             "started_at": .string("2026-10-07T00:00:00Z"), "duration_seconds": .number(42),
+                             "exit_code": .number(0), "taken_over": .bool(true)] {
             var changed = task.raw
             changed[key] = value
             #expect(baseline != TaskDetailToolbarSnapshot(vm, task: try #require(TaskInfo(.object(changed))), showsInspector: false))
@@ -38,6 +40,25 @@ import Testing
             mutation(owner)
             #expect(original != TaskDetailToolbarSnapshot(owner, task: task, showsInspector: false))
         }
+    }
+
+    @Test func givenStatusProjection_whenBuilt_thenItCarriesTheObservedExitTheSettledDurationReads() throws {
+        // given — a settled task with an observed exit and a recorded duration, plus duplicate feed
+        // fields the badge never reads.
+        let vm = TaskDetailViewModelMock()
+        let task = try #require(TaskInfo(.object([
+            "task_id": .string("abc12345"), "backend": .string("claude"), "status": .string("completed"),
+            "duration_seconds": .number(1260), "exit_code": .number(0), "summary": .string("New activity"),
+            "usage": .object(["output_tokens": .number(900)])
+        ])))
+        // when
+        let snapshot = TaskDetailToolbarSnapshot(vm, task: task, showsInspector: false)
+        // then — the projection keeps the exit and duration `TaskSettledDuration` reads, and drops
+        // the feed fields the badge does not, so they can never refresh the chrome boundary.
+        #expect(snapshot.statusTask.exitCode == 0)
+        #expect(snapshot.statusTask.durationSeconds == 1260)
+        #expect(snapshot.statusTask.raw["summary"] == nil)
+        #expect(snapshot.statusTask.raw["usage"] == nil)
     }
 
     @Test func givenNativeToolbar_whenOwnerOrTaskIdentityChanges_thenPresenterInstallsCurrentActionOwner() async throws {

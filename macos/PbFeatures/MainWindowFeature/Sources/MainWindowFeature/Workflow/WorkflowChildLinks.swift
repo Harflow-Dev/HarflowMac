@@ -55,7 +55,7 @@ struct WorkflowChildLinks: View {
     @State private var expandedIDs: Set<String> = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
             ForEach(groups) { group in
                 if group.runs.count > 1 {
                     DisclosureGroup(isExpanded: Binding(get: { expandedIDs.contains(group.id) }, set: { expanded in
@@ -63,9 +63,9 @@ struct WorkflowChildLinks: View {
                             if expanded { expandedIDs.insert(group.id) } else { expandedIDs.remove(group.id) }
                         }
                     })) {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
                             ForEach(group.runs) { link in row(link, repeated: true) }
-                        }.padding(.top, 4)
+                        }.padding(.top, PbRadius.Metrics.spacing4)
                     } label: {
                         Text("\(group.name) · \(group.runs.count) runs")
                             .font(.pb(.secondary, weight: .medium))
@@ -81,8 +81,8 @@ struct WorkflowChildLinks: View {
 
     private func row(_ link: WorkflowChildLink, repeated: Bool) -> some View {
         Button { onOpen(link.id) } label: {
-            HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: PbRadius.Metrics.spacing8) {
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
                     Text(repeated ? "Run \(link.ordinal) · \(link.name)" : link.name)
                         .font(.pb(.secondary, weight: .medium))
                         .fixedSize(horizontal: false, vertical: true)
@@ -90,13 +90,15 @@ struct WorkflowChildLinks: View {
                         .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
                 }
-                Spacer(minLength: 4)
+                Spacer(minLength: PbRadius.Metrics.spacing4)
                 Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.tertiaryText)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, PbRadius.Metrics.spacing12)
+            .padding(.vertical, PbRadius.Metrics.spacing6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.cardFill, in: RoundedRectangle(cornerRadius: PbRadius.row))
+            .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder, lineWidth: PbRadius.Metrics.hairlineStroke))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -107,12 +109,17 @@ struct WorkflowChildLinks: View {
 }
 
 #if DEBUG
-#Preview {
-    WorkflowChildLinks(groups: [WorkflowChildLinkGroup(id: "child", name: "Review", runs: [
-        WorkflowChildLink(id: "one", name: "Review", status: "completed", ordinal: 1),
-        WorkflowChildLink(id: "two", name: "Review", status: "running", ordinal: 2)
-    ])], onOpen: { _ in })
+private struct WorkflowChildLinksPreview: View {
+    var body: some View {
+        WorkflowChildLinks(groups: [WorkflowChildLinkGroup(id: "child", name: "Review", runs: [
+            WorkflowChildLink(id: "one", name: "Review", status: "completed", ordinal: 1),
+            WorkflowChildLink(id: "two", name: "Review", status: "running", ordinal: 2)
+        ])], onOpen: { _ in })
 .padding()
-.frame(width: 320)
+.frame(width: PbRadius.Metrics.activityPreviewWidth)
+    }
 }
+
+#Preview("Workflow child links - light") { WorkflowChildLinksPreview().preferredColorScheme(.light) }
+#Preview("Workflow child links - dark") { WorkflowChildLinksPreview().preferredColorScheme(.dark) }
 #endif

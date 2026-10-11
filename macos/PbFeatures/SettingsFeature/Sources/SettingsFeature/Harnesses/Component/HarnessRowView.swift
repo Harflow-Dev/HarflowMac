@@ -50,7 +50,7 @@ struct HarnessRowView: View {
     
     var body: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.rowLineSpacing) {
                 HStack {
                     Text(row.displayName).font(.pb(.headline, weight: .medium))
                     Text(row.stateLabel).font(.pb(.secondary)).foregroundStyle(stateColor)
@@ -58,7 +58,7 @@ struct HarnessRowView: View {
                 }
                 if let rowError = row.error { Text(rowError).font(.pb(.secondary)).foregroundStyle(Color.failedRed) }
                 ForEach(Array(row.notes.enumerated()), id: \.offset) { _, note in
-                    Text(note).font(.pb(.secondary)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(note).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer()
@@ -69,27 +69,55 @@ struct HarnessRowView: View {
             Button("Remove", action: onRemove)
                 .disabled(HarnessRowActions.isRemoveDisabled(row: row, isAnyWorking: isAnyWorking))
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, PbRadius.Metrics.spacing4)
     }
 
     private var stateColor: Color {
         if HarnessRowActions.isOutOfDate(row: row) { return .warningFG }
-        return row.installed == true ? .doneGreen : .secondary
+        return row.installed == true ? .doneGreen : .secondaryText
     }
 }
 
 #if DEBUG
-#Preview {
-    // `HarnessRow` has no public initializer (MonitorCore builds it internally from JSON), so the
-    // preview goes through the same public `SetupDocument.decode` entry point the app uses — the
-    // same pattern `PbRepositoryTests` already established for this type.
-    let json = #"{"v":1,"server_path":"/usr/local/bin/polybridge","clients":[{"key":"claude-code","available":true,"installed":true,"current":true,"#
-    + #""notes":["Registered via `claude mcp add`."]}]}"#
-    if let document = try? SetupDocument.decode(stdout: Data(json.utf8), stderr: "", exitCode: 0).get() {
+private struct HarnessRowPreview: View {
+    let row: HarnessRow
+
+    init(_ row: HarnessRow) { self.row = row }
+
+    var body: some View {
+        // `HarnessRow` has no public initializer (MonitorCore builds it internally from JSON), so
+        // the preview goes through the same public `SetupDocument.decode` entry point the app
+        // uses — the same pattern `PbRepositoryTests` already established for this type.
         List {
-            HarnessRowView(row: document.rows[0], isWorking: false, isAnyWorking: false, onInstall: {}, onRemove: {})
+            HarnessRowView(row: row, isWorking: false, isAnyWorking: false, onInstall: {}, onRemove: {})
         }
-        .frame(width: 500, height: 120)
+        .frame(width: PbRadius.Metrics.toolbarPreviewHeight, height: PbRadius.Metrics.sidebarSearchMinimumWidth)
     }
+
+    static func sampleRow(installed: Bool) -> HarnessRow? {
+        let json = """
+        {"v":1,"server_path":"/usr/local/bin/polybridge","clients":[
+          {"key":"claude-code","available":true,"installed":\(installed),"current":true,
+           "notes":["Registered via `claude mcp add`."]}
+        ]}
+        """
+        return (try? SetupDocument.decode(stdout: Data(json.utf8), stderr: "", exitCode: 0).get())?.rows[0]
+    }
+}
+
+#Preview("HarnessRow, registered - light") {
+    if let row = HarnessRowPreview.sampleRow(installed: true) { HarnessRowPreview(row).preferredColorScheme(.light) }
+}
+
+#Preview("HarnessRow, registered - dark") {
+    if let row = HarnessRowPreview.sampleRow(installed: true) { HarnessRowPreview(row).preferredColorScheme(.dark) }
+}
+
+#Preview("HarnessRow, not installed - light") {
+    if let row = HarnessRowPreview.sampleRow(installed: false) { HarnessRowPreview(row).preferredColorScheme(.light) }
+}
+
+#Preview("HarnessRow, not installed - dark") {
+    if let row = HarnessRowPreview.sampleRow(installed: false) { HarnessRowPreview(row).preferredColorScheme(.dark) }
 }
 #endif

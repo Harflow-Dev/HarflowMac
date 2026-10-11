@@ -41,7 +41,7 @@ extension TaskDetailVM {
         let dialogTaskID = currentTaskID
         let isRunning = task.status.isRunning
         let title = isRunning ? "Take over this task?" : "Continue this session in a terminal?"
-        let buttonTitle = isRunning ? "Stop it and take over" : "Continue in terminal"
+        let buttonTitle = isRunning ? "Take over in terminal" : "Open in terminal"
         var message = isRunning
         ? "The headless run is stopped first (with any sub-tasks), then the same conversation opens in Terminal.app. "
         : "The same conversation opens in Terminal.app. "
@@ -113,7 +113,7 @@ extension TaskDetailVM {
             "Couldn't copy to the clipboard."
         } else if task?.status.isRunning == true {
             "Copied. This task is still running — resuming it now would put two writers "
-            + "on one conversation; prefer Take over."
+            + "on one conversation; prefer Take over in terminal."
         } else {
             "Copied resume command."
         }

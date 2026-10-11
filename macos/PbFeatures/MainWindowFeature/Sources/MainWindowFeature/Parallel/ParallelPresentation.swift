@@ -20,6 +20,13 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     var history = EventHistoryState()
     var paginationRevision = 0
     var summary: String?
+    /// The lane feed's step-count copy ("1 step"/"N steps"); `nil` while no item row is loaded —
+    /// a zero or still-loading count is omitted rather than claimed as "0 steps" (§4).
+    var stepCountText: String?
+    /// "No tool calls recorded", proven only for a terminal current task from the UNFILTERED
+    /// member inputs — never from the filtered display rows alone, which compact folding may
+    /// intentionally hide calls from.
+    var noToolCallsText: String?
     let start: Date?
     let memberTaskIDs: Set<String>
 }
@@ -80,10 +87,20 @@ enum ParallelPresentationBuilder {
         result.liveStep = LiveStep(rows: rows, isRunning: result.task.status.isRunning)
         result.pendingMessages = PendingMessage.visible(snapshot: input.snapshot, events: input.events)
         let hasItems = input.members.contains { !$0.items.isEmpty }
+        // The step-count copy (§4): a loaded count of one reads "1 step", a still-loading or
+        // empty feed omits the count rather than claiming "0 steps".
+        let itemCount = rows.filter { if case .item = $0.kind { return true }; return false }.count
+        result.stepCountText = itemCount > 0 ? "\(itemCount) \(itemCount == 1 ? "step" : "steps")" : nil
+        // "No tool calls recorded" (§4) is proven only for a terminal current task from the
+        // unfiltered member inputs and a settled history window — the same proof TaskDetail's
+        // timeline uses, never the compact-folded display rows.
+        let provesNoToolCalls = result.task.status.isTerminal
+            && TaskDetailTimelinePresentation.noToolCallsRecorded(members: input.members, history: result.history)
+        result.noToolCallsText = provesNoToolCalls ? "No tool calls recorded" : nil
         result.isLoading = !hasItems && (input.members.contains { $0.availability == .loading }
             || (input.members.isEmpty && input.base.history.isLoading))
         result.emptyText = nil
-        if !result.isLoading, !hasItems, result.history.error == nil {
+        if !result.isLoading, !hasItems, result.history.error == nil, !provesNoToolCalls {
             result.emptyText = input.members.contains { $0.availability == .unavailable }
                 ? "Activity log unavailable." : "No activity to display."
         }
@@ -131,11 +148,76 @@ enum ParallelResidency {
     }
 }
 
+// MARK: - ParallelStatusSummary
+
+/// The Parallel header's truthful current-status counts (§6.5): derived only from the CURRENT
+/// member of every conversation in the group, each task counted in exactly one bucket — running,
+/// done, failed (timed out included), cancelled. An unknown status is counted nowhere, and an
+/// empty membership renders nothing rather than "0 running".
+enum ParallelStatusSummary {
+    nonisolated static func text(_ tasks: [TaskInfo]) -> String? {
+        var running = 0, done = 0, failed = 0, cancelled = 0
+        for task in tasks {
+            switch task.status {
+            case .running: running += 1
+            case .completed: done += 1
+            case .failed, .timedOut: failed += 1
+            case .cancelled: cancelled += 1
+            case .other: break
+            }
+        }
+        var parts: [String] = []
+        if running > 0 { parts.append("\(running) running") }
+        if done > 0 { parts.append("\(done) done") }
+        if failed > 0 { parts.append("\(failed) failed") }
+        if cancelled > 0 { parts.append("\(cancelled) cancelled") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - ParallelTaskRenderingKey
+
+/// Lane equality omits only enforcement, which renders in the separate group claim strip.
+/// Every other raw field, including unknown future metadata and action inputs, stays compared.
+/// This key never replaces the full task in worker inputs, descriptors, or column models.
+struct ParallelTaskRenderingKey: Equatable {
+    let raw: [String: JSONValue]
+    let taskID: String
+    let startedAt: Date?
+
+    init(_ task: TaskInfo) {
+        var raw = task.raw
+        raw.removeValue(forKey: "enforcement")
+        self.raw = raw
+        self.taskID = task.taskID
+        self.startedAt = task.startedAt
+    }
+}
+
+// MARK: - ParallelColumnRenderValue
+
 struct ParallelColumnRenderValue: Equatable {
     let presentation: ParallelColumnPresentation
     let animatesArrival: Bool
     let isResident: Bool
     let isVisible: Bool
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        let left = lhs.presentation
+        let right = rhs.presentation
+        return ParallelTaskRenderingKey(left.task) == ParallelTaskRenderingKey(right.task)
+            && left.id == right.id && left.title == right.title && left.subtitle == right.subtitle
+            && left.isBusy == right.isBusy && left.outcomeMessage == right.outcomeMessage
+            && left.showPrompt == right.showPrompt && left.prompt == right.prompt
+            && left.rows == right.rows && left.activityRows == right.activityRows
+            && left.liveStep == right.liveStep && left.pendingMessages == right.pendingMessages
+            && left.isLoading == right.isLoading && left.emptyText == right.emptyText
+            && left.history == right.history && left.paginationRevision == right.paginationRevision
+            && left.summary == right.summary && left.stepCountText == right.stepCountText
+            && left.noToolCallsText == right.noToolCallsText && left.start == right.start
+            && left.memberTaskIDs == right.memberTaskIDs && lhs.animatesArrival == rhs.animatesArrival
+            && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
+    }
 }
 
 extension ParallelColumnModel {
@@ -151,6 +233,8 @@ extension ParallelColumnModel {
         value.emptyText = emptyText
         value.history = history
         value.paginationRevision = paginationRevision
+        value.stepCountText = stepCountText
+        value.noToolCallsText = noToolCallsText
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible)
     }
 }

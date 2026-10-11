@@ -6,9 +6,9 @@ import SwiftUI
 /// give the container an accessibility label (`BackendDotStack`).
 public struct BackendDot: View {
     public let backend: String
-    public var size: CGFloat = 8
+    public var size: CGFloat
 
-    public init(backend: String, size: CGFloat = 8) {
+    public init(backend: String, size: CGFloat = PbRadius.Metrics.backendDotSize) {
         self.backend = backend
         self.size = size
     }
@@ -33,7 +33,7 @@ public struct BackendLabel: View {
     }
 
     public var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: PbRadius.Metrics.spacing5) {
             BackendDot(backend: backend)
             Text(BackendStyle.displayName(backend))
         }
@@ -46,9 +46,9 @@ public struct BackendLabel: View {
 /// Overlapping backend dots for a group of tasks. The accessibility label lists the backends.
 public struct BackendDotStack: View {
     public let backends: [String]
-    public var size: CGFloat = 10
+    public var size: CGFloat
 
-    public init(backends: [String], size: CGFloat = 10) {
+    public init(backends: [String], size: CGFloat = PbRadius.Metrics.backendDotStackSize) {
         self.backends = backends
         self.size = size
     }
@@ -61,10 +61,10 @@ public struct BackendDotStack: View {
     }
 
     public var body: some View {
-        HStack(spacing: -size * 0.3) {
+        HStack(spacing: -size * PbRadius.Metrics.backendDotStackOverlap) {
             ForEach(Array(backends.enumerated()), id: \.offset) { _, backend in
                 BackendDot(backend: backend, size: size)
-                    .overlay(Circle().stroke(Color.windowBG, lineWidth: 1.5))
+                    .overlay(Circle().stroke(Color.windowBG, lineWidth: PbRadius.Metrics.backendDotStackStroke))
             }
         }
         .accessibilityElement(children: .ignore)
@@ -83,7 +83,7 @@ public struct BackendDotStack: View {
 
 private struct BackendDotsPreview: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
             ForEach(BackendStyle.known + ["mystery"], id: \.self) { BackendLabel(backend: $0) }
             BackendDotStack(backends: ["claude", "codex", "vibe"])
         }

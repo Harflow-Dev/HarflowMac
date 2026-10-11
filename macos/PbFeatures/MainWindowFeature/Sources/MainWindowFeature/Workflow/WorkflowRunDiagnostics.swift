@@ -9,7 +9,7 @@ struct WorkflowRunDiagnostics: View {
     let run: WorkflowRunModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing6) {
             if let permissions = run.orchestratorPermissions {
                 WorkflowPermissionsView(model: permissions)
             }
@@ -34,9 +34,24 @@ struct WorkflowRunDiagnostics: View {
 }
 
 #if DEBUG
-#Preview("Workflow diagnostics") {
+#Preview("Workflow diagnostics - light") {
     WorkflowRunDiagnostics(run: WorkflowRunModel(raw: ["decision_errors": .array([
         .object(["attempt": .number(1), "error": .string("Structural continuations do not choose sessions")])
-    ])])).padding()
+    ])]))
+.padding()
+.preferredColorScheme(.light)
+}
+
+#Preview("Workflow diagnostics - dark") {
+    WorkflowRunDiagnostics(run: WorkflowRunModel(raw: [
+        "checkout_wait": .object(["reason": .string("Waiting for another workflow to release the checkout")]),
+        "decision_errors": .array([
+            .object(["attempt": .number(2), "error": .string("Decision rejected")])
+        ]),
+        "pending": .array([.object(["decision_attempts": .number(2)])]),
+        "definition": .object(["max_decision_attempts": .number(3)])
+    ]))
+.padding()
+.preferredColorScheme(.dark)
 }
 #endif

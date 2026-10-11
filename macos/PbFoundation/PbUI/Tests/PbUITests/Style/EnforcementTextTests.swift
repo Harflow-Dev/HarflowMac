@@ -70,6 +70,47 @@ import Testing
         // then
         #expect(lines == ["Network: not controlled"])
     }
+
+    @Test func givenCommonLines_whenProjectingPills_thenOnlyBlockedNetworkAndFullClaimsBecomeShortLabels() {
+        // given
+        let lines = [
+            "Network: blocked", "Restrictions enforced by the OS sandbox",
+            "File writes confined to the workspace (+ temp dirs)",
+            "Direct git commit/push commands denied (not a full block)"
+        ]
+
+        // when / then
+        #expect(EnforcementText.pillLabels(fromCommonLines: lines) == [
+            "No network", "OS sandbox", "Writes: workspace + temp dirs"
+        ])
+        #expect(EnforcementText.captionLines(fromCommonLines: lines) == [
+            "Direct git commit/push commands denied (not a full block)"
+        ])
+    }
+
+    @Test func givenPublicWorkspaceAndNetworkClaims_whenProjectingPills_thenKeepsExactLabels() {
+        // given — these labels are public presentation strings consumed by the Parallel header.
+        let lines = [
+            "File writes confined to the workspace (+ temp dirs)",
+            "Network: blocked"
+        ]
+
+        // when / then
+        #expect(EnforcementText.pillLabels(fromCommonLines: lines) == [
+            "Writes: workspace + temp dirs", "No network"
+        ])
+    }
+
+    @Test func givenUnknownOrUncontrolledNetwork_whenProjectingPills_thenItNeverClaimsNoNetwork() {
+        // given / when
+        let unknown = EnforcementText.pillLabels(fromCommonLines: ["Network: not controlled"])
+        let future = EnforcementText.pillLabels(fromCommonLines: ["Network: future_state"])
+
+        // then
+        #expect(unknown.isEmpty)
+        #expect(future.isEmpty)
+        #expect(EnforcementText.captionLines(fromCommonLines: ["Network: not controlled"]) == ["Network: not controlled"])
+    }
     
     @Test func givenEveryClaimTrue_whenReadingLines_thenReturnsThemInFixedOrder() {
         // given
@@ -128,6 +169,64 @@ import Testing
         #expect(common == "Enforced for every agent here: Restrictions enforced by the OS sandbox.")
     }
     
+    @Test func givenTheSameClaimsInDifferentOrder_whenComputingCommon_thenKeepsOneDeterministicSentence() {
+        // given — the parallel header/footer is derived from all members, not from the first
+        // member's ordering. Sorting the shared set keeps rendering stable across refreshes.
+        let first = makeTask(id: "first", enforcement: [
+            "os_enforced": .bool(true),
+            "writes_confined": .bool(true),
+            "network_access": .string("blocked")
+        ])
+        let second = makeTask(id: "second", enforcement: [
+            "network_access": .string("blocked"),
+            "writes_confined": .bool(true),
+            "os_enforced": .bool(true)
+        ])
+
+        // when
+        let common = EnforcementText.common([first, second])
+
+        // then
+        let expected = "Enforced for every agent here: File writes confined to the workspace (+ temp dirs); "
+            + "Network: blocked; Restrictions enforced by the OS sandbox."
+        #expect(common == expected)
+    }
+
+    @Test func givenOneMemberWithNoClaims_whenComputingCommon_thenDoesNotMakeAGroupWideClaim() {
+        // given — an absent enforcement record is not evidence that a claim is shared.
+        let enforced = makeTask(id: "enforced", enforcement: ["os_enforced": .bool(true)])
+        let unknown = makeTask(id: "unknown", enforcement: [:])
+
+        // when / then
+        #expect(EnforcementText.common([enforced, unknown]) == nil)
+    }
+
+    @Test func givenPartialClaimsAndUnknownNetwork_whenComputingCommon_thenOnlyExactSharedLinesSurvive() {
+        // given — the weaker direct-git denial and uncontrolled network must remain nuanced; only
+        // the exact shared OS claim is eligible for the group header.
+        let first = makeTask(id: "first", enforcement: [
+            "os_enforced": .bool(true), "direct_commit_commands_denied": .bool(true),
+            "network_access": .string("not_controlled")
+        ])
+        let second = makeTask(id: "second", enforcement: [
+            "os_enforced": .bool(true), "direct_commit_commands_denied": .bool(true),
+            "network_access": .string("not_controlled"), "writes_confined": .bool(true)
+        ])
+
+        // when
+        let lines = EnforcementText.commonLines([first, second])
+
+        // then
+        #expect(lines == [
+            "Direct git commit/push commands denied (not a full block)",
+            "Network: not controlled", "Restrictions enforced by the OS sandbox"
+        ])
+        #expect(EnforcementText.pillLabels(fromCommonLines: lines) == ["OS sandbox"])
+        #expect(EnforcementText.captionLines(fromCommonLines: lines) == [
+            "Direct git commit/push commands denied (not a full block)", "Network: not controlled"
+        ])
+    }
+
     // MARK: - Helpers
     
     private func makeTask(id: String, enforcement: [String: JSONValue]) -> TaskInfo {

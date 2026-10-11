@@ -198,7 +198,6 @@ final class SidebarVM: SidebarViewModel {
 
     @ObservationIgnored var workflowHistoryInitialized = false
     @ObservationIgnored var workflowRefreshOffset = 0
-
     @ObservationIgnored private var renderedSelectedBackend: String = "all"
     var selectedBackend: String {
         get { access(keyPath: \.selectedBackend); return renderedSelectedBackend }
@@ -475,18 +474,6 @@ final class SidebarVM: SidebarViewModel {
         let input = presentationInput()
         schedulePresentation(input, requestedStart: start)
         MonitorMetrics.end(start, stage: .sidebarPreparation)
-    }
-
-    func presentationInput() -> SidebarPresentationInput {
-        SidebarPresentationInput(tasks: latestTasks, runs: workflowRuns, definitions: workflowDefinitions,
-            titles: capturedTitles(), catalog: latestCatalog, search: searchQuery, backend: selectedBackend,
-            collapsed: collapsedTaskIDs, expanded: expandedExecutionParents, selection: desiredSelection,
-            siblings: lastKnownSiblingsByMember, reveal: pendingRevealToApply, workflowReveal: pendingWorkflowRevealID,
-            now: currentDate(), calendar: Calendar.current)
-    }
-
-    func capturedTitles() -> [String: String] {
-        Dictionary(latestTasks.map { ($0.taskID, latestTitles[$0.taskID] ?? useCase.title($0.taskID)) }, uniquingKeysWith: { _, new in new })
     }
 
     func schedulePresentation(_ input: SidebarPresentationInput, requestedStart: UInt64?) {

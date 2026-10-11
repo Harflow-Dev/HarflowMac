@@ -32,16 +32,21 @@ struct MCPAllowlistView<VM: MCPAllowlistViewModel>: View {
     init(viewModel: VM) { _viewModel = State(initialValue: viewModel) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             HStack {
                 Text("\(viewModel.title) MCP approvals").font(.pb(.headline))
                 Spacer()
                 if viewModel.isBusy { ProgressView().controlSize(.small) }
                 Button("Done") { dismiss() }.disabled(viewModel.isBusy)
             }
-            Text("Global tool approvals apply across projects and future tasks.").font(.pb(.secondary)).foregroundStyle(.secondary)
+            Text("Global tool approvals apply across projects and future tasks.")
+                .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
             if !viewModel.configPath.isEmpty {
-                Text(viewModel.configPath).font(.pb(.caption)).foregroundStyle(.secondary).textSelection(.enabled)
+                Text(viewModel.configPath)
+                    .font(.pb(.caption, design: .monospaced))
+                    .foregroundStyle(Color.secondaryText)
+                    .textSelection(.enabled)
             }
             if !viewModel.detail.isEmpty { Text(viewModel.detail).font(.pb(.secondary)).textSelection(.enabled) }
             if let error = viewModel.errorMessage { Text(error).foregroundStyle(Color.failedRed).textSelection(.enabled) }
@@ -54,8 +59,11 @@ struct MCPAllowlistView<VM: MCPAllowlistViewModel>: View {
                     }
                 }
             }
-            .frame(minHeight: 150, maxHeight: 260)
-            Text(viewModel.entryHelp).font(.pb(.caption)).foregroundStyle(.secondary)
+            // Bounded scope (§6.7): the approvals List's own scroll view, independent of row
+            // presence — an empty or repopulated list keeps its chrome.
+            .scrollChromeScope()
+            .frame(minHeight: PbRadius.Metrics.mcpAllowlistMinimumHeight, maxHeight: PbRadius.Metrics.mcpAllowlistMaximumHeight)
+            Text(viewModel.entryHelp).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             HStack {
                 TextField(viewModel.entryPlaceholder, text: $viewModel.entry)
                     .textFieldStyle(.roundedBorder)
@@ -64,8 +72,8 @@ struct MCPAllowlistView<VM: MCPAllowlistViewModel>: View {
                 Button("Refresh") { Task { await viewModel.load() } }.disabled(viewModel.isBusy)
             }
         }
-        .padding(20)
-        .frame(width: 590)
+        .padding(PbRadius.Metrics.spacing20)
+        .frame(width: PbRadius.Metrics.mcpAllowlistSheetWidth)
         .task { await viewModel.load() }
         .interactiveDismissDisabled(viewModel.isBusy)
         .publishViewEvent(from: viewModel, to: viewEvent)
@@ -82,7 +90,7 @@ private final class MCPAllowlistPreview: MCPAllowlistViewModel {
     let configPath = "~/.codex/config.toml"
     let detail = "Other harness policies still apply."
     let supported = true
-    let isBusy = false
+    var isBusy = false
     let errorMessage: String? = nil
     let canAdd = false
     let entryPlaceholder = "server/tool or server/*"
@@ -92,7 +100,11 @@ private final class MCPAllowlistPreview: MCPAllowlistViewModel {
     func confirmRemove(_ value: String) {}
 }
 
-#Preview {
-    MCPAllowlistView(viewModel: MCPAllowlistPreview())
+#Preview("MCP approvals - light") {
+    MCPAllowlistView(viewModel: MCPAllowlistPreview()).preferredColorScheme(.light)
+}
+
+#Preview("MCP approvals - dark") {
+    MCPAllowlistView(viewModel: MCPAllowlistPreview()).preferredColorScheme(.dark)
 }
 #endif

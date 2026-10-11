@@ -9,12 +9,19 @@ import Testing
         #expect(StatusIcon.symbolName(for: .running) == nil)
     }
 
-    @Test func givenEachTerminalStatus_whenPickingASymbol_thenMatchesCheckXAndMinus() {
-        // given / when / then
+    @Test func givenEachTerminalStatus_whenPickingASymbol_thenMatchesTheSharedBadgeSemantics() {
+        // given / when / then — the same symbol vocabulary as the StatusBadge (SPEC §5.1), in the
+        // icon's filled-circle family: a stop glyph for cancelled.
         #expect(StatusIcon.symbolName(for: .completed) == "checkmark.circle.fill")
         #expect(StatusIcon.symbolName(for: .failed) == "xmark.circle.fill")
         #expect(StatusIcon.symbolName(for: .timedOut) == "xmark.circle.fill")
-        #expect(StatusIcon.symbolName(for: .cancelled) == "minus.circle.fill")
+        #expect(StatusIcon.symbolName(for: .cancelled) == "stop.circle.fill")
+    }
+
+    @Test func givenPendingAndQueuedRawStatuses_whenPickingASymbol_thenACircleIsUsed() {
+        // given / when / then
+        #expect(StatusIcon.symbolName(for: .other("pending")) == "circle")
+        #expect(StatusIcon.symbolName(for: .other("queued")) == "circle")
     }
 }
 

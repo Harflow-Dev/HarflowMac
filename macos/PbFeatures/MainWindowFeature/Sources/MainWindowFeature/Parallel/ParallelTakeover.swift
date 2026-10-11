@@ -9,7 +9,10 @@ enum ParallelTakeover {
     static func dialog(taskID: String, task: TaskInfo?, snapshot: TaskInfo?,
                        context: @escaping () -> Context?) -> AlertContent? {
         guard WorkflowNodePresentation.allowsTerminal(snapshot ?? task), let task else { return nil }
-        let title = task.status.isRunning ? "Take over this task?" : "Continue this session in a terminal?"
+        // Copy-only (§4/§6.5): the confirmation title names the same action the lane button does —
+        // "Take over in terminal" — for both an active and a settled lane; the dialog's choices,
+        // message, current-member check and action dispatch are unchanged.
+        let title = "Take over in terminal?"
         let button = task.status.isRunning ? "Stop it and take over" : "Continue in terminal"
         let message = "The headless run is stopped first if it is still going, then the same conversation opens in Terminal.app. It runs "
             + "under your own default permissions, not \(task.freedom ?? "this task's freedom")."

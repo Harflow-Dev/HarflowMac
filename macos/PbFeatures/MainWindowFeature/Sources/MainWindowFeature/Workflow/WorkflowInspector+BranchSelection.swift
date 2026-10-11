@@ -22,6 +22,8 @@ extension WorkflowInspector {
                 viewModel.updateNode(start.id, key: "selection_guidance", value: .string(guidance))
             }))
                 .font(.pb(.body))
+                // Bounded scope (§6.3): the selection-guidance editor's own scroll view, if one exists.
+                .scrollChromeScope()
 .frame(minHeight: 80)
                 .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                 .accessibilityLabel("Selection guidance")

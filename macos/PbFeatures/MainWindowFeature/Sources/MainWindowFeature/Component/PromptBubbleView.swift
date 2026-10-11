@@ -38,16 +38,16 @@ struct PromptBubbleView: View {
 
     var body: some View {
         let isLong = Self.isLong(text)
-        HStack(spacing: 0) {
-            Spacer(minLength: 48)
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: PbRadius.Metrics.zero) {
+            Spacer(minLength: PbRadius.Metrics.promptBubbleLeadingSpace)
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
                 if let caption {
                     Text(caption).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                 }
                 Text(text)
                     .font(.pb(.reading))
-                    .foregroundStyle(isPending ? Color.secondaryText : Color.primary)
-                    .lineSpacing(6)
+                    .foregroundStyle(isPending ? Color.secondaryText : Color.primaryText)
+                    .lineSpacing(PbRadius.Metrics.spacing6)
                     .lineLimit(isLong && !isExpanded ? Self.collapsedLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isLong {
@@ -56,9 +56,17 @@ struct PromptBubbleView: View {
                         .font(.pb(.secondary))
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(isPending ? Color.promptBubble.opacity(0.45) : Color.promptBubble))
+            .padding(.horizontal, PbRadius.Metrics.spacing14)
+            .padding(.vertical, PbRadius.Metrics.spacing10)
+            .background(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: PbRadius.Metrics.promptBubbleCornerRadius,
+                    bottomLeadingRadius: PbRadius.Metrics.promptBubbleCornerRadius,
+                    bottomTrailingRadius: PbRadius.Metrics.promptBubbleTailCornerRadius,
+                    topTrailingRadius: PbRadius.Metrics.promptBubbleCornerRadius
+                )
+                .fill(isPending ? Color.promptBubble.opacity(0.45) : Color.promptBubble)
+            )
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
@@ -67,7 +75,7 @@ struct PromptBubbleView: View {
 #if DEBUG
 private struct PromptBubblePreview: View {
     var body: some View {
-        VStack(alignment: .trailing, spacing: 12) {
+        VStack(alignment: .trailing, spacing: PbRadius.Metrics.spacing12) {
             PromptBubbleView(text: "Fix the flaky login test.")
             PromptBubbleView(
                 text: "Fix the flaky login test. It fails about one run in five on CI and only when the keychain is cold. "
@@ -80,12 +88,23 @@ private struct PromptBubblePreview: View {
                 isInitiallyExpanded: true
             )
         }
-        .padding()
-        .frame(width: 480)
+        .padding(PbRadius.Metrics.spacing16)
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth)
         .background(Color.windowBG)
     }
 }
 
 #Preview("Prompt bubble - light") { PromptBubblePreview().preferredColorScheme(.light) }
 #Preview("Prompt bubble - dark") { PromptBubblePreview().preferredColorScheme(.dark) }
+#Preview("Pending prompt - light") {
+    PromptBubbleView(text: "Also cover the cold keychain.", caption: "Pending", isPending: true)
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth)
+.preferredColorScheme(.light)
+}
+
+#Preview("Pending prompt - dark") {
+    PromptBubbleView(text: "Also cover the cold keychain.", caption: "Pending", isPending: true)
+        .frame(width: PbRadius.Metrics.taskDetailNarrowPreviewWidth)
+.preferredColorScheme(.dark)
+}
 #endif

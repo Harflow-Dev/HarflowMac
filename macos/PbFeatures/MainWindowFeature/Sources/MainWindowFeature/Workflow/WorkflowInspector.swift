@@ -12,15 +12,20 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     var body: some View {
         Group {
             if isScrollable {
-                ScrollView { content }
+                // The document probe (§6.3): inside the inspector's own document, so it can only
+                // ever target this outer scroll view — never a nested editor's.
+                ScrollView { content.background(ScrollChrome()) }
             } else {
                 content
             }
-        }.background(Color.cardFill)
+        }
+        // The flush-pane amendment (user override of SPEC §6.3): a plain cardFill panel
+        // edge-to-edge, as before the redesign — no rounded surround or border.
+        .background(Color.cardFill)
     }
 
     private var content: some View {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
                 if let permissions = viewModel.selectedRun?.orchestratorPermissions {
                     WorkflowPermissionsView(model: permissions)
                 }
@@ -44,7 +49,8 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 } else {
                     workflowEditor.disabled(viewModel.selectedRun != nil)
                 }
-            }.padding(16)
+            }
+            .padding(PbRadius.Metrics.spacing16)
     }
 
     var inspectorDefinition: [String: JSONValue] {
@@ -52,7 +58,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private var workflowEditor: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
             SectionLabel(text: "Workflow")
             TextField("Workflow name", text: Binding(get: { inspectorDefinition["name"]?.stringValue ?? viewModel.name }, set: {
                     guard viewModel.selectedRun == nil else { return }
@@ -68,6 +74,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 }),
                 axis: .vertical
             )
+                // Bounded scope (§6.3): the multiline description's own dedicated scroll view,
+                // when one exists; a quiet no-op otherwise, the shared field editor untouched.
+                .scrollChromeScope()
                 .textFieldStyle(.roundedBorder)
             if let start = WorkflowJSON.objects(inspectorDefinition["nodes"]).first(where: { $0["type"]?.stringValue == "start" }),
                let startID = start["id"]?.stringValue {
@@ -79,12 +88,28 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     viewModel.updateNode(startID, key: "prompt", value: .string($0))
                 }))
                     .font(.pb(.body))
-                    .frame(minHeight: 100)
+                    // Bounded scope (§6.3): the prompt editor's own scroll view, when one exists.
+                    .scrollChromeScope()
+                    .frame(minHeight: PbRadius.Metrics.recoveryEditorMaximumHeight)
+                    .overlay(alignment: .topLeading) {
+                        // The existing helper text becomes the empty editor's overlay and the
+                        // field's accessibility hint; the binding is unchanged.
+                        let prompt = WorkflowJSON.objects(inspectorDefinition["nodes"])
+                            .first { $0["id"]?.stringValue == startID }?["prompt"]?
+.stringValue ?? ""
+                        if prompt.isEmpty {
+                            Text("Describe the workflow's purpose to guide the orchestrator.")
+                                .font(.pb(.body))
+                                .foregroundStyle(Color.tertiaryText)
+                                .padding(.top, PbRadius.Metrics.spacing8)
+                                .padding(.leading, PbRadius.Metrics.spacing6)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
                     .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                     .accessibilityLabel("Workflow prompt")
-                Text("Describe the workflow's purpose to guide the orchestrator.")
-                    .font(.pb(.secondary))
-.foregroundStyle(Color.secondaryText)
+                    .accessibilityHint("Describe the workflow's purpose to guide the orchestrator.")
             }
             SectionLabel(text: "Orchestrator")
             WorkflowAgentEditor(
@@ -99,11 +124,39 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 modelChoices: viewModel.modelChoices,
                 loadModels: viewModel.loadModels
             )
-            Stepper("Decision attempts: \(integer("max_decision_attempts", default: 3))", value: intBinding("max_decision_attempts", default: 3), in: 1 ... 10)
-            Stepper("Inspections: \(integer("max_inspections", default: 20))", value: intBinding("max_inspections", default: 20), in: 1 ... 1000)
-            Stepper("Parallel agents: \(integer("max_parallel", default: 4))", value: intBinding("max_parallel", default: 4), in: 1 ... 64)
-            Stepper("Transition limit: \(integer("max_transitions", default: 100))", value: intBinding("max_transitions", default: 100), in: 1 ... 10000)
-            Text("Select a node or connection to edit its instructions and conditions.").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+            SectionLabel(text: "Limits")
+            WorkflowFormGroup {
+                WorkflowFormRow(label: "Decision attempts") {
+                    WorkflowCompactStepper(label: "Decision attempts",
+                                           value: intBinding("max_decision_attempts", default: 3),
+                                           range: 1 ... 10)
+                }
+                WorkflowFormDivider()
+                WorkflowFormRow(label: "Inspections") {
+                    WorkflowCompactStepper(label: "Inspections",
+                                           value: intBinding("max_inspections", default: 20),
+                                           range: 1 ... 1000)
+                }
+                WorkflowFormDivider()
+                WorkflowFormRow(label: "Parallel agents") {
+                    WorkflowCompactStepper(label: "Parallel agents",
+                                           value: intBinding("max_parallel", default: 4),
+                                           range: 1 ... 64)
+                }
+                WorkflowFormDivider()
+                WorkflowFormRow(label: "Transition limit") {
+                    WorkflowCompactStepper(label: "Transition limit",
+                                           value: intBinding("max_transitions", default: 100),
+                                           range: 1 ... 10000)
+                }
+            }
+            Text("Select a node or connection to edit its instructions and conditions.")
+                .font(.pb(.secondary))
+                .foregroundStyle(Color.secondaryText)
+                .padding(PbRadius.Metrics.spacing12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(RoundedRectangle(cornerRadius: PbRadius.row)
+                    .stroke(Color.cardBorder, style: StrokeStyle(lineWidth: PbRadius.Metrics.hairlineStroke, dash: PbRadius.Metrics.workflowPendingDash)))
         }.font(.pb(.body))
     }
 
@@ -130,7 +183,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private func workflowNodeEditor(_ node: WorkflowNodeModel) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
             HStack {
                 SectionLabel(text: "Run workflow")
                 Spacer()
@@ -164,7 +217,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
             SectionLabel(text: "Assignment guidance")
             TextEditor(text: nodeString(node, "instructions"))
                 .font(.pb(.body))
-.frame(minHeight: 100)
+                // Bounded scope (§6.3): the instructions editor's own scroll view, if one exists.
+                .scrollChromeScope()
+.frame(minHeight: PbRadius.Metrics.recoveryEditorMaximumHeight)
                 .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                 .accessibilityLabel("Assignment guidance")
             Toggle("Optional", isOn: Binding(get: { node.isOptional }, set: {
@@ -185,7 +240,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private var savedWorkflowAccess: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
             SectionLabel(text: "Workflow tree access requirements")
             if let access = viewModel.validationDependencies["access"]?.objectValue {
                 ForEach(access.keys.sorted(), id: \.self) { id in
@@ -204,7 +259,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private func nodeEditor(_ node: WorkflowNodeModel) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
             HStack {
                 SectionLabel(text: node.type == "agent" ? node.role.capitalized : WorkflowRole.title(node.type))
                 Spacer()
@@ -229,7 +284,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 SectionLabel(text: "Instructions")
                 TextEditor(text: nodeString(node, "instructions"))
 .font(.pb(.body))
-.frame(minHeight: 100)
+                    // Bounded scope (§6.3): the instructions editor's own scroll view, if one exists.
+                    .scrollChromeScope()
+.frame(minHeight: PbRadius.Metrics.recoveryEditorMaximumHeight)
                     .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                     .accessibilityLabel("Step instructions")
                 WorkflowAgentEditor(
@@ -260,7 +317,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private func executionSetting(_ node: WorkflowNodeModel) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing6) {
             Picker("Execution", selection: nodeString(node, "execution_mode", default: "headless")) {
                 Text("Headless").tag("headless")
                 Text("Prefer orchestrator subagent")
@@ -275,7 +332,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private func sessionSetting(_ node: WorkflowNodeModel) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing6) {
             Text("Session").fixedSize(horizontal: true, vertical: false)
             Picker("Session", selection: nodeString(node, "session_mode", default: "agent_decides")) {
                 Text("Let agent decide").tag("agent_decides")
@@ -296,14 +353,14 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private func timeoutSetting(_ node: WorkflowNodeModel) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing6) {
             Toggle("Time limit", isOn: Binding(get: {
                 viewModel.selectedNode.map { WorkflowNodeExecutionSettings.timeoutSeconds($0) != nil } ?? false
             }, set: { enabled in
                 viewModel.updateNode(node.id, key: "timeout_seconds", value: enabled ? .number(900) : nil)
             }))
             if WorkflowNodeExecutionSettings.timeoutSeconds(node) != nil {
-                HStack(spacing: 6) {
+                HStack(spacing: PbRadius.Metrics.spacing6) {
                     TextField("Duration", value: Binding(get: {
                         timeoutUnit.value(for: viewModel.selectedNode.flatMap(WorkflowNodeExecutionSettings.timeoutSeconds) ?? 900)
                     }, set: { value in
@@ -311,7 +368,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                         viewModel.updateNode(node.id, key: "timeout_seconds", value: .number(Double(seconds)))
                     }), format: .number.grouping(.never).precision(.fractionLength(0 ... 6)))
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 80)
+                        .frame(width: PbRadius.Metrics.workflowFieldValueWidth)
                         .accessibilityLabel("Time limit duration")
                     Picker("Unit", selection: $timeoutUnit) {
                         ForEach(WorkflowTimeoutUnit.allCases, id: \.self) { unit in
@@ -338,7 +395,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private func edgeEditor(_ edge: WorkflowEdgeModel) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
             HStack {
                 SectionLabel(text: "Connection")
                 Spacer()
@@ -355,7 +412,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 viewModel.updateEdge(edge.id, key: "condition", value: .string($0))
             }))
 .font(.pb(.body))
-.frame(minHeight: 110)
+                // Bounded scope (§6.3): the condition editor's own scroll view, if one exists.
+                .scrollChromeScope()
+.frame(minHeight: PbRadius.Metrics.taskSkeletonStatusWidth)
                 .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                 .accessibilityLabel("Connection condition")
             Toggle("Default path", isOn: Binding(get: { viewModel.selectedEdge?.isDefault ?? false }, set: {
@@ -375,7 +434,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     }
 
     private func retryLimit(_ edge: WorkflowEdgeModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
             Toggle("Limit retries", isOn: Binding(get: { viewModel.selectedEdge?.maxRetries != nil }, set: {
                 viewModel.updateEdge(edge.id, key: "max_retries", value: $0 ? .number(3) : nil)
             }))
@@ -388,96 +447,6 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     .font(.pb(.caption))
 .foregroundStyle(Color.secondaryText)
             }
-        }
-    }
-
-    private func nodeHistory(_ node: WorkflowNodeModel) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel(text: node.name)
-            if node.type == "agent" {
-                Text(node.isOptional ? "Optional step" : "Required step")
-                    .font(.pb(.secondary))
-.foregroundStyle(Color.secondaryText)
-            }
-            Text(node.instructions).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
-            Button("Show latest steps") { viewModel.selectActivation(nil) }.buttonStyle(QuietButtonStyle())
-            ForEach(Array((viewModel.selectedRun?.activations.filter {
-                $0["node_id"]?.stringValue == node.id
-            } ?? []).enumerated()), id: \.offset) { index, activation in
-                VStack(alignment: .leading, spacing: 8) {
-                    let label = activation["role"]?.stringValue == "orchestrator" ? "Decision" : "Attempt"
-                    let attempt = activation["attempt_in_visit"]?.intValue ?? index + 1
-                    Text("\(label) \(attempt) · \(activation["status"]?.stringValue ?? "")")
-                        .font(.pb(.secondary, weight: .semibold))
-                    if let error = activation["result_error"]?.stringValue {
-                        Text(error).font(.pb(.secondary)).foregroundStyle(Color.warningFG).textSelection(.enabled)
-                    }
-                    invocationSessionDetails(activation)
-                    if let assignment = activation["assignment_prompt"]?.stringValue {
-                        Text("Assignment").font(.pb(.secondary, weight: .semibold))
-                        Text(assignment).font(.pb(.secondary)).textSelection(.enabled)
-                    }
-                    ForEach(Array(WorkflowJSON.objects(activation["questions"]).enumerated()), id: \.offset) { _, question in
-                        Text("Question: " + (question["question"]?.stringValue ?? "")).font(.pb(.secondary)).textSelection(.enabled)
-                        if let context = question["context"]?.stringValue { Text(context).font(.pb(.secondary)).textSelection(.enabled) }
-                        if let answer = question["answer"]?.stringValue {
-                            Text("Answer: " + answer).font(.pb(.secondary)).textSelection(.enabled)
-                        }
-                    }
-                    if let result = activation["node_result"], let description = WorkflowNodePresentation.summary(result.rendered()) {
-                        Text("Result").font(.pb(.secondary, weight: .semibold))
-                        Text(description).font(.pb(.secondary)).textSelection(.enabled)
-                    }
-                    if activation["role"]?.stringValue == "node", let id = activation["id"]?.stringValue {
-                        Button("Show activity") { viewModel.selectActivation(id) }.buttonStyle(QuietButtonStyle())
-                    }
-                    ForEach(Array(WorkflowJSON.objects(activation["tasks"]).enumerated()), id: \.offset) { _, task in
-                        let attempt = WorkflowExecutionAttempts.fallbackIndices(activation)[task["task_id"]?.stringValue ?? ""] ?? 0
-                        HStack(alignment: .top, spacing: 6) {
-                            BackendDot(backend: task["candidate"]?["backend"]?.stringValue ?? "")
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("\(attempt == 0 ? "Primary" : "Fallback \(attempt)"): \(task["candidate"]?["backend"]?.stringValue ?? "agent")")
-                                Text(task["status"]?.stringValue ?? "").foregroundStyle(Color.secondaryText)
-                                if let reason = task["reason"]?.stringValue {
-                                    Text(reason).foregroundStyle(Color.secondaryText)
-                                }
-                                ForEach(Array(WorkflowContextDelivery(task: task).lines.enumerated()), id: \.offset) { _, line in
-                                    Text(line).foregroundStyle(Color.secondaryText).textSelection(.enabled)
-                                }
-                            }.font(.pb(.caption))
-                        }
-                    }
-                }
-.padding(10)
-.background(Color.composerFill, in: RoundedRectangle(cornerRadius: PbRadius.row))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func executionSessionDetails(_ activation: [String: JSONValue]) -> some View {
-        let execution = WorkflowExecutionPresentation(raw: activation)
-        Text(execution.label).font(.pb(.caption, weight: .semibold))
-        if let reason = execution.fallbackReason {
-            Text(reason).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-        }
-        if execution.isSubagent {
-            if let owner = execution.ownerTaskID {
-                Button("Open owning orchestrator") { viewModel.openOwnerTask(owner) }.buttonStyle(QuietButtonStyle())
-            } else {
-                Text("Owning orchestrator history unavailable").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-            }
-            if execution.activityLimited {
-                Text("Activity limited").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-            }
-        }
-        if let mode = activation["execution_session_mode"]?.stringValue {
-            Text("Session: " + mode.replacingOccurrences(of: "_", with: " "))
-                .font(.pb(.caption))
-.foregroundStyle(Color.secondaryText)
-        }
-        if let reason = activation["session_reason"]?.stringValue {
-            Text(reason).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
         }
     }
 
@@ -495,6 +464,69 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 })
     }
 }
+
+#if DEBUG
+#Preview("Workflow inspector") {
+    WorkflowInspector(viewModel: WorkflowPreview.make())
+        .frame(width: PbRadius.Metrics.formPreviewWidth,
+                height: PbRadius.Metrics.workflowInspectorPreviewHeight)
+}
+
+#Preview("Workflow inspector - dark") {
+    WorkflowInspector(viewModel: WorkflowPreview.make())
+        .frame(width: PbRadius.Metrics.formPreviewWidth,
+                height: PbRadius.Metrics.workflowInspectorPreviewHeight)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Workflow inspector - selected node") {
+    let vm = WorkflowPreview.make()
+    vm.selectedNodeID = vm.nodes.first { $0.type == "agent" }?.id
+    return WorkflowInspector(viewModel: vm).frame(width: PbRadius.Metrics.formPreviewWidth, height: PbRadius.Metrics.workflowInspectorPreviewHeight)
+}
+
+#Preview("Workflow inspector - selected connection") {
+    let vm = WorkflowPreview.make()
+    vm.selectedEdgeID = vm.edges.first?.id
+    return WorkflowInspector(viewModel: vm)
+        .frame(width: PbRadius.Metrics.formPreviewWidth,
+                height: PbRadius.Metrics.workflowInspectorPreviewHeight)
+        .preferredColorScheme(.dark)
+}
+
+/// A parallel boundary pair selected: the branch-selection editor (and its scoped guidance
+/// editor) render inside the parallel panel. Dummy preview data only.
+@MainActor
+private func makeParallelBoundaryPreviewVM() -> WorkflowVM {
+    let vm = WorkflowPreview.make()
+    var nodes = WorkflowJSON.objects(vm.definition["nodes"])
+    nodes.append([
+        "id": .string("preview-parallel-start"), "title": .string("Parallel"),
+        "type": .string("parallel_start"), "parallel_group_id": .string("preview-group")
+    ])
+    nodes.append([
+        "id": .string("preview-parallel-end"), "title": .string("Parallel"),
+        "type": .string("parallel_end"), "parallel_group_id": .string("preview-group")
+    ])
+    vm.definition["nodes"] = .array(nodes.map(JSONValue.object))
+    vm.selectedNodeID = "preview-parallel-start"
+    return vm
+}
+
+#Preview("Workflow inspector - parallel branch selection - light") {
+    WorkflowInspector(viewModel: makeParallelBoundaryPreviewVM())
+        .frame(width: PbRadius.Metrics.formPreviewWidth,
+                height: PbRadius.Metrics.workflowInspectorPreviewHeight)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Workflow inspector - parallel branch selection - dark") {
+    WorkflowInspector(viewModel: makeParallelBoundaryPreviewVM())
+        .frame(width: PbRadius.Metrics.formPreviewWidth,
+                height: PbRadius.Metrics.workflowInspectorPreviewHeight)
+        .preferredColorScheme(.dark)
+}
+#endif
 
 // MARK: - Child conversation settings and invocation details
 
@@ -514,25 +546,4 @@ extension WorkflowInspector {
         }
     }
 
-    private func childSessionDetails(_ activation: [String: JSONValue]) -> some View {
-        let details = WorkflowChildSessionDetails(invocation: activation["invocation"]?.objectValue ?? [:])
-        return ForEach(Array(details.lines.enumerated()), id: \.offset) { _, line in
-            Text(line).font(.pb(.caption)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
-        }
-    }
-
-    @ViewBuilder
-    private func invocationSessionDetails(_ activation: [String: JSONValue]) -> some View {
-        if let retryOf = activation["retry_of_execution_id"]?.stringValue {
-            Text("Retry of execution " + retryOf).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-        }
-        executionSessionDetails(activation)
-        childSessionDetails(activation)
-    }
 }
-
-#if DEBUG
-#Preview("Workflow inspector") {
-    WorkflowInspector(viewModel: WorkflowPreview.make()).frame(width: 300, height: 650)
-}
-#endif

@@ -5,7 +5,9 @@ import SwiftUI
 /// The design's toolbar button: a small neutral fill with a hairline border and button radius, in
 /// the normal text colour — present, but not competing with the content. It draws its own
 /// background, so a toolbar can neither strip it (a plain toolbar button is bezel-less until hover)
-/// nor wrap it in a glass capsule.
+/// nor wrap it in a glass capsule. Glass stays opt-in through `MonitorButtonStyle(.glass)`; this
+/// style serves content and toolbar callsites alike and never takes glass globally. A destructive
+/// button is the tinted danger style: `dangerFG` on a `dangerBG` capsule (SPEC §4/§5.3).
 public struct QuietButtonStyle: ButtonStyle {
     /// Shows the selected look — used for a toggle that is on (the inspector while it is open).
     public var isSelected: Bool
@@ -29,27 +31,39 @@ private struct QuietButtonBody: View {
     let isFilled: Bool
     @Environment(\.isEnabled) private var isEnabled
 
+    private var isDestructive: Bool { configuration.role == .destructive }
+
     var body: some View {
-        configuration.label
-            .font(.pb(.body))
-            // A destructive action ("Cancel all") keeps its red, as a system button would.
-            .foregroundStyle(isEnabled ? (configuration.role == .destructive ? Color.failedRed : Color.primary) : Color.secondaryText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: PbRadius.button)
-                    .fill(Color.pillFill.opacity(configuration.isPressed || isSelected ? 1 : (isFilled ? 0.75 : 0)))
-            )
-            .overlay(RoundedRectangle(cornerRadius: PbRadius.button).stroke(Color.cardBorder, lineWidth: 1))
-            .brightness(configuration.isPressed ? -0.04 : 0)
-            .contentShape(RoundedRectangle(cornerRadius: PbRadius.button))
+        if isDestructive {
+            configuration.label
+                .font(.pb(.body, weight: .semibold))
+                .foregroundStyle(isEnabled ? Color.dangerFG : Color.dangerFG.opacity(0.5))
+                .padding(.horizontal, PbRadius.Metrics.spacing10)
+                .padding(.vertical, PbRadius.Metrics.spacing4)
+                .background(Capsule().fill(Color.dangerBG))
+                .brightness(configuration.isPressed ? -0.04 : 0)
+                .contentShape(Capsule())
+        } else {
+            configuration.label
+                .font(.pb(.body))
+                .foregroundStyle(isEnabled ? Color.primaryText : Color.secondaryText)
+                .padding(.horizontal, PbRadius.Metrics.spacing10)
+                .padding(.vertical, PbRadius.Metrics.spacing4)
+                .background(
+                    RoundedRectangle(cornerRadius: PbRadius.button)
+                        .fill(Color.pillFill.opacity(configuration.isPressed || isSelected ? 1 : (isFilled ? 0.75 : 0)))
+                )
+                .overlay(RoundedRectangle(cornerRadius: PbRadius.button).stroke(Color.cardBorder, lineWidth: PbRadius.Metrics.hairlineStroke))
+                .brightness(configuration.isPressed ? -0.04 : 0)
+                .contentShape(RoundedRectangle(cornerRadius: PbRadius.button))
+        }
     }
 }
 
 #if DEBUG
 private struct QuietButtonPreview: View {
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: PbRadius.Metrics.spacing12) {
             Button("Continue in terminal") {}.buttonStyle(QuietButtonStyle())
             Button("Take over") {}.buttonStyle(QuietButtonStyle()).disabled(true)
             Button("Cancel all", role: .destructive) {}.buttonStyle(QuietButtonStyle())

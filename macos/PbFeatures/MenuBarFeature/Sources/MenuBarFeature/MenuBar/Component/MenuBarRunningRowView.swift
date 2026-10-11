@@ -12,6 +12,8 @@ import MonitorCore
 import PbUI
 import SwiftUI
 
+// MARK: - MenuBarRunningRowView
+
 struct MenuBarRunningRowView: View {
     let model: MenuBarRunningRowModel
     let onTap: () -> Void
@@ -19,19 +21,19 @@ struct MenuBarRunningRowView: View {
     var body: some View {
         Button(action: onTap) {
             ActivityCard {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        RunningSpinner().frame(width: 16, height: 16)
-                        Text(model.title).font(.pb(.body, weight: .medium)).lineLimit(1)
-                        Spacer(minLength: 4)
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
+                    HStack(spacing: PbRadius.Metrics.spacing8) {
+                        RunningSpinner().frame(width: PbRadius.Metrics.statusIconSize, height: PbRadius.Metrics.statusIconSize)
+                        Text(model.title).font(.pb(.body, weight: .semibold)).lineLimit(1)
+                        Spacer(minLength: PbRadius.Metrics.spacing4)
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             Text(Format.clock(elapsed(at: context.date)))
                                 .font(.pb(.caption))
                                 .monospacedDigit()
-                                .foregroundStyle(Color.secondaryText)
+                                .foregroundStyle(Color.tertiaryText)
                         }
                     }
-                    HStack(spacing: 4) {
+                    HStack(spacing: PbRadius.Metrics.spacing4) {
                         if let activityLine = model.activityLine {
                             Text(activityLine)
                                 .font(model.activityIsMonospaced ? .pb(.caption, design: .monospaced) : .pb(.caption))
@@ -43,7 +45,7 @@ struct MenuBarRunningRowView: View {
                         }
                     }
                     .foregroundStyle(Color.secondaryText)
-                    .padding(.leading, 24)
+                    .padding(.leading, PbRadius.Metrics.menuBarRunningRowDetailInset)
                 }
             }
             .contentShape(Rectangle())
@@ -75,7 +77,7 @@ struct MenuBarRunningRowView: View {
 
 private struct MenuBarRunningRowPreview: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
             MenuBarRunningRowView(
                 model: MenuBarRunningRowModel(
                     id: "abc123", backend: "claude", title: "Fix the login bug", repoName: "polybridge",
@@ -92,16 +94,29 @@ private struct MenuBarRunningRowPreview: View {
                 ),
                 onTap: {}
             )
+            // A long monospaced command truncates from the middle; a long title truncates from the tail.
+            MenuBarRunningRowView(
+                model: MenuBarRunningRowModel(
+                    id: "long1", backend: "vibe", title: "Rework the recovery overlay's presentation and lifecycle end to end",
+                    repoName: "polybridge",
+                    startedAt: .now.addingTimeInterval(-125), durationSeconds: nil,
+                    activityLine: "swift test --filter MenuBarViewTests/MenuBarVMTests/WorkflowMenuBarStatusVMTests",
+                    activityIsMonospaced: true
+                ),
+                onTap: {}
+            )
+            // Missing data: no activity, unknown repository, and no start time — the clock falls
+            // back to the recorded duration.
             MenuBarRunningRowView(
                 model: MenuBarRunningRowModel(
                     id: "ghi789", backend: "vibe", title: "Warming up", repoName: "",
-                    startedAt: .now, durationSeconds: nil, activityLine: nil, activityIsMonospaced: false
+                    startedAt: nil, durationSeconds: 75, activityLine: nil, activityIsMonospaced: false
                 ),
                 onTap: {}
             )
         }
         .padding()
-        .frame(width: 380)
+        .frame(width: PbRadius.Metrics.menuBarPopoverWidth)
         .background(Color.windowBG)
     }
 }

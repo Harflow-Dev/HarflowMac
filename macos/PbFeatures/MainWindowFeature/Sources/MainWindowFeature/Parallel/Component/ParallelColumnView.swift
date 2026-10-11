@@ -27,7 +27,7 @@ struct ParallelColumnModel: Identifiable {
     let id: String
     let task: TaskInfo
     let title: String
-    /// "<repo name> · <Backend>", plus "· N turns" once the conversation has more than one turn.
+    /// "<Backend> · <repo name>", plus "· N turns" once the conversation has more than one turn.
     let subtitle: String
     let isBusy: Bool
     let outcomeMessage: String?
@@ -47,8 +47,14 @@ struct ParallelColumnModel: Identifiable {
     let isLoading: Bool
     var emptyText: String?
     /// From the current member's snapshot only — no fallback to `task.summary` (F4-40, a deliberate
-    /// difference from `ChangesPane`).
+    /// difference from `ChangesPane`). A settled lane shows it first, as its result callout.
     let summary: String?
+    /// The lane feed's step-count copy ("1 step"/"N steps"); `nil` while no item row is loaded —
+    /// a zero, still-loading or unavailable feed omits the count rather than claiming "0 steps".
+    var stepCountText: String?
+    /// "No tool calls recorded", proven only for a terminal current task from the UNFILTERED
+    /// member inputs — never inferred from the visible page having none.
+    var noToolCallsText: String?
     let onTapTakeover: () -> Void
     let onTapOpenTask: () -> Void
     /// When the conversation's FIRST turn started — every row's elapsed time counts from here, as
@@ -63,10 +69,10 @@ struct ParallelColumnModel: Identifiable {
     var paginationRevision = 0
     var onLoadMore: (() -> Bool)?
 
-    /// "<repo name> · <Backend>" plus "· N turns" when `turns > 1` — the task header's subtitle,
+    /// "<Backend> · <repo name>" plus "· N turns" when `turns > 1` — the lane header's subtitle,
     /// without the session id.
     static func subtitle(repoPath: String, backend: String, turns: Int) -> String {
-        var parts = [Format.repoName(repoPath), BackendStyle.displayName(backend)].filter { !$0.isEmpty }
+        var parts = [BackendStyle.displayName(backend), Format.repoName(repoPath)].filter { !$0.isEmpty }
         if turns > 1 { parts.append("\(turns) turns") }
         return parts.joined(separator: " · ")
     }
@@ -82,6 +88,7 @@ struct ParallelColumnModel: Identifiable {
 struct ParallelColumnView: View {
     let model: ParallelColumnModel
     @State private var state: ParallelColumnUIState
+    @State private var resultContentSize = CGSize(width: PbRadius.Metrics.zero, height: PbRadius.Metrics.parallelResultMaximumHeight)
 
     init(model: ParallelColumnModel, state: ParallelColumnUIState? = nil) {
         self.model = model
@@ -89,22 +96,23 @@ struct ParallelColumnView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing10) {
             header
             if let message = model.outcomeMessage {
                 Text(message).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
             }
             if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
             Divider()
+            resultCallout
             if model.isLoading, model.liveStep == nil {
                 SkeletonRows(count: 4, showsBadge: false)
-.padding(.top, 4)
+.padding(.top, PbRadius.Metrics.spacing4)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 feed.pbFadeIn()
             }
         }
-        .padding(16)
+        .padding(PbRadius.Metrics.spacing16)
         .frame(maxHeight: .infinity, alignment: .top)
         .opensFileLinks(repoPath: model.task.repoPath)
     }
@@ -112,22 +120,27 @@ struct ParallelColumnView: View {
     // MARK: Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+            HStack(alignment: .top, spacing: PbRadius.Metrics.spacing8) {
                 StatusIcon(status: model.task.status)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.title).font(.pb(.body, weight: .semibold)).lineLimit(2)
-                    Text(model.subtitle).font(.pb(.caption)).foregroundStyle(Color.secondaryText).lineLimit(1)
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing2) {
+                    Text(model.title).font(.pb(.headline, weight: .semibold)).lineLimit(2)
+                    HStack(spacing: PbRadius.Metrics.spacing6) {
+                        BackendDot(backend: model.task.backend)
+                        Text(model.subtitle).font(.pb(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
+                    }
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: PbRadius.Metrics.spacing8)
                 TaskStatusLabel(task: model.task).fixedSize()
             }
-            HStack(spacing: 10) {
+            HStack(spacing: PbRadius.Metrics.spacing10) {
                 Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
-                Spacer(minLength: 8)
+                Spacer(minLength: PbRadius.Metrics.spacing8)
                 if model.isBusy { ProgressView().controlSize(.small) }
                 if WorkflowNodePresentation.allowsTerminal(model.task) {
-                TerminalActionButton(model.task.status.isRunning ? "Take over" : "Continue in terminal", action: model.onTapTakeover)
+                // §4: one action, one name — "Take over in terminal" for an active AND a settled
+                // lane; the confirmation dialog matches this copy for both.
+                TerminalActionButton("Take over in terminal", action: model.onTapTakeover)
                     .disabled(model.task.sessionID == nil || model.isBusy)
                 }
             }
@@ -135,13 +148,60 @@ struct ParallelColumnView: View {
         }
     }
 
+    // MARK: Result callout
+
+    /// A settled lane shows its current-member snapshot's result FIRST (§6.5) — in a `doneBG`
+    /// callout when it succeeded, truthfully tinted for a failure or cancellation. The summary is
+    /// the snapshot's own, with no fallback to `task.summary`, and an empty or missing one is
+    /// omitted entirely. Long results scroll independently within a bounded callout so activity
+    /// remains reachable without changing the activity feed's own identity or scroll state.
+    @ViewBuilder
+    private var resultCallout: some View {
+        if let summary = model.summary, !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           model.task.status.isTerminal {
+            ScrollView {
+                MarkdownText(text: summary)
+                    .padding(PbRadius.Metrics.spacing12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+                        if resultContentSize != size { resultContentSize = size }
+                    }
+                    .background(ActivityScrollChrome())
+            }
+            .frame(height: min(resultContentSize.height, PbRadius.Metrics.parallelResultMaximumHeight))
+            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(resultBackground))
+            .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(Color.cardBorder, lineWidth: PbRadius.Metrics.hairlineStroke))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Result")
+        }
+    }
+
+    /// The result callout's background: the state's own tint, never a status colour as a fill for
+    /// anything but this callout.
+    private var resultBackground: Color {
+        switch model.task.status {
+        case .completed: Color.doneBG
+        case .failed, .timedOut: Color.dangerBG
+        case .cancelled: Color.neutralFill
+        case .running, .other: Color.cardFill
+        }
+    }
+
     // MARK: Feed
 
     private var feed: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("\(ParallelColumnModel.itemCount(model.rows)) steps").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
-                Spacer()
+        VStack(spacing: PbRadius.Metrics.spacing8) {
+            if model.stepCountText != nil || model.noToolCallsText != nil {
+                HStack(spacing: PbRadius.Metrics.spacing8) {
+                    if let stepCountText = model.stepCountText {
+                        Text(stepCountText).font(.pb(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText)
+                    }
+                    if let noToolCallsText = model.noToolCallsText {
+                        Text(noToolCallsText).font(.pb(.secondary)).foregroundStyle(Color.tertiaryText)
+                    }
+                    Spacer()
+                }
             }
             ActivityFeedView(rows: model.activityRows, start: model.start, history: model.history,
                              isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages),
@@ -150,7 +210,7 @@ struct ParallelColumnView: View {
                 ForEach(model.pendingMessages) { message in
                     PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
                 }
-                if let liveStep = model.liveStep { LiveStepLineView(text: liveStep.text) }
+                if let liveStep = model.liveStep { LiveStepLineView(text: liveStep.text, indicator: .threeDots) }
             }
         }
     }
@@ -167,20 +227,20 @@ private func previewTask(id: String, age: TimeInterval, status: String = "runnin
 @MainActor
 private func previewColumn(_ model: ParallelColumnModel) -> some View {
     ParallelColumnView(model: model)
-        .frame(width: 380, height: 560)
+        .frame(width: PbRadius.Metrics.parallelColumnPreviewWidth, height: PbRadius.Metrics.parallelColumnPreviewHeight)
         .background(Color.windowBG)
 }
 
 @MainActor
 private func columnModel(
     id: String = "abc123", task: TaskInfo, rows: [ConversationTimelineRow], isLoading: Bool = false, turns: Int = 1,
-    summary: String? = nil
+    summary: String? = nil, liveStep: LiveStep? = nil
 ) -> ParallelColumnModel {
     ParallelColumnModel(
         id: id, task: task, title: "Fix the login bug",
         subtitle: ParallelColumnModel.subtitle(repoPath: "/Users/me/Code/polybridge", backend: task.backend, turns: turns),
         isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: LiveStep(rows: rows), isLoading: isLoading,
+        rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: liveStep ?? LiveStep(rows: rows), isLoading: isLoading,
         summary: summary, onTapTakeover: {}, onTapOpenTask: {}
     )
 }
@@ -225,6 +285,22 @@ private var followUpRows: [ConversationTimelineRow] {
     .preferredColorScheme(.dark)
 }
 
+#Preview("Long result - light") {
+    previewColumn(longResultColumnModel()).preferredColorScheme(.light)
+}
+
+#Preview("Long result - dark") {
+    previewColumn(longResultColumnModel()).preferredColorScheme(.dark)
+}
+
+@MainActor
+private func longResultColumnModel() -> ParallelColumnModel {
+    columnModel(task: previewTask(id: "abc123", age: 90, status: "completed"),
+                rows: PreviewFixtures.sampleRows(taskID: "abc123", running: false),
+                summary: Array(repeating: "The completed review includes a detailed result that remains scrollable above activity.", count: 20)
+                    .joined(separator: "\n\n"))
+}
+
 #Preview("Loading column - light") {
     previewColumn(columnModel(task: previewTask(id: "abc123", age: 2), rows: [], isLoading: true)).preferredColorScheme(.light)
 }
@@ -241,5 +317,46 @@ private var followUpRows: [ConversationTimelineRow] {
 #Preview("With a follow-up turn - dark") {
     previewColumn(columnModel(id: "t1", task: previewTask(id: "t2", age: 90), rows: followUpRows, turns: 2))
         .preferredColorScheme(.dark)
+}
+
+#Preview("Prose-only, no tools recorded - light") {
+    previewColumn(noToolsColumnModel())
+        .preferredColorScheme(.light)
+}
+
+#Preview("Prose-only, no tools recorded - dark") {
+    previewColumn(noToolsColumnModel())
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Live step, three dots - light") {
+    previewColumn(liveStepColumnModel()).preferredColorScheme(.light)
+}
+
+#Preview("Live step, three dots - dark") {
+    previewColumn(liveStepColumnModel()).preferredColorScheme(.dark)
+}
+
+@MainActor
+private func noToolsColumnModel() -> ParallelColumnModel {
+    // A complete, settled, prose-only turn: the count reads "1 step" and the proven
+    // "No tool calls recorded" note shows beside it.
+    let rows = [ConversationTimelineRow(
+        id: "abc123#1", taskID: "abc123", timestamp: .now.addingTimeInterval(-30),
+        kind: .item(PreviewFixtures.textItem("Reviewed the diff and left one comment.")), live: false
+    )]
+    var model = columnModel(task: previewTask(id: "abc123", age: 30, status: "completed"), rows: rows)
+    model.stepCountText = "1 step"
+    model.noToolCallsText = "No tool calls recorded"
+    return model
+}
+
+@MainActor
+private func liveStepColumnModel() -> ParallelColumnModel {
+    let rows = PreviewFixtures.sampleRows(taskID: "abc123")
+    var model = columnModel(task: previewTask(id: "abc123", age: 10), rows: rows,
+                            liveStep: LiveStep(rows: rows, isRunning: true))
+    model.stepCountText = "6 steps"
+    return model
 }
 #endif

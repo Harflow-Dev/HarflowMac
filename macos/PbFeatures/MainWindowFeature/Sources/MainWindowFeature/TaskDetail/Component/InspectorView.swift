@@ -102,6 +102,8 @@ struct InspectorView: View {
                     }
                 }
                 .padding(20)
+                // The document probe (§6.2): inside the task inspector's own document.
+                .background(ScrollChrome())
             }
         }
         .background(Color.inspectorFill)

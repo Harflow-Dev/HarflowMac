@@ -1,4 +1,5 @@
 import AppKit
+import PbUI
 import SwiftUI
 
 // MARK: - WorkflowRunSplitPosition
@@ -27,6 +28,7 @@ final class WorkflowRunSplitSnapshot {
     var restoring = false
     var inspectorWidth: CGFloat?
     var canvasHeight: CGFloat?
+    var didInitializeInspector = false
     weak var inspectorSplit: NSSplitView?
     weak var canvasSplit: NSSplitView?
 
@@ -67,6 +69,14 @@ final class WorkflowRunSplitProbe: NSView {
         for split in ancestorSplits() where split.arrangedSubviews.count == 2 {
             if split.isVertical {
                 snapshot.inspectorSplit = split
+                if !snapshot.didInitializeInspector,
+                   split.bounds.width >= WorkflowInspectorWidth.canvasMinimumWidth + WorkflowRunLayout.inspectorMinimum + split.dividerThickness {
+                    snapshot.didInitializeInspector = true
+                    snapshot.restoring = true
+                    let width = WorkflowInspectorWidth.clamped(WorkflowRunLayout.inspectorIdeal, available: split.bounds.width)
+                    split.setPosition(split.bounds.width - width - split.dividerThickness, ofDividerAt: 0)
+                    snapshot.restoring = false
+                }
                 snapshot.inspectorWidth = split.arrangedSubviews[1].frame.width
             } else {
                 snapshot.canvasSplit = split
@@ -97,3 +107,17 @@ final class WorkflowRunSplitProbe: NSView {
         return result
     }
 }
+
+#if DEBUG
+#Preview("Workflow run split - light") {
+    WorkflowRunPanes(isGraph: true) { Color.inspectorFill } inspector: { Color.cardFill } activity: { Color.cardFill }
+        .frame(width: PbRadius.Metrics.foundationWidth, height: PbRadius.Metrics.workflowPreviewHeight)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Workflow run split - dark") {
+    WorkflowRunPanes(isGraph: true) { Color.inspectorFill } inspector: { Color.cardFill } activity: { Color.cardFill }
+        .frame(width: PbRadius.Metrics.foundationWidth, height: PbRadius.Metrics.workflowPreviewHeight)
+        .preferredColorScheme(.dark)
+}
+#endif

@@ -1,12 +1,20 @@
 import AppKit
+import PbUI
 import SwiftUI
 
 // MARK: - WorkflowInspectorWidth
 
 enum WorkflowInspectorWidth {
-    static let initial: CGFloat = 320
+    /// The Phase 3 visual adjustment (SPEC §6.3): the initial ideal width is 288; the native
+    /// clamp range, the canvas minimum and resizing persistence are unchanged.
+    static let initial: CGFloat = PbRadius.Metrics.workflowInspectorInitialWidth
+    static let minimum: CGFloat = PbRadius.Metrics.workflowInspectorMinimumWidth
+    static let maximum: CGFloat = PbRadius.Metrics.workflowInspectorMaximumWidth
+    static let canvasMinimumWidth: CGFloat = PbRadius.Metrics.workflowCanvasMinimumWidth
+
     static func clamped(_ requested: CGFloat, available: CGFloat) -> CGFloat {
-        min(max(220, requested), min(500, max(220, available - 401)))
+        // The 401 keeps the canvas at its 400 pt minimum plus the split divider.
+        min(max(minimum, requested), min(maximum, max(minimum, available - canvasMinimumWidth - 1)))
     }
 }
 
@@ -68,10 +76,13 @@ final class WorkflowInspectorNativeSplit: NSSplitView, NSSplitViewDelegate {
         inspectorWidth = width
     }
 
-    func splitView(_ splitView: NSSplitView, constrainMinCoordinate _: CGFloat, ofSubviewAt _: Int) -> CGFloat { 400 }
+    func splitView(_: NSSplitView, constrainMinCoordinate _: CGFloat, ofSubviewAt _: Int) -> CGFloat {
+        WorkflowInspectorWidth.canvasMinimumWidth
+    }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate _: CGFloat, ofSubviewAt _: Int) -> CGFloat {
-        max(400, splitView.bounds.width - 220 - splitView.dividerThickness)
+        max(WorkflowInspectorWidth.canvasMinimumWidth,
+            splitView.bounds.width - WorkflowInspectorWidth.minimum - splitView.dividerThickness)
     }
 
     func splitView(_ splitView: NSSplitView, constrainSplitPosition proposedPosition: CGFloat, ofSubviewAt _: Int) -> CGFloat {
@@ -91,6 +102,6 @@ final class WorkflowInspectorNativeSplit: NSSplitView, NSSplitViewDelegate {
         Color(nsColor: .windowBackgroundColor)
     } inspector: {
         Text("Inspector").frame(maxWidth: .infinity, maxHeight: .infinity)
-    }.frame(width: 1000, height: 600)
+    }.frame(width: PbRadius.Metrics.foundationWidth, height: PbRadius.Metrics.sidebarPreviewHeight)
 }
 #endif

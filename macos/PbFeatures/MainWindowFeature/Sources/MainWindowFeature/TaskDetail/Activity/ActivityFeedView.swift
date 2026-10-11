@@ -97,7 +97,7 @@ struct ActivityFeedView<Tail: View>: View {
     var paginationRevision = 0
     var isVisible = true
     var emptyText: String?
-    var horizontalPadding: CGFloat = 0
+    var horizontalPadding: CGFloat = PbRadius.Metrics.zero
     /// Task detail owns its started-row prompt; Parallel owns it in the toggled column header.
     var showsPromptBubble = true
     let state: ParallelColumnUIState
@@ -133,7 +133,7 @@ struct ActivityFeedView<Tail: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
+                LazyVStack(alignment: .leading, spacing: PbRadius.Metrics.spacing20) {
                     historyHeader
                     if let emptyText { Text(emptyText).font(.pb(.body)).foregroundStyle(Color.secondaryText) }
                     ForEach(shown) { row in
@@ -154,11 +154,16 @@ struct ActivityFeedView<Tail: View>: View {
                             .onAppear { seenIDs.insert(row.id) }
                     }
                     tail()
-                    Color.clear.frame(height: 1).id(Self.bottomID)
+                    Color.clear.frame(height: PbRadius.Metrics.hairlineStroke).id(Self.bottomID)
                 }
                 .padding(.horizontal, horizontalPadding)
-                .padding(.vertical, 12)
+                .padding(.vertical, PbRadius.Metrics.spacing12)
                 .coordinateSpace(name: "activity-feed-document")
+                // The user-authorized Phase 4 amendment: thin, auto-hiding native chrome on this
+                // feed's own enclosing vertical scroll view — attached inside the document so it
+                // can never target an outer lane or canvas, and non-layout-occupying. Every other
+                // scroll setting, observer and callback below is untouched.
+                .background(ActivityScrollChrome())
                 .background(ParallelScrollObserver(axis: .vertical, restorationOffset: targetOffset, restorationActive: restoring || followingLayout,
                                                    onViewportSize: observeViewport, onUpwardIntent: upwardIntent) { offset, content, viewport in
                     if positioned, !restoring, abs(content - position.content) < 0.5, position.viewport == viewport,
@@ -182,7 +187,8 @@ struct ActivityFeedView<Tail: View>: View {
                     scheduleReadingUpdate()
                 })
             }
-            .task(id: ActivityFeedKey(nativeViewportReady: nativeViewportReady, realizedLastRowID: realizedLastRowID, rows: shown, tail: tailValue, showsPromptBubble: showsPromptBubble,
+            .task(id: ActivityFeedKey(nativeViewportReady: nativeViewportReady, realizedLastRowID: realizedLastRowID,
+                                     rows: shown, tail: tailValue, showsPromptBubble: showsPromptBubble,
                                      expandedGroups: state.expandedGroups, viewport: viewportSize, history: history,
                                      loading: isLoading, visible: isVisible, paginationRevision: paginationRevision, restoring: restoring)) {
                 await settle(proxy)
@@ -224,7 +230,7 @@ struct ActivityFeedView<Tail: View>: View {
         if history.isLoading || waitingForPage {
             LoadingLabel("Loading activity…")
         } else if let error = history.error {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing6) {
                 Text(error).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 Button("Retry older activity") { requestPage(retry: true) }.buttonStyle(.link)
             }
@@ -468,3 +474,21 @@ struct ActivityFeedView<Tail: View>: View {
         }
     }
 }
+
+#if DEBUG
+/// Overflowing dummy rows prove the feed's thin chrome and content fit together — no invented
+/// production values, only `PreviewFixtures`' own fixture items.
+@MainActor
+private func activityFeedPreview() -> some View {
+    let rows = ActivityRowsBuilder.build(from: PreviewFixtures.sampleRows(taskID: "feed-preview", running: false))
+    return ActivityFeedView(rows: rows, start: .now.addingTimeInterval(-600), history: EventHistoryState(),
+                            isLoading: false, emptyText: nil, state: ParallelColumnUIState(), onLoadMore: nil) {
+        LiveStepLineView(text: "Running the login tests…", indicator: .threeDots)
+    }
+    .frame(width: PbRadius.Metrics.timelinePanePreviewWidth, height: PbRadius.Metrics.taskDetailPreviewHeight)
+    .background(Color.windowBG)
+}
+
+#Preview("ActivityFeed - light") { activityFeedPreview().preferredColorScheme(.light) }
+#Preview("ActivityFeed - dark") { activityFeedPreview().preferredColorScheme(.dark) }
+#endif

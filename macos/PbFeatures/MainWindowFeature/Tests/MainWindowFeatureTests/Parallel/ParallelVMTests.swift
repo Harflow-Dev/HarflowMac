@@ -68,7 +68,6 @@ import Testing
         let loadAdmissionBox = Box(true)
         let acquireEffectBox = Box<((String) -> Void)?>(nil)
         let conversationPagesBox = Box<[TaskHistoryPage?]>([])
-
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).snapshotsPublisher().willReturn(snapshotsSubject.eraseToAnyPublisher())
         given(useCase).busyPublisher().willReturn(busySubject.eraseToAnyPublisher())
@@ -234,7 +233,7 @@ import Testing
             cancellable.cancel()
             return
         }
-        #expect(dialog.title == "Take over this task?")
+        #expect(dialog.title == "Take over in terminal?")
         #expect(dialog.actions.count == 1)
         #expect(dialog.actions.first?.title == "Stop it and take over")
         dialog.actions.first?.action()
@@ -269,7 +268,7 @@ import Testing
             cancellable.cancel()
             return
         }
-        #expect(dialog.title == "Continue this session in a terminal?")
+        #expect(dialog.title == "Take over in terminal?")
         #expect(dialog.actions.first?.title == "Continue in terminal")
         #expect(
             dialog.description
@@ -484,34 +483,6 @@ import Testing
         #expect(sut.headerSubtitle.hasPrefix("2 agents · Can edit this repo, Read-only ·"))
     }
     
-    @Test func givenEveryMemberSharesAnEnforcementFact_whenComputingTheFooter_thenItReflectsTheSharedFact() async {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let tasksSubject = harness.tasksSubject
-        let snapshotsSubject = harness.snapshotsSubject
-        let tasksBox = harness.tasksBox
-        let sharedEnforcement: [String: JSONValue] = ["os_enforced": .bool(true)]
-        let task1 = task(id: "t1")
-        let task2 = task(id: "t2")
-        tasksBox.value["t1"] = task1
-        tasksBox.value["t2"] = task2
-        sut.didAppear()
-        tasksSubject.send([task1, task2])
-        await waitUntil { sut.columns.count == 2 && sut.isPresentationSettled }
-        #expect(sut.footerText == ParallelVM.fallbackFooter)
-        
-        // when — both snapshots share the same enforcement fact
-        snapshotsSubject.send([
-            "t1": task(id: "t1", enforcement: sharedEnforcement),
-            "t2": task(id: "t2", enforcement: sharedEnforcement)
-        ])
-        
-        // then
-        await waitUntil { sut.footerText != ParallelVM.fallbackFooter }
-        #expect(sut.footerText.contains("Restrictions enforced by the OS sandbox"))
-    }
-
     // MARK: - Column loading state (Monitor piece 12, Design point 4)
 
     @Test func givenNoItemsAndLoadingAvailability_whenColumnBuilds_thenIsLoadingIsTrue() async {

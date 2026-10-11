@@ -30,10 +30,10 @@ struct AccessOptionRow: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: PbRadius.Metrics.spacing12) {
                 radio
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
+                    HStack(spacing: PbRadius.Metrics.spacing6) {
                         Text(model.title).font(.pb(.body, weight: .semibold))
                         if model.isWarning {
                             Image(systemName: "exclamationmark.triangle").font(.pb(.secondary)).foregroundStyle(Color.warningFG)
@@ -45,13 +45,19 @@ struct AccessOptionRow: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: PbRadius.Metrics.zero)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 14)
-            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(model.isSelected ? Color.accentLink.opacity(0.1) : Color.cardFill))
-            .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(model.isSelected ? Color.accentLink : Color.cardBorder, lineWidth: 1))
+            .padding(.horizontal, PbRadius.Metrics.spacing12)
+            .padding(.vertical, PbRadius.Metrics.spacing14)
+            // The selected card is a running-tint fill with a named accent border — never an
+            // opacity-derived tint (the same treatment as the selected agent card).
+            .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(model.isSelected ? Color.runningBG : Color.cardFill))
+            .overlay {
+                RoundedRectangle(cornerRadius: PbRadius.card)
+                    .stroke(model.isSelected ? Color.accentLink : Color.cardBorder,
+                            lineWidth: model.isSelected ? PbRadius.Metrics.newSessionCardSelectedBorderWidth : PbRadius.Metrics.hairlineStroke)
+            }
             .contentShape(RoundedRectangle(cornerRadius: PbRadius.card))
         }
         .buttonStyle(.plain)
@@ -61,9 +67,10 @@ struct AccessOptionRow: View {
 
     private var radio: some View {
         Circle()
-            .strokeBorder(model.isSelected ? Color.accentLink : Color.secondaryText.opacity(0.6), lineWidth: model.isSelected ? 5 : 1.5)
-            .frame(width: 16, height: 16)
-            .padding(.top, 1)
+            .strokeBorder(model.isSelected ? Color.accentLink : Color.accessRadioBorder,
+                          lineWidth: model.isSelected ? PbRadius.Metrics.accessRadioSelectedStroke : PbRadius.Metrics.accessRadioUnselectedStroke)
+            .frame(width: PbRadius.Metrics.spacing16, height: PbRadius.Metrics.spacing16)
+            .padding(.top, PbRadius.Metrics.hairlineStroke)
             .accessibilityHidden(true)
     }
 }
@@ -72,32 +79,55 @@ struct AccessOptionRow: View {
 private let previewOptions = [
     AccessOptionModel(
         id: "read_only", title: "Read-only",
-        detail: "Reads the code and answers. Doesn't change any files. Good for questions and reviews.",
+        detail: "Requests read-only repo review.",
         isSelected: true, isWarning: false
     ),
     AccessOptionModel(
         id: "write_in_repo", title: "Can edit this repo",
-        detail: "Edits files in the repo. Commits and pushes are blocked, so you review before anything leaves.",
+        detail: "Requests repo edits, no publishing.",
+        isSelected: false, isWarning: false
+    ),
+    AccessOptionModel(
+        id: "publish", title: "Can publish",
+        detail: "Requests edits and publish attempts.",
         isSelected: false, isWarning: false
     ),
     AccessOptionModel(
         id: "unrestricted", title: "Full access",
-        detail: "No limits from polybridge. The agent can touch anything your user account can. Use sparingly.",
+        detail: "Requests broad access; use sparingly.",
         isSelected: false, isWarning: true
     )
 ]
 
 private struct AccessOptionRowPreview: View {
     var body: some View {
-        VStack(spacing: 8) {
+        // The default 760-wide sheet's 2×2 layout.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: PbRadius.Metrics.newSessionAccessCardMinimumWidth),
+                                     spacing: PbRadius.Metrics.spacing12)],
+                  spacing: PbRadius.Metrics.spacing12) {
             ForEach(previewOptions) { AccessOptionRow(model: $0, onSelect: {}) }
         }
-        .padding(20)
-.frame(width: 600)
-.background(Color.windowBG)
+        .padding(PbRadius.Metrics.spacing20)
+        .frame(width: PbRadius.Metrics.newSessionSheetWidth - 2 * PbRadius.Metrics.spacing28)
+        .background(Color.windowBG)
     }
 }
 
 #Preview("AccessOptionRow - light") { AccessOptionRowPreview().preferredColorScheme(.light) }
 #Preview("AccessOptionRow - dark") { AccessOptionRowPreview().preferredColorScheme(.dark) }
+
+/// The narrower overflow fallback: one column, descriptions wrap without truncation.
+private struct AccessOptionRowNarrowPreview: View {
+    var body: some View {
+        VStack(spacing: PbRadius.Metrics.spacing12) {
+            ForEach(previewOptions) { AccessOptionRow(model: $0, onSelect: {}) }
+        }
+        .padding(PbRadius.Metrics.spacing20)
+        .frame(width: PbRadius.Metrics.newSessionAccessCardMinimumWidth)
+        .background(Color.windowBG)
+    }
+}
+
+#Preview("AccessOptionRow narrow - light") { AccessOptionRowNarrowPreview().preferredColorScheme(.light) }
+#Preview("AccessOptionRow narrow - dark") { AccessOptionRowNarrowPreview().preferredColorScheme(.dark) }
 #endif

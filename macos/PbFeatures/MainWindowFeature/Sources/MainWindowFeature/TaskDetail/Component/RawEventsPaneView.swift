@@ -26,6 +26,8 @@ struct RawEventsPaneView: View {
                 }
             }
             .padding(10)
+            // The document probe (§6.2): inside the raw events pane's own document.
+            .background(ScrollChrome())
         }
         .overlay(alignment: .topTrailing) {
             Text(path).font(.pb(.caption)).foregroundStyle(.secondary).padding(6).textSelection(.enabled)
@@ -37,5 +39,25 @@ struct RawEventsPaneView: View {
 #Preview {
     RawEventsPaneView(events: [], path: "/tmp/example.events.jsonl")
         .frame(width: 400, height: 300)
+}
+
+/// Dummy overflowing events — the pane's native overlay chrome only shows itself while scrolling.
+private func rawEventsPreviewEvents() -> [TaskEvent] {
+    (1 ... 30).compactMap { index in
+        TaskEvent(line: "{\"v\":1,\"seq\":\(index),\"kind\":\"assistant_text\","
+            + "\"text\":\"Raw event line \(index) — dummy preview data that overflows the pane.\"}")
+    }
+}
+
+#Preview("Raw events - light") {
+    RawEventsPaneView(events: rawEventsPreviewEvents(), path: "/tmp/example.events.jsonl")
+        .frame(width: PbRadius.Metrics.sidebarPreviewWidth, height: PbRadius.Metrics.sidebarPreviewHeight)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Raw events - dark") {
+    RawEventsPaneView(events: rawEventsPreviewEvents(), path: "/tmp/example.events.jsonl")
+        .frame(width: PbRadius.Metrics.sidebarPreviewWidth, height: PbRadius.Metrics.sidebarPreviewHeight)
+        .preferredColorScheme(.dark)
 }
 #endif

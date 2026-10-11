@@ -12,6 +12,12 @@ import SwiftUI
 
 // MARK: - ToolGroupCardView
 
+/// A card folding adjacent tool calls: icon, summary, time range and a chevron. Redesign §5.4: the
+/// grouped-card treatment (`GroupedActivityCard` + `ActivityCardRow`'s 10 × 14 rows with hairline
+/// dividers between them), a 15 pt row icon, and the strong-verb summary with monospaced detail.
+/// Expanded, a read card first shows its file names as pills, then every call as an ordinary
+/// `ToolRow` in its own row — each call stays its own row; adjacent groups are never merged, and
+/// expansion state belongs to the feed (keyed by the group id), not to this view.
 struct ToolGroupCardView: View {
     let group: ToolGroup
     let start: Date?
@@ -20,61 +26,63 @@ struct ToolGroupCardView: View {
     @State private var seenMemberIDs: Set<String> = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: onToggle) {
-                header
-                    .textSelection(.disabled)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-            .accessibilityHint(isExpanded ? "Hides the individual calls" : "Shows the individual calls")
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 12) {
-                    if !group.pillNames.isEmpty {
-                        FilePillsView(names: group.pillNames, paths: group.pillPaths, overflowCount: group.overflowCount)
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(group.members) { member in
-                            ToolRow(model: ToolRowModel(call: member.call, result: member.result, live: member.live))
-                                .pbFadeIn(animate: !seenMemberIDs.contains(member.id))
-                                .onAppear { seenMemberIDs.insert(member.id) }
-                        }
-                    }.pbFadeIn()
-                }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 12)
+        GroupedActivityCard {
+            headerButton
+            if isExpanded { expandedContent }
+        }
+    }
+
+    private var headerButton: some View {
+        Button(action: onToggle) {
+            ActivityCardRow { header }
+                .textSelection(.disabled)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        .accessibilityHint(isExpanded ? "Hides the individual calls" : "Shows the individual calls")
+    }
+
+    @ViewBuilder
+    private var expandedContent: some View {
+        if !group.pillNames.isEmpty {
+            ActivityCardDivider()
+            ActivityCardRow {
+                FilePillsView(names: group.pillNames, paths: group.pillPaths, overflowCount: group.overflowCount)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.cardFill))
-        .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(Color.cardBorder, lineWidth: 1).allowsHitTesting(false))
+        ForEach(group.members) { member in
+            ActivityCardDivider()
+            ActivityCardRow {
+                ToolRow(model: ToolRowModel(call: member.call, result: member.result, live: member.live))
+            }
+            .pbFadeIn(animate: !seenMemberIDs.contains(member.id))
+            .onAppear { seenMemberIDs.insert(member.id) }
+        }
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: PbRadius.Metrics.spacing8) {
             Image(systemName: group.bucket.iconName)
-                .frame(width: 16)
+                .font(.pb(.headline))
+                .frame(width: PbRadius.Metrics.activityIconSize)
                 .foregroundStyle(Color.secondaryText)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(group.summary).font(.pb(.body, weight: .medium))
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing2) {
+                Text(group.summary).font(.pb(.body, weight: .bold)).monospacedDigit()
                 if let subtitle = group.subtitle {
-                    Text(subtitle).font(.pb(.caption)).foregroundStyle(Color.secondaryText).lineLimit(1)
+                    Text(subtitle).font(.pb(.caption)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
                 }
             }
-            Spacer(minLength: 8)
-            if group.isRunning { RunningSpinner(size: 12) }
+            Spacer(minLength: PbRadius.Metrics.spacing8)
+            if group.isRunning { RunningSpinner(size: PbRadius.Metrics.spacing12) }
             Text(group.timeRangeText(start: start))
                 .font(.pb(.caption))
                 .monospacedDigit()
-                .foregroundStyle(Color.secondaryText)
+                .foregroundStyle(Color.tertiaryText)
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                 .font(.pb(.caption, weight: .semibold))
-                .foregroundStyle(Color.secondaryText)
+                .foregroundStyle(Color.tertiaryText)
         }
         .contentShape(Rectangle())
     }
@@ -91,7 +99,7 @@ struct FilePillsView: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        PillFlowLayout(spacing: 6) {
+        PillFlowLayout(spacing: PbRadius.Metrics.spacing6) {
             ForEach(Array(names.enumerated()), id: \.offset) { index, name in
                 if index < paths.count, let link = FileLinks.link(forPath: paths[index]) {
                     Button { openURL(link) } label: { pill(name) }
@@ -102,17 +110,17 @@ struct FilePillsView: View {
                     pill(name)
                 }
             }
-            if overflowCount > 0 { pill("+\(overflowCount) more") }
+            if overflowCount > 0 { pill("+\(overflowCount) more").monospacedDigit() }
         }
     }
 
     private func pill(_ text: String) -> some View {
         Text(text)
-            .font(.pb(.caption))
+            .font(.pb(.secondary, design: .monospaced))
             .foregroundStyle(Color.secondaryText)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .padding(.horizontal, PbRadius.Metrics.spacing8)
+            .padding(.vertical, PbRadius.Metrics.rowLineSpacing)
             .background(Capsule().fill(Color.pillFill))
     }
 }
@@ -121,7 +129,7 @@ struct FilePillsView: View {
 
 /// Places subviews left to right and wraps to a new line when the next one does not fit.
 struct PillFlowLayout: Layout {
-    var spacing: CGFloat = 6
+    var spacing: CGFloat = PbRadius.Metrics.spacing6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let result = arrange(width: proposal.width ?? .infinity, subviews: subviews)
@@ -179,17 +187,29 @@ private struct ToolGroupCardPreview: View {
     )
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: PbRadius.Metrics.spacing12) {
             ToolGroupCardView(group: Self.readGroup, start: .now, isExpanded: false, onToggle: {})
             ToolGroupCardView(group: Self.readGroup, start: .now, isExpanded: true, onToggle: {})
             ToolGroupCardView(group: Self.runningGroup, start: .now, isExpanded: false, onToggle: {})
         }
-        .padding()
-        .frame(width: 560)
+        .padding(PbRadius.Metrics.spacing16)
+        .frame(width: PbRadius.Metrics.taskComponentPreviewWidth)
         .background(Color.windowBG)
     }
 }
 
 #Preview("Tool group card - light") { ToolGroupCardPreview().preferredColorScheme(.light) }
 #Preview("Tool group card - dark") { ToolGroupCardPreview().preferredColorScheme(.dark) }
+
+#Preview("File pills, long name and overflow - light") {
+    FilePillsView(names: ["AppDelegate.swift", String(repeating: "LongName", count: 12)], paths: ["/repo/AppDelegate.swift"], overflowCount: 3)
+        .frame(width: PbRadius.Metrics.activityPreviewWidth)
+.preferredColorScheme(.light)
+}
+
+#Preview("File pills, long name and overflow - dark") {
+    FilePillsView(names: ["AppDelegate.swift", String(repeating: "LongName", count: 12)], paths: ["/repo/AppDelegate.swift"], overflowCount: 3)
+        .frame(width: PbRadius.Metrics.activityPreviewWidth)
+.preferredColorScheme(.dark)
+}
 #endif

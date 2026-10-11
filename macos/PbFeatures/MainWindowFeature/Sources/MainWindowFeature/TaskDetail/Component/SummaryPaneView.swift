@@ -13,19 +13,26 @@ import SwiftUI
 
 // MARK: - SummaryHeroModel
 
-/// The Summary's headline (decision D9): status icon, a status/duration sentence, and a
-/// "<Backend> · N turns" subline.
+/// The Summary's headline (decision D9 / redesign §1.6, §6.2): status icon, a status/duration
+/// sentence, and a backend/agent-turns subline.
 struct SummaryHeroModel: Equatable {
     let status: TaskStatus
     let backend: String
-    /// The whole headline for a settled task ("Done in 21 min", or just "Done" when no exit was
-    /// observed). While running the view ticks "Running · m:ss" itself from `startedAt`.
+    /// The whole headline for a settled task ("Done in 21 min", or just "Done" when no reliable
+    /// duration exists). While running the view ticks "Running · m:ss" itself from `startedAt`.
     let headline: String
     /// While running: when it started, and the recorded duration `TaskInfo.elapsed(now:)` falls back
     /// to when it has no start time.
     let startedAt: Date?
     let fallbackElapsed: TimeInterval?
-    /// "3 turns" — backend `numTurns` only, nil when unreported.
+    /// The reliable settled duration (§1.6): the recorded `duration_seconds` of a terminal task
+    /// with an observed exit (`TaskSettledDuration`), shared by the headline and the Duration tile.
+    /// `nil` means no duration shows anywhere — never a now-minus-start fallback. Included in
+    /// equality like every field consumers read.
+    var settledDuration: TimeInterval?
+    /// "Agent turns: 3" — the CURRENT agent run's own reported `numTurns` only, deliberately
+    /// distinct from the conversation-turn counts elsewhere (the header's "N turns" is
+    /// conversation members). `nil` when unreported.
     let turnsText: String?
 
     var isRunning: Bool { status.isRunning }
@@ -96,6 +103,11 @@ struct SummaryPaneModel {
 
     var editedFileRows: [SummaryFileRow] { editedFiles.map(SummaryFileRow.init) }
 
+    /// The scope of every reported Summary metric, including tasks that report no agent-turn count.
+    var metricScopeText: String? {
+        !statTiles.isEmpty || hero?.turnsText != nil ? "Reported by current agent run" : nil
+    }
+
     /// How many file rows show before the rest collapses behind the "Show all N" button (item 13).
     static let fileRowCollapseThreshold = 8
 
@@ -109,10 +121,19 @@ struct SummaryPaneModel {
         return (Array(rows.prefix(fileRowCollapseThreshold)), rows.count - fileRowCollapseThreshold)
     }
 
-    /// Tokens / Cost, each only when reported. Duration has no tile (item 9): the hero headline
-    /// already says it, so the row as a whole shows only once Tokens or Cost is reported.
+    /// Duration / Agent turns / Tokens / Cost, each only when reported (§6.2). The Duration tile
+    /// uses the same reliable recorded value as the headline (`hero.settledDuration`, populated
+    /// from `TaskSettledDuration`) — terminal + observed exit + recorded duration — so the two
+    /// never disagree and neither fabricates an elapsed value. The Agent turns tile carries the
+    /// current agent run's own reported `numTurns`, not the conversation's member count.
     var statTiles: [SummaryStatTile] {
         var tiles: [SummaryStatTile] = []
+        if let settledDuration = hero?.settledDuration {
+            tiles.append(SummaryStatTile(title: "Duration", value: Format.clock(settledDuration)))
+        }
+        if let numTurns {
+            tiles.append(SummaryStatTile(title: "Agent turns", value: String(numTurns)))
+        }
         if inputTokens != nil || outputTokens != nil {
             let input = inputTokens.map(Self.tokenCount) ?? "–"
             let output = outputTokens.map(Self.tokenCount) ?? "–"
@@ -140,20 +161,24 @@ struct SummaryPaneModel {
 
     private static func tokenCount(_ value: Int) -> String { String(value) }
 
-    /// D9: a settled task shows its duration only when an exit was observed (`exitCode` present);
-    /// without one, the elapsed value would keep growing with "now". The duration lives in the
-    /// headline alone — item 9 dropped the Duration tile that repeated it a third time.
+    /// The headline's duration is the reliable recorded one (§1.6): terminal + observed exit +
+    /// recorded `duration_seconds`, the same `TaskSettledDuration` rule the header badge and the
+    /// Duration tile use. Without it the headline is status-only — the old `task.elapsed()` call
+    /// fabricated an ever-growing duration for a settled task that had an exit but no recorded
+    /// duration. The turns subline names the CURRENT agent run's own reported turns, deliberately
+    /// distinct from the conversation-turn counts shown in the header and the Activity tab.
     static func heroParts(task: TaskInfo) -> SummaryHeroModel {
         let status = task.status
+        let settledDuration = TaskSettledDuration.seconds(for: task)
         var headline = status.label
-        if status.isTerminal, task.exitCode != nil, let elapsed = task.elapsed() {
-            let text = durationText(elapsed)
+        if let settledDuration {
+            let text = durationText(settledDuration)
             headline += status == .completed ? " in \(text)" : " after \(text)"
         }
-        let turns = task.numTurns.map { "\($0) \($0 == 1 ? "turn" : "turns")" }
+        let turns = task.numTurns.map { "Agent turns: \($0)" }
         return SummaryHeroModel(
             status: status, backend: task.backend, headline: headline, startedAt: task.startedAt,
-            fallbackElapsed: task.durationSeconds, turnsText: turns
+            fallbackElapsed: task.durationSeconds, settledDuration: settledDuration, turnsText: turns
         )
     }
 
@@ -239,9 +264,11 @@ struct SummaryPaneView: View {
 
     var body: some View {
         ScrollView {
-            // Item 12: hero → Result → Files edited → Refusals & warnings → stat tiles.
-            VStack(alignment: .leading, spacing: 28) {
+            // Redesign §6.2: hero → stat tiles → Result → Files edited → Refusals & warnings.
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing28) {
                 if let hero = model.hero { heroSection(hero) }
+
+                if !model.statTiles.isEmpty { statTiles }
 
                 section("Result") {
                     if let answer = model.finalAnswer {
@@ -254,22 +281,26 @@ struct SummaryPaneView: View {
                 editedFilesSection
 
                 if !model.refusalLines.isEmpty { refusals }
-
-                if !model.statTiles.isEmpty { statTiles }
             }
-            .padding(24)
+            .padding(PbRadius.Metrics.spacing24)
             .readingColumn()
+            // The document probe (§6.2): inside the summary pane's own document, so it can only
+            // ever target this scroll view.
+            .background(ScrollChrome())
         }
     }
 
     // MARK: Hero
 
     /// Item 11: the headline text stays primary; only the status icon carries the status colour
-    /// (`StatusIcon` applies `StatusColor` itself).
+    /// (`StatusIcon` applies `StatusColor` itself). The subline names the agent and the CURRENT
+    /// agent run's own turns; the caption pins that scope for every reported metric below.
     private func heroSection(_ hero: SummaryHeroModel) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            StatusIcon(status: hero.status).scaleEffect(1.6).frame(width: 28, height: 28)
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .center, spacing: PbRadius.Metrics.spacing12) {
+            StatusIcon(status: hero.status)
+.scaleEffect(PbRadius.Metrics.summaryStatusIconScale)
+                .frame(width: PbRadius.Metrics.spacing28, height: PbRadius.Metrics.spacing28)
+            VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing4) {
                 if hero.isRunning {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         let elapsed = hero.startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? hero.fallbackElapsed
@@ -277,39 +308,26 @@ struct SummaryPaneView: View {
                     }
                     .font(.pb(.hero, weight: .semibold))
                 } else {
-                    Text(hero.headline).font(.pb(.hero, weight: .semibold))
+                    Text(hero.headline).font(.pb(.hero, weight: .semibold)).monospacedDigit()
                 }
-                HStack(spacing: 4) {
+                HStack(spacing: PbRadius.Metrics.spacing4) {
                     BackendLabel(backend: hero.backend)
-                    if let turns = hero.turnsText { Text("· \(turns)") }
+                    if let turns = hero.turnsText { Text("· \(turns)").monospacedDigit() }
                 }
                 .font(.pb(.secondary))
                 .foregroundStyle(Color.secondaryText)
+                if let scopeText = model.metricScopeText {
+                    Text(scopeText)
+                        .font(.pb(.caption))
+                        .foregroundStyle(Color.tertiaryText)
+                }
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: PbRadius.Metrics.zero)
         }
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: Stat tiles
-
-    /// Item 10: fixed-width, leading-aligned tiles (never stretched to the pane's full width);
-    /// values keep the proportional type with tabular digits rather than a monospaced design.
-    private var statTiles: some View {
-        HStack(alignment: .top, spacing: 10) {
-            ForEach(model.statTiles) { tile in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(tile.title).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-                    Text(tile.value).font(.pb(.body, weight: .semibold)).monospacedDigit()
-                }
-                .frame(width: 160, alignment: .leading)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: PbRadius.card).fill(Color.cardFill))
-                .overlay(RoundedRectangle(cornerRadius: PbRadius.card).stroke(Color.cardBorder, lineWidth: 1))
-                .accessibilityElement(children: .combine)
-            }
-        }
-    }
+    private var statTiles: some View { SummaryStatTilesView(tiles: model.statTiles) }
 
     // MARK: Refusals & warnings
 
@@ -318,7 +336,7 @@ struct SummaryPaneView: View {
     private var refusals: some View {
         ActivityCard {
             DisclosureGroup(isExpanded: $refusalsExpanded) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing6) {
                     ForEach(Array(model.refusalLines.enumerated()), id: \.offset) { _, line in
                         Text(line)
                             .font(.pb(.secondary))
@@ -327,12 +345,12 @@ struct SummaryPaneView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .padding(.top, 6)
+                .padding(.top, PbRadius.Metrics.spacing6)
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: PbRadius.Metrics.spacing6) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.warningFG)
                     Text("Refusals & warnings")
-                    Text("· \(model.refusalLines.count)").foregroundStyle(Color.warningFG)
+                    Text("· \(model.refusalLines.count)").monospacedDigit().foregroundStyle(Color.warningFG)
                 }
                 .font(.pb(.body, weight: .semibold))
             }
@@ -352,77 +370,30 @@ struct SummaryPaneView: View {
             }
         case .available:
             if !model.editedFiles.isEmpty {
-                section("Files edited · \(model.editedFiles.count)") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("As reported by the agent's own edit tools — not a git diff; changes made by shell commands aren't listed.")
-                            .font(.pb(.caption))
-                            .foregroundStyle(Color.secondaryText)
-                        if let note = model.editedFilesNote {
-                            Text(note).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-                        }
-                        editedFilesCard
+                VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+                    SummaryEditedFilesHeading(count: model.editedFiles.count)
+                    if let note = model.editedFilesNote {
+                        Text(note).font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                     }
+                    editedFilesCard
                 }
             }
         }
     }
 
-    /// Item 13: the list sits in a card (`ActivityCard` style: `cardFill`, hairline `cardBorder`,
-    /// radius 10) with hairline dividers between rows; past `SummaryPaneModel.fileRowCollapseThreshold`
-    /// rows the rest hides behind a "Show all N" button.
+    /// The grouped file card uses the shared 10 × 14 rows, full-width hairlines and card radius.
+    /// The retained collapse threshold and load-more callbacks stay owned by this pane.
     private var editedFilesCard: some View {
         let allRows = model.editedFileRows
         let visible = SummaryPaneModel.visibleFileRows(allRows, showingAll: showAllFiles)
-        return ActivityCard {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(visible.rows.enumerated()), id: \.element.id) { index, row in
-                    if index > 0 { Divider() }
-                    fileRow(row)
-                }
-                if visible.hiddenCount > 0 {
-                    Divider()
-                    Button("Show loaded \(allRows.count)") { showAllFiles = true }
-                }
-                if model.additionalFileCount > 0, let loadMore = model.onLoadMoreFiles {
-                    Button("Load more files (\(model.additionalFileCount) task file entries not shown)") { showAllFiles = true; loadMore() }
-                        .buttonStyle(.link)
-                        .font(.pb(.secondary, weight: .medium))
-                        .padding(.top, 8)
-                }
-            }
-        }
-    }
-
-    private func fileRow(_ row: SummaryFileRow) -> some View {
-        HStack(spacing: 8) {
-            statusBadge(row.status)
-            Text(row.name).font(.pb(.secondary, weight: .medium)).lineLimit(1)
-            if let folder = row.parentFolder {
-                Text(folder).font(.pb(.caption)).foregroundStyle(Color.secondaryText).lineLimit(1).truncationMode(.head)
-            }
-            Spacer(minLength: 0)
-            if row.status == .unconfirmed {
-                Text("no result recorded").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
-            }
-        }
-        .padding(.vertical, 6)
-        .help(row.fullPath)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(row.accessibilityLabel)
-    }
-
-    private func statusBadge(_ status: EditedFileStatus) -> some View {
-        let (symbol, color): (String, Color) = switch status {
-        case .edited: ("✓", Color.doneGreen)
-        case .failed: ("✗", Color.failedRed)
-        case .unconfirmed: ("?", Color.secondaryText)
-        }
-        return Text(symbol).font(.pb(.caption, weight: .bold)).foregroundStyle(color).frame(width: 12)
+        return SummaryEditedFilesCard(rows: visible.rows, hiddenCount: visible.hiddenCount, loadedCount: allRows.count,
+            additionalFileCount: model.additionalFileCount, onShowLoaded: { showAllFiles = true },
+            onLoadMore: model.onLoadMoreFiles.map { loadMore in { showAllFiles = true; loadMore() } })
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.pb(.headline, weight: .semibold))
+        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+            Text(title).font(.pb(.headline, weight: .semibold)).monospacedDigit()
             content()
         }
     }
@@ -487,7 +458,7 @@ private struct SummaryPreviewGallery: View {
 
     var body: some View {
         SummaryPaneView(model: model)
-            .frame(width: 520, height: 560)
+            .frame(width: PbRadius.Metrics.summaryPreviewWidth, height: PbRadius.Metrics.summaryPreviewHeight)
             .background(Color.windowBG)
     }
 }
@@ -515,6 +486,16 @@ private func manyFiles() -> SummaryPaneModel {
     Fixtures.model(Fixtures.task(status: "completed"), files: Fixtures.manyFiles)
 }
 
+private func partialFiles() -> SummaryPaneModel {
+    SummaryPaneModel.build(task: Fixtures.task(status: "completed"), summary: "Result from the current agent run.",
+        memberEventsOldestFirst: [[], []], memberAvailabilities: [.unavailable, .available])
+.with(editedFiles: Fixtures.files)
+}
+
+private func unavailableFiles() -> SummaryPaneModel {
+    SummaryPaneModel.build(task: Fixtures.task(status: "completed"), summary: nil, events: [], eventsAvailability: .unavailable)
+}
+
 #Preview("Done - light") { SummaryPreviewPair(model: completed()).preferredColorScheme(.light) }
 #Preview("Done - dark") { SummaryPreviewPair(model: completed()).preferredColorScheme(.dark) }
 #Preview("Running - light") { SummaryPreviewPair(model: running()).preferredColorScheme(.light) }
@@ -531,4 +512,16 @@ private func manyFiles() -> SummaryPaneModel {
 #Preview("Twelve files - dark") { SummaryPreviewPair(model: manyFiles()).preferredColorScheme(.dark) }
 #Preview("Loading - light") { SummaryPreviewPair(model: .empty).preferredColorScheme(.light) }
 #Preview("Loading - dark") { SummaryPreviewPair(model: .empty).preferredColorScheme(.dark) }
+#Preview("Metrics without agent turns - light") {
+    SummaryPreviewPair(model: Fixtures.model(Fixtures.task(status: "completed", turns: nil))).preferredColorScheme(.light)
+}
+
+#Preview("Metrics without agent turns - dark") {
+    SummaryPreviewPair(model: Fixtures.model(Fixtures.task(status: "completed", turns: nil))).preferredColorScheme(.dark)
+}
+
+#Preview("Partial file history - light") { SummaryPreviewPair(model: partialFiles()).preferredColorScheme(.light) }
+#Preview("Partial file history - dark") { SummaryPreviewPair(model: partialFiles()).preferredColorScheme(.dark) }
+#Preview("Unavailable file history - light") { SummaryPreviewPair(model: unavailableFiles()).preferredColorScheme(.light) }
+#Preview("Unavailable file history - dark") { SummaryPreviewPair(model: unavailableFiles()).preferredColorScheme(.dark) }
 #endif
