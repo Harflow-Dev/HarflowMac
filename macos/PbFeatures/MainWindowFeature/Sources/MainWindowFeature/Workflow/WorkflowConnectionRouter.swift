@@ -4,19 +4,53 @@ import Foundation
 
 enum WorkflowConnectionRouter {
     private static let spacing = WorkflowCanvasGeometry.gridSpacing
-    private static let clearance: CGFloat = 10
+    // Other routes stay outside the destination arrowhead (7pt) and port rim.
+    private static let clearance: CGFloat = 20
     private static let expansionLimit = 5000
 
-    static func route(source: WorkflowNodeModel, target: WorkflowNodeModel?, endpoint: CGPoint, nodes: [WorkflowNodeModel]) -> [CGPoint] {
+    static func route(source: WorkflowNodeModel, target: WorkflowNodeModel?, endpoint: CGPoint,
+                      nodes: [WorkflowNodeModel], approachInset: CGFloat = 35) -> [CGPoint] {
         let start = WorkflowCanvasGeometry.connectionOutput(source)
         let finish = endpoint
+        // An aligned short gap needs no bend corridor. Its approach anchor could otherwise
+        // land inside the source's clearance rectangle and force an unnecessary return loop.
+        let directObstacles = nodes.filter { $0.id != source.id && $0.id != target?.id }.map {
+            CGRect(origin: $0.position, size: WorkflowCanvasGeometry.size($0)).insetBy(dx: -clearance, dy: -clearance)
+        }
+        if start.y == finish.y, finish.x > start.x, clear([start, finish], obstacles: directObstacles) {
+            return [start, finish]
+        }
         let startGrid = CGPoint(x: ceil((start.x + 15) / spacing) * spacing, y: start.y)
-        let finishGrid = CGPoint(x: floor((finish.x - 15) / spacing) * spacing, y: finish.y)
+        // Reserve 35pt before the tip: a rounded 10pt bend cannot consume the 7pt arrowhead.
+        // Keep fan-in lanes on the canvas when the destination is close to its leading edge.
+        let inset = min(max(35, approachInset), max(35, finish.x))
+        var finishGrid = CGPoint(x: floor((finish.x - inset) / spacing) * spacing, y: finish.y)
+        let sourceObstacle = CGRect(origin: source.position, size: WorkflowCanvasGeometry.size(source))
+            .insetBy(dx: -clearance, dy: -clearance)
+        let sourceExit = max(startGrid.x, ceil(sourceObstacle.maxX / spacing) * spacing)
+        // Short forward gaps can place the approach anchor inside the source's padding.
+        // Bound it to the exit lane while retaining room for the 10pt bend and 7pt tip.
+        if finish.x > start.x, finish.y > sourceObstacle.minY, finish.y < sourceObstacle.maxY,
+           finishGrid.x < sourceExit, finish.x - sourceExit >= 17 {
+            finishGrid.x = sourceExit
+        }
         let prefix = [start, startGrid]
-        let suffix = [finishGrid, finish]
         let obstacles = nodes.map { node in
             (node.id, CGRect(origin: node.position, size: WorkflowCanvasGeometry.size(node)).insetBy(dx: -clearance, dy: -clearance))
         }
+        // Fan-in lanes share the available corridor with every preceding node, not just
+        // their source. Shorten an approach when its anchor would enter another box.
+        let approachObstacles = obstacles.filter { $0.0 != target?.id }.map(\.1)
+        if let corridorEdge = approachObstacles.filter({ rectangle in
+            finish.y > rectangle.minY && finish.y < rectangle.maxY
+                && rectangle.minX < finish.x && rectangle.maxX > finishGrid.x
+        })
+.map(\.maxX)
+.max() {
+            let safeAnchor = ceil(corridorEdge / spacing) * spacing
+            if finish.x - safeAnchor >= 17 { finishGrid.x = max(finishGrid.x, safeAnchor) }
+        }
+        let suffix = [finishGrid, finish]
         let prefixClear = clear(prefix, obstacles: obstacles.filter { $0.0 != source.id }.map(\.1))
         let suffixClear = clear(suffix, obstacles: obstacles.filter { $0.0 != target?.id }.map(\.1))
         let rectangles = obstacles.map(\.1)

@@ -23,7 +23,7 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
   (`mainWindowCoordinator`/`menuBarCoordinator`/`settingsCoordinator` are `lazy var`s on
   `AppCoordinator`, so the first access — from wherever it comes — builds them).
 - `AppCoordinator.handle(path:)` for `MonitorDestination`: `.task`/`.group` delegate
-  to `mainWindowCoordinator.handle(path:)` (which owns `selection`/`isNewSessionPresented`);
+  to `mainWindowCoordinator.handle(path:)` (which owns `selection`/`presentedSheet`);
   `.newSession` first brings the window forward, then delegates the same way; `.openWindow` goes
   through `WindowPresenting` (`NSApp.activate(ignoringOtherApps: true)`, then the registered opener).
   The opener is registered by `MainWindowSceneRoot.onAppear` (the main window's scene root) and, as a

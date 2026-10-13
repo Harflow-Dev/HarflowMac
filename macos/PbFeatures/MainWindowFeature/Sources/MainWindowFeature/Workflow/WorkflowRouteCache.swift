@@ -9,6 +9,7 @@ final class WorkflowRouteCache {
         let sourceID: String
         let targetID: String?
         let endpoint: CGPoint
+        let approachInset: CGFloat
         let geometry: [Geometry]
     }
 
@@ -19,11 +20,12 @@ final class WorkflowRouteCache {
         entries = entries.filter { ids.contains($0.key) }
     }
 
-    func route(id: String, source: WorkflowNodeModel, target: WorkflowNodeModel?, endpoint: CGPoint, nodes: [WorkflowNodeModel]) -> [CGPoint] {
-        let key = Key(sourceID: source.id, targetID: target?.id, endpoint: endpoint,
+    func route(id: String, source: WorkflowNodeModel, target: WorkflowNodeModel?, endpoint: CGPoint,
+               nodes: [WorkflowNodeModel], approachInset: CGFloat = 35) -> [CGPoint] {
+        let key = Key(sourceID: source.id, targetID: target?.id, endpoint: endpoint, approachInset: approachInset,
                       geometry: nodes.map { Geometry(id: $0.id, rectangle: CGRect(origin: $0.position, size: WorkflowCanvasGeometry.size($0))) })
         if let entry = entries[id], entry.key == key { return entry.points }
-        let points = WorkflowConnectionRouter.route(source: source, target: target, endpoint: endpoint, nodes: nodes)
+        let points = WorkflowConnectionRouter.route(source: source, target: target, endpoint: endpoint, nodes: nodes, approachInset: approachInset)
         computationCount += 1
         entries[id] = (key, points)
         return points

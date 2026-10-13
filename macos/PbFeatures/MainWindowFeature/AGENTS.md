@@ -13,9 +13,12 @@ no embedded terminal anywhere in this package (piece 1 of the Monitor architectu
 
 - Swift 6 language mode (tools 6.2 default).
 - Depends on `PbUtilities`, `PbCommon`, `PbUI`, `MonitorCore`, and `PbRepository`.
-- `MainWindowCoordinator.selection: MonitorDestination?` and `isNewSessionPresented: Bool` are the
-  real navigation state — the single source of truth the settled plan's window seam formalises
-  app-wide. `AppCoordinator` (the app target's real root coordinator, Phase 5) delegates
+- `MainWindowCoordinator.selection: MonitorDestination?` and `presentedSheet: MainWindowSheet?`
+  own selection and mutually exclusive modal state app-wide. `isNewSessionPresented` and
+  `isWorkflowRunnerPresented` are compatibility projections; dismissing either clears only its
+  matching active destination. Lightweight preview/test coordinators may derive `presentedSheet`
+  through the protocol fallback rather than storing it. `AppCoordinator` (the app target's real root
+  coordinator, Phase 5) delegates
   `.task`/`.group`/`.newSession` straight onto `MainWindowCoordinator.handle(path:)` for the
   URL/notification/Cmd-N paths it owns; there is no app-target `Selection` enum, no `AppModel`, and no
   mirroring layer at all (Phase 4d part 2 dropped the last of it; Phase 5 deleted

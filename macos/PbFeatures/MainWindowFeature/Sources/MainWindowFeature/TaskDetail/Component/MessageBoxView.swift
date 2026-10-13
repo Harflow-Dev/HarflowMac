@@ -87,7 +87,7 @@ struct MessageBoxView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
-            HStack(alignment: .bottom, spacing: PbRadius.Metrics.spacing10) {
+            HStack(alignment: .center, spacing: PbRadius.Metrics.spacing10) {
                 field
                 sendButton
             }

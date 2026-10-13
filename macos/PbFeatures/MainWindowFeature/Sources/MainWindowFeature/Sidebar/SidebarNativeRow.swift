@@ -93,6 +93,7 @@ struct SidebarNativeRow: View {
         case .workflowDefinition(let title):
             SidebarWorkflowDefinitionRow(title: title)
                 .font(.pb(.body, weight: .medium))
+                .padding(.vertical, PbRadius.Metrics.spacing6)
                 .frame(minHeight: entry.minimumHeight)
                 .pbFadeIn(animate: animate)
         case .item(let item):

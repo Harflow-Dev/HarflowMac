@@ -198,11 +198,7 @@ struct WorkflowCanvas: View {
                 }
             }
             .dropDestination(for: String.self) { values, location in
-                guard isEditable, let role = values.first,
-                      ["planning", "implementation", "review", "task", "start", "join", "end", "parallel_group"].contains(role) else {
-                          return false
-                      }
-                guard !["start", "end"].contains(role) || !nodes.contains(where: { $0.type == role }) else { return false }
+                guard let role = values.first, WorkflowCanvasDropPolicy.accepts(role, isEditable: isEditable, nodes: nodes) else { return false }
                 onDrop(role, WorkflowCanvasZoom.logical(location, scale: zoom))
                 return true
             }
@@ -275,7 +271,8 @@ struct WorkflowCanvas: View {
             guard !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   let source = nodes.first(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) else { return nil }
             let finish = WorkflowCanvasGeometry.connectionInput(target)
-            let points = routeCache.route(id: edge.id, source: source, target: target, endpoint: finish, nodes: nodes)
+            let points = routeCache.route(id: edge.id, source: source, target: target, endpoint: finish, nodes: nodes,
+                                          approachInset: WorkflowConnectionApproach.inset(for: edge, edges: edges, nodes: nodes))
             return WorkflowArrowHover.Candidate(id: edge.id, path: arrowPath(points, finish: finish), points: points)
         }
         hoveredArrow = WorkflowArrowHover.nearest(to: point, candidates: candidates).map { WorkflowArrowHoverState(edgeID: $0, point: point) }
@@ -404,32 +401,12 @@ struct WorkflowCanvas: View {
             : PbRadius.Metrics.workflowConnectionLineWidth
     }
 
-    /// The condition pill sits on the edge's middle segment, offset clear of the line. Purely
-    /// decorative: the edge's own accessibility label already carries the condition.
-    private func conditionLabelPosition(_ points: [CGPoint]) -> CGPoint? {
-        guard points.count >= 2 else { return nil }
-        let middle = points.count / 2
-        let from = points[middle - 1]
-        let to = points[middle]
-        let midpoint = CGPoint(x: (from.x + to.x) / 2, y: (from.y + to.y) / 2)
-        if abs(to.y - from.y) < abs(to.x - from.x) {
-            return CGPoint(x: midpoint.x, y: midpoint.y - PbRadius.Metrics.workflowConditionPillOffset)
-        }
-        return CGPoint(x: midpoint.x - PbRadius.Metrics.workflowConditionPillOffset, y: midpoint.y)
-    }
-
-    private func conditionPill(_ edge: WorkflowEdgeModel, points: [CGPoint]) -> some View {
-        WorkflowConditionPill(condition: edge.condition)
-            .position(conditionLabelPosition(points) ?? .zero)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-
     @ViewBuilder
     private func edgeView(_ edge: WorkflowEdgeModel) -> some View {
         if let source = nodes.first(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) {
             let finish = WorkflowCanvasGeometry.connectionInput(target, highlighted: isConnectionTarget(target))
-            let points = routeCache.route(id: edge.id, source: source, target: target, endpoint: finish, nodes: nodes)
+            let points = routeCache.route(id: edge.id, source: source, target: target, endpoint: finish, nodes: nodes,
+                                          approachInset: WorkflowConnectionApproach.inset(for: edge, edges: edges, nodes: nodes))
             let connection = arrowPath(points, finish: finish)
             let label = "Connection from \(source.name) to \(target.name)"
                 + (edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : ": \(edge.condition)")
@@ -448,9 +425,6 @@ struct WorkflowCanvas: View {
                 .accessibilityLabel(label)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { isCanvasFocused = true; onSelectEdge(edge.id) }
-                if !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    conditionPill(edge, points: points)
-                }
             }
         }
     }

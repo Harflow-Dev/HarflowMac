@@ -10,7 +10,7 @@
 //  façade, which no longer exists.
 //
 //  `handle(path:)` for `MonitorDestination`: `.task`/`.group`/`.newSession` delegate to
-//  `MainWindowCoordinator` (which owns `selection`/`isNewSessionPresented`); `.openWindow` goes
+//  `MainWindowCoordinator` (which owns `selection`/`presentedSheet`); `.openWindow` goes
 //  through `WindowPresenting` — `NSApp.activate(ignoringOtherApps:)`, then the opener captured in
 //  `MenuBarLabelView.onAppear` via `MenuBarCoordinator.registerWindowOpener`. The directory-chooser
 //  panel already lives in `MainWindowCoordinator` (`NewSessionRouting.chooseDirectory`) — nothing
@@ -181,6 +181,18 @@ public final class AppCoordinator: ParentCoordinator, WindowPresenting, LaunchUR
         }
     }
     
+    /// Brings the main window forward before opening a fresh workflow canvas.
+    func createWorkflow() {
+        showWindow()
+        mainWindowCoordinator.handle(path: MonitorDestination.newWorkflow(UUID()))
+    }
+
+    /// Uses the main window coordinator’s saved-workflow chooser without requiring an editor.
+    func runWorkflow() {
+        showWindow()
+        mainWindowNavigationCoordinator?.presentWorkflowRunner()
+    }
+
     // MARK: - LaunchURLHandling
 
     @discardableResult

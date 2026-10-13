@@ -288,6 +288,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 Text("Add")
                     .font(.pb(.caption, weight: .semibold))
                     .foregroundStyle(Color.tertiaryText)
+                    .padding(.leading, PbRadius.Metrics.spacing8)
                 WorkflowStepFlowLayout(spacing: PbRadius.Metrics.spacing8) {
                     ForEach(WorkflowStepPalette.items()) { item in
                         stepItem(item)
@@ -416,6 +417,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             }
             GeometryReader { viewport in
                 let minimums = WorkflowBuilderLayout.minimums(height: viewport.size.height)
+                WorkflowPaneViewport {
                 VSplitView {
                     HSplitView {
                         canvas.frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity)
@@ -441,6 +443,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                             }.frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }.frame(minHeight: minimums.task)
+                }
                 }
                 .frame(width: viewport.size.width, height: viewport.size.height)
                 .clipped()

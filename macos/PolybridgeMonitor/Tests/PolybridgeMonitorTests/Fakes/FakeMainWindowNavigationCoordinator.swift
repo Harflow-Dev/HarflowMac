@@ -41,6 +41,13 @@ final class FakeMainWindowNavigationCoordinator: MainWindowNavigationCoordinator
         self.parent = parent
     }
     
+    var isWorkflowRunnerPresented = false
+    var runnerPresentationCount = 0
+    func presentWorkflowRunner() {
+        runnerPresentationCount += 1
+        isWorkflowRunnerPresented = true
+    }
+
     func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never> { Empty().eraseToAnyPublisher() }
     func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never> { Empty().eraseToAnyPublisher() }
     func buildSidebarView() -> AnyView { EmptyView().eraseToAnyView() }

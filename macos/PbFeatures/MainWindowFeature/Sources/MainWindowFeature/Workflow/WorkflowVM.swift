@@ -123,7 +123,11 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var validationSuspended = false
     @ObservationIgnored private var operation: Task<Void, Never>?
 
-    init(useCase: any WorkflowUseCase, routing: any WorkflowRouting, parallel: ParallelVM, draftStore: any WorkflowDraftStoring) {
+    @ObservationIgnored private let routesStartedRun: Bool
+
+    init(useCase: any WorkflowUseCase, routing: any WorkflowRouting, parallel: ParallelVM,
+         draftStore: any WorkflowDraftStoring, routesStartedRun: Bool = false) {
+        self.routesStartedRun = routesStartedRun
         self.draftStore = draftStore
         self.useCase = useCase
         self.routing = routing
@@ -321,6 +325,11 @@ final class WorkflowVM: WorkflowViewModel {
             initialLoadFailed = false
             selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "workflow_name": .string(loadedName), "definition": .object(definition)])
             isEditing = false
+            if routesStartedRun {
+                routing.openWorkflowRun(id: id)
+                await useCase.refreshTasks()
+                return
+            }
             await useCase.refreshTasks()
             await refresh()
         }

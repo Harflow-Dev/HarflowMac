@@ -419,9 +419,7 @@ struct PolybridgeMonitorApp: App {
         }
         .defaultSize(width: 1440, height: 900)
         .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Session…") { coordinator.handle(path: MonitorDestination.newSession) }.keyboardShortcut("n")
-            }
+            MonitorCommands(coordinator: coordinator)
         }
         
         // Settings and the menu bar are built through their own feature coordinators

@@ -11,6 +11,81 @@ import Testing
 @MainActor
 @Suite struct MainWindowCoordinatorTests {
     
+    @Test func givenNewSessionSheet_whenWorkflowRunnerRequested_thenRunnerReplacesSession() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.handle(path: MonitorDestination.newSession)
+        // when
+        sut.presentWorkflowRunner()
+        // then
+        #expect(sut.presentedSheet == .workflowRunner)
+        #expect(!sut.isNewSessionPresented)
+        #expect(sut.isWorkflowRunnerPresented)
+    }
+
+    @Test func givenWorkflowRunnerSheet_whenNewSessionRequested_thenSessionReplacesRunner() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.presentWorkflowRunner()
+        // when
+        sut.handle(path: MonitorDestination.newSession)
+        // then
+        #expect(sut.presentedSheet == .newSession)
+        #expect(sut.isNewSessionPresented)
+        #expect(!sut.isWorkflowRunnerPresented)
+    }
+
+    @Test func givenWorkflowRunnerSheet_whenSidebarRequestsNewSession_thenSessionReplacesRunner() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.presentWorkflowRunner()
+        // when
+        sut.openNewSession()
+        // then
+        #expect(sut.presentedSheet == .newSession)
+        #expect(!sut.isWorkflowRunnerPresented)
+    }
+
+    @Test func givenCompetingSheet_whenBooleanPresentationChanges_thenOnlyMatchingDismissalClearsIt() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.isNewSessionPresented = true
+        // when
+        sut.isWorkflowRunnerPresented = true
+        sut.isNewSessionPresented = false
+        // then
+        #expect(sut.presentedSheet == .workflowRunner)
+        // when
+        sut.isWorkflowRunnerPresented = false
+        // then
+        #expect(sut.presentedSheet == nil)
+        // when
+        sut.isNewSessionPresented = true
+        sut.isWorkflowRunnerPresented = false
+        // then
+        #expect(sut.presentedSheet == .newSession)
+        // when
+        sut.isNewSessionPresented = false
+        // then
+        #expect(sut.presentedSheet == nil)
+    }
+
+    @Test func givenSessionPublisher_whenSheetsSwitch_thenSessionTransitionsPublishOnce() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        var received: [Bool] = []
+        let cancellable = sut.isNewSessionPresentedPublisher().sink { received.append($0) }
+        // when
+        sut.openNewSession()
+        sut.presentWorkflowRunner()
+        sut.presentWorkflowRunner()
+        sut.openNewSession()
+        sut.openNewSession()
+        // then
+        #expect(received == [false, true, false, true])
+        withExtendedLifetime(cancellable) {}
+    }
+
     // MARK: - handle(path:)
     
     @Test func givenATaskDestination_whenHandled_thenSelectionIsSetAndNothingBubbles() {

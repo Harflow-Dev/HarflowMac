@@ -14,25 +14,48 @@ import PbUtilities
 import SwiftEnvironment
 import SwiftUI
 
+// MARK: - MainWindowSheet
+
+/// Mutually exclusive modal destinations presented by the main window.
+public enum MainWindowSheet: String, Identifiable {
+    /// Starts a new headless session.
+    case newSession
+    /// Chooses and launches a saved workflow.
+    case workflowRunner
+
+    /// Stable identity for the presented destination.
+    public var id: String { rawValue }
+}
+
 // MARK: - MainWindowNavigationCoordinator
 
 /// Navigation/view-building contract for the main window's split view. `MainWindowNavigationView`
 /// (this package) is generic over this protocol, never the concrete `MainWindowCoordinator` —
-/// `selection` and `isNewSessionPresented` are the single source of truth the settled plan's
+/// `selection` and `presentedSheet` are the single source of truth the settled plan's
 /// window/navigation seam formalises; the app target's root `AppCoordinator` (Phase 5) delegates
 /// `.task`/`.group`/`.newSession` straight onto `handle(path:)` for the URL/notification/Cmd-N
 /// paths it owns (see that file's header).
 @MainActor
 public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     /// The currently selected task/group destination, or `nil`. Never set to
-    /// `.newSession`/`.openWindow` — those are handled separately (`isNewSessionPresented`, and the
+    /// `.newSession`/`.openWindow` — those are handled separately (`presentedSheet`, and the
     /// parent's own window-opening seam) — see `MainWindowCoordinator.handle(path:)`.
     var selection: MonitorDestination? { get set }
     func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never>
 
-    /// Whether the New Session sheet is presented.
+    /// The main window's mutually exclusive modal destination.
+    var presentedSheet: MainWindowSheet? { get set }
+
+    /// Compatibility projection of the New Session destination; false dismisses only that destination.
     var isNewSessionPresented: Bool { get set }
     func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never>
+
+    /// Presents the saved-workflow chooser and existing launch flow independently of editor focus.
+    func presentWorkflowRunner()
+    /// Compatibility projection of the workflow runner destination; false dismisses only that destination.
+    var isWorkflowRunnerPresented: Bool { get set }
+    /// Builds the saved-workflow chooser and launch sheet.
+    func buildWorkflowRunnerView() -> AnyView
 
     /// Builds the sidebar (task list, search/filter, parallel runs).
     func buildSidebarView() -> AnyView
@@ -46,6 +69,20 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     func buildWorkflowEditorView(name: String?) -> AnyView
     /// Builds the monitor for a persisted workflow run.
     func buildWorkflowRunView(id: String) -> AnyView
+}
+
+public extension MainWindowNavigationCoordinator {
+    /// Derives modal state for lightweight preview and test coordinators.
+    var presentedSheet: MainWindowSheet? {
+        get {
+            if isNewSessionPresented { return .newSession }
+            return isWorkflowRunnerPresented ? .workflowRunner : nil
+        }
+        set {
+            isNewSessionPresented = newValue == .newSession
+            isWorkflowRunnerPresented = newValue == .workflowRunner
+        }
+    }
 }
 
 // MARK: - PasteboardWriting
@@ -83,12 +120,32 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         }
     }
 
-    public var isNewSessionPresented = false {
+    public var presentedSheet: MainWindowSheet? {
         didSet {
-            guard isNewSessionPresented != oldValue else { return }
-            isNewSessionPresentedSubject.send(isNewSessionPresented)
+            let wasNewSession = oldValue == .newSession
+            let isNewSession = presentedSheet == .newSession
+            guard wasNewSession != isNewSession else { return }
+            isNewSessionPresentedSubject.send(isNewSession)
         }
     }
+
+    public var isNewSessionPresented: Bool {
+        get { presentedSheet == .newSession }
+        set {
+            if newValue { presentedSheet = .newSession }
+            else if presentedSheet == .newSession { presentedSheet = nil }
+        }
+    }
+
+    public var isWorkflowRunnerPresented: Bool {
+        get { presentedSheet == .workflowRunner }
+        set {
+            if newValue { presentedSheet = .workflowRunner }
+            else if presentedSheet == .workflowRunner { presentedSheet = nil }
+        }
+    }
+
+    public func presentWorkflowRunner() { isWorkflowRunnerPresented = true }
 
     // MARK: - Private Properties
 

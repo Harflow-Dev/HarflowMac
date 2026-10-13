@@ -51,6 +51,36 @@ import Testing
         return (sut, fakeMainWindow, taskList, settings)
     }
     
+    @Test func givenNoEditor_whenCreateWorkflowCommandRuns_thenWindowOpensBeforeFreshCanvas() {
+        // given
+        let log = LockedBox<[String]>([])
+        let (sut, mainWindow, _, _) = makeSUT(activateLog: log)
+        sut.registerWindowOpener { log.value.append("open") }
+        mainWindow.onHandle = { _ in log.value.append("route") }
+        // when
+        sut.createWorkflow()
+        let first = mainWindow.selection
+        sut.createWorkflow()
+        // then
+        guard case .newWorkflow = first else { Issue.record("Expected a fresh workflow canvas"); return }
+        #expect(first != mainWindow.selection)
+        #expect(log.value == ["activate", "open", "route", "activate", "open", "route"])
+    }
+
+    @Test func givenNoEditor_whenRunWorkflowCommandRuns_thenWindowAndSavedWorkflowChooserOpen() {
+        // given
+        let log = LockedBox<[String]>([])
+        let (sut, mainWindow, _, _) = makeSUT(activateLog: log)
+        sut.registerWindowOpener { log.value.append("open") }
+        // when
+        sut.runWorkflow()
+        // then
+        #expect(log.value == ["activate", "open"])
+        #expect(mainWindow.isWorkflowRunnerPresented)
+        #expect(mainWindow.runnerPresentationCount == 1)
+        #expect(mainWindow.selection == nil)
+    }
+
     // MARK: - handle(path:)
     
     @Test func givenEachMonitorDestination_whenHandled_thenItRoutesOrBubblesCorrectly() {
