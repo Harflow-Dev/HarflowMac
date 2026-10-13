@@ -96,7 +96,7 @@ import Testing
         await DisplayFrames.waitForPresentedFrame()
         await waitUntil(timeout: 5) {
             host.layoutSubtreeIfNeeded()
-            return descendants(host).compactMap { $0 as? NSScrollView }.count >= 2
+            return hasCommittedActivityOverflow(in: host)
         }
 
         // then — the result gets its own bounded viewport, while the activity feed still owns a
@@ -185,6 +185,19 @@ import Testing
     enum RenderState: String, CaseIterable, CustomStringConvertible {
         case loaded, nonresident, skeleton
         var description: String { rawValue }
+    }
+
+    private func hasCommittedActivityOverflow(in host: NSView) -> Bool {
+        let scrolls = descendants(host).compactMap { $0 as? NSScrollView }
+        guard scrolls.count >= 2,
+              let activity = scrolls.first(where: { $0.documentView is ActivityFeedNativeTableView }),
+              let table = activity.documentView as? ActivityFeedNativeTableView,
+              table.numberOfRows >= 100, table.owner?.positioned == true else { return false }
+        // Native scroll containers exist before their committed rows are realized.
+        return table.bounds.height > activity.contentView.bounds.height
+            && descendants(table).contains {
+                ($0 as? ActivityFeedNativeCell)?.isCoherentNativeMeasurement == true
+            }
     }
 
     private func makeModel(id: String = "lane", state: RenderState) -> ParallelColumnModel {

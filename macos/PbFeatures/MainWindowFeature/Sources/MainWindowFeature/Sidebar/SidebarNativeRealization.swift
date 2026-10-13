@@ -66,6 +66,8 @@ extension SidebarNativeList.Coordinator {
         cell.animate = !seenIDs.contains(box.entry.id)
         box.reportGeneration += 1
         let reportGeneration = box.reportGeneration
+        box.associationToken = UUID()
+        let associationToken = box.associationToken
         cells[box.entry.displayID] = cell
         invalidateNaturalProminence(box)
         rootWriteCount += 1
@@ -81,7 +83,9 @@ extension SidebarNativeList.Coordinator {
             guard let self, let box, let cell, boxesByID[box.entry.displayID] === box,
                   cells[box.entry.displayID] === cell, cell.association === box else { return }
             invalidateNaturalProminence(box)
-            refresh(box)
+            // The root refresh is deferred, never synchronous: this callback can fire while
+            // AppKit owns a native operation, where rewriting the SwiftUI root is the hazard.
+            queueProminenceRefresh(box, cell: cell, associationToken: associationToken)
         }
         cell.onLaidOut = { [weak self, weak box, weak cell] in
             guard let self, let box, let cell, boxesByID[box.entry.displayID] === box,
@@ -98,6 +102,7 @@ extension SidebarNativeList.Coordinator {
     }
 
     func disassociate(_ box: SidebarNativeItemBox) {
+        pendingProminenceRefreshes.removeValue(forKey: box.entry.displayID)
         if let cell = cells[box.entry.displayID], cell.association === box {
             cell.association = nil
             cell.onLaidOut = nil
@@ -107,6 +112,7 @@ extension SidebarNativeList.Coordinator {
         cells.removeValue(forKey: box.entry.displayID)
         box.reportingCell = nil
         box.reportGeneration += 1
+        box.associationToken = UUID()
         box.height = nil
         box.pendingHostedHeight = nil
         box.latestHostedReport = nil

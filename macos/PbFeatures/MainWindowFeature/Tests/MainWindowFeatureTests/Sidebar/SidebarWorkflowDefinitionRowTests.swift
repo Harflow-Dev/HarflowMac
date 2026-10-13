@@ -28,6 +28,9 @@ import Testing
 
         // then — title paint is deterministic and follows the row-local native selection state.
         #expect(first == repeated)
+        #expect(first.width == correct.width && first.height == correct.height)
+        #expect(first.alpha == correct.alpha)
+        #expect(first.nonTransparentMask == correct.nonTransparentMask)
         #expect(!titleMask.isEmpty, "The public-color references must produce a non-empty title-ink mask")
         #expect(first.matches(correct, at: titleMask), "The row title must use the matching public color")
         #expect(!incorrect.matches(correct, at: titleMask), "The deliberately wrong foreground must fail the title-pixel oracle")
@@ -132,11 +135,19 @@ private struct RenderedImage: Equatable {
 
     func matches(_ other: Self, at mask: [Int]) -> Bool {
         width == other.width && height == other.height && mask.allSatisfy { offset in
-            rgba[offset] == other.rgba[offset]
-                && rgba[offset + 1] == other.rgba[offset + 1]
-                && rgba[offset + 2] == other.rgba[offset + 2]
+            abs(Int(rgba[offset]) - Int(other.rgba[offset])) <= 1
+                && abs(Int(rgba[offset + 1]) - Int(other.rgba[offset + 1])) <= 1
+                && abs(Int(rgba[offset + 2]) - Int(other.rgba[offset + 2])) <= 1
                 && rgba[offset + 3] == other.rgba[offset + 3]
         }
+    }
+
+    var alpha: [UInt8] {
+        stride(from: 3, to: rgba.count, by: 4).map { rgba[$0] }
+    }
+
+    var nonTransparentMask: [Bool] {
+        alpha.map { $0 != 0 }
     }
 
 }

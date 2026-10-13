@@ -134,13 +134,14 @@ struct TimelinePaneView: View {
                          isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages,
                             children: model.subTaskStrip?.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) } ?? []),
                          paginationRevision: model.paginationRevision, emptyText: model.emptyText, horizontalPadding: PbRadius.Metrics.spacing24,
-                         state: state, onLoadMore: model.onLoadMore) {
-            if let subTaskStrip = model.subTaskStrip { SubTaskStripView(model: subTaskStrip) }
-            ForEach(model.pendingMessages) { message in
-                PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
-            }
-            if let liveStep = model.liveStep { LiveStepLineView(text: liveStep.text) }
-        }
+                         state: state, onLoadMore: model.onLoadMore,
+                         tailPresentation: .standard(.init(
+                            subTaskStrip: model.subTaskStrip.map { strip in
+                                .init(children: strip.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) }, start: strip.start)
+                            },
+                            pendingMessages: model.pendingMessages,
+                            liveStep: model.liveStep.map { .init(text: $0.text, indicator: .singleDot) }
+                         )), onSelectChildTask: model.subTaskStrip?.onSelectTask)
         .readingColumn()
     }
 }

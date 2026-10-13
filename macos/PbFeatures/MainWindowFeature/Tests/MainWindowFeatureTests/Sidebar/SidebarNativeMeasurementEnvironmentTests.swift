@@ -1,6 +1,7 @@
 import AppKit
 @testable import MainWindowFeature
 import PbCommon
+import PbTestUtilities
 import PbUI
 import SwiftUI
 import Testing
@@ -38,7 +39,7 @@ struct SidebarNativeMeasurementEnvironmentTests {
     @Test(arguments: [false, true])
     func givenNativeCellBackgroundStyle_whenNaturalMeasurementRuns_thenMeasurementProminenceMatchesObservedStyle(
         emphasized: Bool
-    ) throws {
+    ) async throws {
         // given
         _ = NSApplication.shared
         let coordinator = SidebarNativeList.Coordinator()
@@ -69,7 +70,15 @@ struct SidebarNativeMeasurementEnvironmentTests {
         coordinator.boxesByID[entry.displayID] = box
         coordinator.indexesByID[entry.displayID] = 0
         let cell = coordinator.cell(for: box, outline: outline)
+        let beforeRootWrite = coordinator.rootWriteCount
+        coordinator.beginNativeOperation()
         cell.backgroundStyle = emphasized ? .emphasized : .normal
+        #expect(coordinator.rootWriteCount == beforeRootWrite,
+                "A prominence callback must not rewrite the root inside a native operation")
+        coordinator.endNativeOperation(flushHostedHeights: false)
+        if emphasized {
+            await waitUntil(timeout: 2) { coordinator.rootWriteCount == beforeRootWrite + 1 }
+        }
         box.naturalHeight = nil
         box.measurementKey = nil
 

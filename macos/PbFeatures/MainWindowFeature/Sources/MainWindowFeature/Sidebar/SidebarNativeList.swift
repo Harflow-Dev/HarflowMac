@@ -115,6 +115,14 @@ struct SidebarNativeList: NSViewRepresentable {
         var nativeOperationDepth = 0
         var invalidatingHostedHeights = false
         var pendingHostedHeights: Set<SidebarDisplayID> = []
+        /// Deferred prominence refreshes: a `backgroundStyle` callback can fire while AppKit
+        /// owns a native operation (inside layout), where a synchronous hosting-root write
+        /// crosses that operation boundary. Pending work is coalesced per display ID and bound to the
+        /// association token captured when queued; delivery runs only from a queued
+        /// main-actor callback outside every native operation, never inside layout.
+        var pendingProminenceRefreshes: [SidebarDisplayID: SidebarNativePendingProminence] = [:]
+        var prominenceRefreshQueued = false
+        var prominenceDeliveryGeneration = 0
 
         func bind(_ relay: SidebarNativeTransitionRelay?) {
             guard self.relay !== relay else { return }
@@ -183,6 +191,9 @@ struct SidebarNativeList: NSViewRepresentable {
             outline?.delegate = nil
             cells.removeAll()
             boxesByID.removeAll()
+            pendingProminenceRefreshes.removeAll()
+            prominenceRefreshQueued = false
+            prominenceDeliveryGeneration += 1
             indexesByID.removeAll()
             logicalDisplays.removeAll()
             destinationIndexes.removeAll()

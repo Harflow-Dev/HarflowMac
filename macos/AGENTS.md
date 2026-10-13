@@ -128,7 +128,11 @@ declares every product it imports — no `@_exported` re-exports, ever.
    regenerate the baseline, run `swiftlint lint --write-baseline` with a config that includes only
    that folder, then make each `file` entry repo-relative so it matches on any checkout.
 2. `scripts/check-private-refs.sh` must pass.
-3. The per-package `swift test` loop and `macos/build-app.sh` must pass.
+3. The guarded per-package Swift Testing loop and `macos/build-app.sh` must pass. Run
+   `python3 scripts/test-swift-package.py --package <package> --mode suites` for
+   `PbFeatures/MainWindowFeature` with `PB_NATIVE_SIDEBAR_BENCHMARK=1` and `--mode aggregate` for every other package (repo-root
+   Commands section documents the loop; MonitorCore also requires `PB_NATIVE_BENCHMARK=1`) — the runner fail-closed validates identity coverage,
+   event streams, summaries and XCTest silence; a bare `swift test` exit is not evidence.
 4. The headless smoke (launch the built binary with a temporary `HOME` and a fake `polybridge-ctl`,
    check the first `list`, an FSEvents-driven second `list`, and that the app stays alive) is a
    local gate only: it depends on FSEvents timing and a window server, which shared CI runners do not

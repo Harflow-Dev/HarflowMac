@@ -83,6 +83,9 @@ extension SidebarNativeList.Coordinator {
         guard nativeOperationDepth == 0 else { return }
         if flushHostedHeights { self.flushHostedHeights() }
         if !pendingHostedHeights.isEmpty { queueGeometry() }
+        // Re-arm deferred prominence delivery by enqueueing only — this boundary still sits
+        // inside a native layout pass, so it must never flush the refresh synchronously.
+        if !pendingProminenceRefreshes.isEmpty { queueProminenceDelivery() }
     }
 
     /// One batch at a safe native boundary. Reentrant reports wait for existing queued delivery.
@@ -169,6 +172,49 @@ extension SidebarNativeList.Coordinator {
             box.height = nil
             pendingHeights.insert(box.entry.displayID)
             queueGeometry()
+        }
+    }
+
+    /// Queues the hosting-root refresh a prominence change requires. A `backgroundStyle`
+    /// callback can fire while AppKit owns a native operation — inside `layout()` — where
+    /// rewriting the cell's SwiftUI root synchronously crosses the native operation boundary, so only
+    /// cache invalidation (`invalidateNaturalProminence`) runs inline; the root refresh waits
+    /// for a queued main-actor callback. Coalesced per display ID and bound to the association
+    /// token captured when queued, so a reused, detached or re-associated cell never receives it.
+    func queueProminenceRefresh(_ box: SidebarNativeItemBox, cell: SidebarNativeCell, associationToken: UUID) {
+        pendingProminenceRefreshes[box.entry.displayID] = SidebarNativePendingProminence(
+            box: box, cell: cell, associationToken: associationToken
+        )
+        queueProminenceDelivery()
+    }
+
+    func queueProminenceDelivery() {
+        guard !prominenceRefreshQueued else { return }
+        prominenceRefreshQueued = true
+        let generation = prominenceDeliveryGeneration
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, generation == prominenceDeliveryGeneration else { return }
+            prominenceRefreshQueued = false
+            deliverProminenceRefresh(generation: generation)
+        }
+    }
+
+    /// Delivers deferred prominence refreshes only outside every native operation, from the
+    /// queued main-actor callback. A stale generation (a stopped coordinator) or a stale
+    /// association token (reuse/detach/re-associate) drops the work — a fresh association
+    /// configures its cell itself, so nothing is lost. An in-flight native operation retains
+    /// the pending work; the next `endNativeOperation` boundary re-arms delivery by enqueueing
+    /// again. Never refreshes synchronously here, and never from a native-operation boundary.
+    func deliverProminenceRefresh(generation: Int) {
+        guard generation == prominenceDeliveryGeneration, nativeOperationDepth == 0 else { return }
+        let pending = pendingProminenceRefreshes
+        pendingProminenceRefreshes.removeAll()
+        for (id, request) in pending {
+            guard let box = request.box, let cell = request.cell,
+                  boxesByID[id] === box, cells[id] === cell,
+                  box.associationToken == request.associationToken, cell.association === box else { continue }
+            refresh(box)
         }
     }
 

@@ -15,6 +15,10 @@ import Testing
         // given — a real representable, retained window, and one stable task entry.
         _ = NSApplication.shared
         let state = HostedEnvironmentState()
+        // SwiftUI's system reduce-motion value is read-only. Capture the actual AppKit
+        // preference that seeds it for this hosted window instead of comparing with a
+        // newly-created, unhosted EnvironmentValues default.
+        let inheritedReduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let host = NSHostingView(rootView: HostedEnvironmentView(state: state))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 360, height: 260), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -49,6 +53,7 @@ import Testing
             { state.displayScale = 2 },
             { state.controlSize = .large },
             { state.enabled = false },
+            { state.motionOverride = false },
             { state.motionOverride = true },
             { state.shimmerOverride = false }
         ]
@@ -89,7 +94,7 @@ import Testing
         #expect(renderedEnvironment?.displayScale == 2)
         #expect(renderedEnvironment?.controlSize == .large)
         #expect(renderedEnvironment?.isEnabled == false)
-        #expect(renderedEnvironment?.accessibilityReduceMotion == EnvironmentValues().accessibilityReduceMotion)
+        #expect(renderedEnvironment?.accessibilityReduceMotion == inheritedReduceMotion)
         #expect(renderedEnvironment?.pbReduceMotionOverride == true)
         #expect(renderedEnvironment?.shimmerReduceMotionOverride == false)
     }

@@ -206,12 +206,11 @@ struct ParallelColumnView: View {
             ActivityFeedView(rows: model.activityRows, start: model.start, history: model.history,
                              isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages),
                              paginationRevision: model.paginationRevision, isVisible: model.isVisible,
-                             emptyText: model.emptyText, showsPromptBubble: false, state: state, onLoadMore: model.onLoadMore) {
-                ForEach(model.pendingMessages) { message in
-                    PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
-                }
-                if let liveStep = model.liveStep { LiveStepLineView(text: liveStep.text, indicator: .threeDots) }
-            }
+                             emptyText: model.emptyText, showsPromptBubble: false, state: state, onLoadMore: model.onLoadMore,
+                             tailPresentation: .standard(.init(
+                                pendingMessages: model.pendingMessages,
+                                liveStep: model.liveStep.map { .init(text: $0.text, indicator: .threeDots) }
+                             )))
         }
     }
 }

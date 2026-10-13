@@ -65,6 +65,7 @@ import Testing
         let editor = NSTextView(frame: panel.bounds)
         panel.addSubview(editor)
         let window = NSWindow(contentRect: panel.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.contentView = panel
         window.makeKeyAndOrderFront(nil)
         defer { window.contentView = nil; window.close() }
@@ -106,6 +107,7 @@ import Testing
         _ = NSApplication.shared
         let root = WorkflowRecoveryPanelRootView(frame: CGRect(x: 0, y: 0, width: 200, height: 100))
         let window = NSWindow(contentRect: root.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.contentView = root
         window.orderFront(nil)
         root.syncKeyboard()

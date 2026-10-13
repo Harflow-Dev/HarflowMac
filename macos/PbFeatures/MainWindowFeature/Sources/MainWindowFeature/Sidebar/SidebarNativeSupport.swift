@@ -17,6 +17,10 @@ import SwiftUI
     var entryRevision = 0
     var naturalHeight: CGFloat?
     var measurementKey: SidebarNativeMeasurementKey?
+    /// Identity of the current (box, cell) association, independent of every report and
+    /// reconciliation generation. Renewed on associate and disassociate so a deferred
+    /// prominence refresh can never reach a reused, detached or re-associated cell.
+    var associationToken = UUID()
     init(_ entry: SidebarListEntry) { self.entry = entry }
 }
 
@@ -184,4 +188,10 @@ struct SidebarNativeHistoryPublication: Equatable {
     let visible: Bool
     let revision: Int
     let token: String
+}
+
+@MainActor struct SidebarNativePendingProminence {
+    weak var box: SidebarNativeItemBox?
+    weak var cell: SidebarNativeCell?
+    let associationToken: UUID
 }

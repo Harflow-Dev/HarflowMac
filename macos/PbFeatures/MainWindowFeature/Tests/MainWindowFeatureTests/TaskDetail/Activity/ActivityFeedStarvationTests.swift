@@ -135,7 +135,7 @@ import Testing
         let values = syntheticRows()
         func feed(loaded: Bool) -> some View {
             ActivityFeedView(rows: loaded ? values : [], start: nil, history: EventHistoryState(), isLoading: !loaded,
-                             horizontalPadding: 24, state: state, onLoadMore: nil) { Color.clear.frame(height: 1) }
+                             horizontalPadding: 24, state: state, onLoadMore: nil)
                 .readingColumn()
                 .frame(maxHeight: .infinity)
         }
