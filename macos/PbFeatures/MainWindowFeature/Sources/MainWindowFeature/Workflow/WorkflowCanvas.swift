@@ -114,7 +114,8 @@ struct WorkflowCanvas: View {
         GeometryReader { viewport in
         let contentSize = WorkflowCanvasZoom.contentSize(extent: CGSize(width: width, height: height), viewport: viewport.size, scale: zoom)
         let visible = scrollController.visibleRect.isEmpty ? CGRect(origin: .zero, size: viewport.size) : scrollController.visibleRect
-        let routes = routeCache.routes(edges: edges, nodes: nodes)
+        let routeSnapshot = WorkflowRouteCache.snapshot(edges: edges, nodes: nodes)
+        let routes = routeCache.currentRoutes(for: routeSnapshot)
         ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
                 Color.cardFill
@@ -180,6 +181,10 @@ struct WorkflowCanvas: View {
                     )
                         .position(WorkflowCanvasGeometry.center(node))
                 }
+            }
+            .task(id: routeSnapshot) {
+                guard !Task.isCancelled else { return }
+                routeCache.request(routeSnapshot)
             }
             .frame(width: contentSize.width, height: contentSize.height)
             .scaleEffect(zoom, anchor: .topLeading)
@@ -266,7 +271,7 @@ struct WorkflowCanvas: View {
 
     private func updateArrowHover(at point: CGPoint) {
         guard !scrollController.isDragging, activeConnectionDrag == nil, editingTitleNodeID == nil else { hoveredArrow = nil; return }
-        let routes = routeCache.routes(edges: edges, nodes: nodes)
+        let routes = routeCache.currentRoutes(for: WorkflowRouteCache.snapshot(edges: edges, nodes: nodes))
         let candidates = edges.compactMap { edge -> WorkflowArrowHover.Candidate? in
             guard !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   nodes.contains(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) else { return nil }

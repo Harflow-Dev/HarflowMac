@@ -57,7 +57,7 @@ import Testing
         #expect((surface.minY + first.y).truncatingRemainder(dividingBy: 10) == 0)
     }
 
-    @Test func givenCachedRoutes_whenScrollingOrChangingOnlyTitles_thenReusesRouteButGeometryChangesRecompute() {
+    @Test func givenCachedRoutes_whenScrollingOrChangingOnlyTitles_thenReusesRouteButGeometryChangesRecompute() async {
         // given
         let cache = WorkflowRouteCache()
         var nodes = WorkflowJSON.nodes(WorkflowVM.starterDefinition())
@@ -65,19 +65,19 @@ import Testing
         let target = nodes[1]
         let edge = WorkflowEdgeModel(raw: ["id": .string("edge"), "source": .string(source.id), "target": .string(target.id)])
         // when
-        let original = cache.routes(edges: [edge], nodes: nodes)["edge"]!
+        let original = (await cache.settledRoutes(edges: [edge], nodes: nodes))["edge"]!
         nodes[1].raw["title"] = .string("Renamed")
-        let renamed = cache.routes(edges: [edge], nodes: nodes)["edge"]!
+        let renamed = (await cache.settledRoutes(edges: [edge], nodes: nodes))["edge"]!
         // then
         #expect(renamed == original)
         #expect(cache.computationCount == 1)
         // when
         nodes[1].raw["position"] = .object(["x": .number(450), "y": .number(250)])
-        _ = cache.routes(edges: [edge], nodes: nodes)["edge"]!
+        _ = (await cache.settledRoutes(edges: [edge], nodes: nodes))["edge"]!
         // then
         #expect(cache.computationCount == 2)
         cache.clear()
-        _ = cache.routes(edges: [edge], nodes: nodes)["edge"]!
+        _ = (await cache.settledRoutes(edges: [edge], nodes: nodes))["edge"]!
         #expect(cache.computationCount == 3)
     }
 

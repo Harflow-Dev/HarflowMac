@@ -153,18 +153,18 @@ import Testing
         #expect(endpoint.x - route[route.count - 2].x >= 17)
     }
 
-    @MainActor @Test func givenCachedRoute_whenTargetMoves_thenRecomputesAndRemainsAttached() {
+    @MainActor @Test func givenCachedRoute_whenTargetMoves_thenRecomputesAndRemainsAttached() async {
         // given
         let source = node("source", x: 60, y: 100)
         var target = node("target", x: 560, y: 240)
         let cache = WorkflowRouteCache()
         let edge = WorkflowEdgeModel(raw: ["id": .string("edge"), "source": .string(source.id), "target": .string(target.id)])
-        _ = cache.routes(edges: [edge], nodes: [source, target])["edge"]!
+        _ = (await cache.settledRoutes(edges: [edge], nodes: [source, target]))["edge"]!
         // when
-        _ = cache.routes(edges: [edge], nodes: [source, target])["edge"]!
+        _ = (await cache.settledRoutes(edges: [edge], nodes: [source, target]))["edge"]!
         target.raw["position"] = .object(["x": .number(720), "y": .number(320)])
         let movedEndpoint = WorkflowCanvasGeometry.connectionInput(target)
-        let route = cache.routes(edges: [edge], nodes: [source, target])["edge"]!
+        let route = (await cache.settledRoutes(edges: [edge], nodes: [source, target]))["edge"]!
         // then
         #expect(cache.computationCount == 2)
         #expect(route.last == movedEndpoint)
@@ -272,7 +272,7 @@ import Testing
         #expect(same.isFinite && same >= 0)
     }
 
-    @MainActor @Test func givenEdgeBatch_whenReorderingPreviewingAndRetargeting_thenRoutesAreStableAndCacheInvalidatesCompletely() {
+    @MainActor @Test func givenEdgeBatch_whenReorderingPreviewingAndRetargeting_thenRoutesAreStableAndCacheInvalidatesCompletely() async {
         // given
         let source = node("source", x: 60, y: 100)
         let upper = node("upper", x: 560, y: 100)
@@ -282,27 +282,28 @@ import Testing
         let second = WorkflowEdgeModel(raw: ["id": .string("b"), "source": .string("source"), "target": .string("lower")])
         let cache = WorkflowRouteCache()
         // when
-        let original = cache.routes(edges: [first, second], nodes: nodes)
-        let reordered = cache.routes(edges: [second, first], nodes: nodes.reversed())
+        let original = await cache.settledRoutes(edges: [first, second], nodes: nodes)
+        let reordered = await cache.settledRoutes(edges: [second, first], nodes: nodes.reversed())
         _ = cache.preview(source: source, target: lower, endpoint: WorkflowCanvasGeometry.connectionInput(lower), nodes: nodes, edges: [second, first])
         // then
         #expect(original == reordered)
-        #expect(cache.routes(edges: [first, second], nodes: nodes) == original)
+        let reused = await cache.settledRoutes(edges: [first, second], nodes: nodes)
+        #expect(reused == original)
         #expect(cache.computationCount == 2)
         // when
         let retargeted = WorkflowEdgeModel(raw: ["id": .string("b"), "source": .string("source"), "target": .string("upper")])
-        let changed = cache.routes(edges: [first, retargeted], nodes: nodes)
+        let changed = await cache.settledRoutes(edges: [first, retargeted], nodes: nodes)
         // then
         #expect(cache.computationCount == 4)
         #expect(changed["b"]?.last == WorkflowCanvasGeometry.connectionInput(upper))
         // when
-        _ = cache.routes(edges: [first], nodes: nodes)
-        _ = cache.routes(edges: [first, second], nodes: nodes)
+        _ = await cache.settledRoutes(edges: [first], nodes: nodes)
+        _ = await cache.settledRoutes(edges: [first, second], nodes: nodes)
         // then
         #expect(cache.computationCount == 7)
     }
 
-    @MainActor @Test func givenShortAlignedGapAndUnrelatedEarlierEdge_whenBatchRouting_thenKeepsCompactStraightConnection() {
+    @MainActor @Test func givenShortAlignedGapAndUnrelatedEarlierEdge_whenBatchRouting_thenKeepsCompactStraightConnection() async {
         // given
         let source = node("source", x: 190, y: 100)
         let target = node("target", x: 440, y: 100)
@@ -312,14 +313,14 @@ import Testing
         let edge = WorkflowEdgeModel(raw: ["id": .string("b"), "source": .string("source"), "target": .string("target")])
         let duplicate = WorkflowEdgeModel(raw: ["id": .string("c"), "source": .string("source"), "target": .string("target")])
         // when
-        let routes = WorkflowRouteCache().routes(edges: [unrelated, edge, duplicate], nodes: [source, target, upper, upperTarget])
+        let routes = await WorkflowRouteCache().settledRoutes(edges: [unrelated, edge, duplicate], nodes: [source, target, upper, upperTarget])
         // then
         let direct = [WorkflowCanvasGeometry.connectionOutput(source), WorkflowCanvasGeometry.connectionInput(target)]
         #expect(routes["b"] == direct)
         #expect(routes["c"] == direct)
     }
 
-    @MainActor @Test func givenEarlierRouteNearLaterDestination_whenBatchRouting_thenClearsLaterArrowhead() {
+    @MainActor @Test func givenEarlierRouteNearLaterDestination_whenBatchRouting_thenClearsLaterArrowhead() async {
         // given
         let source = node("source", x: 20, y: 40)
         let target = node("target", x: 400, y: 300)
@@ -329,12 +330,12 @@ import Testing
                      WorkflowEdgeModel(raw: ["id": .string("z"), "source": .string("laterSource"), "target": .string("later")])]
         let tip = WorkflowCanvasGeometry.connectionInput(laterTarget)
         // when
-        let routes = WorkflowRouteCache().routes(edges: edges, nodes: [source, target, laterTarget, laterSource])
+        let routes = await WorkflowRouteCache().settledRoutes(edges: edges, nodes: [source, target, laterTarget, laterSource])
         // then
         #expect(WorkflowConnectionRouter.clear(routes["a"]!, obstacles: [CGRect(x: tip.x - 9, y: tip.y - 7, width: 12, height: 14)]))
     }
 
-    @MainActor @Test func givenMovedPrepareNode_whenBatchRouting_thenAvoidsWrappingBehindSourceWhenDestinationLoopIsAvailable() {
+    @MainActor @Test func givenMovedPrepareNode_whenBatchRouting_thenAvoidsWrappingBehindSourceWhenDestinationLoopIsAvailable() async {
         // given
         let start = node("start", x: 40, y: 40, type: "start")
         let prepare = node("prepare", x: 170, y: 70)
@@ -348,13 +349,53 @@ import Testing
                      ("e-review-baseline", review, baseline), ("f-baseline-end", baseline, end)]
         let edges = pairs.map { WorkflowEdgeModel(raw: ["id": .string($0.0), "source": .string($0.1.id), "target": .string($0.2.id)]) }
         // when
-        let routes = WorkflowRouteCache().routes(edges: edges, nodes: nodes)
+        let routes = await WorkflowRouteCache().settledRoutes(edges: edges, nodes: nodes)
         let route = routes["b-prepare-plan"]!
         // then
         #expect(route.map(\.x).min()! >= prepare.position.x)
         #expect(route.first == WorkflowCanvasGeometry.connectionOutput(prepare))
         #expect(route.last == WorkflowCanvasGeometry.connectionInput(plan))
         #expect(WorkflowConnectionRouter.clear(route, obstacles: nodes.map { CGRect(origin: $0.position, size: WorkflowCanvasGeometry.size($0)) }))
+    }
+
+    @MainActor @Test func givenPendingBatch_whenGeometryChangesRepeatedly_thenPublishesOnlyLatestAttachedRoutes() async {
+        let source = node("source", x: 60, y: 100)
+        let first = node("target", x: 560, y: 240)
+        let latest = node("target", x: 760, y: 340)
+        let edge = WorkflowEdgeModel(raw: ["id": .string("edge"), "source": .string("source"), "target": .string("target")])
+        let cache = WorkflowRouteCache()
+        _ = cache.routes(edges: [edge], nodes: [source, first])
+        let provisional = cache.routes(edges: [edge], nodes: [source, latest])
+        #expect(provisional["edge"]?.last == WorkflowCanvasGeometry.connectionInput(latest))
+        await cache.waitUntilSettled()
+        #expect(cache.batch["edge"]?.last == WorkflowCanvasGeometry.connectionInput(latest))
+        #expect(cache.computationCount == 1)
+        _ = cache.routes(edges: [edge], nodes: [source, latest])
+        await cache.waitUntilSettled()
+        #expect(cache.computationCount == 1)
+    }
+
+    @MainActor @Test func givenPendingBatch_whenCanvasDisappears_thenCannotPublishAndEqualGeometryCanRestart() async {
+        let nodes = [node("source", x: 60, y: 100), node("target", x: 560, y: 240)]
+        let edge = WorkflowEdgeModel(raw: ["id": .string("edge"), "source": .string("source"), "target": .string("target")])
+        let cache = WorkflowRouteCache()
+        _ = cache.routes(edges: [edge], nodes: nodes)
+        cache.clear()
+        await cache.waitUntilSettled()
+        #expect(cache.batch.isEmpty)
+        #expect(cache.computationCount == 0)
+        let restarted = await cache.settledRoutes(edges: [edge], nodes: nodes)
+        #expect(restarted["edge"]?.last == WorkflowCanvasGeometry.connectionInput(nodes[1]))
+        #expect(cache.computationCount == 1)
+    }
+
+    @Test func givenCancelledRoutingTask_whenComputingBatch_thenReturnsNoPublishableResult() async {
+        let task = Task.detached {
+            withUnsafeCurrentTask { $0?.cancel() }
+            let edge = WorkflowRouteCache.Edge(id: "edge", source: "missing", target: "missing")
+            return WorkflowRouteCache.compute(WorkflowRouteCache.Snapshot(nodes: [], edges: [edge]))
+        }
+        #expect(await task.value == nil)
     }
 
 }

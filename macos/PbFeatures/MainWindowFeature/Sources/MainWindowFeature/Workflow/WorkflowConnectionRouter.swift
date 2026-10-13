@@ -8,14 +8,34 @@ enum WorkflowConnectionRouter {
     private static let clearance: CGFloat = 10
     private static let expansionLimit = 5000
 
+    struct Node: Equatable, Sendable {
+        let id: String
+        let rectangle: CGRect
+        let input: CGPoint
+        let output: CGPoint
+        var position: CGPoint { rectangle.origin }
+    }
+
+    static func snapshot(_ node: WorkflowNodeModel) -> Node {
+        Node(id: node.id, rectangle: CGRect(origin: node.position, size: WorkflowCanvasGeometry.size(node)),
+             input: WorkflowCanvasGeometry.connectionInput(node), output: WorkflowCanvasGeometry.connectionOutput(node))
+    }
+
     static func route(source: WorkflowNodeModel, target: WorkflowNodeModel?, endpoint: CGPoint,
                       nodes: [WorkflowNodeModel], occupied: [[CGPoint]] = []) -> [CGPoint] {
-        let start = WorkflowCanvasGeometry.connectionOutput(source)
+        route(source: snapshot(source), target: target.map(snapshot), endpoint: endpoint,
+              nodes: nodes.map(snapshot), occupied: occupied)
+    }
+
+    static func route(source: Node, target: Node?, endpoint: CGPoint,
+                      nodes: [Node], occupied: [[CGPoint]] = []) -> [CGPoint] {
+        guard !Task.isCancelled else { return [] }
+        let start = source.output
         let finish = endpoint
         // An aligned short gap needs no bend corridor. Its approach anchor could otherwise
         // land inside the source's clearance rectangle and force an unnecessary return loop.
         let directObstacles = nodes.filter { $0.id != source.id && $0.id != target?.id }.map {
-            CGRect(origin: $0.position, size: WorkflowCanvasGeometry.size($0)).insetBy(dx: -clearance, dy: -clearance)
+            $0.rectangle.insetBy(dx: -clearance, dy: -clearance)
         }
         let direct = start.y == finish.y && finish.x > start.x && clear([start, finish], obstacles: directObstacles)
         if direct, occupancyCost(from: start, to: finish, occupied: occupied) == 0 {
@@ -26,7 +46,7 @@ enum WorkflowConnectionRouter {
         // Keep fan-in lanes on the canvas when the destination is close to its leading edge.
         let inset = CGFloat(20)
         var finishGrid = CGPoint(x: floor((finish.x - inset) / spacing) * spacing, y: finish.y)
-        let sourceObstacle = CGRect(origin: source.position, size: WorkflowCanvasGeometry.size(source))
+        let sourceObstacle = source.rectangle
             .insetBy(dx: -clearance, dy: -clearance)
         let sourceExit = max(startGrid.x, ceil(sourceObstacle.maxX / spacing) * spacing)
         // Short forward gaps can place the approach anchor inside the source's padding.
@@ -37,7 +57,7 @@ enum WorkflowConnectionRouter {
         }
         let prefix = [start, startGrid]
         let obstacles = nodes.map { node in
-            (node.id, CGRect(origin: node.position, size: WorkflowCanvasGeometry.size(node)).insetBy(dx: -clearance, dy: -clearance))
+            (node.id, node.rectangle.insetBy(dx: -clearance, dy: -clearance))
         }
         // Fan-in lanes share the available corridor with every preceding node, not just
         // their source. Shorten an approach when its anchor would enter another box.
@@ -218,6 +238,10 @@ enum WorkflowConnectionRouter {
         return walk(origin: origin, goal: goal, space: space)
     }
 
+    private static func nextEntry(from frontier: inout RouteHeap) -> RouteEntry? {
+        Task.isCancelled ? nil : frontier.pop()
+    }
+
     private static func walk(origin: GridState, goal: GridPoint, space: SearchSpace) -> [CGPoint]? {
         let xCoordinates = space.xCoordinates
         let yCoordinates = space.yCoordinates
@@ -245,7 +269,7 @@ enum WorkflowConnectionRouter {
         let directions = [(1, 0), (0, -1), (0, 1), (-1, 0)]
         var expansions = 0
         var bestGoal: (state: GridState, cost: RouteCost)?
-        while let entry = frontier.pop(), expansions < expansionLimit {
+        while let entry = nextEntry(from: &frontier), expansions < expansionLimit {
             guard costs[entry.state] == entry.cost else { continue }
             if let bestGoal, !entry.score.precedes(bestGoal.cost) { break }
             expansions += 1
