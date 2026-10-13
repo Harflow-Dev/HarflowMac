@@ -9,6 +9,9 @@ struct WorkflowScreenLayout<Header: View, Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        // The header must share the viewport boundary: its vertically fixed wrapping
+        // otherwise becomes a native navigation minimum at narrow window widths.
+        GeometryReader { screen in
         VStack(spacing: 0) {
             header().fixedSize(horizontal: false, vertical: true)
             GeometryReader { viewport in
@@ -16,7 +19,8 @@ struct WorkflowScreenLayout<Header: View, Content: View>: View {
                     .frame(width: viewport.size.width, height: viewport.size.height, alignment: .top)
                     .clipped()
             }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }.frame(width: screen.size.width, height: screen.size.height, alignment: .top)
+        }
     }
 }
 
