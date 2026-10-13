@@ -93,8 +93,8 @@ import Testing
         #expect(zip(route, route.dropFirst()).allSatisfy { abs($0.x - $1.x) + abs($0.y - $1.y) >= 10 })
     }
 
-    @Test(arguments: [35, 75] as [CGFloat])
-    func givenSequentialNodesWithReturnEdge_whenRouting_thenFinalApproachClearsArrowheadAndRoundedCorner(approachInset: CGFloat) {
+    @Test
+    func givenSequentialNodesWithReturnEdge_whenRouting_thenFinalApproachClearsArrowheadAndRoundedCorner() {
         // given
         let target = node("target", x: 60, y: 100)
         let middle = node("middle", x: 360, y: 100)
@@ -102,33 +102,29 @@ import Testing
         let endpoint = WorkflowCanvasGeometry.connectionInput(target)
         // when
         let route = WorkflowConnectionRouter.route(source: source, target: target, endpoint: endpoint,
-                                                    nodes: [target, middle, source], approachInset: approachInset)
+                                                    nodes: [target, middle, source])
         // then
         #expect(route.last == endpoint)
         #expect(route.allSatisfy { $0.x >= 0 })
-        #expect(endpoint.x - route[route.count - 2].x >= 35)
+        #expect(endpoint.x - route[route.count - 2].x >= 17)
         #expect(route[route.count - 2].y == endpoint.y)
         #expect(WorkflowConnectionRouter.clear(route, obstacles: [CGRect(origin: middle.position, size: WorkflowCanvasGeometry.size(middle))]))
     }
 
-    @Test func givenParallelFanIn_whenRouting_thenApproachesAreOrderedAndArrowheadCorridorStaysClear() {
+    @Test func givenParallelFanIn_whenRouting_thenLocalApproachKeepsArrowheadCorridorClear() {
         // given
         let sources = [node("upper", x: 60, y: 60), node("center", x: 60, y: 220), node("lower", x: 60, y: 380)]
         let target = node("target", x: 560, y: 220)
         let nodes = sources + [target]
-        let edges = sources.map { WorkflowEdgeModel(raw: ["id": .string($0.id), "source": .string($0.id), "target": .string(target.id)]) }
         let endpoint = WorkflowCanvasGeometry.connectionInput(target)
         // when
-        let insets = edges.map { WorkflowConnectionApproach.inset(for: $0, edges: edges, nodes: nodes) }
-        let routes = zip(sources, insets).map {
-            WorkflowConnectionRouter.route(source: $0, target: target, endpoint: endpoint, nodes: nodes, approachInset: $1)
+        let routes = sources.map {
+            WorkflowConnectionRouter.route(source: $0, target: target, endpoint: endpoint, nodes: nodes)
         }
         // then
-        #expect(insets == [35, 55, 75])
-        #expect(edges.map { WorkflowConnectionApproach.inset(for: $0, edges: edges.reversed(), nodes: nodes) } == insets)
         for route in routes {
            #expect(route.last == endpoint)
-            #expect(endpoint.x - route[route.count - 2].x >= 35)
+            #expect(endpoint.x - route[route.count - 2].x >= 17)
             #expect(route[route.count - 2].y == endpoint.y)
             #expect(WorkflowConnectionRouter.clear(Array(route.dropFirst()), obstacles: [
                 CGRect(origin: target.position, size: WorkflowCanvasGeometry.size(target))
@@ -136,18 +132,18 @@ import Testing
         }
     }
 
-    @Test(arguments: [35, 55, 75] as [CGFloat])
-    func givenFanInWithPrecedingColumnNeighbor_whenRouting_thenFitsApproachInsideClearCorridor(approachInset: CGFloat) {
+    @Test
+    func givenFanInWithPrecedingColumnNeighbor_whenRouting_thenFitsApproachInsideClearCorridor() {
         // given: an offset source and a neighboring step in the preceding default column.
         let source = node("source", x: 40, y: 40)
         let neighbor = node("neighbor", x: 300, y: 220)
         let target = node("target", x: 560, y: 220)
         let endpoint = WorkflowCanvasGeometry.connectionInput(target)
         let paddedNeighbor = CGRect(origin: neighbor.position, size: WorkflowCanvasGeometry.size(neighbor))
-            .insetBy(dx: -20, dy: -20)
+            .insetBy(dx: -10, dy: -10)
         // when
         let route = WorkflowConnectionRouter.route(source: source, target: target, endpoint: endpoint,
-                                                    nodes: [source, neighbor, target], approachInset: approachInset)
+                                                    nodes: [source, neighbor, target])
         // then
         #expect(route.first == WorkflowCanvasGeometry.connectionOutput(source))
         #expect(route.last == endpoint)
@@ -157,22 +153,22 @@ import Testing
         #expect(endpoint.x - route[route.count - 2].x >= 17)
     }
 
-    @MainActor @Test func givenCachedFanInRoute_whenApproachOrTargetMoves_thenRecomputesAndRemainsAttached() {
+    @MainActor @Test func givenCachedRoute_whenTargetMoves_thenRecomputesAndRemainsAttached() {
         // given
         let source = node("source", x: 60, y: 100)
         var target = node("target", x: 560, y: 240)
         let cache = WorkflowRouteCache()
-        let endpoint = WorkflowCanvasGeometry.connectionInput(target)
-        _ = cache.route(id: "edge", source: source, target: target, endpoint: endpoint, nodes: [source, target], approachInset: 35)
+        let edge = WorkflowEdgeModel(raw: ["id": .string("edge"), "source": .string(source.id), "target": .string(target.id)])
+        _ = cache.routes(edges: [edge], nodes: [source, target])["edge"]!
         // when
-        _ = cache.route(id: "edge", source: source, target: target, endpoint: endpoint, nodes: [source, target], approachInset: 75)
+        _ = cache.routes(edges: [edge], nodes: [source, target])["edge"]!
         target.raw["position"] = .object(["x": .number(720), "y": .number(320)])
         let movedEndpoint = WorkflowCanvasGeometry.connectionInput(target)
-        let route = cache.route(id: "edge", source: source, target: target, endpoint: movedEndpoint, nodes: [source, target], approachInset: 75)
+        let route = cache.routes(edges: [edge], nodes: [source, target])["edge"]!
         // then
-        #expect(cache.computationCount == 3)
+        #expect(cache.computationCount == 2)
         #expect(route.last == movedEndpoint)
-        #expect(movedEndpoint.x - route[route.count - 2].x >= 75)
+        #expect(movedEndpoint.x - route[route.count - 2].x >= 17)
     }
 
     @Test(arguments: ["start", "agent"])
@@ -235,16 +231,130 @@ import Testing
         let review = node("review", x: 500, y: 170)
         let baseline = node("baseline", x: 600, y: 310)
         let nodes = [prepare, plan, review, baseline]
-        let edges = [WorkflowEdgeModel(raw: ["id": .string("prepare-plan"), "source": .string("prepare"), "target": .string("plan")]),
-                     WorkflowEdgeModel(raw: ["id": .string("review-plan"), "source": .string("review"), "target": .string("plan")])]
-        let inset = WorkflowConnectionApproach.inset(for: edges[1], edges: edges, nodes: nodes)
         // when
         let route = WorkflowConnectionRouter.route(source: review, target: plan,
-            endpoint: WorkflowCanvasGeometry.connectionInput(plan), nodes: nodes, approachInset: inset)
+            endpoint: WorkflowCanvasGeometry.connectionInput(plan), nodes: nodes)
         // then
-        #expect(inset <= 30)
+        #expect(route.map(\.x).min()! >= 210)
+        #expect(route.map(\.x).max()! <= 730)
+        #expect(route.map(\.y).min()! >= 150)
         #expect(route.last == WorkflowCanvasGeometry.connectionInput(plan))
+    }
 
+    @Test(arguments: [false, true]) func givenOccupiedAlignedLane_whenRouting_thenUsesNearbySeparateLane(opposing: Bool) {
+        // given
+        let source = node("source", x: 60, y: 100)
+        let target = node("target", x: 560, y: 100)
+        let start = WorkflowCanvasGeometry.connectionOutput(source)
+        let finish = WorkflowCanvasGeometry.connectionInput(target)
+        let occupied = opposing ? [[finish, start]] : [[start, finish]]
+        // when
+        let route = WorkflowConnectionRouter.route(source: source, target: target, endpoint: finish,
+            nodes: [source, target], occupied: occupied)
+        // then
+        #expect(route.count > 2)
+        #expect(route.contains { abs($0.y - start.y) <= 20 && $0.y != start.y })
+        #expect(route.first == start)
+        #expect(route.last == finish)
+    }
+
+    @Test func givenSharedLane_whenScoring_thenOpposingTrafficAndArrowheadCrossingAreMoreCostly() {
+        // given
+        let path = [CGPoint(x: 20, y: 40), CGPoint(x: 220, y: 40)]
+        // when
+        let same = WorkflowConnectionRouter.occupancyCost(from: CGPoint(x: 40, y: 40), to: CGPoint(x: 180, y: 40), occupied: [path])
+        let opposite = WorkflowConnectionRouter.occupancyCost(from: CGPoint(x: 180, y: 40), to: CGPoint(x: 40, y: 40), occupied: [path])
+        let ordinaryCrossing = WorkflowConnectionRouter.occupancyCost(from: CGPoint(x: 100, y: 20), to: CGPoint(x: 100, y: 60), occupied: [path])
+        let tipCrossing = WorkflowConnectionRouter.occupancyCost(from: CGPoint(x: 215, y: 20), to: CGPoint(x: 215, y: 60), occupied: [path])
+        // then
+        #expect(opposite > same)
+        #expect(tipCrossing > ordinaryCrossing)
+        #expect(same.isFinite && same >= 0)
+    }
+
+    @MainActor @Test func givenEdgeBatch_whenReorderingPreviewingAndRetargeting_thenRoutesAreStableAndCacheInvalidatesCompletely() {
+        // given
+        let source = node("source", x: 60, y: 100)
+        let upper = node("upper", x: 560, y: 100)
+        let lower = node("lower", x: 560, y: 240)
+        let nodes = [source, upper, lower]
+        let first = WorkflowEdgeModel(raw: ["id": .string("a"), "source": .string("source"), "target": .string("upper")])
+        let second = WorkflowEdgeModel(raw: ["id": .string("b"), "source": .string("source"), "target": .string("lower")])
+        let cache = WorkflowRouteCache()
+        // when
+        let original = cache.routes(edges: [first, second], nodes: nodes)
+        let reordered = cache.routes(edges: [second, first], nodes: nodes.reversed())
+        _ = cache.preview(source: source, target: lower, endpoint: WorkflowCanvasGeometry.connectionInput(lower), nodes: nodes, edges: [second, first])
+        // then
+        #expect(original == reordered)
+        #expect(cache.routes(edges: [first, second], nodes: nodes) == original)
+        #expect(cache.computationCount == 2)
+        // when
+        let retargeted = WorkflowEdgeModel(raw: ["id": .string("b"), "source": .string("source"), "target": .string("upper")])
+        let changed = cache.routes(edges: [first, retargeted], nodes: nodes)
+        // then
+        #expect(cache.computationCount == 4)
+        #expect(changed["b"]?.last == WorkflowCanvasGeometry.connectionInput(upper))
+        // when
+        _ = cache.routes(edges: [first], nodes: nodes)
+        _ = cache.routes(edges: [first, second], nodes: nodes)
+        // then
+        #expect(cache.computationCount == 7)
+    }
+
+    @MainActor @Test func givenShortAlignedGapAndUnrelatedEarlierEdge_whenBatchRouting_thenKeepsCompactStraightConnection() {
+        // given
+        let source = node("source", x: 190, y: 100)
+        let target = node("target", x: 440, y: 100)
+        let upper = node("upper", x: 190, y: 400)
+        let upperTarget = node("upperTarget", x: 440, y: 400)
+        let unrelated = WorkflowEdgeModel(raw: ["id": .string("a"), "source": .string("upper"), "target": .string("upperTarget")])
+        let edge = WorkflowEdgeModel(raw: ["id": .string("b"), "source": .string("source"), "target": .string("target")])
+        let duplicate = WorkflowEdgeModel(raw: ["id": .string("c"), "source": .string("source"), "target": .string("target")])
+        // when
+        let routes = WorkflowRouteCache().routes(edges: [unrelated, edge, duplicate], nodes: [source, target, upper, upperTarget])
+        // then
+        let direct = [WorkflowCanvasGeometry.connectionOutput(source), WorkflowCanvasGeometry.connectionInput(target)]
+        #expect(routes["b"] == direct)
+        #expect(routes["c"] == direct)
+    }
+
+    @MainActor @Test func givenEarlierRouteNearLaterDestination_whenBatchRouting_thenClearsLaterArrowhead() {
+        // given
+        let source = node("source", x: 20, y: 40)
+        let target = node("target", x: 400, y: 300)
+        let laterTarget = node("later", x: 250, y: 170)
+        let laterSource = node("laterSource", x: 600, y: 170)
+        let edges = [WorkflowEdgeModel(raw: ["id": .string("a"), "source": .string("source"), "target": .string("target")]),
+                     WorkflowEdgeModel(raw: ["id": .string("z"), "source": .string("laterSource"), "target": .string("later")])]
+        let tip = WorkflowCanvasGeometry.connectionInput(laterTarget)
+        // when
+        let routes = WorkflowRouteCache().routes(edges: edges, nodes: [source, target, laterTarget, laterSource])
+        // then
+        #expect(WorkflowConnectionRouter.clear(routes["a"]!, obstacles: [CGRect(x: tip.x - 9, y: tip.y - 7, width: 12, height: 14)]))
+    }
+
+    @MainActor @Test func givenMovedPrepareNode_whenBatchRouting_thenAvoidsWrappingBehindSourceWhenDestinationLoopIsAvailable() {
+        // given
+        let start = node("start", x: 40, y: 40, type: "start")
+        let prepare = node("prepare", x: 170, y: 70)
+        let plan = node("plan", x: 250, y: 170)
+        let review = node("review", x: 500, y: 170)
+        let baseline = node("baseline", x: 600, y: 310)
+        let end = node("end", x: 900, y: 450, type: "end")
+        let nodes = [start, prepare, plan, review, baseline, end]
+        let pairs = [("a-start", start, prepare), ("b-prepare-plan", prepare, plan),
+                     ("c-plan-review", plan, review), ("d-review-plan", review, plan),
+                     ("e-review-baseline", review, baseline), ("f-baseline-end", baseline, end)]
+        let edges = pairs.map { WorkflowEdgeModel(raw: ["id": .string($0.0), "source": .string($0.1.id), "target": .string($0.2.id)]) }
+        // when
+        let routes = WorkflowRouteCache().routes(edges: edges, nodes: nodes)
+        let route = routes["b-prepare-plan"]!
+        // then
+        #expect(route.map(\.x).min()! >= prepare.position.x)
+        #expect(route.first == WorkflowCanvasGeometry.connectionOutput(prepare))
+        #expect(route.last == WorkflowCanvasGeometry.connectionInput(plan))
+        #expect(WorkflowConnectionRouter.clear(route, obstacles: nodes.map { CGRect(origin: $0.position, size: WorkflowCanvasGeometry.size($0)) }))
     }
 
 }

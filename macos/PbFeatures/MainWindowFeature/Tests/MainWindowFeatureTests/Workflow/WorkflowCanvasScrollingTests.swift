@@ -63,21 +63,21 @@ import Testing
         var nodes = WorkflowJSON.nodes(WorkflowVM.starterDefinition())
         let source = nodes[0]
         let target = nodes[1]
-        let endpoint = WorkflowCanvasGeometry.connectionInput(target)
+        let edge = WorkflowEdgeModel(raw: ["id": .string("edge"), "source": .string(source.id), "target": .string(target.id)])
         // when
-        let original = cache.route(id: "edge", source: source, target: target, endpoint: endpoint, nodes: nodes)
+        let original = cache.routes(edges: [edge], nodes: nodes)["edge"]!
         nodes[1].raw["title"] = .string("Renamed")
-        let renamed = cache.route(id: "edge", source: source, target: target, endpoint: endpoint, nodes: nodes)
+        let renamed = cache.routes(edges: [edge], nodes: nodes)["edge"]!
         // then
         #expect(renamed == original)
         #expect(cache.computationCount == 1)
         // when
         nodes[1].raw["position"] = .object(["x": .number(450), "y": .number(250)])
-        _ = cache.route(id: "edge", source: source, target: nodes[1], endpoint: WorkflowCanvasGeometry.connectionInput(nodes[1]), nodes: nodes)
+        _ = cache.routes(edges: [edge], nodes: nodes)["edge"]!
         // then
         #expect(cache.computationCount == 2)
-        cache.retain(ids: [])
-        _ = cache.route(id: "edge", source: source, target: nodes[1], endpoint: WorkflowCanvasGeometry.connectionInput(nodes[1]), nodes: nodes)
+        cache.clear()
+        _ = cache.routes(edges: [edge], nodes: nodes)["edge"]!
         #expect(cache.computationCount == 3)
     }
 

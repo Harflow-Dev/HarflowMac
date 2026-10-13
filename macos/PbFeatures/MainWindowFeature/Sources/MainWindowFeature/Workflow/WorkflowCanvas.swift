@@ -133,7 +133,7 @@ struct WorkflowCanvas: View {
                 if let drag = activeConnectionDrag, let source = nodes.first(where: { $0.id == drag.sourceID }) {
                     let target = WorkflowCanvasGeometry.target(at: drag.location, sourceID: drag.sourceID, nodes: nodes)
                     let endpoint = target.map { WorkflowCanvasGeometry.connectionInput($0, highlighted: true) } ?? drag.location
-                    connectionPath(routeCache.route(id: "preview", source: source, target: target, endpoint: endpoint, nodes: nodes))
+                    connectionPath(routeCache.preview(source: source, target: target, endpoint: endpoint, nodes: nodes, edges: edges))
                         .stroke(Color.accentLink, style: StrokeStyle(
                             lineWidth: PbRadius.Metrics.workflowConnectionHighlightedLineWidth,
                             dash: PbRadius.Metrics.workflowConnectionDash
@@ -252,16 +252,14 @@ struct WorkflowCanvas: View {
         .onChange(of: scrollController.isDragging) { _, dragging in if dragging { hoveredArrow = nil } }
         .onChange(of: nodes) { _, _ in hoveredArrow = nil }
         .onChange(of: editingTitleNodeID) { _, _ in hoveredArrow = nil }
-        .onAppear { routeCache.retain(ids: Set(edges.map(\.id)).union(["preview"])) }
-        .onChange(of: edges) { _, edges in
+        .onChange(of: edges) { _, _ in
             hoveredArrow = nil
-            routeCache.retain(ids: Set(edges.map(\.id)).union(["preview"]))
         }
         .onDisappear {
             onEndNodeDrag()
             hoveredArrow = nil
             scrollController.stop()
-            routeCache.retain(ids: [])
+            routeCache.clear()
         }
     }
 
@@ -269,10 +267,9 @@ struct WorkflowCanvas: View {
         guard !scrollController.isDragging, activeConnectionDrag == nil, editingTitleNodeID == nil else { hoveredArrow = nil; return }
         let candidates = edges.compactMap { edge -> WorkflowArrowHover.Candidate? in
             guard !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  let source = nodes.first(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) else { return nil }
+                  nodes.contains(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) else { return nil }
             let finish = WorkflowCanvasGeometry.connectionInput(target)
-            let points = routeCache.route(id: edge.id, source: source, target: target, endpoint: finish, nodes: nodes,
-                                          approachInset: WorkflowConnectionApproach.inset(for: edge, edges: edges, nodes: nodes))
+            let points = routeCache.routes(edges: edges, nodes: nodes)[edge.id] ?? []
             return WorkflowArrowHover.Candidate(id: edge.id, path: arrowPath(points, finish: finish), points: points)
         }
         hoveredArrow = WorkflowArrowHover.nearest(to: point, candidates: candidates).map { WorkflowArrowHoverState(edgeID: $0, point: point) }
@@ -404,9 +401,8 @@ struct WorkflowCanvas: View {
     @ViewBuilder
     private func edgeView(_ edge: WorkflowEdgeModel) -> some View {
         if let source = nodes.first(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) {
-            let finish = WorkflowCanvasGeometry.connectionInput(target, highlighted: isConnectionTarget(target))
-            let points = routeCache.route(id: edge.id, source: source, target: target, endpoint: finish, nodes: nodes,
-                                          approachInset: WorkflowConnectionApproach.inset(for: edge, edges: edges, nodes: nodes))
+            let finish = WorkflowCanvasGeometry.connectionInput(target)
+            let points = routeCache.routes(edges: edges, nodes: nodes)[edge.id] ?? []
             let connection = arrowPath(points, finish: finish)
             let label = "Connection from \(source.name) to \(target.name)"
                 + (edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : ": \(edge.condition)")
