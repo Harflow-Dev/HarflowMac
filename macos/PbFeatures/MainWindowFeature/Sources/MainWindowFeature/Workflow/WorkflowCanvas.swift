@@ -114,6 +114,7 @@ struct WorkflowCanvas: View {
         GeometryReader { viewport in
         let contentSize = WorkflowCanvasZoom.contentSize(extent: CGSize(width: width, height: height), viewport: viewport.size, scale: zoom)
         let visible = scrollController.visibleRect.isEmpty ? CGRect(origin: .zero, size: viewport.size) : scrollController.visibleRect
+        let routes = routeCache.routes(edges: edges, nodes: nodes)
         ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
                 Color.cardFill
@@ -129,7 +130,7 @@ struct WorkflowCanvas: View {
                         .position(x: marquee.midX, y: marquee.midY)
                         .allowsHitTesting(false)
                 }
-                ForEach(edges) { edge in edgeView(edge) }
+                ForEach(edges) { edge in edgeView(edge, points: routes[edge.id] ?? []) }
                 if let drag = activeConnectionDrag, let source = nodes.first(where: { $0.id == drag.sourceID }) {
                     let target = WorkflowCanvasGeometry.target(at: drag.location, sourceID: drag.sourceID, nodes: nodes)
                     let endpoint = target.map { WorkflowCanvasGeometry.connectionInput($0, highlighted: true) } ?? drag.location
@@ -400,10 +401,9 @@ struct WorkflowCanvas: View {
     }
 
     @ViewBuilder
-    private func edgeView(_ edge: WorkflowEdgeModel) -> some View {
+    private func edgeView(_ edge: WorkflowEdgeModel, points: [CGPoint]) -> some View {
         if let source = nodes.first(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) {
             let finish = WorkflowCanvasGeometry.connectionInput(target)
-            let points = routeCache.routes(edges: edges, nodes: nodes)[edge.id] ?? []
             let connection = arrowPath(points, finish: finish)
             let label = "Connection from \(source.name) to \(target.name)"
                 + (edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : ": \(edge.condition)")
