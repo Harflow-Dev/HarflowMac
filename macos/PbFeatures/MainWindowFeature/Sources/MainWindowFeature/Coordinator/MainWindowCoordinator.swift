@@ -132,16 +132,22 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public var isNewSessionPresented: Bool {
         get { presentedSheet == .newSession }
         set {
-            if newValue { presentedSheet = .newSession }
-            else if presentedSheet == .newSession { presentedSheet = nil }
+            if newValue {
+                presentedSheet = .newSession
+            } else if presentedSheet == .newSession {
+                presentedSheet = nil
+            }
         }
     }
 
     public var isWorkflowRunnerPresented: Bool {
         get { presentedSheet == .workflowRunner }
         set {
-            if newValue { presentedSheet = .workflowRunner }
-            else if presentedSheet == .workflowRunner { presentedSheet = nil }
+            if newValue {
+                presentedSheet = .workflowRunner
+            } else if presentedSheet == .workflowRunner {
+                presentedSheet = nil
+            }
         }
     }
 
