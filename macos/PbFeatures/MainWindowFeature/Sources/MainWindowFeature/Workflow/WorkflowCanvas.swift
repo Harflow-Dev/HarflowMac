@@ -265,11 +265,12 @@ struct WorkflowCanvas: View {
 
     private func updateArrowHover(at point: CGPoint) {
         guard !scrollController.isDragging, activeConnectionDrag == nil, editingTitleNodeID == nil else { hoveredArrow = nil; return }
+        let routes = routeCache.routes(edges: edges, nodes: nodes)
         let candidates = edges.compactMap { edge -> WorkflowArrowHover.Candidate? in
             guard !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   nodes.contains(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) else { return nil }
             let finish = WorkflowCanvasGeometry.connectionInput(target)
-            let points = routeCache.routes(edges: edges, nodes: nodes)[edge.id] ?? []
+            let points = routes[edge.id] ?? []
             return WorkflowArrowHover.Candidate(id: edge.id, path: arrowPath(points, finish: finish), points: points)
         }
         hoveredArrow = WorkflowArrowHover.nearest(to: point, candidates: candidates).map { WorkflowArrowHoverState(edgeID: $0, point: point) }
