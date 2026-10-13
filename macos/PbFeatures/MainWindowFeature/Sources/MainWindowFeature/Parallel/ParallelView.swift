@@ -87,7 +87,14 @@ struct ParallelView<VM: ParallelViewModel>: View {
     }
 
     private var realContent: some View {
+        GeometryReader { screen in
         VStack(spacing: PbRadius.Metrics.zero) {
+            groupTitle
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, PbRadius.Metrics.spacing16)
+                .padding(.vertical, PbRadius.Metrics.spacing12)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
             if viewModel.isEmpty {
                 Text("No tasks in this group any more.").font(.pb(.body)).foregroundStyle(Color.secondaryText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -107,6 +114,8 @@ struct ParallelView<VM: ParallelViewModel>: View {
                     }
                 }
             }
+        }
+        .frame(width: screen.size.width, height: screen.size.height, alignment: .top)
         }
     }
 
@@ -143,11 +152,10 @@ struct ParallelView<VM: ParallelViewModel>: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// The group's header lives in the window's toolbar row, as the task detail's does. The title
-    /// sits on the bare toolbar (no glass capsule) and a spacer pushes the actions trailing.
+    /// Keep actions in the native toolbar. The two-line group title lives in the content
+    /// header, where its vertical inset is not constrained by the native toolbar height.
     private func withToolbar(@ViewBuilder content: () -> some View) -> some View {
         content().toolbar {
-            ToolbarItem(placement: .navigation) { groupTitle }.sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.flexible)
             // The task screen's quiet buttons, each on the bare toolbar — no glass capsule.
             ToolbarItem(placement: .primaryAction) { viewPromptButton }.sharedBackgroundVisibility(.hidden)
@@ -160,13 +168,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
     private var groupTitle: some View {
         VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing2) {
             Text(viewModel.groupName).font(.pb(.title, weight: .semibold)).lineLimit(1)
-            Text(viewModel.headerSubtitle).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).lineLimit(1)
-            // NEW truthful status counts (§6.5) from the complete current membership — complete
-            // toolbar equality includes this field, so a status change refreshes it while
-            // duplicate snapshots/feeds stay quiet.
-            if let statusSummary = viewModel.statusSummary {
-                Text(statusSummary).font(.pb(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
-            }
+            Text(viewModel.headerSubtitle).font(.pb(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
         }
     }
 

@@ -480,7 +480,7 @@ import Testing
         
         // then
         await waitUntil { sut.columns.count == 2 && sut.isPresentationSettled }
-        #expect(sut.headerSubtitle.hasPrefix("2 agents · Can edit this repo, Read-only ·"))
+        #expect(sut.headerSubtitle.hasPrefix("2 agents · \(sut.statusSummary ?? "") · Can edit this repo, Read-only ·"))
     }
     
     // MARK: - Column loading state (Monitor piece 12, Design point 4)

@@ -40,12 +40,14 @@ enum ParallelLeaseOrder {
 // MARK: - ParallelHeader
 
 enum ParallelHeader {
-    static func subtitle(_ conversations: [Conversation], startedAt: Date?) -> String {
+    static func subtitle(_ conversations: [Conversation], startedAt: Date?, statusSummary: String? = nil) -> String {
         let first = conversations.map(\.first)
         let freedoms = Set(first.compactMap(\.freedom).map { AccessLabel.text(freedom: $0) }).sorted().joined(separator: ", ")
         let repos = Set(first.map { Format.repoName($0.repoPath) }).sorted().joined(separator: ", ")
         let count = conversations.count
-        return "\(count) agent\(count == 1 ? "" : "s") · \(freedoms) · \(repos)"
+        return "\(count) agent\(count == 1 ? "" : "s")"
+            + (statusSummary.flatMap { $0.isEmpty ? nil : " · \($0)" } ?? "")
+            + " · \(freedoms) · \(repos)"
             + (startedAt.map { " · started \(Format.time($0))" } ?? "")
     }
 }

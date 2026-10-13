@@ -56,10 +56,10 @@ protocol ParallelRouting: Sendable {
 final class ParallelVM: ParallelViewModel {
     
     // MARK: - ParallelViewModel Properties
-    
+
     let groupName: String
     private(set) var headerSubtitle = ""
-    /// Truthful counts from complete current membership, independent of the static subtitle.
+    /// Truthful current-membership counts, included before metadata in the description.
     private(set) var statusSummary: String?
     /// Common enforced claims from every current member; empty input produces no pills.
     private(set) var headerPills: [String] = []
@@ -71,7 +71,7 @@ final class ParallelVM: ParallelViewModel {
     private(set) var columns: [ParallelColumnModel] = []
     
     // MARK: - Private Properties
-    
+
     static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
     @ObservationIgnored private let useCase: any ParallelUseCase
     @ObservationIgnored private let routing: any ParallelRouting
@@ -92,6 +92,7 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var latestOutcomes: [String: String] = [:]
     @ObservationIgnored private var memberIDs: [String] = []
     @ObservationIgnored private var conversations: [Conversation] = []
+    @ObservationIgnored private var groupStartedAt: Date?
     @ObservationIgnored private var workflowTaskIDs: [String]?
     @ObservationIgnored private var workflowFocusedTaskIDs: Set<String>?
     @ObservationIgnored private var workflowTitles: [String: String] = [:]
@@ -308,6 +309,7 @@ final class ParallelVM: ParallelViewModel {
     private func recomputeMembersAndLeases() {
         let preparation = MonitorMetrics.begin()
         let group = Lineage.sections(latestTasks).parallel.first { $0.name == groupName }
+        groupStartedAt = group?.startedAt
         let groupConversations = ParallelMembership.conversations(tasks: latestTasks, group: group?.conversations ?? [],
             workflowTaskIDs: workflowTaskIDs, focusedTaskIDs: workflowFocusedTaskIDs)
 .map { ParallelMembership.extending($0, states: uiStates) }
@@ -327,13 +329,10 @@ final class ParallelVM: ParallelViewModel {
             result[entry.key] = input
         }
         conversations = groupConversations
-
         let cancellable = group?.anyRunning == true
         if canCancelAll != cancellable { canCancelAll = cancellable }
         let empty = groupConversations.isEmpty
         if isEmpty != empty { isEmpty = empty }
-        let subtitle = ParallelHeader.subtitle(groupConversations, startedAt: group?.startedAt)
-        if headerSubtitle != subtitle { headerSubtitle = subtitle }
         MonitorMetrics.end(preparation, stage: .parallelPreparation, residentColumns: residentIDs.count, leasedMembers: leases.count)
         recompute()
     }
@@ -409,6 +408,8 @@ final class ParallelVM: ParallelViewModel {
         let tasks = orderedConversations.map { latestSnapshots[$0.current.taskID] ?? $0.current }
         let header = ParallelHeaderPresentation(tasks: tasks, fallback: Self.fallbackFooter)
         if statusSummary != header.statusSummary { statusSummary = header.statusSummary }
+        let subtitle = ParallelHeader.subtitle(conversations, startedAt: groupStartedAt, statusSummary: header.statusSummary)
+        if headerSubtitle != subtitle { headerSubtitle = subtitle }
         if headerPills != header.pills { headerPills = header.pills }
         if headerClaimCaption != header.caption { headerClaimCaption = header.caption }
     }

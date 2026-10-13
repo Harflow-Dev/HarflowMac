@@ -113,3 +113,21 @@ extension ParallelVMTests {
 @MainActor private final class ObservationCounter {
     var value = 0
 }
+
+extension ParallelVMTests {
+    @Test func givenMemberStatusChanges_whenSnapshotsRefresh_thenDescriptionImmediatelyReflectsCurrentCounts() async {
+        // given
+        let harness = makeSUT()
+        let running = task(id: "t1", status: "running")
+        harness.tasksBox.value[running.taskID] = running
+        harness.sut.didAppear()
+        defer { harness.sut.didDisappear() }
+        harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.headerSubtitle.hasPrefix("1 agent · 1 running ·") }
+        // when
+        harness.snapshotsSubject.send([running.taskID: task(id: "t1", status: "completed")])
+        // then
+        await waitUntil { harness.sut.headerSubtitle.hasPrefix("1 agent · 1 done ·") }
+        #expect(!harness.sut.headerSubtitle.contains("running"))
+    }
+}
