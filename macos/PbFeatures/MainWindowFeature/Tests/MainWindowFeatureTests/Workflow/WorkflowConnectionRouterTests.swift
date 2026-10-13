@@ -398,4 +398,35 @@ import Testing
         #expect(await task.value == nil)
     }
 
+    @MainActor @Test(arguments: ["agent", "end"])
+    func givenScreenshotLikeFanIn_whenBatchRouting_thenSharesOneVerticalDestinationTrunk(type: String) async {
+        // given
+        let sources = [node("prepare", x: 150, y: 30), node("review", x: 480, y: 160),
+                       node("verify", x: 580, y: 290), node("implement", x: 680, y: 410)]
+        let target = node("target", x: 1600, y: 900, type: type)
+        let edges = sources.enumerated().map { index, source in
+            WorkflowEdgeModel(raw: ["id": .string("edge-\(index)"), "source": .string(source.id), "target": .string(target.id)])
+        }
+        // when
+        let routes = await WorkflowRouteCache().settledRoutes(edges: edges, nodes: sources + [target])
+        // then
+        let lowestSourceY = sources.map { WorkflowCanvasGeometry.connectionOutput($0).y }.max()!
+        let commonProbeY = (lowestSourceY + WorkflowCanvasGeometry.connectionInput(target).y) / 2
+        let trunkXs = routes.values.flatMap { points in
+            zip(points, points.dropFirst()).compactMap { start, finish -> Double? in
+                guard start.x == finish.x, min(start.y, finish.y) < commonProbeY,
+                      max(start.y, finish.y) > commonProbeY else { return nil }
+                return start.x
+            }
+        }
+        #expect(trunkXs.count == sources.count)
+        #expect(Set(trunkXs).count == 1)
+        #expect(routes.count == edges.count)
+        for source in sources {
+            let route = routes[edges[sources.firstIndex(where: { $0.id == source.id })!].id]!
+            #expect(route.first == WorkflowCanvasGeometry.connectionOutput(source))
+            #expect(route.last == WorkflowCanvasGeometry.connectionInput(target))
+        }
+    }
+
 }
