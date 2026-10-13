@@ -228,4 +228,23 @@ import Testing
         #expect(WorkflowConnectionRouter.clear(route, obstacles: [CGRect(origin: obstacle.position, size: WorkflowCanvasGeometry.size(obstacle))]))
     }
 
+    @Test func givenScreenshotReturnConnection_whenRouting_thenUsesNearbyApproachWithoutFanInExpansion() {
+        // given
+        let prepare = node("prepare", x: 170, y: 30)
+        let plan = node("plan", x: 250, y: 170)
+        let review = node("review", x: 500, y: 170)
+        let baseline = node("baseline", x: 600, y: 310)
+        let nodes = [prepare, plan, review, baseline]
+        let edges = [WorkflowEdgeModel(raw: ["id": .string("prepare-plan"), "source": .string("prepare"), "target": .string("plan")]),
+                     WorkflowEdgeModel(raw: ["id": .string("review-plan"), "source": .string("review"), "target": .string("plan")])]
+        let inset = WorkflowConnectionApproach.inset(for: edges[1], edges: edges, nodes: nodes)
+        // when
+        let route = WorkflowConnectionRouter.route(source: review, target: plan,
+            endpoint: WorkflowCanvasGeometry.connectionInput(plan), nodes: nodes, approachInset: inset)
+        // then
+        #expect(inset <= 30)
+        #expect(route.last == WorkflowCanvasGeometry.connectionInput(plan))
+
+    }
+
 }
