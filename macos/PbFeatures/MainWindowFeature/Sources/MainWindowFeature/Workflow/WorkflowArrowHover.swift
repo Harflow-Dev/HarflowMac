@@ -9,12 +9,16 @@ enum WorkflowArrowHover {
         let points: [CGPoint]
     }
 
-    static func nearest(to point: CGPoint, candidates: [Candidate]) -> String? {
+    static func nearest(to point: CGPoint, candidates: [Candidate], preferredID: String? = nil) -> String? {
         candidates.filter { $0.path.strokedPath(StrokeStyle(lineWidth: 18)).contains(point) }
             .min { first, second in
                 let firstDistance = distance(point, to: first.points)
                 let secondDistance = distance(point, to: second.points)
-                return firstDistance == secondDistance ? first.id < second.id : firstDistance < secondDistance
+                if firstDistance != secondDistance { return firstDistance < secondDistance }
+                let firstPreferred = first.id == preferredID
+                let secondPreferred = second.id == preferredID
+                if firstPreferred != secondPreferred { return firstPreferred }
+                return first.id < second.id
             }?.id
     }
 

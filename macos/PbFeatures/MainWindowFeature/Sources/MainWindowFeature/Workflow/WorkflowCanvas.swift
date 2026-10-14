@@ -116,6 +116,12 @@ struct WorkflowCanvas: View {
         let visible = scrollController.visibleRect.isEmpty ? CGRect(origin: .zero, size: viewport.size) : scrollController.visibleRect
         let routeSnapshot = WorkflowRouteCache.snapshot(edges: edges, nodes: nodes)
         let routes = routeCache.currentRoutes(for: routeSnapshot)
+        let region = parallelRegion
+        let highlightedEdgeIDs = Set(edges.filter { edge in
+            edge.id == selectedEdgeID || selectedBranchEdgeIDs.contains(edge.id)
+                || (region.contains(edge.source) && region.contains(edge.target))
+        }
+.map(\.id))
         ScrollView([.horizontal, .vertical]) {
             ZStack(alignment: .topLeading) {
                 Color.cardFill
@@ -131,7 +137,11 @@ struct WorkflowCanvas: View {
                         .position(x: marquee.midX, y: marquee.midY)
                         .allowsHitTesting(false)
                 }
-                ForEach(edges) { edge in edgeView(edge, points: routes[edge.id] ?? []) }
+                ForEach(edges) { edge in
+                    let highlighted = highlightedEdgeIDs.contains(edge.id)
+                    edgeView(edge, points: routes[edge.id] ?? [], highlighted: highlighted)
+                        .zIndex(edge.id == selectedEdgeID ? 2 : highlighted || takenEdgeIDs.contains(edge.id) ? 1 : 0)
+                }
                 if let drag = activeConnectionDrag, let source = nodes.first(where: { $0.id == drag.sourceID }) {
                     let target = WorkflowCanvasGeometry.target(at: drag.location, sourceID: drag.sourceID, nodes: nodes)
                     let endpoint = target.map { WorkflowCanvasGeometry.connectionInput($0, highlighted: true) } ?? drag.location
@@ -269,17 +279,24 @@ struct WorkflowCanvas: View {
         }
     }
 
-    private func updateArrowHover(at point: CGPoint) {
-        guard !scrollController.isDragging, activeConnectionDrag == nil, editingTitleNodeID == nil else { hoveredArrow = nil; return }
+    private func connectionAt(_ point: CGPoint) -> String? {
         let routes = routeCache.currentRoutes(for: WorkflowRouteCache.snapshot(edges: edges, nodes: nodes))
+        let nodeByID = Dictionary(nodes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let candidates = edges.compactMap { edge -> WorkflowArrowHover.Candidate? in
-            guard !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  nodes.contains(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) else { return nil }
+            guard nodeByID[edge.source] != nil, let target = nodeByID[edge.target] else { return nil }
             let finish = WorkflowCanvasGeometry.connectionInput(target)
             let points = routes[edge.id] ?? []
             return WorkflowArrowHover.Candidate(id: edge.id, path: arrowPath(points, finish: finish), points: points)
         }
-        hoveredArrow = WorkflowArrowHover.nearest(to: point, candidates: candidates).map { WorkflowArrowHoverState(edgeID: $0, point: point) }
+        return WorkflowArrowHover.nearest(to: point, candidates: candidates, preferredID: selectedEdgeID)
+    }
+
+    private func updateArrowHover(at point: CGPoint) {
+        guard !scrollController.isDragging, activeConnectionDrag == nil, editingTitleNodeID == nil,
+              let edgeID = connectionAt(point),
+              let edge = edges.first(where: { $0.id == edgeID }),
+              !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { hoveredArrow = nil; return }
+        hoveredArrow = WorkflowArrowHoverState(edgeID: edgeID, point: point)
     }
 
     @ViewBuilder
@@ -387,26 +404,21 @@ struct WorkflowCanvas: View {
         }
     }
 
-    private func isHighlighted(_ edge: WorkflowEdgeModel) -> Bool {
-        edge.id == selectedEdgeID || selectedBranchEdgeIDs.contains(edge.id)
-            || (parallelRegion.contains(edge.source) && parallelRegion.contains(edge.target))
-    }
-
     /// A traversed connection is tinted doneGreen (SPEC §6.4); selection and branch paths stay
     /// accent. Stroke widths keep their existing emphasis weights.
-    private func edgeColor(_ edge: WorkflowEdgeModel) -> Color {
+    private func edgeColor(_ edge: WorkflowEdgeModel, highlighted: Bool) -> Color {
         if takenEdgeIDs.contains(edge.id) { return .doneGreen }
-        return isHighlighted(edge) ? .accentLink : .tertiaryText
+        return highlighted ? .accentLink : .tertiaryText
     }
 
-    private func edgeWidth(_ edge: WorkflowEdgeModel) -> CGFloat {
-        (isHighlighted(edge) || takenEdgeIDs.contains(edge.id))
+    private func edgeWidth(_ edge: WorkflowEdgeModel, highlighted: Bool) -> CGFloat {
+        (highlighted || takenEdgeIDs.contains(edge.id))
             ? PbRadius.Metrics.workflowConnectionHighlightedLineWidth
             : PbRadius.Metrics.workflowConnectionLineWidth
     }
 
     @ViewBuilder
-    private func edgeView(_ edge: WorkflowEdgeModel, points: [CGPoint]) -> some View {
+    private func edgeView(_ edge: WorkflowEdgeModel, points: [CGPoint], highlighted: Bool) -> some View {
         if let source = nodes.first(where: { $0.id == edge.source }), let target = nodes.first(where: { $0.id == edge.target }) {
             let finish = WorkflowCanvasGeometry.connectionInput(target)
             let connection = arrowPath(points, finish: finish)
@@ -414,16 +426,19 @@ struct WorkflowCanvas: View {
                 + (edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : ": \(edge.condition)")
             ZStack {
                 connection.stroke(
-                    edgeColor(edge),
+                    edgeColor(edge, highlighted: highlighted),
                     style: StrokeStyle(
-                        lineWidth: edgeWidth(edge),
+                        lineWidth: edgeWidth(edge, highlighted: highlighted),
                         dash: edge.isBackward ? PbRadius.Metrics.workflowConnectionDash : []
                     )
                 )
                 .opacity(excludedBranchEdgeIDs.contains(edge.id) ? 0.25
                     : !isEditable && !selectedBranchEdgeIDs.contains(edge.id) && !takenEdgeIDs.isEmpty && !takenEdgeIDs.contains(edge.id) ? 0.5 : 1)
                 .contentShape(connection.strokedPath(StrokeStyle(lineWidth: PbRadius.Metrics.workflowConnectionHitWidth)))
-                .onTapGesture { isCanvasFocused = true; onSelectEdge(edge.id) }
+                .onTapGesture(coordinateSpace: .named("workflow-canvas")) { location in
+                    isCanvasFocused = true
+                    if let edgeID = connectionAt(WorkflowCanvasZoom.logical(location, scale: zoom)) { onSelectEdge(edgeID) }
+                }
                 .accessibilityLabel(label)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { isCanvasFocused = true; onSelectEdge(edge.id) }

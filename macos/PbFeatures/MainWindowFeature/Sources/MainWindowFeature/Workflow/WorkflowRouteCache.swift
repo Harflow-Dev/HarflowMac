@@ -69,10 +69,17 @@ final class WorkflowRouteCache {
             guard nodes[edge.source] != nil, let target = nodes[edge.target], protectedTargets.insert(target.id).inserted else { return nil }
             return [target.input]
         }
+        let groups = Dictionary(grouping: snapshot.edges, by: \.target)
+        var plannedTargets = Set<String>()
+        var shared: [String: [CGPoint]] = [:]
         for edge in snapshot.edges {
             guard !Task.isCancelled else { return nil }
             guard let source = nodes[edge.source], let target = nodes[edge.target] else { continue }
-            let points = WorkflowConnectionRouter.route(source: source, target: target, endpoint: target.input,
+            if plannedTargets.insert(edge.target).inserted {
+                shared.merge(WorkflowSharedDestinationRoutes.routes(edges: groups[edge.target] ?? [],
+                                                                   nodes: snapshot.nodes, occupied: occupied)) { first, _ in first }
+            }
+            let points = shared[edge.id] ?? WorkflowConnectionRouter.route(source: source, target: target, endpoint: target.input,
                                                        nodes: snapshot.nodes, occupied: occupied)
             guard !Task.isCancelled else { return nil }
             result[edge.id] = points

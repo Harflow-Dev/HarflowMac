@@ -429,4 +429,73 @@ import Testing
         }
     }
 
+    @MainActor @Test func givenBlockedDestinationBus_whenBatchRouting_thenFallsBackWithoutCrossingObstacle() async {
+        // given
+        let sources = [node("first", x: 100, y: 100), node("second", x: 400, y: 300)]
+        let target = node("target", x: 1200, y: 800)
+        let blocker = node("blocker", x: 1100, y: 500)
+        let nodes = sources + [target, blocker]
+        let edges = sources.map { WorkflowEdgeModel(raw: ["id": .string($0.id), "source": .string($0.id), "target": .string(target.id)]) }
+        // when
+        let routes = await WorkflowRouteCache().settledRoutes(edges: edges, nodes: nodes)
+        // then
+        #expect(routes.count == edges.count)
+        for source in sources {
+            #expect(routes[source.id]?.first == WorkflowCanvasGeometry.connectionOutput(source))
+            #expect(routes[source.id]?.last == WorkflowCanvasGeometry.connectionInput(target))
+            #expect(WorkflowConnectionRouter.clear(routes[source.id]!, obstacles: [CGRect(origin: blocker.position, size: WorkflowCanvasGeometry.size(blocker))]))
+        }
+        let snapshot = WorkflowRouteCache.snapshot(edges: edges, nodes: nodes)
+        #expect(WorkflowSharedDestinationRoutes.routes(edges: snapshot.edges, nodes: snapshot.nodes, occupied: []).isEmpty)
+    }
+
+    @MainActor @Test func givenBackwardOutlier_whenBatchRouting_thenForwardBranchesShareAndOutlierRemainsAttached() async {
+        // given
+        let sources = [node("first", x: 100, y: 100), node("second", x: 400, y: 300), node("backward", x: 1400, y: 500)]
+        let target = node("target", x: 1200, y: 800)
+        let edges = sources.map { WorkflowEdgeModel(raw: ["id": .string($0.id), "source": .string($0.id), "target": .string(target.id)]) }
+        // when
+        let routes = await WorkflowRouteCache().settledRoutes(edges: edges, nodes: sources + [target])
+        // then
+        #expect(routes["first"]!.suffix(2) == routes["second"]!.suffix(2))
+        #expect(routes["backward"]?.first == WorkflowCanvasGeometry.connectionOutput(sources[2]))
+        #expect(routes["backward"]?.last == WorkflowCanvasGeometry.connectionInput(target))
+        let bodies = (sources + [target]).map { CGRect(origin: $0.position, size: WorkflowCanvasGeometry.size($0)) }
+        #expect(WorkflowConnectionRouter.clear(routes["backward"]!, obstacles: bodies))
+    }
+
+    @MainActor @Test func givenSharedDestination_whenInputReordersAndTargetMoves_thenRoutesStayDeterministicAndRefreshBus() async {
+        // given
+        let sources = [node("first", x: 100, y: 100), node("second", x: 400, y: 300)]
+        let target = node("target", x: 1200, y: 800)
+        let moved = node("target", x: 1400, y: 900)
+        let edges = sources.map { WorkflowEdgeModel(raw: ["id": .string($0.id), "source": .string($0.id), "target": .string(target.id)]) }
+        let cache = WorkflowRouteCache()
+        // when
+        let original = await cache.settledRoutes(edges: edges, nodes: sources + [target])
+        let reordered = await cache.settledRoutes(edges: edges.reversed(), nodes: ([target] + sources).reversed())
+        let changed = await cache.settledRoutes(edges: edges, nodes: sources + [moved])
+        // then
+        #expect(original == reordered)
+        #expect(original != changed)
+        #expect(changed["first"]!.suffix(2) == changed["second"]!.suffix(2))
+        #expect(changed.values.allSatisfy { $0.last == WorkflowCanvasGeometry.connectionInput(moved) })
+        #expect(cache.computationCount == 4)
+    }
+
+    @MainActor @Test func givenDistinctDestinationIDs_whenBatchRouting_thenKeepsEachBranchAttachedToItsOwnTarget() async {
+        // given
+        let sources = [node("first", x: 100, y: 100), node("second", x: 400, y: 300)]
+        let targets = [node("target-a", x: 1200, y: 800), node("target-b", x: 1200, y: 1000)]
+        let edges = zip(sources, targets).map { source, target in
+            WorkflowEdgeModel(raw: ["id": .string(source.id), "source": .string(source.id), "target": .string(target.id)])
+        }
+        // when
+        let routes = await WorkflowRouteCache().settledRoutes(edges: edges, nodes: sources + targets)
+        // then
+        #expect(routes["first"]?.last == WorkflowCanvasGeometry.connectionInput(targets[0]))
+        #expect(routes["second"]?.last == WorkflowCanvasGeometry.connectionInput(targets[1]))
+        #expect(routes["first"]!.suffix(2) != routes["second"]!.suffix(2))
+    }
+
 }

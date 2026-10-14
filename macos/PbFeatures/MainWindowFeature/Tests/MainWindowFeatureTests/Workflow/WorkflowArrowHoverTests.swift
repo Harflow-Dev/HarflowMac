@@ -23,6 +23,24 @@ import Testing
         #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 40), candidates: candidates) == nil)
     }
 
+    @Test func givenSharedTrunk_whenBranchIsSelected_thenHoverKeepsItsConditionAndUniqueBranchesRemainDistinct() {
+        // given
+        func branch(_ id: String, y: CGFloat) -> WorkflowArrowHover.Candidate {
+            let points = [CGPoint(x: 0, y: y), CGPoint(x: 80, y: y), CGPoint(x: 80, y: 100), CGPoint(x: 120, y: 100)]
+            var path = Path()
+            path.move(to: points[0])
+            for point in points.dropFirst() { path.addLine(to: point) }
+            return WorkflowArrowHover.Candidate(id: id, path: path, points: points)
+        }
+        let candidates = [branch("a", y: 0), branch("b", y: 40)]
+        // when / then
+        let trunk = CGPoint(x: 80, y: 80)
+        #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates, preferredID: "b") == "b")
+        #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates.reversed(), preferredID: "b") == "b")
+        #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates) == "a")
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 20, y: 0), candidates: candidates, preferredID: "b") == "a")
+    }
+
     @Test func givenBentPathBoundingBox_whenHoveringAwayFromStroke_thenDoesNotShowCondition() {
         // given
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0), CGPoint(x: 100, y: 100)]
