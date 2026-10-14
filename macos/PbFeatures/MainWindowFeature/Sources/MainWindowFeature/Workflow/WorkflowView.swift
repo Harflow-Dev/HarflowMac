@@ -485,6 +485,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     // Native disclosure triangles extend before their label's layout origin.
                     .padding(.leading, PbRadius.Metrics.spacing8)
                 }
+                WorkflowGoalView(viewModel: viewModel, run: run)
+                    .padding(PbRadius.Metrics.spacing16)
+                    .padding(.leading, PbRadius.Metrics.spacing8)
                 WorkflowRunPlan(run: run)
                     .padding(PbRadius.Metrics.spacing16)
                     .padding(.leading, PbRadius.Metrics.spacing8)

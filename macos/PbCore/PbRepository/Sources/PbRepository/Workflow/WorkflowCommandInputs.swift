@@ -18,7 +18,8 @@ struct WorkflowCommandInputs {
                         ("--source=", "--source-file=", "source.json"),
                         ("--prompt=", "--prompt-file=", "prompt.txt"),
                         ("--instructions=", "--instructions-file=", "instructions.txt"),
-                        ("--reason=", "--reason-file=", "reason.txt")]
+                        ("--reason=", "--reason-file=", "reason.txt"),
+                        ("--goal=", "--goal-file=", "goal.txt")]
         guard options.contains(where: { option in payloads.contains { option.hasPrefix($0.0) } }) else {
             self.options = options
             self.directory = nil

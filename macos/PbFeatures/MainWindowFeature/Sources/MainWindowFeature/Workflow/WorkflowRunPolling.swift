@@ -59,7 +59,8 @@ final class WorkflowRunPolling {
         let response = try await useCase.command("status", options: options, positionals: [id])
         let stateKeys = [
             "status", "updated_at", "settling", "draft_revision", "input_decision_id", "revision",
-            "interaction_owner", "can_cancel_from_monitor", "monitor_cancel_reason"
+            "interaction_owner", "can_cancel_from_monitor", "monitor_cancel_reason",
+            "can_revise_goal", "goal_revision_reason", "goal_revision", "goal_replanning_required", "goal_replanning_revision"
         ]
         if hasDigests, let previous, stateKeys.allSatisfy({ response[$0] == previous[$0] }),
            let advertised = response["monitor_digests"], advertised == previous["monitor_digests"] {

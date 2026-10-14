@@ -1,3 +1,4 @@
+import Foundation
 @testable import MainWindowFeature
 import Mockable
 import MonitorCore
@@ -57,6 +58,25 @@ import Testing
         verify(routing).openWorkflowRun(id: .value("created-run")).called(1)
         verify(useCase).refreshTasks().called(1)
         vm.didDisappear()
+    }
+
+    @Test(arguments: ["  Verify all states.\nPreserve whitespace.  ", " \n "])
+    func givenLaunchGoal_whenStarting_thenPreservesSuppliedTextOrOmitsBlank(_ goal: String) async throws {
+        // given
+        let (vm, useCase, _) = try makeRunner()
+        defer { vm.didDisappear() }
+        vm.goal = goal
+        let expected = (goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["--goal=\(goal)"])
+            + vm.launchPreviewOptions + ["--monitor", "--prompt=\(vm.prompt)", "--expected-preview-hash=verified-preview"]
+        given(useCase)
+.command(.value("start"), options: .any, positionals: .any)
+            .willReturn(["workflow_run_id": .string("created-run")])
+        // when
+        vm.start()
+        // then
+        await verify(useCase)
+.command(.value("start"), options: .value(expected), positionals: .value(["Saved workflow"]))
+            .calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenMenuRunner_whenStartFails_thenNoRunIsRoutedAndSheetStaysOpen() async throws {

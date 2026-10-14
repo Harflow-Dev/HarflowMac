@@ -36,6 +36,8 @@ protocol WorkflowViewModel: ViewModel {
     var branchSelection: WorkflowBranchSelection { get }
     var repo: String { get set }
     var prompt: String { get set }
+    var goal: String { get set }
+    func reviseGoal(_ goal: String, runID: String, expectedRevision: Int)
     var freedom: String { get set }
     var instructions: String { get set }
     var additionalAttempts: Int { get set }
@@ -101,6 +103,8 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
+    var goal: String { get { "" } set { _ = newValue } }
+    func reviseGoal(_: String, runID _: String, expectedRevision _: Int) {}
     var readFailureText: String? { nil }
     func retryReadFailure() {}
     func control(_ command: String, allowOptionalReviewSkip: Bool) {

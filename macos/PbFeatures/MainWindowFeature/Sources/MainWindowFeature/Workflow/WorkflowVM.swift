@@ -79,6 +79,7 @@ final class WorkflowVM: WorkflowViewModel {
     var validationMessage: String?
     var repo = "" { didSet { if repo != oldValue { scheduleLaunchPreview() } } }
     var prompt = ""
+    var goal = ""
     var freedom = "write_in_repo"
     var instructions = ""
     var additionalAttempts = 0
@@ -305,8 +306,13 @@ final class WorkflowVM: WorkflowViewModel {
             errorText = "Wait for the orchestrator permission preview before running."
             return
         }
+        guard goal.utf8.count <= 65_536 else {
+            errorText = "Goal must be at most 64 KiB of UTF-8 text."
+            return
+        }
         let capturedName = loadedName
-        let capturedOptions = launchPreviewOptions + ["--monitor", "--prompt=\(prompt)", "--expected-preview-hash=\(preview.hash)"]
+        let goalOptions = goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["--goal=\(goal)"]
+        let capturedOptions = goalOptions + launchPreviewOptions + ["--monitor", "--prompt=\(prompt)", "--expected-preview-hash=\(preview.hash)"]
         perform { [weak self] in
             guard let self else { return }
             let options = capturedOptions

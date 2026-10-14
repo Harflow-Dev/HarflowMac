@@ -60,6 +60,12 @@ struct WorkflowRunModel: Identifiable, Equatable {
     var name: String { raw["workflow_name"]?.stringValue ?? raw["name"]?.stringValue ?? "Workflow" }
     var status: String { raw["status"]?.stringValue ?? "unknown" }
     var reason: String { raw["attention_reason"]?.stringValue ?? raw["reason"]?.stringValue ?? "" }
+    var goal: String? { raw["goal"]?.stringValue }
+    var goalRevision: Int { raw["goal_revision"]?.intValue ?? 0 }
+    var goalHistory: [[String: JSONValue]] { raw["goal_history"]?.arrayValue?.compactMap(\.objectValue) ?? [] }
+    var goalAssessment: [String: JSONValue]? { raw["goal_assessment"]?.objectValue }
+    var canReviseGoal: Bool { allowsMonitorControl && raw["can_revise_goal"]?.boolValue == true }
+    var goalRevisionReason: String? { raw["goal_revision_reason"]?.stringValue }
     var isDelegation: Bool { raw["execution_contract"]?.stringValue == "delegation" }
     var orchestratorPermissions: WorkflowPermissionsModel? {
         raw["owner_contracts"]?.objectValue.flatMap(WorkflowPermissionsModel.init)

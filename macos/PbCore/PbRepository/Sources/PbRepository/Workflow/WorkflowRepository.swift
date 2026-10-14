@@ -43,7 +43,8 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
         let ctl = try toolEnvironment.ctl().get()
         // Workflow prompts, control instructions and builder JSON are logical payloads, never argv entries.
         // Keep its disposable files alive until the CLI has finished, including failures.
-        let input = ["build", "start", "builder-followup", "resume", "recover"].contains(command) ? try WorkflowCommandInputs.prepare(options: options) : nil
+        let payloadCommands = ["build", "start", "builder-followup", "resume", "recover", "revise-goal"]
+        let input = payloadCommands.contains(command) ? try WorkflowCommandInputs.prepare(options: options) : nil
         defer { input?.cleanUp() }
         var processOptions = input?.options ?? options
         if command == "list", !processOptions.contains("--monitor-view") {

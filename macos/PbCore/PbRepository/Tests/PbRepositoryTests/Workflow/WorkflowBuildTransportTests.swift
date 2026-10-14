@@ -138,3 +138,30 @@ extension WorkflowBuildTransportTests {
         for path in paths.value { #expect(!FileManager.default.fileExists(atPath: path)) }
     }
 }
+
+extension WorkflowBuildTransportTests {
+    @Test(arguments: ["start", "revise-goal"])
+    func givenMultilineGoal_whenExecuting_thenUsesPrivateFileAndPreservesText(_ command: String) async throws {
+        // given
+        let goal = "  Compare screens.\nVerify all states.  "
+        let paths = LockedBox<[String]>([])
+        let runner = StubProcessRunner { call in
+            guard let path = call.arguments.first(where: { $0.hasPrefix("--goal-file=") }).map({ String($0.dropFirst("--goal-file=".count)) }) else {
+                Issue.record("Goal was not transported in a private file")
+                return .failure(.unreadable(tool: "polybridge-ctl", exitCode: 1, stderr: "missing goal"))
+            }
+            paths.mutate { $0 = [path] }
+            #expect((try? String(contentsOfFile: path, encoding: .utf8)) == goal)
+            #expect(!call.arguments.contains { $0.hasPrefix("--goal=") })
+            return .success(stdout(#"{"v":4,"result":{"workflow_run_id":"run"}}"#))
+        }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
+        let sut = WorkflowRepositoryImpl(toolEnvironment: environment)
+        // when
+        _ = try await sut.command(command, options: ["--goal=\(goal)", "--expected-revision=2"], positionals: ["run"])
+        // then
+        #expect(paths.value.count == 1)
+        for path in paths.value { #expect(!FileManager.default.fileExists(atPath: path)) }
+    }
+}

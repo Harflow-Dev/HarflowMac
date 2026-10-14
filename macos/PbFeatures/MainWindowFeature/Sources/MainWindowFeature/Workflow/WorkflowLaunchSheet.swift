@@ -50,6 +50,20 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
                             .accessibilityLabel(isGenerating ? "Workflow request" : "Workflow task")
                     }
+                    if !isGenerating {
+                        VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
+                            SectionLabel(text: "Goal (optional)")
+                            TextEditor(text: Binding(get: { viewModel.goal }, set: { viewModel.goal = $0 }))
+                                .font(.pb(.body))
+.scrollChromeScope()
+                                .frame(minHeight: PbRadius.Metrics.sidebarSearchMinimumWidth)
+                                .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
+                                .accessibilityLabel("Workflow goal")
+                            Text("Describe the result and the evidence needed to verify it.")
+                                .font(.pb(.secondary))
+.foregroundStyle(Color.secondaryText)
+                        }
+                    }
                     VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
                         SectionLabel(text: isGenerating ? "Repository (optional)" : "Repository")
                         HStack {

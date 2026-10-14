@@ -21,6 +21,22 @@ struct WorkflowRunPollingChangedViewTests {
         #expect(useCase.statusOptions == [["--monitor-view", "--snapshot"], ["--monitor-view"]])
     }
 
+    @Test func givenUnchangedDigests_whenGoalEligibilityChanges_thenFreshHeaderIsAppliedWithoutDetailRead() async throws {
+        // given
+        let useCase = ChangedViewPollingUseCase()
+        let loader = WorkflowRunPolling()
+        _ = try await loader.load(id: "run", useCase: useCase)
+        useCase.detailViews = []
+        // when
+        useCase.canReviseGoal = true
+        useCase.goalRevisionReason = "Ready for revision"
+        let refreshed = try await loader.load(id: "run", useCase: useCase)
+        // then
+        #expect(refreshed["can_revise_goal"]?.boolValue == true)
+        #expect(refreshed["goal_revision_reason"]?.stringValue == "Ready for revision")
+        #expect(useCase.detailViews.isEmpty)
+    }
+
     @Test func givenIndexAdvancesDuringFrozenBootstrap_whenSeedingFails_thenFrozenSnapshotRemainsUsable() async throws {
         let useCase = ChangedViewPollingUseCase()
         useCase.failIndex = true
@@ -59,6 +75,8 @@ private final class ChangedViewPollingUseCase: WorkflowUseCase, @unchecked Senda
     var executionStatus = "running"
     var status = "running"
     var failIndex = false
+    var canReviseGoal = false
+    var goalRevisionReason = "Workers running"
     var detailViews: [String] = []
     var statusOptions: [[String]] = []
     private var old: JSONValue { .object(["id": .string("old"), "status": .string("completed")]) }
@@ -70,6 +88,7 @@ private final class ChangedViewPollingUseCase: WorkflowUseCase, @unchecked Senda
             statusOptions.append(options)
             let raw: [String: JSONValue] = ["workflow_run_id": .string("run"), "status": .string(status),
                 "summary": .string(summary), "activations": .array([old, live]),
+                "can_revise_goal": .bool(canReviseGoal), "goal_revision_reason": .string(goalRevisionReason),
                 "monitor_digests": .object(["summary": .string(summary), "execution_index": .string(executionStatus)])]
             if options.contains("--snapshot") {
                 let text = JSONValue.object(raw).rendered()
