@@ -286,7 +286,8 @@ struct WorkflowCanvas: View {
             guard nodeByID[edge.source] != nil, let target = nodeByID[edge.target] else { return nil }
             let finish = WorkflowCanvasGeometry.connectionInput(target)
             let points = routes[edge.id] ?? []
-            return WorkflowArrowHover.Candidate(id: edge.id, path: arrowPath(points, finish: finish), points: points)
+            return WorkflowArrowHover.Candidate(id: edge.id, path: arrowPath(points, finish: finish), points: points,
+                                               hasCondition: !edge.condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         return WorkflowArrowHover.nearest(to: point, candidates: candidates, preferredID: selectedEdgeID)
     }

@@ -7,6 +7,7 @@ enum WorkflowArrowHover {
         let id: String
         let path: Path
         let points: [CGPoint]
+        var hasCondition: Bool = true
     }
 
     static func nearest(to point: CGPoint, candidates: [Candidate], preferredID: String? = nil) -> String? {
@@ -18,6 +19,7 @@ enum WorkflowArrowHover {
                 let firstPreferred = first.id == preferredID
                 let secondPreferred = second.id == preferredID
                 if firstPreferred != secondPreferred { return firstPreferred }
+                if first.hasCondition != second.hasCondition { return first.hasCondition }
                 return first.id < second.id
             }?.id
     }

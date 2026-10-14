@@ -6,12 +6,12 @@ import Testing
 // MARK: - WorkflowArrowHoverTests
 
 @Suite struct WorkflowArrowHoverTests {
-    private func candidate(_ id: String, y: CGFloat) -> WorkflowArrowHover.Candidate {
+    private func candidate(_ id: String, y: CGFloat, hasCondition: Bool = true) -> WorkflowArrowHover.Candidate {
         let points = [CGPoint(x: 0, y: y), CGPoint(x: 100, y: y)]
         var path = Path()
         path.move(to: points[0])
         path.addLine(to: points[1])
-        return WorkflowArrowHover.Candidate(id: id, path: path, points: points)
+        return WorkflowArrowHover.Candidate(id: id, path: path, points: points, hasCondition: hasCondition)
     }
 
     @Test func givenOverlappingArrowHitRegions_whenHovering_thenNearestWinsAndTiesAreDeterministic() {
@@ -39,6 +39,32 @@ import Testing
         #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates.reversed(), preferredID: "b") == "b")
         #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates) == "a")
         #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 20, y: 0), candidates: candidates, preferredID: "b") == "a")
+    }
+
+    @Test func givenSharedStrokeWithUnconditionalConnection_whenUnselected_thenConditionedConnectionWinsRegardlessOfOrder() {
+        // given
+        let candidates = [candidate("a", y: 0, hasCondition: false), candidate("b", y: 0)]
+        let point = CGPoint(x: 50, y: 0)
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates) == "b")
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates.reversed()) == "b")
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates, preferredID: "a") == "a")
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates, preferredID: "b") == "b")
+    }
+
+    @Test func givenOnlyUnconditionalSharedConnections_whenResolving_thenStableChoiceRemainsSelectable() {
+        // given
+        let candidates = [candidate("b", y: 0, hasCondition: false), candidate("a", y: 0, hasCondition: false)]
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 0), candidates: candidates) == "a")
+    }
+
+    @Test func givenDistinctNearbyStrokes_whenUnconditionalConnectionIsCloser_thenDistanceWinsOverConditionAndSelection() {
+        // given
+        let candidates = [candidate("a", y: 0, hasCondition: false), candidate("b", y: 4)]
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 1), candidates: candidates) == "a")
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 1), candidates: candidates, preferredID: "b") == "a")
     }
 
     @Test func givenBentPathBoundingBox_whenHoveringAwayFromStroke_thenDoesNotShowCondition() {
