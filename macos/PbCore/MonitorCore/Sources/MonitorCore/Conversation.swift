@@ -222,7 +222,7 @@ extension Lineage {
         let ids = Set(tasks.map(\.taskID))
         var parent: [String: String] = [:]
         for task in tasks {
-            if let parentID = task.parentTaskID, parentID != task.taskID, ids.contains(parentID) { parent[task.taskID] = parentID }
+            if let parentID = task.continuationOfTaskID ?? task.parentTaskID, parentID != task.taskID, ids.contains(parentID) { parent[task.taskID] = parentID }
         }
         for task in tasks {
             var seen: Set<String> = [task.taskID]

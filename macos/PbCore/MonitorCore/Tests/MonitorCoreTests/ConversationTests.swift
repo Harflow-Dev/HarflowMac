@@ -8,6 +8,26 @@ struct ConversationTests {
     // MARK: - Grouping
 
     @Test
+    func givenFreshContinuationWithDifferentSession_whenGrouped_thenItSharesConversationWithoutResumeAncestry() {
+        // given
+        let first = task("a", status: "completed", minute: 0)
+        var raw = task("b", status: "running", minute: 1).raw
+        raw["continuation_of_task_id"] = .string("a")
+        raw["chain_root_task_id"] = .string("a")
+        raw["session_id"] = .string("fresh-session")
+        let successor = TaskInfo(.object(raw))!
+        // when
+        let conversations = Lineage.conversations([first, successor])
+        // then
+        #expect(successor.parentTaskID == nil)
+        #expect(successor.continuationOfTaskID == "a")
+        #expect(conversations.count == 1)
+        #expect(conversations[0].members.map(\.taskID) == ["a", "b"])
+        #expect(conversations[0].current.sessionID == "fresh-session")
+        #expect(Lineage.cancelScope(of: "a", in: [first, successor]) == Set(["a", "b"]))
+    }
+
+    @Test
     func givenAChainOfThreeResumes_whenGrouped_thenTheyFormOneConversationOrderedOldestToNewest() {
         // given
         let tasks = [

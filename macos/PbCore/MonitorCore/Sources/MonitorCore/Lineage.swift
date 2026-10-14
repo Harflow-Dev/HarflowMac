@@ -105,6 +105,7 @@ public struct LineageIndex: Sendable {
         var spawnedByChildren: [String: [String]] = [:]
         for task in tasks {
             if let spawner = task.spawnedBy { spawnedByChildren[spawner, default: []].append(task.taskID) }
+            if let predecessor = task.continuationOfTaskID { spawnedByChildren[predecessor, default: []].append(task.taskID) }
         }
         self.spawnedByChildren = spawnedByChildren
 
@@ -139,7 +140,7 @@ public struct LineageIndex: Sendable {
 
     /// The exact scope `tasks.py`'s cancel cascade computes for `taskID` (`_cascade_targets`/
     /// `lineage.lineage_closure`, ~tasks.py:1817 — Review round 2): the task itself, every
-    /// descendant reachable by following `spawned_by`, and every task whose `root_task_id` names it
+    /// descendant reachable by following `spawned_by` or fresh continuation links, and every task whose `root_task_id` names it
     /// directly (not transitively expanded further — matching the backend exactly).
     public func cancelScope(of taskID: String) -> Set<String> {
         var targets: Set<String> = [taskID]

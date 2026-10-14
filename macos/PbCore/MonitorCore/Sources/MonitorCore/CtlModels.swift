@@ -105,6 +105,10 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     public var startedAtRaw: String? { string("started_at") }
     public var durationSeconds: Double? { raw["duration_seconds"]?.doubleValue }
     public var parentTaskID: String? { string("parent_task_id") }
+    /// Predecessor of a fresh-session continuation, distinct from session resume ancestry.
+    public var continuationOfTaskID: String? { string("continuation_of_task_id") }
+    /// First task in a fresh continuation chain.
+    public var chainRootTaskID: String? { string("chain_root_task_id") }
     public var spawnedBy: String? { string("spawned_by") }
     public var rootTaskID: String? { string("root_task_id") }
     public var depth: Int { raw["depth"]?.intValue ?? 0 }
