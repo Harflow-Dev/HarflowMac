@@ -8,12 +8,13 @@ import Foundation
 /// v7 adds human Monitor workflow cancellation eligibility and refusal metadata.
 /// v8 adds native owner permission plans and launch preview contracts.
 /// v9 adds durable usage-limit diagnostics and workflow recovery choices. Older versions remain accepted.
+/// v10 adds bounded extra-path grants and capability/enforcement metadata; task raw fields retain grants; backend discovery tolerates capability additions.
 /// `polybridge-setup --json` and
 /// `events.jsonl` are separate contracts with their own single-version constants — see
 /// `setupContractVersion` (`SetupClient.swift`) and `eventLogVersion` (`Events.swift`) — because a
 /// shape change to one of the three must never silently widen what the app accepts from the
 /// others.
-public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 public enum TaskStatus: Equatable, Hashable, Sendable {
     case running, completed, failed, timedOut, cancelled
