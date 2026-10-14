@@ -18,6 +18,8 @@ struct SidebarNativeWindowHostedTests {
         for reduceMotion in [false, true] {
             let fixture = try await NativeSidebarWindowFixture(dark: dark, reduceMotion: reduceMotion)
             defer { fixture.close() }
+            fixture.window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             await fixture.settle()
             let children = fixture.nativeIDs.filter { $0.contains("abc123-child") }
             #expect(children.count == 2)
@@ -25,15 +27,20 @@ struct SidebarNativeWindowHostedTests {
             let expandedHeight = fixture.rowHeight(for: first)
             #expect(expandedHeight > PbRadius.Metrics.hairlineStroke)
 
+            let initialSample = fixture.heightSample(for: first)
+            let toggleStartedAt = ProcessInfo.processInfo.systemUptime
             try fixture.toggleThroughSidebarAction(taskID: "root")
-            await fixture.model.waitForPresentation()
             if reduceMotion {
+                await fixture.model.waitForPresentation()
                 await waitUntil(timeout: 5) {
                     fixture.layout()
                     return children.allSatisfy { fixture.row(for: $0) == nil }
                 }
             } else {
-                try await runAnimatedMotionCase(fixture: fixture, children: children, first: first, expandedHeight: expandedHeight)
+                try await runAnimatedMotionCase(
+                    fixture: fixture, children: children, first: first, expandedHeight: expandedHeight,
+                    initial: (sample: initialSample, toggleStartedAt: toggleStartedAt)
+                )
             }
             #expect(fixture.outline.selectedRowIndexes.isEmpty)
 
@@ -56,17 +63,22 @@ struct SidebarNativeWindowHostedTests {
         fixture: NativeSidebarWindowFixture,
         children: [String],
         first: String,
-        expandedHeight: CGFloat
+        expandedHeight: CGFloat,
+        initial: (sample: HeightSample?, toggleStartedAt: TimeInterval)
     ) async throws {
         var reversed = false
         var collapsingSamples: [HeightSample] = []
         var expandingSamples: [HeightSample] = []
         var expanding = false
         var sawExpansionIntermediate = false
+        var firstPollDelay: TimeInterval?
+        var firstSampleDelay: TimeInterval?
         await waitUntil(timeout: 5) {
+            firstPollDelay = firstPollDelay ?? (ProcessInfo.processInfo.systemUptime - initial.toggleStartedAt)
             fixture.layout()
             guard fixture.row(for: first) != nil else { return false }
             guard let sample = fixture.heightSample(for: first) else { return false }
+            firstSampleDelay = firstSampleDelay ?? (ProcessInfo.processInfo.systemUptime - initial.toggleStartedAt)
             if expanding { expandingSamples.append(sample) } else { collapsingSamples.append(sample) }
             let height = sample.native
             let intermediate = height > PbRadius.Metrics.hairlineStroke
@@ -79,13 +91,21 @@ struct SidebarNativeWindowHostedTests {
             if expanding, intermediate { sawExpansionIntermediate = true }
             return sawExpansionIntermediate && children.allSatisfy { fixture.row(for: $0) != nil }
         }
-        #expect(reversed)
-        #expect(sawExpansionIntermediate)
+        let diagnostic = Comment(rawValue:
+            "collapse samples=\(collapsingSamples.count), expansion samples=\(expandingSamples.count), "
+                + "toggle-to-first-poll seconds=\(String(describing: firstPollDelay)), "
+                + "toggle-to-first-sample seconds=\(String(describing: firstSampleDelay)), "
+                + "initial heights=\(String(describing: initial.sample)), "
+                + "window key=\(fixture.window.isKeyWindow), visible=\(fixture.window.isVisible), "
+                + "occlusion=\(fixture.window.occlusionState.rawValue), app active=\(NSApp.isActive)"
+        )
+        #expect(reversed, diagnostic)
+        #expect(sawExpansionIntermediate, diagnostic)
         await fixture.model.waitForPresentation()
         #expect(collapsingSamples.contains {
             $0.native > PbRadius.Metrics.hairlineStroke
                 && $0.native < expandedHeight - PbRadius.Metrics.hairlineStroke
-        })
+        }, diagnostic)
         let collapsingWithinHairline = collapsingSamples.allSatisfy { sample in sample.isWithinHairline }
         let expandingWithinHairline = expandingSamples.allSatisfy { sample in sample.isWithinHairline }
         #expect(collapsingWithinHairline)
@@ -555,27 +575,6 @@ final class NativeSidebarWindowFixture {
     private static func descendants(_ view: NSView) -> [NSView] {
         [view] + view.subviews.flatMap(descendants)
     }
-}
-
-struct HeightSample {
-    let rect: CGFloat
-    let frame: CGFloat
-    let reported: CGFloat
-
-    var native: CGFloat { rect }
-    var isWithinHairline: Bool {
-        abs(rect - frame) <= PbRadius.Metrics.hairlineStroke
-            && abs(rect - reported) <= PbRadius.Metrics.hairlineStroke
-            && abs(frame - reported) <= PbRadius.Metrics.hairlineStroke
-    }
-}
-
-struct SidebarShellGeometry {
-    let contentLayout: NSRect
-    let searchFrame: NSRect
-    let scrollFrame: NSRect
-    let effectiveViewportBottom: CGFloat
-    let effectiveViewportTop: CGFloat
 }
 
 @MainActor
