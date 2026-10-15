@@ -6,11 +6,13 @@ import PbCommon
 
 extension WorkflowVM {
     func selectWorkflow(_ workflow: WorkflowRecord) {
+        editorConflict = nil
+        checkingEditorBaseline = false
         resetEditHistory()
         editorReadTask?.cancel()
         persistDraft()
         draftKey = "saved:" + workflow.id
-        if restoreDraft() { initialLoadingKind = nil; initialLoadFailed = false; return }
+        if restoreDraftForEditing(workflow) { return }
         initialLoadingKind = "editor"
         initialLoadFailed = false
         draftPersistenceSuspended = true
@@ -66,6 +68,14 @@ extension WorkflowVM {
         }
     }
 
+    private func restoreDraftForEditing(_ workflow: WorkflowRecord) -> Bool {
+        guard restoreDraft() else { return false }
+        initialLoadingKind = nil
+        initialLoadFailed = false
+        checkEditorBaseline(workflow)
+        return true
+    }
+
     private func readEditor(_ workflow: WorkflowRecord, draftID: UUID, loadID: UUID) async throws -> [String: JSONValue] {
         while true {
             let response = try await useCase.command("get", options: [], positionals: [workflow.id])
@@ -95,6 +105,8 @@ extension WorkflowVM {
     }
 
     func selectRun(_ run: WorkflowRunModel) {
+        editorConflict = nil
+        checkingEditorBaseline = false
         resetEditHistory()
         editorReadTask?.cancel()
         editorLoadID = UUID()
@@ -111,6 +123,8 @@ extension WorkflowVM {
     }
 
     func newWorkflow() {
+        editorConflict = nil
+        checkingEditorBaseline = false
         resetEditHistory()
         editorReadTask?.cancel()
         editorLoadID = UUID()

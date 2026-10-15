@@ -323,38 +323,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         }
     }
 
-    /// The validation/hint row. Only a supplied `validationMessage` populates the glass pill —
-    /// nil or empty never proves "Workflow is valid" (it also occurs before checking and after
-    /// resets), so the absent case keeps the existing drag hint and its exact connect/delete
-    /// help. The supplied message stays neutral, single-line, with its full text as help; no
-    /// state icon and no Valid invention. The Cancel connection action keeps its callback and
-    /// guards while a source is set.
-    private var validationRow: some View {
-        HStack(spacing: PbRadius.Metrics.spacing12) {
-            if let message = viewModel.validationMessage, !message.isEmpty {
-                Text(message)
-                    .font(.pb(.caption))
-                    .foregroundStyle(Color.secondaryText)
-                    .lineLimit(1)
-                    .help(message)
-                    .padding(.horizontal, PbRadius.Metrics.spacing12)
-                    .padding(.vertical, PbRadius.Metrics.spacing6)
-                    .glassEffect(.regular, in: Capsule())
-            } else {
-                Text("Drag steps onto the canvas; connect their dots.")
-                    .font(.pb(.caption))
-                    .foregroundStyle(Color.secondaryText)
-                    .lineLimit(1)
-                    .help("Drag an output dot to an input, or click the output then the destination. "
-                          + "Select a step and press Delete to remove it.")
-            }
-            Spacer(minLength: PbRadius.Metrics.zero)
-            if viewModel.connectionSourceID != nil {
-                Button("Cancel connection") { viewModel.connectionSourceID = nil }
-                    .buttonStyle(MonitorButtonStyle(.glass))
-            }
-        }
-    }
+    private var validationRow: some View { WorkflowValidationStatus(viewModel: viewModel) }
 
     private func stepChip(_ role: String) -> some View {
         Label(WorkflowRole.title(role), systemImage: WorkflowRole.symbol(role))

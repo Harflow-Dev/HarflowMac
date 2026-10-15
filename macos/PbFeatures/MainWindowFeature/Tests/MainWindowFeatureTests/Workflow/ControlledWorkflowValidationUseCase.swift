@@ -76,7 +76,7 @@ final class ControlledWorkflowValidationUseCase: WorkflowUseCase, @unchecked Sen
         pendingLoad = nil
     }
 
-    func save(name _: String, definition: JSONValue, expectedRevision _: Int) async throws -> [String: JSONValue] {
+    func save(name _: String, definition: JSONValue, expectedRevision _: Int, expectedWorkflowID _: String?) async throws -> [String: JSONValue] {
         savedRequests.append(definition.objectValue ?? [:])
         finishRequestWaiters()
         return await withCheckedContinuation { pendingSave = $0 }

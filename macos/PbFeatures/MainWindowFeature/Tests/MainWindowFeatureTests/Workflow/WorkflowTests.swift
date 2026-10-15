@@ -111,7 +111,10 @@ import Testing
         })
         var saved = canonical
         saved["revision"] = .number(8)
-        given(harness.useCase).save(name: .value("implement-review"), definition: .value(.object(canonical)), expectedRevision: .value(7)).willReturn(saved)
+        given(harness.useCase)
+.save(name: .value("implement-review"), definition: .value(.object(canonical)),
+                                    expectedRevision: .value(7), expectedWorkflowID: .any)
+.willReturn(saved)
         given(harness.useCase).command(.value("list"), options: .any, positionals: .any).willReturn(["workflows": .array([])])
         given(harness.useCase).command(.value("list-runs"), options: .any, positionals: .any).willReturn(["runs": .array([])])
         // when
@@ -426,7 +429,7 @@ import Testing
         harness.sut.save()
         await waitUntil { alert != nil }
         #expect(alert?.description == "Enter a workflow name.")
-        verify(harness.useCase).save(name: .any, definition: .any, expectedRevision: .any).called(0)
+        verify(harness.useCase).save(name: .any, definition: .any, expectedRevision: .any, expectedWorkflowID: .any).called(0)
         withExtendedLifetime(subscription) {}
     }
 

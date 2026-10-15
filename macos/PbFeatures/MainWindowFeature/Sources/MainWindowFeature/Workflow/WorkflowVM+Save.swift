@@ -23,6 +23,8 @@ extension WorkflowVM {
         validationID = UUID()
         validatedDefinition = nil
         validationDependencies = [:]
+        missingReferences = []
+        missingReferencesTruncated = false
         nativeSubagentsAvailable = false
         if canonicalValidationSource.map({ WorkflowRetryMetadata.topology($0) != WorkflowRetryMetadata.topology(definition) }) == true {
             canonicalValidationDefinition = nil
@@ -43,6 +45,8 @@ extension WorkflowVM {
             do {
                 let response = try await useCase.validate(definition: .object(snapshot))
                 guard !Task.isCancelled, requestID == validationID, snapshot == effectiveDefinition, selectedRun == nil else { return }
+                missingReferences = WorkflowJSON.objects(response["missing_references"])
+                missingReferencesTruncated = response["missing_references_truncated"]?.boolValue ?? false
                 nativeSubagentsAvailable = response["native_subagents_available"]?.boolValue ?? false
                 if response["valid"]?.boolValue == true {
                     validationDependencies = response["dependencies"]?.objectValue ?? [:]
@@ -75,7 +79,8 @@ extension WorkflowVM {
         perform { [weak self] in
             guard let self, snapshot.matches(self), await validateForSave(snapshot) else { return }
             guard snapshot.matches(self) else { return }
-            let response = try await useCase.save(name: snapshot.name, definition: .object(snapshot.definition), expectedRevision: snapshot.revision)
+            guard try await verifyCurrentBaseline(snapshot) else { return }
+            let response = try await submitSave(snapshot)
             let record = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
             WorkflowDraftCompletion.completed[snapshot.draftID] = WorkflowDraftCompletion(
                 name: snapshot.name, revision: record.revision, submitted: snapshot.definition, saved: record.definition
@@ -98,6 +103,36 @@ extension WorkflowVM {
                snapshot.matches(self, revision: record.revision, definition: record.definition) {
                 routing.didSaveWorkflow(name: snapshot.name)
             }
+        }
+    }
+
+    private func verifyCurrentBaseline(_ snapshot: SaveSnapshot) async throws -> Bool {
+        guard !loadedName.isEmpty else { return true }
+        let current: [String: JSONValue]
+        do { current = try await useCase.command("get", options: [], positionals: [loadedName]) } catch {
+            if snapshot.matches(self) {
+                editorConflict = "The current saved workflow could not be read. Your draft is preserved. " + Self.message(error)
+            }
+            throw error
+        }
+        guard snapshot.matches(self) else { return false }
+        guard baselineMatches(WorkflowRecord(raw: current["workflow"]?.objectValue ?? current)) else {
+            editorConflict = "The saved workflow changed or was replaced. Your draft is preserved. Save a copy and reload to reconcile it."
+            return false
+        }
+        return true
+    }
+
+    private func submitSave(_ snapshot: SaveSnapshot) async throws -> [String: JSONValue] {
+        do {
+            return try await useCase.save(name: snapshot.name, definition: .object(snapshot.definition),
+                                          expectedRevision: snapshot.revision, expectedWorkflowID: snapshot.expectedWorkflowID)
+        } catch {
+            if snapshot.matches(self), !loadedName.isEmpty {
+                checkEditorBaseline(WorkflowRecord(raw: ["name": .string(loadedName)]))
+            }
+            if snapshot.matches(self) { scheduleValidation() }
+            throw error
         }
     }
 
@@ -145,6 +180,8 @@ extension WorkflowVM {
             return false
         }
         guard snapshot.matches(self) else { return false }
+        missingReferences = WorkflowJSON.objects(validation["missing_references"])
+        missingReferencesTruncated = validation["missing_references_truncated"]?.boolValue ?? false
         guard validation["valid"]?.boolValue == true else {
             let reason = validation["error"]?.stringValue ?? "Workflow is invalid."
             validationMessage = reason
@@ -172,8 +209,10 @@ private struct SaveSnapshot {
     let isFirstSave: Bool
     let alreadyValidated: Bool
     let draftKey: String?
+    let expectedWorkflowID: String?
 
     @MainActor init(_ vm: WorkflowVM) {
+        self.expectedWorkflowID = vm.savedDefinition["workflow_id"]?.stringValue
         self.draftKey = vm.draftKey
         self.definition = vm.effectiveDefinition
         self.name = vm.name

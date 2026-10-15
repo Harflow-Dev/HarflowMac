@@ -1,6 +1,8 @@
 import Foundation
 @testable import MainWindowFeature
+import Mockable
 import MonitorCore
+import PbTestUtilities
 import Testing
 
 // MARK: - WorkflowUndoTests
@@ -30,7 +32,7 @@ import Testing
         #expect(reopened.definition == WorkflowVM.starterDefinition())
     }
 
-    @Test func givenSavedDraft_whenDiscarding_thenOriginalNameRevisionAndBaselineSurviveReopen() throws {
+    @Test func givenSavedDraft_whenDiscarding_thenOriginalNameRevisionAndBaselineSurviveReopen() async throws {
         // given
         let helper = WorkflowDraftTests()
         let store = helper.store()
@@ -39,16 +41,17 @@ import Testing
         changed["description"] = .string("Changed")
         try store.save(["draft_id": .string(UUID().uuidString), "name": .string("Renamed"), "loaded_name": .string("Saved"), "revision": .number(7),
                         "definition": .object(changed), "saved_definition": .object(baseline)], key: "saved:Saved")
-        let sut = helper.vm(store: store)
+        let sut = helper.vm(store: store, current: ["name": .string("Saved"), "revision": .number(8), "definition": .object(baseline)])
         sut.draftKey = "saved:Saved"
         #expect(sut.restoreDraft())
         // when
         sut.discardChanges()
+        await waitUntil { !sut.isBusy }
         sut.persistDraft()
         // then
         #expect(sut.name == "Saved")
         #expect(sut.loadedName == "Saved")
-        #expect(sut.revision == 7)
+        #expect(sut.revision == 8)
         #expect(sut.definition == baseline)
         #expect(!sut.canSave)
         #expect(try store.load(key: "saved:Saved") == nil)
@@ -122,10 +125,13 @@ import Testing
         #expect(sut.nodes.contains { $0.type == "agent" && $0.raw["role"]?.stringValue == "review" })
     }
 
-    @Test func givenNewlySavedBaseline_whenUndoingThenDiscarding_thenSavedMetadataRemainsCurrent() {
+    @Test func givenNewlySavedBaseline_whenUndoingThenDiscarding_thenSavedMetadataRemainsCurrent() async {
         // given
         let helper = WorkflowDraftTests()
-        let sut = helper.vm(store: helper.store())
+        let useCase = MockWorkflowUseCase()
+        given(useCase).backendIDs.willReturn(["codex"])
+        given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
+        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: helper.store())
         sut.newWorkflow()
         sut.name = "Saved"
         sut.updateNode("planning", key: "instructions", value: .string("Saved edit"))
@@ -141,7 +147,11 @@ import Testing
         #expect(sut.revision == 9)
         #expect(sut.savedDefinition == saved)
         #expect(sut.canDiscard)
+        given(useCase)
+.command(.value("get"), options: .any, positionals: .any)
+            .willReturn(["name": .string("Saved"), "revision": .number(9), "definition": .object(saved)])
         sut.discardChanges()
+        await waitUntil { !sut.isBusy }
         #expect(sut.definition == saved)
         #expect(!sut.canSave)
     }

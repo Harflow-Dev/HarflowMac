@@ -20,8 +20,8 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
         try await repository.validate(definition: definition)
     }
 
-    func save(name: String, definition: JSONValue, expectedRevision: Int) async throws -> [String: JSONValue] {
-        try await repository.save(name: name, definition: definition, expectedRevision: expectedRevision)
+    func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue] {
+        try await repository.save(name: name, definition: definition, expectedRevision: expectedRevision, expectedWorkflowID: expectedWorkflowID)
     }
 
     func refreshTasks() async { await taskList.refresh() }

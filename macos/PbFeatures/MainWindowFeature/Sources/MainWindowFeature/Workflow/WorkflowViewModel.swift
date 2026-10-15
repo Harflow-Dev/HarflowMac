@@ -26,6 +26,11 @@ protocol WorkflowViewModel: ViewModel {
     var errorText: String? { get }
     var readFailureText: String? { get }
     func retryReadFailure()
+    var editorConflict: String? { get }
+    var missingReferences: [[String: JSONValue]] { get }
+    var missingReferencesTruncated: Bool { get }
+    func preserveDraftAndReload()
+    func replaceMissingReferences(_ target: String, with replacement: String)
     var validationMessage: String? { get }
     var validationDependencies: [String: JSONValue] { get }
     var nativeSubagentsAvailable: Bool { get }
@@ -112,4 +117,14 @@ extension WorkflowViewModel {
         guard !allowOptionalReviewSkip else { return }
         control(command)
     }
+}
+
+// MARK: - WorkflowViewModel recovery defaults
+
+extension WorkflowViewModel {
+    var editorConflict: String? { nil }
+    var missingReferences: [[String: JSONValue]] { [] }
+    var missingReferencesTruncated: Bool { false }
+    func preserveDraftAndReload() {}
+    func replaceMissingReferences(_: String, with _: String) {}
 }

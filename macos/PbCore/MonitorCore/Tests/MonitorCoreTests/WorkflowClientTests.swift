@@ -39,4 +39,19 @@ struct WorkflowClientTests {
         #expect(!FileManager.default.fileExists(atPath: file.path))
         #expect(!FileManager.default.fileExists(atPath: file.deletingLastPathComponent().path))
     }
+
+    @Test(arguments: [String?.none, "expected-identity"])
+    func givenSavedWorkflowIdentity_whenSaving_thenGuardIsTransportedOnlyWhenSupplied(identity: String?) async throws {
+        // given
+        let runner = RecordingRunner { _ in
+            ProcessOutput(exitCode: 0, stdout: json(#"{"v":1,"ok":true,"result":{}}"#), stderr: "", timedOut: false)
+        }
+        let client = CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)
+        // when
+        _ = await client.saveWorkflow(name: "Saved", definition: .object([:]), expectedRevision: 1, expectedWorkflowID: identity)
+        // then
+        let call = try #require(runner.calls.first)
+        #expect(call.arguments.filter { $0.hasPrefix("--expected-workflow-id=") } == identity.map { ["--expected-workflow-id=\($0)"] } ?? [])
+    }
+
 }

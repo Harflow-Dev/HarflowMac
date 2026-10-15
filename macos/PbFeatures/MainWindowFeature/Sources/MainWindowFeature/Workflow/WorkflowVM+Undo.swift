@@ -52,8 +52,28 @@ extension WorkflowVM {
     }
 
     func discardChanges() {
-        endNodeDrag()
         guard canDiscard else { return }
+        guard builderSession == nil, !builderDispatchPending else { return }
+        guard !loadedName.isEmpty else { discardChanges(using: nil); return }
+        let identity = draftID
+        let loadID = editorLoadID
+        let snapshot = definition
+        let originalName = name
+        let target = loadedName
+        perform { [weak self] in
+            guard let self else { return }
+            let response = try await useCase.command("get", options: [], positionals: [target])
+            guard draftID == identity, editorLoadID == loadID, definition == snapshot, name == originalName,
+                  builderSession == nil, !builderDispatchPending else { return }
+            let current = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
+            guard !current.id.isEmpty, !current.definition.isEmpty else { return }
+            discardChanges(using: current)
+        }
+    }
+
+    private func discardChanges(using current: WorkflowRecord?) {
+        endNodeDrag()
+        guard builderSession == nil, !builderDispatchPending else { return }
         do {
             if let key = draftKey, let draft = try draftStore.load(key: key),
                draft["draft_id"]?.stringValue != draftID.uuidString {
@@ -65,11 +85,11 @@ extension WorkflowVM {
             return
         }
         reconnectBuilderSession()
-        guard canDiscard else { return }
+        guard builderSession == nil, !builderDispatchPending else { return }
         // Adopt a save that completed in another editor before choosing the baseline.
         guard persistDraft(reconnectBuilder: false) else { return }
         reconnectBuilderSession()
-        guard canDiscard else { return }
+        guard builderSession == nil, !builderDispatchPending else { return }
         do {
             if let key = draftKey, let draft = try draftStore.load(key: key) {
                 guard draft["draft_id"]?.stringValue == draftID.uuidString,
@@ -86,6 +106,16 @@ extension WorkflowVM {
         draftWriteTask?.cancel()
         draftWriteTask = nil
         draftPersistenceSuspended = true
+        editorReadTask?.cancel()
+        checkingEditorBaseline = false
+        draftID = UUID()
+        editorLoadID = UUID()
+        editorConflict = nil
+        if let current {
+            loadedName = current.id
+            revision = current.revision
+            savedDefinition = current.definition
+        }
         name = loadedName
         definition = loadedName.isEmpty ? Self.starterDefinition() : savedDefinition
         draftPersistenceSuspended = false

@@ -182,6 +182,19 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         }
     }
 
+    @ViewBuilder
+    private func unavailableWorkflowActions(_ node: WorkflowNodeModel) -> some View {
+            if !node.workflowID.isEmpty, !viewModel.workflows.contains(where: { $0.workflowID == node.workflowID }) {
+                Text("Unavailable workflow: \(node.workflowID). Choose a replacement for this step, or replace all matching steps below.")
+                    .font(.pb(.secondary))
+                Menu("Replace all matching steps…") {
+                    ForEach(viewModel.workflows.filter { !$0.workflowID.isEmpty }) { record in
+                        Button(record.id) { viewModel.replaceMissingReferences(node.workflowID, with: record.workflowID) }
+                    }
+                }
+            }
+    }
+
     private func workflowNodeEditor(_ node: WorkflowNodeModel) -> some View {
         VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
             HStack {
@@ -204,6 +217,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     Text(record.id).tag(record.workflowID)
                 }
             }
+            unavailableWorkflowActions(node)
             Picker("Orchestrator mode", selection: nodeString(node, "orchestrator_mode", default: "child")) {
                 Text("Child orchestrator").tag("child")
                 Text("Current orchestrator").tag("current")

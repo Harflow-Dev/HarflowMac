@@ -15,7 +15,7 @@ public protocol WorkflowRepository: Sendable {
     /// Validates an editable graph without saving workflow state.
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
     /// Saves against the revision the editor loaded, refusing concurrent edits.
-    func save(name: String, definition: JSONValue, expectedRevision: Int) async throws -> [String: JSONValue]
+    func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue]
 }
 
 // MARK: - WorkflowRepositoryImpl
@@ -58,9 +58,9 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
         return try await ctl.validateWorkflow(definition: definition).get()
     }
 
-    public func save(name: String, definition: JSONValue, expectedRevision: Int) async throws -> [String: JSONValue] {
+    public func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue] {
         let ctl = try toolEnvironment.ctl().get()
-        return try await ctl.saveWorkflow(name: name, definition: definition, expectedRevision: expectedRevision).get()
+        return try await ctl.saveWorkflow(name: name, definition: definition, expectedRevision: expectedRevision, expectedWorkflowID: expectedWorkflowID).get()
     }
 }
 
@@ -87,7 +87,7 @@ public struct NullWorkflowRepository: WorkflowRepository {
         throw ToolError.notFound(tool: "polybridge-ctl", searched: [])
     }
 
-    public func save(name _: String, definition _: JSONValue, expectedRevision _: Int) async throws -> [String: JSONValue] {
+    public func save(name _: String, definition _: JSONValue, expectedRevision _: Int, expectedWorkflowID _: String?) async throws -> [String: JSONValue] {
         throw ToolError.notFound(tool: "polybridge-ctl", searched: [])
     }
 }

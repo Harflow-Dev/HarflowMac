@@ -13,10 +13,11 @@ import Testing
         WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
     }
 
-    func vm(store: any WorkflowDraftStoring) -> WorkflowVM {
+    func vm(store: any WorkflowDraftStoring, current: [String: JSONValue] = [:]) -> WorkflowVM {
         let useCase = MockWorkflowUseCase()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
         given(useCase).backendIDs.willReturn(["codex"])
+        given(useCase).command(.value("get"), options: .any, positionals: .any).willReturn(current)
         return WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
     }
 

@@ -194,7 +194,7 @@ private final class RecordingWorkflowBuilderUseCase: WorkflowUseCase, @unchecked
     }
 
     func validate(definition _: JSONValue) async throws -> [String: JSONValue] { ["valid": .bool(true)] }
-    func save(name _: String, definition _: JSONValue, expectedRevision _: Int) async throws -> [String: JSONValue] { [:] }
+    func save(name _: String, definition _: JSONValue, expectedRevision _: Int, expectedWorkflowID _: String?) async throws -> [String: JSONValue] { [:] }
     func refreshTasks() async {}
     func modelOptions(backend _: String) async -> [ModelOption] { [] }
 }

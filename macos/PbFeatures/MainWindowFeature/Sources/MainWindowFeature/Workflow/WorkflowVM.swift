@@ -14,7 +14,7 @@ import PbUI
 protocol WorkflowUseCase: Sendable {
     func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue]
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
-    func save(name: String, definition: JSONValue, expectedRevision: Int) async throws -> [String: JSONValue]
+    func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue]
     func refreshTasks() async
     var backendIDs: [String] { get }
     func modelOptions(backend: String) async -> [ModelOption]
@@ -76,6 +76,10 @@ final class WorkflowVM: WorkflowViewModel {
     var nativeActivity: WorkflowNativeActivityModel?
     @ObservationIgnored var nativeActivityTask: Task<Void, Never>?
 
+    var editorConflict: String?
+    var checkingEditorBaseline = false
+    var missingReferences: [[String: JSONValue]] = []
+    var missingReferencesTruncated = false
     var validationMessage: String?
     var repo = "" { didSet { if repo != oldValue { scheduleLaunchPreview() } } }
     var prompt = ""
@@ -158,10 +162,13 @@ final class WorkflowVM: WorkflowViewModel {
     var backendIDs: [String] { useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs }
     var selectedNode: WorkflowNodeModel? { nodes.first { $0.id == selectedNodeID } }
     var selectedEdge: WorkflowEdgeModel? { edges.first { $0.id == selectedEdgeID } }
-    var canSave: Bool { initialLoadingKind == nil && !initialLoadFailed && !isBusy && selectedRun == nil && hasUnsavedChanges }
+    var canSave: Bool {
+        initialLoadingKind == nil && !initialLoadFailed && !checkingEditorBaseline
+            && editorConflict == nil && !isBusy && selectedRun == nil && hasUnsavedChanges
+    }
 
     var canDiscard: Bool {
-        canEditHistory && (name != loadedName
+        !checkingEditorBaseline && canEditHistory && (name != loadedName
             || !WorkflowDraftEquality.matches(definition, loadedName.isEmpty ? Self.starterDefinition() : savedDefinition))
     }
 
@@ -251,6 +258,10 @@ final class WorkflowVM: WorkflowViewModel {
         persistDraft()
         resetEditHistory()
         draftKey = "new"
+        editorReadTask?.cancel()
+        editorLoadID = UUID()
+        editorConflict = nil
+        checkingEditorBaseline = false
         draftPersistenceSuspended = true
         draftID = UUID()
         name += "-copy"

@@ -20,11 +20,15 @@ public extension CtlClient {
     }
 
     /// Sends an editable definition through a disposable input file; this is not a state file.
-    func saveWorkflow(name: String, definition: JSONValue, expectedRevision: Int) async -> Result<[String: JSONValue], ToolError> {
+    func saveWorkflow(
+        name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String? = nil
+    ) async -> Result<[String: JSONValue], ToolError> {
         do {
             let input = try WorkflowDefinitionInput(definition: definition)
             defer { input.cleanUp() }
-            return await workflow("save", options: ["--definition=\(input.file.path)", "--expected-revision=\(expectedRevision)"], positionals: [name])
+            let identity = expectedWorkflowID.map { ["--expected-workflow-id=\($0)"] } ?? []
+            return await workflow("save", options: ["--definition=\(input.file.path)", "--expected-revision=\(expectedRevision)"] + identity,
+                                  positionals: [name])
         } catch {
             return .failure(.unreadable(tool: "workflow input", exitCode: 0, stderr: error.localizedDescription))
         }
