@@ -67,6 +67,8 @@ protocol TaskDetailViewModel: ViewModel {
     var tabs: [TaskTab] { get }
 
     var timelineModel: TimelinePaneModel { get }
+    var artifactMembers: [ArtifactMemberModel] { get }
+    func didLoadArtifacts(taskID: String)
     var summaryModel: SummaryPaneModel { get }
     var promptText: String { get }
     var rawEvents: [TaskEvent] { get }
@@ -436,7 +438,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         case .activity:
             TimelinePaneView(model: viewModel.timelineModel)
         case .summary:
-            SummaryPaneView(model: viewModel.summaryModel)
+            SummaryPaneView(model: viewModel.summaryModel, artifactMembers: viewModel.artifactMembers,
+                            loadArtifacts: { viewModel.didLoadArtifacts(taskID: $0) })
         case .prompt:
             ScrollView {
                 Text(viewModel.promptText)

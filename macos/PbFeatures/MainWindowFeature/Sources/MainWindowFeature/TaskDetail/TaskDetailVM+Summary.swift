@@ -22,6 +22,7 @@ import MonitorCore
 extension TaskDetailVM {
 
     func recomputeSummary(task: TaskInfo) {
+        recomputeArtifactMembers()
         // `summary` is a snapshot-only field (nil on a bare listing), so the freshest snapshot
         // wins over whatever `task` itself resolved to — the same precedence the git-backed
         // Changes pane used before it.

@@ -18,6 +18,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
 
     // MARK: - Private Properties
 
+    @GlobalEnvironment(\.taskArtifactRepository) private var taskArtifactRepository
     private let builderRunID: String?
     private var relatedMembers: [String: TaskInfo] = [:]
     @GlobalEnvironment(\.workflowRepository) private var workflowRepository
@@ -37,10 +38,12 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         eventStreamRepository: (any EventStreamRepository)? = nil,
         takeoverService: (any TakeoverService)? = nil,
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
+        taskArtifactRepository: (any TaskArtifactRepository)? = nil,
         builderRunID: String? = nil,
         workflowRepository: (any WorkflowRepository)? = nil
     ) {
         self.builderRunID = builderRunID
+        if let taskArtifactRepository { self.taskArtifactRepository = taskArtifactRepository }
         if let workflowRepository { self.workflowRepository = workflowRepository }
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskSnapshotRepository { self.taskSnapshotRepository = taskSnapshotRepository }
@@ -50,6 +53,10 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
     }
     
+    func artifactPage(taskID: String, cursor: String?) async -> Result<TaskArtifactPage, ToolError> {
+        await taskArtifactRepository.page(taskID: taskID, cursor: cursor)
+    }
+
     // MARK: - TaskDetailUseCase Methods
     
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }

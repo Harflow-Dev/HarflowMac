@@ -13,6 +13,7 @@ context this package implements.
 | `Scheduling` / `SystemScheduler` | The one scheduling seam every production timer in this package uses (1 s throttle, 10 s poll) — injectable so tests never sleep. |
 | `SettingsRepository` | `UserDefaults`-backed `toolDirectory` / `openWindowOnStart` / `notifyOnFinish`, published live. |
 | `ToolEnvironmentRepository` | Login-PATH + `uv` discovery, `ctl()`/`setup()` client construction, the launch environment. |
+| `TaskArtifactRepository` | Explicit bounded pages of registered standalone-task artifact metadata; unavailable reads remain distinct from an empty manifest. |
 | `TaskSnapshotRepository` | Per-task `polybridge-ctl status` snapshots. |
 | `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task; also publishes each task's `EventAvailability` (`loading`/`available`/`unavailable`), so a caller never has to infer "the log couldn't be read" from an empty event list. |
 | `TaskListRepository` | `polybridge-ctl list`, refresh coalescing, titles, the FSEvents throttle, the safety poll, `detail()` precedence. |

@@ -39,6 +39,7 @@ public final class Module: PbModule {
             .environment(\.settingsRepository, settings)
             .environment(\.toolEnvironmentRepository, toolEnvironment)
             .environment(\.taskSnapshotRepository, snapshot)
+            .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.eventStreamRepository, eventStream)
             .environment(\.finishNotifier, finishNotifier)
             .environment(\.taskListRepository, taskList)

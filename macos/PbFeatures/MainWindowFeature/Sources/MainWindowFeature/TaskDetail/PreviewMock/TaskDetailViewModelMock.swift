@@ -48,6 +48,8 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
         )],
         start: .now.addingTimeInterval(-30), emptyText: nil, subTaskStrip: nil, isLoading: false
     )
+    var artifactMembers: [ArtifactMemberModel] = []
+    func didLoadArtifacts(taskID _: String) {}
     var summaryModel = SummaryPaneModel.empty
     var promptText = "Fix the flaky login test."
     var rawEvents: [TaskEvent] = []

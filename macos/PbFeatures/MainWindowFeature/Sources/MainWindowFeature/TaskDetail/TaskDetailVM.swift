@@ -49,6 +49,8 @@ protocol TaskDetailUseCase: Sendable {
     /// branching prune resolves to the same id on both screens.
     func oldestSurvivor(among candidates: Set<String>) -> String?
 
+    func artifactPage(taskID: String, cursor: String?) async -> Result<TaskArtifactPage, ToolError>
+
     // Snapshot
     func snapshot(_ id: String) -> TaskInfo?
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never>
@@ -99,6 +101,10 @@ protocol TaskDetailUseCase: Sendable {
 }
 
 extension TaskDetailUseCase {
+    func artifactPage(taskID _: String, cursor _: String?) async -> Result<TaskArtifactPage, ToolError> {
+        .failure(.unreadable(tool: "polybridge-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
+    }
+
     func resolveTask(_ id: String) async -> TaskInfo? { task(id) }
     func conversationHistory(sessionID _: String, cursor _: String?) async throws -> TaskHistoryPage? { nil }
     func acquireSummaryLease(_ id: String) -> any EventStreamLease { acquireEventLease(id) }
@@ -174,6 +180,9 @@ final class TaskDetailVM: TaskDetailViewModel {
     var tabs: [TaskTab] = [.activity, .summary, .prompt]
 
     var timelineModel = TimelinePaneModel.empty
+    var artifactMembers: [ArtifactMemberModel] = []
+    @ObservationIgnored var artifactRequests: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored var artifactGeneration = UUID()
     var summaryModel = SummaryPaneModel.empty
     var promptText = "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
     var rawEvents: [TaskEvent] = []
@@ -286,6 +295,10 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// every subscription, and resets `didSubscribe` so a reappearing screen subscribes and
     /// re-acquires leases fresh.
     func didDisappear() {
+        artifactGeneration = UUID()
+        for request in artifactRequests.values { request.cancel() }
+        artifactRequests.removeAll()
+        artifactMembers = []
         memberLeaseAcquisition?.cancel()
         memberLeaseAcquisition = nil
         timelineEpoch = UUID()

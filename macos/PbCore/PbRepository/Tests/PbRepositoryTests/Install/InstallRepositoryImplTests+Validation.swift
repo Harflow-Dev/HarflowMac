@@ -116,10 +116,10 @@ extension InstallRepositoryImplTests {
     }
 
     @Test func givenCtlListReturnsAnUnsupportedVersion_whenValidating_thenTheContractFailureIsShown() async {
-        // given — v11 is outside `ctlContractVersions` ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}); v2 added
+        // given — v12 is outside `ctlContractVersions` ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}); v2 added
         // `resume_command` (Monitor piece 3/3) and is accepted, covered below.
         let runner = InstallRepositoryImplTests.makeRunner(
-            ctlListJSON: #"{"v":11,"tasks":[]}"#
+            ctlListJSON: #"{"v":12,"tasks":[]}"#
         )
         let sut = makeSUT(runner: runner)
 
@@ -135,7 +135,7 @@ extension InstallRepositoryImplTests {
     }
 
     @Test func givenCtlListReturnsSupportedVersion_whenValidating_thenAllAreAccepted() async {
-        for version in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] {
+        for version in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] {
             // given
             let runner = InstallRepositoryImplTests.makeRunner(
                 ctlListJSON: #"{"v":\#(version),"tasks":[]}"#

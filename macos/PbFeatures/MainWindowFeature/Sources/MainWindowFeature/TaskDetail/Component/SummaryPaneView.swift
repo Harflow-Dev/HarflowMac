@@ -258,6 +258,8 @@ struct SummaryPaneModel {
 
 struct SummaryPaneView: View {
     let model: SummaryPaneModel
+    var artifactMembers: [ArtifactMemberModel] = []
+    var loadArtifacts: (String) -> Void = { _ in }
 
     @State private var refusalsExpanded = false
     @State private var showAllFiles = false
@@ -277,6 +279,8 @@ struct SummaryPaneView: View {
                         Text(model.finalAnswerPlaceholder).font(.pb(.body)).foregroundStyle(Color.secondaryText)
                     }
                 }
+
+                TaskArtifactsView(members: artifactMembers, load: loadArtifacts)
 
                 editedFilesSection
 
