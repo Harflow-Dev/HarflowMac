@@ -207,6 +207,23 @@ import Testing
         #expect(sut.columns.first?.summary == "from the snapshot")
     }
     
+    @Test func givenAColumn_whenAConsumedFollowupLinkFires_thenItRoutesToTheSuccessorTask() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        let task1 = task(id: "t1", status: "running")
+        harness.tasksBox.value["t1"] = task1
+        sut.didAppear()
+        harness.tasksSubject.send([task1])
+        await waitUntil { sut.columns.count == 1 && sut.isPresentationSettled }
+        
+        // when
+        sut.columns.first?.onSelectTask?("successor")
+        
+        // then
+        verify(harness.routing).selectTask(.value("successor")).called(1)
+    }
+    
     // MARK: - Embedded takeover (decision 5)
     
     @Test func givenAnEmbeddedTakeover_whenConfirmed_thenSelectionMovesToTheTaskScreen() async {

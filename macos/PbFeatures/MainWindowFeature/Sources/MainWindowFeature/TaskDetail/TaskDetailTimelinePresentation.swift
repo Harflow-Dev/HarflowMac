@@ -162,5 +162,6 @@ extension TaskDetailVM {
             updateToken: ActivityUpdateToken(rows: value.rows, liveStep: value.liveStep, pendingMessages: value.pendingMessages),
             pendingMessages: value.pendingMessages, history: value.history,
             paginationRevision: activityPaginationRevision, onLoadMore: { [weak self] in self?.loadMoreConversationActivity() ?? false })
+        timelineModel.onSelectTask = { [weak self] id in self?.didTapTask(id) }
     }
 }

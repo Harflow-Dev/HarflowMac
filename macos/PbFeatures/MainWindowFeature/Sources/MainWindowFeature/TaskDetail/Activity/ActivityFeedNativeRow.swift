@@ -223,7 +223,11 @@ struct ActivityFeedNativeTailContent: View {
                     ))
                 }
                 ForEach(standard.pendingMessages) { message in
-                    PromptBubbleView(text: message.text, caption: "Pending", isPending: true)
+                    PromptBubbleView(text: message.text, caption: message.caption, isPending: message.isPending)
+                    if let successor = message.successorTaskID {
+                        Button("Open \(successor)") { actions.onSelectChildTask(successor) }
+                            .buttonStyle(.link)
+                    }
                 }
                 if let line = standard.liveStep {
                     switch line.indicator {

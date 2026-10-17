@@ -531,7 +531,7 @@ final class ParallelVM: ParallelViewModel {
             let metadata = descriptors[conversation.id] ?? presentation
             var column = ParallelColumnModelBuilder.build(presentation: presentation, metadata: metadata,
                 onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: metadata.task.taskID) },
-                onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) })
+                onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) }, onSelectTask: { [weak self] in self?.routing.selectTask($0) })
             column.animatesArrival = arrivals.contains(column.id)
             column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }
             column.isResident = presentations[column.id] != nil || residentIDs.contains(column.id)

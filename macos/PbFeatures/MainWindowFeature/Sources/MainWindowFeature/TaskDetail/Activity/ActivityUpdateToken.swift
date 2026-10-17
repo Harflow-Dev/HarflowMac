@@ -19,7 +19,9 @@ struct ActivityUpdateToken: Equatable {
     init(rows: [ConversationTimelineRow], liveStep: LiveStep?, pendingMessages: [PendingMessage] = []) {
         self.rowCount = rows.count
         var hasher = Hasher()
-        for message in pendingMessages { hasher.combine(message.id); hasher.combine(message.text) }
+        for message in pendingMessages { hasher.combine(message.id); hasher.combine(message.text); hasher.combine(message.caption)
+            hasher.combine(message.successorTaskID); hasher.combine(message.isPending)
+        }
         for row in rows {
             hasher.combine(row.id)
             hasher.combine(row.live)

@@ -54,6 +54,9 @@ struct TimelinePaneModel {
     let history: EventHistoryState
     let paginationRevision: Int
     let onLoadMore: (() -> Bool)?
+    /// Opens another task by id (a consumed follow-up's successor). Independent of the sub-task
+    /// strip, which only exists when the task has delegated children.
+    var onSelectTask: ((String) -> Void)?
 
     init(
         stepCountText: String?, turnsText: String? = nil, noToolCallsText: String? = nil, rows: [ConversationTimelineRow],
@@ -141,7 +144,7 @@ struct TimelinePaneView: View {
                             },
                             pendingMessages: model.pendingMessages,
                             liveStep: model.liveStep.map { .init(text: $0.text, indicator: .singleDot) }
-                         )), onSelectChildTask: model.subTaskStrip?.onSelectTask)
+                         )), onSelectChildTask: model.onSelectTask ?? model.subTaskStrip?.onSelectTask)
         .readingColumn()
     }
 }

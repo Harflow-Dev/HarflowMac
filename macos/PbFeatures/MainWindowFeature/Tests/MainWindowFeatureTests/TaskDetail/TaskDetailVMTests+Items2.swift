@@ -273,6 +273,23 @@ extension TaskDetailVMTests {
         verify(harness.routing).selectTask(.value("child1")).called(1)
     }
     
+    @Test func givenNoDelegatedChildren_whenTheFollowupLinkFires_thenItStillRoutesToTheSuccessor() async {
+        // given — no children, so there is no sub-task strip to carry a handler
+        let harness = makeSUT()
+        let running = task(status: "running")
+        harness.detailBox.value = running
+        harness.sut.didAppear()
+        harness.tasksSubject.send([running])
+        await waitUntil { harness.sut.timelineModel.onSelectTask != nil }
+        #expect(harness.sut.timelineModel.subTaskStrip == nil)
+        
+        // when
+        harness.sut.timelineModel.onSelectTask?("successor")
+        
+        // then
+        verify(harness.routing).selectTask(.value("successor")).called(1)
+    }
+    
     @Test func givenOpenParentIsTapped_whenInvoked_thenItRoutesToTheParent() async {
         // given
         let harness = makeSUT(taskID: "child")

@@ -57,6 +57,8 @@ struct ParallelColumnModel: Identifiable {
     var noToolCallsText: String?
     let onTapTakeover: () -> Void
     let onTapOpenTask: () -> Void
+    /// Opens another task by id (a consumed follow-up's successor).
+    var onSelectTask: ((String) -> Void)?
     /// When the conversation's FIRST turn started — every row's elapsed time counts from here, as
     /// TaskDetail's Timeline does; the current turn's own start would clamp earlier turns to 0.
     var start: Date?
@@ -210,7 +212,7 @@ struct ParallelColumnView: View {
                              tailPresentation: .standard(.init(
                                 pendingMessages: model.pendingMessages,
                                 liveStep: model.liveStep.map { .init(text: $0.text, indicator: .threeDots) }
-                             )))
+                             )), onSelectChildTask: model.onSelectTask)
         }
     }
 }
