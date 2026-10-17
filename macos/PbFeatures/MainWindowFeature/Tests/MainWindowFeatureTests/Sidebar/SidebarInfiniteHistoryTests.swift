@@ -45,7 +45,8 @@ struct SidebarInfiniteHistoryTests {
 
     private func vm(_ history: History) -> SidebarVM {
         let harness = SidebarVMTests().makeSUT()
-        return SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history)
+        return SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
     }
 
     @Test func givenRepeatedBottomEvents_whenPageIsInFlight_thenOnlyOneRequestStarts() async throws {

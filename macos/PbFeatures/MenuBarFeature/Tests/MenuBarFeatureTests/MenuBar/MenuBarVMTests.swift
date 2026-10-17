@@ -55,9 +55,12 @@ import Testing
         let sut: MenuBarVM
         let useCase: MockMenuBarUseCase
         let routing: MockMenuBarRouting
+        let visibility: FakeMonitorVisibility
+        let scheduler: CapturingScheduler
         let tasksSubject: PassthroughSubject<[TaskInfo], Never>
         let listErrorSubject: PassthroughSubject<ToolError?, Never>
         let hasListedSubject: PassthroughSubject<Bool, Never>
+        let countsSubject: PassthroughSubject<TaskListCounts, Never>
         let runningCountBox: Box<Int>
         let titlesSubject: PassthroughSubject<[String: String], Never>
         let titleBox: Box<(String) -> String>
@@ -72,13 +75,16 @@ import Testing
     func makeSUT(
         connectionLine: String = "connecting…",
         runningCount: Int = 0,
-        installState: InstallState = .idle
+        installState: InstallState = .idle,
+        visibility: FakeMonitorVisibility = FakeMonitorVisibility(),
+        scheduler: CapturingScheduler = CapturingScheduler()
     ) -> SUT {
         let useCase = MockMenuBarUseCase()
         let routing = MockMenuBarRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let listErrorSubject = PassthroughSubject<ToolError?, Never>()
         let hasListedSubject = PassthroughSubject<Bool, Never>()
+        let countsSubject = PassthroughSubject<TaskListCounts, Never>()
         let titlesSubject = PassthroughSubject<[String: String], Never>()
         let runningCountBox = Box(runningCount)
         // Re-stubbing `title(_:)` a second time after this is FIFO/unreliable (the same Mockable
@@ -97,6 +103,7 @@ import Testing
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
+        given(useCase).countsPublisher().willReturn(countsSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(titlesSubject.eraseToAnyPublisher())
         given(useCase).title(.any).willProduce { titleBox.value($0) }
         given(routing).select(.any).willReturn()
@@ -118,10 +125,12 @@ import Testing
         given(useCase).installAnyway().willReturn(true)
         given(useCase).reset().willReturn()
 
-        let sut = MenuBarVM(useCase: useCase, routing: routing)
+        let sut = MenuBarVM(useCase: useCase, routing: routing, visibility: visibility, scheduler: scheduler)
         return SUT(
-            sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
-            hasListedSubject: hasListedSubject, runningCountBox: runningCountBox, titlesSubject: titlesSubject, titleBox: titleBox,
+            sut: sut, useCase: useCase, routing: routing, visibility: visibility, scheduler: scheduler,
+            tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
+            hasListedSubject: hasListedSubject, countsSubject: countsSubject, runningCountBox: runningCountBox,
+            titlesSubject: titlesSubject, titleBox: titleBox,
             installStateSubject: installStateSubject, lastCheckMessageSubject: lastCheckMessageSubject,
             installAnywayBlockedMessageSubject: installAnywayBlockedMessageSubject, installStateBox: installStateBox,
             installNeedBox: installNeedBox, installDestinationBox: installDestinationBox
@@ -222,26 +231,25 @@ import Testing
         #expect(sut.recentTasks.first?.title == "Task a")
     }
 
-    @Test func givenTwoIdenticalListings_whenTheClockAdvancesPastAThreshold_thenAgeTextUpdates() async {
-        // given — Codex review round 1, finding 2: the tasks stream must NOT `.removeDuplicates()`,
-        // or a byte-identical republish would never recompute `ageText`, freezing it at whatever it
-        // read the last time the array's own CONTENT changed.
+    @Test func givenAnOpenPopoverAndNoRepublish_whenTheMinuteTickFiresPastAThreshold_thenAgeTextUpdates() async {
+        // given — an equivalent listing no longer republishes, so the explicit minute-aligned tick
+        // (not a repeated array) is what keeps a finished task's age from freezing.
         let harness = makeSUT()
         let sut = harness.sut
-        let tasksSubject = harness.tasksSubject
         sut.didAppear()
+        sut.didPopoverOpen()
         let startedAt = Date().addingTimeInterval(-59.8)
-        let completed = task(id: "t1", status: "completed", startedAt: startedAt)
-        tasksSubject.send([completed])
+        harness.tasksSubject.send([task(id: "t1", status: "completed", startedAt: startedAt)])
         await waitUntil { sut.recentTasks.first?.ageText == "now" }
 
-        // when — wait past the 60s boundary, then re-publish the SAME array (identical content).
+        // when — wait past the 60 s boundary, then let the aligning one-shot land. No new listing.
         await waitUntil(timeout: 2) { Date().timeIntervalSince(startedAt) >= 60.1 }
-        tasksSubject.send([completed])
+        harness.scheduler.fireOneShot(interval: 60)
 
         // then
         await waitUntil { sut.recentTasks.first?.ageText == "1m" }
         #expect(sut.recentTasks.first?.ageText == "1m")
+        sut.didPopoverClose()
     }
 
     @Test func givenTheRunningCountFromTheUseCase_whenTasksUpdate_thenItIsRepublished() async {

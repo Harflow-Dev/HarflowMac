@@ -30,7 +30,8 @@ import Testing
         given(routing).didSaveWorkflow(name: .any).willReturn()
         given(routing).openWorkflowEditor(name: .any).willReturn()
         let store = WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         return (vm, useCase)
     }
 
@@ -233,7 +234,8 @@ import Testing
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "old-name"
         try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
@@ -253,7 +255,8 @@ import Testing
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "workflow"
         try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
@@ -273,7 +276,8 @@ import Testing
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "original"
         try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
@@ -344,7 +348,8 @@ import Testing
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         var loaded = WorkflowVM.starterDefinition()
         loaded["name"] = .string("old-workflow")
         // when / then
@@ -367,7 +372,8 @@ import Testing
         let routing = MockWorkflowRouting()
         given(routing).didSaveWorkflow(name: .any).willReturn()
         let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "workflow"
         try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
@@ -436,7 +442,8 @@ import Testing
     @Test func givenInvalidGraph_whenSaving_thenCanonicalWarningShowsWithoutPersistence() async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.newWorkflow()
         vm.name = "draft"
         var alert: AlertContent?
@@ -456,7 +463,8 @@ import Testing
     @Test func givenPendingValidGraph_whenSaveClicked_thenValidatesExactSnapshotBeforePersisting() async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.newWorkflow()
         vm.name = "pending-draft"
         vm.save()
@@ -480,7 +488,8 @@ import Testing
     func givenSaveValidationInFlight_whenDraftChanges_thenStaleSuccessCannotPersist(_ change: String) async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.newWorkflow()
         vm.name = "draft"
         vm.save()
@@ -529,7 +538,8 @@ import Testing
     @Test func givenLegacyEditableModes_whenSaving_thenOnlySubmittedSnapshotUsesAutomaticBranching() async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.newWorkflow()
         vm.name = "legacy"
         vm.updateNode("review", key: "branch_mode", value: .string("choose_one"))
@@ -575,7 +585,8 @@ extension WorkflowTests {
         let routing = MockWorkflowRouting()
         given(routing).openWorkflowRun(id: .any).willReturn()
         let sut = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,
-            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         sut.openRun("child")
         // then

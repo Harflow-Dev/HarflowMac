@@ -42,6 +42,7 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { taskListRepository.listErrorPublisher() }
     func hasListedPublisher() -> AnyPublisher<Bool, Never> { taskListRepository.hasListedPublisher() }
     func titlesPublisher() -> AnyPublisher<[String: String], Never> { taskListRepository.titlesPublisher() }
+    func countsPublisher() -> AnyPublisher<TaskListCounts, Never> { taskListRepository.countsPublisher() }
     
     var connectionLine: String { taskListRepository.connectionLine }
     var countsComplete: Bool { taskListRepository.historyState.countsComplete }

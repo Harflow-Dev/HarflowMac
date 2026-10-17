@@ -1007,3 +1007,101 @@ startup movement, paused history, streaming, disclosure, resizing and remounts. 
 also verified native page navigation, history loading and disclosure. These local results do not
 establish exact-head PR review, green CI or installation. Earlier test counts and measurements
 elsewhere in this document apply only to their recorded source states.
+
+## Stage 6: polling cost, deduplication and batched status
+
+The Monitor felt sluggish because of how it drove `polybridge-ctl`, not because of rendering.
+Several loops started a fresh Python process every 2 s whether or not anyone could see the window,
+the 10 s task-list pass ended with one `ctl status <id>` per leased task (up to 100, serially), and
+republished equal task lists whenever a task ran, because `duration_seconds` is recomputed from
+the current time on every call. This stage changes how often the app asks, whether an unchanged
+answer publishes anything, and how many processes a pass costs. The Python-side work (one caller
+scan per `status`/`status-batch`, no retention sweep or `server` import from ctl) is described in
+[compact task reads](compact-task-reads.md); this section covers the app.
+
+### Visibility gating
+
+A `MonitorVisibility` seam (in `PbRepository`) publishes two deduplicated facts: whether a main
+window is visible (`occlusionState` contains `.visible` and the window is not miniaturized; a
+visible but unfocused Monitor beside a terminal keeps full cadence) and whether the menu-bar popover
+content is on screen. The app shell feeds the first from window occlusion, miniaturize,
+deminiaturize and close notifications, and the second from the popover's own appear/disappear.
+
+| Loop | Visible | Not visible |
+|---|---|---|
+| Sidebar workflows | 2 s | paused; immediate refresh on show |
+| Selected workflow screen | 2 s | paused; immediate refresh on show |
+| Menu-bar workflows | 2 s while the popover is open or the window is visible | 10 s |
+| Task-list safety poll (evaluated every 10 s) | refreshes when the 60 s reconcile is due or anything is busy | with a task running or unreconciled, as visible; otherwise the same triggers are evaluated only on every third tick (30 s) |
+| Event summaries, event-file tailing | unchanged (cheap file I/O, lease-scoped) | unchanged |
+
+"Busy" for the safety poll means a running or unreconciled task; busy keeps the 10 s urgency in
+every state. A bootstrap in progress, a list error, or a watcher that is not attached still
+triggers a refresh, but while hidden and idle it is only checked every third tick (30 s).
+
+Accepted latencies:
+
+- With nothing visible, a workflow that needs input reaches the menu-bar badge up to 10 s late
+  (it was up to 2 s). A hidden to visible change (popover opens or window shows) wakes the
+  menu-bar poll immediately instead of waiting out the 10 s.
+- While the app is hidden and idle (nothing running), list-error, bootstrap and watcher-down
+  recovery are rechecked only every 30 s, and the 60 s reconcile can land up to about 20 s late
+  (it is seen on the next third tick).
+- On a wake restart of the menu-bar poll, an in-flight ctl read can overlap the new one; its stale
+  result is discarded.
+- Task-finished notifications are unchanged while anything runs.
+- Showing the main window refreshes the sidebar and workflow screens at once.
+
+### Deduplication and explicit clocks
+
+- `TaskInfo.isEquivalent(to:)` ignores `duration_seconds` only when both sides have a start time and
+  a non-terminal status. A started task's running label derives from `startedAt`, so that drift
+  carries no state; every other difference, including the duration of a task with no start time
+  (its only clock), is real. The task list, the snapshot store and the task-detail subscription use
+  it, so a poll that changed nothing publishes nothing.
+- Catalog counts and readiness (the menu-bar label's running count and loading state) have their
+  own deduplicated channel, since the task array no longer republishes as a side effect.
+- Time-derived presentation that used to ride the republish pulse (sidebar Today/Earlier bucketing
+  and ages, the menu-bar's finished-task ages) now ticks on a minute-aligned clock: a one-shot to
+  the next minute boundary, then a repeat every 60 s, re-aligned each time the window shows or the
+  popover opens. The sidebar tick runs while its window is visible; the menu-bar tick runs only
+  while the popover is open (the always-visible label has no time-derived text). Running elapsed labels keep their
+  own one-second `TimelineView`.
+- Workflow view models compare before assigning, and the sidebar workflow poll recomputes only when
+  its complete input (definitions, run and child-invocation headers, loaded-workflow status,
+  history and failure state) changed.
+
+### Batched status
+
+`polybridge-ctl status-batch --task-ids a,b,... --json` answers up to 100 ids in one process; the
+task-list pass issues one batch per leased set instead of one `status` per id. Each id keeps its
+own generation guard, so a late batch cannot overwrite a newer single-id refresh; `unknown_task`
+evicts an id, any other per-id error keeps the stale snapshot, and a failure of the whole command
+changes nothing. An older ctl without the command makes the app fall back to per-id `status` calls
+for the rest of the session.
+
+### Out of scope
+
+Merging the sidebar's three workflow reads into one ctl command, Markdown and data-detector
+caching, row-measurement reuse, moving TaskDetail, menu-bar and Parallel index building off the
+main actor (this stage reduces how often they run; it does not claim the main-actor rule is fully
+met there), a long-lived ctl helper, and settling stale "running" records.
+
+### Measurements
+
+> **Placeholder, not yet measured.** Fill these from a run on the same machine and fixture before
+> and after the change; do not estimate them. Suggested method: `time polybridge-ctl status <id>
+> --json` and `polybridge-ctl workflow inspect ...` against `scripts/benchmark-monitor.py`
+> fixtures; ctl spawn rate with `POLYBRIDGE_MONITOR_METRICS=1` (or `ps` sampling) in four states
+> (window visible or hidden, task running or idle); Activity Monitor CPU in each state.
+
+| Measurement | Before | After |
+|---|---|---|
+| `ctl status <id> --json` wall time | _TBD_ | _TBD_ |
+| `ctl workflow inspect` wall time | _TBD_ | _TBD_ |
+| ctl spawns per minute, window visible, task running | _TBD_ | _TBD_ |
+| ctl spawns per minute, window visible, idle | _TBD_ | _TBD_ |
+| ctl spawns per minute, hidden, task running | _TBD_ | _TBD_ |
+| ctl spawns per minute, hidden, idle | _TBD_ | _TBD_ |
+| ctl processes for a 100-task leased pass | _TBD_ | _TBD_ |
+| Monitor CPU, hidden and idle | _TBD_ | _TBD_ |

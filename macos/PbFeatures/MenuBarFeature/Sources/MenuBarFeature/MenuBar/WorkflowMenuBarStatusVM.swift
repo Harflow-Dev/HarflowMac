@@ -1,7 +1,9 @@
+import Combine
 import Foundation
 import Mockable
 import MonitorCore
 import PbCommon
+import PbRepository
 
 // MARK: - WorkflowMenuBarUseCase
 
@@ -58,26 +60,62 @@ final class WorkflowMenuBarStatusVM: ViewModel {
     var attentionCount: Int { catalogAttentionCount ?? (countsLoading ? 0 : rows.filter(\.needsAttention).count) }
 
     @ObservationIgnored private let useCase: any WorkflowMenuBarUseCase
+    /// Whether anyone can see the Monitor: the status item is always on screen, so the poll never
+    /// pauses — but with nothing visible it stretches from 2 s to 10 s, since the badge's
+    /// needs-input signal is the only thing anyone could notice late.
+    @ObservationIgnored private let visibility: any MonitorVisibility
+    /// The poll's wait runs on the scheduler seam so tests fire it directly, never a real timer.
+    @ObservationIgnored private let scheduler: any Scheduling
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var visibilityWake: AnyCancellable?
 
-    init(useCase: any WorkflowMenuBarUseCase) { self.useCase = useCase }
+    init(useCase: any WorkflowMenuBarUseCase, visibility: any MonitorVisibility, scheduler: any Scheduling) {
+        self.useCase = useCase
+        self.visibility = visibility
+        self.scheduler = scheduler
+    }
+
+    /// The poll interval for the current visibility: 2 s while the popover is open or the main
+    /// window is visible, else 10 s.
+    var pollInterval: TimeInterval {
+        (visibility.mainWindowVisible || visibility.menuBarPopoverOpen) ? 2 : 10
+    }
 
     func didAppear() {
         guard poll == nil else { return }
         let token = UUID()
         generation = token
+        startPoll(token)
+        // The poll stretches to 10 s while nothing is visible; the moment the popover opens or the
+        // main window shows, cut any pending wait short and refresh at once.
+        visibilityWake = visibility.mainWindowVisiblePublisher()
+            .combineLatest(visibility.menuBarPopoverOpenPublisher())
+            .map { $0 || $1 }
+            .removeDuplicates()
+            .dropFirst()
+            .filter(\.self)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, poll != nil else { return }
+                poll?.cancel()
+                startPoll(generation)
+            }
+    }
+
+    private func startPoll(_ token: UUID) {
         poll = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 await refresh(generation: token)
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                do { try await scheduler.wait(for: pollInterval) } catch { return }
             }
         }
     }
 
     func didDisappear() {
         generation = UUID()
+        visibilityWake = nil
         poll?.cancel()
         poll = nil
     }
@@ -96,13 +134,10 @@ final class WorkflowMenuBarStatusVM: ViewModel {
                 result = page.items + page.relatedHeaders
             } else { result = try await useCase.runs(); loadingCounts = false }
             guard !Task.isCancelled, token == nil || token == generation else { return }
-            countsLoading = loadingCounts
-            catalogActiveCount = activeCount
-            catalogAttentionCount = attentionCount
             let mapped = result.compactMap(WorkflowMenuBarRow.init)
             // A child is part of its owning workflow tree, not another badge item.
             let known = Set(mapped.map(\.id))
-            rows = mapped.filter { $0.rootID == $0.id || !known.contains($0.rootID) }.map { row in
+            let nextRows = mapped.filter { $0.rootID == $0.id || !known.contains($0.rootID) }.map { row in
                 let descendants = mapped.filter { $0.rootID == row.id && $0.id != row.id }
                 guard let attention = descendants.first(where: \.needsAttention) ?? descendants.first(where: \.isActive),
                       attention.needsAttention || !row.isActive else { return row }
@@ -110,11 +145,21 @@ final class WorkflowMenuBarStatusVM: ViewModel {
                     "status": .string(attention.status), "attention_reason": .string("\(attention.name): \(attention.detail)"),
                     "settling": .bool(row.isSettling)]) ?? row
             }
-            errorText = nil
+            apply(rows: nextRows, loadingCounts: loadingCounts, activeCount: activeCount, attentionCount: attentionCount)
         } catch {
             guard !Task.isCancelled, token == nil || token == generation else { return }
             // Keep agent monitoring usable with older CLI installations.
-            errorText = "Workflow status unavailable"
+            if errorText != "Workflow status unavailable" { errorText = "Workflow status unavailable" }
         }
+    }
+
+    /// Assigns only what changed — an unchanged poll recomputes nothing, so it re-renders nothing
+    /// either (`WorkflowMenuBarRow` is `Equatable`).
+    private func apply(rows nextRows: [WorkflowMenuBarRow], loadingCounts: Bool, activeCount: Int?, attentionCount: Int?) {
+        if rows != nextRows { rows = nextRows }
+        if countsLoading != loadingCounts { countsLoading = loadingCounts }
+        if catalogActiveCount != activeCount { catalogActiveCount = activeCount }
+        if catalogAttentionCount != attentionCount { catalogAttentionCount = attentionCount }
+        if errorText != nil { errorText = nil }
     }
 }

@@ -15,7 +15,7 @@ struct TaskDetailConversationDispatchTests {
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let listing: any TaskListRepository = TaskListRepositoryImpl(toolEnvironment: environment,
             snapshotRepository: NullTaskSnapshotRepository(), eventStreamRepository: NullEventStreamRepository(),
-            finishNotifier: NullFinishNotifier(), scheduler: NullScheduling())
+            finishNotifier: NullFinishNotifier(), scheduler: NullScheduling(), visibility: NullMonitorVisibility())
         let sut = TaskDetailViewRepository(taskListRepository: listing)
         let page = try await sut.conversationHistory(sessionID: "session", cursor: "older")
         #expect(page?.items.map(\.taskID) == ["turn"])

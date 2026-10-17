@@ -15,6 +15,7 @@ public final class Module: PbModule {
         super.initializeModule()
 
         let scheduler = SystemScheduler()
+        let visibility = SystemMonitorVisibility()
         let settings = SettingsRepositoryImpl()
         let toolEnvironment = ToolEnvironmentRepositoryImpl(settings: settings)
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
@@ -25,7 +26,8 @@ public final class Module: PbModule {
             snapshotRepository: snapshot,
             eventStreamRepository: eventStream,
             finishNotifier: finishNotifier,
-            scheduler: scheduler
+            scheduler: scheduler,
+            visibility: visibility
         )
         let taskAction = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshot)
         let harness = HarnessRepositoryImpl(toolEnvironment: toolEnvironment)
@@ -36,6 +38,7 @@ public final class Module: PbModule {
 
         GlobalValues
             .environment(\.scheduling, scheduler)
+            .environment(\.monitorVisibility, visibility)
             .environment(\.settingsRepository, settings)
             .environment(\.toolEnvironmentRepository, toolEnvironment)
             .environment(\.taskSnapshotRepository, snapshot)

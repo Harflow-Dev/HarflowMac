@@ -49,6 +49,9 @@ import Testing
         sut.startBackendsCatalog = {}
         sut.notifyBackendsAppActive = {}
         sut.openWindowOnStart = { true }
+        // B1: no real notification center and no real global visibility sink in any test.
+        sut.addWindowVisibilityObserver = { _, _ in NSObject() }
+        sut.updateMainWindowVisibility = { _ in }
         
         return (sut, firedScheduled, orderedOutWindows, nowBox)
     }

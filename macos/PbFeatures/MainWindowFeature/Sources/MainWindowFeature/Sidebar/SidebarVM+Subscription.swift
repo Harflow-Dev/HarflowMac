@@ -11,8 +11,10 @@ extension SidebarVM {
 
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)
-            // Equal listings still provide clock refresh opportunities. The background builder
-            // computes ages, then equality-guarded presentation setters suppress unchanged UI.
+            // The producer already dedupes duration-drifted equivalents, so an emission here is a
+            // real change (a started-less running task's duration drift is real state — it is that
+            // task's only clock — and still republishes). Time-derived presentation that used to
+            // ride the republish pulse ticks on the minute-aligned presentation clock instead.
             .sink { [weak self] tasks in
                 guard let self else { return }
                 latestTasks = tasks
@@ -20,6 +22,8 @@ extension SidebarVM {
                 recompute()
             }
             .store(in: &cancellables)
+
+        subscribeToVisibility()
 
         useCase.listErrorPublisher()
             .receive(on: DispatchQueue.main)

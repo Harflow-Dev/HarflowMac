@@ -99,9 +99,13 @@ extension WorkflowVM {
               let status = raw["status"]?.stringValue, !status.isEmpty else {
             throw WorkflowReadResponseError.invalidRun
         }
-        selectedRun = WorkflowRunModel(raw: raw)
-        initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
-        updateActivityMembership()
+        // An unchanged 2 s poll (same run document) re-renders nothing.
+        let next = WorkflowRunModel(raw: raw)
+        let runChanged = selectedRun != next
+        if runChanged { selectedRun = next }
+        let failed = selectedRun?.raw["status"]?.stringValue == nil
+        if initialLoadFailed != failed { initialLoadFailed = failed }
+        if runChanged { updateActivityMembership() } else { pulseNativeActivity() }
         MonitorMetrics.end(metricStart, stage: .workflowContentReady)
     }
 

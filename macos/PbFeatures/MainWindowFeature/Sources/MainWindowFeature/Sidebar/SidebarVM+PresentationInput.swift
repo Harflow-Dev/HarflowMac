@@ -18,7 +18,7 @@ extension SidebarVM {
             titles: capturedTitles(), catalog: latestCatalog, search: searchQuery, backend: selectedBackend,
             collapsed: collapsedTaskIDs, expanded: expandedExecutionParents, selection: desiredSelection,
             siblings: lastKnownSiblingsByMember, reveal: pendingRevealToApply, workflowReveal: pendingWorkflowRevealID,
-            now: currentDate(), calendar: Calendar.current)
+            now: (currentDate ?? clock.scheduler.now)(), calendar: Calendar.current)
     }
 
     func capturedTitles() -> [String: String] {

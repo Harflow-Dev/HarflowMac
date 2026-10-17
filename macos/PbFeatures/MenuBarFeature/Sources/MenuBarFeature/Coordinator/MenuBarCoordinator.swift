@@ -6,7 +6,9 @@
 import AppKit
 import Foundation
 import PbCommon
+import PbRepository
 import PbUtilities
+import SwiftEnvironment
 import SwiftUI
 
 // MARK: - MenuBarNavigationCoordinator
@@ -74,8 +76,10 @@ public final class MenuBarCoordinator: MenuBarNavigationCoordinator {
     private func sharedVM() -> MenuBarVM {
         if let vm { return vm }
         let useCase = MenuBarViewRepository()
-        let status = WorkflowMenuBarStatusVM(useCase: WorkflowMenuBarViewRepository())
-        let newVM = MenuBarVM(useCase: useCase, routing: self, workflowStatus: status)
+        let visibility = GlobalValues.monitorVisibility
+        let scheduler = GlobalValues.scheduling
+        let status = WorkflowMenuBarStatusVM(useCase: WorkflowMenuBarViewRepository(), visibility: visibility, scheduler: scheduler)
+        let newVM = MenuBarVM(useCase: useCase, routing: self, workflowStatus: status, visibility: visibility, scheduler: scheduler)
         vm = newVM
         return newVM
     }

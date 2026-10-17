@@ -12,7 +12,8 @@ extension WorkflowTests {
         // given
         let useCase = MockWorkflowUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         defer { vm.didDisappear() }
         var raw = try fixture("definition")
         var connections = WorkflowJSON.objects(raw["connections"])

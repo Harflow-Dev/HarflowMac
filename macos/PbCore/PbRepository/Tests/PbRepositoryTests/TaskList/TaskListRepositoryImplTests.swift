@@ -48,22 +48,35 @@ import Testing
         return scheduler
     }
 
+    /// A `MockMonitorVisibility` pre-stubbed visible, so the safety poll's gating reads "someone
+    /// is looking" and every pre-visibility test keeps its exact behaviour. Same default-argument
+    /// pattern as `defaultScheduler()` for the same `Mockable` FIFO-shadowing reason.
+    private static func defaultVisibility() -> MockMonitorVisibility {
+        let visibility = MockMonitorVisibility()
+        given(visibility).mainWindowVisible.willReturn(true)
+        given(visibility).menuBarPopoverOpen.willReturn(false)
+        return visibility
+    }
+
     func makeSUT(
         toolEnvironment: MockToolEnvironmentRepository = MockToolEnvironmentRepository(),
         snapshotRepository: MockTaskSnapshotRepository = MockTaskSnapshotRepository(),
         eventStreamRepository: MockEventStreamRepository = MockEventStreamRepository(),
         finishNotifier: MockFinishNotifier = MockFinishNotifier(),
-        scheduler: MockScheduling = TaskListRepositoryImplTests.defaultScheduler()
+        scheduler: MockScheduling = TaskListRepositoryImplTests.defaultScheduler(),
+        visibility: MockMonitorVisibility = TaskListRepositoryImplTests.defaultVisibility()
     ) -> TaskListRepositoryImpl {
         given(snapshotRepository).evict(keeping: .any).willReturn()
         given(snapshotRepository).refresh(.any).willReturn()
+        given(snapshotRepository).refresh(ids: .any).willReturn()
         given(snapshotRepository).snapshot(.any).willReturn(nil)
         given(eventStreamRepository).leasedTaskIDs.willReturn([])
         given(finishNotifier).notify(.any, titleFor: .any).willReturn()
         given(toolEnvironment).discoverEnvironment().willReturn(DiscoveryResult(loginPath: nil, uv: nil))
         return TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository,
-            eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier, scheduler: scheduler
+            eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier, scheduler: scheduler,
+            visibility: visibility
         )
     }
 

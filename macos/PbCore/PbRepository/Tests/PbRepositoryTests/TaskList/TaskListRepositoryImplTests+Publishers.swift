@@ -7,7 +7,7 @@ import PbTestUtilities
 import Testing
 
 extension TaskListRepositoryImplTests {
-    @Test func givenRepeatedRefreshes_whenStateIsEqual_thenStatePublishersStayQuietAndTaskRefreshPulseRemains() async {
+    @Test func givenRepeatedRefreshes_whenStateIsEqual_thenStateAndTaskPublishersStayQuiet() async {
         // given
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
@@ -35,7 +35,8 @@ extension TaskListRepositoryImplTests {
         // then
         #expect(listed.value == [false, true])
         #expect(errors.value == [nil, error, nil])
-        #expect(tasks.value.filter { $0.map(\.taskID) == ["a"] }.count == 3)
+        // Equivalent listings no longer pulse: consumers tick on their own presentation clock.
+        #expect(tasks.value.filter { $0.map(\.taskID) == ["a"] }.count == 1)
         let late = LockedBox<[Bool]>([])
         let subscription = sut.hasListedPublisher().sink { value in late.mutate { $0.append(value) } }
         defer { subscription.cancel() }

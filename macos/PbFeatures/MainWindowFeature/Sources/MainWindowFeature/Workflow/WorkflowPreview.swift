@@ -17,7 +17,9 @@ enum WorkflowPreview {
             useCase: useCase,
             routing: routing,
             parallel: ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: routing),
-            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            visibility: NullMonitorVisibility(),
+            scheduler: NullScheduling()
         )
         vm.newWorkflow()
         vm.name = "code-review"

@@ -65,6 +65,16 @@ protocol MenuBarViewModel: ViewModel {
     func didTapInstallBannerPrimary()
     func didTapInstallBannerSecondary()
     func didTapInstallBannerDismiss()
+    /// The popover content appeared — the one reliable `MenuBarExtra` open signal. Distinct from
+    /// `didAppear()`, which the always-on-screen label view also fires.
+    func didPopoverOpen()
+    /// The popover content disappeared.
+    func didPopoverClose()
+}
+
+extension MenuBarViewModel {
+    func didPopoverOpen() {}
+    func didPopoverClose() {}
 }
 
 extension MenuBarViewModel {
@@ -123,8 +133,14 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             footer
         }
         .frame(width: PbRadius.Metrics.menuBarPopoverWidth, height: PbRadius.Metrics.menuBarPopoverHeight)
-        .onAppear { viewModel.didAppear() }
-        .onDisappear { viewModel.didDisappear() }
+        .onAppear {
+            viewModel.didAppear()
+            viewModel.didPopoverOpen()
+        }
+        .onDisappear {
+            viewModel.didDisappear()
+            viewModel.didPopoverClose()
+        }
         .publishViewEvent(from: viewModel, to: viewEvent)
     }
     

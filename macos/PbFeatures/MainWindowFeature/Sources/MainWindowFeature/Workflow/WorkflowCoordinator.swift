@@ -1,7 +1,9 @@
 import Foundation
 import MonitorCore
 import PbCommon
+import PbRepository
 import PbUtilities
+import SwiftEnvironment
 import SwiftUI
 
 // MARK: - Workflow coordinator integration
@@ -28,13 +30,16 @@ extension MainWindowCoordinator: WorkflowRouting {
     public func buildWorkflowRunnerView() -> AnyView {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
         let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel,
-                            draftStore: WorkflowRunnerDraftStore(), routesStartedRun: true)
+                            draftStore: WorkflowRunnerDraftStore(), routesStartedRun: true,
+                            visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
         return WorkflowRunnerView(vm).eraseToAnyView()
     }
 
     public func buildWorkflowEditorView(name: String?) -> AnyView {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
-        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel, draftStore: WorkflowDraftStore.applicationStore())
+        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel,
+                            draftStore: WorkflowDraftStore.applicationStore(),
+                            visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
         vm.prepareEditor(name: name)
         return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id(name ?? "new-workflow").eraseToAnyView()
     }
@@ -59,7 +64,9 @@ extension MainWindowCoordinator: WorkflowRouting {
 
     public func buildWorkflowRunView(id: String) -> AnyView {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
-        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel, draftStore: WorkflowDraftStore.applicationStore())
+        let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel,
+                            draftStore: WorkflowDraftStore.applicationStore(),
+                            visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
         vm.prepareRun(id: id, polling: workflowRunPolling)
         return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id("workflow-run:\(id)").eraseToAnyView()
     }

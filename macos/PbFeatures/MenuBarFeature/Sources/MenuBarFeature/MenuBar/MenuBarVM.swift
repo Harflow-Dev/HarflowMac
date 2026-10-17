@@ -27,7 +27,11 @@ protocol MenuBarUseCase: Sendable {
     /// their rows when this fires, and the menu bar must too, or a row can be stuck on a placeholder
     /// title after the real one loads.
     func titlesPublisher() -> AnyPublisher<[String: String], Never>
-    
+    /// The catalog counts/readiness channel: the always-visible label's running count and its
+    /// loading state, published even when the task array itself has not changed — the label must
+    /// not depend on the popover-only rows recomputing.
+    func countsPublisher() -> AnyPublisher<TaskListCounts, Never>
+
     var connectionLine: String { get }
     var runningCount: Int { get }
     
@@ -126,6 +130,16 @@ final class MenuBarVM: MenuBarViewModel {
 
     @ObservationIgnored private let useCase: any MenuBarUseCase
     @ObservationIgnored private let routing: any MenuBarRouting
+    /// Whether anyone can see the Monitor: feeds the popover-open state (the popover's own
+    /// appear/disappear is the one reliable `MenuBarExtra` signal) and paces the minute tick's
+    /// popover-content recompute.
+    @ObservationIgnored let visibility: any MonitorVisibility
+    /// The minute-aligned presentation clock's scheduler seam.
+    @ObservationIgnored let scheduler: any Scheduling
+    @ObservationIgnored var minuteTickToken: AnyCancellable?
+    @ObservationIgnored var minuteRepeatToken: AnyCancellable?
+    /// Bumped on every stop, so a one-shot already queued on the main actor can tell it is stale.
+    @ObservationIgnored var minuteTickGeneration = 0
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored private var latestTasks: [TaskInfo] = []
@@ -141,10 +155,13 @@ final class MenuBarVM: MenuBarViewModel {
 
     // MARK: - Init
 
-    init(useCase: any MenuBarUseCase, routing: any MenuBarRouting, workflowStatus: WorkflowMenuBarStatusVM? = nil) {
+    init(useCase: any MenuBarUseCase, routing: any MenuBarRouting, workflowStatus: WorkflowMenuBarStatusVM? = nil,
+         visibility: any MonitorVisibility, scheduler: any Scheduling) {
         self.workflowStatus = workflowStatus
         self.useCase = useCase
         self.routing = routing
+        self.visibility = visibility
+        self.scheduler = scheduler
         self.connectionLine = useCase.connectionLine
         self.runningCount = useCase.runningCount
         self.taskCountsLoading = !((useCase as? any MenuBarCountAvailabilityUseCase)?.countsComplete ?? true)
@@ -159,6 +176,23 @@ final class MenuBarVM: MenuBarViewModel {
     func didAppear() {
         workflowStatus?.didAppear()
         subscribeIfNeeded()
+    }
+
+    /// The popover content appeared — distinct from `didAppear()`, which the always-on-screen
+    /// label view also fires, so it cannot mean "the popover opened". This is the one reliable
+    /// `MenuBarExtra` open/close signal, fed to `MonitorVisibility` (the workflow poll and the
+    /// popover-content recompute pace off it) and used to refresh the popover's time-derived
+    /// presentation immediately and re-align the minute tick.
+    func didPopoverOpen() {
+        visibility.setMenuBarPopoverOpen(true)
+        restartMinuteTick()
+        recompute()
+    }
+
+    /// The popover content disappeared — see `didPopoverOpen()` for why this is its own method.
+    func didPopoverClose() {
+        visibility.setMenuBarPopoverOpen(false)
+        stopMinuteTick()
     }
 
     func didDisappearStatusItem() { workflowStatus?.didDisappear() }
@@ -257,13 +291,25 @@ final class MenuBarVM: MenuBarViewModel {
 
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)
-            // Deliberately NOT `.removeDuplicates()` (Codex review round 1, finding 2 — see
-            // `SidebarVM`'s identical note): a byte-identical republish while a task runs is what
-            // refreshes its relative age/running clock; deduping this stream would freeze that text.
+            // The producer dedupes duration-drifted equivalents, so an emission here is a real
+            // change. (Codex review round 1, finding 2's republish-as-clock is replaced by the
+            // minute-aligned tick below: relative ages/finished-task ages refresh there, and
+            // running elapsed labels already tick in their own `TimelineView`.)
             .sink { [weak self] tasks in
                 guard let self else { return }
                 latestTasks = tasks
                 recompute()
+            }
+            .store(in: &cancellables)
+
+        useCase.countsPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] counts in
+                guard let self else { return }
+                // The always-visible label's own channel: the running count and its loading state
+                // update without the popover-only rows recomputing.
+                if runningCount != counts.runningCount { runningCount = counts.runningCount }
+                if taskCountsLoading == counts.countsComplete { taskCountsLoading = !counts.countsComplete }
             }
             .store(in: &cancellables)
 
@@ -302,7 +348,7 @@ final class MenuBarVM: MenuBarViewModel {
     /// Recomputes every derived list from `latestTasks`/`latestListError`/`latestHasListed`. Mirrors
     /// the old `MenuBarView.body`'s inline `Lineage.sections`/`filter`/`sorted` exactly, including
     /// the undefined-order existing issue (roots/sub-tasks are not given a stabilising sort).
-    private func recompute() {
+    func recompute() {
         isConnected = latestListError == nil && latestHasListed
         connectionLine = useCase.connectionLine
         runningCount = useCase.runningCount

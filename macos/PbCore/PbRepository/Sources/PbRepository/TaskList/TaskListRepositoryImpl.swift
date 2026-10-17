@@ -9,12 +9,14 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private let snapshotRepository: any TaskSnapshotRepository
     private let eventStreamRepository: any EventStreamRepository
     private let finishNotifier: any FinishNotifier
-    private let scheduler: any Scheduling
+    let scheduler: any Scheduling
+    let visibility: any MonitorVisibility
 
-    @Subjected private var tasksValue: [TaskInfo] = []
-    @Subjected private var listErrorValue: ToolError?
+    @Subjected var tasksValue: [TaskInfo] = []
+    @Subjected var listErrorValue: ToolError?
     @Subjected private var hasListedValue = false
     @Subjected private var titlesValue: [String: String] = [:]
+    @Subjected private var countsValue = TaskListCounts(runningCount: 0, countsComplete: false)
 
     // Test seams count completed background passes so tests can await completion instead of sleeping.
     @Subjected private(set) var titleLoadPassCount = 0
@@ -24,6 +26,8 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     @Subjected private(set) var coalescedCallCount = 0
 
     private let safetyPollCountLock = NSLock()
+    /// Counts safety-poll ticks spent hidden and idle (`TaskListRepositoryImpl+SafetyPoll.swift`).
+    let hiddenIdleTicks = HiddenIdleTickCounter()
     private let titlesLock = NSLock()
     private var failedTitleIDs: Set<String> = []
     private let startLock = NSLock()
@@ -33,7 +37,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private var watcher: DirectoryWatcher?
     private var pollToken: AnyCancellable?
 
-    @Subjected private var historyStateValue = HistoryLoadingState()
+    @Subjected var historyStateValue = HistoryLoadingState()
     private let historyLock = NSRecursiveLock()
     private var historyTasks: [String: TaskInfo] = [:]
     private var relatedTasks: [String: TaskInfo] = [:]
@@ -55,7 +59,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private var lastRefreshValue: Date = .distantPast
 
     /// Refresh tasks and the safety-poll queue share this timestamp under a lock.
-    private var lastRefresh: Date {
+    var lastRefresh: Date {
         get { lastRefreshLock.lock(); defer { lastRefreshLock.unlock() }; return lastRefreshValue }
         set { lastRefreshLock.lock(); defer { lastRefreshLock.unlock() }; lastRefreshValue = newValue }
     }
@@ -65,13 +69,15 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         snapshotRepository: any TaskSnapshotRepository,
         eventStreamRepository: any EventStreamRepository,
         finishNotifier: any FinishNotifier,
-        scheduler: any Scheduling
+        scheduler: any Scheduling,
+        visibility: any MonitorVisibility
     ) {
         self.toolEnvironment = toolEnvironment
         self.snapshotRepository = snapshotRepository
         self.eventStreamRepository = eventStreamRepository
         self.finishNotifier = finishNotifier
         self.scheduler = scheduler
+        self.visibility = visibility
     }
 
     public var tasks: [TaskInfo] { tasksValue }
@@ -83,6 +89,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     public func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { $listErrorValue.removeDuplicates().eraseToAnyPublisher() }
     public func hasListedPublisher() -> AnyPublisher<Bool, Never> { $hasListedValue.removeDuplicates().eraseToAnyPublisher() }
     public func titlesPublisher() -> AnyPublisher<[String: String], Never> { $titlesValue.removeDuplicates().eraseToAnyPublisher() }
+    public func countsPublisher() -> AnyPublisher<TaskListCounts, Never> { $countsValue.removeDuplicates().eraseToAnyPublisher() }
 
     // MARK: Startup (MS-LIST-1/F4-01)
 
@@ -106,16 +113,13 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         watcher.start()
         // A dead owner writes nothing, and the tasks folder may not exist yet: a 10 s safety poll
         // while that matters, and an unconditional reconcile every minute regardless (F4-06).
+        // While nothing is visible and nothing needs attention, the cadence stretches to 30 s —
+        // three ticks — since nobody is looking; anything busy (running, unreconciled, erroring,
+        // bootstrap, dead watcher) keeps its 10 s urgency, and a due 60 s reconcile always wins.
         let token = scheduler.scheduleRepeating(every: 10) { [weak self] in
             guard let self else { return }
             Task {
-                let due = self.scheduler.now().timeIntervalSince(self.lastRefresh) >= RefreshTrigger.reconcileInterval
-                let requiresReconciliation = self.tasksValue.contains {
-                    $0.status.isRunning || $0.raw["needs_reconciliation"]?.boolValue == true
-                }
-                if due || requiresReconciliation || self.historyStateValue.bootstrapPending || self.listErrorValue != nil || !self.watcherActive {
-                    await self.refresh()
-                }
+                await self.evaluateSafetyPoll()
                 self.countSafetyPollEvaluation()
             }
         }
@@ -130,7 +134,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         watcherLock.unlock()
     }
 
-    private var watcherActive: Bool {
+    var watcherActive: Bool {
         watcherLock.lock(); defer { watcherLock.unlock() }
         return watcher?.isActive ?? false
     }
@@ -280,8 +284,11 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
                 hasListedValue = true
             }
             updatePreparationRefresh()
-            // Catalog titles are bounded summaries; row population never scans event logs.
-            for id in nextSnapshotRefreshBatch() { await snapshotRepository.refresh(id) }
+            // Catalog titles are bounded summaries; row population never scans event logs. One
+            // batched refresh per leased pass — one `status-batch` process for up to 100 ids that
+            // a pre-batch ctl answers per id (the snapshot repository owns that fallback).
+            let snapshotBatch = nextSnapshotRefreshBatch()
+            if !snapshotBatch.isEmpty { await snapshotRepository.refresh(ids: snapshotBatch) }
             return .success(())
         case .failure(let error):
             listErrorValue = error
@@ -363,12 +370,27 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
     private func publishHistory() {
         historyLock.withLock {
-            tasksValue = historyTasks.values.sorted {
+            let next = historyTasks.values.sorted {
                 let lhs = $0.startedAt ?? .distantPast
                 let rhs = $1.startedAt ?? .distantPast
                 return lhs == rhs ? $0.taskID > $1.taskID : lhs > rhs
             }
+            // An unchanged poll — same count, same order (both sorted with this rule), every entry
+            // equivalent (`duration_seconds` drift on a running task with a start time is the only
+            // difference an unchanged poll produces) — publishes nothing; consumers with
+            // time-derived text tick on their own presentation clock instead.
+            let unchanged = next.count == tasksValue.count
+                && zip(next, tasksValue).allSatisfy { $0.isEquivalent(to: $1) }
+            guard !unchanged else { return }
+            tasksValue = next
         }
+        publishCounts()
+    }
+
+    /// The deduped counts channel (`countsPublisher`) for consumers that need neither the task
+    /// array nor its republish pulse.
+    private func publishCounts() {
+        countsValue = TaskListCounts(runningCount: runningCount, countsComplete: historyStateValue.countsComplete)
     }
 
     private func pruneTerminalHistory(_ terminalPage: TaskHistoryPage?, ids terminalIDs: [String]) {

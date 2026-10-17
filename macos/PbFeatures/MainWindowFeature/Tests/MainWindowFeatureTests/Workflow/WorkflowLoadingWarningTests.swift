@@ -101,7 +101,8 @@ import Testing
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.selectWorkflow(WorkflowRecord(raw: ["name": .string("saved")]))
         await waitUntil { useCase.pendingLoad != nil }
         useCase.finishLoad(["catalog_state": .object(["status": .string("blocked"), "reason": .string("Record too large")])])

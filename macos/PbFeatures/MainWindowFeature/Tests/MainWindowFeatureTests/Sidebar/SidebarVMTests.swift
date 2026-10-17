@@ -63,7 +63,8 @@ import Testing
 
     func makeSUT(
         connectionLine: String = "connecting…", installState: InstallState = .idle, catalog: BackendCatalog = .empty,
-        onSelect: ((MonitorDestination?) -> Void)? = nil, workflowUseCase: (any SidebarWorkflowUseCase)? = nil
+        onSelect: ((MonitorDestination?) -> Void)? = nil, workflowUseCase: (any SidebarWorkflowUseCase)? = nil,
+        visibility: FakeMonitorVisibility = FakeMonitorVisibility(), scheduler: CapturingScheduler = CapturingScheduler()
     ) -> SUT {
         let useCase = MockSidebarUseCase()
         let routing = MockSidebarRouting()
@@ -116,7 +117,8 @@ import Testing
         given(useCase).installAnyway().willReturn(true)
         given(useCase).reset().willReturn()
 
-        let sut = SidebarVM(useCase: useCase, routing: routing, workflowUseCase: workflowUseCase)
+        let sut = SidebarVM(useCase: useCase, routing: routing, workflowUseCase: workflowUseCase,
+                                                 visibility: visibility, scheduler: scheduler)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
             hasListedSubject: hasListedSubject, selectionSubject: selectionSubject, titlesSubject: titlesSubject,
@@ -379,24 +381,22 @@ import Testing
         #expect(abs((sut.runningRows.first?.startedAt ?? .distantPast).timeIntervalSince(start)) < 1)
     }
 
-    @Test func givenTwoIdenticalListings_whenTheClockAdvancesPastAThreshold_thenAgeTextUpdates() async {
-        // given — Codex review round 1, finding 2: the tasks stream must NOT `.removeDuplicates()`,
-        // or a byte-identical republish (the ordinary case while nothing about the task itself has
-        // changed) would never recompute `ageText`, freezing it at whatever it read the last time
-        // the array's own CONTENT changed.
-        let harness = makeSUT()
+    @Test func givenAnEquivalentListing_whenTheInjectedClockAdvancesPastAThreshold_thenTheMinuteTickUpdatesAgeText() async {
+        // given — an equivalent listing no longer republishes, so the explicit minute tick (driven
+        // by the injected clock, which is also the presentation's `now`) keeps ages from freezing.
+        let scheduler = CapturingScheduler()
+        let harness = makeSUT(visibility: FakeMonitorVisibility(), scheduler: scheduler)
         let sut = harness.sut
-        let startedAt = Date().addingTimeInterval(-59.8)
-        let completed = task(id: "t1", status: "completed", startedAt: startedAt)
+        let startedAt = scheduler.now().addingTimeInterval(-59)
         sut.didAppear()
         await sut.waitForPresentation()
-        harness.tasksSubject.send([completed])
+        harness.tasksSubject.send([task(id: "t1", status: "completed", startedAt: startedAt)])
         await waitUntil { sut.recentRows.first?.ageText == "now" }
         await sut.waitForPresentation()
 
-        // when — wait past the 60s boundary, then re-publish the SAME array (identical content).
-        await waitUntil(timeout: 2) { Date().timeIntervalSince(startedAt) >= 60.1 }
-        harness.tasksSubject.send([completed])
+        // when — the clock passes the 60 s boundary and the tick lands. No new listing.
+        scheduler.advance(to: startedAt.addingTimeInterval(61))
+        scheduler.fireOneShot(interval: 60)
 
         // then
         await waitUntil { sut.recentRows.first?.ageText == "1m" }

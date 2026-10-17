@@ -107,7 +107,7 @@ import Testing
         _ = NSApplication.shared
         let harness = SidebarVMTests().makeSUT()
         let coordinator = MainWindowCoordinator(parent: MockCoordinator())
-        let vm = SidebarVM(useCase: harness.useCase, routing: coordinator)
+        let vm = SidebarVM(useCase: harness.useCase, routing: coordinator, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.workflowRuns = [SidebarWorkflowRun(raw: ["workflow_run_id": .string("selection-target"),
             "name": .string("Selected workflow"), "status": .string("completed"), "created_at": .number(Date().timeIntervalSince1970)])]
         let recorder = SelectionTransactionRecorder()

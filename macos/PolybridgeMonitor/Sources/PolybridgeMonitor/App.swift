@@ -66,6 +66,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     var notifyBackendsAppActive: () -> Void = { GlobalValues.backendsRepository.appDidBecomeActive() }
     var openWindowOnStart: () -> Bool = { GlobalValues.settingsRepository.openWindowOnStart }
 
+    // MARK: Monitor visibility (B1) seams
+
+    /// Whether a main window is visible right now: `occlusionState.contains(.visible)` and not
+    /// miniaturized, decided from the injectable `mainWindows()` seam — the same seam
+    /// `applicationShouldHandleReopen` already trusts. Fed through `updateMainWindowVisibility`
+    /// on every occlusion/miniaturize/deminiaturize/close notification, and once at launch.
+    var updateMainWindowVisibility: @MainActor (Bool) -> Void = { GlobalValues.monitorVisibility.setMainWindowVisible($0) }
+
+    /// The notification-registration seam behind the occlusion observer: injectable so a test can
+    /// capture the handler and drive it without a real window server event.
+    var addWindowVisibilityObserver: @MainActor (Notification.Name, @escaping @MainActor (Notification) -> Void) -> NSObjectProtocol
+        = { name, handler in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { note in
+                // Delivered on the main queue, so the main-actor hop is a no-op; `Notification` is
+                // simply not `Sendable`.
+                nonisolated(unsafe) let note = note
+                MainActor.assumeIsolated { handler(note) }
+            }
+        }
+
+    /// The visibility observers registered by `startObservingWindowVisibility()` — kept so the
+    /// delegate's lifetime owns them (block-based observers are owned by the center otherwise).
+    @MainActor private var windowVisibilityObservers: [NSObjectProtocol] = []
+
+    @MainActor private var windowVisibilityObserverNames: [Notification.Name] {
+        [NSWindow.didChangeOcclusionStateNotification, NSWindow.didMiniaturizeNotification,
+         NSWindow.didDeminiaturizeNotification, NSWindow.willCloseNotification]
+    }
+
     // MARK: - Single instance (Monitor piece 9) seams
 
     /// A snapshot of every running application — the raw input to `SingleInstanceGuard`. Plain
@@ -187,6 +216,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Monitor piece 6: the backends catalog's own startup fetch, exactly once — implemented and
         // tested by `PbRepository.BackendsRepositoryImpl.start()`.
         startBackendsCatalog()
+        // B1: the main window's visibility drives polling cadence — observed from launch, and fed
+        // through the same closure-seam pattern as `startTaskListing` above.
+        MainActor.assumeIsolated {
+            startObservingWindowVisibility()
+            // SwiftUI may not have created the window yet; with none to observe the default
+            // (visible) stands, and the first occlusion notification corrects it.
+            if !mainWindows().isEmpty { updateMainWindowVisibilityFromWindows() }
+        }
         // SwiftUI opens the main window at launch. When the launch came from a task starting
         // (`open -g polybridge-monitor://task/<id>`) and the user asked not to have the window
         // come forward, put it away again; a launch by hand keeps it.
@@ -292,6 +329,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// Pulled out of `userNotificationCenter(_:willPresent:withCompletionHandler:)` for the same
     /// reason as `handleNotificationClick(userInfo:)` above.
     func foregroundPresentationOptions() -> UNNotificationPresentationOptions { [.banner, .sound] }
+
+    // MARK: Monitor visibility (B1)
+
+    /// Registers the occlusion/miniaturize/close observers that keep `MonitorVisibility` fed, and
+    /// publishes the current state once. Occlusion changes cover full coverage by other windows
+    /// and Spaces switches — neither of which SwiftUI reports as a view `onDisappear`, which is
+    /// why the polling loops key off this seam rather than view lifecycle.
+    @MainActor
+    func startObservingWindowVisibility() {
+        guard windowVisibilityObservers.isEmpty else { return }
+        windowVisibilityObservers = windowVisibilityObserverNames.map { name in
+            addWindowVisibilityObserver(name) { [weak self] note in
+                // `willClose` fires while the window still reports itself visible, so the closing
+                // window is excluded explicitly rather than trusted to have already left.
+                let closing = name == NSWindow.willCloseNotification ? note.object as? NSWindow : nil
+                self?.updateMainWindowVisibilityFromWindows(excluding: closing)
+            }
+        }
+    }
+
+    /// Computes visibility from the `mainWindows()` seam and forwards it — pulled out so a test
+    /// drives the exact production rule with an injected window list and a captured update.
+    @MainActor
+    func updateMainWindowVisibilityFromWindows(excluding closing: NSWindow? = nil) {
+        let visible = mainWindows().contains { $0 !== closing && $0.occlusionState.contains(.visible) && !$0.isMiniaturized }
+        updateMainWindowVisibility(visible)
+    }
 
     // MARK: - Single instance (Monitor piece 9)
 

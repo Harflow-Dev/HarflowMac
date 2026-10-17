@@ -38,6 +38,92 @@ public struct NullScheduling: Scheduling {
     public func scheduleRepeating(every _: TimeInterval, execute _: @escaping @Sendable () -> Void) -> AnyCancellable { AnyCancellable {} }
 }
 
+// MARK: - Awaited waits
+
+public extension Scheduling {
+
+    /// Suspends for `interval` seconds as measured through this seam — the awaited counterpart of
+    /// `schedule(after:execute:)`, so a polling loop's cadence is testable the same way: a test
+    /// captures the scheduled closure and fires it directly, with no real timer and no fixed sleep
+    /// (`NullScheduling` never fires it, which is why timing tests must inject a capturing fake).
+    /// Returns early with `CancellationError` when the surrounding task is cancelled, and cancels
+    /// the scheduled token so a stopped poll never leaves a dangling timer.
+    func wait(for interval: TimeInterval) async throws {
+        let gate = PollWaitGate()
+        gate.arm(schedule(after: interval) { gate.fire() })
+        try await withTaskCancellationHandler {
+            try await gate.awaitFire()
+        } onCancel: {
+            gate.cancel()
+        }
+    }
+
+    /// Seconds from `now` to the next minute boundary — the alignment delay of a minute-aligned
+    /// presentation tick's first one-shot. Never zero: a scheduler handed a zero delay could
+    /// legitimately fire immediately, which would turn the aligning shot into a double tick.
+    func minuteBoundaryDelay(after now: Date, calendar: Calendar = .current) -> TimeInterval {
+        guard let boundary = calendar.nextDate(after: now, matching: DateComponents(second: 0), matchingPolicy: .nextTime) else {
+            return 60
+        }
+        return max(0.05, boundary.timeIntervalSince(now))
+    }
+}
+
+/// One lock-guarded resume for `Scheduling.wait(for:)`: exactly one of the scheduled fire and the
+/// task-cancellation path may resume the continuation, whichever lands first — the other becomes a
+/// no-op, so a fire racing a cancel can never double-resume.
+private final class PollWaitGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fired = false
+    private var cancelled = false
+    private var token: AnyCancellable?
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    func arm(_ token: AnyCancellable) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.token = token
+    }
+
+    /// The scheduled tick landed. No-op if cancellation already ended the wait.
+    func fire() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !fired, !cancelled else { return }
+        fired = true
+        continuation?.resume()
+        continuation = nil
+    }
+
+    /// The waiting task was cancelled: cancel the scheduled token and end the wait with
+    /// `CancellationError`. No-op if the tick already fired.
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !fired, !cancelled else { return }
+        cancelled = true
+        token?.cancel()
+        continuation?.resume(throwing: CancellationError())
+        continuation = nil
+    }
+
+    func awaitFire() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            lock.lock()
+            if cancelled {
+                lock.unlock()
+                continuation.resume(throwing: CancellationError())
+            } else if fired {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+}
+
 // MARK: - GlobalValues
 
 public extension GlobalValues {

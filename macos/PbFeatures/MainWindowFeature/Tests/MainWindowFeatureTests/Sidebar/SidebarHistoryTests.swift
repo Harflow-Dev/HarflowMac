@@ -34,7 +34,8 @@ struct SidebarHistoryTests {
         // given
         let harness = SidebarVMTests().makeSUT()
         let history = History()
-        let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history)
+        let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.didAppear()
         await vm.waitForPresentation()
         defer { vm.didDisappear() }
@@ -88,7 +89,8 @@ struct SidebarHistoryTests {
         let harness = SidebarVMTests().makeSUT()
         let history = History()
         history.page = try page(["older"], next: "page3")
-        let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history)
+        let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.mergeWorkflowHeaders(try page(["current"], next: "page2").items)
         vm.updateWorkflowHistory(try page(["current"], next: "page2"), advancing: false)
         vm.didSelect(.workflowRun("current"))
@@ -113,7 +115,8 @@ struct SidebarHistoryTests {
         let harness = SidebarVMTests().makeSUT()
         let history = History()
         history.page = try page((100 ..< 150).map { "run-\($0)" })
-        let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history)
+        let vm = SidebarVM(useCase: harness.useCase, routing: harness.routing, historyUseCase: history,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.mergeWorkflowHeaders(try page((0 ..< 100).map { "run-\($0)" }, status: "running").items)
         vm.mergeWorkflowHeaders(try page((100 ..< 150).map { "run-\($0)" }, status: "running").items)
         // when

@@ -18,7 +18,8 @@ import Testing
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).command(.value("get"), options: .any, positionals: .any).willReturn(current)
-        return WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        return WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
     }
 
     @Test func givenUnchangedSavedWorkflow_whenEditingNameInstructionsOrPosition_thenSaveReflectsDirtyState() {
@@ -169,7 +170,8 @@ import Testing
         // given
         let store = store()
         let useCase = ControlledWorkflowValidationUseCase()
-        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         sut.newWorkflow()
         sut.name = "Saved later"
         sut.validatedDefinition = sut.effectiveDefinition
@@ -217,7 +219,8 @@ import Testing
         // given
         let store = store()
         let useCase = ControlledWorkflowValidationUseCase()
-        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         sut.selectWorkflow(WorkflowRecord(raw: ["name": .string("Original")]))
         await waitUntil { useCase.pendingLoad != nil }
@@ -253,7 +256,8 @@ import Testing
         // given
         let store = store()
         let useCase = ControlledWorkflowValidationUseCase()
-        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         sut.newWorkflow()
         sut.name = "Saved later"
         sut.validatedDefinition = sut.effectiveDefinition

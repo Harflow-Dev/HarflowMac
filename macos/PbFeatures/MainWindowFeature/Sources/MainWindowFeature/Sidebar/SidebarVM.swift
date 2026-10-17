@@ -82,7 +82,8 @@ final class SidebarVM: SidebarViewModel {
     @ObservationIgnored var workflowGeneration = UUID()
     @ObservationIgnored let historyUseCase: (any SidebarHistoryUseCase)?
     @ObservationIgnored let workflowUseCase: (any SidebarWorkflowUseCase)?
-    
+    @ObservationIgnored let clock: SidebarPresentationClock
+
     // MARK: - SidebarViewModel Properties
     
     /// Running / Today / Earlier, each holding whole root trees and parallel groups (settled plan D10).
@@ -111,8 +112,7 @@ final class SidebarVM: SidebarViewModel {
     /// `computeEmptyStateMessage()` for the exact rule (Monitor piece 6, Review round 1 item 3).
     /// Written from `SidebarVM+InstallBanner.swift`'s `recomputeInstallBanner()` too (Code review
     /// round 1, finding 4 — the message depends on `installBannerModel`, so a banner change must
-    /// recompute it), so it cannot be `private(set)` — `private` is file-scoped in Swift, same
-    /// reasoning as `installBannerModel` just below.
+    /// recompute it), so it cannot be `private(set)` — `private` is file-scoped, same reasoning as `installBannerModel` below.
     @ObservationIgnored private var renderedEmptyStateMessage: String?
     var emptyStateMessage: String? {
         get { access(keyPath: \.emptyStateMessage); return renderedEmptyStateMessage }
@@ -276,7 +276,7 @@ final class SidebarVM: SidebarViewModel {
     @ObservationIgnored var latestHasListed = false
     @ObservationIgnored var latestCatalog: BackendCatalog
     /// The clock Today/Earlier bucketing reads; tests replace it.
-    @ObservationIgnored var currentDate: () -> Date = { Date() }
+    @ObservationIgnored var currentDate: (() -> Date)?
     @ObservationIgnored var installState: InstallState = .idle
     @ObservationIgnored var lastCheckMessage: String?
     @ObservationIgnored var installAnywayBlockedMessage: String?
@@ -299,11 +299,12 @@ final class SidebarVM: SidebarViewModel {
     // MARK: - Init
 
     init(useCase: any SidebarUseCase, routing: any SidebarRouting, workflowUseCase: (any SidebarWorkflowUseCase)? = nil,
-         historyUseCase: (any SidebarHistoryUseCase)? = nil) {
+         historyUseCase: (any SidebarHistoryUseCase)? = nil, visibility: any MonitorVisibility, scheduler: any Scheduling) {
         self.workflowUseCase = workflowUseCase
         self.historyUseCase = historyUseCase ?? (useCase as? any SidebarHistoryUseCase)
         self.useCase = useCase
         self.routing = routing
+        self.clock = SidebarPresentationClock(visibility: visibility, scheduler: scheduler)
         self.renderedConnectionLine = useCase.connectionLine
         let initialSelection = routing.selection
         self.renderedSelection = initialSelection
@@ -334,6 +335,7 @@ final class SidebarVM: SidebarViewModel {
         if !didSubscribe { subscribeToHistory() }
         subscribeIfNeeded()
         startWorkflowPolling()
+        restartPresentationTick()
         recompute()
     }
 
@@ -351,6 +353,7 @@ final class SidebarVM: SidebarViewModel {
         pendingPresentationInput = nil
         presentationWorker?.cancel()
         stopWorkflowPolling()
+        stopPresentationTick()
         cancellables.removeAll()
         didSubscribe = false
     }

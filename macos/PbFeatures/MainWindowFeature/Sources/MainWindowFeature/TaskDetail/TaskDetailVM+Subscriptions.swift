@@ -55,8 +55,11 @@ extension TaskDetailVM {
                 // would almost never fire and buys nothing. Before membership is known at all
                 // (`conversationMembers` still empty — e.g. a snapshot arriving ahead of the
                 // listing), every publication still applies, so a real change is never dropped.
+                // Duration drift on a running task with a start time is not a change (the snapshot
+                // repository keeps it from publishing at all; this guard covers a dictionary that
+                // changed through some other member).
                 let touchesConversation = conversationMembers.isEmpty
-                    || conversationMembers.contains { latestSnapshots[$0.taskID] != snapshots[$0.taskID] }
+                    || conversationMembers.contains { !latestSnapshots[$0.taskID].isEquivalent(to: snapshots[$0.taskID]) }
                 guard touchesConversation else { return }
                 latestSnapshots = snapshots
                 recompute()

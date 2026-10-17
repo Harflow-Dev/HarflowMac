@@ -131,7 +131,8 @@ import Testing
         let useCase = MockWorkflowUseCase()
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
-        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: helper.store())
+        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: helper.store(),
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         sut.newWorkflow()
         sut.name = "Saved"
         sut.updateNode("planning", key: "instructions", value: .string("Saved edit"))

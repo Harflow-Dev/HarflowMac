@@ -129,14 +129,22 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored private var operation: Task<Void, Never>?
 
     @ObservationIgnored private let routesStartedRun: Bool
+    /// Whether anyone can see the Monitor — pauses this screen's poll while the window is hidden,
+    /// with the showing window waking it for an immediate refresh.
+    @ObservationIgnored private let visibility: any MonitorVisibility
+    /// The poll's 2 s wait runs on the scheduler seam so tests fire it directly, never a real timer.
+    @ObservationIgnored private let scheduler: any Scheduling
 
     init(useCase: any WorkflowUseCase, routing: any WorkflowRouting, parallel: ParallelVM,
-         draftStore: any WorkflowDraftStoring, routesStartedRun: Bool = false) {
+         draftStore: any WorkflowDraftStoring, routesStartedRun: Bool = false,
+         visibility: any MonitorVisibility, scheduler: any Scheduling) {
         self.routesStartedRun = routesStartedRun
         self.draftStore = draftStore
         self.useCase = useCase
         self.routing = routing
         self.parallel = parallel
+        self.visibility = visibility
+        self.scheduler = scheduler
         parallel.setWorkflowTaskIDs([])
     }
 
@@ -212,7 +220,17 @@ final class WorkflowVM: WorkflowViewModel {
                     return
                 }
                 await refresh(generation: generation)
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                // B1: full 2 s cadence while the window is visible; a hidden window parks the poll
+                // in `waitForMainWindowVisible()`, and the showing window wakes it for the next
+                // pass — the immediate refresh on show.
+                do {
+                    if visibility.mainWindowVisible {
+                        try await scheduler.wait(for: 2)
+                    } else {
+                        await visibility.waitForMainWindowVisible()
+                        try Task.checkCancellation()
+                    }
+                } catch { return }
             }
         }
     }

@@ -94,7 +94,8 @@ import Testing
         given(useCase).refreshTasks().willReturn()
         given(useCase).command(.any, options: .any, positionals: .any).willReturn(raw)
         let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.definition = preview.definition
         vm.selectedRun = WorkflowRunModel(raw: raw)
         vm.selectedNodeID = nodeID

@@ -23,7 +23,8 @@ import Testing
         if failSave {
             given(useCase).save(name: .any, definition: .any, expectedRevision: .any, expectedWorkflowID: .any).willThrow(WorkflowUIError.missingRun)
         }
-        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         sut.draftPersistenceSuspended = true
         sut.name = "Saved"
         sut.loadedName = "Saved"
@@ -117,7 +118,8 @@ import Testing
         // given
         let (sut, store, _) = makeVM()
         let controlled = ControlledWorkflowValidationUseCase()
-        let copy = WorkflowVM(useCase: controlled, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+        let copy = WorkflowVM(useCase: controlled, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         copy.draftKey = "saved:Saved"
         #expect(copy.restoreDraft())
         copy.editorConflict = "Changed"
@@ -144,7 +146,7 @@ import Testing
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false), "error": .string("Missing workflow"),
                                                             "missing_references": .array(references), "missing_references_truncated": .bool(true)])
         let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                             draftStore: WorkflowDraftTests().store())
+                             draftStore: WorkflowDraftTests().store(), visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         sut.newWorkflow()
         sut.name = "New"
         // when

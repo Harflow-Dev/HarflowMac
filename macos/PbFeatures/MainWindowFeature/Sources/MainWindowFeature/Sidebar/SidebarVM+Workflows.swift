@@ -2,6 +2,7 @@ import Foundation
 import Mockable
 import MonitorCore
 import PbCommon
+import PbRepository
 import PbUI
 
 // MARK: - SidebarWorkflowUseCase
@@ -42,8 +43,58 @@ struct SidebarWorkflowRun: Equatable, Sendable {
     }
 }
 
+/// The complete recompute input the workflow poll owns — compared before/after each pass so an
+/// unchanged poll (same definitions, same run headers, same loaded-workflow status, same failure
+/// state) skips the recompute it would otherwise run every 2 s.
+struct SidebarWorkflowPollState: Equatable {
+    let definitions: [WorkflowRecord]
+    let runs: [SidebarWorkflowRun]
+    let history: HistoryLoadingState
+    let errorMessage: String?
+}
+
 extension SidebarVM {
     func didTapNewWorkflow() { routing.select(.newWorkflow(UUID())) }
+
+    /// The workflow poll's own presentation state, for the before/after comparison.
+    var workflowPollState: SidebarWorkflowPollState {
+        SidebarWorkflowPollState(definitions: workflowDefinitions, runs: workflowRuns,
+                                history: workflowHistoryState, errorMessage: workflowErrorMessage)
+    }
+
+    /// One workflow-poll interval through the seams: the 2 s wait runs on the scheduler so tests
+    /// fire it directly, and a hidden window parks in `waitForMainWindowVisible()` instead — the
+    /// showing window wakes the loop, and the pass that follows is the immediate refresh on show.
+    func waitWorkflowPollInterval() async throws {
+        if clock.visibility.mainWindowVisible {
+            try await clock.scheduler.wait(for: 2)
+        } else {
+            await clock.visibility.waitForMainWindowVisible()
+            try Task.checkCancellation()
+        }
+    }
+
+    /// One poll interval; false once the surrounding task is cancelled.
+    func waitOrStop() async -> Bool {
+        do { try await waitWorkflowPollInterval() } catch { return false }
+        return true
+    }
+
+    /// Applies one ready snapshot and its dependent reads, recomputing only when the poll's
+    /// complete input changed. False when the poll was superseded mid-way.
+    func applyWorkflowSnapshot(_ snapshot: SidebarWorkflowSnapshot, token: UUID) async -> Bool {
+        let before = workflowPollState
+        workflowDefinitions = snapshot.definitions.map { WorkflowRecord(raw: $0) }
+        mergeWorkflowHeaders(snapshot.runs, replacing: snapshot.page == nil)
+        if let page = snapshot.page { updateWorkflowHistory(page, advancing: false) }
+        await refreshChildInvocationHeaders()
+        workflowErrorMessage = nil
+        publishViewEvent(.incidentResolved(source: "workflow-list"))
+        await refreshLoadedWorkflowStatus(excluding: Set(snapshot.runs.compactMap { $0["workflow_run_id"]?.stringValue }))
+        guard !Task.isCancelled, workflowGeneration == token else { return false }
+        if workflowPollState != before { recompute() }
+        return true
+    }
 
     func startWorkflowPolling() {
         guard workflowPoll == nil, let workflowUseCase else { return }
@@ -59,24 +110,16 @@ extension SidebarVM {
                             workflowErrorMessage = snapshot.catalogState.reason ?? "Workflow catalog is blocked."
                             publishWorkflowIncident(source: "workflow-list", message: workflowErrorMessage ?? "Workflow list unavailable")
                         }
-                        try await Task.sleep(for: .seconds(2))
-                        continue
+                        if await waitOrStop() { continue }
+                        return
                     }
-                    workflowDefinitions = snapshot.definitions.map { WorkflowRecord(raw: $0) }
-                    mergeWorkflowHeaders(snapshot.runs, replacing: snapshot.page == nil)
-                    if let page = snapshot.page { updateWorkflowHistory(page, advancing: false) }
-                    await refreshChildInvocationHeaders()
-                    workflowErrorMessage = nil
-                    publishViewEvent(.incidentResolved(source: "workflow-list"))
-                    await refreshLoadedWorkflowStatus(excluding: Set(snapshot.runs.compactMap { $0["workflow_run_id"]?.stringValue }))
-                    guard !Task.isCancelled, workflowGeneration == token else { return }
-                    recompute()
+                    guard await applyWorkflowSnapshot(snapshot, token: token) else { return }
                 } catch {
                     guard let self, !Task.isCancelled, workflowGeneration == token else { return }
                     workflowErrorMessage = "Workflow list unavailable: \((error as? ToolError)?.message ?? error.localizedDescription)"
                     publishWorkflowIncident(source: "workflow-list", message: workflowErrorMessage ?? "Workflow list unavailable")
                 }
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                guard let self, await waitOrStop() else { return }
             }
         }
     }

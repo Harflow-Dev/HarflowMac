@@ -14,6 +14,9 @@ import PbUtilities
 import SwiftEnvironment
 import SwiftUI
 
+// `GlobalValues.monitorVisibility`/`GlobalValues.scheduling` resolve here at VM-build time —
+// after `ApplicationModules.initialize()` has registered the real values.
+
 // MARK: - MainWindowSheet
 
 /// Mutually exclusive modal destinations presented by the main window.
@@ -296,7 +299,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     private func sharedSidebarVM() -> SidebarVM {
         if let sidebarVM { return sidebarVM }
         let useCase = SidebarViewRepository()
-        let newVM = SidebarVM(useCase: useCase, routing: self, workflowUseCase: useCase)
+        let newVM = SidebarVM(useCase: useCase, routing: self, workflowUseCase: useCase,
+                              visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
         newVM.invocationDetails = { [weak self] id in self?.workflowRunPolling.cached(id: id) }
         sidebarVM = newVM
         return newVM

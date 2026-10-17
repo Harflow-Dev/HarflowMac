@@ -5,7 +5,7 @@ import SwiftUI
 // MARK: - WorkflowNativeActivityModel
 
 /// Native execution activity has no process task or independent terminal handoff.
-struct WorkflowNativeActivityModel {
+struct WorkflowNativeActivityModel: Equatable {
     let executionID: String
     let title: String
     let status: String
@@ -13,6 +13,8 @@ struct WorkflowNativeActivityModel {
     var items: [TimelineItem] = []
     var error: String?
     var hasEarlierActivity = false
+    /// Whether a fetch for this execution has succeeded; a settled execution is pulsed until one has.
+    var loaded = false
 }
 
 // MARK: - WorkflowNativeActivityView
@@ -102,17 +104,39 @@ extension WorkflowVM {
         let old = nativeActivity?.executionID == executionID ? nativeActivity?.items ?? [] : []
         nativeActivity = WorkflowNativeActivityModel(executionID: executionID, title: selectedNode?.name ?? "Workflow node",
             status: activation["status"]?.stringValue ?? "unknown", limited: projection.activityLimited, items: old)
-        nativeActivityTask = Task { [weak self] in
+        nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: executionID)
+    }
+
+    /// A poll that found the run document unchanged: a running subagent's activity feed still
+    /// moves without the run document changing, so refetch it — but never recreate the model,
+    /// cancel a fetch already in flight, or drop `hasEarlierActivity`. Nothing is assigned unless
+    /// the fetched content differs, so an identical poll publishes nothing.
+    func pulseNativeActivity() {
+        // Relies on every cancel site (`updateNativeActivity`, `WorkflowVM.didDisappear`) setting
+        // `nativeActivityTask` to nil; a stale non-nil task would block the pulse forever.
+        guard nativeActivityTask == nil, let run = selectedRun, let current = nativeActivity,
+              !current.loaded || ["running", "launch_requested"].contains(current.status) else { return }
+        nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: current.executionID)
+    }
+
+    private func fetchNativeActivity(runID: String, executionID: String) -> Task<Void, Never> {
+        Task { [weak self] in
             guard let self else { return }
+            defer { if !Task.isCancelled { nativeActivityTask = nil } }
             do {
-                let page = try await useCase.command("inspect", options: ["--view=activity", "--limit=200"], positionals: [run.id, executionID])
-                guard !Task.isCancelled, selectedRun?.id == run.id, nativeActivity?.executionID == executionID else { return }
+                let page = try await useCase.command("inspect", options: ["--view=activity", "--limit=200"], positionals: [runID, executionID])
+                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
                 let events = (page["events"]?.arrayValue ?? []).compactMap { TaskEvent(line: $0.rendered()) }
-                nativeActivity?.items = Timeline.items(from: events)
-                nativeActivity?.hasEarlierActivity = page["has_more"]?.boolValue ?? false
+                let items = Timeline.items(from: events)
+                let more = page["has_more"]?.boolValue ?? false
+                if nativeActivity?.items != items { nativeActivity?.items = items }
+                if nativeActivity?.hasEarlierActivity != more { nativeActivity?.hasEarlierActivity = more }
+                if nativeActivity?.error != nil { nativeActivity?.error = nil }
+                if nativeActivity?.loaded == false { nativeActivity?.loaded = true }
             } catch {
-                guard !Task.isCancelled, selectedRun?.id == run.id, nativeActivity?.executionID == executionID else { return }
-                nativeActivity?.error = "Unable to load subagent activity. " + Self.message(error)
+                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
+                let message = "Unable to load subagent activity. " + Self.message(error)
+                if nativeActivity?.error != message { nativeActivity?.error = message }
             }
         }
     }

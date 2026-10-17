@@ -17,7 +17,8 @@ import Testing
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
         given(useCase).command(.value("get"), options: .any, positionals: .any).willReturn(current)
-        return (WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store), store)
+        return (WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler()), store)
     }
 
     @Test func givenStaleDraft_whenRestored_thenCurrentReadDetectsConflictWithoutLosingEdits() async throws {

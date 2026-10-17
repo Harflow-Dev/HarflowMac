@@ -17,7 +17,8 @@ import Testing
         let routing = MainWindowCoordinator(parent: MockCoordinator())
         routing.selection = .workflowRun("initial-run")
         let history = HeldSidebarHistory()
-        let vm = SidebarVM(useCase: harness.useCase, routing: routing, historyUseCase: history)
+        let vm = SidebarVM(useCase: harness.useCase, routing: routing, historyUseCase: history,
+                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         defer { history.release(); vm.didDisappear() }
         // when — keep lookups suspended so the initial replay cannot be masked by a cached header.
         vm.didAppear()

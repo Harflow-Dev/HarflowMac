@@ -30,6 +30,12 @@ public protocol TaskListRepository: Sendable {
     func hasListedPublisher() -> AnyPublisher<Bool, Never>
     func titlesPublisher() -> AnyPublisher<[String: String], Never>
 
+    /// Catalog counts/readiness on their own deduped channel: with `tasksPublisher` deduping
+    /// duration-drifted snapshots, a consumer that only needs the running count and whether the
+    /// catalog counts are complete (the menu-bar label) subscribes here instead of relying on the
+    /// task array republishing.
+    func countsPublisher() -> AnyPublisher<TaskListCounts, Never>
+
     /// Discovery → first list → watcher start, exactly once (MS-LIST-1/F4-01). A second call is a
     /// no-op.
     func start()
@@ -59,6 +65,19 @@ public protocol TaskListRepository: Sendable {
     var connectionLine: String { get }
 }
 
+/// The catalog-count summary `countsPublisher()` carries: how many tasks are running, and whether
+/// the catalog counts are complete (vs still bootstrapping, when `runningCount` is a provisional
+/// lower bound).
+public struct TaskListCounts: Equatable, Sendable {
+    public var runningCount: Int
+    public var countsComplete: Bool
+
+    public init(runningCount: Int, countsComplete: Bool) {
+        self.runningCount = runningCount
+        self.countsComplete = countsComplete
+    }
+}
+
 public struct HistoryLoadingState: Equatable, Sendable {
     public var catalogState = CatalogState(raw: [:])
     public var nextCursor: String?
@@ -84,6 +103,10 @@ public extension TaskListRepository {
     func conversationPage(sessionID: String, cursor: String?, limit: Int) async throws -> TaskHistoryPage {
         throw ToolError.unsupportedCommand(tool: "polybridge-ctl", command: "task-list-page", detail: "Conversation pages unavailable")
     }
+
+    func countsPublisher() -> AnyPublisher<TaskListCounts, Never> {
+        Just(TaskListCounts(runningCount: runningCount, countsComplete: false)).eraseToAnyPublisher()
+    }
 }
 
 // MARK: - NullTaskListRepository
@@ -98,6 +121,7 @@ public struct NullTaskListRepository: TaskListRepository {
     public func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { Just(nil).eraseToAnyPublisher() }
     public func hasListedPublisher() -> AnyPublisher<Bool, Never> { Just(false).eraseToAnyPublisher() }
     public func titlesPublisher() -> AnyPublisher<[String: String], Never> { Just([:]).eraseToAnyPublisher() }
+    public func countsPublisher() -> AnyPublisher<TaskListCounts, Never> { Just(TaskListCounts(runningCount: 0, countsComplete: false)).eraseToAnyPublisher() }
     public func start() {}
     public func refresh() async {}
     public func refreshAndWait() async -> Result<Void, ToolError> { .success(()) }

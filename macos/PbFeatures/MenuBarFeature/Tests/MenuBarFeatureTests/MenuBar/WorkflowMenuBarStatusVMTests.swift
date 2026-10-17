@@ -22,7 +22,7 @@ import Testing
         let page = try #require(HistoryPage(raw: ["items": .array([.object(run("visible", status: "running"))]),
             "next_cursor": .string("next"), "has_more": .bool(true), "bootstrap_pending": .bool(false),
             "total_active_count": .number(400), "total_active_root_count": .number(250), "total_attention_root_count": .number(12)]))
-        let vm = WorkflowMenuBarStatusVM(useCase: Pages(page: page))
+        let vm = WorkflowMenuBarStatusVM(useCase: Pages(page: page), visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         await vm.refresh()
         // then
@@ -37,7 +37,7 @@ import Testing
             "next_cursor": .null, "has_more": .bool(false), "bootstrap_pending": .bool(true),
             "total_active_count": .number(2), "total_active_root_count": .number(1), "total_attention_root_count": .number(0)]
         let pages = Pages(page: try #require(HistoryPage(raw: raw)))
-        let vm = WorkflowMenuBarStatusVM(useCase: pages)
+        let vm = WorkflowMenuBarStatusVM(useCase: pages, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when / then: the first partial inventory is explicitly unknown.
         await vm.refresh()
         #expect(vm.countsLoading)
@@ -72,7 +72,7 @@ import Testing
             run("running", status: "running"), run("paused", status: "paused"),
             run("attention", status: "needs_attention"), run("done", status: "completed")
         ])
-        let sut = WorkflowMenuBarStatusVM(useCase: useCase)
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         await sut.refresh()
         // then
@@ -88,7 +88,7 @@ import Testing
         let calls = WorkflowPollCalls()
         let row = run("running", status: "running")
         given(useCase).runs().willProduce { calls.increment(); return [row] }
-        let sut = WorkflowMenuBarStatusVM(useCase: useCase)
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         sut.didAppear()
         sut.didAppear()
@@ -107,7 +107,7 @@ import Testing
         // given
         let useCase = MockWorkflowMenuBarUseCase()
         given(useCase).runs().willThrow(ToolError.unsupportedCommand(tool: "polybridge-ctl", command: "workflow-list-runs", detail: "older CLI"))
-        let sut = WorkflowMenuBarStatusVM(useCase: useCase)
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         await sut.refresh()
         // then
@@ -159,7 +159,7 @@ extension WorkflowMenuBarStatusVMTests {
         child["root_workflow_run_id"] = .string("root")
         child["attention_reason"] = .string("Choose an option")
         given(useCase).runs().willReturn([run("root", status: "paused"), child])
-        let sut = WorkflowMenuBarStatusVM(useCase: useCase)
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         await sut.refresh()
         // then
@@ -175,7 +175,7 @@ extension WorkflowMenuBarStatusVMTests {
         var child = run("child", status: "running")
         child["root_workflow_run_id"] = .string("root")
         given(useCase).runs().willReturn([run("root", status: "completed"), child])
-        let sut = WorkflowMenuBarStatusVM(useCase: useCase)
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         await sut.refresh()
         // then

@@ -13,7 +13,8 @@ struct WorkflowLoadingTests {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // when
         vm.selectWorkflow(WorkflowRecord(raw: ["name": .string("saved")]))
         await waitUntil { useCase.pendingLoad != nil }
@@ -73,7 +74,8 @@ struct WorkflowLoadingTests {
         let useCase = ControlledWorkflowValidationUseCase()
         useCase.delayRefresh = true
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run")])
         vm.initialLoadingKind = "run"
         // when
@@ -93,7 +95,8 @@ struct WorkflowLoadingTests {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)))
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.selectWorkflow(WorkflowRecord(raw: ["name": .string("saved")]))
         await waitUntil { useCase.pendingLoad != nil }
         let oldRead = try #require(useCase.pendingLoad)

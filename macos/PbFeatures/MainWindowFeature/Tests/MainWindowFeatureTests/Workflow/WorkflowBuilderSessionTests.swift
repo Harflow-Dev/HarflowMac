@@ -11,7 +11,7 @@ import Testing
 @Suite struct WorkflowBuilderSessionTests {
     func vm(store: WorkflowDraftStore, useCase: BuilderSessionUseCase) -> WorkflowVM {
         WorkflowVM(useCase: useCase, routing: WorkflowTests().makeVM().sut.routing,
-                   parallel: ParallelVMTests().makeSUT().sut, draftStore: store)
+                   parallel: ParallelVMTests().makeSUT().sut, draftStore: store, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
     }
 
     @Test(arguments: ["running", "completed"])

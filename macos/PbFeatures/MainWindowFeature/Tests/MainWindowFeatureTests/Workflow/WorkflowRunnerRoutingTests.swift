@@ -15,7 +15,8 @@ import Testing
         given(useCase).refreshTasks().willReturn()
         given(routing).openWorkflowRun(id: .any).willReturn()
         let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowRunnerDraftStore(), routesStartedRun: true)
+                            draftStore: WorkflowRunnerDraftStore(), routesStartedRun: true,
+                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.validationSuspended = true
         vm.definition = WorkflowVM.starterDefinition()
         vm.name = "Saved workflow"
