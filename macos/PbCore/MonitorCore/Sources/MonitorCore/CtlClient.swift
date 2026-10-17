@@ -33,6 +33,19 @@ public struct CtlClient: Sendable {
     }
 
     func call(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout) async -> Result<CtlDocument, ToolError> {
+        await raw(command, options: options, positionals: positionals, timeout: timeout)
+            .flatMap { output in
+                let decodeStart = MonitorMetrics.begin()
+                defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
+                return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode, command: command)
+            }
+    }
+
+    /// The transport half of `call`, with no document decode: run the argv, classify a timeout,
+    /// and hand back the raw stdout/stderr/exit the command-specific decoder then reads. Split out
+    /// so a command with its own decoder (`status-batch` keeps `tasks` and `errors` siblings) can
+    /// share the transport, timeout and metrics without going through `CtlDocument`.
+    func raw(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout) async -> Result<ProcessOutput, ToolError> {
         let argv = Self.argv(command, options: options, positionals: positionals)
         let transportStart = MonitorMetrics.begin()
         let output = await runner.run(executable: executable, arguments: argv, environment: environment, currentDirectory: nil, timeout: timeout)
@@ -42,10 +55,23 @@ public struct CtlClient: Sendable {
         }
         return output.flatMap { output in
             if output.timedOut { return .failure(.timedOut(tool: "polybridge-ctl \(command)", seconds: timeout)) }
-            let decodeStart = MonitorMetrics.begin()
-            defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
-            return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode, command: command)
+            return .success(output)
         }
+    }
+
+    /// `polybridge-ctl status-batch --task-ids=a,b,... --json`: one process for up to 100 ids
+    /// instead of one `status` per id. Decoded by `CtlDocument.decodeBatchResult`, which keeps the
+    /// per-id `errors` the generic decoder would drop. An `unsupportedCommand` failure (an older
+    /// ctl without the command) is the caller's signal to fall back to per-id `status` calls.
+    public func statusBatch(ids: [String]) async -> Result<StatusBatchResult, ToolError> {
+        guard !ids.isEmpty else { return .success(StatusBatchResult(tasks: [], errors: [:])) }
+        let bounded = Array(ids.prefix(100))
+        return await raw("status-batch", options: ["--task-ids=\(bounded.joined(separator: ","))"])
+            .flatMap { output in
+                let decodeStart = MonitorMetrics.begin()
+                defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
+                return CtlDocument.decodeBatchResult(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode, command: "status-batch")
+            }
     }
 
     public func list() async -> Result<[TaskInfo], ToolError> {

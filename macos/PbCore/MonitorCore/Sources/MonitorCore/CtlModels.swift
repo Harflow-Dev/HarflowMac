@@ -153,6 +153,42 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
         if let startedAt { return max(0, now.timeIntervalSince(startedAt)) }
         return durationSeconds
     }
+
+    /// Polling-dedup equality: equal ignoring `duration_seconds`, but **only** for a running task
+    /// that has a start time — for such a task the duration is recomputed from `startedAt`
+    /// (`elapsed(now:)`), so its drift carries no state. Every other difference (including a
+    /// started-less task's duration, which is the only clock it has) is a real change and must
+    /// republish. Nothing else is stripped: liveness fields are real state.
+    public func isEquivalent(to other: TaskInfo) -> Bool {
+        guard self != other, let startedAt, !status.isTerminal, other.startedAt == startedAt, !other.status.isTerminal else {
+            return self == other
+        }
+        var mine = raw
+        var theirs = other.raw
+        mine["duration_seconds"] = nil
+        theirs["duration_seconds"] = nil
+        return mine == theirs
+    }
+}
+
+public extension Optional where Wrapped == TaskInfo {
+    /// Nil-safe `TaskInfo.isEquivalent(to:)`: two `nil`s are equivalent, a `nil` against a task never is.
+    func isEquivalent(to other: TaskInfo?) -> Bool {
+        switch (self, other) {
+        case (nil, nil): return true
+        case let (mine?, theirs?): return mine.isEquivalent(to: theirs)
+        default: return false
+        }
+    }
+}
+
+public extension Dictionary where Key == String, Value == TaskInfo {
+    /// Per-value `TaskInfo.isEquivalent(to:)` over the same key set — a changed dictionary only
+    /// when some entry genuinely changed, so unchanged polls publish nothing.
+    func isEquivalent(to other: [String: TaskInfo]) -> Bool {
+        guard count == other.count else { return false }
+        return allSatisfy { id, info in other[id].isEquivalent(to: info) }
+    }
 }
 
 /// One backend as `polybridge-ctl backends --json` reports it: its registered name, its binary, and
@@ -331,6 +367,46 @@ public enum TakeoverRefusal {
     }
 }
 
+/// One per-id refusal from `polybridge-ctl status-batch --json` — the same `code` values a
+/// single `status` reports (`unknown_task`, refusal codes, invalid id), kept per task id.
+public struct TaskStatusError: Equatable, Sendable {
+    public let code: String
+    public let message: String
+
+    public init(code: String, message: String) {
+        self.code = code
+        self.message = message
+    }
+
+    init?(_ value: JSONValue) {
+        guard let object = value.objectValue,
+              let code = object["code"]?.stringValue else { return nil }
+        self.code = code
+        self.message = object["message"]?.stringValue ?? ""
+    }
+}
+
+/// A decoded `polybridge-ctl status-batch --json` document: the snapshots that answered and the
+/// per-id errors that did not, kept **together** — the generic `CtlDocument` `tasks` branch drops
+/// sibling keys, which is exactly why this has its own decoder.
+public struct StatusBatchResult: Equatable, Sendable {
+    public let tasks: [TaskInfo]
+    public let errors: [String: TaskStatusError]
+
+    public init(tasks: [TaskInfo], errors: [String: TaskStatusError]) {
+        self.tasks = tasks
+        self.errors = errors
+    }
+}
+
+/// What `CtlDocument.validatedDocument` hands a command-specific decoder: a payload document, or
+/// a well-formed `error` document whose meaning (a result for single-command decodes, a failure
+/// for a batched one) depends on the command.
+enum ValidatedDocument {
+    case document([String: JSONValue])
+    case error(code: String, message: String)
+}
+
 /// A decoded `polybridge-ctl --json` document.
 public enum CtlDocument: Equatable, Sendable {
     case tasks([TaskInfo])
@@ -342,6 +418,31 @@ public enum CtlDocument: Equatable, Sendable {
 
     /// Decode stdout of `polybridge-ctl <command> --json`. `command` is only used in messages.
     public static func decode(stdout: Data, stderr: String, exitCode: Int32, command: String) -> Result<CtlDocument, ToolError> {
+        validatedDocument(stdout: stdout, stderr: stderr, exitCode: exitCode, command: command)
+            .flatMap { validated in
+                switch validated {
+                case .error(let code, let message):
+                    return .success(.error(code: code, message: message))
+                case .document(let document):
+                    if let known = knownDocument(document) {
+                        return .success(known)
+                    }
+                    return .failure(.unreadable(
+                        tool: "polybridge-ctl", exitCode: exitCode,
+                        stderr: "unexpected document: \(JSONValue.object(document).rendered())"
+                    ))
+                }
+            }
+    }
+
+    /// The shared prelude of every ctl decode: stdout → one JSON object, the contract-version
+    /// check, an `error` document (with the usage → `unsupportedCommand` classification an older
+    /// ctl without the command takes), and the argparse-shaped exit-2 refusal. Everything
+    /// command-specific — including whether an `error` document is a *result* (single-command
+    /// decodes) or a *failure* (batched) — is left to the caller.
+    static func validatedDocument(
+        stdout: Data, stderr: String, exitCode: Int32, command: String
+    ) -> Result<ValidatedDocument, ToolError> {
         let tool = "polybridge-ctl"
         guard let document = firstJSONObject(in: stdout) else {
             // An older ctl without this subcommand exits 2 from argparse, and may not know
@@ -365,10 +466,35 @@ public enum CtlDocument: Equatable, Sendable {
             }
             return .success(.error(code: code, message: message))
         }
-        if let known = knownDocument(document) {
-            return .success(known)
-        }
-        return .failure(.unreadable(tool: tool, exitCode: exitCode, stderr: "unexpected document: \(JSONValue.object(document).rendered())"))
+        return .success(.document(document))
+    }
+
+    /// Decode stdout of `polybridge-ctl status-batch --json`: keeps `tasks` and `errors`
+    /// siblings together. An `error`-shaped document or an unsupported command is a failure for
+    /// the whole batch — per-id refusals live in `errors`.
+    public static func decodeBatchResult(
+        stdout: Data, stderr: String, exitCode: Int32, command: String
+    ) -> Result<StatusBatchResult, ToolError> {
+        validatedDocument(stdout: stdout, stderr: stderr, exitCode: exitCode, command: command)
+            .flatMap { validated in
+                switch validated {
+                case .error(let code, let message):
+                    return .failure(.refused(code: code, message: message))
+                case .document(let document):
+                    guard let values = document["tasks"]?.arrayValue else {
+                        return .failure(.unreadable(tool: "polybridge-ctl", exitCode: exitCode, stderr: "status-batch returned no task array"))
+                    }
+                    let tasks = values.compactMap(TaskInfo.init)
+                    guard tasks.count == values.count else {
+                        return .failure(.unreadable(tool: "polybridge-ctl", exitCode: exitCode, stderr: "status-batch returned a malformed task"))
+                    }
+                    var errors: [String: TaskStatusError] = [:]
+                    for (id, value) in document["errors"]?.objectValue ?? [:] {
+                        if let error = TaskStatusError(value) { errors[id] = error }
+                    }
+                    return .success(StatusBatchResult(tasks: tasks, errors: errors))
+                }
+            }
     }
 
     /// The document shapes that carry no error/version concerns of their own — pulled out of
