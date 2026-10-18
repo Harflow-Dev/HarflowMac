@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+*.p12
+*.pfx
+*.p8
+.env
+.env.*
