@@ -42,8 +42,39 @@ class Commands:
 
     def run(self, args, timeout=120, include_stderr=False):
         result = subprocess.run(args, env=self.env, capture_output=True, text=True,
-                                check=True, timeout=timeout)
+                                check=True, timeout=timeout, stdin=subprocess.DEVNULL)
         return result.stdout + (result.stderr if include_stderr else '')
+
+
+def notary_failure_category(error):
+    """Classify captured notary failures without exposing their private details."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        return 'timed-out'
+    parts = []
+    for value in (error.output, error.stderr):
+        if isinstance(value, bytes):
+            parts.append(value.decode('utf-8', errors='replace'))
+        elif isinstance(value, str):
+            parts.append(value)
+    details = '\n'.join(parts)
+    statuses = re.findall(r'\bHTTP\s+status(?:\s+code)?\s*[:=]?\s*([1-5][0-9]{2})\b',
+                          details, re.I)
+    if '401' in statuses:
+        return 'authentication-rejected'
+    if '403' in statuses:
+        return 'authorization-rejected'
+    if any(status.startswith('5') for status in statuses):
+        return 'service-unavailable'
+    transport_markers = (
+        'could not resolve host', 'could not resolve hostname',
+        'the internet connection appears to be offline',
+        'a server with the specified hostname could not be found',
+        'could not connect to the server', 'network is unreachable',
+        'connection refused', 'connection reset by peer',
+    )
+    if any(marker in details.lower() for marker in transport_markers):
+        return 'network-failure'
+    return 'command-failed'
 
 
 def validate_runner(env):
@@ -148,19 +179,33 @@ def preflight(env=None, commands=None):
         if not re.search(r'^TeamIdentifier=' + re.escape(env['HARFLOW_APPLE_TEAM_ID']) + r'$', details, re.M):
             raise PreflightError()
         print('preflight probe-signing ok', flush=True)
-        stage = 'notary-authentication'
+        stage = 'notary-credential-validation'
         profile = 'harflow-preflight-' + secrets.token_hex(16)
         commands.run([XCRUN, 'notarytool', 'store-credentials', profile, '--apple-id', env['HARFLOW_NOTARY_APPLE_ID'], '--password', env['HARFLOW_NOTARY_APP_PASSWORD'], '--team-id', env['HARFLOW_APPLE_TEAM_ID'], '--keychain', str(keychain), '--validate'])
+        print('preflight notary-credential-validation ok', flush=True)
+        stage = 'notary-history-access'
         history = commands.run([XCRUN, 'notarytool', 'history', '--keychain-profile', profile, '--keychain', str(keychain), '--output-format', 'json'])
         with os.fdopen(os.open(str(scratch / 'history.json'), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as handle:
             handle.write(history)
-        parsed = json.loads(history)
+        print('preflight notary-history-access ok', flush=True)
+        stage = 'notary-response-validation'
+        try:
+            parsed = json.loads(history)
+        except json.JSONDecodeError:
+            raise PreflightError() from None
         if not isinstance(parsed, dict) or not isinstance(parsed.get('history'), list):
             raise PreflightError()
-        print('preflight notary-authentication ok', flush=True)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        print('preflight notary-response-validation ok', flush=True)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         failed = True
-        print('preflight ' + stage + ' failed', flush=True)
+        suffix = ''
+        if stage in ('notary-credential-validation', 'notary-history-access'):
+            suffix = ': ' + notary_failure_category(error)
+        print('preflight ' + stage + ' failed' + suffix, flush=True)
+    except PreflightError:
+        failed = True
+        suffix = ': invalid-response' if stage == 'notary-response-validation' else ''
+        print('preflight ' + stage + ' failed' + suffix, flush=True)
     except Exception:
         failed = True
         print('preflight ' + stage + ' failed', flush=True)

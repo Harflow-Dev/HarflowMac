@@ -48,7 +48,25 @@ Open [Apple signing credential preflight](https://github.com/Harflow-Dev/Harflow
 
 The script uses a private temporary directory, an ephemeral keychain and random password. It snapshots the runner's user keychain search list before creating/prepending its keychain and restores the exact saved list in cleanup, including partial prepend failures. No login/default keychain contents or trust settings are changed. Import permits codesign access only; partition access is limited to `apple-tool:,apple:,codesign:`. The P12 file is deleted immediately after import and remaining temporary files are removed in cleanup.
 
-Exactly one valid Developer ID Application identity for the configured team must be present. The generated probe uses secure timestamping and hardened runtime, strict signature verification, Developer ID authority and exact TeamIdentifier checks. Notarytool validates a temporary keychain credential profile and reads history JSON; it never submits a payload. No history details, identity names/fingerprints, Team ID, Apple ID, or captured tool errors are printed. Public output contains stage labels and success/failure only. A cleanup or search-list restoration failure fails the run with a generic stage error; the disposable runner teardown remains the final backup.
+Exactly one valid Developer ID Application identity for the configured team must be present. The generated probe uses secure timestamping and hardened runtime, strict signature verification, Developer ID authority and exact TeamIdentifier checks. Notarytool validates a temporary keychain credential profile and reads history JSON; it never submits a payload. No history details, identity names/fingerprints, Team ID, Apple ID, or captured tool errors are printed. Public output contains stage labels, success/failure and the fixed notary failure categories below only. A cleanup or search-list restoration failure fails the run with a generic stage error; the disposable runner teardown remains the final backup.
+
+Notary checks report three separate stages: `notary-credential-validation` validates the stored credential profile, `notary-history-access` requests history and writes the private temporary `history.json`, and `notary-response-validation` checks the returned JSON and its history-list shape. The history file stays private and is removed during cleanup. Tool stdin is closed to prevent interactive prompts.
+
+Notary subprocess failures use `preflight <stage> failed: <category>`. Categories describe the observed signal and do not establish the underlying cause:
+
+| Category | Interpretation |
+| --- | --- |
+| `timed-out` | The command exceeded its local deadline; this alone does not identify an authentication or service problem. |
+| `authentication-rejected` | Captured output explicitly reported HTTP status 401; check the configured credentials. |
+| `authorization-rejected` | Captured output explicitly reported HTTP status 403; check account/team access. |
+| `service-unavailable` | Captured output explicitly reported an HTTP 5xx status; a service or intermediary may have failed. |
+| `network-failure` | Captured output contained a recognized transport failure marker; investigate connectivity. |
+| `command-failed` | The notary command failed without a recognized signal. |
+| `invalid-response` | JSON parsing or the expected history-list shape failed during response validation. |
+
+Timeout takes precedence over output, followed by 401, 403, 5xx, transport markers, and the generic command category. Bare numbers are not treated as HTTP statuses. Unexpected exceptions and history-file write failures retain plain stage failure output. Raw command arguments, captured output and exception details are never printed, including workflow command text.
+
+After pushing a diagnostic change, start a **new** workflow dispatch on main and approve its environment deployment. Rerunning an older workflow run uses its original commit SHA and will not exercise the updated script.
 
 Passwords are passed as arguments to trusted Apple tools and can be visible to other processes on the disposable single-tenant hosted VM. This is not encryption at runtime or a promise of zero exposure. Do not run this script with real credentials on a developer machine. Local tests mock subprocesses and credentials; no local signing/keychain mutation is required.
 
