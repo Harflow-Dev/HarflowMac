@@ -161,6 +161,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 .padding(.horizontal, PbRadius.Metrics.spacing16)
 .padding(.vertical, PbRadius.Metrics.spacing8)
                         }
+                        if task.raw["caller_approvals"]?.boolValue == true || (task.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 {
+                            CallerApprovalPanel(taskID: viewModel.taskID, polls: task.status == .running)
+                        }
                         header(task)
                         tabPicker
                         column

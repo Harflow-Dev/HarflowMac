@@ -62,6 +62,7 @@ protocol WorkflowViewModel: ViewModel {
     var nodes: [WorkflowNodeModel] { get }
     var edges: [WorkflowEdgeModel] { get }
     var backendIDs: [String] { get }
+    var callerApprovalBackends: Set<String> { get }
     var selectedNode: WorkflowNodeModel? { get }
     var selectedEdge: WorkflowEdgeModel? { get }
     var canSave: Bool { get }
@@ -134,3 +135,6 @@ extension WorkflowViewModel {
     func preserveDraftAndReload() {}
     func replaceMissingReferences(_: String, with _: String) {}
 }
+
+@MainActor
+extension WorkflowViewModel { var callerApprovalBackends: Set<String> { [] } }

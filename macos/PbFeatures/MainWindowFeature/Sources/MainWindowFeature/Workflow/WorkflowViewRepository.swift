@@ -30,6 +30,11 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     }
 
     func refreshTasks() async { await taskList.refresh() }
+    var callerApprovalBackends: Set<String> {
+        backends.catalog.state == .available
+            ? Set(backends.catalog.entries.filter(\.supportsCallerApprovals).map(\.backend)) : []
+    }
+
     var backendIDs: [String] { backends.catalog.entries.map(\.backend) }
     func modelOptions(backend: String) async -> [ModelOption] { await models.models(for: backend) }
 }

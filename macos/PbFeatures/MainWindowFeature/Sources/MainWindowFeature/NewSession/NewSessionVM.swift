@@ -81,6 +81,18 @@ final class NewSessionVM: NewSessionViewModel {
     private(set) var name = ""
     private(set) var model = ""
     private(set) var turnLimit = ""
+    private(set) var callerApprovals = false
+    private(set) var approvalNote: String?
+    private var approvalBackends: Set<String> = []
+    var supportsCallerApprovals: Bool { approvalBackends.contains(backend) }
+    var callerApprovalError: String? {
+        guard callerApprovals else { return nil }
+        if !supportsCallerApprovals { return "Caller approvals are unavailable for this agent." }
+        if !["write_in_repo", "publish"].contains(freedom) { return "Caller approvals require repository write or publish access." }
+        if !turnLimit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Caller approvals require an empty turn limit." }
+        return nil
+    }
+
     /// The chosen reasoning effort; empty means the agent's default.
     private(set) var effort = ""
     private(set) var errorText: String?
@@ -144,7 +156,7 @@ final class NewSessionVM: NewSessionViewModel {
 
     var canStart: Bool {
         !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && turnLimitError == nil
+            && turnLimitError == nil && callerApprovalError == nil
     }
 
     /// The typed turn limit: blank means the agent's default; anything else must be a whole number
@@ -221,6 +233,7 @@ final class NewSessionVM: NewSessionViewModel {
     func didChangeName(_ value: String) { name = value }
     func didChangeModel(_ value: String) { model = value }
     func didChangeTurnLimit(_ value: String) { turnLimit = value }
+    func didChangeCallerApprovals(_ value: Bool) { callerApprovals = value && supportsCallerApprovals; approvalNote = nil }
     func didChangeEffort(_ value: String) { effort = effortOptions.contains(value) ? value : "" }
     func didTapRecentRepo(_ path: String) { repo = path }
 
@@ -279,13 +292,17 @@ final class NewSessionVM: NewSessionViewModel {
             reasoningEffort: effortOptions.contains(effort) ? effort : nil,
             title: trimmedName.isEmpty ? nil : trimmedName,
             model: showsModel && !trimmedModel.isEmpty ? trimmedModel : nil,
-            maxTurns: showsTurnLimit ? parsedTurnLimit : nil
+            maxTurns: showsTurnLimit ? parsedTurnLimit : nil, callerApprovals: callerApprovals
         )
     }
 
     /// A model typed or picked for one agent means nothing to another, so it is cleared (like effort
     /// for vibe), and the new agent's suggestions are requested.
     private func agentDidChange() {
+        if callerApprovals, !supportsCallerApprovals {
+            callerApprovals = false
+            approvalNote = "Caller approvals were cleared because the selected agent does not support them."
+        }
         model = ""
         modelOptions = []
         loadModels()
@@ -332,6 +349,7 @@ final class NewSessionVM: NewSessionViewModel {
     /// catalog; otherwise fall to the catalog's first entry — or to nothing at all when the catalog
     /// is empty, which is what disables Start.
     private func applyCatalog(_ catalog: BackendCatalog) {
+        approvalBackends = catalog.state == .available ? Set(catalog.entries.filter(\.supportsCallerApprovals).map(\.backend)) : []
         let (options, unavailableNote) = Self.computeAgentOptions(from: catalog)
         agentOptions = options
         agentListUnavailableNote = unavailableNote

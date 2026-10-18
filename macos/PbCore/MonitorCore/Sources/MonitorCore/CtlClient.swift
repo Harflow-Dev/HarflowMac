@@ -176,10 +176,11 @@ public struct RunRequest: Equatable, Sendable {
     /// The backend's own model name; `nil` or empty keeps the agent's default.
     public var model: String?
     public var maxTurns: Int?
+    public var callerApprovals: Bool
 
     public init(
         backend: String, repo: String, prompt: String, freedom: String? = nil, reasoningEffort: String? = nil, group: String? = nil,
-        title: String? = nil, model: String? = nil, maxTurns: Int? = nil
+        title: String? = nil, model: String? = nil, maxTurns: Int? = nil, callerApprovals: Bool = false
     ) {
         self.backend = backend
         self.repo = repo
@@ -190,6 +191,7 @@ public struct RunRequest: Equatable, Sendable {
         self.title = title
         self.model = model
         self.maxTurns = maxTurns
+        self.callerApprovals = callerApprovals
     }
 
     /// `--opt=value` form throughout, so a prompt starting with `-` can never be read as an option.
@@ -201,6 +203,7 @@ public struct RunRequest: Equatable, Sendable {
         if let title, !title.isEmpty { args.append("--title=\(title)") }
         if let model, !model.isEmpty { args.append("--model=\(model)") }
         if let maxTurns { args.append("--max-turns=\(maxTurns)") }
+        if callerApprovals { args += ["--caller-approvals", "--monitor"] }
         return args
     }
 }

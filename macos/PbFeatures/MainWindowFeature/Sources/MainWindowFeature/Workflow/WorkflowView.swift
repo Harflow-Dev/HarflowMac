@@ -432,6 +432,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                         .buttonStyle(QuietButtonStyle())
 .padding(.horizontal, PbRadius.Metrics.spacing16)
                 }
+                if CallerApprovalPanel.containsOptIn(.object(run.raw)) || (run.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 {
+                    CallerApprovalPanel(workflowRunID: run.id, polls: ["running", "needs_attention", "needs_input"].contains(run.status))
+                }
                 WorkflowChildLinks(groups: WorkflowChildLinkGroup.build(run: run), onOpen: viewModel.openRun)
                     .padding(.horizontal, PbRadius.Metrics.spacing16)
                     .padding(.vertical, PbRadius.Metrics.spacing4)

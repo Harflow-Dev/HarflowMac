@@ -75,7 +75,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 ),
                 backendIDs: viewModel.backendIDs,
                 modelChoices: viewModel.modelChoices,
-                loadModels: viewModel.loadModels
+                loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends
             )
             SectionLabel(text: "Instructions")
             TextEditor(text: Binding(get: {
@@ -282,7 +282,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     ),
                     backendIDs: viewModel.backendIDs,
                     modelChoices: viewModel.modelChoices,
-                    loadModels: viewModel.loadModels
+                    loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends
                 )
                 executionSetting(node)
                 sessionSetting(node)

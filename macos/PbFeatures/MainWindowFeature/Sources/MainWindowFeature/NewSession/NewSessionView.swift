@@ -24,6 +24,11 @@ protocol NewSessionViewModel: ViewModel {
     var name: String { get }
     var model: String { get }
     var turnLimit: String { get }
+    var callerApprovals: Bool { get }
+    var supportsCallerApprovals: Bool { get }
+    var callerApprovalError: String? { get }
+    var approvalNote: String? { get }
+    func didChangeCallerApprovals(_ value: Bool)
     /// Why the Turn limit blocks Start, shown under the field; `nil` when it doesn't.
     var turnLimitError: String? { get }
     var effort: String { get }
@@ -258,6 +263,12 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         }
     }
 
+    private var approvalDescription: String {
+        viewModel.callerApprovalError ?? viewModel.approvalNote ?? (viewModel.supportsCallerApprovals
+            ? "Exact action once; requires uncapped repository write or publish access. Existing restrictions still apply."
+            : "Unsupported or unmeasured for this agent.")
+    }
+
     private var advancedFields: some View {
         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: PbRadius.Metrics.spacing12, verticalSpacing: PbRadius.Metrics.spacing16) {
             if viewModel.showsEffort {
@@ -281,6 +292,18 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                 GridRow {
                     Text("Model").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                     Text(note).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                }
+            }
+            GridRow {
+                Text("Caller approvals").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+                VStack(alignment: .leading) {
+                    Toggle("Ask before each eligible action", isOn: Binding(
+                        get: { viewModel.callerApprovals }, set: { viewModel.didChangeCallerApprovals($0) }
+                    ))
+                        .disabled(!viewModel.supportsCallerApprovals)
+                    Text(approvalDescription)
+                        .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
                 }
             }
             if viewModel.showsTurnLimit {
@@ -349,3 +372,12 @@ private struct NewSessionPreview: View {
     NewSessionPreview(viewModel: NewSessionViewModelMock.sample).preferredColorScheme(.dark)
 }
 #endif
+
+@MainActor
+extension NewSessionViewModel {
+    var callerApprovals: Bool { false }
+    var supportsCallerApprovals: Bool { false }
+    var callerApprovalError: String? { nil }
+    var approvalNote: String? { nil }
+    func didChangeCallerApprovals(_ value: Bool) {}
+}

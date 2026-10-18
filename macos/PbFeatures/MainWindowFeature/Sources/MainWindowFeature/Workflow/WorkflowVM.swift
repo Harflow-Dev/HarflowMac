@@ -18,10 +18,12 @@ protocol WorkflowUseCase: Sendable {
     func artifactPage(runID: String, executionID: String, cursor: String?) async -> Result<WorkflowArtifactPage, ToolError>
     func refreshTasks() async
     var backendIDs: [String] { get }
+    var callerApprovalBackends: Set<String> { get }
     func modelOptions(backend: String) async -> [ModelOption]
 }
 
 extension WorkflowUseCase {
+    var callerApprovalBackends: Set<String> { [] }
     func artifactPage(runID _: String, executionID _: String, cursor _: String?) async -> Result<WorkflowArtifactPage, ToolError> {
         .failure(.unreadable(tool: "polybridge-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
     }

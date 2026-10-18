@@ -32,7 +32,8 @@ extension WorkflowInspector {
                 .accessibilityLabel("Worker instructions")
             WorkflowAgentEditor(candidate: Binding(get: { current(node).raw["agent"]?.objectValue ?? [:] }, set: {
                 viewModel.updateNode(node.id, key: "agent", value: .object($0))
-            }), backendIDs: viewModel.backendIDs, modelChoices: viewModel.modelChoices, loadModels: viewModel.loadModels)
+            }), backendIDs: viewModel.backendIDs, modelChoices: viewModel.modelChoices,
+                loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends)
             SectionLabel(text: "When called")
             Picker("Access", selection: standaloneString(node, "freedom", default: "read_only")) {
                 ForEach(WorkflowAccess.allowedLevels(for: "task"), id: \.self) { Text(WorkflowAccess.title($0)).tag($0) }

@@ -61,9 +61,17 @@ struct WorkflowAgentEditor: View {
     let modelChoices: [String: [ModelChoiceModel]]
     let loadModels: (String) -> Void
     var allowsFallbacks = true
+    var callerApprovalBackends: Set<String> = []
+    @State private var approvalNote: String?
 
     private var backend: String { candidate["backend"]?.stringValue ?? "" }
     private var allBackends: [String] { Array(Set(backendIDs + [backend].filter { !$0.isEmpty })).sorted() }
+
+    private var approvalDescription: String {
+        candidate["max_turns"] == nil || candidate["max_turns"] == .null
+            ? "Exact action once. Requires non-native repository write or publish access; existing restrictions still apply."
+            : "Caller approvals require an empty turn limit. Clear the explicit cap before starting."
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
@@ -113,6 +121,19 @@ struct WorkflowAgentEditor: View {
                     }
                 }
             }
+            Toggle("Caller approvals: ask before each eligible action", isOn: Binding(
+                get: { candidate["caller_approvals"]?.boolValue ?? false },
+                set: { candidate["caller_approvals"] = .bool($0) }
+            ))
+                .disabled(!callerApprovalBackends.contains(backend))
+            if let approvalNote { Text(approvalNote).font(.pb(.caption)).foregroundStyle(Color.secondaryText) }
+            if candidate["caller_approvals"]?.boolValue == true {
+                Text(approvalDescription)
+                    .font(.pb(.caption))
+.foregroundStyle(Color.secondaryText)
+            } else if !callerApprovalBackends.contains(backend) {
+                Text("Caller approvals are unsupported or unmeasured for this agent.").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
+            }
             if allowsFallbacks {
                 fallbacks
             }
@@ -127,7 +148,11 @@ struct WorkflowAgentEditor: View {
     private func binding(_ key: String) -> Binding<String> {
         Binding(get: { candidate[key]?.stringValue ?? "" }, set: {
             if key == "backend" {
-                candidate = WorkflowCandidateSettings.replacingBackend(in: candidate, with: $0)
+                let wasEnabled = candidate["caller_approvals"]?.boolValue == true
+                candidate = WorkflowCandidateSettings.replacingBackend(in: candidate, with: $0, supportsCallerApprovals: callerApprovalBackends.contains($0))
+                if wasEnabled, candidate["caller_approvals"]?.boolValue != true {
+                    approvalNote = "Caller approvals were cleared because the selected agent does not support them."
+                }
                 return
             }
             candidate[key] = $0.isEmpty ? nil : .string($0)
@@ -166,7 +191,8 @@ struct WorkflowAgentEditor: View {
                             backendIDs: backendIDs,
                             modelChoices: modelChoices,
                             loadModels: loadModels,
-                            allowsFallbacks: false
+                            allowsFallbacks: false,
+                            callerApprovalBackends: callerApprovalBackends
                         )
                     }
                     .padding(PbRadius.Metrics.spacing10)

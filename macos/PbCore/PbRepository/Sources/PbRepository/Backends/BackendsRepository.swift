@@ -25,10 +25,12 @@ public struct BackendCatalogEntry: Equatable, Identifiable, Sendable {
     public var id: String { backend }
     public let backend: String
     public let installed: Bool?
+    public let supportsCallerApprovals: Bool
 
-    public init(backend: String, installed: Bool?) {
+    public init(backend: String, installed: Bool?, supportsCallerApprovals: Bool = false) {
         self.backend = backend
         self.installed = installed
+        self.supportsCallerApprovals = supportsCallerApprovals
     }
 }
 

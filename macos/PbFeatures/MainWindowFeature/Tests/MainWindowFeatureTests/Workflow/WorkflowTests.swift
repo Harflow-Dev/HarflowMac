@@ -554,10 +554,10 @@ import Testing
     }
 
     @Test(arguments: ["claude", "vibe", "codex", "opencode", "antigravity"])
-    func givenWorkflowCandidate_whenDefaultingTurnBudget_thenOnlyCapableBackendsUse100(_ backend: String) {
+    func givenWorkflowCandidate_whenDefaultingTurnBudget_thenImplicitCapIsAbsent(_ backend: String) {
         let candidate = WorkflowCandidateSettings.make(backend: backend)
+        #expect(candidate["max_turns"] == nil)
         let supported = ["claude", "vibe"].contains(backend)
-        #expect(candidate["max_turns"] == (supported ? .number(100) : nil))
         #expect(WorkflowCandidateSettings.turnLimitText(candidate) == (supported ? "100" : ""))
         #expect(candidate["max_attempts"] == nil)
         #expect(candidate["max_transitions"] == nil)
@@ -572,7 +572,9 @@ import Testing
         let unsupported = WorkflowCandidateSettings.replacingBackend(in: switched, with: "codex")
         #expect(unsupported["max_turns"] == nil)
         #expect(WorkflowCandidateSettings.turnLimitText(unsupported).isEmpty)
-        #expect(WorkflowCandidateSettings.replacingBackend(in: unsupported, with: "claude")["max_turns"] == .number(100))
+        let restored = WorkflowCandidateSettings.replacingBackend(in: unsupported, with: "claude")
+        #expect(restored["max_turns"] == nil)
+        #expect(WorkflowCandidateSettings.turnLimitText(restored) == "100")
     }
 
 }

@@ -79,7 +79,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             candidate: Binding(get: { viewModel.generationAgent }, set: { viewModel.generationAgent = $0 }),
                             backendIDs: viewModel.backendIDs,
                             modelChoices: viewModel.modelChoices,
-                            loadModels: viewModel.loadModels
+                            loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends
                         )
                     } else {
                         if let preview = viewModel.launchPreview {
@@ -97,7 +97,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                                 backendIDs: viewModel.backendIDs,
                                 modelChoices: viewModel.modelChoices,
                                 loadModels: viewModel.loadModels,
-                                allowsFallbacks: false
+                                allowsFallbacks: false, callerApprovalBackends: viewModel.callerApprovalBackends
                             )
                             Text("Saved fallback agents remain in effect.").font(.pb(.caption)).foregroundStyle(Color.secondaryText)
                         }

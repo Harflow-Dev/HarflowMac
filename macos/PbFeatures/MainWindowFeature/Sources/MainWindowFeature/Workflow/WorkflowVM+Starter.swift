@@ -3,8 +3,9 @@ import MonitorCore
 // MARK: - WorkflowVM Starter
 
 extension WorkflowVM {
+    var callerApprovalBackends: Set<String> { useCase.callerApprovalBackends }
     static func candidateOptions(_ candidate: [String: JSONValue]) -> [String] {
-        ["backend", "model", "reasoning_effort", "max_turns"].compactMap { key in
+        let options: [String] = ["backend", "model", "reasoning_effort", "max_turns"].compactMap { key -> String? in
             guard let value = candidate[key], value != .null else {
                 return nil
             }
@@ -14,6 +15,7 @@ extension WorkflowVM {
             }
             return "--\(key.replacingOccurrences(of: "_", with: "-"))=\(text)"
         }
+        return options + (candidate["caller_approvals"]?.boolValue == true ? ["--caller-approvals"] : [])
     }
 
     static func message(_ error: Error) -> String { (error as? ToolError)?.message ?? error.localizedDescription }

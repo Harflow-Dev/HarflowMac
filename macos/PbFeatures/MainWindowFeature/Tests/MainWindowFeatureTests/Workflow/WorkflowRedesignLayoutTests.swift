@@ -16,14 +16,14 @@ import Testing
         let vm = WorkflowOnDemandPreview.make(orchestrator: true)
         let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: CGSize(width: 1440, height: 900))
         defer { vm.didDisappear(); fixture.close() }
-        await fixture.settle { fixture.element("Standalone nodes, no connections") != nil }
+        await fixture.settle { fixture.element("Standalone nodes, outside the workflow path") != nil }
 
         // then
         #expect(fixture.element("Always present") != nil)
         #expect(fixture.element("Add on-demand node") != nil)
         #expect(fixture.element("API researcher, pending") != nil)
         #expect(fixture.element("Input to API researcher") == nil)
-        let standalone = try #require(fixture.element("Standalone nodes, no connections"))
+        let standalone = try #require(fixture.element("Standalone nodes, outside the workflow path"))
         let bar = try #require(fixture.frame(standalone))
         let canvas = try #require(fixture.canvasScroll)
         let canvasFrame = canvas.convert(canvas.bounds, to: fixture.window.contentView)
@@ -36,7 +36,7 @@ import Testing
         let vm = WorkflowOnDemandPreview.make(run: true, status: "succeeded")
         let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: CGSize(width: 1440, height: 900))
         defer { vm.didDisappear(); fixture.close() }
-        await fixture.settle { fixture.element("Standalone nodes, no connections") != nil }
+        await fixture.settle { fixture.element("Standalone nodes, outside the workflow path") != nil }
 
         // when
         vm.selectStandalone("preview-run:research")
@@ -72,7 +72,7 @@ import Testing
             if !run { vm.isEditing = true }
             let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: CGSize(width: 1440, height: 900), appearance: appearance)
             defer { vm.didDisappear(); fixture.close() }
-            await fixture.settle { fixture.element("Standalone nodes, no connections") != nil }
+            await fixture.settle { fixture.element("Standalone nodes, outside the workflow path") != nil }
             if run {
                 vm.selectStandalone("preview-run:research")
                 await fixture.settle { fixture.element("#2 · Confirm the refresh endpoint's error response.") != nil }
@@ -89,7 +89,7 @@ import Testing
             size: CGSize(width: 1440, height: 900), appearance: .dark
         )
         defer { boundaryVM.didDisappear(); boundaryFixture.close() }
-        await boundaryFixture.settle { boundaryFixture.element("Standalone nodes, no connections") != nil }
+        await boundaryFixture.settle { boundaryFixture.element("Standalone nodes, outside the workflow path") != nil }
         for (id, suffix) in [("start", "editor-start-dark"), ("end", "editor-end-dark")] {
             boundaryVM.selectNode(id)
             await boundaryFixture.settle { boundaryFixture.hasStableRenderedFrame }
@@ -115,7 +115,7 @@ import Testing
             )
             defer { builderVM.didDisappear(); builderFixture.close() }
             await builderFixture.settle {
-                builderFixture.element("Standalone nodes, no connections") != nil
+                builderFixture.element("Standalone nodes, outside the workflow path") != nil
                     && builderFixture.element("When to call") != nil
             }
             await builderFixture.settle { builderFixture.hasStableRenderedFrame }

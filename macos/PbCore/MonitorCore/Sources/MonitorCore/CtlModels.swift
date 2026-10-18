@@ -199,11 +199,13 @@ public struct BackendAvailability: Equatable, Sendable {
     public let backend: String
     public let binary: String
     public let installed: Bool?
+    public let supportsCallerApprovals: Bool
 
-    public init(backend: String, binary: String, installed: Bool?) {
+    public init(backend: String, binary: String, installed: Bool?, supportsCallerApprovals: Bool = false) {
         self.backend = backend
         self.binary = binary
         self.installed = installed
+        self.supportsCallerApprovals = supportsCallerApprovals
     }
 
     public init?(_ value: JSONValue) {
@@ -215,6 +217,7 @@ public struct BackendAvailability: Equatable, Sendable {
         // `.boolValue` itself already answers `nil` for a missing key or a non-bool value — no
         // `?? false` fallback here, so either case reads as "unknown," never "confirmed absent."
         installed = object["installed"]?.boolValue
+        supportsCallerApprovals = object["capabilities"]?.objectValue?["supports_caller_approvals"]?.boolValue ?? false
     }
 }
 
