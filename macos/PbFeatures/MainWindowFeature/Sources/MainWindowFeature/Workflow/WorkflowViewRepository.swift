@@ -7,6 +7,7 @@ import SwiftEnvironment
 
 @MainActor
 final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
+    @GlobalEnvironment(\.workflowArtifactRepository) private var artifacts
     @GlobalEnvironment(\.workflowRepository) private var repository
     @GlobalEnvironment(\.taskListRepository) private var taskList
     @GlobalEnvironment(\.backendsRepository) private var backends
@@ -22,6 +23,10 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
 
     func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue] {
         try await repository.save(name: name, definition: definition, expectedRevision: expectedRevision, expectedWorkflowID: expectedWorkflowID)
+    }
+
+    func artifactPage(runID: String, executionID: String, cursor: String?) async -> Result<WorkflowArtifactPage, ToolError> {
+        await artifacts.page(runID: runID, executionID: executionID, cursor: cursor)
     }
 
     func refreshTasks() async { await taskList.refresh() }

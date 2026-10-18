@@ -12,6 +12,7 @@ public struct TaskArtifact: Equatable, Sendable, Identifiable {
     public let registeredAt: String
     public let registrar: String
     public let availability: String
+    public let workflow: WorkflowArtifactBinding?
     public let observedAt: String
     public var id: String { taskID + ":" + artifactID }
 
@@ -27,6 +28,12 @@ public struct TaskArtifact: Equatable, Sendable, Identifiable {
               let availability = observation["state"]?.stringValue,
               ["available", "deleted", "changed", "unavailable"].contains(availability),
               let observedAt = observation["observed_at"]?.stringValue else { return nil }
+        if let value = raw["workflow"] {
+            guard let object = value.objectValue, let binding = WorkflowArtifactBinding(raw: object, taskID: taskID) else { return nil }
+            workflow = binding
+        } else {
+            workflow = nil
+        }
         self.artifactID = artifactID
         self.taskID = taskID
         self.kind = kind

@@ -34,6 +34,9 @@ protocol WorkflowViewModel: ViewModel {
     var validationMessage: String? { get }
     var validationDependencies: [String: JSONValue] { get }
     var nativeSubagentsAvailable: Bool { get }
+    var artifacts: WorkflowArtifactModel { get }
+    func prepareArtifacts(runID: String, executionID: String)
+    func loadArtifacts()
     var nativeActivity: WorkflowNativeActivityModel? { get }
     var launchPreview: WorkflowPermissionPreview? { get }
     var launchPreviewMessage: String? { get }
@@ -108,6 +111,9 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
+    var artifacts: WorkflowArtifactModel { WorkflowArtifactModel() }
+    func prepareArtifacts(runID _: String, executionID _: String) {}
+    func loadArtifacts() {}
     var goal: String { get { "" } set { _ = newValue } }
     func reviseGoal(_: String, runID _: String, expectedRevision _: Int) {}
     var readFailureText: String? { nil }

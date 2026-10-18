@@ -127,11 +127,11 @@ struct CtlDecodingTests {
 
     @Test
     func givenAnUnsupportedSchemaVersion_whenDecoded_thenItIsRefused() {
-        // given / when — v13 is outside `ctlContractVersions` ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}).
-        guard case .failure(.unsupportedVersion(_, let v)) = decode(#"{"v": 13, "tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
+        // given / when — v14 is outside `ctlContractVersions` ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}).
+        guard case .failure(.unsupportedVersion(_, let v)) = decode(#"{"v": 14, "tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
         // then
-        #expect(v == "13")
-        let message = ToolError.unsupportedVersion(tool: "polybridge-ctl", version: "13").message
+        #expect(v == "14")
+        let message = ToolError.unsupportedVersion(tool: "polybridge-ctl", version: "14").message
         #expect(message.contains("understands versions 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10"))
         guard case .failure(.unsupportedVersion(_, let none)) = decode(#"{"tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
         #expect(none == "none")
@@ -140,7 +140,7 @@ struct CtlDecodingTests {
     @Test
     func givenSupportedCtlContractVersions_whenDecoded_thenAllAreAccepted() {
         // given / when / then — older documents lack optional fields and remain readable.
-        #expect(ctlContractVersions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+        #expect(ctlContractVersions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
         guard case .success(.tasks) = decode(#"{"v": 1, "tasks": []}"#) else { Issue.record("v1 should decode"); return }
         guard case .success(.tasks) = decode(#"{"v": 2, "tasks": []}"#) else { Issue.record("v2 should decode"); return }
         guard case .success(.tasks) = decode(#"{"v": 3, "tasks": []}"#) else { Issue.record("v3 should decode"); return }
@@ -151,6 +151,14 @@ struct CtlDecodingTests {
         guard case .success(.tasks) = decode(#"{"v": 8, "tasks": []}"#) else { Issue.record("v8 should decode"); return }
         guard case .success(.tasks) = decode(#"{"v": 6, "tasks": []}"#) else { Issue.record("v6 should decode"); return }
         guard case .success(.tasks) = decode(#"{"v": 4, "tasks": []}"#) else { Issue.record("v4 should decode"); return }
+    }
+
+    @Test
+    func givenCurrentCtlContractVersion_whenDecoded_thenItIsAccepted() {
+        guard case .success(.tasks) = decode(#"{"v": 13, "tasks": []}"#) else {
+            Issue.record("v13 should decode")
+            return
+        }
     }
 
     @Test
@@ -405,12 +413,12 @@ struct CtlClientTests {
         // given
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let ctl = try writeFakeTool(dir, name: "polybridge-ctl", body: #"echo '{"v": 13, "tasks": []}'"#)
+        let ctl = try writeFakeTool(dir, name: "polybridge-ctl", body: #"echo '{"v": 14, "tasks": []}'"#)
         // when
         let result = await CtlClient(executable: ctl, environment: [:]).list()
         // then
         guard case .failure(let error) = result, case .unsupportedVersion = error else { Issue.record("expected .unsupportedVersion, got \(result)"); return }
-        #expect(error.message.contains("version 13"), "\(error.message)")
+        #expect(error.message.contains("version 14"), "\(error.message)")
     }
 
     @Test

@@ -21,6 +21,25 @@ extension WorkflowInspector {
         childSessionDetails(activation)
     }
 
+    @ViewBuilder
+    private func selectedArtifacts(_ node: WorkflowNodeModel) -> some View {
+    if let run = viewModel.selectedRun,
+       let activation = run.activations.last(where: { activation in
+           activation["node_id"]?.stringValue == node.id
+               && (viewModel.selectedActivationID.map { activation["id"]?.stringValue == $0 }
+                   ?? (activation["role"]?.stringValue == "node"))
+       }), let executionID = activation["id"]?.stringValue {
+        WorkflowArtifactsView(model: viewModel.artifacts, load: viewModel.loadArtifacts)
+            .task(id: run.id + ":" + executionID) { viewModel.prepareArtifacts(runID: run.id, executionID: executionID) }
+    }
+    }
+
+    private func attemptLabel(_ activation: [String: JSONValue], index: Int) -> String {
+        let label = activation["role"]?.stringValue == "orchestrator" ? "Decision" : "Attempt"
+        let attempt = activation["attempt_in_visit"]?.intValue ?? index + 1
+        return "\(label) \(attempt) · \(activation["status"]?.stringValue ?? "")"
+    }
+
     func nodeHistory(_ node: WorkflowNodeModel) -> some View {
         VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing12) {
             SectionLabel(text: node.name)
@@ -30,14 +49,13 @@ extension WorkflowInspector {
 .foregroundStyle(Color.secondaryText)
             }
             Text(node.instructions).font(.pb(.secondary)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
+            selectedArtifacts(node)
             Button("Show latest steps") { viewModel.selectActivation(nil) }.buttonStyle(QuietButtonStyle())
             ForEach(Array((viewModel.selectedRun?.activations.filter {
                 $0["node_id"]?.stringValue == node.id
             } ?? []).enumerated()), id: \.offset) { index, activation in
                 VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing8) {
-                    let label = activation["role"]?.stringValue == "orchestrator" ? "Decision" : "Attempt"
-                    let attempt = activation["attempt_in_visit"]?.intValue ?? index + 1
-                    Text("\(label) \(attempt) · \(activation["status"]?.stringValue ?? "")")
+                    Text(attemptLabel(activation, index: index))
                         .font(.pb(.secondary, weight: .semibold))
                     if let error = activation["result_error"]?.stringValue {
                         Text(error).font(.pb(.secondary)).foregroundStyle(Color.warningFG).textSelection(.enabled)

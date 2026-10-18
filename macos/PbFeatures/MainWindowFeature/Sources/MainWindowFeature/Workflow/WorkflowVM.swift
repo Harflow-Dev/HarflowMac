@@ -15,9 +15,16 @@ protocol WorkflowUseCase: Sendable {
     func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue]
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
     func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue]
+    func artifactPage(runID: String, executionID: String, cursor: String?) async -> Result<WorkflowArtifactPage, ToolError>
     func refreshTasks() async
     var backendIDs: [String] { get }
     func modelOptions(backend: String) async -> [ModelOption]
+}
+
+extension WorkflowUseCase {
+    func artifactPage(runID _: String, executionID _: String, cursor _: String?) async -> Result<WorkflowArtifactPage, ToolError> {
+        .failure(.unreadable(tool: "polybridge-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
+    }
 }
 
 // MARK: - WorkflowRouting
@@ -73,6 +80,9 @@ final class WorkflowVM: WorkflowViewModel {
     var readFailureText: String? { errorText.flatMap { readFailures.values.contains($0) ? $0 : nil } }
     var validationDependencies: [String: JSONValue] = [:]
     var nativeSubagentsAvailable = false
+    var artifacts = WorkflowArtifactModel()
+    @ObservationIgnored var artifactTask: Task<Void, Never>?
+    @ObservationIgnored var artifactGeneration = UUID()
     var nativeActivity: WorkflowNativeActivityModel?
     @ObservationIgnored var nativeActivityTask: Task<Void, Never>?
 
@@ -236,6 +246,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        clearArtifacts()
         if initialLoadingKind == "editor", let key = draftKey, key.hasPrefix("saved:") {
             pendingEditorName = String(key.dropFirst(6))
         }
