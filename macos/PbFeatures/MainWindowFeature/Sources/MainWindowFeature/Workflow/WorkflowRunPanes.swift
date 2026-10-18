@@ -13,10 +13,11 @@ enum WorkflowRunLayout {
     static let inspectorIdeal: CGFloat = PbRadius.Metrics.workflowRunPanelIdealWidth
     static let inspectorMaximum: CGFloat = PbRadius.Metrics.workflowRunPanelMaximumWidth
 
-    static func minimums(height: CGFloat) -> (canvas: CGFloat, activity: CGFloat) {
+    static func minimums(height: CGFloat, canvasChromeHeight: CGFloat = 0) -> (canvas: CGFloat, activity: CGFloat) {
         let available = max(0, height - 2)
-        let scale = min(1, available / (canvasMinimum + activityMinimum))
-        return (canvasMinimum * scale, activityMinimum * scale)
+        let chrome = min(available, max(0, canvasChromeHeight))
+        let scale = min(1, (available - chrome) / (canvasMinimum + activityMinimum))
+        return (chrome + canvasMinimum * scale, activityMinimum * scale)
     }
 }
 
@@ -26,6 +27,7 @@ enum WorkflowRunLayout {
 struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
     let isGraph: Bool
     var isLoading = false
+    var canvasChromeHeight: CGFloat = 0
     @State private var splitSnapshot = WorkflowRunSplitSnapshot()
     @ViewBuilder let canvas: () -> Canvas
     @ViewBuilder let inspector: () -> Inspector
@@ -34,7 +36,7 @@ struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
     var body: some View {
         if isGraph {
             GeometryReader { viewport in
-                let minimums = WorkflowRunLayout.minimums(height: viewport.size.height)
+                let minimums = WorkflowRunLayout.minimums(height: viewport.size.height, canvasChromeHeight: canvasChromeHeight)
                 WorkflowPaneViewport {
                 VSplitView {
                     HSplitView {

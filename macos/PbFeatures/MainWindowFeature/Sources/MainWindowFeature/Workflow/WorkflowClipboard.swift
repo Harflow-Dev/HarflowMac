@@ -8,6 +8,8 @@ enum WorkflowClipboard {
     static let type = NSPasteboard.PasteboardType("dev.polybridge.workflow-nodes")
 
     static func payload(definition: [String: JSONValue], selection: Set<String>) -> [String: JSONValue]? {
+        let standalone = WorkflowJSON.objects(definition["on_demand_nodes"]).filter { selection.contains($0["id"]?.stringValue ?? "") }
+        if !standalone.isEmpty { return ["on_demand_nodes": .array(standalone.map(JSONValue.object))] }
         let nodes = WorkflowJSON.objects(definition["nodes"]).filter { selection.contains($0["id"]?.stringValue ?? "") }
         guard !nodes.isEmpty else { return nil }
         let ids = Set(nodes.compactMap { $0["id"]?.stringValue })
@@ -15,7 +17,28 @@ enum WorkflowClipboard {
         return ["nodes": .array(nodes.map(JSONValue.object)), "connections": .array(edges.map { .object($0.raw) })]
     }
 
+    private static func pastedStandalone(_ payload: [String: JSONValue], into definition: [String: JSONValue])
+        -> (definition: [String: JSONValue], ids: Set<String>)? {
+        let standalone = WorkflowJSON.objects(payload["on_demand_nodes"])
+        if !standalone.isEmpty {
+            var ids: Set<String> = []
+            let copies = standalone.map { entry -> JSONValue in
+                var raw = entry
+                let id = "specialist_" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+                ids.insert(id)
+                raw["id"] = .string(id)
+                for key in ["position", "role", "connections", "type"] { raw.removeValue(forKey: key) }
+                return .object(raw)
+            }
+            var result = definition
+            result["on_demand_nodes"] = .array((definition["on_demand_nodes"]?.arrayValue ?? []) + copies)
+            return (result, ids)
+        }
+        return nil
+    }
+
     static func pasted(_ payload: [String: JSONValue], into definition: [String: JSONValue]) -> (definition: [String: JSONValue], ids: Set<String>)? {
+        if let result = pastedStandalone(payload, into: definition) { return result }
         let existing = WorkflowJSON.nodes(definition)
         var terminalTypes = Set(existing.filter { ["start", "end"].contains($0.type) }.map(\.type))
         let originals = WorkflowJSON.nodes(payload).filter { node in
@@ -81,7 +104,9 @@ extension WorkflowVM {
               let payload = try? JSONDecoder().decode(JSONValue.self, from: data).objectValue,
               let result = WorkflowClipboard.pasted(payload, into: definition) else { return }
         definition = result.definition
-        selectNodes(result.ids)
+        if let id = result.ids.first, WorkflowJSON.objects(definition["on_demand_nodes"]).contains(where: { $0["id"]?.stringValue == id }) {
+            selectStandalone(id)
+        } else { selectNodes(result.ids) }
     }
 }
 

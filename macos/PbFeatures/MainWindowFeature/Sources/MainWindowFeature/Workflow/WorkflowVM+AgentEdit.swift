@@ -70,8 +70,8 @@ extension WorkflowVM {
         var edited = proposal
         edited["name"] = .string(name)
         edited.removeValue(forKey: "revision")
-        definition = edited
-        selectedNodeID = nil
+        definition = WorkflowStandalone.normalized(edited)
+        selectedNodeID = WorkflowStandalone.orchestratorID
         selectedEdgeID = nil
         connectionSourceID = nil
         appliedProposalIDs.insert(run.id)

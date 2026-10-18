@@ -96,19 +96,8 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             HStack(spacing: PbRadius.Metrics.spacing12) {
                 VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing2) {
                     HStack(spacing: PbRadius.Metrics.spacing10) {
-                    if viewModel.selectedRun == nil, viewModel.isEditing, viewModel.loadedName.isEmpty {
-                        TextField("Workflow name", text: $viewModel.name, prompt: Text("New workflow"))
-                            .textFieldStyle(.roundedBorder)
-                            .font(.pb(.title, weight: .semibold))
-        .frame(minWidth: PbRadius.Metrics.summaryTileWidth,
-                idealWidth: PbRadius.Metrics.workflowInspectorMinimumWidth,
-                maxWidth: PbRadius.Metrics.formPreviewWidth)
-                            .accessibilityLabel("Workflow name")
-                            .help("Enter a workflow name to save")
-                    } else {
-                        Text(viewModel.selectedRun?.name ?? (viewModel.isEditing ? viewModel.name : "Workflows"))
-                            .font(.pb(.title, weight: .semibold))
-                    }
+                    Text(viewModel.selectedRun?.name ?? (viewModel.isEditing ? (viewModel.name.isEmpty ? "New workflow" : viewModel.name) : "Workflows"))
+                        .font(.pb(.title, weight: .semibold))
                     if let run = viewModel.selectedRun {
                         WorkflowRecoveryBadge(run: run, isEligible: recoveryEligibleRunID != nil,
                                               focus: $recoveryBadgeFocused, onOpen: { recoveryOverlay.openFromBadge() })
@@ -270,6 +259,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 // The flush-pane amendment (user override of SPEC §6.3) drops the canvas's outer
                 // workflowCanvasInset: it sits edge-to-edge as before the redesign. The token
                 // still pads the tray's own horizontal chrome below.
+                WorkflowStandaloneBar(viewModel: viewModel)
                 canvas
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 stepTray
@@ -385,12 +375,16 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 Divider()
             }
             GeometryReader { viewport in
-                let minimums = WorkflowBuilderLayout.minimums(height: viewport.size.height)
+                let standaloneHeight = WorkflowStandaloneLayout.height
+                let minimums = WorkflowBuilderLayout.minimums(height: viewport.size.height - standaloneHeight)
                 WorkflowPaneViewport {
                 VSplitView {
-                    HSplitView {
+                    VStack(spacing: PbRadius.Metrics.zero) {
+                        WorkflowStandaloneBar(viewModel: viewModel)
+                        HSplitView {
                         canvas.frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity)
-                        if viewModel.selectedNode != nil || viewModel.selectedEdge != nil {
+                        if viewModel.selectedNode != nil || viewModel.selectedEdge != nil
+                            || viewModel.selectedOnDemandNode != nil || viewModel.isOrchestratorSelected {
                             WorkflowInspector(viewModel: viewModel)
 
         .frame(minWidth: PbRadius.Metrics.workflowInspectorMinimumWidth,
@@ -398,7 +392,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 maxWidth: PbRadius.Metrics.workflowInspectorMaximumWidth)
                         }
                     }
-                    .frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity, minHeight: minimums.canvas, idealHeight: viewport.size.height * 0.42)
+                    }
+                    .frame(minWidth: PbRadius.Metrics.zero, maxWidth: .infinity,
+                           minHeight: minimums.canvas + standaloneHeight,
+                           idealHeight: max(standaloneHeight, viewport.size.height * 0.42))
                     .clipped()
                     GeometryReader { taskPane in
                         if let run = viewModel.selectedRun, let taskID = run.builderTaskID, let builderTaskView {
@@ -494,7 +491,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     @ViewBuilder
     private var activity: some View {
         Group {
-            if let native = viewModel.nativeActivity {
+            if let node = viewModel.selectedOnDemandNode, let run = viewModel.selectedRun {
+                WorkflowOnDemandCallsView(node: node, calls: run.onDemandCalls.filter { $0.nodeID == node.id }, onOpenTask: viewModel.openOwnerTask)
+            } else if let native = viewModel.nativeActivity {
                 WorkflowNativeActivityView(model: native)
             } else {
                 WorkflowActivityColumns(
@@ -535,8 +534,13 @@ private extension WorkflowView {
                 .pbFadeIn()
             }
             Divider()
-            WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading) {
-                if isLoading { WorkflowLoadingCanvas() } else { canvas.pbFadeIn() }
+            WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading, canvasChromeHeight: WorkflowStandaloneLayout.height) {
+                if isLoading { WorkflowLoadingCanvas() } else {
+                    VStack(spacing: PbRadius.Metrics.zero) {
+                        WorkflowStandaloneBar(viewModel: viewModel)
+                        canvas
+                    }.pbFadeIn()
+                }
             } inspector: {
                 if isLoading { WorkflowLoadingInspector(isRun: true) } else { runSidebar.pbFadeIn() }
             } activity: {

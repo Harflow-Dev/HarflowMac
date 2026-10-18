@@ -73,10 +73,10 @@ extension WorkflowVM {
             name = draft["name"]?.stringValue ?? ""
             loadedName = draft["loaded_name"]?.stringValue ?? ""
             revision = draft["revision"]?.intValue ?? 0
-            savedDefinition = draft["saved_definition"]?.objectValue ?? [:]
-            definition = restored
+            savedDefinition = WorkflowStandalone.normalized(draft["saved_definition"]?.objectValue ?? [:])
+            definition = WorkflowStandalone.normalized(restored)
             builderDispatchPending = restoredBuilderDispatchPending(draft, key: key)
-            selectedNodeID = nil
+            selectedNodeID = WorkflowStandalone.orchestratorID
             selectedEdgeID = nil
             isEditing = true
             parallel.setWorkflowTaskIDs([])

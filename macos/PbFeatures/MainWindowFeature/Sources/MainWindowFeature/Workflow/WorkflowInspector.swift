@@ -21,6 +21,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         }
         // The flush-pane amendment (user override of SPEC §6.3): a plain cardFill panel
         // edge-to-edge, as before the redesign — no rounded surround or border.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.cardFill)
     }
 
@@ -32,15 +33,17 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 if let policy = viewModel.selectedRun?.schedulingPolicyDescription {
                     Text(policy).font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
                 }
-                if let node = viewModel.selectedNode {
+                if let node = viewModel.selectedOnDemandNode {
+                    onDemandEditor(node).disabled(viewModel.selectedRun != nil || viewModel.isBusy)
+                } else if let node = viewModel.selectedNode {
                     if node.isParallelBoundary {
                         parallelEditor(node)
                     } else if let run = viewModel.selectedRun, !run.isBuilder {
                         nodeHistory(node)
                     } else if node.type == "workflow" {
                         workflowNodeEditor(node).disabled(viewModel.selectedRun != nil || viewModel.isBusy)
-                    } else if node.type == "start" {
-                        workflowEditor.disabled(viewModel.selectedRun != nil)
+                    } else if ["start", "end"].contains(node.type) {
+                        Text("\(WorkflowRole.title(node.type)) has no settings.").foregroundStyle(Color.secondaryText)
                     } else {
                         nodeEditor(node).disabled(viewModel.selectedRun != nil || viewModel.isBusy)
                     }
@@ -59,59 +62,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
 
     private var workflowEditor: some View {
         VStack(alignment: .leading, spacing: PbRadius.Metrics.spacing16) {
-            SectionLabel(text: "Workflow")
-            TextField("Workflow name", text: Binding(get: { inspectorDefinition["name"]?.stringValue ?? viewModel.name }, set: {
-                    guard viewModel.selectedRun == nil else { return }
-                    viewModel.name = $0
-                }))
-.textFieldStyle(.roundedBorder)
-                .disabled(!viewModel.loadedName.isEmpty)
-            TextField(
-                "Description",
-                text: Binding(get: { inspectorDefinition["description"]?.stringValue ?? "" }, set: {
-                    guard viewModel.selectedRun == nil else { return }
-                    viewModel.definition["description"] = .string($0)
-                }),
-                axis: .vertical
-            )
-                // Bounded scope (§6.3): the multiline description's own dedicated scroll view,
-                // when one exists; a quiet no-op otherwise, the shared field editor untouched.
-                .scrollChromeScope()
-                .textFieldStyle(.roundedBorder)
-            if let start = WorkflowJSON.objects(inspectorDefinition["nodes"]).first(where: { $0["type"]?.stringValue == "start" }),
-               let startID = start["id"]?.stringValue {
-                SectionLabel(text: "Workflow prompt (optional)")
-                TextEditor(text: Binding(get: {
-                    WorkflowJSON.objects(inspectorDefinition["nodes"]).first { $0["id"]?.stringValue == startID }?["prompt"]?.stringValue ?? ""
-                }, set: {
-                    guard viewModel.selectedRun == nil else { return }
-                    viewModel.updateNode(startID, key: "prompt", value: .string($0))
-                }))
-                    .font(.pb(.body))
-                    // Bounded scope (§6.3): the prompt editor's own scroll view, when one exists.
-                    .scrollChromeScope()
-                    .frame(minHeight: PbRadius.Metrics.recoveryEditorMaximumHeight)
-                    .overlay(alignment: .topLeading) {
-                        // The existing helper text becomes the empty editor's overlay and the
-                        // field's accessibility hint; the binding is unchanged.
-                        let prompt = WorkflowJSON.objects(inspectorDefinition["nodes"])
-                            .first { $0["id"]?.stringValue == startID }?["prompt"]?
-.stringValue ?? ""
-                        if prompt.isEmpty {
-                            Text("Describe the workflow's purpose to guide the orchestrator.")
-                                .font(.pb(.body))
-                                .foregroundStyle(Color.tertiaryText)
-                                .padding(.top, PbRadius.Metrics.spacing8)
-                                .padding(.leading, PbRadius.Metrics.spacing6)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
-                    .accessibilityLabel("Workflow prompt")
-                    .accessibilityHint("Describe the workflow's purpose to guide the orchestrator.")
-            }
-            SectionLabel(text: "Orchestrator")
+            Text("Orchestrator").font(.pb(.title, weight: .semibold))
+            Text("Every workflow has one. It can't be removed.").font(.pb(.secondary)).foregroundStyle(Color.secondaryText)
+            SectionLabel(text: "Agent")
             WorkflowAgentEditor(
                 candidate: Binding(
                     get: { inspectorDefinition["orchestrator"]?.objectValue ?? ["backend": .string("codex")] },
@@ -124,6 +77,21 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 modelChoices: viewModel.modelChoices,
                 loadModels: viewModel.loadModels
             )
+            SectionLabel(text: "Instructions")
+            TextEditor(text: Binding(get: {
+                inspectorDefinition["orchestrator"]?["instructions"]?.stringValue
+                    ?? WorkflowJSON.objects(inspectorDefinition["nodes"]).first { $0["type"]?.stringValue == "start" }?["prompt"]?.stringValue ?? ""
+            }, set: { text in
+                guard viewModel.selectedRun == nil else { return }
+                var agent = inspectorDefinition["orchestrator"]?.objectValue ?? [:]
+                agent["instructions"] = .string(text)
+                viewModel.definition["orchestrator"] = .object(agent)
+            }))
+            .font(.pb(.body))
+.scrollChromeScope()
+            .frame(minHeight: PbRadius.Metrics.recoveryEditorMaximumHeight)
+            .overlay(RoundedRectangle(cornerRadius: PbRadius.row).stroke(Color.cardBorder))
+            .accessibilityLabel("Orchestrator instructions")
             SectionLabel(text: "Limits")
             WorkflowFormGroup {
                 WorkflowFormRow(label: "Decision attempts") {
@@ -136,6 +104,10 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     WorkflowCompactStepper(label: "Inspections",
                                            value: intBinding("max_inspections", default: 20),
                                            range: 1 ... 1000)
+                }
+                WorkflowFormDivider()
+                WorkflowFormRow(label: "On-demand calls per decision") {
+                    WorkflowCompactStepper(label: "On-demand calls per decision", value: intBinding("max_on_demand_calls", default: 5), range: 1 ... 50)
                 }
                 WorkflowFormDivider()
                 WorkflowFormRow(label: "Parallel agents") {
@@ -464,7 +436,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         }
     }
 
-    private func nodeString(_ node: WorkflowNodeModel, _ key: String, default fallback: String = "") -> Binding<String> {
+    func nodeString(_ node: WorkflowNodeModel, _ key: String, default fallback: String = "") -> Binding<String> {
         Binding(get: { viewModel.selectedNode?.raw[key]?.stringValue ?? fallback }, set: {
             viewModel.updateNode(node.id, key: key, value: $0.isEmpty && key == "join_id" ? nil : .string($0))
         })

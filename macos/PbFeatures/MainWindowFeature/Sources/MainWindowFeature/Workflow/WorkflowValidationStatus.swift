@@ -8,13 +8,15 @@ struct WorkflowValidationStatus<VM: WorkflowViewModel>: View {
 
     init(viewModel: VM) { _viewModel = State(initialValue: viewModel) }
 
+    private var stepCount: Int { viewModel.nodes.filter { ["agent", "workflow"].contains($0.type) }.count }
+
     var body: some View {
         HStack(spacing: PbRadius.Metrics.spacing12) {
             if let conflict = viewModel.editorConflict {
                 Text(conflict).font(.pb(.caption)).lineLimit(2).help(conflict)
                 Button("Save copy and reload") { viewModel.preserveDraftAndReload() }
             } else if let message = viewModel.validationMessage, !message.isEmpty {
-                Text(message)
+                Text(message + " · \(stepCount) steps · \(viewModel.standaloneNodes.count) on demand")
                     .font(.pb(.caption))
                     .foregroundStyle(Color.secondaryText)
                     .lineLimit(1)

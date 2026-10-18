@@ -15,7 +15,7 @@ import Foundation
 /// `setupContractVersion` (`SetupClient.swift`) and `eventLogVersion` (`Events.swift`) — because a
 /// shape change to one of the three must never silently widen what the app accepts from the
 /// others.
-public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 
 public enum TaskStatus: Equatable, Hashable, Sendable {
     case running, completed, failed, timedOut, cancelled

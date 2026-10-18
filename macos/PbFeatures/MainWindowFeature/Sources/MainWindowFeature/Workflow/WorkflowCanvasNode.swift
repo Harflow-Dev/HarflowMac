@@ -28,11 +28,14 @@ struct WorkflowCanvasNode: View {
     /// 75% treatment (SPEC §6.4). The editor's identically-named placeholder status stays a
     /// plain solid card. A defaulted presentation input; call sites without a run keep it off.
     var showsExecutionStates = false
+    var standalone = false
+    var standaloneSubtitle: String?
     @GestureState private var dragOrigin: CGPoint?
 
     private var nodeSize: CGSize { WorkflowCanvasGeometry.size(node) }
     private var canEditTitle: Bool { isEditable && ["agent", "workflow"].contains(node.type) }
     private var displayTitle: String { ["agent", "workflow"].contains(node.type) ? node.name : WorkflowRole.title(node.type) }
+    private var isOrchestrator: Bool { standalone && node.id == WorkflowStandalone.orchestratorID }
     private var isCompact: Bool { ["start", "end", "parallel_start", "parallel_end"].contains(node.type) }
     private var isRunning: Bool { status == "running" }
     private var statusPresentation: StatusBadgePresentation { WorkflowNodeStatusPresentation.presentation(status: status) }
@@ -56,6 +59,10 @@ struct WorkflowCanvasNode: View {
         return outline.isExecuting ? .accentLink.opacity(0.25) : .cardBorder
     }
 
+    private var usesDashedBorder: Bool {
+        !isSelected && ((standalone && !isOrchestrator) || (showsExecutionStates && status == "pending"))
+    }
+
     private var borderStyle: StrokeStyle {
         let width = isSelected
             ? PbRadius.Metrics.workflowNodeSelectedBorderWidth
@@ -64,7 +71,7 @@ struct WorkflowCanvasNode: View {
                 : (outline.isEmphasized ? PbRadius.Metrics.workflowConnectionHighlightedLineWidth : PbRadius.Metrics.hairlineStroke))
         return StrokeStyle(
             lineWidth: width,
-            dash: showsExecutionStates && status == "pending" && !isSelected ? PbRadius.Metrics.workflowPendingDash : []
+            dash: usesDashedBorder ? PbRadius.Metrics.workflowPendingDash : []
         )
     }
 
@@ -91,11 +98,11 @@ struct WorkflowCanvasNode: View {
     var body: some View {
         ZStack {
             card
-            if node.type != "start" {
+            if !standalone, node.type != "start" {
                 port(isOutput: false)
                     .offset(x: -nodeSize.width / 2)
             }
-            if node.type != "end" {
+            if !standalone, node.type != "end" {
                 port(isOutput: true)
                     .offset(x: nodeSize.width / 2)
             }
@@ -165,12 +172,12 @@ struct WorkflowCanvasNode: View {
 
     /// The 24 pt neutral role tile (SPEC §6.3): the agent's role glyph, never an agent colour.
     private var iconTile: some View {
-        Image(systemName: WorkflowRole.symbol(node.type == "agent" ? node.role : node.type))
+        Image(systemName: standalone ? (isOrchestrator ? "safari" : "bolt.fill") : WorkflowRole.symbol(node.type == "agent" ? node.role : node.type))
             .font(.pb(.body))
-            .foregroundStyle(isSelected ? Color.accentLink : Color.secondaryText)
+            .foregroundStyle(isOrchestrator ? Color.white : (isSelected || isRunning ? Color.accentLink : Color.secondaryText))
             .frame(width: PbRadius.Metrics.workflowNodeIconTileSize, height: PbRadius.Metrics.workflowNodeIconTileSize)
             .background(RoundedRectangle(cornerRadius: PbRadius.Metrics.workflowNodeIconTileCornerRadius)
-                .fill(Color.neutralFill))
+                .fill(isOrchestrator ? Color.accentLink : Color.neutralFill))
             .accessibilityHidden(true)
     }
 
@@ -179,6 +186,9 @@ struct WorkflowCanvasNode: View {
             HStack(spacing: PbRadius.Metrics.spacing8) {
                 iconTile
                 titleView
+                if isOrchestrator {
+                    Image(systemName: "lock.fill").font(.pb(.caption)).foregroundStyle(Color.tertiaryText).accessibilityLabel("Always present")
+                }
                 Spacer(minLength: 0)
                 if isRunning {
                     RunningSpinner()
@@ -212,7 +222,11 @@ struct WorkflowCanvasNode: View {
                     Text("Attempt \(attempt)").font(.pb(.caption)).foregroundStyle(Color.tertiaryText).monospacedDigit()
                 }
             }
-            WorkflowNodeDetail(node: node, status: status, isEditable: isEditable, childRunID: childRunID, onOpenRun: onOpenRun)
+            if let standaloneSubtitle {
+                Text(standaloneSubtitle).font(.pb(.caption)).foregroundStyle(isRunning ? Color.accentLink : Color.secondaryText).lineLimit(1)
+            } else {
+                WorkflowNodeDetail(node: node, status: status, isEditable: isEditable, childRunID: childRunID, onOpenRun: onOpenRun)
+            }
         }
     }
 
@@ -286,7 +300,7 @@ struct WorkflowCanvasNode: View {
                 if editedTitle == nil { onSelect() }
             }
             .transaction { $0.animation = nil }
-            .gesture(moveGesture)
+            .gesture(standalone ? nil : moveGesture)
     }
 
     private var moveGesture: some Gesture {
@@ -295,7 +309,7 @@ struct WorkflowCanvasNode: View {
                 if origin == nil { origin = node.position }
             }
             .onChanged { value in
-                guard isEditable, editedTitle == nil else { return }
+                guard isEditable, !standalone, editedTitle == nil else { return }
                 let origin = dragOrigin ?? node.position
                 let translation = WorkflowCanvasZoom.logical(value.translation, scale: zoom)
                 onMove(CGPoint(x: origin.x + translation.width, y: origin.y + translation.height))
@@ -309,6 +323,8 @@ private struct WorkflowCanvasNodePreview: View {
     var isSelected = false
     var type = "agent"
     var showsExecutionStates = false
+    var standalone = false
+    var standaloneSubtitle: String?
     var body: some View {
         WorkflowCanvasNode(
             node: WorkflowNodeModel(raw: [

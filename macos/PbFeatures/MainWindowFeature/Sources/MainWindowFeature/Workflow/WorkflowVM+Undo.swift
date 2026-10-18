@@ -125,6 +125,7 @@ extension WorkflowVM {
     }
 
     private func pruneEditorSelection() {
+        if isOrchestratorSelected || selectedOnDemandNode != nil { return }
         let edge = selectedEdgeID
         selectNodes(selectedNodeIDs, primary: selectedNodeID)
         selectedEdgeID = edge.flatMap { id in edges.contains(where: { $0.id == id }) ? id : nil }

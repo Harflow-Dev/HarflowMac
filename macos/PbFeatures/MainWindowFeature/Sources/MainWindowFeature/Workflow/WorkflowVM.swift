@@ -178,7 +178,6 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     var backendIDs: [String] { useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs }
-    var selectedNode: WorkflowNodeModel? { nodes.first { $0.id == selectedNodeID } }
     var selectedEdge: WorkflowEdgeModel? { edges.first { $0.id == selectedEdgeID } }
     var canSave: Bool {
         initialLoadingKind == nil && !initialLoadFailed && !checkingEditorBaseline
@@ -422,12 +421,13 @@ final class WorkflowVM: WorkflowViewModel {
 
     func updateNode(_ id: String, key: String, value: JSONValue?) {
         guard selectedRun == nil else { return }
-        var entries = WorkflowJSON.objects(definition["nodes"])
+        let collection = WorkflowJSON.objects(definition["on_demand_nodes"]).contains { $0["id"]?.stringValue == id } ? "on_demand_nodes" : "nodes"
+        var entries = WorkflowJSON.objects(definition[collection])
         guard let index = entries.firstIndex(where: { $0["id"]?.stringValue == id }) else {
             return
         }
         entries[index] = WorkflowAccess.updating(entries[index], key: key, value: value)
-        definition["nodes"] = .array(entries.map(JSONValue.object))
+        definition[collection] = .array(entries.map(JSONValue.object))
     }
 
     func updateEdge(_ id: String, key: String, value: JSONValue?) {
@@ -491,6 +491,7 @@ final class WorkflowVM: WorkflowViewModel {
 
     func deleteSelected() {
         guard selectedRun == nil else { return }
+        if deleteStandaloneSelection() { return }
         if let id = selectedEdgeID {
             definition["connections"] = .array(WorkflowJSON.objects(definition["connections"])
 .filter { $0["id"]?.stringValue != id }

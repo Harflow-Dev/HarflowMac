@@ -48,6 +48,10 @@ enum WorkflowPreview {
         return vm
     }
 
+    static func synchronizeRun(_ vm: WorkflowVM) {
+        (vm.useCase as? PreviewWorkflowUseCase)?.run = vm.selectedRun?.raw ?? [:]
+    }
+
     /// A run with a long input question, for the recovery banner's wrapping and the
     /// diagnostics viewport's scroll fallback. Dummy preview data only.
     static func makeLongQuestionRun() -> WorkflowVM {

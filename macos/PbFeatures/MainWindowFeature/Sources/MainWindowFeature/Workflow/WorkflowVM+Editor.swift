@@ -51,13 +51,13 @@ extension WorkflowVM {
             defer { MonitorMetrics.end(metricStart, stage: .workflowViewUpdate) }
             let record = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
             draftPersistenceSuspended = true
-            definition = record.definition
+            definition = WorkflowStandalone.normalized(record.definition)
             savedDefinition = definition
             name = record.id.isEmpty ? workflow.id : record.id
             loadedName = name
             revision = record.revision
             selectedRun = nil
-            selectedNodeID = nil
+            selectedNodeID = WorkflowStandalone.orchestratorID
             selectedEdgeID = nil
             isEditing = true
             parallel.setWorkflowTaskIDs([])
@@ -142,7 +142,7 @@ extension WorkflowVM {
         savedDefinition = [:]
         definition = Self.starterDefinition()
         isEditing = true
-        selectedNodeID = "start"
+        selectedNodeID = WorkflowStandalone.orchestratorID
         selectedEdgeID = nil
         parallel.setWorkflowTaskIDs([])
         draftPersistenceSuspended = false

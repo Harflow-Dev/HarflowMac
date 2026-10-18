@@ -56,8 +56,9 @@ extension WorkflowVM {
             "condition": .string("The review finds concrete changes needed. Implement the review feedback, then request another review.")
         ]))
         return ["routing_mode": .string("explicit"), "context_delivery": .string("optimized_v1"), "description": .string(""),
+                "on_demand_nodes": .array([]), "max_on_demand_calls": .number(5),
                 "max_parallel": .number(4), "max_transitions": .number(100),
-                "orchestrator": .object(["backend": .string("codex"), "fallbacks": .array([])]),
+                "orchestrator": .object(["instructions": .string(""), "backend": .string("codex"), "fallbacks": .array([])]),
                 "nodes": .array(nodes), "connections": .array(connections)]
     }
 

@@ -527,7 +527,7 @@ import Testing
     @Test func givenNewWorkflowOrAddedSteps_whenCreated_thenBranchingIsAutomatic() {
         let vm = makeVM().sut
         vm.newWorkflow()
-        #expect(vm.selectedNode?.type == "start")
+        #expect(vm.isOrchestratorSelected)
         #expect(vm.nodes.allSatisfy { $0.raw["branch_mode"] == .string("auto") })
         for kind in ["planning", "implementation", "review", "task"] {
             vm.addNode(kind)

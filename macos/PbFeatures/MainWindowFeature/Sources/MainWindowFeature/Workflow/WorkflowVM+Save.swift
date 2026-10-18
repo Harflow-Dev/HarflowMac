@@ -6,7 +6,7 @@ import PbCommon
 
 extension WorkflowVM {
     var effectiveDefinition: [String: JSONValue] {
-        var value = definition
+        var value = WorkflowStandalone.normalized(definition)
         value["name"] = .string(name)
         value["nodes"] = .array(WorkflowJSON.objects(value["nodes"]).map { node in
             var node = node
