@@ -1,0 +1,473 @@
+@testable import MainWindowFeature
+@testable import MonitorCore
+import PbUI
+import Testing
+
+@Suite struct SummaryPaneModelTests {
+
+    private func task(_ fields: [String: JSONValue] = [:]) -> TaskInfo {
+        var object: [String: JSONValue] = ["task_id": .string("t1"), "backend": .string("claude"), "status": .string("running")]
+        for (key, value) in fields { object[key] = value }
+        return TaskInfo(.object(object))!
+    }
+
+    // MARK: - Running vs. finished answer text
+
+    @Test func givenARunningTaskWithNoSummary_whenBuilt_thenThePlaceholderIsNoAnswerYet() {
+        // given
+        let running = task(["status": .string("running")])
+        // when
+        let model = SummaryPaneModel.build(task: running, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.finalAnswer == nil)
+        #expect(model.finalAnswerPlaceholder == "No answer yet.")
+    }
+
+    @Test func givenAFinishedTaskWithNoSummary_whenBuilt_thenThePlaceholderIsNoFinalAnswer() {
+        // given
+        let done = task(["status": .string("completed")])
+        // when
+        let model = SummaryPaneModel.build(task: done, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.finalAnswer == nil)
+        #expect(model.finalAnswerPlaceholder == "No final answer.")
+    }
+
+    @Test func givenASummary_whenBuilt_thenItIsShownRegardlessOfRunState() {
+        // given
+        let running = task(["status": .string("running")])
+        // when
+        let model = SummaryPaneModel.build(task: running, summary: "**done**", events: [], eventsAvailability: .available)
+        // then
+        #expect(model.finalAnswer == "**done**")
+    }
+
+    @Test func givenAnEmptySummaryString_whenBuilt_thenItIsTreatedAsNoSummary() {
+        // given
+        let done = task(["status": .string("completed")])
+        // when
+        let model = SummaryPaneModel.build(task: done, summary: "", events: [], eventsAvailability: .available)
+        // then
+        #expect(model.finalAnswer == nil)
+        #expect(model.finalAnswerPlaceholder == "No final answer.")
+    }
+
+    // MARK: - Refusals & warnings: presence/absence, denial description fallback
+
+    @Test func givenNoDenialsAndNoNotices_whenBuilt_thenRefusalLinesIsEmpty() {
+        // given / when
+        let model = SummaryPaneModel.build(task: task(), summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.refusalLines.isEmpty)
+    }
+
+    @Test func givenADenialWithACommand_whenBuilt_thenTheLineIsTheCommand() {
+        // given
+        let denial: JSONValue = .object(["command": .string("git commit -am wip"), "title": .string("Allow bash?")])
+        let withDenial = task(["permission_denials": .array([denial])])
+        // when
+        let model = SummaryPaneModel.build(task: withDenial, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.refusalLines == ["git commit -am wip"])
+    }
+
+    @Test func givenADenialWithNoCommand_whenBuilt_thenTheLineFallsBackToTitle() {
+        // given
+        let denial: JSONValue = .object(["title": .string("Allow bash?")])
+        let withDenial = task(["permission_denials": .array([denial])])
+        // when
+        let model = SummaryPaneModel.build(task: withDenial, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.refusalLines == ["Allow bash?"])
+    }
+
+    @Test func givenADenialWithNeitherCommandNorTitle_whenBuilt_thenTheLineFallsBackToAnAction() {
+        // given
+        let denial: JSONValue = .object(["kind": .string("approval")])
+        let withDenial = task(["permission_denials": .array([denial])])
+        // when
+        let model = SummaryPaneModel.build(task: withDenial, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.refusalLines == ["an action"])
+    }
+
+    @Test func givenNoticesWithNoDenials_whenBuilt_thenTheyAppearAsRefusalLines() {
+        // given
+        let withNotices = task(["notices": .array([.string("auto-denied: git push")])])
+        // when
+        let model = SummaryPaneModel.build(task: withNotices, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.refusalLines == ["auto-denied: git push"])
+    }
+
+    @Test func givenBothDenialsAndNotices_whenBuilt_thenDenialsComeFirst() {
+        // given
+        let denial: JSONValue = .object(["command": .string("git commit")])
+        let both = task(["permission_denials": .array([denial]), "notices": .array([.string("a notice")])])
+        // when
+        let model = SummaryPaneModel.build(task: both, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.refusalLines == ["git commit", "a notice"])
+    }
+
+    // MARK: - Files the agent edited: availability drives presence
+
+    @Test func givenEventsLoading_whenBuilt_thenAvailabilityIsLoading() {
+        // given / when
+        let model = SummaryPaneModel.build(task: task(), summary: nil, events: [], eventsAvailability: .loading)
+        // then
+        #expect(model.editedFilesAvailability == .loading)
+        #expect(model.editedFiles.isEmpty)
+    }
+
+    @Test func givenEventsUnavailable_whenBuilt_thenAvailabilityIsUnavailable() {
+        // given / when
+        let model = SummaryPaneModel.build(task: task(), summary: nil, events: [], eventsAvailability: .unavailable)
+        // then
+        #expect(model.editedFilesAvailability == .unavailable)
+    }
+
+    @Test func givenEventsAvailableWithNoEditCalls_whenBuilt_thenEditedFilesIsEmpty() {
+        // given / when — the view hides the section in this case; the model just reports empty.
+        let model = SummaryPaneModel.build(task: task(), summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.editedFilesAvailability == .available)
+        #expect(model.editedFiles.isEmpty)
+    }
+
+    // MARK: - Hero (D9) and the shared settled duration (§1.6)
+
+    private func build(_ fields: [String: JSONValue]) -> SummaryPaneModel {
+        SummaryPaneModel.build(task: task(fields), summary: nil, events: [], eventsAvailability: .available)
+    }
+
+    @Test(arguments: [
+        ("completed", "Done in 21 min"), ("failed", "Failed after 21 min"),
+        ("cancelled", "Cancelled after 21 min"), ("timed_out", "Timed out after 21 min")
+    ])
+    func givenASettledTaskWithAnExitAndARecordedDuration_whenBuilt_thenTheHeadlineAndDurationTileCarryTheSameReliableValue(
+        status: String, headline: String
+    ) {
+        // given — duration + observed exit: the reliable value `TaskSettledDuration` shares between
+        // the headline, the Duration tile and the header badge.
+        let fields: [String: JSONValue] = ["status": .string(status), "exit_code": .number(0), "duration_seconds": .number(1260)]
+        // when
+        let model = build(fields)
+        // then
+        #expect(model.hero?.headline == headline)
+        #expect(model.hero?.isRunning == false)
+        #expect(model.hero?.settledDuration == 1260)
+        #expect(model.statTiles.contains(SummaryStatTile(title: "Duration", value: Format.clock(1260))))
+    }
+
+    @Test(arguments: [("completed", "Done"), ("failed", "Failed"), ("cancelled", "Cancelled"), ("timed_out", "Timed out")])
+    func givenASettledTaskWithoutAnExitCode_whenBuilt_thenTheHeadlineIsStatusOnlyWithNoDurationAnywhere(
+        status: String, headline: String
+    ) {
+        // given — a recorded duration without an observed exit proves nothing about when the run
+        // ended, so no surface may show an elapsed value.
+        let fields: [String: JSONValue] = ["status": .string(status), "duration_seconds": .number(1260)]
+        // when
+        let model = build(fields)
+        // then
+        #expect(model.hero?.headline == headline)
+        #expect(model.hero?.settledDuration == nil)
+        #expect(!model.statTiles.contains { $0.title == "Duration" })
+    }
+
+    @Test func givenASettledTaskWithAnExitButNoRecordedDuration_whenBuilt_thenTheHeadlineStaysStatusOnly() {
+        // given — the exact case the old `task.elapsed()` fallback fabricated an ever-growing
+        // finished duration for (§1.6).
+        let fields: [String: JSONValue] = ["status": .string("completed"), "exit_code": .number(0)]
+        // when
+        let model = build(fields)
+        // then — status only, now and at any later moment: the mapping reads no clock at all.
+        #expect(model.hero?.headline == "Done")
+        #expect(model.hero?.settledDuration == nil)
+        #expect(SummaryPaneModel.heroParts(task: task(fields)) == SummaryPaneModel.heroParts(task: task(fields)))
+        #expect(!model.statTiles.contains { $0.title == "Duration" })
+    }
+
+    @Test func givenARunningTask_whenBuilt_thenTheHeroIsRunningWithItsStartAndNoTiles() {
+        // given
+        let started = "2026-01-01T00:00:00Z"
+        let fields: [String: JSONValue] = ["status": .string("running"), "started_at": .string(started), "exit_code": .number(0)]
+        // when
+        let model = build(fields)
+        // then
+        #expect(model.hero?.isRunning == true)
+        #expect(model.hero?.startedAt != nil)
+        #expect(model.hero?.settledDuration == nil)
+        #expect(model.statTiles.isEmpty)
+    }
+
+    @Test func givenTurnsReported_whenBuilt_thenTheSublineNamesTheCurrentAgentRun() {
+        // given / when
+        let many = build(["num_turns": .number(3)])
+        let one = build(["num_turns": .number(1)])
+        // then — "Agent turns: N" is the backend's own reported count, deliberately distinct from
+        // the conversation-turn counts the header and Activity tab show.
+        #expect(many.hero?.turnsText == "Agent turns: 3")
+        #expect(one.hero?.turnsText == "Agent turns: 1")
+        #expect(many.hero?.backend == "claude")
+    }
+
+    @Test func givenNoTurnsReported_whenBuilt_thenTheSublineOmitsThem() {
+        // given / when
+        let model = build([:])
+        // then
+        #expect(model.hero?.turnsText == nil)
+    }
+
+    @Test(arguments: [
+        ["total_cost_usd": JSONValue.number(0.25)],
+        ["usage": JSONValue.object(["input_tokens": .number(123)])],
+        ["status": JSONValue.string("completed"), "exit_code": .number(0), "duration_seconds": .number(30)]
+    ])
+    func givenMetricsWithoutReportedAgentTurns_whenBuilt_thenTheirCurrentRunScopeStillShows(fields: [String: JSONValue]) {
+        // given / when
+        let model = build(fields)
+        // then
+        #expect(model.hero?.turnsText == nil)
+        #expect(!model.statTiles.isEmpty)
+        #expect(model.metricScopeText == "Reported by current agent run")
+    }
+
+    @Test func givenSecondsAndHours_whenFormatted_thenTheDurationIsHumanReadable() {
+        // given / when / then
+        #expect(SummaryPaneModel.durationText(45) == "45 sec")
+        #expect(SummaryPaneModel.durationText(1260) == "21 min")
+        #expect(SummaryPaneModel.durationText(3600) == "1 h")
+        #expect(SummaryPaneModel.durationText(3900) == "1 h 5 min")
+    }
+
+    // MARK: - Stat tiles (§6.2): Duration / Agent turns / Tokens / Cost, each only when reported
+
+    @Test func givenNoMetricsAtAll_whenBuilt_thenThereAreNoTilesAndNoTurns() {
+        // given / when
+        let model = build([:])
+        // then
+        #expect(model.statTiles.isEmpty)
+        #expect(model.numTurns == nil)
+        #expect(model.inputTokens == nil)
+        #expect(model.outputTokens == nil)
+        #expect(model.costUSD == nil)
+    }
+
+    @Test func givenADurationButNeitherTokensNorCostNorTurns_whenBuilt_thenOnlyTheDurationTileAppears() {
+        // given — the reliable settled duration alone still earns its tile (§6.2); the headline
+        // and the tile read the same recorded value.
+        let fields: [String: JSONValue] = ["status": .string("completed"), "exit_code": .number(0), "duration_seconds": .number(1260)]
+        // when
+        let tiles = build(fields).statTiles
+        // then
+        #expect(tiles == [SummaryStatTile(title: "Duration", value: Format.clock(1260))])
+    }
+
+    @Test func givenTokensAndCostReported_whenBuilt_thenBothTilesAppear() {
+        // given
+        let fields: [String: JSONValue] = [
+            "usage": .object(["input_tokens": .number(48210), "output_tokens": .number(3150)]), "total_cost_usd": .number(0.0123)
+        ]
+        // when
+        let tiles = build(fields).statTiles
+        // then
+        #expect(tiles.map(\.title) == ["Tokens (in / out)", "Cost"])
+        #expect(tiles.last?.value == "$0.0123")
+        #expect(tiles.first?.value == "48210 / 3150")
+    }
+
+    @Test func givenTokensOnly_whenBuilt_thenOnlyTheTokensTileAppears() {
+        // given — no cost reported at all.
+        let fields: [String: JSONValue] = ["usage": .object(["input_tokens": .number(48210), "output_tokens": .number(3150)])]
+        // when
+        let tiles = build(fields).statTiles
+        // then
+        #expect(tiles == [SummaryStatTile(title: "Tokens (in / out)", value: "48210 / 3150")])
+    }
+
+    @Test func givenOnlyOneTokenCountReported_whenBuilt_thenTheMissingSideIsADash() {
+        // given / when
+        let tiles = build(["usage": .object(["input_tokens": .number(7)])]).statTiles
+        // then
+        #expect(tiles == [SummaryStatTile(title: "Tokens (in / out)", value: "7 / –")])
+    }
+
+    @Test func givenCostOnly_whenBuilt_thenOnlyTheCostTileAppears() {
+        // given — no usage reported at all.
+        let fields: [String: JSONValue] = ["total_cost_usd": .number(0.05)]
+        // when
+        let tiles = build(fields).statTiles
+        // then
+        #expect(tiles == [SummaryStatTile(title: "Cost", value: "$0.0500")])
+    }
+
+    @Test func givenOnlyTurnsReported_whenBuilt_thenOnlyTheAgentTurnsTileAppears() {
+        // given / when
+        let tiles = build(["num_turns": .number(3)]).statTiles
+        // then — the tile names the CURRENT agent run's own turns, never the conversation's
+        // member count (which lives in the header's "N turns", not here).
+        #expect(tiles == [SummaryStatTile(title: "Agent turns", value: "3")])
+    }
+
+    @Test func givenEveryReportedMetric_whenBuilt_thenTheTilesComeInOrder() {
+        // given — duration, turns, tokens and cost all reported by the current agent run.
+        let fields: [String: JSONValue] = [
+            "status": .string("completed"), "exit_code": .number(0), "duration_seconds": .number(1260),
+            "num_turns": .number(3),
+            "usage": .object(["input_tokens": .number(48210), "output_tokens": .number(3150)]),
+            "total_cost_usd": .number(0.4213)
+        ]
+        // when
+        let tiles = build(fields).statTiles
+        // then
+        #expect(tiles.map(\.title) == ["Duration", "Agent turns", "Tokens (in / out)", "Cost"])
+        #expect(tiles.map(\.value) == [Format.clock(1260), "3", "48210 / 3150", "$0.4213"])
+    }
+
+    // MARK: - Edited file rows (D8, item 13)
+
+    @Test func givenANestedPath_whenMappedToARow_thenItShowsOnlyTheLastParentFolderButKeepsTheFullPath() {
+        // given
+        let file = EditedFile(path: "src/app/View.swift", status: .edited)
+        // when
+        let row = SummaryFileRow(file)
+        // then
+        #expect(row.name == "View.swift")
+        #expect(row.parentFolder == "app")
+        #expect(row.fullPath == "src/app/View.swift")
+        #expect(row.accessibilityLabel == "Edited src/app/View.swift")
+    }
+
+    @Test func givenADeeplyNestedPath_whenMappedToARow_thenTheFolderIsOnlyTheImmediateParent() {
+        // given — "TaskRow.swift" reads as being in "Component", not the whole tree.
+        let file = EditedFile(path: "macos/PbFeatures/MainWindowFeature/Sources/TaskDetail/Component/TaskRow.swift", status: .edited)
+        // when
+        let row = SummaryFileRow(file)
+        // then
+        #expect(row.name == "TaskRow.swift")
+        #expect(row.parentFolder == "Component")
+        #expect(row.fullPath == "macos/PbFeatures/MainWindowFeature/Sources/TaskDetail/Component/TaskRow.swift")
+    }
+
+    @Test func givenABarePath_whenMappedToARow_thenThereIsNoParentFolder() {
+        // given / when
+        let row = SummaryFileRow(EditedFile(path: "README.md", status: .edited))
+        // then
+        #expect(row.name == "README.md")
+        #expect(row.parentFolder == nil)
+    }
+
+    @Test func givenEachEditedFileState_whenMappedToRows_thenTheStatesAndLabelsDiffer() {
+        // given
+        let files = [
+            EditedFile(path: "a/x.swift", status: .edited), EditedFile(path: "a/y.swift", status: .failed),
+            EditedFile(path: "a/z.swift", status: .unconfirmed)
+        ]
+        // when
+        let rows = files.map(SummaryFileRow.init)
+        // then
+        #expect(rows.map(\.status) == [.edited, .failed, .unconfirmed])
+        #expect(rows.map(\.accessibilityLabel) == [
+            "Edited a/x.swift", "Edit failed a/y.swift", "Edit unconfirmed, no result recorded a/z.swift"
+        ])
+    }
+
+    // MARK: - Edited file collapse (item 13)
+
+    private func rows(_ count: Int) -> [SummaryFileRow] {
+        (0 ..< count).map { SummaryFileRow(EditedFile(path: "src/Folder\($0)/File\($0).swift", status: .edited)) }
+    }
+
+    @Test func givenMoreThanEightFiles_whenNotShowingAll_thenOnlyTheFirstEightRowsShow() {
+        // given
+        let all = rows(12)
+        // when
+        let visible = SummaryPaneModel.visibleFileRows(all, showingAll: false)
+        // then
+        #expect(visible.rows.count == SummaryPaneModel.fileRowCollapseThreshold)
+        #expect(visible.rows == Array(all.prefix(8)))
+        #expect(visible.hiddenCount == 4)
+    }
+
+    @Test func givenMoreThanEightFiles_whenShowingAll_thenEveryRowShowsAndNothingHides() {
+        // given
+        let all = rows(12)
+        // when
+        let visible = SummaryPaneModel.visibleFileRows(all, showingAll: true)
+        // then
+        #expect(visible.rows == all)
+        #expect(visible.hiddenCount == 0)
+    }
+
+    @Test func givenAtMostEightFiles_whenNotShowingAll_thenEveryRowShowsAndNothingHides() {
+        // given — exactly the threshold, and one below it.
+        let eight = rows(8)
+        let seven = rows(7)
+        // when / then
+        #expect(SummaryPaneModel.visibleFileRows(eight, showingAll: false) == (eight, 0))
+        #expect(SummaryPaneModel.visibleFileRows(seven, showingAll: false) == (seven, 0))
+    }
+
+    // MARK: - Token key fallback (by key, never by backend name)
+
+    @Test func givenClaudeStyleTokenKeys_whenExtracted_thenTheyAreRead() {
+        // given
+        let usage: [String: JSONValue] = ["input_tokens": .number(100), "output_tokens": .number(20)]
+        // when
+        let (input, output) = SummaryPaneModel.tokens(from: usage)
+        // then
+        #expect(input == 100)
+        #expect(output == 20)
+    }
+
+    @Test func givenOpencodeStyleTokenKeys_whenExtracted_thenTheyAreRead() {
+        // given
+        let usage: [String: JSONValue] = ["input": .number(55), "output": .number(9)]
+        // when
+        let (input, output) = SummaryPaneModel.tokens(from: usage)
+        // then
+        #expect(input == 55)
+        #expect(output == 9)
+    }
+
+    @Test func givenBothKeyShapesPresent_whenExtracted_thenTheLongFormWins() {
+        // given — never chosen by backend name, only by which key is present; the long form is
+        // checked first.
+        let usage: [String: JSONValue] = ["input_tokens": .number(1), "input": .number(2), "output_tokens": .number(3), "output": .number(4)]
+        // when
+        let (input, output) = SummaryPaneModel.tokens(from: usage)
+        // then
+        #expect(input == 1)
+        #expect(output == 3)
+    }
+
+    @Test func givenNoUsageObjectAtAll_whenExtracted_thenBothAreNil() {
+        // given / when
+        let (input, output) = SummaryPaneModel.tokens(from: nil)
+        // then
+        #expect(input == nil)
+        #expect(output == nil)
+    }
+
+    @Test func givenATaskWithOpencodeStyleUsage_whenBuilt_thenTheModelReadsItByKey() {
+        // given
+        let withUsage = task(["usage": .object(["input": .number(10), "output": .number(2)])])
+        // when
+        let model = SummaryPaneModel.build(task: withUsage, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(model.inputTokens == 10)
+        #expect(model.outputTokens == 2)
+    }
+
+    // MARK: - What was enforced (item 15: moved to the Inspector; the Summary model carries none)
+
+    @Test func givenEnforcementData_whenBuilt_thenTheSummaryModelCarriesNoEnforcementData() {
+        // given — enforcement still arrives on the task; the Summary tab just ignores it now.
+        let withEnforcement = task(["enforcement": .object(["os_enforced": .bool(true)])])
+        // when
+        let model = SummaryPaneModel.build(task: withEnforcement, summary: nil, events: [], eventsAvailability: .available)
+        // then
+        #expect(Mirror(reflecting: model).children.contains { $0.label?.localizedCaseInsensitiveContains("enforcement") == true } == false)
+    }
+}

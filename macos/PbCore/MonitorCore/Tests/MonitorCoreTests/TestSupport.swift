@@ -1,0 +1,78 @@
+import Foundation
+@testable import MonitorCore
+
+func task(
+    _ id: String, status: String = "completed", spawnedBy: String? = nil, parentTaskID: String? = nil, rootTaskID: String? = nil,
+    depth: Int? = nil, group: String? = nil, backend: String = "claude", minute: Int = 0
+) -> TaskInfo {
+    var object: [String: JSONValue] = [
+        "task_id": .string(id), "status": .string(status), "backend": .string(backend),
+        "depth": .number(Double(depth ?? (spawnedBy == nil ? 0 : 1))),
+        "started_at": .string(String(format: "2026-09-25T10:%02d:00+00:00", minute))
+    ]
+    if let spawnedBy { object["spawned_by"] = .string(spawnedBy) }
+    if let group { object["group"] = .string(group) }
+    if let parentTaskID { object["parent_task_id"] = .string(parentTaskID) }
+    if let rootTaskID { object["root_task_id"] = .string(rootTaskID) }
+    return TaskInfo(.object(object))!
+}
+
+/// A temp directory per test, removed afterwards.
+func makeTempDir(_ name: String = "pbm") throws -> URL {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+}
+
+/// A fake executable: a `/bin/sh` script. Tests use these in place of polybridge-ctl and
+/// polybridge-setup so nothing real is ever run.
+@discardableResult
+func writeFakeTool(_ dir: URL, name: String, body: String) throws -> String {
+    let url = dir.appendingPathComponent(name)
+    try ("#!/bin/sh\n" + body + "\n").write(to: url, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+    return url.path
+}
+
+/// Records every call and answers from a closure — for asserting the argv the app builds.
+final class RecordingRunner: ProcessRunning, @unchecked Sendable {
+    struct Call: Equatable {
+        let executable: String
+        let arguments: [String]
+        let environment: [String: String]
+    }
+
+    private let lock = NSLock()
+    private var _calls: [Call] = []
+    let answer: @Sendable (Call) -> ProcessOutput
+
+    init(answer: @escaping @Sendable (Call) -> ProcessOutput) {
+        self.answer = answer
+    }
+
+    var calls: [Call] {
+        lock.withLock { _calls }
+    }
+
+    func run(
+        executable: String, arguments: [String], environment: [String: String], currentDirectory: String?, timeout: Double
+    ) async -> Result<ProcessOutput, ToolError> {
+        let call = Call(executable: executable, arguments: arguments, environment: environment)
+        lock.withLock { _calls.append(call) }
+        return .success(answer(call))
+    }
+}
+
+func json(_ text: String) -> Data { Data(text.utf8) }
+
+/// Polls `condition` every 50 ms until it becomes true or `timeout` elapses, instead of a fixed
+/// sleep. Returns whether the condition was ever observed true, rather than just waiting.
+@MainActor
+func waitUntil(timeout: TimeInterval = 5, condition: @MainActor () -> Bool) async -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(50))
+    }
+    return condition()
+}

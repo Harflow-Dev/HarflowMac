@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:PolybridgeMonitor">
+   </FileRef>
+   <Group
+      location = "container:"
+      name = "PbFoundation">
+      <FileRef
+         location = "group:PbFoundation/PbUtilities">
+      </FileRef>
+      <FileRef
+         location = "group:PbFoundation/PbCommon">
+      </FileRef>
+      <FileRef
+         location = "group:PbFoundation/PbUI">
+      </FileRef>
+   </Group>
+   <Group
+      location = "container:"
+      name = "PbCore">
+      <FileRef
+         location = "group:PbCore/MonitorCore">
+      </FileRef>
+      <FileRef
+         location = "group:PbCore/PbRepository">
+      </FileRef>
+   </Group>
+   <Group
+      location = "container:"
+      name = "PbFeatures">
+      <FileRef
+         location = "group:PbFeatures/MainWindowFeature">
+      </FileRef>
+      <FileRef
+         location = "group:PbFeatures/MenuBarFeature">
+      </FileRef>
+      <FileRef
+         location = "group:PbFeatures/SettingsFeature">
+      </FileRef>
+   </Group>
+</Workspace>

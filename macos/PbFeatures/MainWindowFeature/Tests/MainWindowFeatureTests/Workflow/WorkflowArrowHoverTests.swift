@@ -1,0 +1,96 @@
+import Foundation
+@testable import MainWindowFeature
+import SwiftUI
+import Testing
+
+// MARK: - WorkflowArrowHoverTests
+
+@Suite struct WorkflowArrowHoverTests {
+    private func candidate(_ id: String, y: CGFloat, hasCondition: Bool = true) -> WorkflowArrowHover.Candidate {
+        let points = [CGPoint(x: 0, y: y), CGPoint(x: 100, y: y)]
+        var path = Path()
+        path.move(to: points[0])
+        path.addLine(to: points[1])
+        return WorkflowArrowHover.Candidate(id: id, path: path, points: points, hasCondition: hasCondition)
+    }
+
+    @Test func givenOverlappingArrowHitRegions_whenHovering_thenNearestWinsAndTiesAreDeterministic() {
+        // given
+        let candidates = [candidate("b", y: 4), candidate("a", y: 0)]
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 3), candidates: candidates) == "b")
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 2), candidates: candidates) == "a")
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 40), candidates: candidates) == nil)
+    }
+
+    @Test func givenSharedTrunk_whenBranchIsSelected_thenHoverKeepsItsConditionAndUniqueBranchesRemainDistinct() {
+        // given
+        func branch(_ id: String, y: CGFloat) -> WorkflowArrowHover.Candidate {
+            let points = [CGPoint(x: 0, y: y), CGPoint(x: 80, y: y), CGPoint(x: 80, y: 100), CGPoint(x: 120, y: 100)]
+            var path = Path()
+            path.move(to: points[0])
+            for point in points.dropFirst() { path.addLine(to: point) }
+            return WorkflowArrowHover.Candidate(id: id, path: path, points: points)
+        }
+        let candidates = [branch("a", y: 0), branch("b", y: 40)]
+        // when / then
+        let trunk = CGPoint(x: 80, y: 80)
+        #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates, preferredID: "b") == "b")
+        #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates.reversed(), preferredID: "b") == "b")
+        #expect(WorkflowArrowHover.nearest(to: trunk, candidates: candidates) == "a")
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 20, y: 0), candidates: candidates, preferredID: "b") == "a")
+    }
+
+    @Test func givenSharedStrokeWithUnconditionalConnection_whenUnselected_thenConditionedConnectionWinsRegardlessOfOrder() {
+        // given
+        let candidates = [candidate("a", y: 0, hasCondition: false), candidate("b", y: 0)]
+        let point = CGPoint(x: 50, y: 0)
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates) == "b")
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates.reversed()) == "b")
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates, preferredID: "a") == "a")
+        #expect(WorkflowArrowHover.nearest(to: point, candidates: candidates, preferredID: "b") == "b")
+    }
+
+    @Test func givenOnlyUnconditionalSharedConnections_whenResolving_thenStableChoiceRemainsSelectable() {
+        // given
+        let candidates = [candidate("b", y: 0, hasCondition: false), candidate("a", y: 0, hasCondition: false)]
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 0), candidates: candidates) == "a")
+    }
+
+    @Test func givenDistinctNearbyStrokes_whenUnconditionalConnectionIsCloser_thenDistanceWinsOverConditionAndSelection() {
+        // given
+        let candidates = [candidate("a", y: 0, hasCondition: false), candidate("b", y: 4)]
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 1), candidates: candidates) == "a")
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 1), candidates: candidates, preferredID: "b") == "a")
+    }
+
+    @Test func givenBentPathBoundingBox_whenHoveringAwayFromStroke_thenDoesNotShowCondition() {
+        // given
+        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0), CGPoint(x: 100, y: 100)]
+        var path = Path()
+        path.move(to: points[0])
+        path.addLine(to: points[1])
+        path.addLine(to: points[2])
+        let arrow = WorkflowArrowHover.Candidate(id: "bent", path: path, points: points)
+        // when / then
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 50, y: 50), candidates: [arrow]) == nil)
+        #expect(WorkflowArrowHover.nearest(to: CGPoint(x: 99, y: 50), candidates: [arrow]) == "bent")
+    }
+
+    @Test func givenZoomAndScroll_whenPlacingTooltip_thenConvertsToViewportAndFlipsAtEdges() {
+        // given
+        let cursor = WorkflowArrowHover.viewportPoint(logical: CGPoint(x: 675, y: 425), scale: 2,
+                                                      visibleOrigin: CGPoint(x: 600, y: 400))
+        // when
+        let center = WorkflowArrowHover.tooltipCenter(cursor: cursor, size: CGSize(width: 260, height: 60), viewport: CGSize(width: 800, height: 500))
+        // then
+        #expect(cursor == CGPoint(x: 750, y: 450))
+        #expect(center == CGPoint(x: 606, y: 406))
+        let clamped = WorkflowArrowHover.tooltipCenter(cursor: CGPoint(x: -40, y: -20), size: CGSize(width: 260, height: 60),
+                                                       viewport: CGSize(width: 800, height: 500))
+        #expect(clamped.x >= 138 && clamped.y >= 38)
+    }
+}
