@@ -162,7 +162,10 @@ struct WorkflowCanvas: View {
                         zoom: zoom,
                         childRunID: childRunID(node.id),
                         onOpenRun: onOpenRun,
-                        onSelect: { isCanvasFocused = true; if NSEvent.modifierFlags.contains(.command) { onToggleNode(node.id) } else { onSelectNode(node.id) } },
+                        onSelect: {
+                            isCanvasFocused = true
+                            if NSEvent.modifierFlags.contains(.command) { onToggleNode(node.id) } else { onSelectNode(node.id) }
+                        },
                         onMove: { point in
                             moveGroup(anchor: node.id, point: point)
                             scrollController.updateNode(id: node.id, point: point, scale: zoom, onMove: moveGroup)

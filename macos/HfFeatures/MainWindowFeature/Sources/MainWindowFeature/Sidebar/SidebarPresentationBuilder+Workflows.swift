@@ -11,7 +11,8 @@ extension SidebarPresentationBuilder {
         var runs = workflowRuns.filter { WorkflowRunIdentity.isValid($0.id) }
         let known = Set(runs.map(\.id))
         for task in latestTasks {
-            guard let id = task.raw["workflow_run_id"]?.stringValue, WorkflowRunIdentity.isValid(id), !known.contains(id), !runs.contains(where: { $0.id == id }),
+            guard let id = task.raw["workflow_run_id"]?.stringValue, WorkflowRunIdentity.isValid(id),
+                  !known.contains(id), !runs.contains(where: { $0.id == id }),
                   task.raw["workflow_builder"]?.boolValue != true else { continue }
             runs.append(SidebarWorkflowRun(raw: ["workflow_run_id": .string(id),
                 "name": task.raw["workflow_name"] ?? .string("Workflow"),

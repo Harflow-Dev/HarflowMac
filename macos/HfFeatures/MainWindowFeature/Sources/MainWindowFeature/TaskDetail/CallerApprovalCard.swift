@@ -82,7 +82,8 @@ final class CallerApprovalController {
         do {
             let result = try await useCase.detail(request)
             guard generation == token, inspection == inspectionToken, selectedID == request.id else { return }
-            guard result.id == request.id, result.taskID == request.taskID, result.digest == request.digest, result.revision == request.revision, result.complete,
+            guard result.id == request.id, result.taskID == request.taskID, result.digest == request.digest,
+                  result.revision == request.revision, result.complete,
                   requests.contains(where: {
                       $0.id == request.id && $0.digest == result.digest && $0.revision == result.revision
                           && $0.text("disposition") == result.text("disposition")

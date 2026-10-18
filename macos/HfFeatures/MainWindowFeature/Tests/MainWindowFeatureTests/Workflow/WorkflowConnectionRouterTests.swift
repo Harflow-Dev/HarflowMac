@@ -443,7 +443,10 @@ import Testing
         for source in sources {
             #expect(routes[source.id]?.first == WorkflowCanvasGeometry.connectionOutput(source))
             #expect(routes[source.id]?.last == WorkflowCanvasGeometry.connectionInput(target))
-            #expect(WorkflowConnectionRouter.clear(routes[source.id]!, obstacles: [CGRect(origin: blocker.position, size: WorkflowCanvasGeometry.size(blocker))]))
+            #expect(WorkflowConnectionRouter.clear(
+                routes[source.id]!,
+                obstacles: [CGRect(origin: blocker.position, size: WorkflowCanvasGeometry.size(blocker))]
+            ))
         }
         let snapshot = WorkflowRouteCache.snapshot(edges: edges, nodes: nodes)
         #expect(WorkflowSharedDestinationRoutes.routes(edges: snapshot.edges, nodes: snapshot.nodes, occupied: []).isEmpty)
