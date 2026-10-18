@@ -44,8 +44,13 @@ struct RawEventsPaneView: View {
 /// Dummy overflowing events — the pane's native overlay chrome only shows itself while scrolling.
 private func rawEventsPreviewEvents() -> [TaskEvent] {
     (1 ... 30).compactMap { index in
-        TaskEvent(line: "{\"v\":1,\"seq\":\(index),\"kind\":\"assistant_text\","
-            + "\"text\":\"Raw event line \(index) — dummy preview data that overflows the pane.\"}")
+        let payload: [String: JSONValue] = [
+            "product": .string("harflow"), "format": .string(WireContract.events.format),
+            "v": .number(1), "product_version": .string(HarflowVersion.current),
+            "seq": .number(Double(index)), "kind": .string("assistant_text"),
+            "text": .string("Raw event line \(index) — dummy preview data that overflows the pane.")
+        ]
+        return TaskEvent(line: JSONValue.object(payload).rendered())
     }
 }
 

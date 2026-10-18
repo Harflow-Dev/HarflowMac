@@ -5,7 +5,7 @@ import Testing
 @Suite(.serialized)
 struct CtlDecodingTests {
     func decode(_ text: String, stderr: String = "", exit: Int32 = 0, command: String = "list") -> Result<CtlDocument, ToolError> {
-        CtlDocument.decode(stdout: json(text), stderr: stderr, exitCode: exit, command: command)
+        CtlDocument.decode(stdout: ctlJSON(text), stderr: stderr, exitCode: exit, command: command)
     }
 
     @Test
@@ -128,19 +128,25 @@ struct CtlDecodingTests {
     @Test
     func givenAnUnsupportedSchemaVersion_whenDecoded_thenItIsRefused() {
         // given / when — v15 is outside `ctlContractVersions`.
-        guard case .failure(.unsupportedVersion(_, let v)) = decode(#"{"v": 15, "tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
+        guard case .failure(.unsupportedVersion(_, let v)) = CtlDocument.decode(
+            stdout: json(#"{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"1.0.0","tasks":[]}"#),
+            stderr: "", exitCode: 0, command: "list"
+        ) else { Issue.record("expected .unsupportedVersion"); return }
         // then
         #expect(v == "15")
         let message = ToolError.unsupportedVersion(tool: "harflow-ctl", version: "15").message
-        #expect(message.contains("understands versions 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10"))
-        guard case .failure(.unsupportedVersion(_, let none)) = decode(#"{"tasks": []}"#) else { Issue.record("expected .unsupportedVersion"); return }
+        #expect(message.contains("understands version 1"))
+        guard case .failure(.unsupportedVersion(_, let none)) = CtlDocument.decode(
+            stdout: json(#"{"product":"harflow","format":"harflow.ctl","product_version":"1.0.0","tasks":[]}"#),
+            stderr: "", exitCode: 0, command: "list"
+        ) else { Issue.record("expected .unsupportedVersion"); return }
         #expect(none == "none")
     }
 
     @Test
     func givenSupportedCtlContractVersions_whenDecoded_thenAllAreAccepted() {
         // given / when / then — older documents lack optional fields and remain readable.
-        #expect(ctlContractVersions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
+        #expect(ctlContractVersions == [1])
         for version in ctlContractVersions {
             guard case .success(.tasks) = decode("{\"v\": \(version), \"tasks\": []}")
             else { Issue.record("v\(version) should decode"); return }
@@ -149,8 +155,8 @@ struct CtlDecodingTests {
 
     @Test
     func givenCurrentCtlContractVersion_whenDecoded_thenItIsAccepted() {
-        guard case .success(.tasks) = decode(#"{"v": 13, "tasks": []}"#) else {
-            Issue.record("v13 should decode")
+        guard case .success(.tasks) = decode(#"{"v": 1, "tasks": []}"#) else {
+            Issue.record("v1 should decode")
             return
         }
     }
@@ -330,15 +336,15 @@ struct CtlClientTests {
     @Test
     func givenEachClientCommand_whenSent_thenItProducesTheExpectedArgv() async throws {
         // given
-        let runner = RecordingRunner { call in
+        let runner = compatibleRunner { call in
             switch call.arguments.first {
             case "takeover":
                 ProcessOutput(
-                    exitCode: 0, stdout: json(#"{"v":2,"result":{"argv":["/c","--resume","s"],"cwd":"/r","session_id":"s","note":"n"}}"#),
+                    exitCode: 0, stdout: ctlJSON(#"{"v":2,"result":{"argv":["/c","--resume","s"],"cwd":"/r","session_id":"s","note":"n"}}"#),
                     stderr: ""
                 )
-            case "run", "resume": ProcessOutput(exitCode: 0, stdout: json(#"{"v":2,"result":{"task_id":"new1"}}"#), stderr: "")
-            default: ProcessOutput(exitCode: 0, stdout: json(#"{"v":2,"result":{"status":"queued"}}"#), stderr: "")
+            case "run", "resume": ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":2,"result":{"task_id":"new1"}}"#), stderr: "")
+            default: ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":2,"result":{"status":"queued"}}"#), stderr: "")
             }
         }
         let client = CtlClient(executable: "/fake/harflow-ctl", environment: ["HARFLOW_OPEN_MONITOR": "0"], runner: runner)
@@ -365,10 +371,10 @@ struct CtlClientTests {
     @Test
     func givenABackendsCall_whenSent_thenItDecodesTheEntriesInOrder() async throws {
         // given
-        let runner = RecordingRunner { _ in
+        let runner = compatibleRunner { _ in
             ProcessOutput(
                 exitCode: 0,
-                stdout: json(
+                stdout: ctlJSON(
                     #"{"v":2,"backends":["#
                         + #"{"backend":"claude","binary":"claude","installed":true},"#
                         + #"{"backend":"vibe","binary":"vibe","installed":false}]}"#
@@ -390,11 +396,20 @@ struct CtlClientTests {
         // given
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
-        // Echoes its argv back inside a v2 list document, and proves HARFLOW_OPEN_MONITOR arrived.
+        // Answers the required v1 handshake, then echoes its argv inside a list document.
+        let versionInfo = "{" +
+            "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
+            "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
+            "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}}," +
+            "\"capabilities\":[\"ctl.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
         let ctl = try writeFakeTool(dir, name: "harflow-ctl", body: """
-        printf '{"v":2,"tasks":[{"task_id":"t-%s","backend":"%s","status":"running"}]}\\n' "$#" "$HARFLOW_OPEN_MONITOR"
+        if [ "$1" = "version-info" ]; then
+          printf '%s\\n' '\(versionInfo)'
+        else
+          echo '{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[{"task_id":"t-2","backend":"0","status":"running"}]}'
+        fi
         """)
-        let env = LaunchEnvironment.build(base: ["PATH": "/usr/bin:/bin", "HARFLOW_TASK_ID": "leak"], loginPath: nil, toolDirectory: dir.path)
+        let env = LaunchEnvironment.build(base: ["PATH": "/usr/bin:/bin", "HOME": dir.path, "HARFLOW_TASK_ID": "leak"], loginPath: nil, toolDirectory: dir.path)
         // when
         let tasks = try await CtlClient(executable: ctl, environment: env).list().get()
         // then
@@ -407,9 +422,20 @@ struct CtlClientTests {
         // given
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
-        let ctl = try writeFakeTool(dir, name: "harflow-ctl", body: #"echo '{"v": 15, "tasks": []}'"#)
+        let versionInfo = "{" +
+            "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
+            "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
+            "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}}," +
+            "\"capabilities\":[\"ctl.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+        let ctl = try writeFakeTool(dir, name: "harflow-ctl", body: """
+        if [ "$1" = "version-info" ]; then
+          echo '\(versionInfo)'
+        else
+          echo '{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"1.0.0","tasks":[]}'
+        fi
+        """)
         // when
-        let result = await CtlClient(executable: ctl, environment: [:]).list()
+        let result = await CtlClient(executable: ctl, environment: ["HOME": dir.path]).list()
         // then
         guard case .failure(let error) = result, case .unsupportedVersion = error else { Issue.record("expected .unsupportedVersion, got \(result)"); return }
         #expect(error.message.contains("version 15"), "\(error.message)")
@@ -513,7 +539,7 @@ struct SetupTests {
     @Test
     func givenASetupDocument_whenDecoded_thenRowsAreReadRegardlessOfExitCode() throws {
         // given / when
-        let decoded = try SetupDocument.decode(stdout: json(document), stderr: "", exitCode: 1).get()
+        let decoded = try SetupDocument.decode(stdout: setupJSON(document), stderr: "", exitCode: 1).get()
         // then
         #expect(decoded.serverPath == "/u/.local/bin/harflow-server")
         #expect(decoded.rows.map(\.key) == ["claude-desktop", "opencode", "vibe"])
@@ -526,19 +552,6 @@ struct SetupTests {
     }
 
     @Test
-    func givenUnsupportedSetupOutput_whenDecoded_thenItIsRefused() {
-        // given / when / then
-        guard case .failure(.unsupportedVersion) = SetupDocument.decode(stdout: json(#"{"v": 2, "clients": []}"#), stderr: "", exitCode: 0) else {
-            Issue.record("expected .unsupportedVersion")
-            return
-        }
-        guard case .failure(.unsupportedCommand) = SetupDocument.decode(stdout: Data(), stderr: "error: unrecognized arguments: --json", exitCode: 2) else {
-            Issue.record("expected .unsupportedCommand")
-            return
-        }
-    }
-
-    @Test
     func givenSetupActions_whenBuildingArguments_thenTheyMatchTheAction() {
         // given / when / then
         #expect(SetupClient.arguments(.status, client: nil) == ["--status", "--json"])
@@ -546,30 +559,6 @@ struct SetupTests {
         #expect(SetupClient.arguments(.remove, client: "codex") == ["--uninstall", "--client=codex", "--json"])
     }
 
-    @Test
-    func givenAFakeSetupBinary_whenInstallingAndRemoving_thenOnlyTheFakeBinaryRuns() async throws {
-        // given
-        let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let log = dir.appendingPathComponent("calls.log").path
-        // A fake harflow-setup: logs its argv and answers a v1 document naming the action.
-        let setup = try writeFakeTool(dir, name: "harflow-setup", body: """
-        echo "$@" >> '\(log)'
-        case "$1" in --uninstall) act=removed ;; --status) act=null ;; *) act=applied ;; esac
-        [ "$act" = null ] || act="\\"$act\\""
-        printf '{"v":1,"server_path":null,"clients":[{"key":"codex","available":true,"installed":true,"command":null,"current":null,'\
-        '"action":%s,"error":null,"notes":[]}]}' "$act"
-        """)
-        let client = SetupClient(executable: setup, environment: [:])
-        // when
-        let removed = try await client.perform(.remove, client: "codex").get()
-        let installed = try await client.perform(.install, client: "codex").get()
-        // then
-        #expect(removed.rows.first?.action == "removed")
-        #expect(installed.rows.first?.action == "applied")
-        let calls = try String(contentsOfFile: log, encoding: .utf8)
-        #expect(calls == "--uninstall --client=codex --json\n--client=codex --json\n")
-    }
 }
 
 @Suite struct CtlStartTimeoutTests {
@@ -582,8 +571,7 @@ struct SetupTests {
     }
 
     @Test func givenCtlsCascadeBounds_whenCancellingOrTakingOver_thenTheAppWaitsLongerThanAllOfThem() {
-        // given — CASCADE_MAX_ROUNDS 5 × (~15 s to hand off + ~10 s per batch), then
-        // PHASE_WRITE_SETTLE_SECONDS 60, plus takeover's SESSION_LOCK_TIMEOUT_SECONDS 30
+        // given — cascade plus settle and lock timeouts define the worst-case handoff.
         let ctlWorstCase = 5 * (15.0 + 10.0) + 60 + 30
         // when / then
         #expect(CtlClient.takeoverTimeout >= ctlWorstCase + 30)

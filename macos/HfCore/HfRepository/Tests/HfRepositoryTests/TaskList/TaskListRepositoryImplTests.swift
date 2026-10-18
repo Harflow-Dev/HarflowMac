@@ -10,6 +10,10 @@ import Testing
 
     func historyStdout(_ json: String) -> ProcessOutput {
         var raw = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:]
+        raw["product"] = raw["product"] ?? "harflow"
+        raw["format"] = raw["format"] ?? "harflow.ctl"
+        raw["v"] = 1
+        raw["product_version"] = raw["product_version"] ?? "1.0.0"
         if let items = raw.removeValue(forKey: "tasks") {
             raw["result"] = ["items": items, "next_cursor": NSNull(), "has_more": false, "bootstrap_pending": false]
         }
@@ -25,7 +29,7 @@ import Testing
         }
 .joined(separator: ",") + "]"
         let stub = runner ?? StubProcessRunner(output: historyStdout(#"{"v":2,"tasks":\#(payload)}"#))
-        return CtlClient(executable: "/bin/echo", environment: [:], runner: stub)
+        return CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(stub))
     }
 
     /// A `MockScheduling` pre-stubbed with harmless defaults for every member, used as `makeSUT`'s
@@ -76,7 +80,7 @@ import Testing
         return TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository,
             eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier, scheduler: scheduler,
-            visibility: visibility
+            visibility: visibility, compatibilityCheck: { _ in .success(()) }
         )
     }
 
@@ -94,7 +98,7 @@ import Testing
             if callCount.value == 1 { gate.waitSync() }
             return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
         // when

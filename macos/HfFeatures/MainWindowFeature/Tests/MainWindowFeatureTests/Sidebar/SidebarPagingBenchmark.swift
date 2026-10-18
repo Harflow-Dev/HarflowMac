@@ -76,7 +76,9 @@ struct SidebarPagingBenchmark {
         let result: [String: JSONValue] = ["items": .array(recent.map(JSONValue.object)),
             "related_headers": .array(parents.suffix(10).map(JSONValue.object)), "next_cursor": .string("opaque-page2"),
             "has_more": .bool(true), "bootstrap_pending": .bool(false), "total_active_count": .number(0)]
-        let document = JSONValue.object(["v": .number(5), "result": .object(result)]).rendered()
+        let document = JSONValue.object(["product": .string("harflow"), "format": .string("harflow.ctl"),
+            "v": .number(1), "product_version": .string("1.0.0"), "result": .object(result)])
+.rendered()
         return (all, document)
     }
 

@@ -21,8 +21,11 @@ extension TaskDetailVMTests {
         }
         let harness = makeConversationSUT(openedAs: "decision-0", initialMembers: members)
         for member in members {
-            let event: [String: JSONValue] = ["v": .number(1), "seq": .number(1), "kind": .string("assistant_text"),
-                                               "text": .string("Activity from " + member.taskID)]
+            let event: [String: JSONValue] = [
+                "product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+                "product_version": .string("1.0.0"), "seq": .number(1), "kind": .string("assistant_text"),
+                "text": .string("Activity from " + member.taskID)
+            ]
             harness.eventsBox[member.taskID]?.value = [try #require(TaskEvent(line: JSONValue.object(event).rendered()))]
         }
         // when
@@ -57,8 +60,11 @@ extension TaskDetailVMTests {
         }
         let harness = makeConversationSUT(openedAs: "decision-0", initialMembers: members)
         for (index, member) in members.enumerated() {
-            let event: [String: JSONValue] = ["v": .number(1), "seq": .number(1), "kind": .string("task_started"),
-                "prompt": .string(prompts[index])]
+            let event: [String: JSONValue] = [
+                "product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+                "product_version": .string("1.0.0"), "seq": .number(1), "kind": .string("task_started"),
+                "prompt": .string(prompts[index])
+            ]
             harness.eventsBox[member.taskID]?.value = [try #require(TaskEvent(line: JSONValue.object(event).rendered()))]
         }
         // when
@@ -98,8 +104,11 @@ extension TaskDetailVMTests {
         let current = try #require(TaskInfo(.object(currentRaw)))
         let harness = makeConversationSUT(openedAs: "b", initialMembers: [first, current])
         for (id, text) in [("a", "Original assignment"), ("b", "Answer to the worker question")] {
-            let event: [String: JSONValue] = ["v": .number(1), "seq": .number(1), "kind": .string("user_message"),
-                                               "source": .string("initial"), "text": .string(text)]
+            let event: [String: JSONValue] = [
+                "product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+                "product_version": .string("1.0.0"), "seq": .number(1), "kind": .string("user_message"),
+                "source": .string("initial"), "text": .string(text)
+            ]
             harness.eventsBox[id]?.value = [try #require(TaskEvent(line: JSONValue.object(event).rendered()))]
         }
         // when
@@ -137,8 +146,11 @@ extension TaskDetailVMTests {
         }
         let harness = makeConversationSUT(openedAs: "attempt-0", initialMembers: members)
         for (index, member) in members.enumerated() {
-            let event: [String: JSONValue] = ["v": .number(1), "seq": .number(1), "kind": .string("user_message"),
-                "source": .string("initial"), "text": .string("Assignment \(index)")]
+            let event: [String: JSONValue] = [
+                "product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+                "product_version": .string("1.0.0"), "seq": .number(1), "kind": .string("user_message"),
+                "source": .string("initial"), "text": .string("Assignment \(index)")
+            ]
             harness.eventsBox[member.taskID]?.value = [try #require(TaskEvent(line: JSONValue.object(event).rendered()))]
         }
         // when

@@ -11,7 +11,7 @@ extension TaskListRepositoryImplTests {
 
     private func listingClient(_ entries: [String]) -> CtlClient {
         let runner = StubProcessRunner(output: historyStdout(#"{"v":2,"tasks":[\#(entries.joined(separator: ","))]}"#))
-        return CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
+        return CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))
     }
 
     private func entry(_ id: String, status: String = "running", title: String? = nil) -> String {
@@ -23,7 +23,7 @@ extension TaskListRepositoryImplTests {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for (id, prompt) in prompts {
-            try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"\#(prompt)"}"# + "\n")
+            try? (currentEventFixture(#"{"v":1,"seq":1,"kind":"task_started","prompt":"\#(prompt)"}"#) + "\n")
                 .write(to: dir.appendingPathComponent("\(id).events.jsonl"), atomically: true, encoding: .utf8)
         }
         return dir

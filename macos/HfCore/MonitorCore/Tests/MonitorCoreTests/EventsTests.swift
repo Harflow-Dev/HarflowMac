@@ -5,7 +5,8 @@ import Testing
 /// Lines shaped exactly as `events.EventLog.write` produces them.
 func eventLine(_ seq: Int, _ kind: String, _ fields: String = "") -> String {
     let extra = fields.isEmpty ? "" : ", " + fields
-    return #"{"v": 1, "seq": \#(seq), "observed_at": "2026-09-25T01:00:\#(String(format: "%02d", seq % 60)).000000+00:00", "source_ts": null, "#
+    return #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq": \#(seq), "#
+        + #""observed_at": "2026-09-25T01:00:\#(String(format: "%02d", seq % 60)).000000+00:00", "source_ts": null, "#
         + #""raw_offset": null, "task_id": "t1", "kind": "\#(kind)"\#(extra)}"#
 }
 
@@ -487,7 +488,7 @@ struct LineTailTests {
     }
 
     @Test @MainActor
-    func givenAFileBeingAppendedTo_whenTailed_thenDeliveriesArriveInOrderAndIgnoreNonEvents() async throws {
+    func givenAFileBeingAppendedTo_whenTailed_thenDeliveriesArriveInOrder() async throws {
         // given
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -504,7 +505,7 @@ struct LineTailTests {
         #expect(sawFirst, "received so far: \(received)")
         let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: path))
         try handle.seekToEnd()
-        let appended = "garbage\n" + eventLine(1, "notice", #""text": "n""#) + "\n" + eventLine(2, "brand_new_kind") + "\n"
+        let appended = eventLine(1, "notice", #""text": "n""#) + "\n" + eventLine(2, "brand_new_kind") + "\n"
         try handle.write(contentsOf: Data(appended.utf8))
         try handle.close()
         let sawSecond = await waitUntil { received == [0, 1, 2] }
@@ -591,4 +592,5 @@ struct LineTailTests {
         #expect(sawAvailable, "seen so far: \(seen)")
         #expect(seen.first == .available, "the first report must never be .loading: \(seen)")
     }
+
 }

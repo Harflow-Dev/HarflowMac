@@ -5,6 +5,15 @@ import Mockable
 import MonitorCore
 import Testing
 
+private func takeoverCtl(_ payload: String) -> ProcessOutput {
+    guard var object = JSONValue.parse(Data(payload.utf8))?.objectValue else { return stdout(payload) }
+    object["product"] = .string("harflow")
+    object["format"] = .string("harflow.ctl")
+    object["v"] = .number(1)
+    object["product_version"] = .string("1.0.0")
+    return stdout(JSONValue.object(object).rendered())
+}
+
 @Suite struct TakeoverServiceImplTests {
 
     private func makeSUT(
@@ -219,14 +228,14 @@ import Testing
         await run(taskID: "locator-failure", ctl: .failure(.notFound(tool: "harflow-ctl", searched: [])), runner: StubProcessRunner(output: stdout("")))
 
         // grant refused.
-        let refusingRunner = StubProcessRunner { _ in .success(stdout(#"{"v":2,"error":{"code":"session_busy","message":"nope"}}"#)) }
+        let refusingRunner = StubProcessRunner(compatibleOutput: takeoverCtl(#"{"error":{"code":"session_busy","message":"nope"}}"#))
         await run(
             taskID: "grant-refused", ctl: .success(CtlClient(executable: "/bin/echo", environment: [:], runner: refusingRunner)),
             runner: StubProcessRunner(output: stdout(""))
         )
 
         // Terminal.app open fails.
-        let grantingRunner = StubProcessRunner { _ in .success(stdout(#"{"v":2,"result":{"argv":["claude"],"cwd":"/tmp"}}"#)) }
+        let grantingRunner = StubProcessRunner(compatibleOutput: takeoverCtl(#"{"result":{"argv":["claude"],"cwd":"/tmp"}}"#))
         await run(
             taskID: "open-fails", ctl: .success(CtlClient(executable: "/bin/echo", environment: [:], runner: grantingRunner)),
             runner: StubProcessRunner(output: ProcessOutput(exitCode: 1, stdout: Data(), stderr: "", timedOut: false))
@@ -247,7 +256,7 @@ import Testing
         // that awaits the grant is even created, so the second call below is guaranteed to observe
         // the first call's busy state without needing to await anything in between.
         let toolEnvironment = MockToolEnvironmentRepository()
-        let grantingRunner = StubProcessRunner(output: stdout(#"{"v":2,"result":{"argv":["claude"],"cwd":"/tmp"}}"#))
+        let grantingRunner = StubProcessRunner(compatibleOutput: takeoverCtl(#"{"result":{"argv":["claude"],"cwd":"/tmp"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: grantingRunner)))
         given(toolEnvironment).environment(toolDirectory: .any).willReturn([:])
         let taskList = MockTaskListRepository()

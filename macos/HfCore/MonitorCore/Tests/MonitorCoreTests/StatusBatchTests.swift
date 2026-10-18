@@ -8,13 +8,9 @@ import Testing
 /// dedicated decoder, driven from real JSON — never a mocked client.
 @Suite struct StatusBatchTests {
 
-    private func ok(_ text: String) -> ProcessOutput {
-        ProcessOutput(exitCode: 0, stdout: Data(text.utf8), stderr: "", timedOut: false)
-    }
-
     @Test func givenAMixedBatch_whenDecoded_thenTasksAndErrorsAreBothKept() throws {
         // given — a document the generic `tasks` branch would have stripped down to just the array.
-        let stdout = json(#"""
+        let stdout = ctlJSON(#"""
         {"v":11,"tasks":[
             {"task_id":"a","status":"running","backend":"claude","started_at":"2026-10-17T10:00:00+00:00"},
             {"task_id":"b","status":"completed","backend":"codex"}
@@ -37,7 +33,7 @@ import Testing
 
     @Test func givenABatchWithNoErrorsKey_whenDecoded_thenTheTasksDecode() throws {
         // given
-        let stdout = json(#"{"v":11,"tasks":[{"task_id":"a","status":"running","backend":"claude"}]}"#)
+        let stdout = ctlJSON(#"{"v":11,"tasks":[{"task_id":"a","status":"running","backend":"claude"}]}"#)
         // when
         let batch = try #require(try CtlDocument.decodeBatchResult(stdout: stdout, stderr: "", exitCode: 0, command: "status-batch").get())
         // then
@@ -47,7 +43,7 @@ import Testing
 
     @Test func givenABatchErrorDocument_whenDecoded_thenTheWholeBatchFails() {
         // given — authority failures fail the whole command, never partial data.
-        let stdout = json(#"{"v":11,"error":{"code":"caller_undecidable","message":"could not decide"}}"#)
+        let stdout = ctlJSON(#"{"v":11,"error":{"code":"caller_undecidable","message":"could not decide"}}"#)
         // when
         let result = CtlDocument.decodeBatchResult(stdout: stdout, stderr: "", exitCode: 0, command: "status-batch")
         // then
@@ -69,7 +65,7 @@ import Testing
     @Test func givenAMalformedTaskEntry_whenDecoded_thenTheWholeBatchIsUnreadable() {
         // given — one entry missing its `task_id`: a compactMap would silently drop it and leave
         // the caller believing the id simply had no status.
-        let stdout = json(#"{"v":11,"tasks":[{"status":"running"}],"errors":{}}"#)
+        let stdout = ctlJSON(#"{"v":11,"tasks":[{"status":"running"}],"errors":{}}"#)
         // when
         let result = CtlDocument.decodeBatchResult(stdout: stdout, stderr: "", exitCode: 0, command: "status-batch")
         // then
@@ -83,8 +79,8 @@ import Testing
 
     @Test func givenIds_whenStatusBatchIsCalled_thenOneInvocationCarriesThemAll() async throws {
         // given
-        let runner = RecordingRunner { _ in
-            ok(#"{"v":11,"tasks":[],"errors":{}}"#)
+        let runner = compatibleRunner { _ in
+            ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":11,"tasks":[],"errors":{}}"#), stderr: "")
         }
         let client = CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
 
@@ -103,7 +99,7 @@ import Testing
 
     @Test func givenMoreThanOneHundredIds_whenStatusBatchIsCalled_thenOnlyTheFirstHundredAreSent() async throws {
         // given
-        let runner = RecordingRunner { _ in ok(#"{"v":11,"tasks":[],"errors":{}}"#) }
+        let runner = compatibleRunner { _ in ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":11,"tasks":[],"errors":{}}"#), stderr: "") }
         let client = CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
         let ids = (1 ... 120).map { "task-\($0)" }
 
@@ -118,7 +114,7 @@ import Testing
 
     @Test func givenNoIds_whenStatusBatchIsCalled_thenNoProcessRunsAndTheBatchIsEmpty() async throws {
         // given
-        let runner = RecordingRunner { _ in ok(#"{"v":11,"tasks":[],"errors":{}}"#) }
+        let runner = compatibleRunner { _ in ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":11,"tasks":[],"errors":{}}"#), stderr: "") }
         let client = CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
 
         // when
@@ -133,7 +129,7 @@ import Testing
     @Test func givenABatchAnswerWithMalformedErrors_whenDecoded_thenTasksStillDecodeAndBadEntriesDrop() throws {
         // given — an error entry missing its `code` cannot be classified; it is dropped rather
         // than failing the tasks that did answer (their ids simply stay "unknown outcome").
-        let stdout = json(#"{"v":11,"tasks":[{"task_id":"a","status":"running","backend":"claude"}],"errors":{"x":{"message":"no code"}}}"#)
+        let stdout = ctlJSON(#"{"v":11,"tasks":[{"task_id":"a","status":"running","backend":"claude"}],"errors":{"x":{"message":"no code"}}}"#)
         // when
         let batch = try #require(try CtlDocument.decodeBatchResult(stdout: stdout, stderr: "", exitCode: 0, command: "status-batch").get())
         // then

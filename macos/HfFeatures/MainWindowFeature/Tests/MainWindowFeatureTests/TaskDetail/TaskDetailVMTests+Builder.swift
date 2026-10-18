@@ -18,7 +18,8 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([builder])
         await waitUntil { harness.sut.task != nil }
-        let event = try #require(TaskEvent(line: #"{"v":1,"seq":0,"kind":"notice","text":"MCP tool call requires approval, but approval policy is never"}"#))
+        let event = try #require(TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":0,"kind":"notice","text":"MCP tool call requires approval, but approval policy is never"}"#))
         harness.sut.rawEvents = [event]
         given(harness.useCase).allowHarflowTools(backend: .value("codex")).willReturn([:])
         var captured: ViewEvent?

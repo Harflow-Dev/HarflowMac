@@ -8,11 +8,10 @@ public extension CtlClient {
         var options = ["--backend=\(backend)"]
         if let allow { options.append("--allow=\(allow)") }
         if let remove { options.append("--remove=\(remove)") }
-        let output = await runner.run(executable: executable, arguments: Self.argv("mcp-allowlist", options: options),
-                                      environment: environment, currentDirectory: nil, timeout: 25)
+        let output = await raw("mcp-allowlist", options: options, timeout: 25)
         return output.flatMap { output in
-            if output.timedOut { return .failure(.timedOut(tool: "harflow-ctl mcp-allowlist", seconds: 25)) }
-            return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode, command: "mcp-allowlist")
+            CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
+                                      command: "mcp-allowlist", productVersion: compatibilityContext.productVersion)
                 .requiringSuccess()
 .flatMap { document in
                     if case .result(let payload) = document { return .success(payload) }

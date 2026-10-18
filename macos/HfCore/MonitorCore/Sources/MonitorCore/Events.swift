@@ -86,7 +86,7 @@ public struct TaskEvent: Equatable, Identifiable, Sendable {
     /// nil for a line that is not a v1 event at all (not JSON, no `kind`, another `v`).
     public init?(line: String) {
         guard let object = JSONValue.parse(Data(line.utf8))?.objectValue,
-              object["v"]?.intValue == eventLogVersion,
+              WireEnvelope.validate(object, contract: .events) == nil,
               let kindName = object["kind"]?.stringValue else { return nil }
         rawLine = line
         seq = object["seq"]?.intValue ?? -1

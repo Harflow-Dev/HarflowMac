@@ -251,7 +251,10 @@ import Testing
         fields.append(["kind": "task_finished", "status": "completed", "exit_code": 0])
         return try fields.enumerated().map { index, fields in
             var value = fields
+            value["product"] = "harflow"
+            value["format"] = "harflow.event"
             value["v"] = 1
+            value["product_version"] = "1.0.0"
             value["seq"] = index
             let line = try #require(String(data: JSONSerialization.data(withJSONObject: value), encoding: .utf8))
             return try #require(TaskEvent(line: line))

@@ -5,7 +5,7 @@ import MonitorCore
 
 public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendable {
 
-    private let toolEnvironment: any ToolEnvironmentRepository
+    let toolEnvironment: any ToolEnvironmentRepository
     private let snapshotRepository: any TaskSnapshotRepository
     private let eventStreamRepository: any EventStreamRepository
     private let finishNotifier: any FinishNotifier
@@ -30,15 +30,18 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     let hiddenIdleTicks = HiddenIdleTickCounter()
     private let titlesLock = NSLock()
     private var failedTitleIDs: Set<String> = []
-    private let startLock = NSLock()
-    private var started = false
+    let startLock = NSLock()
+    var started = false
+    var compatibilityGeneration = 0
+    let compatibilityCheck: StoreCompatibilityCheck
 
-    private let watcherLock = NSLock()
-    private var watcher: DirectoryWatcher?
-    private var pollToken: AnyCancellable?
+    let watcherLock = NSLock()
+    var watcher: DirectoryWatcher?
+    var pollToken: AnyCancellable?
+    var compatibilityRetryToken: AnyCancellable?
 
     @Subjected var historyStateValue = HistoryLoadingState()
-    private let historyLock = NSRecursiveLock()
+    let historyLock = NSRecursiveLock()
     private var historyTasks: [String: TaskInfo] = [:]
     private var relatedTasks: [String: TaskInfo] = [:]
     private var totalActiveCount = 0
@@ -70,7 +73,8 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         eventStreamRepository: any EventStreamRepository,
         finishNotifier: any FinishNotifier,
         scheduler: any Scheduling,
-        visibility: any MonitorVisibility
+        visibility: any MonitorVisibility,
+        compatibilityCheck: StoreCompatibilityCheck? = nil
     ) {
         self.toolEnvironment = toolEnvironment
         self.snapshotRepository = snapshotRepository
@@ -78,6 +82,9 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         self.finishNotifier = finishNotifier
         self.scheduler = scheduler
         self.visibility = visibility
+        self.compatibilityCheck = compatibilityCheck ?? { root in
+            await StoreCompatibility.check(toolEnvironment: toolEnvironment, expectedStateRoot: root, requiring: [.ctl, .events])
+        }
     }
 
     public var tasks: [TaskInfo] { tasksValue }
@@ -93,47 +100,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
     // MARK: Startup (MS-LIST-1/F4-01)
 
-    public func start() {
-        startLock.lock()
-        guard !started else { startLock.unlock(); return }
-        started = true
-        startLock.unlock()
-        Task {
-            _ = await toolEnvironment.discoverEnvironment()
-            await refresh()
-            startWatching()
-        }
-    }
-
-    private func startWatching() {
-        let watcher = DirectoryWatcher(path: toolEnvironment.tasksDirectory) { [weak self] names in
-            guard names.contains(where: RefreshTrigger.isRelevant) else { return }
-            self?.scheduleThrottledRefresh()
-        }
-        watcher.start()
-        // A dead owner writes nothing, and the tasks folder may not exist yet: a 10 s safety poll
-        // while that matters, and an unconditional reconcile every minute regardless (F4-06).
-        // While nothing is visible and nothing needs attention, the cadence stretches to 30 s —
-        // three ticks — since nobody is looking; anything busy (running, unreconciled, erroring,
-        // bootstrap, dead watcher) keeps its 10 s urgency, and a due 60 s reconcile always wins.
-        let token = scheduler.scheduleRepeating(every: 10) { [weak self] in
-            guard let self else { return }
-            Task {
-                await self.evaluateSafetyPoll()
-                self.countSafetyPollEvaluation()
-            }
-        }
-        // `watcher` and `pollToken` are set together, under the same lock that guards every other
-        // read of `watcher` (`watcherActive`, `restartWatcherIfInactive`) — `pollToken` is written
-        // only here, but `startWatching()` runs on whatever thread `start()`'s Task resumes on,
-        // which is not guaranteed to be the same thread across calls, so the write still needs the
-        // lock for correct publication to any later reader.
-        watcherLock.lock()
-        self.watcher = watcher
-        pollToken = token
-        watcherLock.unlock()
-    }
-
     var watcherActive: Bool {
         watcherLock.lock(); defer { watcherLock.unlock() }
         return watcher?.isActive ?? false
@@ -141,7 +107,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
     // MARK: Throttled refresh (MS-LIST-2/F4-07: leading-arm, fixed-delay — never a debounce)
 
-    private func scheduleThrottledRefresh() {
+    func scheduleThrottledRefresh() {
         throttleLock.lock()
         guard pendingRefreshToken == nil else { throttleLock.unlock(); return }
         let token = scheduler.schedule(after: 1) { [weak self] in
@@ -171,12 +137,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             Task { await self.refresh() }
         }
     }
-
-    public func settingsChanged() {
-        Task { await refresh() }
-    }
-
-    // MARK: Refresh (MS-LIST-4/F4-08/F4-09)
 
     public func refresh() async {
         guard await refreshCoordinator.begin() else {
@@ -208,6 +168,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     /// either returns immediately (`refresh()`) or is resolved as a waiter by the pass it is owed.
     /// Returns the loop's first pass's result.
     private func runRefreshLoop() async -> Result<Void, ToolError> {
+        let generation = refreshGeneration()
         var firstResult: Result<Void, ToolError>?
         repeat {
             let owed = await refreshCoordinator.beginPass()
@@ -216,7 +177,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             let continueLoop = await refreshCoordinator.endPass(owed: owed, result: result)
             if !continueLoop { break }
         } while true
-        restartWatcherIfInactive()
+        if case .success = firstResult, refreshIsCurrent(generation) { restartWatcherIfInactive() }
         return firstResult ?? .success(())
     }
 
@@ -232,36 +193,48 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     /// caller waiting on it sees the same success/failure the listing itself just recorded.
     @discardableResult
     private func runOneRefresh() async -> Result<Void, ToolError> {
-        let result: Result<[TaskInfo], ToolError>
-        switch toolEnvironment.ctl() {
-        case .failure(let error): result = .failure(error)
-        case .success(let client):
-            let first = await client.taskHistoryPage()
-            switch first {
-            case .failure(let error): result = .failure(error)
-            case .success(let page):
-                if !page.page.catalogState.isReady || page.page.bootstrapPending || page.page.authorityIncomplete {
-                    result = .success(mergeHistory(page))
-                    break
-                }
-                do {
-                    let activePage = try await client.taskHistoryPage(activeOnly: true).get()
-                    if !activePage.page.catalogState.isReady || activePage.page.bootstrapPending || activePage.page.authorityIncomplete {
-                        result = .success(mergeHistory(page, active: activePage))
-                        break
-                    }
-                    let visible = Set(page.items.map(\.taskID) + activePage.items.map(\.taskID))
-                    let stale = nextActiveRefreshBatch(excluding: visible)
-                    let updates = stale.isEmpty ? nil : try await client.taskHistoryPage(taskIDs: stale).get()
-                    let terminalIDs = nextTerminalRefreshBatch(excluding: visible)
-                    let terminalPage = terminalIDs.isEmpty ? nil : try await client.taskHistoryPage(taskIDs: terminalIDs).get()
-                    result = .success(mergeHistory(page, active: activePage, updates: updates,
-                                                  terminalPage: terminalPage, terminalIDs: terminalIDs))
-                } catch {
-                    result = .failure(error as? ToolError ?? .unreadable(tool: "harflow-ctl", exitCode: 0, stderr: String(describing: error)))
-                }
-            }
+        let generation = refreshGeneration()
+        let root = (toolEnvironment.tasksDirectory as NSString).deletingLastPathComponent
+        let compatibility = await compatibilityCheck(root)
+        guard refreshIsCurrent(generation) else { return .failure(Self.supersededRefresh) }
+        if case .failure(let error) = compatibility {
+            listErrorValue = error
+            historyLock.withLock { historyStateValue.error = error }
+            return .failure(error)
         }
+        return await performCompatibleRefresh(generation: generation)
+    }
+
+    private func fetchCompatibleHistory(client: CtlClient, generation: Int) async throws -> [TaskInfo] {
+        try requireCurrentRefresh(generation)
+        let page = try await client.taskHistoryPage().get()
+        try requireCurrentRefresh(generation)
+        if !page.page.catalogState.isReady || page.page.bootstrapPending || page.page.authorityIncomplete { return mergeHistory(page) }
+        let activePage = try await client.taskHistoryPage(activeOnly: true).get()
+        try requireCurrentRefresh(generation)
+        if !activePage.page.catalogState.isReady || activePage.page.bootstrapPending || activePage.page.authorityIncomplete {
+            return mergeHistory(page, active: activePage)
+        }
+        let visible = Set(page.items.map(\.taskID) + activePage.items.map(\.taskID))
+        let stale = nextActiveRefreshBatch(excluding: visible)
+        let updates = stale.isEmpty ? nil : try await client.taskHistoryPage(taskIDs: stale).get()
+        try requireCurrentRefresh(generation)
+        let terminalIDs = nextTerminalRefreshBatch(excluding: visible)
+        let terminalPage = terminalIDs.isEmpty ? nil : try await client.taskHistoryPage(taskIDs: terminalIDs).get()
+        try requireCurrentRefresh(generation)
+        return mergeHistory(page, active: activePage, updates: updates, terminalPage: terminalPage, terminalIDs: terminalIDs)
+    }
+
+    private func performCompatibleRefresh(generation: Int) async -> Result<Void, ToolError> {
+        let result: Result<[TaskInfo], ToolError>
+        do {
+            var client = try toolEnvironment.ctl().get()
+            client.operationIsCurrent = { [weak self] in self?.refreshIsCurrent(generation) == true }
+            result = .success(try await fetchCompatibleHistory(client: client, generation: generation))
+        } catch {
+            result = .failure(error as? ToolError ?? .unreadable(tool: "harflow-ctl", exitCode: 0, stderr: String(describing: error)))
+        }
+        guard refreshIsCurrent(generation) else { return .failure(Self.supersededRefresh) }
         switch result {
         case .success(let listed):
             publishHistory()
@@ -289,6 +262,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             // a pre-batch ctl answers per id (the snapshot repository owns that fallback).
             let snapshotBatch = nextSnapshotRefreshBatch()
             if !snapshotBatch.isEmpty { await snapshotRepository.refresh(ids: snapshotBatch) }
+            guard refreshIsCurrent(generation) else { return .failure(Self.supersededRefresh) }
             return .success(())
         case .failure(let error):
             listErrorValue = error
@@ -545,7 +519,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         coalescedCallCount += 1
     }
 
-    private func countSafetyPollEvaluation() {
+    func countSafetyPollEvaluation() {
         safetyPollCountLock.lock()
         defer { safetyPollCountLock.unlock() }
         safetyPollEvaluationCount += 1

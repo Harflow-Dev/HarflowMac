@@ -1,6 +1,19 @@
 import Foundation
 @testable import HfRepository
 import MonitorCore
+import Testing
+
+/// Explicit v1 event fixture helper for positive repository tests.
+func currentEventFixture(_ text: String) -> String {
+    guard var object = JSONValue.parse(Data(text.utf8))?.objectValue else {
+        Issue.record("positive event fixture is not valid JSON")
+        return text
+    }
+    object["product"] = object["product"] ?? .string("harflow")
+    object["format"] = object["format"] ?? .string("harflow.event")
+    object["product_version"] = object["product_version"] ?? .string("1.0.0")
+    return JSONValue.object(object).rendered()
+}
 
 /// Builds a `TaskInfo` fixture the same way `MonitorCoreTests/LineageTests.swift` does.
 func makeTaskInfo(
@@ -29,6 +42,17 @@ final class StubProcessRunner: ProcessRunning, @unchecked Sendable {
     struct Call: Equatable {
         let executable: String
         let arguments: [String]
+        let environment: [String: String]
+
+        init(executable: String, arguments: [String], environment: [String: String] = [:]) {
+            self.executable = executable
+            self.arguments = arguments
+            self.environment = environment
+        }
+
+        static func == (lhs: Call, rhs: Call) -> Bool {
+            lhs.executable == rhs.executable && lhs.arguments == rhs.arguments
+        }
     }
 
     private let lock = NSLock()
@@ -48,10 +72,28 @@ final class StubProcessRunner: ProcessRunning, @unchecked Sendable {
         self.init { _ in .success(output) }
     }
 
+    /// Explicit positive-operation fixture: answer the v1 runtime handshake before returning the
+    /// supplied command result. Raw negative tests continue to use `init(output:)` directly.
+    convenience init(compatibleOutput output: ProcessOutput) {
+        self.init { call in
+            if call.arguments == ["version-info", "--json"] {
+                let root = NSHomeDirectory() + "/.harflow"
+                let versionInfo = "{" +
+                    "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
+                    "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(root)\"," +
+                    "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}," +
+                    "\"setup\":{\"format\":\"harflow.setup\",\"v\":1},\"events\":{\"format\":\"harflow.event\",\"v\":1}}," +
+                    "\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+                return .success(stdout(versionInfo))
+            }
+            return .success(output)
+        }
+    }
+
     func run(
-        executable: String, arguments: [String], environment _: [String: String], currentDirectory _: String?, timeout _: Double
+        executable: String, arguments: [String], environment: [String: String], currentDirectory _: String?, timeout _: Double
     ) async -> Result<ProcessOutput, ToolError> {
-        let call = Call(executable: executable, arguments: arguments)
+        let call = Call(executable: executable, arguments: arguments, environment: environment)
         record(call)
         // Off the cooperative pool, exactly like `ProcessRunner`: a test that gates `answer` with a
         // blocking `AsyncGate` must not hold a pool thread, or a narrow pool (a 3-core CI runner)
@@ -69,6 +111,26 @@ final class StubProcessRunner: ProcessRunning, @unchecked Sendable {
 
 func stdout(_ text: String) -> ProcessOutput {
     ProcessOutput(exitCode: 0, stdout: Data(text.utf8), stderr: "", timedOut: false)
+}
+
+/// Explicit positive-operation runner for clients that now probe the managed runtime first.
+/// Negative compatibility tests should keep using `StubProcessRunner` directly.
+func compatibleRunner(
+    answer: @escaping @Sendable (StubProcessRunner.Call) -> Result<ProcessOutput, ToolError>
+) -> StubProcessRunner {
+    StubProcessRunner { call in
+        if call.arguments == ["version-info", "--json"] {
+            let root = NSHomeDirectory() + "/.harflow"
+            let versionInfo = "{" +
+                "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
+                "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(root)\"," +
+                "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}," +
+                "\"setup\":{\"format\":\"harflow.setup\",\"v\":1},\"events\":{\"format\":\"harflow.event\",\"v\":1}}," +
+                "\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+            return .success(stdout(versionInfo))
+        }
+        return answer(call)
+    }
 }
 
 /// A tiny lock-protected box, since Swift Testing runs tests concurrently and a plain `var` captured

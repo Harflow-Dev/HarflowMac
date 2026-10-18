@@ -56,8 +56,11 @@ extension ParallelVMTests {
         raw["display_prompt"] = .string("Focused assignment")
         raw["summary"] = .string(contract)
         let worker = try #require(TaskInfo(.object(raw)))
-        let event = try #require(TaskEvent(line: JSONValue.object(["v": .number(1), "seq": .number(1),
-                                                                 "kind": .string("assistant_text"), "text": .string(contract)])
+        let event = try #require(TaskEvent(line: JSONValue.object([
+            "product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+            "product_version": .string("1.0.0"), "seq": .number(1),
+            "kind": .string("assistant_text"), "text": .string(contract)
+        ])
 .rendered()))
         harness.tasksBox.value = ["worker": worker]
         harness.itemsBox.value = ["worker": Timeline.items(from: [event])]

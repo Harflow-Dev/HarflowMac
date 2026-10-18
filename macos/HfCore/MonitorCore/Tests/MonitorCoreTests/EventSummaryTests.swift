@@ -6,8 +6,8 @@ import Testing
     @Test func givenManyUniqueEdits_whenPublished_thenTotalsStayCompleteAndFilePagesAreBounded() throws {
         var builder = EventSummaryBuilder()
         for index in 1 ... 250 {
-            let line = #"{"v":1,"seq":\#(index),"kind":"tool_call","call_id":"\#(index)","tool":"Edit","category":"edit", "#
-                + #""path":"\#(index).swift","input_preview":""}"#
+            let line = eventFixture(#"{"seq":\#(index),"kind":"tool_call","call_id":"\#(index)","tool":"Edit","category":"edit", "#
+                + #""path":"\#(index).swift","input_preview":""}"#)
             builder.append([try #require(TaskEvent(line: line))])
         }
         #expect(builder.summary.activity.edits == 250)
@@ -25,8 +25,9 @@ import Testing
             #"{"v":1,"seq":4,"kind":"tool_result","call_id":"old","ok":true,"output_tail":""}"#
         ]
         var builder = EventSummaryBuilder()
-        builder.append(lines.compactMap(TaskEvent.init(line:)))
+        builder.append(lines.map { eventFixture($0) }.compactMap(TaskEvent.init(line:)))
         #expect(builder.summary.totalFiles == 1)
         #expect(builder.summary.files == [EditedFile(path: "a.swift", status: .unconfirmed)])
     }
+
 }

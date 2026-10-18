@@ -19,12 +19,15 @@ import Testing
 extension TaskDetailVMTests {
 
     private func editCall(_ callID: String, path: String, seq: Int) -> TaskEvent {
-        TaskEvent(line: #"{"v":1,"seq":\#(seq),"kind":"tool_call","call_id":"\#(callID)","tool":"Edit","#
+        TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":\#(seq),"kind":"tool_call","call_id":"\#(callID)","tool":"Edit","#
+
             + #""category":"edit","input_preview":"{}","path":"\#(path)"}"#)!
     }
 
     private func okResult(_ callID: String, seq: Int) -> TaskEvent {
-        TaskEvent(line: #"{"v":1,"seq":\#(seq),"kind":"tool_result","call_id":"\#(callID)","ok":true,"output_tail":""}"#)!
+        TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":\#(seq),"kind":"tool_result","call_id":"\#(callID)","ok":true,"output_tail":""}"#)!
     }
 
     // MARK: - `.summary` tab availability wiring

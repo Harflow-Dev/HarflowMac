@@ -10,7 +10,7 @@ struct WorkflowClientTests {
         // given
         let definition = JSONValue.object(["prompt": .string("Private assignment\nwith exact whitespace  ")])
         let expected = Data(definition.rendered().utf8)
-        let runner = RecordingRunner { call in
+        let runner = compatibleRunner { call in
             let argument = call.arguments.first { $0.hasPrefix("--definition=") }!
             let file = URL(fileURLWithPath: String(argument.dropFirst("--definition=".count)))
             let manager = FileManager.default
@@ -20,7 +20,7 @@ struct WorkflowClientTests {
             #expect(fileMode?.intValue == 0o600)
             #expect(directoryMode?.intValue == 0o700)
             #expect(!call.arguments.contains { $0.contains("Private assignment") })
-            return ProcessOutput(exitCode: exitCode, stdout: json(#"{"v":1,"ok":true,"result":{}}"#), stderr: "", timedOut: false)
+            return ProcessOutput(exitCode: exitCode, stdout: ctlJSON(#"{"v":1,"ok":true,"result":{}}"#), stderr: "", timedOut: false)
         }
         let client = CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)
 
@@ -43,8 +43,8 @@ struct WorkflowClientTests {
     @Test(arguments: [String?.none, "expected-identity"])
     func givenSavedWorkflowIdentity_whenSaving_thenGuardIsTransportedOnlyWhenSupplied(identity: String?) async throws {
         // given
-        let runner = RecordingRunner { _ in
-            ProcessOutput(exitCode: 0, stdout: json(#"{"v":1,"ok":true,"result":{}}"#), stderr: "", timedOut: false)
+        let runner = compatibleRunner { _ in
+            ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":1,"ok":true,"result":{}}"#), stderr: "", timedOut: false)
         }
         let client = CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)
         // when

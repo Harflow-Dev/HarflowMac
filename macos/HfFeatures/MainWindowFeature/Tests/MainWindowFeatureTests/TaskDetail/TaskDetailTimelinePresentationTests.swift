@@ -49,7 +49,8 @@ extension TaskDetailVMTests {
     @Test func givenTimelineInput_whenBuiltDetached_thenRunsOffMainAndRetainsCompleteValues() async throws {
         // given
         let task = task(status: "running")
-        let event = try #require(TaskEvent(line: #"{"v":1,"seq":1,"kind":"assistant_text","text":"Synthetic activity"}"#))
+        let event = try #require(TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":1,"kind":"assistant_text","text":"Synthetic activity"}"#))
         let input = TaskDetailTimelineInput(task: task,
             members: [ParallelMemberInput(task: task, items: Timeline.items(from: [event]), prompt: nil, availability: .available)],
             children: [], start: task.startedAt, isBuilder: false, events: [event], snapshot: task,
@@ -183,13 +184,15 @@ private actor DetailBuildGate {
     }
 
     private func textItem(_ seq: Int, _ text: String) throws -> TimelineItem {
-        let event = try #require(TaskEvent(line: #"{"v":1,"seq":\#(seq),"kind":"assistant_text","text":"\#(text)"}"#))
+        let event = try #require(TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":\#(seq),"kind":"assistant_text","text":"\#(text)"}"#))
         return try #require(Timeline.items(from: [event]).first)
     }
 
     private func toolItem(_ seq: Int) throws -> TimelineItem {
         let event = try #require(
-            TaskEvent(line: #"{"v":1,"seq":\#(seq),"kind":"tool_call","call_id":"c\#(seq)","tool":"Read","category":"read","input_preview":""}"#)
+            TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":\#(seq),"kind":"tool_call","call_id":"c\#(seq)","tool":"Read","category":"read","input_preview":""}"#)
         )
         return try #require(Timeline.items(from: [event]).first)
     }

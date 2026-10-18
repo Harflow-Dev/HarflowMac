@@ -30,9 +30,11 @@ extension TaskDetailVMTests {
         let harness = makeSUT()
         let running = task(status: "running")
         harness.detailBox.value = running
-        harness.eventsBox.value = [TaskEvent(line: #"{"v":1,"seq":0,"kind":"assistant_text","text":"FROM RAW EVENTS"}"#)!]
+        harness.eventsBox.value = [TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":0,"kind":"assistant_text","text":"FROM RAW EVENTS"}"#)!]
         harness.itemsOverride.value = Timeline.items(from: [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"assistant_text","text":"FROM THE REPOSITORYS OWN ITEMS"}"#)!
+            TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":0,"kind":"assistant_text","text":"FROM THE REPOSITORYS OWN ITEMS"}"#)!
         ])
 
         // when
@@ -66,7 +68,8 @@ extension TaskDetailVMTests {
         let harness = makeSUT()
         let running = task(status: "running")
         harness.detailBox.value = running
-        harness.eventsBox.value = [TaskEvent(line: #"{"v":1,"seq":0,"kind":"assistant_text","text":"STALE RAW EVENTS"}"#)!]
+        harness.eventsBox.value = [TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":0,"kind":"assistant_text","text":"STALE RAW EVENTS"}"#)!]
         // `items(for:)` is explicitly empty at lease-acquisition time, so the ONLY way the Timeline
         // can show anything below is the `itemsSubject.send(...)` a few lines down — never a
         // fallback to `eventsBox`'s content.
@@ -78,7 +81,8 @@ extension TaskDetailVMTests {
 
         // when — the repository publishes a fresh items snapshot, unrelated to `eventsBox`'s content.
         let published = Timeline.items(from: [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"assistant_text","text":"PUBLISHED VIA ITEMS PUBLISHER"}"#)!
+            TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":0,"kind":"assistant_text","text":"PUBLISHED VIA ITEMS PUBLISHER"}"#)!
         ])
         harness.itemsSubject.send(published)
 
@@ -133,7 +137,7 @@ extension TaskDetailVMTests {
 
         // when
         harness.itemsSubject.send(Timeline.items(from: [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"assistant_text","text":"hello"}"#)!
+            TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":0,"kind":"assistant_text","text":"hello"}"#)!
         ]))
 
         await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
@@ -183,8 +187,10 @@ extension TaskDetailVMTests {
 
         // when — an edit arrives while the Timeline tab (not Summary) is showing.
         harness.eventsBox.value = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/a.swift"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)!
+            TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/a.swift"}"#)!,
+            TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)!
         ]
         harness.itemsSubject.send([])
         try? await Task.sleep(for: .milliseconds(100))

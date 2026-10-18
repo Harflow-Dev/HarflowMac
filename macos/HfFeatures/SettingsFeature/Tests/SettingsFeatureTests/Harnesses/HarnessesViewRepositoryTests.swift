@@ -10,7 +10,11 @@ import Testing
 @Suite struct HarnessesViewRepositoryTests {
     
     private func document(_ json: String) throws -> SetupDocument {
-        try SetupDocument.decode(stdout: Data(json.utf8), stderr: "", exitCode: 0).get()
+        var object = JSONValue.parse(Data(json.utf8))!.objectValue!
+        object["product"] = object["product"] ?? .string("harflow")
+        object["format"] = object["format"] ?? .string("harflow.setup")
+        object["product_version"] = object["product_version"] ?? .string("1.0.0")
+        return try SetupDocument.decode(stdout: Data(JSONValue.object(object).rendered().utf8), stderr: "", exitCode: 0).get()
     }
     
     @Test func givenStatus_whenCalled_thenItPassesThroughToHarnessRepository() async throws {

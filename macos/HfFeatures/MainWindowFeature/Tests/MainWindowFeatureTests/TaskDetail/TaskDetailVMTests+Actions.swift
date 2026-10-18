@@ -237,7 +237,7 @@ extension TaskDetailVMTests {
         let eventsBox = harness.eventsBox
         let running = task(status: "running")
         detailBox.value = running
-        let unknownLine = #"{"v":1,"seq":1,"kind":"some_future_kind"}"#
+        let unknownLine = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":1,"kind":"some_future_kind"}"#
         let unknownEvent = TaskEvent(line: unknownLine)!
         eventsBox.value = [unknownEvent]
         sut.didAppear()

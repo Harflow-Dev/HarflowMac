@@ -51,7 +51,12 @@ import Testing
         for id in ids { try text.write(to: directory.appendingPathComponent("\(id).events.jsonl"), atomically: true, encoding: .utf8) }
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(directory.path)
-        let repository = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: NullTaskSnapshotRepository(), scheduler: NullScheduling())
+        let repository = EventStreamRepositoryImpl(
+            toolEnvironment: environment,
+            snapshotRepository: NullTaskSnapshotRepository(),
+            scheduler: NullScheduling(),
+            compatibilityCheck: { _ in .success(()) }
+        )
         var leases: [any EventStreamLease] = []
         defer { leases.forEach { $0.release() } }
         var records: [[String: Any]] = []
@@ -92,7 +97,7 @@ import Testing
     }
 
     private func eventLine(_ seq: Int) -> String {
-        #"{"v":1,"seq":\#(seq),"kind":"assistant_text","text":"synthetic activity row"}"#
+        currentEventFixture(#"{"v":1,"seq":\#(seq),"kind":"assistant_text","text":"synthetic activity row"}"#)
     }
 
     private func record(_ scenario: String, _ start: UInt64, _ conversations: Int, _ sample: Int,

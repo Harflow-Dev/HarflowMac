@@ -240,8 +240,8 @@ struct TaskEventTimestampCharacterizationTests {
     @Test
     func givenOnlySourceTimestamp_whenAskedForTheDisplayTimestamp_thenItFallsBackToSourceTimestamp() {
         // given
-        let line = #"{"v": 1, "seq": 0, "observed_at": null, "source_ts": "2020-01-01T00:00:00+00:00", "#
-            + #""raw_offset": null, "task_id": "t1", "kind": "notice", "text": "n"}"#
+        let line = eventFixture(#"{"seq": 0, "observed_at": null, "source_ts": "2020-01-01T00:00:00+00:00", "#
+            + #""raw_offset": null, "task_id": "t1", "kind": "notice", "text": "n"}"#)
         let event = TaskEvent(line: line)!
         // when / then
         #expect(event.observedAt == nil)
@@ -255,7 +255,7 @@ struct CtlDocumentFirstJSONObjectCharacterizationTests {
     @Test
     func givenLeadingBlankLinesBeforeTheJSONDocument_whenDecoded_thenTheDocumentIsStillFound() {
         // given
-        let stdout = Data("\n\n{\"v\": 1, \"tasks\": []}\n".utf8)
+        let stdout = Data(("\n\n" + String(data: ctlJSON(#"{"tasks": []}"#), encoding: .utf8)! + "\n").utf8)
         // when
         let result = CtlDocument.decode(stdout: stdout, stderr: "", exitCode: 0, command: "list")
         // then
@@ -264,16 +264,15 @@ struct CtlDocumentFirstJSONObjectCharacterizationTests {
     }
 
     @Test
-    func givenANonJSONLineFollowedByAJSONLine_whenDecoded_thenTheFirstValidJSONLineWins() {
+    func givenANonJSONLineFollowedByAJSONLine_whenDecoded_thenTheWholeResponseIsRejected() {
         // given
-        // A stray log line before the real JSON document, on its own line (firstJSONObject only
-        // splits on newlines — it does not hunt for embedded JSON within a single line).
-        let stdout = Data("some log noise\n{\"v\": 1, \"tasks\": []}\n".utf8)
+        // A stray log line before the real JSON document makes the response invalid; the decoder
+        // requires one complete JSON document rather than hunting for embedded JSON.
+        let stdout = Data(("some log noise\n" + String(data: ctlJSON(#"{"tasks": []}"#), encoding: .utf8)! + "\n").utf8)
         // when
         let result = CtlDocument.decode(stdout: stdout, stderr: "", exitCode: 0, command: "list")
         // then
-        guard case .success(.tasks(let tasks)) = result else { Issue.record("expected .tasks, got \(result)"); return }
-        #expect(tasks.isEmpty)
+        guard case .failure(.unreadable) = result else { Issue.record("expected unreadable response, got \(result)"); return }
     }
 }
 
@@ -286,7 +285,7 @@ struct ToolErrorMessageCharacterizationTests {
         // when / then
         #expect(error.message.contains("harflow-ctl"))
         #expect(error.message.contains("/a, /b"))
-        #expect(error.message.contains("uv tool install"))
+        #expect(error.message.contains("managed Harflow runtime"))
     }
 
     @Test

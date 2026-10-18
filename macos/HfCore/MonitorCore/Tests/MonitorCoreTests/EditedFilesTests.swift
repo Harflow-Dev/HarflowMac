@@ -6,11 +6,11 @@ import Testing
     private func call(_ callID: String, category: String, path: String?, seq: Int) -> TaskEvent {
         var fields = #""call_id":"\#(callID)","tool":"Edit","category":"\#(category)","input_preview":"{}""#
         if let path { fields += #","path":"\#(path)""# }
-        return TaskEvent(line: #"{"v":1,"seq":\#(seq),"kind":"tool_call",\#(fields)}"#)!
+        return TaskEvent(line: eventFixture(#"{"seq":\#(seq),"kind":"tool_call",\#(fields)}"#))!
     }
 
     private func result(_ callID: String, ok: Bool, seq: Int) -> TaskEvent {
-        TaskEvent(line: #"{"v":1,"seq":\#(seq),"kind":"tool_result","call_id":"\#(callID)","ok":\#(ok),"output_tail":""}"#)!
+        TaskEvent(line: eventFixture(#"{"seq":\#(seq),"kind":"tool_result","call_id":"\#(callID)","ok":\#(ok),"output_tail":""}"#))!
     }
 
     @Test func givenAnEditCallWithAnOkResult_whenBuilt_thenItIsEdited() {

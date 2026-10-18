@@ -22,10 +22,12 @@ import Testing
         // given
         let task = try #require(TaskInfo(.object(["task_id": .string("old"), "workflow_builder": .bool(marked)])))
         let events = try [
-            #"{"v":1,"seq":1,"kind":"task_started","prompt":"injected scaffold"}"#,
-            #"{"v":1,"seq":2,"kind":"user_message","text":"injected scaffold","source":"initial"}"#,
-            #"{"v":1,"seq":3,"kind":"user_message","text":"keep feedback","source":"live"}"#,
-            #"{"v":1,"seq":4,"kind":"assistant_text","text":"keep explanation"}"#
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":1,"kind":"task_started","prompt":"injected scaffold"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":2,"kind":"user_message","text":"injected scaffold","source":"initial"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":3,"kind":"user_message","text":"keep feedback","source":"live"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":4,"kind":"assistant_text","text":"keep explanation"}"#
         ].map { try #require(TaskEvent(line: $0)) }
         let items = Timeline.items(from: events)
         // when
@@ -70,7 +72,11 @@ import Testing
     @Test func givenBuilderWorkflowJsonRow_whenProjected_thenFriendlyMessagePreservesIdentityAndOtherMessages() throws {
         // given
         let text = #"{"nodes":[{"id":"start","type":"start"}],"connections":[]}"#
-        let payload: JSONValue = .object(["v": .number(1), "seq": .number(2), "kind": .string("assistant_text"), "text": .string(text)])
+        let payload: JSONValue = .object([
+            "product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+            "product_version": .string("1.0.0"), "seq": .number(2),
+            "kind": .string("assistant_text"), "text": .string(text)
+        ])
         let event = try #require(TaskEvent(line: payload.rendered()))
         let item = try #require(Timeline.items(from: [event]).first)
         let row = ConversationTimelineRow(id: "task:2", taskID: "task", timestamp: nil, kind: .item(item), live: false)
@@ -90,7 +96,11 @@ import Testing
     @Test func givenUserAuthoredWorkflowJson_whenProjected_thenUserMessageIsUnchanged() throws {
         // given
         let text = #"{"nodes":[{"id":"start","type":"start"}],"connections":[]}"#
-        let payload: JSONValue = .object(["v": .number(1), "seq": .number(2), "kind": .string("user_message"), "text": .string(text)])
+        let payload: JSONValue = .object([
+            "product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+            "product_version": .string("1.0.0"), "seq": .number(2),
+            "kind": .string("user_message"), "text": .string(text)
+        ])
         let event = try #require(TaskEvent(line: payload.rendered()))
         let item = try #require(Timeline.items(from: [event]).first)
         let row = ConversationTimelineRow(id: "task:2", taskID: "task", timestamp: nil, kind: .item(item), live: false)

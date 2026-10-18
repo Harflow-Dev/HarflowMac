@@ -10,9 +10,9 @@ struct WorkflowControlTransportTests {
     func givenLogicalWorkflowCommand_whenExecuted_thenOnlyListUsesBoundedMonitorView(command: String, explicitFlag: Bool) async throws {
         let options = explicitFlag ? ["--monitor-view"] : []
         let calls = LockedBox<[[String]]>([])
-        let runner = StubProcessRunner { call in
+        let runner = compatibleRunner { call in
             calls.mutate { $0.append(call.arguments) }
-            return .success(stdout(#"{"v":5,"result":{"workflows":[]}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflows":[]}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -31,7 +31,7 @@ struct WorkflowControlTransportTests {
         let flag = command == "resume" ? "--instructions" : "--reason"
         let text = " \r\n--monitor 🦋 " + String(repeating: "Large answer\r\n", count: 100_000) + "\r\n "
         let paths = LockedBox<[String]>([])
-        let runner = StubProcessRunner { call in
+        let runner = compatibleRunner { call in
             #expect(call.arguments.reduce(0) { $0 + $1.utf8.count } < 8192)
             #expect(!call.arguments.contains { $0.hasPrefix(flag + "=") })
             #expect(call.arguments.contains("--monitor"))
@@ -46,7 +46,7 @@ struct WorkflowControlTransportTests {
                 #expect((try? FileManager.default.attributesOfItem(atPath: folder)[.posixPermissions] as? Int) == 0o700)
             } else { Issue.record("Control payload remained in argv") }
             return failure ? .failure(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "failed"))
-                : .success(stdout(#"{"v":5,"result":{"workflow_run_id":"run"}}"#))
+                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"run"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -67,12 +67,12 @@ struct WorkflowControlTransportTests {
         let paths = LockedBox<[String]>([])
         let gate = AsyncGate()
         defer { gate.open() }
-        let runner = StubProcessRunner { call in
+        let runner = compatibleRunner { call in
             if let option = call.arguments.first(where: { $0.hasPrefix(flag + "-file=") }) {
                 paths.mutate { $0 = [String(option.dropFirst((flag + "-file=").count))] }
             }
             gate.waitSync()
-            return .success(stdout(#"{"v":5,"result":{"workflow_run_id":"run"}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"run"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))

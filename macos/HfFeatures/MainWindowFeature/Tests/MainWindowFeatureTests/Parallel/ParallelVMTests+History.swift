@@ -6,6 +6,11 @@ import MonitorCore
 import Testing
 
 extension ParallelVMTests {
+    private func historyEvent(sequence: Int, text: String) -> TaskEvent? {
+        TaskEvent(line: "{\"product\":\"harflow\",\"format\":\"harflow.event\",\"v\":1,\"product_version\":\"1.0.0\","
+            + "\"seq\":\(sequence),\"kind\":\"assistant_text\",\"text\":\"\(text)\"}")
+    }
+
     @Test func givenUnvisitedColumns_whenOlderActivityIsRequested_thenOnlyVisibleColumnsRequestAndDuplicatesCoalesce() async throws {
         // given
         let harness = historyHarness()
@@ -256,7 +261,10 @@ extension ParallelVMTests {
 
     private func seedHistory(_ harness: SUT, ids: [String], sequence: Int) {
         for id in ids {
-            let event = TaskEvent(line: "{\"v\":1,\"seq\":\(sequence),\"kind\":\"assistant_text\",\"text\":\"synthetic history\"}")!
+            guard let event = historyEvent(sequence: sequence, text: "synthetic history") else {
+                Issue.record("canonical history event fixture must decode")
+                continue
+            }
             harness.eventsBox.value[id] = [event]
             harness.itemsBox.value[id] = Timeline.items(from: [event])
             harness.availabilityBox.value[id] = .available
@@ -271,7 +279,10 @@ extension ParallelVMTests {
     }
 
     private func finishPage(_ harness: SUT, id: String, sequence: Int, hasMore: Bool) {
-        let event = TaskEvent(line: "{\"v\":1,\"seq\":\(sequence),\"kind\":\"assistant_text\",\"text\":\"synthetic older history\"}")!
+        guard let event = historyEvent(sequence: sequence, text: "synthetic older history") else {
+            Issue.record("canonical history event fixture must decode")
+            return
+        }
         harness.eventsBox.value[id] = [event]
         let items = Timeline.items(from: [event])
         harness.itemsBox.value[id] = items

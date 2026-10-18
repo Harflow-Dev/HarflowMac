@@ -6,6 +6,15 @@ import Mockable
 import MonitorCore
 import Testing
 
+private func snapshotBatchCtl(_ payload: String) -> ProcessOutput {
+    guard var object = JSONValue.parse(Data(payload.utf8))?.objectValue else { return stdout(payload) }
+    object["product"] = .string("harflow")
+    object["format"] = .string("harflow.ctl")
+    object["v"] = .number(1)
+    object["product_version"] = .string("1.0.0")
+    return stdout(JSONValue.object(object).rendered())
+}
+
 // MARK: - TaskSnapshotRepositoryImpl batched refresh (B3)
 
 /// A running snapshot entry with a start time (so only its duration can drift).
@@ -15,14 +24,16 @@ private func runningEntry(_ id: String, backend: String = "claude", extra: Strin
 
 /// A `status-batch` document around already-encoded entries and an encoded `errors` object.
 private func batchDocument(_ entries: [String], errors: String = "{}") -> String {
-    #"{"v":11,"tasks":[\#(entries.joined(separator: ","))],"errors":\#(errors)}"#
+    #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[\#(entries.joined(separator: ","))],"errors":\#(errors)}"#
 }
 
 extension TaskSnapshotRepositoryImplTests {
 
     private func makeToolEnvironment(runner: StubProcessRunner) -> MockToolEnvironmentRepository {
         let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(
+            executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner)
+        )))
         return toolEnvironment
     }
 
@@ -63,9 +74,9 @@ extension TaskSnapshotRepositoryImplTests {
         let toolEnvironment = MockToolEnvironmentRepository()
         let ctlBox = LockedBox<Result<CtlClient, ToolError>>(.success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(
+            runner: PositiveCtlRunner(StubProcessRunner(output: stdout(
                 batchDocument([runningEntry("c")])
-            ))
+            )))
         )))
         given(toolEnvironment).ctl().willProduce { ctlBox.value }
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
@@ -73,10 +84,10 @@ extension TaskSnapshotRepositoryImplTests {
         #expect(sut.snapshot("c") != nil)
 
         // when — a mixed batch: "a" answers, "b" is refused, "c" is unknown.
-        ctlBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: StubProcessRunner(output: stdout(
+        ctlBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(StubProcessRunner(output: stdout(
             batchDocument([#"{"task_id":"a","status":"completed","backend":"claude"}"#],
                 errors: #"{"b":{"code":"agent_caller","message":"refused"},"c":{"code":"unknown_task","message":"gone"}}"#)
-        )))) }
+        ))))) }
         await sut.refresh(ids: ["a", "b", "c"])
 
         // then — per-id outcomes follow the single-refresh policy exactly: a returned snapshot
@@ -90,16 +101,18 @@ extension TaskSnapshotRepositoryImplTests {
         // given — a pre-seeded snapshot for an id the batch neither answers nor errors.
         let seedRunner = StubProcessRunner(output: stdout(batchDocument([runningEntry("x")])))
         let toolEnvironment = MockToolEnvironmentRepository()
-        let ctlBox = LockedBox<Result<CtlClient, ToolError>>(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: seedRunner)))
+        let ctlBox = LockedBox<Result<CtlClient, ToolError>>(.success(CtlClient(
+            executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(seedRunner)
+        )))
         given(toolEnvironment).ctl().willProduce { ctlBox.value }
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
         await sut.refresh(ids: ["x"])
         #expect(sut.snapshot("x") != nil)
 
         // when — the batch answers nothing for "x" (and reports no error for it either).
-        ctlBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: StubProcessRunner(output: stdout(
+        ctlBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(StubProcessRunner(output: stdout(
             batchDocument([])
-        )))) }
+        ))))) }
         await sut.refresh(ids: ["x"])
 
         // then — the stale snapshot is retained, exactly as a per-id failure would.
@@ -111,11 +124,14 @@ extension TaskSnapshotRepositoryImplTests {
         let toolEnvironment = MockToolEnvironmentRepository()
         let runner = StubProcessRunner { call in
             if call.arguments.first == "status-batch" {
-                return .success(ProcessOutput(exitCode: 2, stdout: Data(), stderr: "invalid choice: 'status-batch'", timedOut: false))
+                let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","#
+                    + #""error":{"code":"usage","message":"invalid choice: 'status-batch'"}}"#
+                #expect(JSONValue.parse(Data(response.utf8)) != nil)
+                return .success(stdout(response))
             }
-            return .success(stdout(#"{"v":11,"task":{"task_id":"\#(call.arguments.last ?? "")","status":"completed","backend":"claude"}}"#))
+            return .success(snapshotBatchCtl(#"{"task":{"task_id":"\#(call.arguments.last ?? "")","status":"completed","backend":"claude"}}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
 
         // when
@@ -138,9 +154,9 @@ extension TaskSnapshotRepositoryImplTests {
         let toolEnvironment = MockToolEnvironmentRepository()
         let ctlBox = LockedBox<Result<CtlClient, ToolError>>(.success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(
+            runner: PositiveCtlRunner(StubProcessRunner(output: stdout(
                 batchDocument([runningEntry("a"), runningEntry("b", backend: "codex")])
-            ))
+            )))
         )))
         given(toolEnvironment).ctl().willProduce { ctlBox.value }
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
@@ -151,7 +167,7 @@ extension TaskSnapshotRepositoryImplTests {
         // when — the batch times out as a whole.
         ctlBox.mutate { $0 = .success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: ProcessOutput(exitCode: 0, stdout: Data(), stderr: "", timedOut: true))
+            runner: PositiveCtlRunner(StubProcessRunner(output: ProcessOutput(exitCode: 0, stdout: Data(), stderr: "", timedOut: true)))
         )) }
         await sut.refresh(ids: ["a", "b"])
 
@@ -172,7 +188,7 @@ extension TaskSnapshotRepositoryImplTests {
             }
             // The fresher single refresh: "a" has completed.
             answered.mutate { $0 = true }
-            return .success(stdout(#"{"v":11,"task":{"task_id":"a","status":"completed","backend":"claude"}}"#))
+            return .success(snapshotBatchCtl(#"{"task":{"task_id":"a","status":"completed","backend":"claude"}}"#))
         }
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: makeToolEnvironment(runner: runner))
 

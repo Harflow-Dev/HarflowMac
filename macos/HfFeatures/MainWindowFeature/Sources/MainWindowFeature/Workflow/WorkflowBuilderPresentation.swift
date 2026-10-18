@@ -18,7 +18,7 @@ enum WorkflowBuilderPresentation {
         }
 .first ?? prompt
         let projected = items.map { item -> TimelineItem in
-            var payload: [String: JSONValue] = ["v": .number(1), "seq": .number(Double(item.id))]
+            var payload = eventPayload(sequence: item.id)
             switch item.body {
             case let .started(started):
                 payload["kind"] = .string("task_started")
@@ -61,13 +61,19 @@ enum WorkflowBuilderPresentation {
         rows.map { row in
             guard case let .item(item) = row.kind, case let .text(text, _) = item.body, let message = projectedText(text) else { return row }
             // Display-only projection through the shared timeline parser; original events remain unchanged.
-            var payload: [String: JSONValue] = ["v": .number(1), "seq": .number(Double(item.id)),
-                                                "kind": .string("assistant_text"), "text": .string(message)]
+            var payload = eventPayload(sequence: item.id)
+            payload["kind"] = .string("assistant_text")
+            payload["text"] = .string(message)
             if let time = item.at { payload["observed_at"] = .string(time.ISO8601Format()) }
             guard let event = TaskEvent(line: JSONValue.object(payload).rendered()),
                   let projected = Timeline.items(from: [event]).first else { return row }
             return ConversationTimelineRow(id: row.id, taskID: row.taskID, timestamp: row.timestamp, kind: .item(projected), live: row.live)
         }
+    }
+
+    private static func eventPayload(sequence: Int) -> [String: JSONValue] {
+        ["product": .string("harflow"), "format": .string(WireContract.events.format),
+         "v": .number(1), "product_version": .string(HarflowVersion.current), "seq": .number(Double(sequence))]
     }
 
     static func projectedText(_ text: String) -> String? {

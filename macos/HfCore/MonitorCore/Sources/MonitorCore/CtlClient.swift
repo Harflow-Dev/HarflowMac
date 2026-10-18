@@ -6,11 +6,16 @@ public struct CtlClient: Sendable {
     public var executable: String
     public var environment: [String: String]
     public var runner: ProcessRunning
+    public let compatibilityContext: RuntimeCompatibilityContext
+    /// Owner generation check, evaluated again after the suspended compatibility probe.
+    public var operationIsCurrent: @Sendable () -> Bool = { true }
 
-    public init(executable: String, environment: [String: String], runner: ProcessRunning = ProcessRunner()) {
+    public init(executable: String, environment: [String: String], runner: ProcessRunning = ProcessRunner(),
+                compatibilityContext: RuntimeCompatibilityContext? = nil) {
         self.executable = executable
-        self.environment = environment
+        self.environment = RuntimeCompatibilityContext.effectiveEnvironment(environment)
         self.runner = runner
+        self.compatibilityContext = compatibilityContext ?? .derived(environment: environment)
     }
 
     // `run`/`resume` must outlast ctl's own worst case so ctl, not this timeout, gets the last word:
@@ -37,7 +42,9 @@ public struct CtlClient: Sendable {
             .flatMap { output in
                 let decodeStart = MonitorMetrics.begin()
                 defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
-                return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode, command: command)
+                return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
+                                          command: command, productVersion: compatibilityContext.productVersion,
+                                          eventPage: command == "workflow-inspect" && options.contains("--view=activity"))
             }
     }
 
@@ -45,7 +52,13 @@ public struct CtlClient: Sendable {
     /// and hand back the raw stdout/stderr/exit the command-specific decoder then reads. Split out
     /// so a command with its own decoder (`status-batch` keeps `tasks` and `errors` siblings) can
     /// share the transport, timeout and metrics without going through `CtlDocument`.
-    func raw(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout) async -> Result<ProcessOutput, ToolError> {
+    public func raw(_ command: String, options: [String] = [], positionals: [String] = [],
+                    timeout: Double = 30) async -> Result<ProcessOutput, ToolError> {
+        guard operationIsCurrent(), !Task.isCancelled else {
+            return .failure(WireEnvelope.incompatibility("operation superseded before compatibility probe"))
+        }
+        if case .failure(let error) = await checkCompatibility() { return .failure(error) }
+        guard operationIsCurrent(), !Task.isCancelled else { return .failure(WireEnvelope.incompatibility("operation cancelled before command launch")) }
         let argv = Self.argv(command, options: options, positionals: positionals)
         let transportStart = MonitorMetrics.begin()
         let output = await runner.run(executable: executable, arguments: argv, environment: environment, currentDirectory: nil, timeout: timeout)
@@ -55,8 +68,25 @@ public struct CtlClient: Sendable {
         }
         return output.flatMap { output in
             if output.timedOut { return .failure(.timedOut(tool: "harflow-ctl \(command)", seconds: timeout)) }
+            guard let document = CtlDocument.firstJSONObject(in: output.stdout) else {
+                return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: output.stderr))
+            }
+            if let error = WireEnvelope.validate(document, contract: .ctl, productVersion: compatibilityContext.productVersion) {
+                return .failure(error)
+            }
+            if CtlDocument.isEventPageCommand(command) || (command == "workflow-inspect" && options.contains("--view=activity")),
+               let error = WireEnvelope.validateEventPage(document) { return .failure(error) }
             return .success(output)
         }
+    }
+
+    /// Each operation probes the same selected executable and effective child environment.
+    public func checkCompatibility(expectedStateRoot: String? = nil, requiring: Set<WireContract> = [.ctl]) async -> Result<Void, ToolError> {
+        if let expectedStateRoot, LexicalStateRoot.normalize(expectedStateRoot) != compatibilityContext.expectedStateRoot {
+            return .failure(WireEnvelope.incompatibility("reader state_root differs from selected runtime context"))
+        }
+        return await VersionInfoClient(executable: executable, environment: environment, context: compatibilityContext, runner: runner)
+            .check(requiring: requiring).map { _ in () }
     }
 
     /// `harflow-ctl status-batch --task-ids=a,b,... --json`: one process for up to 100 ids
@@ -70,7 +100,8 @@ public struct CtlClient: Sendable {
             .flatMap { output in
                 let decodeStart = MonitorMetrics.begin()
                 defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
-                return CtlDocument.decodeBatchResult(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode, command: "status-batch")
+                return CtlDocument.decodeBatchResult(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
+                                                     command: "status-batch", productVersion: compatibilityContext.productVersion)
             }
     }
 

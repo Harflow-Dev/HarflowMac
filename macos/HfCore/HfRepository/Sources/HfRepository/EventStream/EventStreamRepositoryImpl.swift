@@ -10,22 +10,28 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
     private let toolEnvironment: any ToolEnvironmentRepository
     private let snapshotRepository: any TaskSnapshotRepository
     private let scheduler: any Scheduling
+    private let compatibilityCheck: StoreCompatibilityCheck
 
     private let lock = NSRecursiveLock()
     private var streams: [String: TaskStream] = [:]
     private let initialLoads: EventInitialLoadQueue
 
     /// `EventStreamRepository → TaskSnapshotRepository`, never the reverse (F6/decision 6).
-    public convenience init(toolEnvironment: any ToolEnvironmentRepository, snapshotRepository: any TaskSnapshotRepository, scheduler: any Scheduling) {
-        self.init(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler, initialLoads: EventInitialLoadQueue())
+    public convenience init(toolEnvironment: any ToolEnvironmentRepository, snapshotRepository: any TaskSnapshotRepository,
+                            scheduler: any Scheduling, compatibilityCheck: StoreCompatibilityCheck? = nil) {
+        self.init(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler,
+                  initialLoads: EventInitialLoadQueue(), compatibilityCheck: compatibilityCheck)
     }
 
     init(toolEnvironment: any ToolEnvironmentRepository, snapshotRepository: any TaskSnapshotRepository,
-         scheduler: any Scheduling, initialLoads: EventInitialLoadQueue) {
+         scheduler: any Scheduling, initialLoads: EventInitialLoadQueue, compatibilityCheck: StoreCompatibilityCheck? = nil) {
         self.toolEnvironment = toolEnvironment
         self.snapshotRepository = snapshotRepository
         self.scheduler = scheduler
         self.initialLoads = initialLoads
+        self.compatibilityCheck = compatibilityCheck ?? { root in
+            await StoreCompatibility.check(toolEnvironment: toolEnvironment, expectedStateRoot: root, requiring: [.events])
+        }
     }
 
     public func acquire(_ taskID: String) -> any EventStreamLease { acquire(taskID, activity: true) }
@@ -40,7 +46,9 @@ public final class EventStreamRepositoryImpl: EventStreamRepository, @unchecked 
             isFirst = false
         } else {
             let path = TaskTitle.eventsPath(tasksDirectory: toolEnvironment.tasksDirectory, taskID: taskID) ?? "/dev/null"
-            stream = TaskStream(taskID: taskID, path: path, scheduler: scheduler, initialLoads: initialLoads)
+            stream = TaskStream(taskID: taskID, path: path, scheduler: scheduler, initialLoads: initialLoads,
+                                expectedStateRoot: (toolEnvironment.tasksDirectory as NSString).deletingLastPathComponent,
+                                compatibilityCheck: compatibilityCheck)
             stream.refCount = 1
             streams[taskID] = stream
             isFirst = true
@@ -136,6 +144,9 @@ private final class TaskStream: @unchecked Sendable {
     @Subjected var summary = EventSummary()
     private let summaryQueue = DispatchQueue(label: "dev.harflow.mac.summary")
     private var summaryStopped = false
+    private var summaryEpoch = 0
+    private let expectedStateRoot: String
+    private let compatibilityCheck: StoreCompatibilityCheck
     private var summaryRetry: DispatchWorkItem?
     private var summaryFileLimit = 100
     private var lastSummaryPublish = Date.distantPast
@@ -169,9 +180,12 @@ private final class TaskStream: @unchecked Sendable {
     private var pendingAvailability: EventAvailability?
     private var flushToken: AnyCancellable?
 
-    init(taskID: String, path: String, scheduler: any Scheduling, initialLoads: EventInitialLoadQueue) {
+    init(taskID: String, path: String, scheduler: any Scheduling, initialLoads: EventInitialLoadQueue,
+         expectedStateRoot: String, compatibilityCheck: @escaping StoreCompatibilityCheck) {
         self.taskID = taskID
         self.path = path
+        self.expectedStateRoot = LexicalStateRoot.normalize(expectedStateRoot) ?? ""
+        self.compatibilityCheck = compatibilityCheck
         self.scheduler = scheduler
         self.initialLoads = initialLoads
     }
@@ -185,11 +199,27 @@ private final class TaskStream: @unchecked Sendable {
         history = EventHistoryState(isLoading: true)
         let id = UUID()
         initialActivityID = id
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await compatibilityCheck(expectedStateRoot)
+            completeActivityCheck(result, epoch: epoch, id: id)
+        }
+        bufferLock.unlock()
+    }
+
+    private func completeActivityCheck(_ result: Result<Void, ToolError>, epoch: Int, id: UUID) {
+        bufferLock.lock()
+        defer { bufferLock.unlock() }
+        guard !activityStopped, activityEpoch == epoch else { return }
+        if case .failure(let error) = result {
+            eventsAvailability = .unavailable
+            history = EventHistoryState(error: error.message)
+            return
+        }
         initialLoads.submit(id: id) { [weak self] completion in
             guard let self else { completion(); return }
             startActivityRead(epoch: epoch, completion: completion)
         }
-        bufferLock.unlock()
     }
 
     private func startActivityRead(epoch: Int, completion: @escaping @Sendable () -> Void) {
@@ -244,32 +274,75 @@ private final class TaskStream: @unchecked Sendable {
 
     func startSummary() {
         bufferLock.lock()
+        summaryEpoch += 1
+        let epoch = summaryEpoch
+        summaryStopped = false
         let id = UUID()
         initialSummaryID = id
+        bufferLock.unlock()
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await compatibilityCheck(expectedStateRoot)
+            completeSummaryCheck(result, epoch: epoch, id: id)
+        }
+    }
+
+    private func completeSummaryCheck(_ result: Result<Void, ToolError>, epoch: Int, id: UUID) {
+        bufferLock.lock()
+        defer { bufferLock.unlock() }
+        guard !summaryStopped, summaryEpoch == epoch else { return }
+        if case .failure(let error) = result {
+            summaryQueue.async { [weak self] in
+                guard let self else { return }
+                bufferLock.lock()
+                defer { bufferLock.unlock() }
+                guard !summaryStopped, summaryEpoch == epoch else { return }
+                summaryBuilder.setAvailability(.unavailable)
+                summary = summaryBuilder.snapshot(fileLimit: summaryFileLimit)
+                eventsAvailability = .unavailable
+                history = EventHistoryState(error: error.message)
+            }
+            return
+        }
         initialLoads.submit(id: id) { [weak self] completion in
             guard let self else { completion(); return }
             summaryQueue.async { [weak self] in
                 guard let self else { completion(); return }
-                readSummary(tail: LineTail(maxChunk: 64 << 10), completion: completion)
+                readSummary(tail: LineTail(maxChunk: 64 << 10), epoch: epoch, completion: completion)
             }
         }
-        bufferLock.unlock()
     }
 
-    private func readSummary(tail initial: LineTail, completion: (@Sendable () -> Void)? = nil) {
-        guard !summaryStopped else { completion?(); return }
+    private func readSummary(tail initial: LineTail, epoch: Int, completion: (@Sendable () -> Void)? = nil) {
+        bufferLock.lock()
+        let current = !summaryStopped && summaryEpoch == epoch
+        bufferLock.unlock()
+        guard current else { completion?(); return }
         var tail = initial
         tail.maxLines = EventPages.pageSize
-        guard let step = tail.read(path: path) else {
+        let step = tail.read(path: path)
+        let decoded = step?.lines.compactMap(TaskEvent.init(line:)) ?? []
+        bufferLock.lock()
+        defer { bufferLock.unlock() }
+        guard !summaryStopped, summaryEpoch == epoch else { completion?(); return }
+        guard let step else {
             summaryBuilder.setAvailability(.unavailable)
             summary = summaryBuilder.snapshot(fileLimit: summaryFileLimit)
             completion?()
             // read(path:) can mutate its cursor before a seek/read fails. Commit only successful reads.
-            scheduleSummaryRetry(tail: initial)
+            scheduleSummaryRetry(tail: initial, epoch: epoch)
             return
         }
         if step.reset { summaryBuilder = EventSummaryBuilder() }
-        summaryBuilder.append(step.lines.compactMap(TaskEvent.init(line:)))
+        guard decoded.count == step.lines.count else {
+            summaryBuilder.setAvailability(.unavailable)
+            summary = summaryBuilder.snapshot(fileLimit: summaryFileLimit)
+            eventsAvailability = .unavailable
+            history = EventHistoryState(error: "Unsupported Harflow event envelope")
+            completion?()
+            return
+        }
+        summaryBuilder.append(decoded)
         summaryBuilder.setAvailability(step.more ? .loading : .available)
         if !step.more || Date().timeIntervalSince(lastSummaryPublish) >= 0.1 {
             summary = summaryBuilder.snapshot(fileLimit: summaryFileLimit)
@@ -279,17 +352,17 @@ private final class TaskStream: @unchecked Sendable {
             let nextTail = tail
             summaryQueue.async { [weak self] in
                 guard let self else { completion?(); return }
-                readSummary(tail: nextTail, completion: completion)
+                readSummary(tail: nextTail, epoch: epoch, completion: completion)
             }
         } else {
             completion?()
-            scheduleSummaryRetry(tail: tail)
+            scheduleSummaryRetry(tail: tail, epoch: epoch)
         }
     }
 
-    private func scheduleSummaryRetry(tail: LineTail) {
+    private func scheduleSummaryRetry(tail: LineTail, epoch: Int) {
         summaryRetry?.cancel()
-        let retry = DispatchWorkItem { [weak self] in self?.readSummary(tail: tail) }
+        let retry = DispatchWorkItem { [weak self] in self?.readSummary(tail: tail, epoch: epoch) }
         summaryRetry = retry
         summaryQueue.asyncAfter(deadline: .now() + 1, execute: retry)
     }
@@ -322,11 +395,12 @@ private final class TaskStream: @unchecked Sendable {
 
     func stop() {
         bufferLock.lock()
+        summaryStopped = true
+        summaryEpoch += 1
         if let initialSummaryID { initialLoads.cancel(initialSummaryID) }
         initialSummaryID = nil
         bufferLock.unlock()
         summaryQueue.async { [weak self] in
-            self?.summaryStopped = true
             self?.summaryRetry?.cancel()
             self?.summaryRetry = nil
         }

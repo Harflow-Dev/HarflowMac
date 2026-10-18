@@ -34,5 +34,17 @@
     "literal": "PB_DEPTH",
     "reason": "Regression coverage verifies inherited legacy caller signals are removed.",
     "count": 2
+  },
+  {
+    "file": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/CompatibilityClientTests.swift",
+    "literal": "polybridge",
+    "reason": "Negative transport fixtures prove foreign legacy product responses are rejected.",
+    "count": 2
+  },
+  {
+    "file": "scripts/legacy-name-allowlist.json",
+    "literal": "polybridge",
+    "reason": "Exact legacy product literal recorded for the negative transport fixtures.",
+    "count": 2
   }
 ]

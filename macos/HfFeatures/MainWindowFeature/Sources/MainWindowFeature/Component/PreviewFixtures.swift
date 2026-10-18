@@ -105,7 +105,12 @@ enum PreviewFixtures {
     }
 
     private static func event(_ object: [String: Any]) -> TaskEvent {
-        guard let data = try? JSONSerialization.data(withJSONObject: object),
+        var envelope = object
+        envelope["product"] = "harflow"
+        envelope["format"] = WireContract.events.format
+        envelope["v"] = 1
+        envelope["product_version"] = HarflowVersion.current
+        guard let data = try? JSONSerialization.data(withJSONObject: envelope),
               let line = String(data: data, encoding: .utf8), let event = TaskEvent(line: line) else {
             fatalError("Invalid preview fixture JSON")
         }

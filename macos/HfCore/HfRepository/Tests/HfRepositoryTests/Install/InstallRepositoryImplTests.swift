@@ -6,6 +6,15 @@ import Mockable
 import MonitorCore
 import Testing
 
+private func installVersionInfo(stateRoot: String) -> String {
+    "{" +
+        "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1,\"product_version\":\"1.0.0\",\"component\":\"engine\"," +
+        "\"state_root\":\"\(stateRoot)\",\"contracts\":{" +
+        "\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1},\"setup\":{\"format\":\"harflow.setup\",\"v\":1}," +
+        "\"events\":{\"format\":\"harflow.event\",\"v\":1}},\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\",\"version-info.v1\"]," +
+        "\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+}
+
 @Suite struct InstallRepositoryImplTests {
 
     // MARK: Fixtures
@@ -67,12 +76,16 @@ import Testing
     /// call they care about via `override`.
     static func makeRunner(
         pgrepExitCode: Int32 = 1,
-        ctlListJSON: String = #"{"v":2,"tasks":[]}"#,
-        setupStatusJSON: String = #"{"v":1,"clients":[]}"#,
+        ctlListJSON: String = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[]}"#,
+        setupStatusJSON: String = #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"1.0.0","clients":[]}"#,
         override: (@Sendable (StubProcessRunner.Call) -> Result<ProcessOutput, ToolError>?)? = nil
     ) -> StubProcessRunner {
         StubProcessRunner { call in
             if let overridden = override?(call) { return overridden }
+            if call.executable == ctlPath, call.arguments == ["version-info", "--json"] {
+                let root = RuntimeCompatibilityContext.derived(environment: call.environment).expectedStateRoot
+                return .success(stdout(installVersionInfo(stateRoot: root)))
+            }
             switch call.executable {
             case gitPath: return .success(stdout("git version 2.42.0"))
             case InstallCommands.xcodeSelectExecutable: return .success(stdout(""))

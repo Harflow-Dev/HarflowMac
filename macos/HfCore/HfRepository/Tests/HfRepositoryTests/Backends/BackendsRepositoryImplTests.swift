@@ -45,8 +45,16 @@ import Testing
 
     func ctlClient(backends: [(String, Bool)], runner: StubProcessRunner? = nil) -> CtlClient {
         let payload = "[" + backends.map { #"{"backend":"\#($0.0)","binary":"\#($0.0)","installed":\#($0.1)}"# }.joined(separator: ",") + "]"
-        let stub = runner ?? StubProcessRunner(output: stdout(#"{"v":2,"backends":\#(payload)}"#))
+        let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":"#
+            + payload + "}"
+        let stub = runner ?? StubProcessRunner(compatibleOutput: stdout(response))
         return CtlClient(executable: "/bin/echo", environment: [:], runner: stub)
+    }
+
+    private func backendsResponse(_ pass: Int) -> ProcessOutput {
+        let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[{"backend":"pass\#(pass)","#
+            + #""binary":"pass\#(pass)","installed":true}]}"#
+        return stdout(response)
     }
 
     // MARK: Success
@@ -133,11 +141,11 @@ import Testing
         let toolEnvironment = MockToolEnvironmentRepository()
         let callCount = LockedBox(0)
         let gate = AsyncGate()
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             let pass = callCount.value + 1
             callCount.mutate { $0 = pass }
             if pass == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":2,"backends":[{"backend":"pass\#(pass)","binary":"pass\#(pass)","installed":true}]}"#))
+            return .success(backendsResponse(pass))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -162,9 +170,9 @@ import Testing
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
         let fetchCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":2,"backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -186,9 +194,9 @@ import Testing
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
         let fetchCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":2,"backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let scheduler = MockScheduling()
@@ -211,9 +219,9 @@ import Testing
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
         let fetchCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":2,"backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let scheduler = MockScheduling()
@@ -245,11 +253,11 @@ import Testing
         let toolEnvironment = MockToolEnvironmentRepository()
         let callCount = LockedBox(0)
         let gate = AsyncGate()
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             let pass = callCount.value + 1
             callCount.mutate { $0 = pass }
             if pass == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":2,"backends":[{"backend":"pass\#(pass)","binary":"pass\#(pass)","installed":true}]}"#))
+            return .success(backendsResponse(pass))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -278,11 +286,11 @@ import Testing
         let toolEnvironment = MockToolEnvironmentRepository()
         let callCount = LockedBox(0)
         let gate = AsyncGate()
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             let pass = callCount.value + 1
             callCount.mutate { $0 = pass }
             if pass == 1 { gate.waitSync() }
-            return .success(stdout(#"{"v":2,"backends":[{"backend":"pass\#(pass)","binary":"pass\#(pass)","installed":true}]}"#))
+            return .success(backendsResponse(pass))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let installRepository = MockInstallRepository()
@@ -323,9 +331,9 @@ import Testing
             return DiscoveryResult(loginPath: nil, uv: nil)
         }
         let fetchCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":2,"backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment, stubDiscovery: false)
@@ -357,9 +365,9 @@ import Testing
             return DiscoveryResult(loginPath: nil, uv: nil)
         }
         let fetchCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":2,"backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment, stubDiscovery: false)

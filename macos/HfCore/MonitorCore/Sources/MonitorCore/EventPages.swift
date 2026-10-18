@@ -64,7 +64,7 @@ public enum EventPages {
         let data = try handle.read(upToCount: Int(boundary - start)) ?? Data()
         bytesRead += data.count
         guard data.count == Int(boundary - start) else { throw EventPageError.changed }
-        let decoded = decode(data, start: start, boundary: boundary, initial: cursor == nil, limit: limit)
+        let decoded = try decode(data, start: start, boundary: boundary, initial: cursor == nil, limit: limit)
         let nextOffset = decoded.nextOffset
         let endOffset = decoded.endOffset
         var after = stat()
@@ -82,7 +82,7 @@ public enum EventPages {
     }
 
     private static func decode(_ data: Data, start: UInt64, boundary: UInt64, initial: Bool,
-                               limit: Int) -> (events: [TaskEvent], nextOffset: UInt64, endOffset: UInt64) {
+                               limit: Int) throws -> (events: [TaskEvent], nextOffset: UInt64, endOffset: UInt64) {
         let newlines = data.indices.filter { data[$0] == 10 }
         var records: [(Int, TaskEvent)] = []
         var examined = 0
@@ -95,9 +95,10 @@ public enum EventPages {
             let lineStart = index == 0 ? 0 : newlines[index - 1] + 1
             if lineStart == 0 && start > 0 { break }
             examined += 1
-            if let line = String(bytes: data[lineStart..<newline], encoding: .utf8), let event = TaskEvent(line: line) {
-                records.append((lineStart, event))
+            guard let line = String(bytes: data[lineStart..<newline], encoding: .utf8), let event = TaskEvent(line: line) else {
+                throw EventPageError.unavailable
             }
+            records.append((lineStart, event))
             right = lineStart
             if examined == countLimit { break }
         }

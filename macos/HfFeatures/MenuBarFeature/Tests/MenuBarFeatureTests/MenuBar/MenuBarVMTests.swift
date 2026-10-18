@@ -11,6 +11,13 @@ import Testing
 
 @MainActor
 @Suite struct MenuBarVMTests {
+    private func currentEvent(_ line: String) -> String {
+        guard var object = JSONValue.parse(Data(line.utf8))?.objectValue else { return line }
+        object["product"] = object["product"] ?? .string("harflow")
+        object["format"] = object["format"] ?? .string("harflow.event")
+        object["product_version"] = object["product_version"] ?? .string("1.0.0")
+        return JSONValue.object(object).rendered()
+    }
     
     private func task(
         id: String, backend: String = "claude", status: String = "running", startedAt: Date? = .now,
@@ -32,13 +39,13 @@ import Testing
     private func toolCallItem(command: String) -> TimelineItem {
         let line = #"{"v": 1, "seq": 0, "task_id": "t1", "kind": "tool_call", "call_id": "c1", "tool": "Bash", "#
         + #""category": "shell", "input_preview": "ls", "command": "\#(command)"}"#
-        let event = TaskEvent(line: line)!
+        let event = TaskEvent(line: currentEvent(line))!
         return Timeline.items(from: [event])[0]
     }
     
     private func textItem(_ text: String) -> TimelineItem {
         let line = #"{"v": 1, "seq": 0, "task_id": "t1", "kind": "assistant_text", "text": "\#(text)"}"#
-        let event = TaskEvent(line: line)!
+        let event = TaskEvent(line: currentEvent(line))!
         return Timeline.items(from: [event])[0]
     }
     
@@ -508,8 +515,8 @@ import Testing
         // when — a notice lands after the text, and nothing is running
         sut.didAppearRunningRow("abc123")
         let events = [
-            TaskEvent(line: #"{"v": 1, "seq": 0, "task_id": "t1", "kind": "assistant_text", "text": "Looking at the tokenizer next."}"#)!,
-            TaskEvent(line: #"{"v": 1, "seq": 1, "task_id": "t1", "kind": "notice", "text": "rate limited, retrying"}"#)!
+            TaskEvent(line: currentEvent(#"{"v": 1, "seq": 0, "task_id": "t1", "kind": "assistant_text", "text": "Looking at the tokenizer next."}"#))!,
+            TaskEvent(line: currentEvent(#"{"v": 1, "seq": 1, "task_id": "t1", "kind": "notice", "text": "rate limited, retrying"}"#))!
         ]
         let timeline = Timeline.items(from: events)
         #expect(timeline.count == 2, "the notice must be its own trailing item for this test to mean anything")

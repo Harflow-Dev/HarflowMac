@@ -4,6 +4,10 @@ import MonitorCore
 import Testing
 
 extension ParallelVMTests {
+    private func eventLine(_ suffix: String) -> String {
+        "{\"product\":\"harflow\",\"format\":\"harflow.event\",\"v\":1,\"product_version\":\"1.0.0\"," + suffix
+    }
+
     @Test func givenOnlyEnforcementChanges_whenBuildingTaskRenderKeys_thenAllOtherRawTaskFieldsRemainSignificant() {
         // given — include known action/status/time fields and unknown future metadata in the raw
         // task contract; enforcement is the only group-header-only field.
@@ -106,8 +110,8 @@ extension ParallelVMTests {
         // but the unfiltered member timeline still contains it.
         let memberTask = task(id: "managed", status: "completed")
         let events = try [
-            #require(TaskEvent(line: "{\"v\":1,\"seq\":1,\"kind\":\"tool_call\",\"call_id\":\"c1\",\"tool\":\"workflow\",\"category\":\"workflow\"}")),
-            #require(TaskEvent(line: "{\"v\":1,\"seq\":2,\"kind\":\"tool_result\",\"call_id\":\"c1\",\"ok\":true}"))
+            #require(TaskEvent(line: eventLine("\"seq\":1,\"kind\":\"tool_call\",\"call_id\":\"c1\",\"tool\":\"workflow\",\"category\":\"workflow\"}"))),
+            #require(TaskEvent(line: eventLine("\"seq\":2,\"kind\":\"tool_result\",\"call_id\":\"c1\",\"ok\":true}")))
         ]
         let member = ParallelMemberInput(task: memberTask, items: Timeline.items(from: events), prompt: nil, availability: .available)
         let input = ParallelColumnInput(base: basePresentation(for: memberTask), members: [member], events: events, snapshot: nil)
@@ -129,9 +133,9 @@ extension ParallelVMTests {
         let first = task(id: "first", status: "completed", startedAt: Date(timeIntervalSince1970: 1))
         let second = task(id: "second", startedAt: Date(timeIntervalSince1970: 2), parentTaskID: "first")
         let lines = [
-            "{\"v\":1,\"seq\":1,\"kind\":\"task_started\",\"prompt\":\"assignment\"}",
-            "{\"v\":1,\"seq\":2,\"kind\":\"user_message\",\"text\":\"assignment\",\"source\":\"initial\"}",
-            "{\"v\":1,\"seq\":3,\"kind\":\"assistant_text\",\"text\":\"answer\"}"
+            eventLine("\"seq\":1,\"kind\":\"task_started\",\"prompt\":\"assignment\"}"),
+            eventLine("\"seq\":2,\"kind\":\"user_message\",\"text\":\"assignment\",\"source\":\"initial\"}"),
+            eventLine("\"seq\":3,\"kind\":\"assistant_text\",\"text\":\"answer\"}")
         ]
         let events = try lines.map { try #require(TaskEvent(line: $0)) }
         let items = Timeline.items(from: events)

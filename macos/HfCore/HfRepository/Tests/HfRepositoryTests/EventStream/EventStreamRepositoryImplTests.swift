@@ -24,12 +24,25 @@ import Testing
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let path = dir.appendingPathComponent("\(taskID).events.jsonl")
-        try? (lines.joined(separator: "\n") + "\n").write(to: path, atomically: true, encoding: .utf8)
+        try? (lines.map(currentEventFixture).joined(separator: "\n") + "\n").write(to: path, atomically: true, encoding: .utf8)
         return (dir, String(taskID), dir.path)
     }
 
     private func taskStartedLine(prompt: String = "hello") -> String {
-        #"{"v":1,"seq":1,"kind":"task_started","prompt":"\#(prompt)","backend":"claude"}"#
+        currentEventFixture(#"{"v":1,"seq":1,"kind":"task_started","prompt":"\#(prompt)","backend":"claude"}"#)
+    }
+
+    private func makeRepository(
+        toolEnvironment: MockToolEnvironmentRepository,
+        snapshotRepository: MockTaskSnapshotRepository,
+        scheduler: MockScheduling
+    ) -> EventStreamRepositoryImpl {
+        EventStreamRepositoryImpl(
+            toolEnvironment: toolEnvironment,
+            snapshotRepository: snapshotRepository,
+            scheduler: scheduler,
+            compatibilityCheck: { _ in .success(()) }
+        )
     }
 
     @Test func givenDuplicateSequencesWithinOneSeedBatch_whenFolded_thenOnlyFirstPayloadIsKeptInOrder() async {
@@ -44,14 +57,14 @@ import Testing
         given(environment).tasksDirectory.willReturn(tasksDir)
         let snapshots = MockTaskSnapshotRepository()
         given(snapshots).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
         // when
         let lease = sut.acquire(id)
         defer { lease.release() }
         await waitUntil { !sut.history(for: id).isLoading }
         // then — same-batch duplicates cannot create duplicate row identities or replace content.
         #expect(sut.events(for: id).map(\.seq) == [1, 2, 3])
-        #expect(sut.items(for: id) == Timeline.items(from: uniqueLines.compactMap(TaskEvent.init(line:))))
+        #expect(sut.items(for: id) == Timeline.items(from: uniqueLines.compactMap { TaskEvent(line: currentEventFixture($0)) }))
     }
 
     @Test func givenLongLog_whenPaging_thenSummaryRemainsCumulativeAndPairingCrossesPages() async {
@@ -68,7 +81,7 @@ import Testing
         given(environment).tasksDirectory.willReturn(tasksDir)
         let snapshots = MockTaskSnapshotRepository()
         given(snapshots).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
         let unleased = sut.loadMore(id)
         #expect(!unleased)
         let lease = sut.acquire(id)
@@ -81,7 +94,7 @@ import Testing
         let duplicate = sut.loadMore(id)
         #expect(!duplicate)
         await waitUntil { sut.events(for: id).count == 200 }
-        #expect(sut.items(for: id) == Timeline.items(from: lines.dropFirst(50).compactMap(TaskEvent.init(line:))))
+        #expect(sut.items(for: id) == Timeline.items(from: lines.dropFirst(50).compactMap { TaskEvent(line: currentEventFixture($0)) }))
         #expect(sut.summary(for: id).activity.edits == 1)
         sut.loadMore(id)
         await waitUntil { !sut.history(for: id).hasMore && sut.events(for: id).count == 250 }
@@ -99,7 +112,7 @@ import Testing
         given(environment).tasksDirectory.willReturn(tasksDir)
         let snapshots = MockTaskSnapshotRepository()
         given(snapshots).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
         let firstLease = sut.acquire(id)
         let secondLease = sut.acquire(id)
         defer { firstLease.release(); secondLease.release() }
@@ -125,7 +138,7 @@ import Testing
         given(environment).tasksDirectory.willReturn(tasksDir)
         let snapshots = MockTaskSnapshotRepository()
         given(snapshots).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
         let summaryLease = sut.acquireSummary(id)
         defer { summaryLease.release() }
         let activityLease = sut.acquire(id)
@@ -148,7 +161,7 @@ import Testing
         given(environment).tasksDirectory.willReturn(tasksDir)
         let snapshots = MockTaskSnapshotRepository()
         given(snapshots).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: Self.defaultScheduler())
         let lease = sut.acquireSummary(id)
         defer { lease.release() }
         await waitUntil { sut.summary(for: id).availability == .available }
@@ -167,7 +180,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when
         let lease = sut.acquire("not/a-valid-id")
@@ -188,7 +201,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.value(taskID)).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when
         let lease = sut.acquire(taskID)
@@ -206,7 +219,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when
         let first = sut.acquire(taskID)
@@ -228,7 +241,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when
         let lease = sut.acquire(taskID)
@@ -251,7 +264,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when
         let lease = sut.acquire(taskID)
@@ -278,7 +291,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
         let first = sut.acquire(taskID)
         let second = sut.acquire(taskID)
         await waitUntil { sut.leasedTaskIDs.contains(taskID) }
@@ -300,7 +313,7 @@ import Testing
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
         let snapshotRepository = MockTaskSnapshotRepository()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when / then
         #expect(sut.eventsAvailability(for: "never-leased") == .loading)
@@ -314,7 +327,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when
         let lease = sut.acquire(taskID)
@@ -335,7 +348,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(dir.path)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
 
         // when
         let lease = sut.acquire(String(taskID))
@@ -354,7 +367,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
         let first = sut.acquire(taskID)
         let second = sut.acquire(taskID)
         await waitUntil { sut.leasedTaskIDs.contains(taskID) }
@@ -371,18 +384,18 @@ import Testing
     // MARK: - Coalescing (Monitor piece 8, Review round 1 item 4)
 
     private func deltaLine(seq: Int, messageID: String = "m1", blockIndex: Int = 0, text: String) -> String {
-        #"{"v":1,"seq":\#(seq),"kind":"assistant_delta","message_id":"\#(messageID)","block_index":\#(blockIndex),"text":"\#(text)"}"#
+        currentEventFixture(#"{"v":1,"seq":\#(seq),"kind":"assistant_delta","message_id":"\#(messageID)","block_index":\#(blockIndex),"text":"\#(text)"}"#)
     }
 
     private func finishedLine(seq: Int) -> String {
-        #"{"v":1,"seq":\#(seq),"kind":"task_finished","status":"completed","exit_code":0}"#
+        currentEventFixture(#"{"v":1,"seq":\#(seq),"kind":"task_finished","status":"completed","exit_code":0}"#)
     }
 
     private func appendLine(_ line: String, to path: URL) {
         guard let handle = try? FileHandle(forWritingTo: path) else { return }
         defer { try? handle.close() }
         try? handle.seekToEnd()
-        try? handle.write(contentsOf: Data((line + "\n").utf8))
+        try? handle.write(contentsOf: Data((currentEventFixture(line) + "\n").utf8))
     }
 
     /// A scheduler whose `schedule(after:execute:)` work item is captured (never invoked) rather
@@ -415,7 +428,7 @@ import Testing
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
         let (scheduler, capturedFlush, callCount) = makeFlushCapturingScheduler()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler)
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler)
         let lease = sut.acquire(taskID)
         await waitUntil(timeout: 5) { !sut.items(for: taskID).isEmpty }
         let eventsPath = dir.appendingPathComponent("\(taskID).events.jsonl")
@@ -459,7 +472,7 @@ import Testing
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
         let (scheduler, capturedFlush, _) = makeFlushCapturingScheduler()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler)
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler)
         let lease = sut.acquire(taskID)
         await waitUntil(timeout: 5) { !sut.items(for: taskID).isEmpty }
         let eventsPath = dir.appendingPathComponent("\(taskID).events.jsonl")
@@ -493,7 +506,7 @@ import Testing
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
         let (scheduler, capturedFlush, _) = makeFlushCapturingScheduler()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler)
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: scheduler)
         let lease = sut.acquire(taskID)
         await waitUntil(timeout: 5) { !sut.items(for: taskID).isEmpty }
         let eventsPath = dir.appendingPathComponent("\(taskID).events.jsonl")
@@ -532,7 +545,7 @@ import Testing
         given(toolEnvironment).tasksDirectory.willReturn(tasksDir)
         let snapshotRepository = MockTaskSnapshotRepository()
         given(snapshotRepository).refresh(.any).willReturn()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
+        let sut = makeRepository(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository, scheduler: Self.defaultScheduler())
         let lease = sut.acquire(taskID)
         await waitUntil(timeout: 5) { !sut.items(for: taskID).isEmpty }
         let eventsPath = dir.appendingPathComponent("\(taskID).events.jsonl")

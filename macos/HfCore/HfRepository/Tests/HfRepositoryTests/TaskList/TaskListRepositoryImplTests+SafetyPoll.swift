@@ -29,7 +29,7 @@ extension TaskListRepositoryImplTests {
 
     private func countingCtl(_ result: @escaping @Sendable () -> String) -> (client: CtlClient, callCount: LockedBox<Int>) {
         let callCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let runner = compatibleRunner { _ in
             callCount.mutate { $0 += 1 }
             return .success(historyStdout(result()))
         }
@@ -106,9 +106,12 @@ extension TaskListRepositoryImplTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: LockedBox(Date()))
         let calls = LockedBox(0)
-        let runner = StubProcessRunner { _ in
+        let bootstrapResponse = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","#
+            + #""result":{"items":[],"next_cursor":null,"has_more":false,"bootstrap_pending":true}}"#
+        #expect(JSONValue.parse(Data(bootstrapResponse.utf8)) != nil)
+        let runner = compatibleRunner { _ in
             calls.mutate { $0 += 1 }
-            return .success(stdout(#"{"v":5,"result":{"items":[],"next_cursor":null,"has_more":false,"bootstrap_pending":true}}"#))
+            return .success(stdout(bootstrapResponse))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(dir.path)
@@ -125,32 +128,37 @@ extension TaskListRepositoryImplTests {
     }
 
     @Test func givenTheSafetyPollFires_whenThereIsAListError_thenItRefreshes() async {
-        // given — the very first refresh (inside `start()`) fails, leaving `listError` set, no
-        // running tasks (the listing never succeeded), and "now" never advances.
+        // given — the initial listing succeeds so startup attaches the watcher and safety poll.
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":2,"error":{"code":"session_busy","message":"boom"}}"# }
+        let failed = LockedBox(false)
+        let (client, callCount) = countingCtl {
+            failed.value
+                ? #"{"v":2,"error":{"code":"session_busy","message":"boom"}}"#
+                : #"{"v":2,"tasks":[]}"#
+        }
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).tasksDirectory.willReturn(dir.path)
         given(toolEnvironment).ctl().willReturn(.success(client))
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
         sut.start()
-        await waitUntil { sut.listError != nil }
-        // See the note in `whenTheReconcileIntervalHasElapsed_thenItRefreshes` on why the captured
-        // poll closure must be waited for before firing it.
+        await waitUntil { sut.hasListed }
         await waitUntil { capturedPoll.value != nil }
         #expect(capturedPoll.value != nil)
-        let callsAfterStart = callCount.value
+        failed.mutate { $0 = true }
+        await sut.refresh()
+        await waitUntil { sut.listError != nil }
+        let callsAfterError = callCount.value
 
         // when
         capturedPoll.value?()
 
         // then
-        await waitUntil(timeout: 3) { callCount.value > callsAfterStart }
-        #expect(callCount.value > callsAfterStart)
+        await waitUntil(timeout: 3) { callCount.value > callsAfterError }
+        #expect(callCount.value > callsAfterError)
         withExtendedLifetime(sut) {}
     }
 
@@ -260,7 +268,7 @@ extension TaskListRepositoryImplTests {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        try? (#"{"v":1,"seq":1,"kind":"task_started","prompt":"log title"}"# + "\n")
+        try? (currentEventFixture(#"{"v":1,"seq":1,"kind":"task_started","prompt":"log title"}"#) + "\n")
             .write(to: dir.appendingPathComponent("t1.events.jsonl"), atomically: true, encoding: .utf8)
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(dir.path)
@@ -410,7 +418,7 @@ extension TaskListRepositoryImplTests {
 
         // when
         let doneRunner = StubProcessRunner(output: historyStdout(#"{"v":2,"tasks":[{"task_id":"a","status":"completed","backend":"claude","depth":0}]}"#))
-        resultBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: doneRunner)) }
+        resultBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(doneRunner))) }
         await sut.refresh()
 
         // then
@@ -427,7 +435,7 @@ extension TaskListRepositoryImplTests {
             #"{"v":2,"tasks":[{"task_id":"root","status":"completed","backend":"claude","depth":0},"#
                 + #"{"task_id":"child","status":"running","backend":"claude","spawned_by":"root","depth":1}]}"#
         ))
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
         await sut.refresh()
 

@@ -24,11 +24,12 @@ extension TaskListRepositoryImplTests {
             calls.mutate { $0 += 1 }
             return .success(stdout(body.value))
         }
-        return (CtlClient(executable: "/bin/echo", environment: [:], runner: runner), calls)
+        return (CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner)), calls)
     }
 
     private func page(items: String, totalActive: Int = 0) -> String {
-        #"{"v":5,"result":{"items":[\#(items)],"next_cursor":null,"has_more":false,"bootstrap_pending":false,"total_active_count":\#(totalActive)}}"#
+        #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"items":[\#(items)],"#
+            + #""next_cursor":null,"has_more":false,"bootstrap_pending":false,"total_active_count":\#(totalActive)}}"#
     }
 
     private func runningTask(duration: Int, started: Bool = true) -> String {

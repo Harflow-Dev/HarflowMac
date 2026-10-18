@@ -20,13 +20,18 @@ extension TaskDetailVMTests {
         let running = task(status: "running")
         harness.detailBox.value = running
         harness.itemsOverride.value = events([
-            #"{"v":1,"seq":0,"kind":"task_started","prompt":"Fix it","backend":"claude","freedom":"read_only"}"#,
-            #"{"v":1,"seq":1,"kind":"user_message","text":"Fix it","source":"initial"}"#,
-            #"{"v":1,"seq":2,"kind":"tool_call","call_id":"a","tool":"Read","category":"read","path":"/x/A.swift","input_preview":"A"}"#,
-            #"{"v":1,"seq":3,"kind":"tool_result","call_id":"a","ok":true}"#,
-            #"{"v":1,"seq":4,"kind":"tool_call","call_id":"b","tool":"Read","category":"read","path":"/x/B.swift","input_preview":"B"}"#,
-            #"{"v":1,"seq":5,"kind":"tool_result","call_id":"b","ok":true}"#,
-            #"{"v":1,"seq":6,"kind":"tool_call","call_id":"c","tool":"Bash","category":"shell","command":"swift test","input_preview":"swift test"}"#
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":0,"kind":"task_started","prompt":"Fix it","backend":"claude","freedom":"read_only"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":1,"kind":"user_message","text":"Fix it","source":"initial"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":2,"kind":"tool_call","call_id":"a","tool":"Read","category":"read","path":"/x/A.swift","input_preview":"A"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":3,"kind":"tool_result","call_id":"a","ok":true}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":4,"kind":"tool_call","call_id":"b","tool":"Read","category":"read","path":"/x/B.swift","input_preview":"B"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":5,"kind":"tool_result","call_id":"b","ok":true}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":6,"kind":"tool_call","call_id":"c","tool":"Bash","category":"shell","command":"swift test","input_preview":"swift test"}"#
         ])
 
         // when
@@ -50,7 +55,8 @@ extension TaskDetailVMTests {
         let finished = task(status: "completed")
         harness.detailBox.value = finished
         harness.itemsOverride.value = events([
-            #"{"v":1,"seq":0,"kind":"tool_call","call_id":"a","tool":"Read","category":"read","path":"/x/A.swift","input_preview":"A"}"#
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":0,"kind":"tool_call","call_id":"a","tool":"Read","category":"read","path":"/x/A.swift","input_preview":"A"}"#
         ])
 
         // when
@@ -69,7 +75,8 @@ extension TaskDetailVMTests {
         let harness = makeSUT()
         let running = task(status: "running")
         harness.detailBox.value = running
-        let call = #"{"v":1,"seq":0,"kind":"tool_call","call_id":"a","tool":"Read","category":"read","path":"/x/A.swift","input_preview":"A"}"#
+        let call = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":0,"kind":"tool_call","call_id":"a","tool":"Read","category":"read","path":"/x/A.swift","input_preview":"A"}"#
         harness.itemsOverride.value = events([call])
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
@@ -77,7 +84,8 @@ extension TaskDetailVMTests {
         let before = harness.sut.timelineModel.updateToken
 
         // when
-        harness.itemsSubject.send(events([call, #"{"v":1,"seq":1,"kind":"tool_result","call_id":"a","ok":true}"#]))
+        harness.itemsSubject.send(events([call, #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":1,"kind":"tool_result","call_id":"a","ok":true}"#]))
 
         // then
         await waitUntil { harness.sut.timelineModel.updateToken != before }

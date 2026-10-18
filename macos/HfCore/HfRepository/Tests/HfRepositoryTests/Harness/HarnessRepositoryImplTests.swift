@@ -4,6 +4,15 @@ import Mockable
 import MonitorCore
 import Testing
 
+private func harnessSetup(_ payload: String) -> ProcessOutput {
+    guard var object = JSONValue.parse(Data(payload.utf8))?.objectValue else { return stdout(payload) }
+    object["product"] = .string("harflow")
+    object["format"] = .string("harflow.setup")
+    object["v"] = .number(1)
+    object["product_version"] = .string("1.0.0")
+    return stdout(JSONValue.object(object).rendered())
+}
+
 @Suite struct HarnessRepositoryImplTests {
 
     @Test func givenSetupCannotBeLocated_whenAskingForStatus_thenTheLocatorFailureIsReturned() async {
@@ -25,7 +34,7 @@ import Testing
     @Test func givenSetupIsLocated_whenPerformingInstall_thenTheClientPerformsInstallWithTheGivenKey() async {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: stdout(#"{"v":1,"server_path":"/bin/harflow","clients":[{"key":"codex","available":true}]}"#))
+        let runner = StubProcessRunner(compatibleOutput: harnessSetup(#"{"server_path":"/bin/harflow","clients":[{"key":"codex","available":true}]}"#))
         given(toolEnvironment).setup().willReturn(.success(SetupClient(executable: "/bin/harflow-setup", environment: [:], runner: runner)))
         let sut = HarnessRepositoryImpl(toolEnvironment: toolEnvironment)
 
@@ -38,6 +47,9 @@ import Testing
             return
         }
         #expect(document.rows.first?.key == "codex")
-        #expect(runner.calls.first?.arguments.contains("--client=codex") == true)
+        let installCall = runner.calls.first { call in
+            call.arguments.contains("--client=codex")
+        }
+        #expect(installCall != nil)
     }
 }

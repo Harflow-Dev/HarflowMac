@@ -100,13 +100,15 @@ struct TaskCatalogBlockedTests {
     private func environment(_ runner: StubProcessRunner) -> MockToolEnvironmentRepository {
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         return environment
     }
 
     private func response(_ phase: String, taskStatus: String, cursor: String? = nil, pending: Bool = false) -> ProcessOutput {
         let blocked = phase == "blocked"
-        let raw: [String: JSONValue] = ["v": .number(5), "result": .object([
+        let raw: [String: JSONValue] = [
+            "product": .string("harflow"), "format": .string("harflow.ctl"),
+            "v": .number(1), "product_version": .string("1.0.0"), "result": .object([
             "items": .array([.object(["task_id": .string("root"), "status": .string(taskStatus), "title": .string("Root")])]),
             "next_cursor": blocked ? .null : cursor.map(JSONValue.string) ?? .null,
             "has_more": .bool(!blocked && cursor != nil), "bootstrap_pending": .bool(pending),

@@ -27,12 +27,12 @@ struct CallerApprovalClientTests {
         "delivery":"pending","complete":true,"action":{"tool_name":"Bash",
         "input":{"command":"python3 -c exact"}}}}
         """
-        let runner = RecordingRunner { call in
+        let runner = compatibleRunner { call in
             switch call.arguments.first {
             case "approval-list":
-                ProcessOutput(exitCode: 0, stdout: json(#"{"v":2,"result":{"requests":[],"next_cursor":"16","total":17}}"#), stderr: "")
+                ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":2,"result":{"requests":[],"next_cursor":"16","total":17}}"#), stderr: "")
             case "approval-get", "approval-respond":
-                ProcessOutput(exitCode: 0, stdout: json(fixtureResponse), stderr: "")
+                ProcessOutput(exitCode: 0, stdout: ctlJSON(fixtureResponse), stderr: "")
             default: ProcessOutput(exitCode: 1, stdout: Data(), stderr: "unexpected")
             }
         }
@@ -50,7 +50,7 @@ struct CallerApprovalClientTests {
     @Test
     func givenIncompleteRequest_whenResponding_thenNoCtlMutationIsSent() async throws {
         let raw = approvalRaw(complete: false)
-        let runner = RecordingRunner { _ in ProcessOutput(exitCode: 0, stdout: json(#"{"v":2,"result":{}}"#), stderr: "") }
+        let runner = compatibleRunner { _ in ProcessOutput(exitCode: 0, stdout: ctlJSON(#"{"v":2,"result":{}}"#), stderr: "") }
         let client = CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)
         let result = await client.approvalRespond(CallerApprovalRequest(raw: raw), decision: "approve")
         guard case .failure = result else { Issue.record("incomplete or caller-owned request must be refused"); return }

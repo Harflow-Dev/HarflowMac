@@ -1,21 +1,7 @@
 import Foundation
 
-/// The `"v"` values this app understands for `harflow-ctl --json`. Anything else is refused
-/// with a message naming the tool and the versions understood, never guessed at. v2 added
-/// `resume_command` to `status`'s `task`/`list`'s `tasks[]` snapshot documents (Monitor piece 3/3);
-/// v3 adds pending messages and workflow ownership/status fields; v4 adds workflow result errors; v5 adds nested workflow ownership.
-/// v6 adds native subagent execution identity and capability fields.
-/// v7 adds human Monitor workflow cancellation eligibility and refusal metadata.
-/// v8 adds native owner permission plans and launch preview contracts.
-/// v9 adds durable usage-limit diagnostics and workflow recovery choices. Older versions remain accepted.
-/// v10 adds bounded extra-path grants and capability/enforcement metadata; task raw fields retain grants; backend discovery tolerates capability additions.
-/// v11 adds standalone-task artifact metadata summaries and bounded metadata pages.
-/// `harflow-setup --json` and
-/// `events.jsonl` are separate contracts with their own single-version constants — see
-/// `setupContractVersion` (`SetupClient.swift`) and `eventLogVersion` (`Events.swift`) — because a
-/// shape change to one of the three must never silently widen what the app accepts from the
-/// others.
-public let ctlContractVersions: Set<Int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+/// The Harflow ctl v1 contract; setup and normalized events are separate contracts.
+public let ctlContractVersions: Set<Int> = [1]
 
 public enum TaskStatus: Equatable, Hashable, Sendable {
     case running, completed, failed, timedOut, cancelled
@@ -274,7 +260,7 @@ public enum ToolError: Error, Equatable, Sendable {
         switch self {
         case .notFound(let tool, let searched):
             return "`\(tool)` was not found (searched \(searched.joined(separator: ", "))). "
-                + "Install harflow (`uv tool install . --force --no-cache` in the repo) or set its folder in Settings."
+                + "The managed Harflow runtime is unavailable; runtime integration is required."
         case .unsupportedVersion(let tool, let version):
             let understood = Self.understoodVersions(forTool: tool)
             let plural = understood.contains(" or ") || understood.contains(",")
@@ -282,7 +268,7 @@ public enum ToolError: Error, Equatable, Sendable {
                 + "Update the app or harflow so they match."
         case .unsupportedCommand(let tool, let command, _):
             return "The installed `\(tool)` has no `\(command)` command — it predates this app. "
-                + "Reinstall harflow from the repo (`uv tool install . --force --no-cache`)."
+                + "Use a compatible managed Harflow runtime."
         case .unreadable(let tool, let exitCode, let stderr):
             let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             return "`\(tool)` exited \(exitCode) without a JSON answer"
@@ -419,9 +405,11 @@ public enum CtlDocument: Equatable, Sendable {
     case unknown([String: JSONValue])
     case error(code: String, message: String)
 
-    /// Decode stdout of `harflow-ctl <command> --json`. `command` is only used in messages.
-    public static func decode(stdout: Data, stderr: String, exitCode: Int32, command: String) -> Result<CtlDocument, ToolError> {
-        validatedDocument(stdout: stdout, stderr: stderr, exitCode: exitCode, command: command)
+    /// Decode a ctl answer; explicit event-page commands additionally validate normalized inner records.
+    public static func decode(stdout: Data, stderr: String, exitCode: Int32, command: String,
+                              productVersion: String = HarflowVersion.current, eventPage: Bool = false) -> Result<CtlDocument, ToolError> {
+        validatedDocument(stdout: stdout, stderr: stderr, exitCode: exitCode, command: command,
+                          productVersion: productVersion, eventPage: eventPage)
             .flatMap { validated in
                 switch validated {
                 case .error(let code, let message):
@@ -438,13 +426,24 @@ public enum CtlDocument: Equatable, Sendable {
             }
     }
 
+    /// Explicit event-page decoder; unrelated ctl result metadata remains opaque.
+    public static func decodeEventPage(stdout: Data, stderr: String = "", exitCode: Int32 = 0,
+                                       productVersion: String = HarflowVersion.current) -> Result<CtlDocument, ToolError> {
+        decode(stdout: stdout, stderr: stderr, exitCode: exitCode, command: "events", productVersion: productVersion)
+    }
+
+    static func isEventPageCommand(_ command: String) -> Bool {
+        ["events", "events-page", "get-task-events", "get_task_events"].contains(command)
+    }
+
     /// The shared prelude of every ctl decode: stdout → one JSON object, the contract-version
     /// check, an `error` document (with the usage → `unsupportedCommand` classification an older
     /// ctl without the command takes), and the argparse-shaped exit-2 refusal. Everything
     /// command-specific — including whether an `error` document is a *result* (single-command
     /// decodes) or a *failure* (batched) — is left to the caller.
     static func validatedDocument(
-        stdout: Data, stderr: String, exitCode: Int32, command: String
+        stdout: Data, stderr: String, exitCode: Int32, command: String, productVersion: String = HarflowVersion.current,
+        eventPage: Bool = false
     ) -> Result<ValidatedDocument, ToolError> {
         let tool = "harflow-ctl"
         guard let document = firstJSONObject(in: stdout) else {
@@ -455,12 +454,9 @@ public enum CtlDocument: Equatable, Sendable {
             }
             return .failure(.unreadable(tool: tool, exitCode: exitCode, stderr: stderr))
         }
-        guard let version = document["v"] else {
-            return .failure(.unsupportedVersion(tool: tool, version: "none"))
-        }
-        guard let versionInt = version.intValue, ctlContractVersions.contains(versionInt) else {
-            return .failure(.unsupportedVersion(tool: tool, version: version.rendered()))
-        }
+        if let error = WireEnvelope.validate(document, contract: .ctl, productVersion: productVersion) { return .failure(error) }
+        if eventPage || CtlDocument.isEventPageCommand(command),
+               let error = WireEnvelope.validateEventPage(document) { return .failure(error) }
         if let error = document["error"]?.objectValue {
             let code = error["code"]?.stringValue ?? "error"
             let message = error["message"]?.stringValue ?? ""
@@ -476,9 +472,9 @@ public enum CtlDocument: Equatable, Sendable {
     /// siblings together. An `error`-shaped document or an unsupported command is a failure for
     /// the whole batch — per-id refusals live in `errors`.
     public static func decodeBatchResult(
-        stdout: Data, stderr: String, exitCode: Int32, command: String
+        stdout: Data, stderr: String, exitCode: Int32, command: String, productVersion: String = HarflowVersion.current
     ) -> Result<StatusBatchResult, ToolError> {
-        validatedDocument(stdout: stdout, stderr: stderr, exitCode: exitCode, command: command)
+        validatedDocument(stdout: stdout, stderr: stderr, exitCode: exitCode, command: command, productVersion: productVersion)
             .flatMap { validated in
                 switch validated {
                 case .error(let code, let message):
@@ -535,12 +531,7 @@ public enum CtlDocument: Equatable, Sendable {
 
     /// The document on stdout. harflow prints exactly one; tolerate leading blank lines.
     static func firstJSONObject(in data: Data) -> [String: JSONValue]? {
-        if let whole = JSONValue.parse(data)?.objectValue { return whole }
-        guard let text = String(data: data, encoding: .utf8) else { return nil }
-        for line in text.split(whereSeparator: \.isNewline) {
-            if let object = JSONValue.parse(Data(line.utf8))?.objectValue { return object }
-        }
-        return nil
+        JSONValue.parse(data)?.objectValue
     }
 }
 

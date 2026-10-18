@@ -17,6 +17,10 @@ import Testing
 @MainActor
 extension TaskDetailVMTests {
 
+    private func conversationEvent(_ suffix: String) -> TaskEvent {
+        TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","# + suffix)!
+    }
+
     func conversationTask(
         _ id: String, status: String = "completed", parentTaskID: String? = nil, spawnedBy: String? = nil,
         rootTaskID: String? = nil, sessionID: String? = "sess-1234567890", liveInput: Bool = false, minute: Int = 0
@@ -516,14 +520,13 @@ extension TaskDetailVMTests {
         let taskB = conversationTask("b", status: "completed", parentTaskID: "a", minute: 1)
         let harness = makeConversationSUT(openedAs: "a", initialMembers: [taskA, taskB])
         harness.eventsBox["a"]?.value = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"fix the bug"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"assistant_text","text":"Looked at the failing test."}"#)!
+            conversationEvent(#""seq":0,"kind":"task_started","prompt":"fix the bug"}"#),
+            conversationEvent(#""seq":1,"kind":"assistant_text","text":"Looked at the failing test."}"#)
         ]
         harness.eventsBox["b"]?.value = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"also add a test"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"assistant_text","text":"Added the missing test."}"#)!
+            conversationEvent(#""seq":0,"kind":"task_started","prompt":"also add a test"}"#),
+            conversationEvent(#""seq":1,"kind":"assistant_text","text":"Added the missing test."}"#)
         ]
-
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([taskA, taskB])
@@ -551,12 +554,12 @@ extension TaskDetailVMTests {
         let taskB = conversationTask("b", status: "completed", parentTaskID: "a", minute: 1)
         let harness = makeConversationSUT(openedAs: "a", initialMembers: [taskA, taskB])
         harness.eventsBox["a"]?.value = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/a.swift"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)!
+            conversationEvent(#""seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/a.swift"}"#),
+            conversationEvent(#""seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)
         ]
         harness.eventsBox["b"]?.value = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/b.swift"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)!
+            conversationEvent(#""seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/b.swift"}"#),
+            conversationEvent(#""seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)
         ]
         given(harness.useCase).snapshot(.value("b")).willReturn(conversationTask("b", status: "completed"))
 

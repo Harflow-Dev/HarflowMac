@@ -52,7 +52,8 @@ final class HarnessesViewModelMock: HarnessesViewModel {
     /// `SetupDocument.decode` entry point the app uses.
     static var sampleRows: [HarnessRow] {
         let json = #"""
-        {"v":1,"server_path":"/usr/local/bin/harflow","clients":[
+        {"product":"harflow","format":"\#(WireContract.setup.format)","v":1,"product_version":"\#(HarflowVersion.current)",
+         "server_path":"/usr/local/bin/harflow","clients":[
             {"key":"claude-code","available":true,"installed":true,"current":true},
             {"key":"codex","available":true,"installed":false}
         ]}

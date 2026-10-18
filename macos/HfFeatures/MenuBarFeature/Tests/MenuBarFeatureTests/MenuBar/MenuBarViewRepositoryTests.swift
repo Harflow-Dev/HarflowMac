@@ -41,7 +41,8 @@ import Testing
         // given — `TimelineItem` has no public initializer, built via the public `TaskEvent(line:)`
         // decoder and `Timeline.items(from:)`.
         let eventStream = MockEventStreamRepository()
-        let event = TaskEvent(line: #"{"v": 1, "seq": 0, "task_id": "t1", "kind": "assistant_text", "text": "hi"}"#)!
+        let event = TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":0,"task_id":"t1","kind":"assistant_text","text":"hi"}"#)!
         let item = Timeline.items(from: [event])[0]
         given(eventStream).current(for: .value("abc123")).willReturn(item)
         let sut = MenuBarViewRepository(eventStreamRepository: eventStream)

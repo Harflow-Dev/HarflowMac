@@ -92,7 +92,11 @@ extension ParallelVMTests {
         harness.tasksSubject.send(tasks)
         await waitUntil { harness.sut.columns.count == 8 && harness.sut.isPresentationSettled }
         let builds = harness.sut.builtColumnCount
-        let event = try #require(TaskEvent(line: "{\"v\":1,\"seq\":1,\"kind\":\"assistant_text\",\"text\":\"hello\"}"))
+        let eventLine = #"""
+        {"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":1,"kind":"assistant_text","text":"hello"}
+        """#
+        #expect(JSONValue.parse(Data(eventLine.utf8)) != nil)
+        let event = try #require(TaskEvent(line: eventLine))
         subject.send(Timeline.items(from: [event]))
         await waitUntil { harness.sut.columns.first?.rows.count == 1 && harness.sut.isPresentationSettled }
         #expect(harness.sut.builtColumnCount == builds + 1)
@@ -111,7 +115,11 @@ extension ParallelVMTests {
             }
         }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
-        let event = try #require(TaskEvent(line: "{\"v\":1,\"seq\":1,\"kind\":\"assistant_text\",\"text\":\"synthetic turn\"}"))
+        let eventLine = #"""
+        {"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":1,"kind":"assistant_text","text":"synthetic turn"}
+        """#
+        #expect(JSONValue.parse(Data(eventLine.utf8)) != nil)
+        let event = try #require(TaskEvent(line: eventLine))
         for task in tasks {
             harness.itemsBox.value[task.taskID] = Timeline.items(from: [event])
             harness.availabilityBox.value[task.taskID] = .available

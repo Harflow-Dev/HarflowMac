@@ -10,11 +10,16 @@ struct EventSummaryRetryTests {
     private func makeSUT(directory: URL) -> EventStreamRepositoryImpl {
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(directory.path)
-        return EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: NullTaskSnapshotRepository(), scheduler: NullScheduling())
+        return EventStreamRepositoryImpl(
+            toolEnvironment: environment,
+            snapshotRepository: NullTaskSnapshotRepository(),
+            scheduler: NullScheduling(),
+            compatibilityCheck: { _ in .success(()) }
+        )
     }
 
     private func edit(_ seq: Int, path: String) -> String {
-        #"{"v":1,"seq":\#(seq),"kind":"tool_call","call_id":"\#(seq)","tool":"Edit","category":"edit","path":"\#(path)"}"# + "\n"
+        currentEventFixture(#"{"v":1,"seq":\#(seq),"kind":"tool_call","call_id":"\#(seq)","tool":"Edit","category":"edit","path":"\#(path)"}"#) + "\n"
     }
 
     @Test(.timeLimit(.minutes(1)))

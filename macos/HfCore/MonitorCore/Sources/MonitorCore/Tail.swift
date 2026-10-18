@@ -118,8 +118,9 @@ public enum EventAvailability: Equatable, Sendable {
 
 /// Watches one task's `events.jsonl`: a `DispatchSource` on the file descriptor wakes it on writes,
 /// and a 1 s poll covers the times there is no descriptor to watch (the file does not exist yet, or
-/// was replaced). Delivers decoded v1 events on the main queue; lines that are not v1 events are
-/// skipped, unknown kinds are delivered as `.unknown` for the caller to ignore.
+/// was replaced). Delivers decoded Harflow v1 events on the main queue. Complete incompatible
+/// records make activity explicitly unavailable; incomplete trailing writes wait for completion.
+/// Unknown event kinds are delivered as `.unknown` for the caller to ignore.
 public final class EventFileTailer {
     public typealias Handler = (_ events: [TaskEvent], _ reset: Bool, _ availability: EventAvailability) -> Void
 
@@ -127,6 +128,7 @@ public final class EventFileTailer {
     private let queue = DispatchQueue(label: "dev.harflow.mac.tail")
     private var tail = LineTail(maxChunk: EventPages.byteLimit)
     private var seeded = false
+    private var incompatibleEnvelope = false
     private var olderCursor: EventPageCursor?
     private var history = EventHistoryState(isLoading: true)
     private var historyHandler: ((EventHistoryState) -> Void)?
@@ -211,6 +213,7 @@ public final class EventFileTailer {
             olderCursor = page.next
             history = EventHistoryState(hasMore: page.next != nil, generation: history.generation + (reset ? 1 : 0))
             availability = .available
+            incompatibleEnvelope = false
             if let handler { DispatchQueue.main.async { handler(page.events, true, .available) } }
         } catch {
             history.isLoading = false
@@ -266,12 +269,19 @@ public final class EventFileTailer {
                 seed(reset: true)
                 return
             }
-            collected.append(contentsOf: step.lines.compactMap(TaskEvent.init(line:)))
+            let decoded = step.lines.compactMap(TaskEvent.init(line:))
+            if decoded.count != step.lines.count {
+                incompatibleEnvelope = true
+                history.error = "Unsupported Harflow event envelope"
+                publishHistory()
+                break
+            }
+            collected.append(contentsOf: decoded)
             if !step.more { break }
         }
         // `tail.read` returns nil for a file that cannot be opened at all (missing, or unreadable) —
         // never for one that opened but was merely empty, which still counts as available.
-        let nextAvailability: EventAvailability = opened ? .available : .unavailable
+        let nextAvailability: EventAvailability = opened && !incompatibleEnvelope ? .available : .unavailable
         let availabilityChanged = nextAvailability != availability
         availability = nextAvailability
         guard reset || !collected.isEmpty || availabilityChanged, let handler else { return }

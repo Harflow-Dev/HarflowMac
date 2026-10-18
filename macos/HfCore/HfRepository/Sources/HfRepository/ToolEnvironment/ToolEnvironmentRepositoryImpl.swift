@@ -158,19 +158,25 @@ public final class ToolEnvironmentRepositoryImpl: ToolEnvironmentRepository, @un
     }
 
     public func environment(toolDirectory: String?) -> [String: String] {
-        LaunchEnvironment.build(base: baseEnvironment, loginPath: discoveryValue.loginPath, toolDirectory: toolDirectory)
+        var value = LaunchEnvironment.build(base: baseEnvironment, loginPath: discoveryValue.loginPath, toolDirectory: toolDirectory)
+        value["HOME"] = home
+        return value
     }
 
     /// F4-04: the located binary's own folder goes on the environment's `PATH`.
     public func ctl() -> Result<CtlClient, ToolError> {
         locator.locate("harflow-ctl").map { path in
-            CtlClient(executable: path, environment: environment(toolDirectory: (path as NSString).deletingLastPathComponent))
+            CtlClient(executable: path, environment: environment(toolDirectory: (path as NSString).deletingLastPathComponent),
+                      runner: runner,
+                      compatibilityContext: RuntimeCompatibilityContext(expectedStateRoot: (tasksDirectory as NSString).deletingLastPathComponent))
         }
     }
 
     public func setup() -> Result<SetupClient, ToolError> {
         locator.locate("harflow-setup").map { path in
-            SetupClient(executable: path, environment: environment(toolDirectory: (path as NSString).deletingLastPathComponent))
+            SetupClient(executable: path, environment: environment(toolDirectory: (path as NSString).deletingLastPathComponent), runner: runner,
+                        pairedCtlExecutable: (path as NSString).deletingLastPathComponent + "/harflow-ctl",
+                        compatibilityContext: RuntimeCompatibilityContext(expectedStateRoot: (tasksDirectory as NSString).deletingLastPathComponent))
         }
     }
 }

@@ -91,8 +91,11 @@ import Testing
         let helper = TaskDetailVMTests()
         let harness = helper.makeSUT()
         let text = markdownBody()
-        let prompt = try #require(TaskEvent(line: #"{"v":1,"seq":0,"kind":"user_message","text":"Review this change","source":"initial"}"#))
-        let assistantLine = #"{"v":1,"seq":1,"kind":"assistant_text","text":""# + text.replacingOccurrences(of: "\n", with: "\\n") + #""}"#
+        let prompt = try #require(TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":0,"kind":"user_message","text":"Review this change","source":"initial"}"#))
+        let assistantLine = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":1,"kind":"assistant_text","text":""# + text.replacingOccurrences(of: "\n", with: "\\n")
+        + #""}"#
         let assistant = try #require(TaskEvent(line: assistantLine))
         let events = [prompt, assistant]
         harness.detailBox.value = helper.task(status: "completed")

@@ -1,22 +1,20 @@
 # MonitorCore
 
-The Monitor's bottom layer: dependency-free values and I/O — `harflow-ctl`/`harflow-setup`
-JSON decoding, event tailing, lineage, git-status parsing, process/environment building, and the
-child reaper. Foundation only, so its tests never need a window server.
+Foundation-only values and I/O for Harflow wire decoding, event tailing, lineage, process execution, and environment construction. The package stays in Swift 5 language mode for its process/tailing concurrency internals; see [architecture rules](../../AGENTS.md).
 
-Moved here unchanged from `Harflow/Sources/MonitorCore` as Phase 2 ("package skeleton") of
-`.claude/plans/2026-09-25-monitor-architecture-plan-settled.md` — no code changed, only the package
-boundary. It has no dependencies of its own, and any other package in this repo may import it.
+## Compatibility
 
-## Build & test
+The canonical [wire specification](https://github.com/Harflow-Dev/HarflowMCP/blob/main/docs/contracts.md) is engine-owned. The consumer validates Harflow product identity, format, integer wire version 1, and stable product-version syntax before interpreting payloads. Live ctl/setup answers and compatibility probes require the selected major/minor release line; normalized events retain historical writer versions as provenance.
 
-```bash
-cd macos/HfCore/MonitorCore
-swift build
-swift test
+`RuntimeCompatibilityContext` carries the explicit lexical absolute state root. `VersionInfoClient` runs the selected `harflow-ctl version-info --json` directly through `ProcessRunning`, with a bounded strict document and no cache. Ctl commands and setup actions probe immediately before each operation with the same effective HOME/environment and working-directory policy. Setup probes its paired control executable, never PATH. Darwin/arm64 and the operation's advertised contract/capability are required. Lexical comparison preserves case and does not resolve symlinks; aliases that do not normalize equally safely refuse.
+
+Tests vendor exact engine-owned fixtures under `Tests/MonitorCoreTests/Resources/ContractsV1`, including the engine manifest and its SHA256 digest. The package has no sibling-repository dependency or fixture download step. These envelopes do not establish storage ownership or runtime authenticity.
+
+## Build and test
+
+```sh
+swift build --package-path macos/HfCore/MonitorCore
+HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfCore/MonitorCore --mode aggregate
 ```
 
-## Language mode
-
-`swiftLanguageModes: [.v5]` — see `../../AGENTS.md` for why (its `assumeIsolated` process/tailing
-internals do not compile under Swift 6's strict concurrency checking).
+Complete malformed or incompatible event records make activity and summary reads explicitly unavailable. An incomplete trailing write is deferred until a newline completes it; unknown additive event kinds remain readable.

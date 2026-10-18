@@ -6,7 +6,10 @@ import Testing
 @Suite struct HarnessRowActionsTests {
     
     private func row(_ json: String) throws -> HarnessRow {
-        try SetupDocument.decode(stdout: Data(#"{"v":1,"clients":[\#(json)]}"#.utf8), stderr: "", exitCode: 0).get().rows[0]
+        try SetupDocument.decode(stdout: Data((#"{"product":"harflow","format":"harflow.setup","v":1,"#
+        + #""product_version":"1.0.0","clients":[\#(json)]}"#).utf8), stderr: "", exitCode: 0)
+.get()
+.rows[0]
     }
     
     @Test func givenARowNotAvailable_whenRenderingActions_thenInstallIsDisabled() throws {

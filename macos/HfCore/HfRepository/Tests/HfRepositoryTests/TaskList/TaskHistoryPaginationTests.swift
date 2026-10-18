@@ -8,7 +8,8 @@ import Testing
 
 struct TaskHistoryPaginationTests {
     private func response(_ ids: [String], cursor: String? = nil, status: String = "completed", activeCount: Int = 0, pending: Bool = false) -> ProcessOutput {
-        let raw: [String: JSONValue] = ["v": .number(5), "result": .object([
+        let raw: [String: JSONValue] = ["product": .string("harflow"), "format": .string("harflow.ctl"),
+            "v": .number(1), "product_version": .string("1.0.0"), "result": .object([
             "items": .array(ids.map { .object(["task_id": .string($0), "status": .string(status), "title": .string($0)]) }),
             "next_cursor": cursor.map(JSONValue.string) ?? .null, "has_more": .bool(cursor != nil),
             "bootstrap_pending": .bool(pending), "total_active_count": .number(Double(activeCount))
@@ -29,7 +30,7 @@ struct TaskHistoryPaginationTests {
             }
             return .success(response(Array(catalog.prefix(100)), cursor: "page2"))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         // when
         await sut.refresh()
@@ -60,7 +61,7 @@ struct TaskHistoryPaginationTests {
             }
             return .success(response((0 ..< 100).map { "active-\($0)" }, cursor: "older", status: "running", activeCount: 150))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         await sut.loadMoreHistory()
@@ -86,7 +87,7 @@ struct TaskHistoryPaginationTests {
             }
             return .success(response(["loaded"], status: "running", activeCount: 150))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         // when
@@ -118,7 +119,7 @@ struct TaskHistoryPaginationTests {
             if blockPoll.value { entered.mutate { $0 = true }; gate.waitSync() }
             return .success(response(["newest"], cursor: "page2"))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         blockPoll.mutate { $0 = true }
@@ -143,9 +144,13 @@ struct TaskHistoryPaginationTests {
                 "parent_task_id": .string("parent"), "root_task_id": .string("parent"), "depth": .number(1)])]),
                 "related_headers": .array([.object(["task_id": .string("parent"), "status": .string("completed")])]),
                 "next_cursor": .string("older"), "has_more": .bool(true), "bootstrap_pending": .bool(false)]
-            return .success(stdout(JSONValue.object(["v": .number(5), "result": .object(result)]).rendered()))
+            return .success(stdout(JSONValue.object([
+                "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
+                "product_version": .string("1.0.0"), "result": .object(result)
+            ])
+.rendered()))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         // when
         await sut.refresh()
@@ -164,7 +169,7 @@ struct TaskHistoryPaginationTests {
             let current = state.value
             return .success(response(["root"], status: current.status, activeCount: current.count, pending: current.pending))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let notifier = MockFinishNotifier()
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment, finishNotifier: notifier)
         // when / then: partial bootstrap cannot establish a count or notification baseline.
@@ -200,9 +205,13 @@ struct TaskHistoryPaginationTests {
                 "process_identity_state": .string(current >= 2 ? "dead" : "uncertain")]
             let result: [String: JSONValue] = ["items": .array([.object(item)]), "next_cursor": .null,
                 "has_more": .bool(false), "bootstrap_pending": .bool(false), "total_active_count": .null, "counts_complete": .bool(false)]
-            return .success(stdout(JSONValue.object(["v": .number(5), "result": .object(result)]).rendered()))
+            return .success(stdout(JSONValue.object([
+                "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
+                "product_version": .string("1.0.0"), "result": .object(result)
+            ])
+.rendered()))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let notifier = MockFinishNotifier()
         let finished = LockedBox<[TaskInfo]>([])
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment, finishNotifier: notifier)
@@ -232,11 +241,15 @@ struct TaskHistoryPaginationTests {
                 let result: [String: JSONValue] = ["items": .array([.object(["task_id": .string("older"), "status": .string("failed"),
                     "needs_reconciliation": .bool(true), "process_identity_state": .string("uncertain")])]),
                     "next_cursor": .null, "has_more": .bool(false), "bootstrap_pending": .bool(false)]
-                return .success(stdout(JSONValue.object(["v": .number(5), "result": .object(result)]).rendered()))
+                return .success(stdout(JSONValue.object([
+                    "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
+                    "product_version": .string("1.0.0"), "result": .object(result)
+                ])
+.rendered()))
             }
             return .success(response(["newest"], cursor: "older-page"))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         await sut.loadMoreHistory()
@@ -257,7 +270,11 @@ struct TaskHistoryPaginationTests {
                 let result: [String: JSONValue] = ["items": .array([]), "next_cursor": .null,
                     "has_more": .bool(false), "bootstrap_pending": .bool(true), "counts_complete": .bool(false),
                     "catalog_state": .object(["status": .string("preparing"), "source": .string("task"), "pending_records": .number(150)])]
-                return .success(stdout(JSONValue.object(["v": .number(5), "result": .object(result)]).rendered()))
+                return .success(stdout(JSONValue.object([
+                    "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
+                    "product_version": .string("1.0.0"), "result": .object(result)
+                ])
+.rendered()))
             }
             if call.arguments.contains("--active-only") { return .success(response([], activeCount: 4)) }
             if call.arguments.contains("--cursor=page2") { return .success(response(["older"], cursor: "page3")) }
@@ -266,7 +283,7 @@ struct TaskHistoryPaginationTests {
             }
             return .success(response(["newest"], cursor: "page2"))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         await sut.loadMoreHistory()
@@ -294,7 +311,7 @@ struct TaskHistoryPaginationTests {
         given(environment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
         let preparing = LockedBox(true)
         let runner = StubProcessRunner { _ in .success(response(preparing.value ? [] : ["historical"], pending: preparing.value)) }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let scheduler = MockScheduling()
         let retry = LockedBox<(@Sendable () -> Void)?>(nil)
         given(scheduler).now().willReturn(Date())

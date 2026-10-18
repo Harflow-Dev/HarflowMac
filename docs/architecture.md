@@ -5,3 +5,5 @@ The Swift packages preserve the coordinator → navigation view → view → vie
 Production repository Module wiring uses ManagedToolEnvironmentRepository and ManagedInstallRepository. The managed boundary provides no executable discovery, empty launch environment, unavailable control/setup clients, and an inaccessible task directory. Retained transport and installer implementations are test seams only until managed runtime integration. External installer controls are hidden.
 
 The local package build packages the app icon and both menu template images, then applies an ad-hoc signature. Developer ID, notarization, distribution, and Xcode Cloud are outside this phase.
+
+Ctl/setup commands and asynchronous store readers validate the selected runtime and lexical state root before operations. See [MonitorCore compatibility](../macos/HfCore/MonitorCore/README.md). Managed production wiring stays unavailable and does not probe or read state.

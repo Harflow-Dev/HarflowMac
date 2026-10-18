@@ -58,7 +58,8 @@ public struct SetupDocument: Equatable, Sendable {
 
     /// setup's exit code reflects the rows (a failed client exits non-zero with a full document),
     /// so the document, not the exit code, is the answer.
-    public static func decode(stdout: Data, stderr: String, exitCode: Int32) -> Result<SetupDocument, ToolError> {
+    public static func decode(stdout: Data, stderr: String, exitCode: Int32,
+                              productVersion: String = HarflowVersion.current) -> Result<SetupDocument, ToolError> {
         let tool = "harflow-setup"
         guard let document = CtlDocument.firstJSONObject(in: stdout) else {
             if exitCode == 2, stderr.contains("unrecognized arguments") || stderr.contains("invalid choice") {
@@ -66,11 +67,9 @@ public struct SetupDocument: Equatable, Sendable {
             }
             return .failure(.unreadable(tool: tool, exitCode: exitCode, stderr: stderr))
         }
-        guard let version = document["v"]?.intValue else {
-            return .failure(.unsupportedVersion(tool: tool, version: document["v"]?.rendered() ?? "none"))
-        }
-        guard version == setupContractVersion else {
-            return .failure(.unsupportedVersion(tool: tool, version: String(version)))
+        if let error = WireEnvelope.validate(document, contract: .setup, productVersion: productVersion) { return .failure(error) }
+        if let error = document["error"]?.objectValue {
+            return .failure(.refused(code: error["code"]?.stringValue ?? "setup_error", message: error["message"]?.stringValue ?? ""))
         }
         guard let rows = document["clients"]?.arrayValue else {
             return .failure(.unreadable(tool: tool, exitCode: exitCode, stderr: "no clients array"))
@@ -85,11 +84,16 @@ public struct SetupClient: Sendable {
     public var executable: String
     public var environment: [String: String]
     public var runner: ProcessRunning
+    public let pairedCtlExecutable: String
+    public let compatibilityContext: RuntimeCompatibilityContext
 
-    public init(executable: String, environment: [String: String], runner: ProcessRunning = ProcessRunner()) {
+    public init(executable: String, environment: [String: String], runner: ProcessRunning = ProcessRunner(),
+                pairedCtlExecutable: String? = nil, compatibilityContext: RuntimeCompatibilityContext? = nil) {
         self.executable = executable
-        self.environment = environment
+        self.environment = RuntimeCompatibilityContext.effectiveEnvironment(environment)
         self.runner = runner
+        self.pairedCtlExecutable = pairedCtlExecutable ?? (executable as NSString).deletingLastPathComponent + "/harflow-ctl"
+        self.compatibilityContext = compatibilityContext ?? .derived(environment: environment)
     }
 
     public enum Action: Sendable { case status, install, remove }
@@ -107,10 +111,15 @@ public struct SetupClient: Sendable {
     }
 
     public func perform(_ action: Action, client: String? = nil) async -> Result<SetupDocument, ToolError> {
+        let probe = VersionInfoClient(executable: pairedCtlExecutable, environment: environment,
+                                      context: compatibilityContext, runner: runner)
+        if case .failure(let error) = await probe.check(requiring: [.setup]) { return .failure(error) }
+        guard !Task.isCancelled else { return .failure(WireEnvelope.incompatibility("operation cancelled before setup launch")) }
         let output = await runner.run(executable: executable, arguments: Self.arguments(action, client: client), environment: environment, currentDirectory: nil, timeout: 90)
         return output.flatMap { output in
             if output.timedOut { return .failure(.timedOut(tool: "harflow-setup", seconds: 90)) }
-            return SetupDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode)
+            return SetupDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
+                                        productVersion: compatibilityContext.productVersion)
         }
     }
 }

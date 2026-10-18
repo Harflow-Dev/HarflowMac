@@ -5,7 +5,11 @@ import Testing
 @Suite struct EventPageTests {
     private func fixture(_ count: Int) throws -> URL {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let text = (1 ... count).map { #"{"v":1,"seq":\#($0),"kind":"assistant_text","text":"row"}"# }.joined(separator: "\n") + "\n"
+        let text = (1 ... count)
+.map { seq in
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":\#(seq),"kind":"assistant_text","text":"row"}"#
+        }
+.joined(separator: "\n") + "\n"
         try text.write(to: path, atomically: true, encoding: .utf8)
         return path
     }
@@ -43,6 +47,19 @@ import Testing
         try handle.seek(toOffset: first.end.offset - 16)
         try handle.write(contentsOf: Data(repeating: 32, count: 16))
         #expect(throws: EventPageError.self) { try EventPages.read(path: file.path, before: first.next) }
+    }
+
+    @Test func givenUnstampedEvent_whenPaging_thenThePageIsUnavailable() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: file) }
+        try (#"{"v":1,"seq":1,"kind":"notice"}"# + "\n")
+            .write(to: file, atomically: true, encoding: .utf8)
+        do {
+            _ = try EventPages.read(path: file.path)
+            Issue.record("unstamped event should make the page unavailable")
+        } catch let error as EventPageError {
+            if case .unavailable = error {} else { Issue.record("expected unavailable, got \(error)") }
+        }
     }
 
     @Test func givenSmallByteBudget_whenPaging_thenPartialBoundaryDoesNotLoseCompleteEvents() throws {

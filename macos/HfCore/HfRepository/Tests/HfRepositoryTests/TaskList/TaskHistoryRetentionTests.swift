@@ -10,7 +10,11 @@ struct TaskHistoryRetentionTests {
         var result: [String: JSONValue] = ["items": .array(ids.map { .object(["task_id": .string($0), "status": .string(status)]) }),
             "next_cursor": cursor.map(JSONValue.string) ?? .null, "has_more": .bool(cursor != nil), "bootstrap_pending": .bool(false)]
         result.merge(flags) { _, new in new }
-        return stdout(JSONValue.object(["v": .number(5), "result": .object(result)]).rendered())
+        return stdout(JSONValue.object([
+            "product": .string("harflow"), "format": .string("harflow.ctl"),
+            "v": .number(1), "product_version": .string("1.0.0"), "result": .object(result)
+        ])
+.rendered())
     }
 
     @Test func givenOver100LoadedTerminalRows_whenRetentionDeletesThem_thenBoundedRotatingBatchesRemoveOnlyMissingIDs() async {
@@ -23,7 +27,7 @@ struct TaskHistoryRetentionTests {
             if call.arguments.contains("--cursor=oldest") { return .success(page((100 ..< 150).map { "older-\($0)" })) }
             return .success(page(["visible"], cursor: "older"))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         await sut.loadMoreHistory()
@@ -54,7 +58,7 @@ struct TaskHistoryRetentionTests {
             if call.arguments.contains("--cursor=older") { return .success(page(["older"])) }
             return .success(page(["visible"], cursor: "older"))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         await sut.loadMoreHistory()
@@ -72,9 +76,13 @@ struct TaskHistoryRetentionTests {
             if call.arguments.contains("--cursor=first") { return .success(page(["first"])) }
             let raw: [String: JSONValue] = ["items": .array([.object(["task_id": .string("survivor"), "status": .string("completed"),
                 "parent_task_id": .string("first")])]), "next_cursor": .string("first"), "has_more": .bool(true), "bootstrap_pending": .bool(false)]
-            return .success(stdout(JSONValue.object(["v": .number(5), "result": .object(raw)]).rendered()))
+            return .success(stdout(JSONValue.object([
+                "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
+                "product_version": .string("1.0.0"), "result": .object(raw)
+            ])
+.rendered()))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         await sut.loadMoreHistory()
@@ -95,7 +103,7 @@ struct TaskHistoryRetentionTests {
             if call.arguments.contains("--active-only") { return .success(page([])) }
             return .success(page(["visible"]))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         _ = try await sut.conversationPage(sessionID: "conversation", cursor: nil)
@@ -125,7 +133,7 @@ struct TaskHistoryRetentionTests {
             if call.arguments.contains("--active-only") { return .success(page([])) }
             return .success(page(["visible"]))
         }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
         await sut.refresh()
         _ = try await sut.conversationPage(sessionID: "conversation", cursor: nil)

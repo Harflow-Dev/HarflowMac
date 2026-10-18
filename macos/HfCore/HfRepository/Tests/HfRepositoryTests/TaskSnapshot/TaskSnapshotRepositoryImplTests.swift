@@ -5,6 +5,24 @@ import Mockable
 import MonitorCore
 import Testing
 
+private func snapshotCtl(_ payload: String) -> ProcessOutput {
+    guard var object = JSONValue.parse(Data(payload.utf8))?.objectValue else { return stdout(payload) }
+    object["product"] = .string("harflow")
+    object["format"] = .string("harflow.ctl")
+    object["v"] = .number(1)
+    object["product_version"] = .string("1.0.0")
+    return stdout(JSONValue.object(object).rendered())
+}
+
+private func snapshotJSON(_ payload: String) -> String {
+    guard var object = JSONValue.parse(Data(payload.utf8))?.objectValue else { return payload }
+    object["product"] = .string("harflow")
+    object["format"] = .string("harflow.ctl")
+    object["v"] = .number(1)
+    object["product_version"] = .string("1.0.0")
+    return JSONValue.object(object).rendered()
+}
+
 @Suite struct TaskSnapshotRepositoryImplTests {
 
     @Test func givenCtlCannotBeLocated_whenRefreshingASnapshot_thenNothingChanges() async {
@@ -18,7 +36,7 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+                runner: PositiveCtlRunner(StubProcessRunner(output: snapshotCtl(#"{"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#)))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
@@ -41,7 +59,7 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+                runner: PositiveCtlRunner(StubProcessRunner(output: snapshotCtl(#"{"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#)))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
@@ -52,7 +70,7 @@ import Testing
         // when — an unknown_task refusal supersedes the seeded snapshot.
         resultBox.mutate { $0 = .success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":2,"error":{"code":"unknown_task","message":"gone"}}"#))
+            runner: PositiveCtlRunner(StubProcessRunner(output: snapshotCtl(#"{"error":{"code":"unknown_task","message":"gone"}}"#)))
         )) }
         await sut.refresh("task-1")
 
@@ -70,7 +88,7 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+                runner: PositiveCtlRunner(StubProcessRunner(output: snapshotCtl(#"{"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#)))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
@@ -81,7 +99,7 @@ import Testing
         // when: a later refresh fails with something other than unknown_task.
         resultBox.mutate { $0 = .success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":2,"error":{"code":"session_busy","message":"busy"}}"#))
+            runner: PositiveCtlRunner(StubProcessRunner(output: snapshotCtl(#"{"error":{"code":"session_busy","message":"busy"}}"#)))
         )) }
         await sut.refresh("task-1")
 
@@ -96,14 +114,14 @@ import Testing
         let resultBox = LockedBox<Result<CtlClient, ToolError>>(
             .success(CtlClient(
                 executable: "/bin/echo", environment: [:],
-                runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"a","status":"running","backend":"claude"}}"#))
+                runner: PositiveCtlRunner(StubProcessRunner(output: snapshotCtl(#"{"task":{"task_id":"a","status":"running","backend":"claude"}}"#)))
             ))
         )
         given(toolEnvironment).ctl().willProduce { resultBox.value }
         await sut.refresh("a")
         resultBox.mutate { $0 = .success(CtlClient(
             executable: "/bin/echo", environment: [:],
-            runner: StubProcessRunner(output: stdout(#"{"v":2,"task":{"task_id":"b","status":"running","backend":"claude"}}"#))
+            runner: PositiveCtlRunner(StubProcessRunner(output: snapshotCtl(#"{"task":{"task_id":"b","status":"running","backend":"claude"}}"#)))
         )) }
         await sut.refresh("b")
 
@@ -121,9 +139,9 @@ import Testing
         let toolEnvironment = MockToolEnvironmentRepository()
         let runner = StubProcessRunner { call in
             let id = call.arguments.last ?? ""
-            return .success(stdout(#"{"v":2,"task":{"task_id":"\#(id)","status":"running","backend":"claude"}}"#))
+            return .success(snapshotCtl(#"{"task":{"task_id":"\#(id)","status":"running","backend":"claude"}}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
         let ids = (0 ..< 200).map { "task-\($0)" }
 
@@ -147,11 +165,11 @@ import Testing
             calls.mutate { $0 += 1 }
             if calls.value == 1 {
                 gate.waitSync()
-                return .success(stdout(#"{"v":2,"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
+                return .success(snapshotCtl(#"{"task":{"task_id":"task-1","status":"running","backend":"claude"}}"#))
             }
-            return .success(stdout(#"{"v":2,"task":{"task_id":"task-1","status":"completed","backend":"claude"}}"#))
+            return .success(snapshotCtl(#"{"task":{"task_id":"task-1","status":"completed","backend":"claude"}}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
 
         // when
@@ -169,20 +187,34 @@ import Testing
     @Test func givenSnapshotSubscriber_whenEqualReadsRepeat_thenDurationAndEnforcementChangesStillArrive() async {
         // given
         let environment = MockToolEnvironmentRepository()
-        let payload = LockedBox(#"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":1,"enforcement":{"sandbox":"read-only"}}}"#)
+        let payload = LockedBox(snapshotJSON(
+            #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":1,"enforcement":{"sandbox":"read-only"}}}"#
+        ))
         let runner = StubProcessRunner { _ in .success(stdout(payload.value)) }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = TaskSnapshotRepositoryImpl(toolEnvironment: environment)
         let received = LockedBox<[[String: TaskInfo]]>([])
         let token = sut.snapshotsPublisher().sink { value in received.mutate { $0.append(value) } }
         // when
         await sut.refresh("task")
         await sut.refresh("task")
-        payload.mutate { $0 = #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":2,"enforcement":{"sandbox":"read-only"}}}"# }
+        payload.mutate {
+            $0 = snapshotJSON(
+                #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":2,"enforcement":{"sandbox":"read-only"}}}"#
+            )
+        }
         await sut.refresh("task")
-        payload.mutate { $0 = #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":2,"enforcement":{"sandbox":"workspace-write"}}}"# }
+        payload.mutate {
+            $0 = snapshotJSON(
+                #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":2,"enforcement":{"sandbox":"workspace-write"}}}"#
+            )
+        }
         await sut.refresh("task")
-        payload.mutate { $0 = #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":1,"enforcement":{"sandbox":"read-only"}}}"# }
+        payload.mutate {
+            $0 = snapshotJSON(
+                #"{"v":2,"task":{"task_id":"task","status":"running","duration_seconds":1,"enforcement":{"sandbox":"read-only"}}}"#
+            )
+        }
         await sut.refresh("task")
         sut.evict(keeping: ["task"])
         sut.evict(keeping: [])

@@ -61,7 +61,7 @@ extension TaskListRepositoryImplTests {
             if thisPass == 1 { gate.waitSync() }
             return .success(historyStdout(#"{"v":2,"tasks":[{"task_id":"pass\#(thisPass)","status":"running","backend":"claude"}]}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
         // when
@@ -100,7 +100,7 @@ extension TaskListRepositoryImplTests {
             if thisPass == 2 { secondPassGate.waitSync() }
             return .success(historyStdout(#"{"v":2,"tasks":[{"task_id":"pass\#(thisPass)","status":"running","backend":"claude"}]}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
         let waiterResult = LockedBox<Result<Void, ToolError>?>(nil)
 
@@ -138,7 +138,7 @@ extension TaskListRepositoryImplTests {
             if callCount.value == 1 { gate.waitSync() }
             return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
         // when — one in-flight pass, and five waiters registering behind it.
@@ -171,7 +171,7 @@ extension TaskListRepositoryImplTests {
             if callCount.value == 1 { gate.waitSync() }
             return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
         }
-        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
         // when

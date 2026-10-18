@@ -1,10 +1,10 @@
 # HfRepository
 
-The repository layer for the Harflow: everything `AppModel` used to do by directly
-calling `MonitorCore`, now split into small, independently-testable, `nonisolated` `Sendable`
-repositories. See `../../CLAUDE.md` (the root architecture rulebook) and
-`../../.claude/plans/2026-09-25-monitor-architecture-plan-settled.md` (Phase 3) for the full
-context this package implements.
+The repository layer exposes constructor-injected, nonisolated Sendable business contracts over MonitorCore. See [architecture rules](../../AGENTS.md).
+
+Production Module wiring uses `ManagedToolEnvironmentRepository` and `ManagedInstallRepository`: runtime operations remain explicitly unavailable. This wiring does not discover executables, probe compatibility, install software, or read user task state.
+
+For an explicitly selected runtime, ctl/setup clients carry the selected absolute state-root context and probe compatibility for every operation. Event activity, summary readers, and task-store watchers await an injected `StoreCompatibilityCheck` before I/O, matching the selected tasks directory's parent. Released leases and obsolete generations cannot start delayed reads or watchers. Compatibility failures are explicit unavailable/error states. The gate checks contracts and release lines; storage ownership and verified runtime activation are separate work.
 
 ## What is here
 
@@ -12,7 +12,7 @@ context this package implements.
 |---|---|
 | `Scheduling` / `SystemScheduler` | The one scheduling seam every production timer in this package uses (1 s throttle, 10 s poll) — injectable so tests never sleep. |
 | `SettingsRepository` | `UserDefaults`-backed `toolDirectory` / `openWindowOnStart` / `notifyOnFinish`, published live. |
-| `ToolEnvironmentRepository` | Login-PATH + `uv` discovery, `ctl()`/`setup()` client construction, the launch environment. |
+| `ToolEnvironmentRepository` | Selected tooling and launch environment; production managed tooling remains unavailable. |
 | `TaskArtifactRepository` | Explicit bounded pages of registered standalone-task artifact metadata; unavailable reads remain distinct from an empty manifest. |
 | `TaskSnapshotRepository` | Per-task `harflow-ctl status` snapshots. |
 | `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task; also publishes each task's `EventAvailability` (`loading`/`available`/`unavailable`), so a caller never has to infer "the log couldn't be read" from an empty event list. |
@@ -21,7 +21,7 @@ context this package implements.
 | `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |
 | `TakeoverService` | Opens a task's session in Terminal.app — `ctl takeover` grant → hand-off files → `open -a Terminal`; the only take-over destination the Monitor offers. |
 | `HarnessRepository` | `harflow-setup` status/install/remove. |
-| `InstallRepository` | The guarded "Install harflow" pipeline (git → uv → harflow → validate) and its state machine — see `Install/InstallCommands.swift`/`Install/InstallRepositoryImpl.swift`. |
+| `InstallRepository` | Production managed installation is disabled. Retained installer implementations are isolated test seams. |
 | `DirectoryWatcher` | FSEvents on the tasks folder, moved here in Swift 6 mode with a `@Sendable` handler. |
 
 Every protocol is `@Mockable`; every `@GlobalEntry` default is a hand-written `Null*` struct (see
@@ -33,9 +33,7 @@ in dependency order, in `initializeModule()`.
 ```bash
 cd macos/HfCore/HfRepository
 swift build
-swift test
+HARFLOW_NATIVE_BENCHMARK=1 python3 ../../../scripts/test-swift-package.py --package . --mode aggregate
 ```
 
-This package has been linked into the app target since Phase 3 (`HfRepository.Module` is
-registered by `AppModulesRegistry`, alongside every other module) — there is no `AppModel` any more;
-every screen reads these repositories through its own `ViewRepository`.
+`AppModulesRegistry` registers `HfRepository.Module`; screens access repositories through their own `ViewRepository` contracts.

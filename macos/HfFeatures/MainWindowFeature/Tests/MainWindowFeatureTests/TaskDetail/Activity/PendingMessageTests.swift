@@ -10,7 +10,8 @@ import Testing
             .object(["id": .string("consumed"), "text": .string("same feedback"), "status": .string("pending")]),
             .object(["id": .string("still-queued"), "text": .string("same feedback"), "status": .string("pending")])
         ])])))
-        let started = try #require(TaskEvent(line: #"{"v":1,"seq":1,"kind":"task_started","prompt":"same feedback","message_ids":["consumed"]}"#))
+        let started = try #require(TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":1,"kind":"task_started","prompt":"same feedback","message_ids":["consumed"]}"#))
         // when / then
         #expect(PendingMessage.visible(snapshot: snapshot, events: [started]).map(\.id) == ["still-queued"])
     }
@@ -21,7 +22,8 @@ import Testing
             .object(["id": .string("first"), "text": .string("same feedback"), "status": .string("pending")]),
             .object(["id": .string("second"), "text": .string("same feedback"), "status": .string("pending")])
         ])])))
-        let event = try #require(TaskEvent(line: #"{"v":1,"seq":1,"kind":"user_message","text":"same feedback","message_id":"first"}"#))
+        let event = try #require(TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+        + #""seq":1,"kind":"user_message","text":"same feedback","message_id":"first"}"#))
         // when / then
         #expect(PendingMessage.visible(snapshot: snapshot, events: []).map(\.id) == ["first", "second"])
         #expect(PendingMessage.visible(snapshot: snapshot, events: [event]).map(\.id) == ["second"])
@@ -34,8 +36,9 @@ import Testing
             .object(["id": .string("builder-2"), "text": .string("second"), "status": .string("pending")])
         ])])))
         let events = try [
-            #"{"v":1,"seq":1,"kind":"undelivered","message_id":"inbox-1"}"#,
-            #"{"v":1,"seq":2,"kind":"user_message","text":"followup","message_ids":["builder-2"]}"#
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":1,"kind":"undelivered","message_id":"inbox-1"}"#,
+            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":2,"kind":"user_message","text":"followup","message_ids":["builder-2"]}"#
         ].map { try #require(TaskEvent(line: $0)) }
         // when / then
         #expect(PendingMessage.visible(snapshot: snapshot, events: events).isEmpty)

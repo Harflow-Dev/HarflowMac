@@ -14,7 +14,7 @@ import Testing
         let definition = JSONValue.object(["instructions": .string(String(repeating: "canvas", count: 100_000))]).rendered()
         let source = JSONValue.object(["saved_definition": .object(["instructions": .string(String(repeating: "baseline", count: 100_000))])]).rendered()
         let paths = LockedBox<[String]>([])
-        let runner = StubProcessRunner { call in
+        let runner = compatibleRunner { call in
             #expect(call.arguments.reduce(0) { $0 + $1.utf8.count } < 8192)
             let input = call.arguments.first { $0.hasPrefix("--definition=") }.map { String($0.dropFirst("--definition=".count)) }
             let baseline = call.arguments.first { $0.hasPrefix("--source-file=") }.map { String($0.dropFirst("--source-file=".count)) }
@@ -31,7 +31,7 @@ import Testing
                 Issue.record("Build inputs were placed in argv rather than disposable files")
             }
             return failure ? .failure(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "failed"))
-                : .success(stdout(#"{"v":4,"result":{"workflow_run_id":"builder"}}"#))
+                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"builder"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -52,13 +52,13 @@ extension WorkflowBuildTransportTests {
         let paths = LockedBox<[String]>([])
         let gate = AsyncGate()
         defer { gate.open() }
-        let runner = StubProcessRunner { call in
+        let runner = compatibleRunner { call in
             let filenames = call.arguments
 .filter { option in ["--definition=", "--source-file=", "--prompt-file="].contains { option.hasPrefix($0) } }
                 .map { String($0.split(separator: "=", maxSplits: 1)[1]) }
             paths.mutate { $0 = filenames }
             gate.waitSync()
-            return .success(stdout(#"{"v":4,"result":{"workflow_run_id":"builder"}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"builder"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -114,7 +114,7 @@ extension WorkflowBuildTransportTests {
         // given
         let prompt = String(repeating: "Detailed request 🦋\r\n", count: 30_000)
         let paths = LockedBox<[String]>([])
-        let runner = StubProcessRunner { call in
+        let runner = compatibleRunner { call in
             #expect(call.arguments.reduce(0) { $0 + $1.utf8.count } < 8192)
             if let option = call.arguments.first(where: { $0.hasPrefix("--prompt-file=") }) {
                 let path = String(option.dropFirst("--prompt-file=".count))
@@ -125,7 +125,7 @@ extension WorkflowBuildTransportTests {
                 Issue.record("Workflow prompt was placed in argv")
             }
             return failure ? .failure(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "failed"))
-                : .success(stdout(#"{"v":4,"result":{"workflow_run_id":"builder"}}"#))
+                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"builder"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -145,7 +145,7 @@ extension WorkflowBuildTransportTests {
         // given
         let goal = "  Compare screens.\nVerify all states.  "
         let paths = LockedBox<[String]>([])
-        let runner = StubProcessRunner { call in
+        let runner = compatibleRunner { call in
             guard let path = call.arguments.first(where: { $0.hasPrefix("--goal-file=") }).map({ String($0.dropFirst("--goal-file=".count)) }) else {
                 Issue.record("Goal was not transported in a private file")
                 return .failure(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "missing goal"))
@@ -153,7 +153,7 @@ extension WorkflowBuildTransportTests {
             paths.mutate { $0 = [path] }
             #expect((try? String(contentsOfFile: path, encoding: .utf8)) == goal)
             #expect(!call.arguments.contains { $0.hasPrefix("--goal=") })
-            return .success(stdout(#"{"v":4,"result":{"workflow_run_id":"run"}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"run"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))

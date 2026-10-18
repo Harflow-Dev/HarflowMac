@@ -319,13 +319,14 @@ struct ConversationTests {
     @Test
     func givenTheSamePathEditedInTwoTurns_whenMergedAcrossMembers_thenTheLaterTurnsStatusWins() {
         // given — each member's own call ids restart at "c1"; pairing must stay scoped per member.
+        let editCall = #"{"seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit", "# + #""input_preview":"","path":"/repo/a.swift"}"#
         let turn1: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/a.swift"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_result","call_id":"c1","ok":false,"output_tail":""}"#)!
+            TaskEvent(line: eventFixture(editCall))!,
+            TaskEvent(line: eventFixture(#"{"seq":1,"kind":"tool_result","call_id":"c1","ok":false,"output_tail":""}"#))!
         ]
         let turn2: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/a.swift"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)!
+            TaskEvent(line: eventFixture(editCall))!,
+            TaskEvent(line: eventFixture(#"{"seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#))!
         ]
         // when
         let merged = EditedFiles.build(fromMembers: [turn1, turn2], repoPath: "/repo")
@@ -338,8 +339,8 @@ struct ConversationTests {
     @Test
     func givenTwoMembers_whenBuildingRows_thenASeparatorPrecedesTheSecondTurnWithItsOwnPromptAndTime() {
         // given
-        let firstEvents = [TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"fix the bug"}"#)!]
-        let secondEvents = [TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"also add a test"}"#)!]
+        let firstEvents = [TaskEvent(line: eventFixture(#"{"seq":0,"kind":"task_started","prompt":"fix the bug"}"#))!]
+        let secondEvents = [TaskEvent(line: eventFixture(#"{"seq":0,"kind":"task_started","prompt":"also add a test"}"#))!]
         let members = [
             ConversationMember(task: task("a", status: "completed", minute: 0), events: firstEvents),
             ConversationMember(task: task("b", status: "completed", parentTaskID: "a", minute: 1), events: secondEvents)
@@ -358,8 +359,8 @@ struct ConversationTests {
     @Test
     func givenTwoMembers_whenBuildingRows_thenOnlyTheFirstTurnKeepsItsStartedRow() {
         // given
-        let firstEvents = [TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"fix the bug"}"#)!]
-        let secondEvents = [TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"also add a test"}"#)!]
+        let firstEvents = [TaskEvent(line: eventFixture(#"{"seq":0,"kind":"task_started","prompt":"fix the bug"}"#))!]
+        let secondEvents = [TaskEvent(line: eventFixture(#"{"seq":0,"kind":"task_started","prompt":"also add a test"}"#))!]
         let members = [
             ConversationMember(task: task("a", status: "completed", minute: 0), events: firstEvents),
             ConversationMember(task: task("b", status: "completed", parentTaskID: "a", minute: 1), events: secondEvents)
@@ -378,8 +379,8 @@ struct ConversationTests {
     func givenDuplicateSeqAndCallIDsAcrossMembers_whenBuildingRows_thenEveryRowGetsAGloballyUniqueID() {
         // given — both members' own logs restart at seq 0/call "c1".
         let events: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"x","command":"x"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)!
+            TaskEvent(line: eventFixture(#"{"seq":0,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"x","command":"x"}"#))!,
+            TaskEvent(line: eventFixture(#"{"seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#))!
         ]
         let members = [
             ConversationMember(task: task("a", status: "completed", minute: 0), events: events),
@@ -396,10 +397,10 @@ struct ConversationTests {
         // given — the OLDER member's own tool call never got a result (e.g. it was cancelled), while
         // a NEWER member (the current turn) is still running its own tool.
         let oldEvents: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"x","command":"x"}"#)!
+            TaskEvent(line: eventFixture(#"{"seq":0,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"x","command":"x"}"#))!
         ]
         let newEvents: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"y","command":"y"}"#)!
+            TaskEvent(line: eventFixture(#"{"seq":0,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"y","command":"y"}"#))!
         ]
         let members = [
             ConversationMember(task: task("a", status: "cancelled", minute: 0), events: oldEvents),
@@ -422,9 +423,9 @@ struct ConversationTests {
         // given — a live-input follow-up: its own `user_message(source: "initial")` duplicates the
         // separator; an "injected" message mid-turn must still show.
         let events: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"follow up"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"user_message","text":"follow up","source":"initial"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":2,"kind":"user_message","text":"one more thing","source":"injected"}"#)!
+            TaskEvent(line: eventFixture(#"{"seq":0,"kind":"task_started","prompt":"follow up"}"#))!,
+            TaskEvent(line: eventFixture(#"{"seq":1,"kind":"user_message","text":"follow up","source":"initial"}"#))!,
+            TaskEvent(line: eventFixture(#"{"seq":2,"kind":"user_message","text":"one more thing","source":"injected"}"#))!
         ]
         let members = [
             ConversationMember(task: task("a", status: "completed", minute: 0), events: []),
@@ -451,13 +452,13 @@ struct ConversationTests {
         // members (row identity must still be globally unique) — every behavior
         // `rows(members:)`'s own tests above pin, in one conversation.
         let oldEvents: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"fix the bug"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"x","command":"x"}"#)!
+            TaskEvent(line: eventFixture(#"{"seq":0,"kind":"task_started","prompt":"fix the bug"}"#))!,
+            TaskEvent(line: eventFixture(#"{"seq":1,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"x","command":"x"}"#))!
         ]
         let newEvents: [TaskEvent] = [
-            TaskEvent(line: #"{"v":1,"seq":0,"kind":"task_started","prompt":"also add a test"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":1,"kind":"user_message","text":"also add a test","source":"initial"}"#)!,
-            TaskEvent(line: #"{"v":1,"seq":2,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"y","command":"y"}"#)!
+            TaskEvent(line: eventFixture(#"{"seq":0,"kind":"task_started","prompt":"also add a test"}"#))!,
+            TaskEvent(line: eventFixture(#"{"seq":1,"kind":"user_message","text":"also add a test","source":"initial"}"#))!,
+            TaskEvent(line: eventFixture(#"{"seq":2,"kind":"tool_call","call_id":"c1","tool":"Bash","category":"shell","input_preview":"y","command":"y"}"#))!
         ]
         let members = [
             ConversationMember(task: task("a", status: "cancelled", minute: 0), events: oldEvents),

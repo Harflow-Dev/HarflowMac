@@ -13,13 +13,18 @@ extension EventStreamRepositoryImplTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let path = directory.appendingPathComponent("publisher.events.jsonl")
-        let initial = #"{"v":1,"seq":1,"kind":"task_started","prompt":"hello","backend":"claude"}"#
+        let initial = currentEventFixture(#"{"v":1,"seq":1,"kind":"task_started","prompt":"hello","backend":"claude"}"#)
         try (initial + "\n").write(to: path, atomically: true, encoding: .utf8)
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(directory.path)
         let snapshots = MockTaskSnapshotRepository()
         let scheduler = MockScheduling()
-        let sut = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots, scheduler: scheduler)
+        let sut = EventStreamRepositoryImpl(
+            toolEnvironment: environment,
+            snapshotRepository: snapshots,
+            scheduler: scheduler,
+            compatibilityCheck: { _ in .success(()) }
+        )
         let lease = sut.acquireSummary("publisher")
         defer { lease.release() }
         await waitUntil { sut.summary(for: "publisher").availability == .available }
@@ -29,7 +34,9 @@ extension EventStreamRepositoryImplTests {
         // when: these requests enqueue real, equal summary assignments on the serial summary queue.
         sut.loadMoreSummaryFiles("publisher")
         sut.loadMoreSummaryFiles("publisher")
-        let edit = #"{"v":1,"seq":2,"kind":"tool_call","call_id":"edit","tool":"Edit","category":"edit","path":"a.swift","input_preview":""}"#
+        let edit = currentEventFixture(
+            #"{"v":1,"seq":2,"kind":"tool_call","call_id":"edit","tool":"Edit","category":"edit","path":"a.swift","input_preview":""}"#
+        )
         let file = try FileHandle(forWritingTo: path)
         try file.seekToEnd()
         try file.write(contentsOf: Data((edit + "\n").utf8))

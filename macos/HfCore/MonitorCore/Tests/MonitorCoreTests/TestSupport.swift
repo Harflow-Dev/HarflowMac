@@ -50,7 +50,13 @@ final class RecordingRunner: ProcessRunning, @unchecked Sendable {
         self.answer = answer
     }
 
+    /// Operation calls, excluding the explicit compatibility probe used by positive client tests.
+    /// Gate-specific tests use `allCalls` to assert the probe and launch ordering.
     var calls: [Call] {
+        lock.withLock { _calls.filter { $0.arguments != ["version-info", "--json"] } }
+    }
+
+    var allCalls: [Call] {
         lock.withLock { _calls }
     }
 
@@ -63,7 +69,54 @@ final class RecordingRunner: ProcessRunning, @unchecked Sendable {
     }
 }
 
+/// Explicitly supplies a compatible v1 runtime handshake before answering the operation closure.
+/// This keeps older business tests focused on their operation while leaving raw negative fixtures
+/// independent of any implicit decoder stamping.
+func compatibleRunner(answer: @escaping @Sendable (RecordingRunner.Call) -> ProcessOutput) -> RecordingRunner {
+    RecordingRunner { call in
+        if call.arguments == ["version-info", "--json"] {
+            let root = RuntimeCompatibilityContext.derived(environment: call.environment).expectedStateRoot
+            let document = "{" +
+                "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
+                "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(root)\"," +
+                "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}," +
+                "\"setup\":{\"format\":\"harflow.setup\",\"v\":1},\"events\":{\"format\":\"harflow.event\",\"v\":1}}," +
+                "\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+            return ProcessOutput(exitCode: 0, stdout: json(document), stderr: "")
+        }
+        return answer(call)
+    }
+}
+
 func json(_ text: String) -> Data { Data(text.utf8) }
+
+/// Adds the explicit v1 envelope to a command fixture while preserving the payload's
+/// discriminator fields. Tests that exercise malformed or legacy envelopes pass `json` directly.
+func currentEnvelope(_ text: String, format: String, productVersion: String = HarflowVersion.current) -> Data {
+    guard let object = JSONValue.parse(Data(text.utf8))?.objectValue else { return Data(text.utf8) }
+    var stamped = object
+    if stamped["product"] == nil { stamped["product"] = .string("harflow") }
+    if stamped["format"] == nil { stamped["format"] = .string(format) }
+    if let version = stamped["v"]?.wireIntegerValue, (1 ... 14).contains(version) {
+        stamped["v"] = .number(1)
+    } else if stamped["v"] == nil {
+        stamped["v"] = .number(1)
+    }
+    if stamped["product_version"] == nil { stamped["product_version"] = .string(productVersion) }
+    return Data(JSONValue.object(stamped).rendered().utf8)
+}
+
+func ctlJSON(_ text: String, productVersion: String = HarflowVersion.current) -> Data {
+    currentEnvelope(text, format: "harflow.ctl", productVersion: productVersion)
+}
+
+func setupJSON(_ text: String, productVersion: String = HarflowVersion.current) -> Data {
+    currentEnvelope(text, format: "harflow.setup", productVersion: productVersion)
+}
+
+func eventFixture(_ text: String, productVersion: String = HarflowVersion.current) -> String {
+    String(data: currentEnvelope(text, format: "harflow.event", productVersion: productVersion), encoding: .utf8) ?? text
+}
 
 /// Polls `condition` every 50 ms until it becomes true or `timeout` elapses, instead of a fixed
 /// sleep. Returns whether the condition was ever observed true, rather than just waiting.

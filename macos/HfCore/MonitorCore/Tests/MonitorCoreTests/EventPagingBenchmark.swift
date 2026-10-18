@@ -9,13 +9,15 @@ import Testing
         FileManager.default.createFile(atPath: file.path, contents: nil)
         defer { try? FileManager.default.removeItem(at: file) }
         let output = try FileHandle(forWritingTo: file)
-        let padding = String(repeating: "x", count: 900)
+        let padding = String(repeating: "x", count: 200)
         for batch in 0 ..< 1000 {
             let lines = (1 ... 100)
 .map { index in
                 let seq = batch * 100 + index
-                return #"{"v":1,"seq":\#(seq),"kind":"tool_call","call_id":"\#(seq)","tool":"Edit","category":"edit", "#
+                return eventFixture(
+                    #"{"seq":\#(seq),"kind":"tool_call","call_id":"\#(seq)","tool":"Edit","category":"edit","#
                     + #""path":"/repo/\#(seq).swift","input_preview":"\#(padding)"}"#
+                )
             }
 .joined(separator: "\n") + "\n"
             try output.write(contentsOf: Data(lines.utf8))

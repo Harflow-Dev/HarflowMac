@@ -6,4 +6,6 @@ Version 1.0.0 is under development. The managed runtime is currently unavailable
 
 See [development](docs/development.md), [architecture](docs/architecture.md), [profiling](docs/monitor-performance.md), and [signing preparation](docs/ci-signing.md). Signing and distribution are deferred.
 
+Runtime identity and compatibility follow [HarflowMCP’s public contracts](https://github.com/Harflow-Dev/HarflowMCP/blob/main/docs/contracts.md).
+
 Licensed under Apache 2.0. Copyright Nayanda Haberty.

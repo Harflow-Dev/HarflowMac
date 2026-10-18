@@ -151,7 +151,7 @@ enum WorkflowNodePresentation {
             var payload: [String: JSONValue] = ["v": .number(1), "seq": .number(Double(item.id)),
                                                 "kind": .string("assistant_text"), "text": .string(projectedText)]
             if let time = item.at { payload["observed_at"] = .string(time.ISO8601Format()) }
-            guard let event = TaskEvent(line: JSONValue.object(payload).rendered()),
+            guard let event = TaskEvent(line: eventLine(payload)),
                   let projected = Timeline.items(from: [event]).first else { return row }
             return ConversationTimelineRow(id: row.id, taskID: row.taskID, timestamp: row.timestamp, kind: .item(projected), live: row.live)
         }
@@ -210,9 +210,18 @@ enum WorkflowNodePresentation {
         if let time = row.timestamp { call["observed_at"] = .string(time.ISO8601Format()) }
         let result: [String: JSONValue] = ["v": .number(1), "seq": .number(Double(seq + 1)), "kind": .string("tool_result"),
             "call_id": .string(callID), "ok": .bool(false), "output_tail": .string(reason)]
-        let events = [call, result].compactMap { TaskEvent(line: JSONValue.object($0).rendered()) }
+        let events = [call, result].compactMap { TaskEvent(line: eventLine($0)) }
         guard let item = Timeline.items(from: events).first else { return row }
         return ConversationTimelineRow(id: row.taskID + "#workflow-output-error", taskID: row.taskID, timestamp: row.timestamp, kind: .item(item), live: false)
+    }
+
+    private static func eventLine(_ payload: [String: JSONValue]) -> String {
+        var envelope = payload
+        envelope["product"] = .string("harflow")
+        envelope["format"] = .string(WireContract.events.format)
+        envelope["v"] = .number(1)
+        envelope["product_version"] = .string(HarflowVersion.current)
+        return JSONValue.object(envelope).rendered()
     }
 
 }
