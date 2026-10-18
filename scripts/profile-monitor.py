@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Profile an isolated built Monitor without installation or production registration.
+"""Runtime profiling is unavailable until managed Harflow runtime integration.
 
 Requires a synthetic HOME created by benchmark-monitor.py, including its restricted
 CLI wrappers. Copies the app to a private bundle with a unique identifier, removes
@@ -27,8 +27,8 @@ import uuid
 
 
 def observe(binary: Path, home: Path, output: Path, seconds: float, sample: bool) -> dict:
-    env = {key: value for key, value in os.environ.items() if not key.startswith('PB_')}
-    env.update(HOME=str(home), POLYBRIDGE_MONITOR_METRICS='1')
+    env = {key: value for key, value in os.environ.items() if not key.startswith(('HARFLOW_', 'PB_'))}
+    env.update(HOME=str(home), HARFLOW_MONITOR_METRICS='1')
     command = [str(binary), '-toolDirectory', str(home / '.local/bin'),
                '-notifyOnFinish', 'NO', '-openWindowOnStart', 'YES']
     rows = []
@@ -99,7 +99,7 @@ def observe(binary: Path, home: Path, output: Path, seconds: float, sample: bool
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app', required=True, type=Path, help='Built .app to copy; never modified')
-    parser.add_argument('--home', required=True, type=Path, help='Synthetic fixture home with restricted .local/bin wrappers')
+    parser.add_argument('--fixture-manifest', required=True, type=Path, help='Versioned generated fixture manifest; its parent is the isolated HOME')
     parser.add_argument('--output', required=True, type=Path, help='New or empty directory for numeric results and local logs')
     parser.add_argument('--seconds', type=float, default=15, help='RSS observation duration (default: 15)')
     parser.add_argument('--sample', action='store_true', help='Also capture stacks in a separate app launch')
@@ -108,32 +108,33 @@ def main() -> None:
         parser.error('Actual Monitor profiling requires macOS')
     if not 1 <= args.seconds <= 300:
         parser.error('--seconds must be between 1 and 300')
-    app, home, output = args.app.resolve(), args.home.resolve(), args.output.resolve()
+    app, home, output = args.app.resolve(), args.fixture_manifest.resolve().parent, args.output.resolve()
     if not (app / 'Contents/Info.plist').is_file():
         parser.error('--app must be a built .app bundle')
     try:
-        manifest = json.loads((home / 'monitor-benchmark-fixture.json').read_text())
+        manifest = json.loads(args.fixture_manifest.read_text())
     except (OSError, ValueError):
-        parser.error('--home requires monitor-benchmark-fixture.json; production homes are refused')
-    if not isinstance(manifest, dict) or manifest.get('version') != 1:
-        parser.error('--home fixture manifest must have version 1')
-    if not (home / '.polybridge').is_dir() or not all(
+        parser.error('--fixture-manifest requires a generated fixture; production homes are refused')
+    if not isinstance(manifest, dict) or manifest.get('version') != 1 or manifest.get('format') != 'harflow.monitor-fixture':
+        parser.error('--fixture-manifest must have format harflow.monitor-fixture and version 1')
+    if not (home / '.harflow').is_dir() or not all(
         os.access(home / '.local/bin' / tool, os.X_OK)
-        for tool in ('polybridge-ctl', 'polybridge-setup')
+        for tool in ('harflow-ctl', 'harflow-setup')
     ):
-        parser.error('--home must contain synthetic history and both restricted benchmark CLI wrappers')
+        parser.error('The fixture HOME must contain synthetic history and both restricted benchmark CLI wrappers')
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         parser.error('--output must be a new or empty directory')
+    parser.error('Managed Harflow runtime unavailable: populated runtime profiling requires runtime integration; no app was launched or measurements produced')
     output.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='pb-monitor-profile-') as temporary:
-        private_app = Path(temporary) / 'Polybridge Benchmark.app'
+    with tempfile.TemporaryDirectory(prefix='harflow-monitor-profile-') as temporary:
+        private_app = Path(temporary) / 'Harflow Benchmark.app'
         shutil.copytree(app, private_app, symlinks=True)
         info_file = private_app / 'Contents/Info.plist'
         with info_file.open('rb') as handle:
             info = plistlib.load(handle)
-        identifier = 'dev.polybridge.benchmark.' + uuid.uuid4().hex
-        info.update(CFBundleIdentifier=identifier, CFBundleName='Polybridge Benchmark',
-                    CFBundleDisplayName='Polybridge Benchmark')
+        identifier = 'dev.harflow.benchmark.' + uuid.uuid4().hex
+        info.update(CFBundleIdentifier=identifier, CFBundleName='Harflow Benchmark',
+                    CFBundleDisplayName='Harflow Benchmark')
         info.pop('CFBundleURLTypes', None)
         with info_file.open('wb') as handle:
             plistlib.dump(info, handle)

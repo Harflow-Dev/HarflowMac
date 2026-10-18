@@ -1,0 +1,24 @@
+name: macOS
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m pip install pytest
+      - run: python3 scripts/check-legacy-names.py
+      - run: scripts/check-private-refs.sh
+      - run: python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
+      - run: brew install swiftformat swiftlint
+      - run: swiftformat --lint macos && swiftlint lint --strict
+      - run: macos/build-app.sh
+      - name: Guarded Swift package tests
+        shell: bash
+        run: |
+          HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfFeatures/MainWindowFeature --mode suites
+          for package in macos/HfFoundation/* macos/HfCore/* macos/HfFeatures/MenuBarFeature macos/HfFeatures/SettingsFeature macos/Harflow; do
+            HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package "$package" --mode aggregate || exit 1
+          done

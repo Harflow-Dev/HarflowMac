@@ -1,0 +1,180 @@
+import HfUI
+import MonitorCore
+import SwiftUI
+
+// MARK: - WorkflowNativeActivityModel
+
+/// Native execution activity has no process task or independent terminal handoff.
+struct WorkflowNativeActivityModel: Equatable {
+    let executionID: String
+    let title: String
+    let status: String
+    let limited: Bool
+    var items: [TimelineItem] = []
+    var error: String?
+    var hasEarlierActivity = false
+    /// Whether a fetch for this execution has succeeded; a settled execution is pulsed until one has.
+    var loaded = false
+}
+
+// MARK: - WorkflowNativeActivityView
+
+struct WorkflowNativeActivityView: View {
+    let model: WorkflowNativeActivityModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+                Text(model.title + " · Subagent").font(.hf(.body, weight: .semibold))
+                Text(model.status).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                if model.limited { Text("Activity limited").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
+                if let error = model.error { Text(error).font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
+                if model.hasEarlierActivity { Text("Showing the latest 200 activity events.").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
+                ForEach(model.items) { item in
+                    TimelineRow(model: TimelineRowModel(item: item, start: nil, live: ["running", "launch_requested"].contains(model.status)))
+                }
+            }
+.padding(HfRadius.Metrics.spacing16)
+.frame(maxWidth: .infinity, alignment: .leading)
+            // The user-authorized scrollbar amendment: this alternate feed bypasses
+            // ActivityFeedView, so the shared thin, auto-hiding native chrome is attached to
+            // its own enclosing vertical scroll view here — inside the document, exactly as
+            // ActivityFeedView does, with no interaction or accessibility footprint and no
+            // observer, paging or data change.
+.background(ActivityScrollChrome())
+        }
+    }
+}
+
+// MARK: - WorkflowVM native activity
+
+extension WorkflowVM {
+    func updateActivityMembership() {
+        updateNativeActivity()
+        let activations = selectedRun?.activations ?? []
+        let relevant = activations.filter { ["node", "builder"].contains($0["role"]?.stringValue ?? "") }
+        var latestByNode: [String: [String: JSONValue]] = [:]
+        for activation in relevant { latestByNode[activation["node_id"]?.stringValue ?? "builder"] = activation }
+        let visible = selectedActivationID.map { selected in relevant.filter { $0["id"]?.stringValue == selected } } ?? Array(latestByNode.values)
+        let tasks = relevant.flatMap { headlessTaskIDs($0) }
+        let focused = Set(visible.flatMap { headlessTaskIDs($0) })
+        var titles: [String: String] = [:]
+        for activation in relevant {
+            let nodeID = activation["node_id"]?.stringValue ?? ""
+            let title = nodes.first { $0.id == nodeID }?.name ?? "Workflow builder"
+            let index = relevant.filter { $0["node_id"]?.stringValue == nodeID }.firstIndex { $0["id"] == activation["id"] }.map { $0 + 1 } ?? 1
+            let fallbackIndices = WorkflowExecutionAttempts.fallbackIndices(activation)
+            for task in WorkflowJSON.objects(activation["tasks"]) {
+                if let id = task["task_id"]?.stringValue {
+                    let fallback = fallbackIndices[id] ?? 0
+                    titles[id] = "\(title) · \(index)\(fallback > 0 ? " · Fallback \(fallback)" : "")"
+                }
+            }
+        }
+        var seen = Set<String>()
+        parallel.setWorkflowTaskIDs(tasks.filter { seen.insert($0).inserted }, focusedTaskIDs: focused, titles: titles)
+    }
+
+    private func headlessTaskIDs(_ activation: [String: JSONValue]) -> [String] {
+        WorkflowJSON.objects(activation["tasks"])
+            .filter { $0["execution_kind"]?.stringValue != "native_subagent" }
+            .compactMap { $0["task_id"]?.stringValue }
+    }
+
+    func openOwnerTask(_ id: String) { routing.selectTask(id) }
+
+    func selectActivation(_ id: String?) {
+        selectedActivationID = id
+        updateActivityMembership()
+    }
+
+    func updateNativeActivity() {
+        nativeActivityTask?.cancel()
+        nativeActivityTask = nil
+        guard let run = selectedRun,
+              let activation = run.activations.last(where: { activation in
+                  if let selectedActivationID { return activation["id"]?.stringValue == selectedActivationID }
+                  return activation["node_id"]?.stringValue == selectedNodeID && activation["role"]?.stringValue == "node"
+              }), let executionID = activation["id"]?.stringValue,
+              WorkflowExecutionPresentation(raw: activation).isSubagent else {
+            nativeActivity = nil
+            return
+        }
+        let projection = WorkflowExecutionPresentation(raw: activation)
+        let old = nativeActivity?.executionID == executionID ? nativeActivity?.items ?? [] : []
+        nativeActivity = WorkflowNativeActivityModel(executionID: executionID, title: selectedNode?.name ?? "Workflow node",
+            status: activation["status"]?.stringValue ?? "unknown", limited: projection.activityLimited, items: old)
+        nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: executionID)
+    }
+
+    /// A poll that found the run document unchanged: a running subagent's activity feed still
+    /// moves without the run document changing, so refetch it — but never recreate the model,
+    /// cancel a fetch already in flight, or drop `hasEarlierActivity`. Nothing is assigned unless
+    /// the fetched content differs, so an identical poll publishes nothing.
+    func pulseNativeActivity() {
+        // Relies on every cancel site (`updateNativeActivity`, `WorkflowVM.didDisappear`) setting
+        // `nativeActivityTask` to nil; a stale non-nil task would block the pulse forever.
+        guard nativeActivityTask == nil, let run = selectedRun, let current = nativeActivity,
+              !current.loaded || ["running", "launch_requested"].contains(current.status) else { return }
+        nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: current.executionID)
+    }
+
+    private func fetchNativeActivity(runID: String, executionID: String) -> Task<Void, Never> {
+        Task { [weak self] in
+            guard let self else { return }
+            defer { if !Task.isCancelled { nativeActivityTask = nil } }
+            do {
+                let page = try await useCase.command("inspect", options: ["--view=activity", "--limit=200"], positionals: [runID, executionID])
+                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
+                let events = (page["events"]?.arrayValue ?? []).compactMap { TaskEvent(line: $0.rendered()) }
+                let items = Timeline.items(from: events)
+                let more = page["has_more"]?.boolValue ?? false
+                if nativeActivity?.items != items { nativeActivity?.items = items }
+                if nativeActivity?.hasEarlierActivity != more { nativeActivity?.hasEarlierActivity = more }
+                if nativeActivity?.error != nil { nativeActivity?.error = nil }
+                if nativeActivity?.loaded == false { nativeActivity?.loaded = true }
+            } catch {
+                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
+                let message = "Unable to load subagent activity. " + Self.message(error)
+                if nativeActivity?.error != message { nativeActivity?.error = message }
+            }
+        }
+    }
+}
+
+#if DEBUG
+private struct WorkflowNativeActivityPreview: View {
+    var body: some View {
+        WorkflowNativeActivityView(model: .init(
+            executionID: "example",
+            title: "Review",
+            status: "running",
+            limited: true,
+            error: "Showing the latest 200 activity events.",
+            hasEarlierActivity: true
+        ))
+        .background(Color.cardFill)
+    }
+}
+
+#Preview("Native subagent activity - light") {
+    WorkflowNativeActivityPreview()
+        .frame(width: HfRadius.Metrics.workflowPreviewHeight,
+                height: HfRadius.Metrics.activityPreviewWidth)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Native subagent activity - dark") {
+    WorkflowNativeActivityPreview()
+        .frame(width: HfRadius.Metrics.workflowPreviewHeight,
+                height: HfRadius.Metrics.activityPreviewWidth)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Native subagent activity - narrow") {
+    WorkflowNativeActivityPreview()
+        .frame(width: HfRadius.Metrics.activityPreviewWidth,
+                height: HfRadius.Metrics.activityPreviewWidth)
+        .preferredColorScheme(.light)
+}
+#endif

@@ -805,7 +805,7 @@ def run_package(
     if mode not in ("suites", "aggregate"):
         raise RunnerError(f"unsupported mode: {mode!r}")
     if output_dir is None:
-        output_dir = tempfile.mkdtemp(prefix="polybridge-swift-test-")
+        output_dir = tempfile.mkdtemp(prefix="harflow-swift-test-")
     else:
         os.makedirs(output_dir, exist_ok=True)
     if partition_timeout is None:

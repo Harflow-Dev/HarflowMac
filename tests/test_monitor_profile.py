@@ -21,18 +21,18 @@ def arguments(monkeypatch, tmp_path, *, marker=True):
     (app / 'Contents').mkdir(parents=True)
     (app / 'Contents/Info.plist').write_bytes(b'unmodified-source')
     home = tmp_path / 'home'
-    (home / '.polybridge').mkdir(parents=True)
+    (home / '.harflow').mkdir(parents=True)
     wrappers = home / '.local/bin'
     wrappers.mkdir(parents=True)
-    for tool in ('polybridge-ctl', 'polybridge-setup'):
+    for tool in ('harflow-ctl', 'harflow-setup'):
         script = wrappers / tool
         script.write_text('#!/bin/sh\nexit 0\n')
         script.chmod(0o700)
     if marker:
-        (home / 'monitor-benchmark-fixture.json').write_text(json.dumps({'version': 1}))
+        (home / 'monitor-benchmark-fixture.json').write_text(json.dumps({'version': 1, 'format': 'harflow.monitor-fixture'}))
     output = tmp_path / 'output'
     monkeypatch.setattr('sys.argv', ['profile-monitor.py', '--app', str(app),
-                                    '--home', str(home), '--output', str(output)])
+                                    '--fixture-manifest', str(home / 'monitor-benchmark-fixture.json'), '--output', str(output)])
     return app, home, output
 
 

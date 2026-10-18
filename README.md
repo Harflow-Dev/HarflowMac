@@ -1,9 +1,9 @@
-# HarflowMac
+# Harflow for Mac
 
-HarflowMac is the macOS app for running and following AI development workflows with Harflow's execution engine.
+Harflow is a native macOS interface for agent tasks and workflow nodes. Installed command-line tools are called harnesses; the AI workers they run are agents.
 
-Under development; no release is available yet.
+Version 1.0.0 is under development. The managed runtime is currently unavailable: execution, setup, and external installation controls are disabled until runtime integration. The app does not connect to a legacy installation.
 
-[Signing credential preflight](docs/ci-signing.md)
+See [development](docs/development.md), [architecture](docs/architecture.md), [profiling](docs/monitor-performance.md), and [signing preparation](docs/ci-signing.md). Signing and distribution are deferred.
 
-Copyright 2026 Nayanda Haberty. Licensed under Apache 2.0.
+Licensed under Apache 2.0. Copyright Nayanda Haberty.

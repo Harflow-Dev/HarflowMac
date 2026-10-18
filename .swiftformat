@@ -68,7 +68,7 @@
 --enable wrapMultilineFunctionChains
 --enable yodaConditions
 
---exclude **/.build,macos/build,macos/PolybridgeMonitor/.vscode-build,macos/PbCore/MonitorCore/Sources
+--exclude **/.build,macos/build,macos/Harflow/.vscode-build,macos/HfCore/MonitorCore/Sources
 
 --extensionacl on-declarations
 --funcattributes prev-line

@@ -1,0 +1,91 @@
+import Foundation
+import HfCommon
+import HfUI
+import MonitorCore
+
+// MARK: - Sidebar Sections presentation
+
+// MARK: - SidebarEntry
+
+/// A not-yet-flattened sidebar entry: a whole conversation tree or a parallel group.
+enum SidebarEntry {
+    case tree(ConversationNode)
+    case group(ParallelGroup)
+    case workflow(SidebarWorkflowRun)
+
+    var isRunning: Bool {
+        switch self {
+        case .tree(let node): node.anyRunning
+        case .group(let group): group.anyRunning
+        case .workflow(let run): run.isActive
+        }
+    }
+
+    /// Recency for sorting and day buckets, independent of the original run's age label.
+    var latestRunAt: Date? {
+        switch self {
+        case .tree(let node): node.conversation.current.startedAt
+        case .group(let group): group.members.flatMap { $0.flattened().compactMap(\.node.task.startedAt) }.max()
+        case .workflow(let run): run.latestRunAt
+        }
+    }
+
+    var id: String {
+        switch self {
+        case .tree(let node): "task:\(node.id)"
+        case .group(let group): group.id
+        case .workflow(let run): "workflow:\(run.id)"
+        }
+    }
+}
+
+extension SidebarPresentationBuilder {
+
+    /// Buckets `trees` and `groups` (D10), orders each bucket newest start first (an entry with no
+    /// start time sorts last, ties broken by id), then flattens every entry into items. Empty
+    /// buckets are omitted.
+    func bucketedSections(trees: [ConversationNode], groups: [ParallelGroup], forcedExpandedIDs: Set<String>) -> [SidebarSection] {
+        let taskEntries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group)
+        let entries = taskEntries + workflowRootRuns().map(SidebarEntry.workflow)
+        let now = input.now
+        var buckets: [SidebarSection.Bucket: [SidebarEntry]] = [:]
+        for entry in entries {
+            buckets[bucket(for: entry, now: now), default: []].append(entry)
+        }
+        return SidebarSection.Bucket.allCases.compactMap { bucket in
+            guard let bucketEntries = buckets[bucket], !bucketEntries.isEmpty else { return nil }
+            let ordered = bucketEntries.sorted(by: Self.newestFirst)
+            return SidebarSection(bucket: bucket, items: ordered.flatMap { items(for: $0, forcedExpandedIDs: forcedExpandedIDs) })
+        }
+    }
+
+    private func workflowRootRuns() -> [SidebarWorkflowRun] { visibleRuns }
+
+    private func bucket(for entry: SidebarEntry, now: Date) -> SidebarSection.Bucket {
+        if entry.isRunning { return .running }
+        guard let startedAt = entry.latestRunAt, input.calendar.isDate(startedAt, inSameDayAs: now) else { return .earlier }
+        return .today
+    }
+
+    private func items(for entry: SidebarEntry, forcedExpandedIDs: Set<String>) -> [SidebarItem] {
+        switch entry {
+        case .tree(let node): return flattenedRows(node, forcedExpandedIDs: forcedExpandedIDs).map(SidebarItem.task)
+        case .group(let group):
+            let conversations = groupConversations(group)
+            let row = SidebarGroupPresentation(group: group, conversations: conversations,
+                                               isExpanded: expandedExecutionParents.contains(group.id))
+            return [.group(row)] + (conversations.count > 1 && row.isExpanded ? executionRows(groupChildren(group.name)) : [])
+        case .workflow(let run):
+            return workflowTreeItems(run)
+        }
+    }
+
+    private static func newestFirst(_ lhs: SidebarEntry, _ rhs: SidebarEntry) -> Bool {
+        switch (lhs.latestRunAt, rhs.latestRunAt) {
+        case let (left?, right?) where left != right: left > right
+        case (.some, nil): true
+        case (nil, .some): false
+        default: lhs.id < rhs.id
+        }
+    }
+}

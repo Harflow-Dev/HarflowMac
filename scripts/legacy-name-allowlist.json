@@ -1,0 +1,38 @@
+[
+  {
+    "file": "macos/HfCore/MonitorCore/Sources/MonitorCore/Tools.swift",
+    "literal": "PB_",
+    "reason": "Strip inherited legacy caller environment variables at the runtime boundary.",
+    "count": 2
+  },
+  {
+    "file": "scripts/profile-monitor.py",
+    "literal": "PB_",
+    "reason": "Strip inherited legacy caller environment variables in isolated profiling launches.",
+    "count": 1
+  },
+  {
+    "file": "scripts/legacy-name-allowlist.json",
+    "literal": "PB_",
+    "reason": "Exact legacy prefix recorded for compatibility filtering and its tests.",
+    "count": 6
+  },
+  {
+    "file": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ToolsTests.swift",
+    "literal": "PB_TASK_ID",
+    "reason": "Regression coverage verifies inherited legacy caller signals are removed.",
+    "count": 2
+  },
+  {
+    "file": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ToolsTests.swift",
+    "literal": "PB_ROOT_TASK_ID",
+    "reason": "Regression coverage verifies inherited legacy caller signals are removed.",
+    "count": 2
+  },
+  {
+    "file": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ToolsTests.swift",
+    "literal": "PB_DEPTH",
+    "reason": "Regression coverage verifies inherited legacy caller signals are removed.",
+    "count": 2
+  }
+]

@@ -1,22 +1,22 @@
 # === Paths ===
 included:
-  - macos/PbFoundation
-  - macos/PbCore
-  - macos/PbFeatures
-  - macos/PolybridgeMonitor
+  - macos/HfFoundation
+  - macos/HfCore
+  - macos/HfFeatures
+  - macos/Harflow
 
 excluded:
   - macos/build
-  - macos/PolybridgeMonitor/.vscode-build
-  - macos/PolybridgeMonitor/.build
-  - macos/PbFoundation/PbUtilities/.build
-  - macos/PbFoundation/PbCommon/.build
-  - macos/PbFoundation/PbUI/.build
-  - macos/PbCore/MonitorCore/.build
-  - macos/PbCore/PbRepository/.build
-  - macos/PbFeatures/MainWindowFeature/.build
-  - macos/PbFeatures/MenuBarFeature/.build
-  - macos/PbFeatures/SettingsFeature/.build
+  - macos/Harflow/.vscode-build
+  - macos/Harflow/.build
+  - macos/HfFoundation/HfUtilities/.build
+  - macos/HfFoundation/HfCommon/.build
+  - macos/HfFoundation/HfUI/.build
+  - macos/HfCore/MonitorCore/.build
+  - macos/HfCore/HfRepository/.build
+  - macos/HfFeatures/MainWindowFeature/.build
+  - macos/HfFeatures/MenuBarFeature/.build
+  - macos/HfFeatures/SettingsFeature/.build
 
 # Existing MonitorCore source violations; anything new still fails.
 baseline: .swiftlint-baseline.json
@@ -80,7 +80,7 @@ identifier_name:
     - no
     - of
     - ok
-    - pb
+    - hf
     - pm
     - to
     - up
@@ -106,6 +106,6 @@ custom_rules:
   no_literal_font_size:
     name: "No literal font size"
     regex: '\.system\s*\(\s*size\s*:'
-    included: '(^|/)macos/(PbFoundation/PbUI|PbFeatures/(MainWindowFeature|MenuBarFeature|SettingsFeature))/Sources/'
-    message: "Use Font.pb(_:weight:design:) from PbUI's type scale instead of a literal size."
+    included: '(^|/)macos/(HfFoundation/HfUI|HfFeatures/(MainWindowFeature|MenuBarFeature|SettingsFeature))/Sources/'
+    message: "Use Font.hf(_:weight:design:) from HfUI's type scale instead of a literal size."
     severity: error

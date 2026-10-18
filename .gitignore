@@ -6,3 +6,11 @@ __pycache__/
 *.p8
 .env
 .env.*
+
+.build/
+macos/build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+__pycache__/
+.pytest_cache/

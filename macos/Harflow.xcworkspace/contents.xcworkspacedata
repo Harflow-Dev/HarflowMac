@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:Harflow">
+   </FileRef>
+   <Group
+      location = "container:"
+      name = "HfFoundation">
+      <FileRef
+         location = "group:HfFoundation/HfUtilities">
+      </FileRef>
+      <FileRef
+         location = "group:HfFoundation/HfCommon">
+      </FileRef>
+      <FileRef
+         location = "group:HfFoundation/HfUI">
+      </FileRef>
+   </Group>
+   <Group
+      location = "container:"
+      name = "HfCore">
+      <FileRef
+         location = "group:HfCore/MonitorCore">
+      </FileRef>
+      <FileRef
+         location = "group:HfCore/HfRepository">
+      </FileRef>
+   </Group>
+   <Group
+      location = "container:"
+      name = "HfFeatures">
+      <FileRef
+         location = "group:HfFeatures/MainWindowFeature">
+      </FileRef>
+      <FileRef
+         location = "group:HfFeatures/MenuBarFeature">
+      </FileRef>
+      <FileRef
+         location = "group:HfFeatures/SettingsFeature">
+      </FileRef>
+   </Group>
+</Workspace>
