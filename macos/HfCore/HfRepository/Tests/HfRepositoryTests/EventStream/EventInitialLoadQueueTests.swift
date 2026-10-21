@@ -51,7 +51,7 @@ import Testing
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HfInitialLoads-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let line = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":1,"kind":"assistant_text","text":"loaded"}"# + "\n"
+        let line = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"0.0.1","seq":1,"kind":"assistant_text","text":"loaded"}"# + "\n"
         for id in ["shared", "released"] {
             try line.write(to: directory.appendingPathComponent("\(id).events.jsonl"), atomically: true, encoding: .utf8)
         }
@@ -99,7 +99,7 @@ import Testing
     }
 
     private func makeCtlClient() -> CtlClient {
-        let ctlOutput = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[]}"#
+        let ctlOutput = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","tasks":[]}"#
         let runner = StubProcessRunner { call in
             guard call.arguments == ["version-info", "--json"] else {
                 return .success(stdout(ctlOutput))
@@ -107,7 +107,7 @@ import Testing
             let root = NSHomeDirectory() + "/.harflow"
             let handshake = "{" +
                 "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
-                "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(root)\",\"contracts\":{" +
+                "\"product_version\":\"0.0.1\",\"component\":\"engine\",\"state_root\":\"\(root)\",\"contracts\":{" +
                 "\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1},\"events\":{\"format\":\"harflow.event\",\"v\":1}}," +
                 "\"capabilities\":[\"ctl.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
             return .success(stdout(handshake))

@@ -31,7 +31,7 @@ import Testing
                 Issue.record("Build inputs were placed in argv rather than disposable files")
             }
             return failure ? .failure(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "failed"))
-                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"builder"}}"#))
+                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"workflow_run_id":"builder"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -58,7 +58,7 @@ extension WorkflowBuildTransportTests {
                 .map { String($0.split(separator: "=", maxSplits: 1)[1]) }
             paths.mutate { $0 = filenames }
             gate.waitSync()
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"builder"}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"workflow_run_id":"builder"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -125,7 +125,7 @@ extension WorkflowBuildTransportTests {
                 Issue.record("Workflow prompt was placed in argv")
             }
             return failure ? .failure(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "failed"))
-                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"builder"}}"#))
+                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"workflow_run_id":"builder"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -153,7 +153,7 @@ extension WorkflowBuildTransportTests {
             paths.mutate { $0 = [path] }
             #expect((try? String(contentsOfFile: path, encoding: .utf8)) == goal)
             #expect(!call.arguments.contains { $0.hasPrefix("--goal=") })
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"run"}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"workflow_run_id":"run"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))

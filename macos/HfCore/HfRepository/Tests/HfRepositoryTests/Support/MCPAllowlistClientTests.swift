@@ -6,7 +6,7 @@ import Testing
     @Test func givenApproval_whenRequested_thenArgumentsStaySeparateAndResultDecodes() async throws {
         // given
         let runner = StubProcessRunner(compatibleOutput: stdout(
-            #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"supported":true,"entries":["harflow/*"]}}"#
+            #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"supported":true,"entries":["harflow/*"]}}"#
         ))
         let client = CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)
         // when
@@ -33,7 +33,7 @@ import Testing
     @Test func givenCLIError_whenReading_thenErrorRemainsFailure() async {
         // given
         let runner = StubProcessRunner(compatibleOutput: stdout(
-            #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","error":{"code":"invalid_config","message":"Invalid configuration"}}"#
+            #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","error":{"code":"invalid_config","message":"Invalid configuration"}}"#
         ))
         let client = CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)
         // when

@@ -5,7 +5,7 @@ import Testing
 extension CtlDecodingTests {
     @Test
     func givenUnsupportedSetupOutput_whenDecoded_thenItIsRefused() {
-        let unsupported = #"{"product":"harflow","format":"harflow.setup","v":2,"product_version":"1.0.0", "# + #""clients":[]}"#
+        let unsupported = #"{"product":"harflow","format":"harflow.setup","v":2,"product_version":"0.0.1", "# + #""clients":[]}"#
         guard case .failure(.unsupportedVersion) = SetupDocument.decode(stdout: json(unsupported), stderr: "", exitCode: 0) else {
             Issue.record("expected .unsupportedVersion")
             return
@@ -26,14 +26,15 @@ extension SetupTests {
         let log = dir.appendingPathComponent("calls.log").path
         let versionInfo = "{" +
             "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
-            "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
+            "\"product_version\":\"\(HarflowVersion.current)\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
             "\"contracts\":{\"setup\":{\"format\":\"harflow.setup\",\"v\":1}}," +
             "\"capabilities\":[\"setup.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
         let ctl = try writeFakeTool(dir, name: "harflow-ctl", body: """
         printf '%s\\n' '\(versionInfo)'
         """)
         // A fake harflow-setup: logs its argv and answers a v1 document naming the action.
-        let removedDocument = #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"1.0.0","server_path":null,"clients":["#
+        let removedDocument =
+            #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"\#(HarflowVersion.current)","server_path":null,"clients":["#
             + #"{"key":"codex","available":true,"installed":true,"command":null,"current":null,"action":"removed","error":null,"notes":[] }]}"#
         let applied = removedDocument.replacingOccurrences(of: "removed", with: "applied")
         let setup = try writeFakeTool(dir, name: "harflow-setup", body: """

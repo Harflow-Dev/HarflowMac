@@ -129,7 +129,7 @@ struct CtlDecodingTests {
     func givenAnUnsupportedSchemaVersion_whenDecoded_thenItIsRefused() {
         // given / when — v15 is outside `ctlContractVersions`.
         guard case .failure(.unsupportedVersion(_, let v)) = CtlDocument.decode(
-            stdout: json(#"{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"1.0.0","tasks":[]}"#),
+            stdout: json(#"{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"0.0.1","tasks":[]}"#),
             stderr: "", exitCode: 0, command: "list"
         ) else { Issue.record("expected .unsupportedVersion"); return }
         // then
@@ -137,7 +137,7 @@ struct CtlDecodingTests {
         let message = ToolError.unsupportedVersion(tool: "harflow-ctl", version: "15").message
         #expect(message.contains("understands version 1"))
         guard case .failure(.unsupportedVersion(_, let none)) = CtlDocument.decode(
-            stdout: json(#"{"product":"harflow","format":"harflow.ctl","product_version":"1.0.0","tasks":[]}"#),
+            stdout: json(#"{"product":"harflow","format":"harflow.ctl","product_version":"0.0.1","tasks":[]}"#),
             stderr: "", exitCode: 0, command: "list"
         ) else { Issue.record("expected .unsupportedVersion"); return }
         #expect(none == "none")
@@ -399,14 +399,17 @@ struct CtlClientTests {
         // Answers the required v1 handshake, then echoes its argv inside a list document.
         let versionInfo = "{" +
             "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
-            "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
+            "\"product_version\":\"\(HarflowVersion.current)\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
             "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}}," +
             "\"capabilities\":[\"ctl.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+        let taskDocument = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":""#
+            + HarflowVersion.current
+            + #"","tasks":[{"task_id":"t-2","backend":"0","status":"running"}]}"#
         let ctl = try writeFakeTool(dir, name: "harflow-ctl", body: """
         if [ "$1" = "version-info" ]; then
           printf '%s\\n' '\(versionInfo)'
         else
-          echo '{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[{"task_id":"t-2","backend":"0","status":"running"}]}'
+          echo '\(taskDocument)'
         fi
         """)
         let env = LaunchEnvironment.build(base: ["PATH": "/usr/bin:/bin", "HOME": dir.path, "HARFLOW_TASK_ID": "leak"], loginPath: nil, toolDirectory: dir.path)
@@ -424,14 +427,14 @@ struct CtlClientTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let versionInfo = "{" +
             "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
-            "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
+            "\"product_version\":\"\(HarflowVersion.current)\",\"component\":\"engine\",\"state_root\":\"\(dir.path)/.harflow\"," +
             "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}}," +
             "\"capabilities\":[\"ctl.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
         let ctl = try writeFakeTool(dir, name: "harflow-ctl", body: """
         if [ "$1" = "version-info" ]; then
           echo '\(versionInfo)'
         else
-          echo '{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"1.0.0","tasks":[]}'
+          echo '{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"\(HarflowVersion.current)","tasks":[]}'
         fi
         """)
         // when

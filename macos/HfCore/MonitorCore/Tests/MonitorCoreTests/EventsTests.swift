@@ -5,7 +5,7 @@ import Testing
 /// Lines shaped exactly as `events.EventLog.write` produces them.
 func eventLine(_ seq: Int, _ kind: String, _ fields: String = "") -> String {
     let extra = fields.isEmpty ? "" : ", " + fields
-    return #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq": \#(seq), "#
+    return #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"\#(HarflowVersion.current)","seq": \#(seq), "#
         + #""observed_at": "2026-09-25T01:00:\#(String(format: "%02d", seq % 60)).000000+00:00", "source_ts": null, "#
         + #""raw_offset": null, "task_id": "t1", "kind": "\#(kind)"\#(extra)}"#
 }

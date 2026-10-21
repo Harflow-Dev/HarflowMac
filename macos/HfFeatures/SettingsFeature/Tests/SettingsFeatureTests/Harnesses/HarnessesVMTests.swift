@@ -17,7 +17,7 @@ import Testing
         var object = JSONValue.parse(Data(json.utf8))!.objectValue!
         object["product"] = object["product"] ?? .string("harflow")
         object["format"] = object["format"] ?? .string("harflow.setup")
-        object["product_version"] = object["product_version"] ?? .string("1.0.0")
+        object["product_version"] = object["product_version"] ?? .string("0.0.1")
         // swiftlint:disable:next force_try
         return try! SetupDocument.decode(stdout: Data(JSONValue.object(object).rendered().utf8), stderr: "", exitCode: 0).get()
     }
@@ -26,11 +26,11 @@ import Testing
         Self.document(json)
     }
     
-    private static let emptyDocumentJSON = #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"1.0.0","clients":[]}"#
+    private static let emptyDocumentJSON = #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"0.0.1","clients":[]}"#
     
     private var twoRowsJSON: String {
         #"""
-        {"product":"harflow","format":"harflow.setup","v":1,"product_version":"1.0.0","server_path":"/usr/local/bin/harflow","clients":[
+        {"product":"harflow","format":"harflow.setup","v":1,"product_version":"0.0.1","server_path":"/usr/local/bin/harflow","clients":[
             {"key":"claude-code","available":true,"installed":true,"current":true},
             {"key":"codex","available":true,"installed":false}
         ]}

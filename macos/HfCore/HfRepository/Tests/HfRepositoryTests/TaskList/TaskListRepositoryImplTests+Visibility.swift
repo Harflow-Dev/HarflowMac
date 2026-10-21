@@ -28,7 +28,7 @@ extension TaskListRepositoryImplTests {
     }
 
     private func page(items: String, totalActive: Int = 0) -> String {
-        #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"items":[\#(items)],"#
+        #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"items":[\#(items)],"#
             + #""next_cursor":null,"has_more":false,"bootstrap_pending":false,"total_active_count":\#(totalActive)}}"#
     }
 

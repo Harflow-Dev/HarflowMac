@@ -242,7 +242,7 @@ import Testing
             "counts_complete": .bool(true), "total_active_count": .number(Double(items.count)),
             "catalog_state": .object(["status": .string("ready"), "source": .string("task_catalog")])]
         let response: [String: JSONValue] = ["product": .string("harflow"), "format": .string("harflow.ctl"),
-            "v": .number(1), "product_version": .string("1.0.0"), "result": .object(page)]
+            "v": .number(1), "product_version": .string("0.0.1"), "result": .object(page)]
         return stdout(JSONValue.object(response).rendered())
     }
 

@@ -13,7 +13,7 @@ import Testing
         raw["product"] = raw["product"] ?? "harflow"
         raw["format"] = raw["format"] ?? "harflow.ctl"
         raw["v"] = 1
-        raw["product_version"] = raw["product_version"] ?? "1.0.0"
+        raw["product_version"] = raw["product_version"] ?? "0.0.1"
         if let items = raw.removeValue(forKey: "tasks") {
             raw["result"] = ["items": items, "next_cursor": NSNull(), "has_more": false, "bootstrap_pending": false]
         }

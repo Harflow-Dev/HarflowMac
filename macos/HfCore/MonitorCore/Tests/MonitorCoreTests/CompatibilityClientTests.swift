@@ -11,7 +11,7 @@ struct CompatibilityClientTests {
         root: String? = nil,
         product: String = "harflow",
         format: String = "harflow.version-info",
-        version: String = "1.0.0",
+        version: String = HarflowVersion.current,
         wireVersion: String = "1",
         operatingSystem: String = "darwin",
         architecture: String = "arm64",
@@ -29,13 +29,13 @@ struct CompatibilityClientTests {
 
     private func ctlSuccess() -> ProcessOutput {
         ProcessOutput(exitCode: 0, stdout: json("""
-        {"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[]}
+        {"product":"harflow","format":"harflow.ctl","v":1,"product_version":"\(HarflowVersion.current)","tasks":[]}
         """), stderr: "")
     }
 
     private func setupSuccess() -> ProcessOutput {
         ProcessOutput(exitCode: 0, stdout: json("""
-        {"product":"harflow","format":"harflow.setup","v":1,"product_version":"1.0.0","clients":[]}
+        {"product":"harflow","format":"harflow.setup","v":1,"product_version":"\(HarflowVersion.current)","clients":[]}
         """), stderr: "")
     }
 
@@ -158,9 +158,9 @@ struct CompatibilityClientTests {
     @Test
     func givenValidProbe_whenCtlResponseIsForeignOrIncompatible_thenResponseFailsIndependently() async {
         let answers: [Data] = [
-            json("{\"product\":\"polybridge\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"1.0.0\",\"tasks\":[]}"),
-            json("{\"product\":\"harflow\",\"format\":\"harflow.setup\",\"v\":1,\"product_version\":\"1.0.0\",\"tasks\":[]}"),
-            json("{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"1.1.0\",\"tasks\":[]}")
+            json("{\"product\":\"polybridge\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"\(HarflowVersion.current)\",\"tasks\":[]}"),
+            json("{\"product\":\"harflow\",\"format\":\"harflow.setup\",\"v\":1,\"product_version\":\"\(HarflowVersion.current)\",\"tasks\":[]}"),
+            json("{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"0.1.0\",\"tasks\":[]}")
         ]
         for answer in answers {
             let runner = compatibleRunner { _ in ProcessOutput(exitCode: 0, stdout: answer, stderr: "") }
@@ -175,7 +175,7 @@ struct CompatibilityClientTests {
         let runner = compatibleRunner { call in
             if call.arguments.first == "status-batch" {
                 return ProcessOutput(exitCode: 0, stdout: json("""
-                {"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[],"errors":{}}
+                {"product":"harflow","format":"harflow.ctl","v":1,"product_version":"\(HarflowVersion.current)","tasks":[],"errors":{}}
                 """), stderr: "")
             }
             return ctlSuccess()
@@ -253,9 +253,9 @@ struct CompatibilityClientTests {
     @Test
     func givenValidSetupProbe_whenSetupResponseIsForeignOrIncompatible_thenMutationFails() async {
         let answers: [Data] = [
-            json("{\"product\":\"polybridge\",\"format\":\"harflow.setup\",\"v\":1,\"product_version\":\"1.0.0\",\"clients\":[]}"),
-            json("{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"1.0.0\",\"clients\":[]}"),
-            json("{\"product\":\"harflow\",\"format\":\"harflow.setup\",\"v\":1,\"product_version\":\"1.1.0\",\"clients\":[]}")
+            json("{\"product\":\"polybridge\",\"format\":\"harflow.setup\",\"v\":1,\"product_version\":\"\(HarflowVersion.current)\",\"clients\":[]}"),
+            json("{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"\(HarflowVersion.current)\",\"clients\":[]}"),
+            json("{\"product\":\"harflow\",\"format\":\"harflow.setup\",\"v\":1,\"product_version\":\"0.1.0\",\"clients\":[]}")
         ]
         for answer in answers {
             let runner = compatibleRunner { call in

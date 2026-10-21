@@ -35,8 +35,8 @@ struct WireContractFixtureTests {
     @Test
     func givenVersionInfoFixtures_whenDecoded_thenValidCompatibilityCasesPassAndInvalidCasesFail() throws {
         let valid: [(String, String)] = [
-            ("version-info.json", "1.0.0"),
-            ("version-info-build-metadata.json", "1.0.0"),
+            ("version-info.json", HarflowVersion.current),
+            ("version-info-build-metadata.json", HarflowVersion.current),
             ("version-info-patch-backward.json", "1.2.7"),
             ("version-info-patch-forward.json", "1.2.0")
         ]
@@ -64,10 +64,26 @@ struct WireContractFixtureTests {
                 context: RuntimeCompatibilityContext(expectedStateRoot: stateRoot),
                 requiring: Set(WireContract.allCases)
             )
-            guard case .failure = result else {
+            guard case .failure(let error) = result else {
                 Issue.record("expected invalid version-info fixture: \(name)")
                 continue
             }
+            let expectedReason = if name.contains("boolean") || name.contains("unsupported") {
+                "contract version"
+            } else if name.contains("major") || name.contains("minor") {
+                "major/minor release line"
+            } else if name.contains("malformed") || name.contains("overflow") || name.contains("prerelease") {
+                "invalid product_version"
+            } else if name == "invalid-foreign-product.json" || name == "invalid-missing-product.json" {
+                "foreign product identity"
+            } else if name == "invalid-foreign-format.json" {
+                "unsupported harflow.version-info format"
+            } else if name.contains("capabilities") {
+                "missing required"
+            } else {
+                "Incompatible Harflow runtime"
+            }
+            #expect(error.message.contains(expectedReason), "\(name) should explain \(expectedReason): \(error.message)")
         }
     }
 

@@ -106,7 +106,7 @@ extension TaskListRepositoryImplTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: LockedBox(Date()))
         let calls = LockedBox(0)
-        let bootstrapResponse = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","#
+        let bootstrapResponse = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","#
             + #""result":{"items":[],"next_cursor":null,"has_more":false,"bootstrap_pending":true}}"#
         #expect(JSONValue.parse(Data(bootstrapResponse.utf8)) != nil)
         let runner = compatibleRunner { _ in

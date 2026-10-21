@@ -8,7 +8,7 @@ import Testing
 
 private func installVersionInfo(stateRoot: String) -> String {
     "{" +
-        "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1,\"product_version\":\"1.0.0\",\"component\":\"engine\"," +
+        "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1,\"product_version\":\"0.0.1\",\"component\":\"engine\"," +
         "\"state_root\":\"\(stateRoot)\",\"contracts\":{" +
         "\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1},\"setup\":{\"format\":\"harflow.setup\",\"v\":1}," +
         "\"events\":{\"format\":\"harflow.event\",\"v\":1}},\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\",\"version-info.v1\"]," +
@@ -76,8 +76,8 @@ private func installVersionInfo(stateRoot: String) -> String {
     /// call they care about via `override`.
     static func makeRunner(
         pgrepExitCode: Int32 = 1,
-        ctlListJSON: String = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[]}"#,
-        setupStatusJSON: String = #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"1.0.0","clients":[]}"#,
+        ctlListJSON: String = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","tasks":[]}"#,
+        setupStatusJSON: String = #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"0.0.1","clients":[]}"#,
         override: (@Sendable (StubProcessRunner.Call) -> Result<ProcessOutput, ToolError>?)? = nil
     ) -> StubProcessRunner {
         StubProcessRunner { call in

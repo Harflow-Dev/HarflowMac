@@ -78,7 +78,7 @@ func compatibleRunner(answer: @escaping @Sendable (RecordingRunner.Call) -> Proc
             let root = RuntimeCompatibilityContext.derived(environment: call.environment).expectedStateRoot
             let document = "{" +
                 "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
-                "\"product_version\":\"1.0.0\",\"component\":\"engine\",\"state_root\":\"\(root)\"," +
+                "\"product_version\":\"\(HarflowVersion.current)\",\"component\":\"engine\",\"state_root\":\"\(root)\"," +
                 "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}," +
                 "\"setup\":{\"format\":\"harflow.setup\",\"v\":1},\"events\":{\"format\":\"harflow.event\",\"v\":1}}," +
                 "\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"

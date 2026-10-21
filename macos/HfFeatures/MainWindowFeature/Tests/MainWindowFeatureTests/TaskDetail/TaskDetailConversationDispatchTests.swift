@@ -40,13 +40,13 @@ private actor ConversationPageRunner: ProcessRunning {
              currentDirectory: String?, timeout: Double) async -> Result<ProcessOutput, ToolError> {
         calls.append(arguments)
         let json = if arguments == ["version-info", "--json"] {
-            "{\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1,\"product_version\":\"1.0.0\","
+            "{\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1,\"product_version\":\"0.0.1\","
                 + "\"component\":\"engine\",\"state_root\":\"\(NSHomeDirectory())/.harflow\","
                 + "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1},"
                 + "\"events\":{\"format\":\"harflow.event\",\"v\":1}},"
                 + "\"capabilities\":[\"ctl.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
         } else {
-            #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"items":["#
+            #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"items":["#
                 + #"{"task_id":"turn","session_id":"session"}],"#
                 + #""next_cursor":null,"has_more":false,"bootstrap_pending":false}}"#
         }

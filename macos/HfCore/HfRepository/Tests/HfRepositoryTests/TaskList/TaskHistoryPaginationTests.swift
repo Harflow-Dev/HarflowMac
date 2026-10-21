@@ -9,7 +9,7 @@ import Testing
 struct TaskHistoryPaginationTests {
     private func response(_ ids: [String], cursor: String? = nil, status: String = "completed", activeCount: Int = 0, pending: Bool = false) -> ProcessOutput {
         let raw: [String: JSONValue] = ["product": .string("harflow"), "format": .string("harflow.ctl"),
-            "v": .number(1), "product_version": .string("1.0.0"), "result": .object([
+            "v": .number(1), "product_version": .string("0.0.1"), "result": .object([
             "items": .array(ids.map { .object(["task_id": .string($0), "status": .string(status), "title": .string($0)]) }),
             "next_cursor": cursor.map(JSONValue.string) ?? .null, "has_more": .bool(cursor != nil),
             "bootstrap_pending": .bool(pending), "total_active_count": .number(Double(activeCount))
@@ -146,7 +146,7 @@ struct TaskHistoryPaginationTests {
                 "next_cursor": .string("older"), "has_more": .bool(true), "bootstrap_pending": .bool(false)]
             return .success(stdout(JSONValue.object([
                 "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
-                "product_version": .string("1.0.0"), "result": .object(result)
+                "product_version": .string("0.0.1"), "result": .object(result)
             ])
 .rendered()))
         }
@@ -207,7 +207,7 @@ struct TaskHistoryPaginationTests {
                 "has_more": .bool(false), "bootstrap_pending": .bool(false), "total_active_count": .null, "counts_complete": .bool(false)]
             return .success(stdout(JSONValue.object([
                 "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
-                "product_version": .string("1.0.0"), "result": .object(result)
+                "product_version": .string("0.0.1"), "result": .object(result)
             ])
 .rendered()))
         }
@@ -243,7 +243,7 @@ struct TaskHistoryPaginationTests {
                     "next_cursor": .null, "has_more": .bool(false), "bootstrap_pending": .bool(false)]
                 return .success(stdout(JSONValue.object([
                     "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
-                    "product_version": .string("1.0.0"), "result": .object(result)
+                    "product_version": .string("0.0.1"), "result": .object(result)
                 ])
 .rendered()))
             }
@@ -272,7 +272,7 @@ struct TaskHistoryPaginationTests {
                     "catalog_state": .object(["status": .string("preparing"), "source": .string("task"), "pending_records": .number(150)])]
                 return .success(stdout(JSONValue.object([
                     "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
-                    "product_version": .string("1.0.0"), "result": .object(result)
+                    "product_version": .string("0.0.1"), "result": .object(result)
                 ])
 .rendered()))
             }

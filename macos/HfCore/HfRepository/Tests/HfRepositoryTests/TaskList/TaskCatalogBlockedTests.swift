@@ -108,7 +108,7 @@ struct TaskCatalogBlockedTests {
         let blocked = phase == "blocked"
         let raw: [String: JSONValue] = [
             "product": .string("harflow"), "format": .string("harflow.ctl"),
-            "v": .number(1), "product_version": .string("1.0.0"), "result": .object([
+            "v": .number(1), "product_version": .string("0.0.1"), "result": .object([
             "items": .array([.object(["task_id": .string("root"), "status": .string(taskStatus), "title": .string("Root")])]),
             "next_cursor": blocked ? .null : cursor.map(JSONValue.string) ?? .null,
             "has_more": .bool(!blocked && cursor != nil), "bootstrap_pending": .bool(pending),

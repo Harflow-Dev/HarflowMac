@@ -118,7 +118,7 @@ extension InstallRepositoryImplTests {
     @Test func givenCtlListReturnsAnUnsupportedVersion_whenValidating_thenTheContractFailureIsShown() async {
         // given — v15 is outside the Harflow v1 contract.
         let runner = InstallRepositoryImplTests.makeRunner(
-            ctlListJSON: #"{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"1.0.0","tasks":[]}"#
+            ctlListJSON: #"{"product":"harflow","format":"harflow.ctl","v":15,"product_version":"0.0.1","tasks":[]}"#
         )
         let sut = makeSUT(runner: runner)
 
@@ -137,7 +137,7 @@ extension InstallRepositoryImplTests {
         for version in [1] {
             // given
             let runner = InstallRepositoryImplTests.makeRunner(
-                ctlListJSON: #"{"product":"harflow","format":"harflow.ctl","v":\#(version),"product_version":"1.0.0","tasks":[]}"#
+                ctlListJSON: #"{"product":"harflow","format":"harflow.ctl","v":\#(version),"product_version":"0.0.1","tasks":[]}"#
             )
             let sut = makeSUT(runner: runner)
 
@@ -153,7 +153,7 @@ extension InstallRepositoryImplTests {
         // given — `setupContractVersion` stayed at 1; v2 (ctl's new version) is not a setup version
         // it understands.
         let runner = InstallRepositoryImplTests.makeRunner(
-            setupStatusJSON: #"{"product":"harflow","format":"harflow.setup","v":2,"product_version":"1.0.0","clients":[]}"#
+            setupStatusJSON: #"{"product":"harflow","format":"harflow.setup","v":2,"product_version":"0.0.1","clients":[]}"#
         )
         let sut = makeSUT(runner: runner)
 

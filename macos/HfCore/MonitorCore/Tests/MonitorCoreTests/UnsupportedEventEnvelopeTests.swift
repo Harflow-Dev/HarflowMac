@@ -26,7 +26,7 @@ import Testing
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         let path = dir.appendingPathComponent("t.events.jsonl").path
-        let valid = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":1,"kind":"notice"}"#
+        let valid = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"\#(HarflowVersion.current)","seq":1,"kind":"notice"}"#
         FileManager.default.createFile(atPath: path, contents: Data((valid + "\n").utf8))
         var seen: [EventAvailability] = []
         var history: EventHistoryState?

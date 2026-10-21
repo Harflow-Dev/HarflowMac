@@ -6,10 +6,12 @@ import Testing
     private func fixture(_ count: Int) throws -> URL {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let text = (1 ... count)
-.map { seq in
-            #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","seq":\#(seq),"kind":"assistant_text","text":"row"}"#
-        }
-.joined(separator: "\n") + "\n"
+            .map { seq in
+                #"{"product":"harflow","format":"harflow.event","v":1,"product_version":""#
+                    + HarflowVersion.current
+                    + #"","seq":\#(seq),"kind":"assistant_text","text":"row"}"#
+            }
+            .joined(separator: "\n") + "\n"
         try text.write(to: path, atomically: true, encoding: .utf8)
         return path
     }

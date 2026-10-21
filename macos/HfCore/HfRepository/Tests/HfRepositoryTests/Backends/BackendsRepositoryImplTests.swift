@@ -45,14 +45,14 @@ import Testing
 
     func ctlClient(backends: [(String, Bool)], runner: StubProcessRunner? = nil) -> CtlClient {
         let payload = "[" + backends.map { #"{"backend":"\#($0.0)","binary":"\#($0.0)","installed":\#($0.1)}"# }.joined(separator: ",") + "]"
-        let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":"#
+        let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":"#
             + payload + "}"
         let stub = runner ?? StubProcessRunner(compatibleOutput: stdout(response))
         return CtlClient(executable: "/bin/echo", environment: [:], runner: stub)
     }
 
     private func backendsResponse(_ pass: Int) -> ProcessOutput {
-        let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[{"backend":"pass\#(pass)","#
+        let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":[{"backend":"pass\#(pass)","#
             + #""binary":"pass\#(pass)","installed":true}]}"#
         return stdout(response)
     }
@@ -172,7 +172,7 @@ import Testing
         let fetchCount = LockedBox(0)
         let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
@@ -196,7 +196,7 @@ import Testing
         let fetchCount = LockedBox(0)
         let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let scheduler = MockScheduling()
@@ -221,7 +221,7 @@ import Testing
         let fetchCount = LockedBox(0)
         let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let scheduler = MockScheduling()
@@ -333,7 +333,7 @@ import Testing
         let fetchCount = LockedBox(0)
         let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment, stubDiscovery: false)
@@ -367,7 +367,7 @@ import Testing
         let fetchCount = LockedBox(0)
         let runner = compatibleRunner { _ in
             fetchCount.mutate { $0 += 1 }
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","backends":[]}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":[]}"#))
         }
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: toolEnvironment, stubDiscovery: false)

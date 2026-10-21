@@ -12,7 +12,7 @@ struct WorkflowControlTransportTests {
         let calls = LockedBox<[[String]]>([])
         let runner = compatibleRunner { call in
             calls.mutate { $0.append(call.arguments) }
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflows":[]}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"workflows":[]}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -46,7 +46,7 @@ struct WorkflowControlTransportTests {
                 #expect((try? FileManager.default.attributesOfItem(atPath: folder)[.posixPermissions] as? Int) == 0o700)
             } else { Issue.record("Control payload remained in argv") }
             return failure ? .failure(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "failed"))
-                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"run"}}"#))
+                : .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"workflow_run_id":"run"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
@@ -72,7 +72,7 @@ struct WorkflowControlTransportTests {
                 paths.mutate { $0 = [String(option.dropFirst((flag + "-file=").count))] }
             }
             gate.waitSync()
-            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","result":{"workflow_run_id":"run"}}"#))
+            return .success(stdout(#"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","result":{"workflow_run_id":"run"}}"#))
         }
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))

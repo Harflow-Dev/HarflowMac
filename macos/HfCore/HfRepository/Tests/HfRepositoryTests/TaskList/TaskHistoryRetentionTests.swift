@@ -12,7 +12,7 @@ struct TaskHistoryRetentionTests {
         result.merge(flags) { _, new in new }
         return stdout(JSONValue.object([
             "product": .string("harflow"), "format": .string("harflow.ctl"),
-            "v": .number(1), "product_version": .string("1.0.0"), "result": .object(result)
+            "v": .number(1), "product_version": .string("0.0.1"), "result": .object(result)
         ])
 .rendered())
     }
@@ -78,7 +78,7 @@ struct TaskHistoryRetentionTests {
                 "parent_task_id": .string("first")])]), "next_cursor": .string("first"), "has_more": .bool(true), "bootstrap_pending": .bool(false)]
             return .success(stdout(JSONValue.object([
                 "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
-                "product_version": .string("1.0.0"), "result": .object(raw)
+                "product_version": .string("0.0.1"), "result": .object(raw)
             ])
 .rendered()))
         }

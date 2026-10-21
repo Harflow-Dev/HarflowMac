@@ -11,7 +11,7 @@ private func snapshotBatchCtl(_ payload: String) -> ProcessOutput {
     object["product"] = .string("harflow")
     object["format"] = .string("harflow.ctl")
     object["v"] = .number(1)
-    object["product_version"] = .string("1.0.0")
+    object["product_version"] = .string("0.0.1")
     return stdout(JSONValue.object(object).rendered())
 }
 
@@ -24,7 +24,7 @@ private func runningEntry(_ id: String, backend: String = "claude", extra: Strin
 
 /// A `status-batch` document around already-encoded entries and an encoded `errors` object.
 private func batchDocument(_ entries: [String], errors: String = "{}") -> String {
-    #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","tasks":[\#(entries.joined(separator: ","))],"errors":\#(errors)}"#
+    #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","tasks":[\#(entries.joined(separator: ","))],"errors":\#(errors)}"#
 }
 
 extension TaskSnapshotRepositoryImplTests {
@@ -124,7 +124,7 @@ extension TaskSnapshotRepositoryImplTests {
         let toolEnvironment = MockToolEnvironmentRepository()
         let runner = StubProcessRunner { call in
             if call.arguments.first == "status-batch" {
-                let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"1.0.0","#
+                let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","#
                     + #""error":{"code":"usage","message":"invalid choice: 'status-batch'"}}"#
                 #expect(JSONValue.parse(Data(response.utf8)) != nil)
                 return .success(stdout(response))

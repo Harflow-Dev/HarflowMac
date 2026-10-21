@@ -9,7 +9,7 @@ private func harnessSetup(_ payload: String) -> ProcessOutput {
     object["product"] = .string("harflow")
     object["format"] = .string("harflow.setup")
     object["v"] = .number(1)
-    object["product_version"] = .string("1.0.0")
+    object["product_version"] = .string("0.0.1")
     return stdout(JSONValue.object(object).rendered())
 }
 

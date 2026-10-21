@@ -13,7 +13,7 @@ import Testing
         var object = JSONValue.parse(Data(json.utf8))!.objectValue!
         object["product"] = object["product"] ?? .string("harflow")
         object["format"] = object["format"] ?? .string("harflow.setup")
-        object["product_version"] = object["product_version"] ?? .string("1.0.0")
+        object["product_version"] = object["product_version"] ?? .string("0.0.1")
         return try SetupDocument.decode(stdout: Data(JSONValue.object(object).rendered().utf8), stderr: "", exitCode: 0).get()
     }
     
