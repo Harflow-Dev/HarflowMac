@@ -13,3 +13,5 @@ Runtime identity and compatibility follow [HarflowMCP’s public contracts](http
 See the [Changelog](CHANGELOG.md) for change history.
 
 Licensed under Apache 2.0. Copyright Nayanda Haberty.
+
+Release validation and distribution prerequisites are documented in [Releasing](docs/releasing.md).

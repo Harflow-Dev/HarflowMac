@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add unsigned release validation and protected product signing, notarization and release-asset workflows.
+
 - Prepare and reuse the exact paired managed runtime with pinned Python and dependency wheels, offline installation, and qualified immutable generations.
 - Add shared runtime status and explicit retry; restore readiness-gated Harnesses MCP registration with stable launchers that survive app relocation or removal.
 
