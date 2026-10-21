@@ -2,7 +2,9 @@
 
 Harflow is a native macOS interface for agent tasks and workflow nodes. Installed command-line tools are called harnesses; the AI workers they run are agents.
 
-Version 0.0.1 is under development. The managed runtime is currently unavailable: execution, setup, and external installation controls are disabled until runtime integration. The app does not connect to a legacy installation.
+Version 0.0.1 is under development. On Apple Silicon with macOS 26, the app prepares its exact paired HarflowMCP runtime and reuses a qualified installation without network access. First preparation requires the paired release on PyPI. Harness MCP registrations remain explicit actions in Settings → Harnesses. The app does not adopt legacy or external runtimes.
+
+See [managed runtime](docs/managed-runtime.md) for acquisition, storage, retry, and current distribution limits.
 
 See [development](docs/development.md), [architecture](docs/architecture.md), [profiling](docs/monitor-performance.md), and [signing preparation](docs/ci-signing.md).
 

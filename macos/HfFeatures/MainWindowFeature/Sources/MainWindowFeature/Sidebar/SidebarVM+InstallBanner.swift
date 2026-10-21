@@ -52,11 +52,6 @@ extension SidebarVM {
     }
 
     func recomputeInstallBanner() {
-        if case .failed(_, let message) = installState, message == ManagedInstallRepository.unavailableMessage {
-            installBannerModel = InstallBanner.Model(title: message, detail: "Task execution and harness setup await managed runtime integration.")
-            return
-        }
-
         switch installState {
         case .needsGit:
             installBannerModel = InstallBanner.Model(
@@ -74,8 +69,8 @@ extension SidebarVM {
             installBannerModel = InstallBanner.Model(title: Self.runningTitle(stage), detail: Self.runningDetail(stage), isBusy: true)
         case .failed(_, let message):
             installBannerModel = InstallBanner.Model(
-                title: "harflow couldn't be installed",
-                detail: "Something went wrong while installing.",
+                title: "Harflow runtime preparation failed",
+                detail: "The managed runtime is unavailable. Try again to prepare it.",
                 primaryTitle: "Try again",
                 errorText: message,
                 canDismiss: true
@@ -89,7 +84,9 @@ extension SidebarVM {
                 errorText: installAnywayBlockedMessage ?? lastCheckMessage
             )
         case .idle, .installed:
-            if let need = currentInstallNeed, let error = latestListError {
+            if latestListError?.isManagedRuntimeUnavailable == true {
+                installBannerModel = nil
+            } else if let need = currentInstallNeed, let error = latestListError {
                 installBannerModel = InstallBanner.Model(
                     title: need == .missing ? "harflow isn't installed" : "harflow is incomplete or out of date",
                     detail: error.message,
@@ -125,14 +122,14 @@ extension SidebarVM {
 
     private static func runningTitle(_ stage: InstallStage) -> String {
         if case .validate = stage { return "Checking…" }
-        return "Installing harflow…"
+        return "Preparing Harflow runtime…"
     }
 
     private static func runningDetail(_ stage: InstallStage) -> String {
         switch stage {
         case .git: "Checking for git…"
         case .uv: "Setting up uv…"
-        case .harflow: "Installing harflow from GitHub. This can take a few minutes."
+        case .harflow: "Preparing the exact paired runtime. This can take a few minutes."
         case .validate: "Checking the new install. This can take a little while."
         }
     }

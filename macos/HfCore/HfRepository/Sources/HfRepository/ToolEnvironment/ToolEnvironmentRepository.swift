@@ -46,9 +46,8 @@ public protocol ToolEnvironmentRepository: Sendable {
     var discovery: DiscoveryResult { get }
     func discoveryPublisher() -> AnyPublisher<DiscoveryResult, Never>
 
-    /// Runs the login-PATH probe and `uv` discovery, coalesced and awaitable: a caller that arrives
-    /// while a run is already in flight awaits a run that **started after its own call** (never the
-    /// one already in progress) and gets that run's result.
+    /// Awaits tooling readiness. Managed callers join the same current acquisition attempt;
+    /// legacy discovery implementations retain their probe-coalescing semantics.
     func discoverEnvironment() async -> DiscoveryResult
 
     func environment(toolDirectory: String?) -> [String: String]
@@ -76,21 +75,6 @@ public struct NullToolEnvironmentRepository: ToolEnvironmentRepository {
     public func environment(toolDirectory _: String?) -> [String: String] { [:] }
     public func ctl() -> Result<CtlClient, ToolError> { .failure(.notFound(tool: "harflow-ctl", searched: [])) }
     public func setup() -> Result<SetupClient, ToolError> { .failure(.notFound(tool: "harflow-setup", searched: [])) }
-}
-
-/// Phase-two production boundary. Managed runtime integration is not available yet.
-/// No ambient executable discovery, process launches, or user history access occurs here.
-public struct ManagedToolEnvironmentRepository: ToolEnvironmentRepository {
-    public init() {}
-    public var home: String { "/dev/null" }
-    public var tasksDirectory: String { "/dev/null/.harflow/tasks" }
-    public var locator: ToolLocator { ToolLocator(overrideDirectory: nil, home: home, uvToolBin: nil, isExecutable: { _ in false }) }
-    public var discovery: DiscoveryResult { DiscoveryResult(loginPath: nil, uv: nil) }
-    public func discoveryPublisher() -> AnyPublisher<DiscoveryResult, Never> { Just(discovery).eraseToAnyPublisher() }
-    public func discoverEnvironment() async -> DiscoveryResult { discovery }
-    public func environment(toolDirectory _: String?) -> [String: String] { [:] }
-    public func ctl() -> Result<CtlClient, ToolError> { .failure(.notFound(tool: "Managed Harflow runtime unavailable", searched: [])) }
-    public func setup() -> Result<SetupClient, ToolError> { .failure(.notFound(tool: "Managed Harflow runtime unavailable", searched: [])) }
 }
 
 // MARK: - GlobalValues

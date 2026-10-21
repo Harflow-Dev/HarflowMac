@@ -15,7 +15,7 @@
     "file": "scripts/legacy-name-allowlist.json",
     "literal": "PB_",
     "reason": "Exact legacy prefix recorded for compatibility filtering and its tests.",
-    "count": 6
+    "count": 7
   },
   {
     "file": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ToolsTests.swift",
@@ -46,5 +46,11 @@
     "literal": "polybridge",
     "reason": "Exact legacy product literal recorded for the negative transport fixtures.",
     "count": 2
+  },
+  {
+    "file": "macos/HfCore/MonitorCore/Sources/MonitorCore/ManagedRuntime/ManagedRuntimeInstaller.swift",
+    "literal": "PB_",
+    "reason": "Generation launchers remove inherited legacy runtime configuration before selecting the managed Harflow state root.",
+    "count": 1
   }
 ]

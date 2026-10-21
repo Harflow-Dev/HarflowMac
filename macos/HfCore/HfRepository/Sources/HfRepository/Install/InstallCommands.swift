@@ -99,6 +99,7 @@ public enum InstallCommands {
     /// message (`nil` here). Both missing is `.missing`; one missing, or an unsupported command, is
     /// `.incomplete`.
     public static func installNeed(for error: ToolError, ctl: ToolPresence, setup: ToolPresence) -> InstallNeed? {
+        if error.isManagedRuntimeUnavailable { return .missing }
         let tool: String
         let isUnsupportedCommand: Bool
         switch error {

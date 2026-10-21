@@ -13,10 +13,12 @@ import Testing
         settings: MockSettingsRepository = MockSettingsRepository(),
         toolEnvironment: MockToolEnvironmentRepository = MockToolEnvironmentRepository(),
         taskList: MockTaskListRepository = MockTaskListRepository(),
-        backends: MockBackendsRepository = MockBackendsRepository()
+        backends: MockBackendsRepository = MockBackendsRepository(),
+        install: MockInstallRepository = MockInstallRepository()
     ) -> GeneralSettingsViewRepository {
         GeneralSettingsViewRepository(
-            settingsRepository: settings, toolEnvironmentRepository: toolEnvironment, taskListRepository: taskList, backendsRepository: backends
+            settingsRepository: settings, toolEnvironmentRepository: toolEnvironment, taskListRepository: taskList,
+            backendsRepository: backends, installRepository: install
         )
     }
     
@@ -80,5 +82,35 @@ import Testing
         #expect(sut.toolDirectory == "/custom/bin")
         #expect(sut.openWindowOnStart == false)
         #expect(sut.notifyOnFinish == false)
+    }
+
+    @Test func givenRuntimeRetry_whenRequested_thenItForwardsToTheInstallRepository() async {
+        // given
+        let install = MockInstallRepository()
+        given(install).retry().willReturn()
+        let sut = makeSUT(install: install)
+
+        // when
+        await sut.retryRuntime()
+
+        // then
+        verify(install).retry().called(1)
+    }
+
+    @Test func givenRuntimeStatePublisher_whenRead_thenItPassesThroughTheInstallStatus() {
+        // given
+        let install = MockInstallRepository()
+        let subject = PassthroughSubject<InstallState, Never>()
+        given(install).statePublisher().willReturn(subject.eraseToAnyPublisher())
+        let sut = makeSUT(install: install)
+        var received: InstallState?
+        let token = sut.installStatePublisher().sink { received = $0 }
+
+        // when
+        subject.send(.failed(stage: .harflow, message: "fixture runtime failure"))
+
+        // then
+        #expect(received == .failed(stage: .harflow, message: "fixture runtime failure"))
+        withExtendedLifetime(token) {}
     }
 }

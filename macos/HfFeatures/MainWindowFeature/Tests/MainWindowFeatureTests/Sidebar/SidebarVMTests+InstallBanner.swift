@@ -150,7 +150,7 @@ extension SidebarVMTests {
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.installBannerModel?.isBusy == true)
         #expect(sut.installBannerModel?.primaryTitle == nil)
-        #expect(sut.installBannerModel?.detail == "Installing harflow from GitHub. This can take a few minutes.")
+        #expect(sut.installBannerModel?.detail == "Preparing the exact paired runtime. This can take a few minutes.")
     }
 
     @Test func givenAnIncompleteInstallNeed_whenPrimaryTapped_thenTheUpdateDialogPublishes_andConfirmCallsInstall() async {

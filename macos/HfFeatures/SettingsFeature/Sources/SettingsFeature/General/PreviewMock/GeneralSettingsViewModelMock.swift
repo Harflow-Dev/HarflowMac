@@ -13,6 +13,10 @@ import Foundation
 @MainActor
 final class GeneralSettingsViewModelMock: GeneralSettingsViewModel {
     
+    var runtimeStatus = "Harflow runtime is ready."
+    var runtimeCanRetry = false
+    func didTapRetryRuntime() {}
+
     var directoryField: String
     var searchedDirectoriesText: String
     var ctlResolution: ToolResolution

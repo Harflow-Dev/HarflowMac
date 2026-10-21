@@ -6,6 +6,7 @@
 import Combine
 import Foundation
 import HfCommon
+import HfRepository
 import HfUtilities
 import Mockable
 import MonitorCore
@@ -23,6 +24,9 @@ protocol GeneralSettingsUseCase: Sendable {
     var notifyOnFinish: Bool { get }
     var searchDirectories: [String] { get }
     
+    func installStatePublisher() -> AnyPublisher<InstallState, Never>
+    func retryRuntime() async
+
     func resolve(_ tool: String) -> ToolResolution
     
     func toolDirectoryPublisher() -> AnyPublisher<String, Never>
@@ -53,6 +57,8 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     
     // MARK: - GeneralSettingsViewModel Properties
     
+    private(set) var runtimeStatus = "Preparing the managed Harflow runtime…"
+    private(set) var runtimeCanRetry = false
     private(set) var directoryField: String = ""
     private(set) var searchedDirectoriesText: String = ""
     private(set) var ctlResolution: ToolResolution = .notFound
@@ -87,6 +93,8 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         didSubscribe = false
     }
     
+    func didTapRetryRuntime() { Task { await useCase.retryRuntime() } }
+
     func didChangeDirectoryField(_ text: String) {
         directoryField = text
     }
@@ -116,6 +124,11 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         guard !didSubscribe else { return }
         didSubscribe = true
         
+        useCase.installStatePublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in self?.applyRuntimeState(state) }
+            .store(in: &cancellables)
+
         useCase.toolDirectoryPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshResolutions() }
@@ -149,6 +162,24 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
             .store(in: &cancellables)
     }
     
+    private func applyRuntimeState(_ state: InstallState) {
+        let status: String
+        let canRetry: Bool
+        switch state {
+        case .installed:
+            status = "Harflow runtime is ready."
+            canRetry = false
+        case .failed(_, let message):
+            status = message
+            canRetry = true
+        default:
+            status = "Preparing the managed Harflow runtime…"
+            canRetry = false
+        }
+        if runtimeStatus != status { runtimeStatus = status }
+        if runtimeCanRetry != canRetry { runtimeCanRetry = canRetry }
+    }
+
     private func refreshResolutions() {
         searchedDirectoriesText = useCase.searchDirectories.joined(separator: ", ")
         ctlResolution = useCase.resolve("harflow-ctl")

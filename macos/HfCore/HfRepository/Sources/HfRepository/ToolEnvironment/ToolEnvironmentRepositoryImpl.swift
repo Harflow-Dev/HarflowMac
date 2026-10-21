@@ -73,15 +73,11 @@ public final class ToolEnvironmentRepositoryImpl: ToolEnvironmentRepository, @un
     }
 
     /// Asks an interactive login zsh — the shell Terminal gives you — for its PATH.
-    static let interactivePathArgv = ["/bin/zsh", "-i", "-l", "-c", "printf %s \"$PATH\""]
+    static let interactivePathArgv = LaunchEnvironment.interactivePathArgv
 
     /// `primary`'s directories in order, then any of `extra`'s it lacks; `nil` only when both are.
     static func mergedPath(_ primary: String?, _ extra: String?) -> String? {
-        let first = primary?.split(separator: ":").map(String.init) ?? []
-        let second = extra?.split(separator: ":").map(String.init) ?? []
-        var seen: Set<String> = []
-        let merged = (first + second).filter { !$0.isEmpty && seen.insert($0).inserted }
-        return merged.isEmpty ? nil : merged.joined(separator: ":")
+        LaunchEnvironment.mergedPath(primary, extra)
     }
 
     /// F4-02/F4-03 combined into one coherent probe: the login-PATH probe (cwd = home, 8 s timeout,
@@ -90,29 +86,11 @@ public final class ToolEnvironmentRepositoryImpl: ToolEnvironmentRepository, @un
     /// unconditional overwrite (rather than a per-field conditional write) is what clears a stale
     /// resolution instead of leaving an old value behind.
     private func probeOnce() async -> DiscoveryResult {
-        var loginPath: String?
-        if case .success(let output) = await runner.run(
-            executable: LaunchEnvironment.loginPathArgv[0],
-            arguments: Array(LaunchEnvironment.loginPathArgv.dropFirst()),
+        let loginPath = await LaunchEnvironment.discoverHarnessPath(
+            home: home,
             environment: LaunchEnvironment.build(base: baseEnvironment, loginPath: nil, toolDirectory: nil),
-            currentDirectory: home,
-            timeout: 8
-        ), !output.timedOut {
-            loginPath = LaunchEnvironment.parseLoginPath(output.stdout)
-        }
-        // A login shell reads ~/.zprofile but not ~/.zshrc, where tools like nvm (codex) and
-        // opencode commonly add themselves — so the Settings harness list said "not on PATH" for
-        // CLIs a Terminal finds. An interactive login shell's PATH fills those in; the same parser
-        // keeps only a PATH-shaped last line, and the same timeout bounds a slow or chatty .zshrc.
-        if case .success(let output) = await runner.run(
-            executable: Self.interactivePathArgv[0],
-            arguments: Array(Self.interactivePathArgv.dropFirst()),
-            environment: LaunchEnvironment.build(base: baseEnvironment, loginPath: nil, toolDirectory: nil),
-            currentDirectory: home,
-            timeout: 8
-        ), !output.timedOut {
-            loginPath = Self.mergedPath(loginPath, LaunchEnvironment.parseLoginPath(output.stdout))
-        }
+            runner: runner
+        )
 
         var uv: UvResolution?
         for candidate in uvCandidates(loginPath: loginPath) where isExecutable(candidate) {

@@ -548,3 +548,13 @@ extension Result where Failure == ToolError {
         }
     }
 }
+
+// MARK: - Managed runtime readiness errors
+
+public extension ToolError {
+    /// Preparation and acquisition failure share the install-status surface, never a list incident.
+    var isManagedRuntimeUnavailable: Bool {
+        guard case .refused(let code, _) = self else { return false }
+        return code == "managed_runtime_preparing" || code == "managed_runtime_failed"
+    }
+}

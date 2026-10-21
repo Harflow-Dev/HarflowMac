@@ -3,7 +3,7 @@
 //  SettingsFeature
 //
 //  General settings for application behavior and managed runtime availability.
-//  External tool selection stays hidden until the managed runtime is integrated.
+//  Runtime selection is managed by the application.
 //
 
 import Foundation
@@ -28,6 +28,10 @@ protocol GeneralSettingsViewModel: ViewModel {
     /// The text field's live value — loaded from the committed setting on `didAppear`, then edited
     /// locally until `didTapApply`/`didTapSearchAgain` commits it. Never overwritten by a live
     /// settings update from elsewhere, matching the old `SettingsView`'s local `@State`.
+    var runtimeStatus: String { get }
+    var runtimeCanRetry: Bool { get }
+    func didTapRetryRuntime()
+
     var directoryField: String { get }
     var searchedDirectoriesText: String { get }
     var ctlResolution: ToolResolution { get }
@@ -67,8 +71,11 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
     var body: some View {
         Form {
             Section("Managed runtime") {
-                Text("Managed Harflow runtime unavailable")
-                Text("Task execution and harness setup will become available after runtime integration.")
+                Text(viewModel.runtimeStatus)
+                if viewModel.runtimeCanRetry {
+                    Button("Try again") { viewModel.didTapRetryRuntime() }
+                }
+                Text("The app prepares its paired runtime automatically. MCP registrations are managed in Harnesses.")
                     .foregroundStyle(.secondary)
             }
             Section("Behaviour") {

@@ -116,11 +116,20 @@ extension SidebarVM {
                     guard await applyWorkflowSnapshot(snapshot, token: token) else { return }
                 } catch {
                     guard let self, !Task.isCancelled, workflowGeneration == token else { return }
-                    workflowErrorMessage = "Workflow list unavailable: \((error as? ToolError)?.message ?? error.localizedDescription)"
-                    publishWorkflowIncident(source: "workflow-list", message: workflowErrorMessage ?? "Workflow list unavailable")
+                    applyWorkflowReadFailure(error)
                 }
                 guard let self, await waitOrStop() else { return }
             }
+        }
+    }
+
+    private func applyWorkflowReadFailure(_ error: Error) {
+        if (error as? ToolError)?.isManagedRuntimeUnavailable == true {
+            workflowErrorMessage = nil
+            publishViewEvent(.incidentResolved(source: "workflow-list"))
+        } else {
+            workflowErrorMessage = "Workflow list unavailable: \((error as? ToolError)?.message ?? error.localizedDescription)"
+            publishWorkflowIncident(source: "workflow-list", message: workflowErrorMessage ?? "Workflow list unavailable")
         }
     }
 

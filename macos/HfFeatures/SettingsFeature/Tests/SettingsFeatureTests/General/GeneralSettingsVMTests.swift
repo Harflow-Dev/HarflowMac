@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HfRepository
 import HfTestUtilities
 import Mockable
 import MonitorCore
@@ -30,6 +31,8 @@ private final class Box<Value> {
         let tasksSubject: PassthroughSubject<[TaskInfo], Never>
         let hasListedSubject: PassthroughSubject<Bool, Never>
         let listErrorSubject: PassthroughSubject<ToolError?, Never>
+        let installStateSubject: PassthroughSubject<InstallState, Never>
+        let retryCount: Box<Int>
     }
     
     private func makeSUT(
@@ -48,6 +51,8 @@ private final class Box<Value> {
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let hasListedSubject = PassthroughSubject<Bool, Never>()
         let listErrorSubject = PassthroughSubject<ToolError?, Never>()
+        let installStateSubject = PassthroughSubject<InstallState, Never>()
+        let retryCount = Box(0)
         
         given(useCase).toolDirectory.willReturn(toolDirectory)
         given(useCase).openWindowOnStart.willReturn(openWindowOnStart)
@@ -61,6 +66,8 @@ private final class Box<Value> {
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
+        given(useCase).installStatePublisher().willReturn(installStateSubject.eraseToAnyPublisher())
+        given(useCase).retryRuntime().willProduce { retryCount.value += 1 }
         given(useCase).setToolDirectory(.any).willReturn()
         given(useCase).setOpenWindowOnStart(.any).willReturn()
         given(useCase).setNotifyOnFinish(.any).willReturn()
@@ -69,7 +76,8 @@ private final class Box<Value> {
         return SUT(
             sut: sut, useCase: useCase, toolDirectorySubject: toolDirectorySubject, openWindowSubject: openWindowSubject,
             notifySubject: notifySubject, ctlResolutionBox: ctlResolutionBox, tasksSubject: tasksSubject,
-            hasListedSubject: hasListedSubject, listErrorSubject: listErrorSubject
+            hasListedSubject: hasListedSubject, listErrorSubject: listErrorSubject,
+            installStateSubject: installStateSubject, retryCount: retryCount
         )
     }
     
@@ -83,6 +91,34 @@ private final class Box<Value> {
         
         // then
         #expect(sut.directoryField == "/opt/homebrew/bin")
+    }
+
+    @Test func givenManagedRuntimeFailure_whenPublished_thenStatusShowsTheFailureAndEnablesRetry() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+
+        // when
+        harness.installStateSubject.send(.failed(stage: .harflow, message: "fixture runtime failure"))
+        await waitUntil { sut.runtimeStatus == "fixture runtime failure" }
+
+        // then
+        #expect(sut.runtimeStatus == "fixture runtime failure")
+        #expect(sut.runtimeCanRetry)
+    }
+
+    @Test func givenManagedRuntimeFailure_whenRetryIsTapped_thenTheUseCaseReceivesOneRetry() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+
+        // when
+        sut.didTapRetryRuntime()
+        await waitUntil { harness.retryCount.value == 1 }
+
+        // then
+        #expect(harness.retryCount.value == 1)
     }
     
     @Test func givenWhitespacePaddedInput_whenApplied_thenItIsTrimmedBeforeStoring() {

@@ -128,11 +128,10 @@ declares every product it imports — no `@_exported` re-exports, ever.
    `HfFeatures/MainWindowFeature` with `HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1` and `--mode aggregate` for every other package (repo-root
    Commands section documents the loop; MonitorCore also requires `HARFLOW_NATIVE_BENCHMARK=1`) — the runner fail-closed validates identity coverage,
    event streams, summaries and XCTest silence; a bare `swift test` exit is not evidence.
-4. The headless smoke (launch the built binary with a temporary `HOME` and a fake `harflow-ctl`,
-   check the first `list`, an FSEvents-driven second `list`, and that the app stays alive) is a
+4. The headless smoke (pre-seed a temporary `HOME` through the real managed installer with constructor-injected local acquisitions, launch the built binary against its qualified runtime, then check the first `list`, an FSEvents-driven second `list`, and that the app stays alive) is a
    local gate only: it depends on FSEvents timing and a window server, which shared CI runners do not
    provide reliably.
 
 ## Migration scope
 
-The authorized extraction preserves behavior except Harflow/Hf identities and the explicit unavailable managed-runtime boundary. Production tool discovery and installation remain disabled until runtime integration. Source history is retained through the extraction merge; signing and distribution remain deferred.
+The managed runtime uses only app-pinned interpreter/dependency inputs and the exact paired engine release. Startup qualification precedes task-store access. Failures remain visible with explicit retry; external runtime adoption, legacy data import, signing and distribution remain deferred. Local smoke uses a qualified pre-seeded runtime under scratch HOME; bare fake ctl executables and runtime endpoint environment overrides are not supported.

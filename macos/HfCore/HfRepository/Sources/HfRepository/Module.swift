@@ -1,5 +1,6 @@
 import Foundation
 import HfUtilities
+import MonitorCore
 import SwiftEnvironment
 
 // MARK: - Module
@@ -17,7 +18,16 @@ public final class Module: HfModule {
         let scheduler = SystemScheduler()
         let visibility = SystemMonitorVisibility()
         let settings = SettingsRepositoryImpl()
-        let toolEnvironment = ManagedToolEnvironmentRepository()
+        let layout = ManagedRuntimeLayout(home: ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory())
+        let baseEnvironment = ProcessInfo.processInfo.environment
+        let installer: any ManagedRuntimeInstalling
+        do {
+            installer = ManagedRuntimeInstaller(layout: layout, specification: try .bundled(), baseEnvironment: baseEnvironment)
+        } catch {
+            installer = UnavailableManagedRuntimeInstaller(message: error.localizedDescription)
+        }
+        let runtime = ManagedRuntimeCoordinator(installer: installer)
+        let toolEnvironment = ManagedToolEnvironmentRepository(coordinator: runtime, layout: layout, baseEnvironment: baseEnvironment)
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
         let eventStream = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler)
         let finishNotifier = FinishNotifierImpl(settings: settings)
@@ -31,7 +41,7 @@ public final class Module: HfModule {
         )
         let taskAction = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshot)
         let harness = HarnessRepositoryImpl(toolEnvironment: toolEnvironment)
-        let install = ManagedInstallRepository()
+        let install = ManagedInstallRepository(coordinator: runtime, taskListRepository: taskList)
         let takeover = TakeoverServiceImpl(actions: taskAction, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshot)
         let backends = BackendsRepositoryImpl(toolEnvironment: toolEnvironment, installRepository: install, scheduler: scheduler)
         let modelCatalog = ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment)
@@ -55,4 +65,11 @@ public final class Module: HfModule {
             .environment(\.modelCatalogRepository, modelCatalog)
             .environment(\.workflowRepository, WorkflowRepositoryImpl(toolEnvironment: toolEnvironment))
     }
+}
+
+// MARK: - UnavailableManagedRuntimeInstaller
+
+private struct UnavailableManagedRuntimeInstaller: ManagedRuntimeInstalling {
+    let message: String
+    func prepare() async throws -> ManagedRuntimeReady { throw ManagedRuntimeFailure(message) }
 }

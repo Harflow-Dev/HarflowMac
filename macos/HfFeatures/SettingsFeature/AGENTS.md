@@ -3,8 +3,7 @@
 Root AGENTS.md applies (`../../AGENTS.md`).
 
 The Settings scene is built through `SettingsCoordinator`. General shows managed-runtime
-availability and behaviour toggles. Tool-directory controls and the Harnesses setup tab remain
-hidden until managed runtime integration.
+status, explicit retry, and behaviour toggles. Tool-directory controls remain hidden. The Harnesses tab exposes explicit MCP registration actions only after managed readiness gates its setup client.
 
 - Swift 6 language mode (tools 6.2 default).
 - Depends on `HfUtilities`, `HfCommon`, `HfUI`, `MonitorCore`, `HfRepository`.

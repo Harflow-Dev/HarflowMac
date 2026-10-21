@@ -12,6 +12,7 @@ let package = Package(
         // Foundation only, so the unit tests never need a window server.
         .target(
             name: "MonitorCore",
+            resources: [.copy("Resources/ManagedRuntime.json")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

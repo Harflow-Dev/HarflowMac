@@ -17,6 +17,7 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Se
     
     // MARK: - Private Properties
     
+    @GlobalEnvironment(\.installRepository) private var installRepository
     @GlobalEnvironment(\.settingsRepository) private var settingsRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
@@ -28,8 +29,10 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Se
         settingsRepository: (any SettingsRepository)? = nil,
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
         taskListRepository: (any TaskListRepository)? = nil,
-        backendsRepository: (any BackendsRepository)? = nil
+        backendsRepository: (any BackendsRepository)? = nil,
+        installRepository: (any InstallRepository)? = nil
     ) {
+        if let installRepository { self.installRepository = installRepository }
         if let settingsRepository { self.settingsRepository = settingsRepository }
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
         if let taskListRepository { self.taskListRepository = taskListRepository }
@@ -45,6 +48,9 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Se
     
     // MARK: - GeneralSettingsUseCase Methods
     
+    func installStatePublisher() -> AnyPublisher<InstallState, Never> { installRepository.statePublisher() }
+    func retryRuntime() async { await installRepository.retry() }
+
     func resolve(_ tool: String) -> ToolResolution {
         switch toolEnvironmentRepository.locator.locate(tool) {
         case .success(let path): .found(path: path)

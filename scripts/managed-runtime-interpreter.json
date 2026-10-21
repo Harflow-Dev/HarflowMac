@@ -1,0 +1,11 @@
+{
+  "python": {
+    "filename": "cpython-3.13.16+20261020-aarch64-apple-darwin-install_only.tar.gz",
+    "name": "cpython",
+    "sha256": "235f3d5b182a171f6564ee98ef2812cfb2da8a73c4a37fca1937b25702f94880",
+    "size": 25400715,
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261020/cpython-3.13.16%2B20261020-aarch64-apple-darwin-install_only.tar.gz",
+    "version": "3.13.16"
+  },
+  "pythonVersion": "3.13.16"
+}

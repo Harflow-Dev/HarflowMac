@@ -18,3 +18,7 @@ HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos
 ```
 
 Complete malformed or incompatible event records make activity and summary reads explicitly unavailable. An incomplete trailing write is deferred until a newline completes it; unknown additive event kinds remain readable.
+
+## Managed runtime
+
+`ManagedRuntimeLayout` derives executable storage and the selected `.harflow` store from an injected home without reading history. `ManagedRuntimeInstaller` performs bounded HTTPS acquisition, verifies pinned bytes, installs only locked binary wheels offline under a private pip environment, qualifies the relocated generation, and atomically activates it under a permanent process lock. Completion receipts bind exact engine version, specification, generation, selected store, and observed engine SHA256/yanked metadata. Existing generations are never replaced or collected. The app bundles the specification as a SwiftPM resource; [maintenance and trust details](../../../docs/managed-runtime.md) describe its inputs.

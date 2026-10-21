@@ -18,4 +18,4 @@ Run Swift Testing through `scripts/test-swift-package.py`, which validates suppo
 
 Packages live in `macos/HfFoundation`, `macos/HfCore`, `macos/HfFeatures`, and `macos/Harflow`. Public dependency versions remain SwiftEnvironment 4.1.8, Mockable 0.6.2, and Dummyable 1.1.6. Ctl/setup/normalized event wire envelopes use explicit Harflow v1 contracts; persisted task/workflow storage migration is separate.
 
-Never launch development builds against real user state. Use an isolated generated fixture and temporary HOME. Production Module wiring deliberately uses unavailable managed tooling and a disabled installer.
+Never launch development builds against real user state. Use an isolated generated fixture and temporary HOME. Pre-seed that HOME through the production ManagedRuntimeInstaller with constructor-injected local acquisitions, then launch the ordinary app against the qualified managed generation. A bare fake harflow-ctl cannot satisfy completion receipt, native import, pip, and version-info qualification. See [managed runtime](managed-runtime.md) for pinned input maintenance. No environment variable or preference overrides production acquisition endpoints.

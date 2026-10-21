@@ -35,6 +35,8 @@ public struct SettingsNavigationView<Coordinator: SettingsNavigationCoordinator>
         TabView {
             tabContent(coordinator.buildGeneralSettingsView())
                 .tabItem { Label("General", systemImage: "gearshape") }
+            tabContent(coordinator.buildHarnessesView())
+                .tabItem { Label("Harnesses", systemImage: "terminal") }
         }
         .frame(width: HfRadius.Metrics.settingsSceneWidth, height: HfRadius.Metrics.settingsSceneHeight)
         .withPresentationContext()

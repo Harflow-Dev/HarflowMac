@@ -113,25 +113,6 @@ public struct NullInstallRepository: InstallRepository {
     public func reset() {}
 }
 
-/// Disabled production installer until the managed runtime is integrated.
-public struct ManagedInstallRepository: InstallRepository {
-    public static let unavailableMessage = "Managed Harflow runtime unavailable"
-    public init() {}
-    public var state: InstallState { .failed(stage: .validate, message: Self.unavailableMessage) }
-    public func statePublisher() -> AnyPublisher<InstallState, Never> { Just(state).eraseToAnyPublisher() }
-    public var lastCheckMessage: String? { Self.unavailableMessage }
-    public func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { Just(lastCheckMessage).eraseToAnyPublisher() }
-    public var installAnywayBlockedMessage: String? { Self.unavailableMessage }
-    public func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> { Just(installAnywayBlockedMessage).eraseToAnyPublisher() }
-    public func destination() -> String? { nil }
-    public func install() async {}
-    public func installUvThenHarflow() async {}
-    public func retry() async {}
-    public func checkAgain() async {}
-    public func installAnyway() async -> Bool { false }
-    public func reset() {}
-}
-
 // MARK: - GlobalValues
 
 public extension GlobalValues {
