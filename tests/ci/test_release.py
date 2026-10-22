@@ -24,13 +24,13 @@ ASSET_MODULE_SPEC.loader.exec_module(release_assets)
 
 
 def test_source_accepts_current_plist_and_runtime_pair():
-    assert release.validate_source(ROOT) == ("0.0.1", "0.0.1")
+    assert release.validate_source(ROOT) == ("0.0.2", "0.0.1")
 
 
 def test_source_rejects_tag_mismatch_before_git_lookup():
     with mock.patch.object(release.subprocess, "check_output") as check_output:
         with pytest.raises(release.ReleaseError):
-            release.validate_source(ROOT, tag="v0.0.2", sha="0" * 40)
+            release.validate_source(ROOT, tag="v0.0.3", sha="0" * 40)
     check_output.assert_not_called()
 
 
@@ -80,6 +80,101 @@ def test_wait_for_pypi_retries_exact_release_without_latest_fallback():
     assert result["filename"] == "harflow_mcp-0.0.1-py3-none-any.whl"
     assert len(calls) == 2
     assert sleeps == [10]
+
+
+def test_packaged_startup_probe_requires_exact_bounded_json_and_scrubbed_environment():
+    calls = []
+
+    def process(args, **kwargs):
+        calls.append((args, kwargs))
+        assert Path(kwargs["cwd"]).is_dir()
+        assert Path(kwargs["env"]["HOME"]).is_dir()
+        assert Path(kwargs["env"]["TMPDIR"]).is_dir()
+        assert kwargs["env"]["HOME"] != kwargs["env"]["TMPDIR"]
+        return subprocess.CompletedProcess(args, 0, b'{"appVersion":"0.0.2","engineVersion":"0.0.1","status":"ok"}\n', b"")
+
+    release.validate_packaged_startup(Path("Harflow.app"), "0.0.2", "0.0.1", process=process)
+    args, kwargs = calls[0]
+    assert args[-1] == "--check-packaged-startup"
+    assert Path(args[0]).is_absolute()
+    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert kwargs["timeout"] == 10
+    assert kwargs["env"]["PATH"] == "/usr/bin:/bin"
+    assert set(kwargs["env"]) == {"HOME", "TMPDIR", "PATH"}
+    assert Path(kwargs["cwd"]).name.startswith("harflow-startup-")
+
+
+@pytest.mark.parametrize("result", [
+    subprocess.CompletedProcess(["Harflow"], 1, b"{}\n", b""),
+    subprocess.CompletedProcess(["Harflow"], 0, b"not-json\n", b""),
+    subprocess.CompletedProcess(["Harflow"], 0, b'{"appVersion":"0.0.3","engineVersion":"0.0.1","status":"ok"}\n', b""),
+    subprocess.CompletedProcess(["Harflow"], 0, b'{"appVersion":"0.0.2","engineVersion":"0.0.1","status":"ok"}\n', b"unexpected"),
+])
+def test_packaged_startup_probe_rejects_bad_process_result(result):
+    with pytest.raises(release.ReleaseError):
+        release.validate_packaged_startup(Path("Harflow.app"), "0.0.2", "0.0.1", process=lambda *args, **kwargs: result)
+
+
+@pytest.mark.parametrize("payload", [
+    b'{"appVersion":"0.0.2","engineVersion":"0.0.1","status":"ok","extra":true}\n',
+    b'{"appVersion":"0.0.2","engineVersion":"0.0.1"}\n',
+    b'{"appVersion":"0.0.2","engineVersion":"0.0.2","status":"ok"}\n',
+    b'{"appVersion":"0.0.2","engineVersion":"0.0.1","status":"ok","status":"ok"}\n',
+    b"{" + b"a" * 4100 + b"}\n",
+])
+def test_packaged_startup_probe_rejects_wrong_shape_or_oversized_output(payload):
+    result = subprocess.CompletedProcess(["Harflow"], 0, payload, b"")
+    with pytest.raises(release.ReleaseError):
+        release.validate_packaged_startup(Path("Harflow.app"), "0.0.2", "0.0.1", process=lambda *args, **kwargs: result)
+
+
+def test_packaged_startup_probe_rejects_timeout():
+    def process(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 10)
+
+    with pytest.raises(release.ReleaseError):
+        release.validate_packaged_startup(Path("Harflow.app"), "0.0.2", "0.0.1", process=process)
+
+
+def test_validate_bundle_requires_exact_packaged_runtime_path_and_rejects_duplicates(tmp_path):
+    root = tmp_path / "source"
+    runtime = root / release.RUNTIME_PATH
+    runtime.parent.mkdir(parents=True)
+    runtime.write_bytes((ROOT / release.RUNTIME_PATH).read_bytes())
+    app = tmp_path / "Harflow.app"
+    resources = app / "Contents/Resources"
+    exact = resources / "MonitorCore_MonitorCore.bundle/ManagedRuntime.json"
+    exact.parent.mkdir(parents=True)
+    exact.write_bytes(runtime.read_bytes())
+    for name in ("AppIcon.icns", "menubarTemplate.png", "menubarTemplate@2x.png"):
+        (resources / name).write_bytes(b"asset")
+
+    good_process = lambda *args, **kwargs: subprocess.CompletedProcess(
+        args[0], 0, b'{"appVersion":"0.0.2","engineVersion":"0.0.1","status":"ok"}\n', b""
+    )
+    with mock.patch.object(release, "validate_source", return_value=("0.0.2", "0.0.1")), \
+            mock.patch.object(release, "validate_plist", return_value="0.0.2"), \
+            mock.patch.object(release, "code_paths", return_value=[]), \
+            mock.patch.object(release, "verify_signature"):
+        assert release.validate_bundle(app, root, startup_process=good_process) == ("0.0.2", "0.0.1")
+        duplicate = resources / "Other.bundle/ManagedRuntime.json"
+        duplicate.parent.mkdir()
+        duplicate.write_bytes(runtime.read_bytes())
+        with pytest.raises(release.ReleaseError):
+            release.validate_bundle(app, root, startup_process=good_process)
+
+        duplicate.unlink()
+        exact.unlink()
+        misplaced = resources / "ManagedRuntime.json"
+        misplaced.write_bytes(runtime.read_bytes())
+        with pytest.raises(release.ReleaseError):
+            release.validate_bundle(app, root, startup_process=good_process)
+
+        exact.write_bytes(runtime.read_bytes())
+        root_duplicate = app / "ManagedRuntime.json"
+        root_duplicate.write_bytes(runtime.read_bytes())
+        with pytest.raises(release.ReleaseError):
+            release.validate_bundle(app, root, startup_process=good_process)
 
 
 class _Commands:

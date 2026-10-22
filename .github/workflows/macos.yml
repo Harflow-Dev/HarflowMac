@@ -15,6 +15,7 @@ jobs:
       - run: brew install swiftformat swiftlint
       - run: swiftformat --lint macos && swiftlint lint --strict
       - run: macos/build-app.sh
+      - run: /usr/bin/python3 -I scripts/ci/release.py bundle
       - name: Guarded Swift package tests
         shell: bash
         run: |

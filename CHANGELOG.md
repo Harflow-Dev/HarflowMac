@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.0.2
+
+- Fix packaged app startup by loading the managed-runtime specification from the app's standard resource bundle.
+- Validate packaged resource startup before release packaging and in macOS CI; the paired engine remains 0.0.1.
+
+## 0.0.1
 
 - Add unsigned release validation and protected product signing, notarization and release-asset workflows.
 

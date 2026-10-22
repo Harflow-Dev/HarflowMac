@@ -65,7 +65,17 @@ public struct ManagedRuntimeSpecification: Codable, Equatable, Sendable {
 
     /// Loads the exact interpreter and dependency pins packaged with the app.
     public static func bundled() throws -> Self {
-        guard let url = Bundle.module.url(forResource: "ManagedRuntime", withExtension: "json") else {
+        try bundled(bundleURL: Bundle.main.bundleURL, resourceURL: Bundle.main.resourceURL)
+    }
+
+    static func bundled(bundleURL: URL, resourceURL: URL?) throws -> Self {
+        let url: URL?
+        if bundleURL.pathExtension == "app" {
+            url = resourceURL?.appendingPathComponent("MonitorCore_MonitorCore.bundle/ManagedRuntime.json")
+        } else {
+            url = Bundle.module.url(forResource: "ManagedRuntime", withExtension: "json")
+        }
+        guard let url, FileManager.default.fileExists(atPath: url.path) else {
             throw ManagedRuntimeFailure("The app is missing its managed runtime specification.")
         }
         return try JSONDecoder().decode(Self.self, from: Data(contentsOf: url))

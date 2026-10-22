@@ -28,6 +28,7 @@ Commands = preflight.Commands
 ReleaseError = preflight.PreflightError
 RUNTIME_PATH = Path('macos/HfCore/MonitorCore/Sources/MonitorCore/Resources/ManagedRuntime.json')
 PLIST_PATH = Path('macos/Harflow/Resources/Info.plist')
+PACKAGED_RUNTIME_PATH = Path('Contents/Resources/MonitorCore_MonitorCore.bundle/ManagedRuntime.json')
 
 
 def exact_version(value):
@@ -107,7 +108,41 @@ def verify_signature(path, commands, signed=False, team=None):
         raise ReleaseError()
 
 
-def validate_bundle(app, root, commands=None, signed=False, team=None):
+def validate_packaged_startup(app, version, engine, process=None):
+    """Check resource startup before any app or managed-runtime initialization."""
+    executable = (Path(app) / 'Contents/MacOS/Harflow').resolve()
+    process = process or subprocess.run
+    try:
+        with tempfile.TemporaryDirectory(prefix='harflow-startup-') as temporary:
+            scratch = Path(temporary)
+            home, tmp = scratch / 'home', scratch / 'tmp'
+            home.mkdir(mode=0o700)
+            tmp.mkdir(mode=0o700)
+            result = process(
+                [str(executable), '--check-packaged-startup'],
+                cwd=scratch,
+                env={'HOME': str(home), 'TMPDIR': str(tmp), 'PATH': '/usr/bin:/bin'},
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=10, check=False,
+            )
+        if result.returncode != 0 or not isinstance(result.stdout, bytes) or len(result.stdout) > 4096 or result.stderr:
+            raise ReleaseError()
+        # Reject duplicate keys as well as additional/missing fields or trailing output.
+        def unique_object(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ReleaseError()
+                value[key] = item
+            return value
+        payload = json.loads(result.stdout, object_pairs_hook=unique_object)
+        if payload != {'appVersion': version, 'engineVersion': engine, 'status': 'ok'}:
+            raise ReleaseError()
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        raise ReleaseError() from None
+
+
+def validate_bundle(app, root, commands=None, signed=False, team=None, startup_process=None):
     commands = commands or Commands(os.environ)
     app, root = Path(app), Path(root)
     version, engine = validate_source(root)
@@ -117,8 +152,9 @@ def validate_bundle(app, root, commands=None, signed=False, team=None):
     for name in ('AppIcon.icns', 'menubarTemplate.png', 'menubarTemplate@2x.png'):
         if not (resources / name).is_file():
             raise ReleaseError()
-    specs = list(resources.rglob('ManagedRuntime.json'))
-    if len(specs) != 1 or specs[0].read_bytes() != (root / RUNTIME_PATH).read_bytes() or validate_runtime(specs[0]) != engine:
+    specification = app / PACKAGED_RUNTIME_PATH
+    specs = list(app.rglob('ManagedRuntime.json'))
+    if specs != [specification] or not specification.is_file() or specification.read_bytes() != (root / RUNTIME_PATH).read_bytes() or validate_runtime(specification) != engine:
         raise ReleaseError()
     for code in code_paths(app):
         archs = commands.run(['/usr/bin/lipo', '-archs', str(code)]).strip().split()
@@ -126,6 +162,7 @@ def validate_bundle(app, root, commands=None, signed=False, team=None):
             raise ReleaseError()
         verify_signature(code, commands, signed, team)
     verify_signature(app, commands, signed, team)
+    validate_packaged_startup(app, version, engine, startup_process)
     return version, engine
 
 

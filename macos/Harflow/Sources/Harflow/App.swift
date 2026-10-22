@@ -454,7 +454,6 @@ func loadMenuBarIcon(from bundle: Bundle) -> NSImage? {
     return image
 }
 
-@main
 struct HarflowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private let coordinator: AppCoordinator

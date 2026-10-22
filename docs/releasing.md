@@ -2,6 +2,8 @@
 
 The release workflow builds one arm64 Harflow.app for macOS 26 and checks its bundle identifier `dev.harflow.mac`, version, build, resources, managed-runtime specification and ad-hoc signature before packaging. The release tag must be strict `vX.Y.Z` and equal the app plist version; checkout, event SHA and tag commit must agree. The engine version is independently validated against the bundled supported runtime specification. App and engine versions need not remain equal. No engine, interpreter or sibling checkout is embedded or consulted.
 
+Bundle validation requires the source-identical managed-runtime JSON at `Contents/Resources/MonitorCore_MonitorCore.bundle/ManagedRuntime.json` and rejects additional or misplaced copies anywhere in the app. It runs the absolute packaged executable with the sole `--check-packaged-startup` argument, a fresh working directory and private HOME/TMPDIR, a minimal environment and a ten-second timeout. The diagnostic validates app identity and the bundled runtime specification before application initialization; it performs no runtime acquisition or registration. Its single bounded JSON result must identify the exact app and engine versions. This checks resource startup, not GUI readiness, runtime onboarding or OS network isolation. Ordinary macOS CI runs this check immediately after the build; `build-app.sh` itself remains build-only.
+
 Local unsigned validation (macOS 26 arm64, Python 3.9+):
 
 ```sh
