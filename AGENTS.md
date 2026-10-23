@@ -3,8 +3,9 @@
 Native macOS application for Harflow: the task and workflow monitor, managed engine acquisition and
 lifecycle, platform integration, signing, and application releases. The engine (MCP server,
 `harflow-ctl`, `harflow-setup`, state persistence) lives in the separate `HarflowMCP` repository;
-interface designs live in Claude Design. Never make a build, test or release here depend on a
-sibling checkout.
+interface designs live in the Harflow design system in Claude Design
+(https://claude.ai/artifact/5GBLWKg7SgBoyCLqwkMV5k). Never make a build, test or release here depend
+on a sibling checkout.
 
 ## Documentation
 
