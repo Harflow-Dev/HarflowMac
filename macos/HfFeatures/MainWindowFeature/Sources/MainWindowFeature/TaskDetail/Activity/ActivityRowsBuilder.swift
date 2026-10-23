@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import HfUI
 import MonitorCore
 
 // MARK: - ActivityRowsBuilder
@@ -21,7 +22,8 @@ enum ActivityRowsBuilder {
     /// The initial prompt is rendered once, from `task_started.prompt` (`TimelineRow` shows the started row's prompt as a bubble): only
     /// the matching `user_message(source: "initial")` of the first member is dropped here, so a
     /// mid-run message that happens to repeat the prompt still shows.
-    static func build(from rows: [ConversationTimelineRow], cancellationAware: Bool = false) -> [ActivityRow] {
+    static func build(from rows: [ConversationTimelineRow], cancellationAware: Bool = false,
+                      markdown: [String: StreamingMarkdownState] = [:]) -> [ActivityRow] {
         var result: [ActivityRow] = []
         result.reserveCapacity(rows.count)
         var open: OpenGroup?
@@ -32,14 +34,14 @@ enum ActivityRowsBuilder {
             if cancellationAware, Task.isCancelled { return [] }
             guard case .item(let item) = row.kind else {
                 closeGroup(&open, into: &result)
-                result.append(.single(row))
+                result.append(.single(row, markdown: prepared(row, previous: markdown[row.id])))
                 continue
             }
             switch item.body {
             case .tool(let call, let resultOfCall):
                 guard let bucket = ToolBucket(category: call.category) else {
                     closeGroup(&open, into: &result)
-                    result.append(.single(row))
+                    result.append(.single(row, markdown: prepared(row, previous: markdown[row.id])))
                     continue
                 }
                 let member = ToolGroupMember(id: row.id, call: call, result: resultOfCall, timestamp: item.at, live: row.live)
@@ -55,14 +57,27 @@ enum ActivityRowsBuilder {
                     initialSuppressed = true
                     continue
                 }
-                result.append(.single(row))
+                result.append(.single(row, markdown: prepared(row, previous: markdown[row.id])))
             default:
                 closeGroup(&open, into: &result)
-                result.append(.single(row))
+                result.append(.single(row, markdown: prepared(row, previous: markdown[row.id])))
             }
         }
         closeGroup(&open, into: &result)
         return result
+    }
+
+    static func markdownSnapshot(from rows: [ConversationTimelineRow], previous: [String: StreamingMarkdownState]) -> [String: StreamingMarkdownState] {
+        var result: [String: StreamingMarkdownState] = [:]
+        for row in rows {
+            if let value = prepared(row, previous: previous[row.id]) { result[row.id] = value }
+        }
+        return result
+    }
+
+    private static func prepared(_ row: ConversationTimelineRow, previous: StreamingMarkdownState?) -> StreamingMarkdownState? {
+        guard case .item(let item) = row.kind, case .text(let text, let streaming) = item.body else { return nil }
+        return (previous ?? StreamingMarkdownState()).updating(text: text, isStreaming: streaming)
     }
 
     // MARK: - Open group

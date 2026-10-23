@@ -14,6 +14,12 @@ Graph keeps a full-height canvas and a resizable inspector (420 pt initially, 22
 
 The bottom summary reserves one collapsed line; its bounded scrolling expansion overlays upward without moving the canvas. Parallel retains all current workflow task columns. Selected activity has independent viewport leases and retained per-attempt feed state. Immutable, equality-checked sidebar derivation runs outside the main actor and discards superseded results.
 
+## Streaming Markdown
+
+Task, Parallel, and native workflow activity prepare immutable Markdown blocks outside the main actor. Each conversation row retains its own parser snapshot, keyed by its task and event sequence. Appended text reparses the unresolved suffix; completed blocks retain source-offset identities and prepared inline attributes. Superseded presentation builds cannot publish their parser state. Removed rows and full teardown discard it; hidden visited Parallel columns retain it with their activity snapshot.
+
+The native feed measures the prepared blocks it displays. Completing an unchanged reply retains those blocks and removes the caret from reserved space without changing row height. Static reading surfaces prepare their Markdown asynchronously. Tables use equal-width columns so appended rows do not resize earlier columns.
+
 ## Lost-capture activity
 
 `RecoveryEventStreamRepository` wraps captured event streams without changing their tailer, folding or renderer. Activity leases poll the engine's bounded `recovery-activity` command only when supervision reports `lost_with_owner`; summary leases do no recovery I/O. Selected-runtime compatibility, cancellation and generation checks gate each operation and application. Unsupported commands retain captured history.

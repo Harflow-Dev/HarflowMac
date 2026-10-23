@@ -1,4 +1,5 @@
 import Foundation
+import HfUI
 import MonitorCore
 
 struct TaskDetailTimelineChild: Equatable, Sendable {
@@ -19,6 +20,7 @@ struct TaskDetailTimelineInput: Equatable, Sendable {
     /// never-followed-up task), passed through to the pane — conversation members, never the
     /// backend's own `numTurns`.
     var turnsText: String?
+    var previousMarkdown: [String: StreamingMarkdownState] = [:]
 }
 
 struct TaskDetailTimelinePresentation: Equatable, Sendable {
@@ -43,11 +45,13 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
     let pendingMessages: [PendingMessage]
     let history: EventHistoryState
 
+    var markdown: [String: StreamingMarkdownState] = [:]
+
     func loadingHistory() -> Self {
         Self(rows: rows, activityRows: activityRows, children: children, start: start, stepCount: stepCount,
             stepCountText: stepCountText, turnsText: turnsText, noToolCallsText: nil,
             emptyText: emptyText, isLoading: isLoading, liveStep: liveStep, pendingMessages: pendingMessages,
-            history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation))
+            history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation), markdown: markdown)
     }
 
     /// The history half of the no-tool proof (§4/§8); the builder separately requires a terminal task.
@@ -84,7 +88,8 @@ enum TaskDetailTimelineBuilder {
         : WorkflowNodePresentation.visibleRows(rawRows, tasks: Dictionary(uniqueKeysWithValues: input.members.map { ($0.task.taskID, $0.task) }))
         try Task.checkCancellation()
         let count = rows.filter { if case .item = $0.kind { return true }; return false }.count
-        let activity = ActivityRowsBuilder.build(from: rows, cancellationAware: true)
+        let markdown = ActivityRowsBuilder.markdownSnapshot(from: rows, previous: input.previousMarkdown)
+        let activity = ActivityRowsBuilder.build(from: rows, cancellationAware: true, markdown: markdown)
         let noTools = input.task.status.isTerminal
             && TaskDetailTimelinePresentation.noToolCallsRecorded(members: input.members, history: input.history)
         try Task.checkCancellation()
@@ -97,7 +102,7 @@ enum TaskDetailTimelineBuilder {
                 : "This task's event log is empty or was not found.") : nil,
             isLoading: count == 0 && input.members.contains { $0.availability == .loading },
             liveStep: LiveStep(rows: rows, isRunning: input.task.status.isRunning),
-            pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events), history: input.history)
+            pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events), history: input.history, markdown: markdown)
     }
 }
 
@@ -114,7 +119,8 @@ extension TaskDetailVM {
     }
 
     func startPendingTimeline() {
-        guard timelineWorker == nil, let input = pendingTimelineInput else { return }
+        guard timelineWorker == nil, var input = pendingTimelineInput else { return }
+        input.previousMarkdown = appliedTimelinePresentation?.markdown ?? [:]
         pendingTimelineInput = nil
         let epoch = timelineEpoch
         let revision = timelineRevision

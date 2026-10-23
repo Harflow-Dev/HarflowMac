@@ -198,12 +198,12 @@ enum ActivityFeedNativeRegroup {
     private static func replacementIndex(for id: String, in old: [ActivityRow], next: [ActivityRow]) -> Int? {
         guard let oldRow = old.first(where: { $0.id == id }) else { return nil }
         let members: Set<String> = switch oldRow {
-        case .single(let row): [row.id]
+        case .single(let row, _): [row.id]
         case .toolGroup(let group): Set(group.members.map(\.id))
         }
         return next.firstIndex { row in
             switch row {
-            case .single(let value): members.contains(value.id)
+            case .single(let value, _): members.contains(value.id)
             case .toolGroup(let group): group.members.contains { members.contains($0.id) }
             }
         }

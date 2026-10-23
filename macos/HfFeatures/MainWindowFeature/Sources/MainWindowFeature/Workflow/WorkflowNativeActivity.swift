@@ -11,6 +11,7 @@ struct WorkflowNativeActivityModel: Equatable {
     let status: String
     let limited: Bool
     var items: [TimelineItem] = []
+    var markdown: [Int: StreamingMarkdownState] = [:]
     var error: String?
     var hasEarlierActivity = false
     /// Whether a fetch for this execution has succeeded; a settled execution is pulsed until one has.
@@ -31,7 +32,8 @@ struct WorkflowNativeActivityView: View {
                 if let error = model.error { Text(error).font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
                 if model.hasEarlierActivity { Text("Showing the latest 200 activity events.").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
                 ForEach(model.items) { item in
-                    TimelineRow(model: TimelineRowModel(item: item, start: nil, live: ["running", "launch_requested"].contains(model.status)))
+                    TimelineRow(model: TimelineRowModel(item: item, start: nil,
+                        live: ["running", "launch_requested"].contains(model.status), markdown: model.markdown[item.id]))
                 }
             }
 .padding(HfRadius.Metrics.spacing16)
@@ -76,7 +78,7 @@ extension WorkflowVM {
             limited: projection.activityLimited)
         next = WorkflowNativeActivityModel(executionID: executionID, title: runSidebar.title,
             status: activation["status"]?.stringValue ?? "unknown", limited: projection.activityLimited,
-            items: next.items, error: next.error, hasEarlierActivity: next.hasEarlierActivity, loaded: next.loaded)
+            items: next.items, markdown: next.markdown, error: next.error, hasEarlierActivity: next.hasEarlierActivity, loaded: next.loaded)
         if nativeActivity != next { nativeActivity = next }
         nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: executionID)
     }
@@ -93,9 +95,10 @@ extension WorkflowVM {
         nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: current.executionID)
     }
 
-    private func applyNativeActivity(items: [TimelineItem], more: Bool) {
+    private func applyNativeActivity(items: [TimelineItem], markdown: [Int: StreamingMarkdownState], more: Bool) {
         guard var next = nativeActivity else { return }
         next.items = items
+        next.markdown = markdown
         next.hasEarlierActivity = more
         next.error = nil
         next.loaded = true
@@ -109,12 +112,20 @@ extension WorkflowVM {
             do {
                 let page = try await useCase.command("inspect", options: ["--view=activity", "--limit=200"], positionals: [runID, executionID])
                 guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
-                let items = await Task.detached(priority: .userInitiated) {
+                let previous = nativeActivity?.markdown ?? [:]
+                let prepared = await Task.detached(priority: .userInitiated) {
                     let events = (page["events"]?.arrayValue ?? []).compactMap { TaskEvent(line: $0.rendered()) }
-                    return Timeline.items(from: events)
+                    let items = Timeline.items(from: events)
+                    var markdown: [Int: StreamingMarkdownState] = [:]
+                    for item in items {
+                        if case .text(let text, let streaming) = item.body {
+                            markdown[item.id] = (previous[item.id] ?? StreamingMarkdownState()).updating(text: text, isStreaming: streaming)
+                        }
+                    }
+                    return (items, markdown)
                 }.value
                 guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
-                applyNativeActivity(items: items, more: page["has_more"]?.boolValue ?? false)
+                applyNativeActivity(items: prepared.0, markdown: prepared.1, more: page["has_more"]?.boolValue ?? false)
             } catch {
                 guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
                 let message = "Unable to load subagent activity. " + Self.message(error)

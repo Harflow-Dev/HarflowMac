@@ -67,7 +67,7 @@ extension ActivityRow {
     }
 
     var singleRowID: String? {
-        if case .single(let row) = self { return row.id }
+        if case .single(let row, _) = self { return row.id }
         return nil
     }
 }

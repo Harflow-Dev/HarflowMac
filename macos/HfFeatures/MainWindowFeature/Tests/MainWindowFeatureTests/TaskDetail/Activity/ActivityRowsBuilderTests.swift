@@ -79,7 +79,7 @@ import Testing
         let result = ActivityRowsBuilder.build(from: rows)
         // then
         #expect(result.count == 3)
-        guard case .single(let row) = result[1], case .item(let item) = row.kind else {
+        guard case .single(let row, _) = result[1], case .item(let item) = row.kind else {
             Issue.record("expected the edit as its own row")
             return
         }
@@ -173,6 +173,42 @@ import Testing
     }
 
     // MARK: - Sanity
+
+    @Test func givenStreamingTextRows_whenBuiltWithPreviousMarkdown_thenStablePrefixIsRetained() {
+        // given
+        let firstRow = Fixture.text(1, "Introductory text.\n\n- first item", streaming: true)
+        let first = ActivityRowsBuilder.build(from: [firstRow])
+        guard case .single(_, let firstMarkdown) = first[0], let firstMarkdown else {
+            Issue.record("expected a prepared markdown state for the streaming text row")
+            return
+        }
+
+        // when
+        let nextRow = Fixture.text(1, "Introductory text.\n\n- first item\n\nTrailing paragraph.", streaming: true)
+        let next = ActivityRowsBuilder.build(from: [nextRow], markdown: [nextRow.id: firstMarkdown])
+
+        // then
+        guard case .single(_, let nextMarkdown) = next[0], let nextMarkdown else {
+            Issue.record("expected a prepared markdown state after the append")
+            return
+        }
+        #expect(nextMarkdown.source == "Introductory text.\n\n- first item\n\nTrailing paragraph.")
+        #expect(nextMarkdown.blocks.first?.id == firstMarkdown.blocks.first?.id)
+        #expect(nextMarkdown.blocks.count >= firstMarkdown.blocks.count)
+    }
+
+    @Test func givenSameStreamingText_whenSnapshotReplayed_thenPreparedStateIsEqual() {
+        // given
+        let row = Fixture.text(1, "Stable **answer**", streaming: true)
+        let initial = ActivityRowsBuilder.markdownSnapshot(from: [row], previous: [:])
+
+        // when
+        let replayed = ActivityRowsBuilder.markdownSnapshot(from: [row], previous: initial)
+
+        // then
+        #expect(replayed == initial)
+        #expect(replayed[row.id]?.blocks == initial[row.id]?.blocks)
+    }
 
     @Test func givenTwoThousandRows_whenBuilt_thenItFoldsInOnePassWithTheRightShape() {
         // given — 500 repeats of: 2 reads, 1 shell, text.

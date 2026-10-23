@@ -8,7 +8,7 @@ import Testing
 
     private func messageTexts(_ rows: [ActivityRow]) -> [String] {
         rows.compactMap { row in
-            guard case .single(let single) = row, case .item(let item) = single.kind, case .message(let text, _) = item.body else { return nil }
+            guard case .single(let single, _) = row, case .item(let item) = single.kind, case .message(let text, _) = item.body else { return nil }
             return text
         }
     }

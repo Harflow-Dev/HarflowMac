@@ -73,6 +73,31 @@ extension ParallelVMTests {
         #expect(presentation.emptyText == nil)
     }
 
+    @Test func givenPreviousMarkdown_whenParallelPresentationBuilds_thenPreparedStateReachesActivityRow() throws {
+        // given
+        let memberTask = task(id: "prose", status: "running")
+        let member = ParallelMemberInput(task: memberTask,
+            items: [PreviewFixtures.textItem("A streaming result.", seq: 1)], prompt: nil, availability: .available)
+        let base = basePresentation(for: memberTask)
+        let first = try ParallelPresentationBuilder.build(
+            ParallelColumnInput(base: base, members: [member], events: [], snapshot: nil)
+        )
+        let previous = first.markdown
+
+        // when
+        let second = try ParallelPresentationBuilder.build(
+            ParallelColumnInput(base: base, members: [member], events: [], snapshot: nil, previousMarkdown: previous)
+        )
+
+        // then
+        #expect(second.markdown == previous)
+        guard case .single(_, let markdown) = second.activityRows.first else {
+            Issue.record("expected the prepared text row in the parallel presentation")
+            return
+        }
+        #expect(markdown != nil)
+    }
+
     @Test func givenAnIncompleteOrUnreadableHistory_whenParallelPresentationBuilds_thenNoToolClaimIsOmitted() throws {
         // given
         let memberTask = task(id: "prose", status: "completed")

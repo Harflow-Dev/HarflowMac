@@ -16,43 +16,84 @@ struct ReadingMarkdownView: View {
     private static let codeFont = Font.hf(.body, design: .monospaced)
 
     let text: String
+    var prepared: StreamingMarkdownState?
+    @State private var staticPresentation = StreamingMarkdownState()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(MarkdownText.blocks(text).enumerated()), id: \.offset) { _, block in
-                switch block {
-                case .heading(let value):
-                    Text(MarkdownText.inline(value, codeFont: Self.codeFont)).font(.hf(.headline, weight: .semibold))
-                case .bullet(let value):
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("•")
-                        Text(MarkdownText.inline(value, codeFont: Self.codeFont)).lineSpacing(6)
-                    }
-                case .code(let value):
-                    Text(value)
-                        .font(.hf(.secondary, design: .monospaced))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: HfRadius.button).fill(Color.codeFill))
-                case .paragraph(let value):
-                    Text(MarkdownText.inline(value, codeFont: Self.codeFont)).lineSpacing(6)
-                case .table(let rows):
-                    MarkdownText.table(rows, codeFont: Self.codeFont).padding(.vertical, 4)
-                case .numbered(let marker, let value):
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(marker).monospacedDigit()
-                        Text(MarkdownText.inline(value, codeFont: Self.codeFont)).lineSpacing(6)
-                    }
-                case .quote(let value):
-                    MarkdownText.quote(Text(MarkdownText.inline(value, codeFont: Self.codeFont)).lineSpacing(6))
-                case .rule:
-                    Divider().padding(.vertical, 4)
-                }
+            ForEach((prepared ?? staticPresentation).blocks) { block in
+                blockView(block.content)
             }
         }
         .font(.hf(.reading))
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
+        .task(id: prepared == nil ? text : "") {
+            guard prepared == nil else { return }
+            let value = text
+            let result = await Task.detached(priority: .userInitiated) {
+                StreamingMarkdownState().updating(text: value, isStreaming: false)
+            }.value
+            guard !Task.isCancelled else { return }
+            staticPresentation = result
+        }
+    }
+
+    private func styled(_ value: AttributedString) -> AttributedString {
+        var result = value
+        for run in value.runs where run.inlinePresentationIntent?.contains(.code) == true {
+            result[run.range].font = Self.codeFont
+            result[run.range].backgroundColor = .codeFill
+        }
+        return result
+    }
+
+    @ViewBuilder
+    private func blockView(_ content: StreamingMarkdownBlock.Content) -> some View {
+        switch content {
+        case .heading(let value):
+            Text(styled(value)).font(.hf(.headline, weight: .semibold))
+        case .bullet(let value):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("•")
+                Text(styled(value)).lineSpacing(6)
+            }
+        case .code(let value):
+            Text(value)
+                .font(.hf(.secondary, design: .monospaced))
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: HfRadius.button).fill(Color.codeFill))
+        case .paragraph(let value):
+            Text(styled(value)).lineSpacing(6)
+        case .table(let rows):
+            table(rows).padding(.vertical, 4)
+        case .numbered(let marker, let value):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(marker).monospacedDigit()
+                Text(styled(value)).lineSpacing(6)
+            }
+        case .quote(let value):
+            MarkdownText.quote(Text(styled(value)).lineSpacing(6))
+        case .rule:
+            Divider().padding(.vertical, 4)
+        }
+    }
+
+    private func table(_ rows: [[AttributedString]]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(rows.indices, id: \.self) { index in
+                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                    ForEach(rows[index].indices, id: \.self) { column in
+                        Text(styled(rows[index][column]))
+                            .fontWeight(index == 0 ? .semibold : nil)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if index < rows.count - 1 { Divider() }
+            }
+        }
     }
 }
 

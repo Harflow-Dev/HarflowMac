@@ -280,7 +280,7 @@ public struct MarkdownText: View {
         self.text = text
     }
 
-    public enum Block: Hashable {
+    public enum Block: Hashable, Sendable {
         case heading(String), bullet(String), code(String), paragraph(String)
         /// A pipe table: the header row first, then the body rows (the `|---|` separator dropped).
         case table([[String]])
@@ -290,7 +290,7 @@ public struct MarkdownText: View {
         case rule
     }
 
-    public static func blocks(_ text: String) -> [Block] {
+    public nonisolated static func blocks(_ text: String) -> [Block] {
         var blocks: [Block] = []
         var paragraph: [String] = []
         var code: [String]?
@@ -356,7 +356,7 @@ public struct MarkdownText: View {
     }
 
     /// A line that is a block on its own (heading, rule, list item, quote), or nil for prose.
-    static func lineBlock(_ line: String) -> Block? {
+    nonisolated static func lineBlock(_ line: String) -> Block? {
         if line.hasPrefix("#") { return .heading(line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)) }
         if isRule(line) { return .rule }
         if line.hasPrefix("- ") || line.hasPrefix("* ") { return .bullet(String(line.dropFirst(2))) }
@@ -365,18 +365,18 @@ public struct MarkdownText: View {
         return nil
     }
 
-    static func isSetextUnderline(_ line: String) -> Bool {
+    nonisolated static func isSetextUnderline(_ line: String) -> Bool {
         guard let first = line.first, first == "-" || first == "=" else { return false }
         return line.allSatisfy { $0 == first }
     }
 
-    static func isRule(_ line: String) -> Bool {
+    nonisolated static func isRule(_ line: String) -> Bool {
         guard line.count >= 3, let first = line.first, "-*_".contains(first) else { return false }
         return line.allSatisfy { $0 == first }
     }
 
     /// "1. text" / "12) text" → ("1.", "text").
-    static func numberedItem(_ line: String) -> (String, String)? {
+    nonisolated static func numberedItem(_ line: String) -> (String, String)? {
         let digits = line.prefix(while: \.isNumber)
         guard !digits.isEmpty, digits.count <= 3 else { return nil }
         let rest = line.dropFirst(digits.count)
@@ -384,7 +384,7 @@ public struct MarkdownText: View {
         return ("\(digits)\(delimiter)", rest.dropFirst(2).trimmingCharacters(in: .whitespaces))
     }
 
-    static func isTableSeparator(_ line: String) -> Bool {
+    nonisolated static func isTableSeparator(_ line: String) -> Bool {
         let cells = tableCells(line)
         return !cells.isEmpty && cells.allSatisfy { cell in
             !cell.isEmpty && cell.contains("-") && cell.allSatisfy { $0 == "-" || $0 == ":" }
@@ -393,7 +393,7 @@ public struct MarkdownText: View {
 
     /// Splits a table row on unescaped pipes; `\|` stays a literal pipe in the cell, code spans
     /// included, as GFM tables specify.
-    static func tableCells(_ line: String) -> [String] {
+    nonisolated static func tableCells(_ line: String) -> [String] {
         var cells: [String] = []
         var current = ""
         var escaped = false
@@ -419,7 +419,7 @@ public struct MarkdownText: View {
         return cells
     }
 
-    public static func inline(_ text: String) -> AttributedString {
+    public nonisolated static func inline(_ text: String) -> AttributedString {
         var result = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             ?? AttributedString(text)
         autolink(&result)
@@ -428,7 +428,7 @@ public struct MarkdownText: View {
 
     /// Links bare URLs (`https://…`) that the Markdown parser leaves as text — never inside a code
     /// span or an existing link.
-    static func autolink(_ string: inout AttributedString) {
+    nonisolated static func autolink(_ string: inout AttributedString) {
         let plain = String(string.characters)
         guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return }
         let matches = detector.matches(in: plain, range: NSRange(plain.startIndex..., in: plain))

@@ -186,14 +186,14 @@ struct ActivityFeedNativeRowRoot: View {
                 actions.onDisclosure(group.id)
             }
             .hfFadeIn(animate: row.fade)
-        case .single(let value):
+        case .single(let value, let markdown):
             switch value.kind {
             case .separator(let text):
                 TurnSeparatorRow(text: text, timestamp: value.timestamp)
                     .hfFadeIn(animate: row.fade)
             case .item(let item):
                 TimelineRow(model: TimelineRowModel(item: item, start: start, live: value.live,
-                                                    showsPromptBubble: showsPromptBubble))
+                                                    showsPromptBubble: showsPromptBubble, markdown: markdown))
                     .hfFadeIn(animate: row.fade)
             }
         }

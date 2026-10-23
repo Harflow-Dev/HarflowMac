@@ -23,6 +23,8 @@ struct TimelineRowModel: Identifiable {
     /// this way; a Parallel column shows it only on demand, from its own "View prompt" toggle.
     var showsPromptBubble = true
 
+    var markdown: StreamingMarkdownState?
+
     var id: Int { item.id }
 }
 
@@ -47,16 +49,17 @@ struct TimelineRow: View {
                 StartLineView(backend: started.backend, time: model.item.at, freedom: started.freedom)
             }
         case .text(let text, let streaming):
-            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
-                ReadingMarkdownView(text: text)
-                if streaming {
-                    if model.live {
-                        StreamingCaret()
-                    } else {
-                        Text("(incomplete)").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+            preparedText(text)
+                .padding(.bottom, HfRadius.Metrics.spacing16)
+                .overlay(alignment: .bottomLeading) {
+                    if streaming {
+                        if model.live {
+                            StreamingCaret()
+                        } else {
+                            Text("(incomplete)").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                        }
                     }
                 }
-            }
         case .tool(let call, let result):
             GroupedActivityCard {
                 ActivityCardRow {
@@ -74,6 +77,20 @@ struct TimelineRow: View {
             )
         case .finished(let status, let exitCode, _):
             finishedMarker(status: TaskStatus(status), exitCode: exitCode)
+        }
+    }
+
+    @ViewBuilder
+    private func preparedText(_ text: String) -> some View {
+        if let markdown = model.markdown {
+            ReadingMarkdownView(text: text, prepared: markdown)
+        } else {
+            // Unprepared compatibility rows have deterministic geometry in native measurement.
+            Text(text)
+.font(.hf(.reading))
+.lineSpacing(6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 

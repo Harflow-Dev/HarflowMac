@@ -529,7 +529,8 @@ final class ParallelVM: ParallelViewModel {
         let buildEpoch = epoch
         let queueStart = scheduledStart
         let updateStart = latencyStart
-        let dirty = inputs.filter { completedInputs[$0.key] != $0.value }
+        var dirty = inputs.filter { completedInputs[$0.key] != $0.value }
+        for id in dirty.keys { dirty[id]?.previousMarkdown = presentations[id]?.markdown ?? [:] }
         let build = buildColumns
         let detached = Task.detached(priority: .utility) { () -> [String: ParallelColumnPresentation]? in
             MonitorMetrics.end(queueStart, stage: .parallelScheduling, backgroundThread: Self.isBackgroundThread())

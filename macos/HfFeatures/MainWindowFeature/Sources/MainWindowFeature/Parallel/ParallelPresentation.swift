@@ -1,4 +1,5 @@
 import Foundation
+import HfUI
 import MonitorCore
 
 /// Values cross the worker boundary; navigation and observation stay on the main actor.
@@ -13,6 +14,7 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     let prompt: String?
     var rows: [ConversationTimelineRow] = []
     var activityRows: [ActivityRow] = []
+    var markdown: [String: StreamingMarkdownState] = [:]
     var liveStep: LiveStep?
     var pendingMessages: [PendingMessage] = []
     var isLoading = true
@@ -43,6 +45,7 @@ struct ParallelColumnInput: Equatable, Sendable {
     let members: [ParallelMemberInput]
     let events: [TaskEvent]
     let snapshot: TaskInfo?
+    var previousMarkdown: [String: StreamingMarkdownState] = [:]
 }
 
 typealias ParallelColumnsBuild = @Sendable ([String: ParallelColumnInput]) async -> [String: ParallelColumnPresentation]?
@@ -82,7 +85,8 @@ enum ParallelPresentationBuilder {
             result.summary = WorkflowNodePresentation.summary(input.snapshot?.summary, task: result.task)
         }
         result.rows = rows
-        result.activityRows = ActivityRowsBuilder.build(from: rows, cancellationAware: true)
+        result.markdown = ActivityRowsBuilder.markdownSnapshot(from: rows, previous: input.previousMarkdown)
+        result.activityRows = ActivityRowsBuilder.build(from: rows, cancellationAware: true, markdown: result.markdown)
         try Task.checkCancellation()
         result.liveStep = LiveStep(rows: rows, isRunning: result.task.status.isRunning)
         result.pendingMessages = PendingMessage.visible(snapshot: input.snapshot, events: input.events)

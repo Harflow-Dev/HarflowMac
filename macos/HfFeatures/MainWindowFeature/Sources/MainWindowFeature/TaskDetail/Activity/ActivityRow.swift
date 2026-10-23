@@ -15,12 +15,12 @@ import MonitorCore
 
 /// One entry of the Activity feed: a row rendered on its own, or a card folding adjacent tool calls.
 enum ActivityRow: Equatable, Identifiable, Sendable {
-    case single(ConversationTimelineRow)
+    case single(ConversationTimelineRow, markdown: StreamingMarkdownState? = nil)
     case toolGroup(ToolGroup)
 
     var id: String {
         switch self {
-        case .single(let row): row.id
+        case .single(let row, _): row.id
         case .toolGroup(let group): group.id
         }
     }

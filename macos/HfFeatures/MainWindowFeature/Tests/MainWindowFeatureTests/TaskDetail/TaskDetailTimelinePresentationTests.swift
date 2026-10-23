@@ -8,6 +8,50 @@ import Testing
 
 @MainActor
 extension TaskDetailVMTests {
+    @Test func givenPreparedTextPublication_whenDuplicateAndChangedSnapshotsArrive_thenOnlyChangedPublishes() throws {
+        // given
+        let member = task(status: "running")
+        let firstLine = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":1,"kind":"assistant_text","text":"First"}"#
+        let first = try #require(TaskEvent(line: firstLine))
+        let base = TaskDetailTimelineInput(task: member,
+            members: [ParallelMemberInput(task: member, items: Timeline.items(from: [first]), prompt: nil, availability: .available)],
+            children: [], start: member.startedAt, isBuilder: false, events: [first], snapshot: member,
+            history: EventHistoryState())
+        let firstPresentation = try TaskDetailTimelineBuilder.build(base)
+        let harness = makeSUT(taskID: member.taskID)
+        let counter = TimelineObservationCounter()
+        // applyTimeline is synchronous and this test is MainActor-isolated, so the callback is synchronous too.
+        withObservationTracking { _ = harness.sut.timelineModel } onChange: {
+            MainActor.assumeIsolated { counter.writes += 1 }
+        }
+
+        // when
+        harness.sut.applyTimeline(firstPresentation)
+        #expect(counter.writes == 1)
+        let firstWrites = counter.writes
+        withObservationTracking { _ = harness.sut.timelineModel } onChange: {
+            MainActor.assumeIsolated { counter.writes += 1 }
+        }
+        harness.sut.applyTimeline(firstPresentation)
+        let duplicateWrites = counter.writes - firstWrites
+        let changedLine = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":1,"kind":"assistant_text","text":"First changed"}"#
+        let changed = try #require(TaskEvent(line: changedLine))
+        let changedInput = TaskDetailTimelineInput(task: member,
+            members: [ParallelMemberInput(task: member, items: Timeline.items(from: [changed]), prompt: nil, availability: .available)],
+            children: [], start: member.startedAt, isBuilder: false, events: [changed], snapshot: member,
+            history: EventHistoryState(), previousMarkdown: firstPresentation.markdown)
+        let changedPresentation = try TaskDetailTimelineBuilder.build(changedInput)
+        harness.sut.applyTimeline(changedPresentation)
+        #expect(counter.writes == 2)
+
+        // then
+        #expect(firstWrites == 1)
+        #expect(duplicateWrites == 0)
+        #expect(counter.writes == firstWrites + 1)
+    }
+
     @Test func givenEqualTimelineInputs_whenRecomputed_thenNoNewPresentationRevision() async {
         // given
         let harness = makeSUT()
@@ -66,6 +110,32 @@ extension TaskDetailVMTests {
         #expect(result.1.stepCount == 1)
         #expect(result.1.history == input.history)
         #expect(result.1.activityRows.count == 1)
+    }
+
+    @Test func givenPreviousMarkdown_whenTimelineBuilds_thenPreparedStateReachesActivityRow() throws {
+        // given
+        let task = task(status: "running")
+        let line = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
+            + #""seq":1,"kind":"assistant_text","text":"Synthetic activity"}"#
+        let event = try #require(TaskEvent(line: line))
+        let base = TaskDetailTimelineInput(task: task,
+            members: [ParallelMemberInput(task: task, items: Timeline.items(from: [event]), prompt: nil, availability: .available)],
+            children: [], start: task.startedAt, isBuilder: false, events: [event], snapshot: task,
+            history: EventHistoryState())
+        let first = try TaskDetailTimelineBuilder.build(base)
+
+        // when
+        var replay = base
+        replay.previousMarkdown = first.markdown
+        let second = try TaskDetailTimelineBuilder.build(replay)
+
+        // then
+        #expect(second.markdown == first.markdown)
+        guard case .single(_, let markdown) = second.activityRows.first else {
+            Issue.record("expected the prepared text row in the task timeline")
+            return
+        }
+        #expect(markdown != nil)
     }
 
     @Test func givenEmptyOlderPageWithCursorProgress_whenCompleted_thenRevisionSignalsAndDuplicateRequestIsSuppressed() async {

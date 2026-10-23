@@ -5,6 +5,7 @@
 - Show engine capture/input evidence and background idle-bound diagnostics in inspector notices.
 - Add bounded, source-labelled backend transcript recovery activity without changing task outcomes or captured summaries.
 
+- Prepare streaming Markdown incrementally outside the main actor, preserving completed block identities and final reply geometry across task and workflow activity.
 - Move Graph activity into a wider selection sidebar with attempt switching, native execution activity and on-demand call history.
 - Keep the run summary in a collapsible bottom strip that expands above the canvas.
 
