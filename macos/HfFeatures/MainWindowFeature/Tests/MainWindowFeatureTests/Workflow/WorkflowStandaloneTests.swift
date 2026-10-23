@@ -203,6 +203,7 @@ struct WorkflowStandaloneTests {
         var laterRaw = initialRaw
         laterRaw["builder_draft"] = .object(laterDraft)
         vm.selectedRun = WorkflowRunModel(raw: laterRaw)
+        vm.selectedNodeID = nil
 
         vm.selectStandalone("research")
         let before = vm.selectedRun?.raw

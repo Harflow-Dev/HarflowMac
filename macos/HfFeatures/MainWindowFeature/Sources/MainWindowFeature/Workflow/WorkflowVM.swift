@@ -56,16 +56,26 @@ final class WorkflowVM: WorkflowViewModel {
     var initialLoadFailed = false
     var revision = 0
     var savedDefinition: [String: JSONValue] = [:] { didSet { if savedDefinition != oldValue { scheduleLaunchPreview() } } }
-    private var primaryNodeID: String?
-    private(set) var selectedNodeIDs: Set<String> = []
+    var primaryNodeID: String?
+    var selectedNodeIDs: Set<String> = []
     var selectedNodeID: String? {
         get { primaryNodeID }
-        set { selectedNodeIDs = newValue.map { [$0] } ?? []; primaryNodeID = newValue }
+        set {
+            guard primaryNodeID != newValue else { return }
+            selectedNodeIDs = newValue.map { [$0] } ?? []
+            primaryNodeID = newValue
+            selectedActivationID = nil
+            scheduleRunSidebar()
+        }
     }
 
     var selectedEdgeID: String?
     var connectionSourceID: String?
-    var selectedRun: WorkflowRunModel? { didSet { updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence() } }
+    var selectedRun: WorkflowRunModel? { didSet {
+        updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence()
+        if selectedRun?.id != oldValue?.id { selectedActivationID = nil }
+        if selectedRun != oldValue { scheduleRunSidebar() }
+    } }
     var branchSelection = WorkflowBranchSelection()
     var selectedActivationID: String?
     var isEditing = false
@@ -85,6 +95,13 @@ final class WorkflowVM: WorkflowViewModel {
     var artifacts = WorkflowArtifactModel()
     @ObservationIgnored var artifactTask: Task<Void, Never>?
     @ObservationIgnored var artifactGeneration = UUID()
+    var runSidebar = WorkflowRunSidebarPresentation()
+    var selectedActivity: ParallelVM?
+    @ObservationIgnored var sidebarTask: Task<Void, Never>?
+    @ObservationIgnored var sidebarGeneration = UUID()
+    @ObservationIgnored var activityCache: [String: ParallelVM] = [:]
+    @ObservationIgnored var activityRunID: String?
+    @ObservationIgnored var runGraphVisible = true
     var nativeActivity: WorkflowNativeActivityModel?
     @ObservationIgnored var nativeActivityTask: Task<Void, Never>?
 
@@ -223,6 +240,7 @@ final class WorkflowVM: WorkflowViewModel {
         validationSuspended = false
         scheduleValidation()
         parallel.didAppear()
+        scheduleRunSidebar()
         let generation = UUID()
         generationID = generation
         poll = Task { [weak self] in
@@ -247,6 +265,12 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        sidebarTask?.cancel()
+        sidebarTask = nil
+        sidebarGeneration = UUID()
+        for activity in activityCache.values { activity.didDisappear() }
+        activityCache.removeAll()
+        selectedActivity = nil
         clearArtifacts()
         if initialLoadingKind == "editor", let key = draftKey, key.hasPrefix("saved:") {
             pendingEditorName = String(key.dropFirst(6))
@@ -382,74 +406,6 @@ final class WorkflowVM: WorkflowViewModel {
         }
     }
 
-    func selectNode(_ id: String) {
-        if let source = connectionSourceID, source != id, selectedRun == nil {
-            addEdge(source: source, target: id)
-            connectionSourceID = nil
-        }
-        selectedNodeID = id
-        selectedEdgeID = nil
-        selectedActivationID = nil
-        updateNativeActivity()
-    }
-
-    func selectNodes(_ ids: Set<String>, primary: String? = nil) {
-        let valid = ids.intersection(Set(nodes.map(\.id)))
-        selectedNodeIDs = valid
-        primaryNodeID = primary.flatMap { valid.contains($0) ? $0 : nil } ?? valid.sorted().first
-        selectedEdgeID = nil
-        connectionSourceID = nil
-        selectedActivationID = nil
-        updateNativeActivity()
-    }
-
-    func toggleNode(_ id: String) {
-        var selection = selectedNodeIDs
-        if !selection.insert(id).inserted { selection.remove(id) }
-        selectNodes(selection, primary: selection.contains(id) ? id : primaryNodeID)
-    }
-
-    func moveNodes(_ positions: [String: CGPoint]) {
-        guard selectedRun == nil, !positions.isEmpty else { return }
-        var entries = WorkflowJSON.objects(definition["nodes"])
-        for index in entries.indices {
-            guard let id = entries[index]["id"]?.stringValue, let point = positions[id] else { continue }
-            entries[index]["position"] = .object(["x": .number(max(0, point.x)), "y": .number(max(0, point.y))])
-        }
-        let value = JSONValue.array(entries.map(JSONValue.object))
-        guard definition["nodes"] != value else { return }
-        definition["nodes"] = value
-    }
-
-    func updateNode(_ id: String, key: String, value: JSONValue?) {
-        guard selectedRun == nil else { return }
-        let collection = WorkflowJSON.objects(definition["on_demand_nodes"]).contains { $0["id"]?.stringValue == id } ? "on_demand_nodes" : "nodes"
-        var entries = WorkflowJSON.objects(definition[collection])
-        guard let index = entries.firstIndex(where: { $0["id"]?.stringValue == id }) else {
-            return
-        }
-        entries[index] = WorkflowAccess.updating(entries[index], key: key, value: value)
-        definition[collection] = .array(entries.map(JSONValue.object))
-    }
-
-    func updateEdge(_ id: String, key: String, value: JSONValue?) {
-        guard selectedRun == nil else { return }
-        var entries = WorkflowJSON.objects(definition["connections"])
-        guard let index = entries.firstIndex(where: { $0["id"]?.stringValue == id }) else {
-            return
-        }
-        entries[index][key] = value
-        definition["connections"] = .array(entries.map(JSONValue.object))
-    }
-
-    func moveNode(_ id: String, to point: CGPoint) {
-        guard selectedRun == nil else { return }
-        let point = WorkflowCanvasGeometry.snapped(point)
-        let position: JSONValue = .object(["x": .number(max(0, point.x)), "y": .number(max(0, point.y))])
-        guard definition["nodes"]?.arrayValue?.first(where: { $0["id"]?.stringValue == id })?["position"] != position else { return }
-        updateNode(id, key: "position", value: position)
-    }
-
     func addNode(_ kind: String, at point: CGPoint? = nil) {
         guard selectedRun == nil else { return }
         if kind == "parallel_group" { addParallelGroup(at: point); return }
@@ -559,7 +515,7 @@ final class WorkflowVM: WorkflowViewModel {
         return executions.last?["attempt_in_visit"]?.intValue ?? executions.count
     }
 
-    private func addEdge(source: String, target: String) {
+    func addEdge(source: String, target: String) {
         guard source != target, let sourceNode = nodes.first(where: { $0.id == source }), sourceNode.type != "end",
               let targetNode = nodes.first(where: { $0.id == target }), targetNode.type != "start" else { return }
         var entries = WorkflowJSON.objects(definition["connections"])

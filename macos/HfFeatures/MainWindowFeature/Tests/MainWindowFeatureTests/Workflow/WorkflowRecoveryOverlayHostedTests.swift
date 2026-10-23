@@ -139,13 +139,17 @@ import Testing
             "pending": .array((0 ..< 80).map { _ in .object(["decision_attempts": .number(2)]) }),
             "definition": .object(["max_decision_attempts": .number(3)])
         ])
+        WorkflowPreview.synchronizeRun(vm)
         let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 1000, height: 700))
         defer { vm.didDisappear(); fixture.close() }
         await fixture.settle { fixture.element("Close recovery options") != nil }
         let panel = try #require(fixture.descendants.compactMap { $0 as? WorkflowRecoveryPanelRootView }.first)
-        let paneSplit = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { !$0.isVertical })
+        let expand = try #require(fixture.element("Expand summary"))
+        #expect(fixture.press(expand))
+        await fixture.settle { fixture.element("Collapse summary") != nil }
         let diagnostics = try #require(fixture.descendants.compactMap { $0 as? NSScrollView }.first {
-            !$0.isDescendant(of: paneSplit) && !$0.isDescendant(of: panel)
+            !$0.isDescendant(of: panel)
+                && ($0.documentView?.bounds.height ?? 0) > $0.contentView.bounds.height
         })
         let document = try #require(diagnostics.documentView)
         let diagnosticsFrame = try #require(fixture.frame(diagnostics))
@@ -153,8 +157,8 @@ import Testing
 
         // when / then — the real diagnostics viewport overflows and its existing action remains hit-testable.
         #expect(document.bounds.height > diagnostics.contentView.bounds.height)
-        #expect(diagnosticsFrame.minY >= panelFrame.maxY - 1, "Diagnostics remain above the floating panel")
-        #expect(!diagnosticsFrame.intersects(panelFrame))
+        #expect(diagnosticsFrame.maxY <= fixture.host.bounds.maxY + 1)
+        #expect(diagnosticsFrame.minY < panelFrame.minY)
         let showMore = try #require(fixture.element("Show more"))
         #expect(fixture.press(showMore))
     }
@@ -221,7 +225,7 @@ import Testing
 
     private func matchingElements(in fixture: RedesignHost, label: String) -> [NSObject] {
         var seen = Set<ObjectIdentifier>()
-        return fixture.descendants.flatMap { fixture.elements(in: $0) }.filter { object in
+        return fixture.elements(in: fixture.host).filter { object in
             guard seen.insert(ObjectIdentifier(object)).inserted else { return false }
             return ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { property in
                 fixture.string(object, property) == label

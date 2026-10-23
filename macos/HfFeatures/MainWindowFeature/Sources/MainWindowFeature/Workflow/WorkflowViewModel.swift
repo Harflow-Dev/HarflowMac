@@ -38,6 +38,9 @@ protocol WorkflowViewModel: ViewModel {
     func prepareArtifacts(runID: String, executionID: String)
     func loadArtifacts()
     var nativeActivity: WorkflowNativeActivityModel? { get }
+    var runSidebar: WorkflowRunSidebarPresentation { get }
+    var selectedActivity: ParallelVM? { get }
+    func setRunGraphVisible(_ visible: Bool)
     var launchPreview: WorkflowPermissionPreview? { get }
     var launchPreviewMessage: String? { get }
     var canStartWithPreview: Bool { get }
@@ -112,6 +115,9 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
+    var runSidebar: WorkflowRunSidebarPresentation { .init() }
+    var selectedActivity: ParallelVM? { nil }
+    func setRunGraphVisible(_: Bool) {}
     var artifacts: WorkflowArtifactModel { WorkflowArtifactModel() }
     func prepareArtifacts(runID _: String, executionID _: String) {}
     func loadArtifacts() {}

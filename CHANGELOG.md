@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Move Graph activity into a wider selection sidebar with attempt switching, native execution activity and on-demand call history.
+- Keep the run summary in a collapsible bottom strip that expands above the canvas.
+
 ## 0.0.2
 
 - Fix packaged app startup by loading the managed-runtime specification from the app's standard resource bundle.

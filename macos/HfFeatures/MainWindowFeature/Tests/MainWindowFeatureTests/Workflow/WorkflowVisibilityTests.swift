@@ -103,7 +103,9 @@ import Testing
             "execution_kind": .string("native_subagent")
         ]
         let runRaw: [String: JSONValue] = [
-            "workflow_run_id": .string("run"), "status": .string("running"), "activations": .array([.object(activation)])
+            "workflow_run_id": .string("run"), "status": .string("running"),
+            "definition": .object(["nodes": .array([.object(["id": .string("n1"), "type": .string("agent")])])]),
+            "activations": .array([.object(activation)])
         ]
         let page: [String: JSONValue] = ["events": .array([]), "has_more": .bool(true)]
         let inspects = PollCounter()
@@ -123,7 +125,7 @@ import Testing
                             visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.selectedRun = WorkflowRunModel(raw: runRaw)
         vm.selectedNodeID = "n1"
-        vm.updateNativeActivity()
+        await vm.sidebarTask?.value
         await waitUntil { vm.nativeActivity?.hasEarlierActivity == true && vm.nativeActivityTask == nil }
         let fetchesBefore = inspects.value
         let changed = PollCounter()
@@ -155,7 +157,9 @@ import Testing
             "execution_kind": .string("native_subagent")
         ]
         let runRaw: [String: JSONValue] = [
-            "workflow_run_id": .string("run"), "status": .string("running"), "activations": .array([.object(activation)])
+            "workflow_run_id": .string("run"), "status": .string("running"),
+            "definition": .object(["nodes": .array([.object(["id": .string("n1"), "type": .string("agent")])])]),
+            "activations": .array([.object(activation)])
         ]
         let useCase = MockWorkflowUseCase()
         let routing = MockWorkflowRouting()
@@ -182,7 +186,7 @@ import Testing
         // given — the first read fails.
         let inspects = PollCounter()
         let vm = makeNativeVM(status: "running", failures: 1, inspects: inspects)
-        vm.updateNativeActivity()
+        await vm.sidebarTask?.value
         await waitUntil { vm.nativeActivity?.error != nil && vm.nativeActivityTask == nil }
 
         // when — the next (unchanged) poll succeeds.
@@ -205,7 +209,7 @@ import Testing
         // given — a completed execution, first read fails.
         let inspects = PollCounter()
         let vm = makeNativeVM(status: "completed", failures: 1, inspects: inspects)
-        vm.updateNativeActivity()
+        await vm.sidebarTask?.value
         await waitUntil { vm.nativeActivity?.error != nil && vm.nativeActivityTask == nil }
         #expect(inspects.value == 1)
 

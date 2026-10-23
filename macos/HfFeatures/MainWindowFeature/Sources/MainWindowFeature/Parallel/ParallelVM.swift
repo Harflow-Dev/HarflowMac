@@ -7,47 +7,6 @@ import HfUtilities
 import Mockable
 import MonitorCore
 
-// MARK: - ParallelUseCase
-
-/// Data and action boundary for Parallel conversation presentation.
-@Mockable
-@MainActor
-protocol ParallelUseCase: Sendable {
-    func tasksPublisher() -> AnyPublisher<[TaskInfo], Never>
-    func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never>
-    func busyPublisher() -> AnyPublisher<Set<String>, Never>
-    func outcomesPublisher() -> AnyPublisher<[String: String], Never>
-    func titlesPublisher() -> AnyPublisher<[String: String], Never>
-    /// Returns the fresh listing entry.
-    func task(_ id: String) -> TaskInfo?
-    func title(_ taskID: String) -> String
-    func acquireEventLease(_ taskID: String) -> any EventStreamLease
-    func events(for taskID: String) -> [TaskEvent]
-    func items(for taskID: String) -> [TimelineItem]
-    func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never>
-    func prompt(for taskID: String) -> String?
-    func eventHistory(for taskID: String) -> EventHistoryState
-    func eventHistoryPublisher(for taskID: String) -> AnyPublisher<EventHistoryState, Never>
-    func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage?
-    @discardableResult func loadMoreEvents(_ taskID: String) -> Bool
-    /// Distinguishes pending activity from a missing or unreadable log.
-    func eventsAvailability(for taskID: String) -> EventAvailability
-    func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never>
-    func runningInSubtrees(of ids: [String]) -> [String]
-    func cancelAll(_ ids: [String]) async
-    func setOutcome(_ id: String, _ text: String?)
-    /// Starts Terminal takeover synchronously before routing.
-    func beginTakeover(taskID: String)
-}
-
-// MARK: - ParallelRouting
-
-@Mockable
-@MainActor
-protocol ParallelRouting: Sendable {
-    func selectTask(_ taskID: String)
-}
-
 // MARK: - ParallelVM
 
 /// Presents complete membership with bounded leases and equality-guarded off-main presentation.
@@ -172,12 +131,18 @@ final class ParallelVM: ParallelViewModel {
     
     // MARK: - ParallelViewModel Methods
     
+    /// Independent workflow inspector ownership with the same activity dependencies.
+    func makeWorkflowActivity() -> ParallelVM {
+        ParallelVM(groupName: groupName, useCase: useCase, routing: routing, buildColumns: buildColumns)
+    }
+
     func didAppear() {
         subscribeIfNeeded()
     }
 
     /// Workflow membership follows persisted dispatch associations.
     func setWorkflowTaskIDs(_ ids: [String], focusedTaskIDs: Set<String>? = nil, titles: [String: String] = [:]) {
+        guard workflowTaskIDs != ids || workflowFocusedTaskIDs != focusedTaskIDs || workflowTitles != titles else { return }
         workflowTaskIDs = ids
         workflowFocusedTaskIDs = focusedTaskIDs
         workflowTitles = titles
@@ -597,4 +562,30 @@ final class ParallelVM: ParallelViewModel {
         guard let dialog else { return }
         publishDialog(dialog)
     }
+}
+
+// MARK: - Workflow activity suspension
+
+extension ParallelVM {
+    /// Stops hidden inspector work while retaining visited feed presentation and reading state.
+    func suspendWorkflowActivity() {
+        updateViewport(offset: 0, width: 0)
+        epoch &+= 1
+        revision &+= 1
+        worker?.cancel()
+        worker = nil
+        acquisition.cancel()
+        pendingInputs = nil
+        neededMemberIDs.removeAll()
+        for id in Array(leases.keys) { history.release(id) }
+        history.teardown()
+        cancellables.removeAll()
+        itemCancellables.removeAll()
+        availabilityCancellables.removeAll()
+        for lease in leases.values { lease.release() }
+        leases.removeAll()
+        leaseGenerations.removeAll()
+        didSubscribe = false
+    }
+
 }

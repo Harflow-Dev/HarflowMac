@@ -22,8 +22,10 @@ struct WorkflowRunPanesTests {
         host.layoutSubtreeIfNeeded()
         await Task.yield()
         host.layoutSubtreeIfNeeded()
-        let split = try #require(findSplit(in: host, vertical: false))
-        split.setPosition(size.height * 0.5, ofDividerAt: 0)
+        let split = try #require(findSplit(in: host, vertical: true))
+        #expect(findSplit(in: host, vertical: false) == nil,
+                "Graph mode must not retain a bottom activity split")
+        split.setPosition(split.bounds.width * 0.5, ofDividerAt: 0)
         host.layoutSubtreeIfNeeded()
         let before = split.arrangedSubviews.map(\.frame)
         // when
@@ -33,15 +35,15 @@ struct WorkflowRunPanesTests {
         // then
         await waitUntil {
             host.layoutSubtreeIfNeeded()
-            guard let current = findSplit(in: host, vertical: false) else { return false }
-            return zip(before, current.arrangedSubviews.map(\.frame)).allSatisfy { abs($0.height - $1.height) < 2 }
+            guard let current = findSplit(in: host, vertical: true) else { return false }
+            return zip(before, current.arrangedSubviews.map(\.frame)).allSatisfy { abs($0.width - $1.width) < 2 }
         }
-        let afterSplit = try #require(findSplit(in: host, vertical: false))
+        let afterSplit = try #require(findSplit(in: host, vertical: true))
         #expect(afterSplit === split)
         for (old, new) in zip(before, afterSplit.arrangedSubviews.map(\.frame)) {
-            #expect(abs(old.height - new.height) < 2)
+            #expect(abs(old.width - new.width) < 2)
         }
-        #expect(afterSplit.arrangedSubviews[0].frame.height > 300)
+        #expect(afterSplit.arrangedSubviews[0].frame.width >= WorkflowInspectorWidth.canvasMinimumWidth)
         window.contentView = nil
         window.close()
     }

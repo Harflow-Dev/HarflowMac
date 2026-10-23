@@ -39,7 +39,10 @@ import Testing
         await fixture.settle { fixture.element("Standalone nodes, outside the workflow path") != nil }
 
         // when
+        vm.selectedNodeID = nil
+        await vm.sidebarTask?.value
         vm.selectStandalone("preview-run:research")
+        await vm.sidebarTask?.value
         await fixture.settle { fixture.element("#2 · Confirm the refresh endpoint's error response.") != nil }
 
         // then
@@ -380,7 +383,8 @@ private struct RecoveryOverlayTestHarness<VM: WorkflowViewModel>: View {
     }
 
     func matches(_ object: NSObject, _ label: String) -> Bool {
-        ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { string(object, $0) == label }
+        ["accessibilityLabel", "accessibilityTitle", "accessibilityValue", "accessibilityIdentifier"]
+            .contains { string(object, $0) == label }
     }
 
     func element(_ label: String) -> NSObject? {

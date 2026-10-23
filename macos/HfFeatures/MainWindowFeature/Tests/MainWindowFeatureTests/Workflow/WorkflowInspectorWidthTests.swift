@@ -5,9 +5,13 @@ import Testing
 
 @Suite struct WorkflowInspectorWidthTests {
     @Test func givenLargeWindow_whenUsingInitialWidth_thenInspectorStartsAt288() {
-        // given / when / then — the Phase 3 visual adjustment: the initial ideal width is 288.
+        // Builder inspector sizing remains unchanged; run panes use WorkflowRunLayout below.
         #expect(WorkflowInspectorWidth.initial == 288)
         #expect(WorkflowInspectorWidth.clamped(WorkflowInspectorWidth.initial, available: 1400) == 288)
+    }
+
+    @Test func givenRunPane_whenUsingInitialWidth_thenInspectorMatchesActivityColumn() {
+        #expect(WorkflowRunLayout.inspectorIdeal == 420)
     }
 
     @Test func givenResizeRequest_whenClamping_thenInspectorStaysBetween220And500() {

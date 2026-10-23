@@ -24,7 +24,7 @@ extension WorkflowViewModel {
     func selectStandalone(_ id: String) {
         connectionSourceID = nil
         selectedEdgeID = nil
-        selectedNodeID = id
+        selectedNodeID = selectedRun != nil && selectedNodeID == id ? nil : id
     }
 
     func addOnDemandNode() {

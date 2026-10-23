@@ -50,60 +50,34 @@ struct WorkflowNativeActivityView: View {
 
 extension WorkflowVM {
     func updateActivityMembership() {
-        updateNativeActivity()
-        let activations = selectedRun?.activations ?? []
-        let relevant = activations.filter { ["node", "builder"].contains($0["role"]?.stringValue ?? "") }
-        var latestByNode: [String: [String: JSONValue]] = [:]
-        for activation in relevant { latestByNode[activation["node_id"]?.stringValue ?? "builder"] = activation }
-        let visible = selectedActivationID.map { selected in relevant.filter { $0["id"]?.stringValue == selected } } ?? Array(latestByNode.values)
-        let tasks = relevant.flatMap { headlessTaskIDs($0) }
-        let focused = Set(visible.flatMap { headlessTaskIDs($0) })
-        var titles: [String: String] = [:]
-        for activation in relevant {
-            let nodeID = activation["node_id"]?.stringValue ?? ""
-            let title = nodes.first { $0.id == nodeID }?.name ?? "Workflow builder"
-            let index = relevant.filter { $0["node_id"]?.stringValue == nodeID }.firstIndex { $0["id"] == activation["id"] }.map { $0 + 1 } ?? 1
-            let fallbackIndices = WorkflowExecutionAttempts.fallbackIndices(activation)
-            for task in WorkflowJSON.objects(activation["tasks"]) {
-                if let id = task["task_id"]?.stringValue {
-                    let fallback = fallbackIndices[id] ?? 0
-                    titles[id] = "\(title) · \(index)\(fallback > 0 ? " · Fallback \(fallback)" : "")"
-                }
-            }
-        }
-        var seen = Set<String>()
-        parallel.setWorkflowTaskIDs(tasks.filter { seen.insert($0).inserted }, focusedTaskIDs: focused, titles: titles)
-    }
-
-    private func headlessTaskIDs(_ activation: [String: JSONValue]) -> [String] {
-        WorkflowJSON.objects(activation["tasks"])
-            .filter { $0["execution_kind"]?.stringValue != "native_subagent" }
-            .compactMap { $0["task_id"]?.stringValue }
+        scheduleRunSidebar()
     }
 
     func openOwnerTask(_ id: String) { routing.selectTask(id) }
 
     func selectActivation(_ id: String?) {
         selectedActivationID = id
-        updateActivityMembership()
+        scheduleRunSidebar()
     }
 
     func updateNativeActivity() {
         nativeActivityTask?.cancel()
         nativeActivityTask = nil
-        guard let run = selectedRun,
-              let activation = run.activations.last(where: { activation in
-                  if let selectedActivationID { return activation["id"]?.stringValue == selectedActivationID }
-                  return activation["node_id"]?.stringValue == selectedNodeID && activation["role"]?.stringValue == "node"
-              }), let executionID = activation["id"]?.stringValue,
+        guard runGraphVisible, let run = selectedRun,
+              let activation = runSidebar.activation,
+              let executionID = activation["id"]?.stringValue,
               WorkflowExecutionPresentation(raw: activation).isSubagent else {
-            nativeActivity = nil
+            if nativeActivity != nil { nativeActivity = nil }
             return
         }
         let projection = WorkflowExecutionPresentation(raw: activation)
-        let old = nativeActivity?.executionID == executionID ? nativeActivity?.items ?? [] : []
-        nativeActivity = WorkflowNativeActivityModel(executionID: executionID, title: selectedNode?.name ?? "Workflow node",
-            status: activation["status"]?.stringValue ?? "unknown", limited: projection.activityLimited, items: old)
+        var next = nativeActivity?.executionID == executionID ? nativeActivity! : WorkflowNativeActivityModel(
+            executionID: executionID, title: runSidebar.title, status: activation["status"]?.stringValue ?? "unknown",
+            limited: projection.activityLimited)
+        next = WorkflowNativeActivityModel(executionID: executionID, title: runSidebar.title,
+            status: activation["status"]?.stringValue ?? "unknown", limited: projection.activityLimited,
+            items: next.items, error: next.error, hasEarlierActivity: next.hasEarlierActivity, loaded: next.loaded)
+        if nativeActivity != next { nativeActivity = next }
         nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: executionID)
     }
 
@@ -114,9 +88,18 @@ extension WorkflowVM {
     func pulseNativeActivity() {
         // Relies on every cancel site (`updateNativeActivity`, `WorkflowVM.didDisappear`) setting
         // `nativeActivityTask` to nil; a stale non-nil task would block the pulse forever.
-        guard nativeActivityTask == nil, let run = selectedRun, let current = nativeActivity,
+        guard runGraphVisible, nativeActivityTask == nil, let run = selectedRun, let current = nativeActivity,
               !current.loaded || ["running", "launch_requested"].contains(current.status) else { return }
         nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: current.executionID)
+    }
+
+    private func applyNativeActivity(items: [TimelineItem], more: Bool) {
+        guard var next = nativeActivity else { return }
+        next.items = items
+        next.hasEarlierActivity = more
+        next.error = nil
+        next.loaded = true
+        if nativeActivity != next { nativeActivity = next }
     }
 
     private func fetchNativeActivity(runID: String, executionID: String) -> Task<Void, Never> {
@@ -126,13 +109,12 @@ extension WorkflowVM {
             do {
                 let page = try await useCase.command("inspect", options: ["--view=activity", "--limit=200"], positionals: [runID, executionID])
                 guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
-                let events = (page["events"]?.arrayValue ?? []).compactMap { TaskEvent(line: $0.rendered()) }
-                let items = Timeline.items(from: events)
-                let more = page["has_more"]?.boolValue ?? false
-                if nativeActivity?.items != items { nativeActivity?.items = items }
-                if nativeActivity?.hasEarlierActivity != more { nativeActivity?.hasEarlierActivity = more }
-                if nativeActivity?.error != nil { nativeActivity?.error = nil }
-                if nativeActivity?.loaded == false { nativeActivity?.loaded = true }
+                let items = await Task.detached(priority: .userInitiated) {
+                    let events = (page["events"]?.arrayValue ?? []).compactMap { TaskEvent(line: $0.rendered()) }
+                    return Timeline.items(from: events)
+                }.value
+                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
+                applyNativeActivity(items: items, more: page["has_more"]?.boolValue ?? false)
             } catch {
                 guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
                 let message = "Unable to load subagent activity. " + Self.message(error)

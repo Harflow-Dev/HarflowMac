@@ -29,15 +29,12 @@ import Testing
         #expect(vm.selectedRun?.childRunIDs.count == 6)
         vm.selectedNodeID = try #require(vm.nodes.first?.id)
         #expect(vm.selectedNode != nil)
-        let host = NSHostingView(rootView: NavigationSplitView {
+        let fixture = RedesignHost(NavigationSplitView {
             Text("Sidebar top").frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        } detail: { WorkflowView(vm) }.frame(minWidth: 1000, minHeight: 620).withPresentationContext())
+        } detail: { WorkflowView(vm) }.frame(minWidth: 1000, minHeight: 620), size: CGSize(width: 2210, height: 864))
+        let host = fixture.host
         let size = CGSize(width: 2210, height: 864)
-        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = host
-        host.frame = CGRect(origin: .zero, size: size)
-        defer { window.contentView = nil; window.close() }
+        defer { fixture.close() }
         // when
         await Task.yield()
         host.layoutSubtreeIfNeeded()
@@ -49,7 +46,7 @@ import Testing
         // then
         #expect(host.fittingSize.height == 620)
         #expect(host.intrinsicContentSize.height == 620)
-        let compactPanes = try #require(descendants(of: host).compactMap { $0 as? NSSplitView }.first { !$0.isVertical })
+        let compactPanes = try #require(descendants(of: host).compactMap { $0 as? NSSplitView }.last { $0.isVertical })
         for status in ["cancelled", "running"] {
             raw["status"] = .string(status)
             vm.selectedRun = WorkflowRunModel(raw: raw)
@@ -72,25 +69,26 @@ import Testing
         #expect(host.fittingSize.height == 620)
         #expect(host.intrinsicContentSize.height == 620)
         // when
-        window.setContentSize(CGSize(width: 1000, height: 620))
+        fixture.window.setContentSize(CGSize(width: 1000, height: 620))
         await Task.yield()
         host.layoutSubtreeIfNeeded()
         // then
         #expect(host.fittingSize.height == 620)
         #expect(host.intrinsicContentSize.height == 620)
-        #expect(window.contentLayoutRect.height == 620)
+        #expect(fixture.window.contentLayoutRect.height == 620)
+        let expand = try #require(fixture.element("Expand summary"))
+        #expect(fixture.press(expand))
+        await fixture.settle { fixture.element("Collapse summary") != nil }
         try assertAccessiblePanes(in: host)
     }
 
     private func assertAccessiblePanes(in host: NSView) throws {
-        let split = try #require(descendants(of: host).compactMap { $0 as? NSSplitView }.first { !$0.isVertical })
+        let split = try #require(descendants(of: host).compactMap { $0 as? NSSplitView }.last { $0.isVertical })
         let paneBounds = host.convert(split.bounds, from: split)
         #expect(paneBounds.minY >= -1)
         #expect(paneBounds.maxY <= host.bounds.maxY + 1)
         #expect(split.arrangedSubviews.allSatisfy { $0.bounds.height > 0 })
-        let graphRow = try #require(split.arrangedSubviews.first)
-        let columns = try #require(descendants(of: graphRow).compactMap { $0 as? NSSplitView }.first { $0.isVertical })
-        let inspectorPane = try #require(columns.arrangedSubviews.last)
+        let inspectorPane = try #require(split.arrangedSubviews.last)
         let inspector = try #require(descendants(of: inspectorPane).compactMap { $0 as? NSScrollView }.first)
         let diagnostics = try #require(descendants(of: host).compactMap { $0 as? NSScrollView }.first { !$0.isDescendant(of: split) })
         for scroll in [diagnostics, inspector] {

@@ -9,6 +9,61 @@ import Testing
 // MARK: - WorkflowRunSidebarHostedTests
 
 @MainActor @Suite(.serialized) struct WorkflowRunSidebarHostedTests {
+    @Test func givenTwoActivityNodes_whenSwitchingAwayAndBackAtSameWidth_thenSelectedFeedMountIsRecreated() async throws {
+        let vm = WorkflowPreview.make(run: true)
+        defer { vm.didDisappear() }
+        let nodeIDs = vm.nodes.filter { $0.type == "agent" }.prefix(2).map(\.id)
+        let firstNode = try #require(nodeIDs.first)
+        let secondNode = try #require(nodeIDs.dropFirst().first)
+        var raw = try #require(vm.selectedRun?.raw)
+        raw["activations"] = .array(nodeIDs.enumerated().map { index, nodeID in
+            .object(["id": .string("attempt-\(index)"), "role": .string("node"), "node_id": .string(nodeID),
+                     "status": .string("completed"), "tasks": .array([.object(["task_id": .string("task-\(index)")])])])
+        })
+        vm.selectedRun = WorkflowRunModel(raw: raw)
+        WorkflowPreview.synchronizeRun(vm)
+        vm.selectedNodeID = firstNode
+        let parallelTests = ParallelVMTests()
+        let parallelHarness = parallelTests.makeSUT()
+        parallelHarness.tasksBox.value["task-0"] = parallelTests.task(id: "task-0", status: "completed")
+        parallelHarness.tasksBox.value["task-1"] = parallelTests.task(id: "task-1", status: "completed")
+        vm.parallel = parallelHarness.sut
+        let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 900, height: 700))
+        defer { fixture.close() }
+        parallelHarness.tasksSubject.send(Array(parallelHarness.tasksBox.value.values))
+        await fixture.settle { fixture.element("workflow-selected-sidebar") != nil }
+        parallelHarness.tasksSubject.send(Array(parallelHarness.tasksBox.value.values))
+        await fixture.settle { vm.selectedActivity?.leasedMemberCount == 1 }
+        #expect(vm.selectedActivity?.leasedMemberCount == 1)
+        let firstScroll = try #require(activityScroll(in: fixture))
+
+        vm.selectedNodeID = secondNode
+        await vm.sidebarTask?.value
+        parallelHarness.tasksSubject.send(Array(parallelHarness.tasksBox.value.values))
+        await fixture.settle {
+            fixture.element("workflow-selected-sidebar") != nil
+                && activityScroll(in: fixture) != nil
+                && activityScroll(in: fixture) !== firstScroll
+        }
+        let secondScroll = try #require(activityScroll(in: fixture))
+        await fixture.settle { vm.selectedActivity?.leasedMemberCount == 1 }
+        #expect(vm.selectedActivity?.leasedMemberCount == 1)
+
+        vm.selectedNodeID = firstNode
+        await vm.sidebarTask?.value
+        parallelHarness.tasksSubject.send(Array(parallelHarness.tasksBox.value.values))
+        await fixture.settle {
+            fixture.element("workflow-selected-sidebar") != nil
+                && activityScroll(in: fixture) !== secondScroll
+        }
+        let restoredScroll = try #require(activityScroll(in: fixture))
+        await fixture.settle { vm.selectedActivity?.leasedMemberCount == 1 }
+        #expect(vm.selectedActivity?.leasedMemberCount == 1)
+
+        #expect(restoredScroll !== secondScroll)
+        #expect(restoredScroll !== firstScroll, "A same-width owner swap must recreate the observer mount so leases reacquire")
+    }
+
     @Test(arguments: [220.0, 288.0], [ColorScheme.light, .dark])
     func givenPopulatedChildRun_whenSidePanelScrolls_thenDisclosuresHistoryAndRoutesRemainReachable(width: Double, appearance: ColorScheme) async throws {
         // given
@@ -16,9 +71,11 @@ import Testing
         let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: CGSize(width: 900, height: 700))
         defer { vm.didDisappear(); fixture.close() }
         await fixture.settle { fixture.element("Open owning orchestrator") != nil }
+        #expect(vm.runSidebar.isDefault)
+        #expect(fixture.element("workflow-selected-sidebar") == nil)
         vm.didDisappear()
         vm.selectedRun = WorkflowRunModel(raw: raw)
-        vm.selectedNodeID = nodeID
+        vm.selectedNodeID = nil
         let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
         split.setPosition(split.bounds.width - width - split.dividerThickness, ofDividerAt: 0)
         await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - width) < 1 }
@@ -37,17 +94,22 @@ import Testing
         try await openDisclosures(using: scroll, fixture: fixture)
         #expect(fixture.element("Assignment for this child") != nil)
         #expect(fixture.element("Technical plan") != nil)
-        let activity = try await reveal("Show activity", using: scroll, fixture: fixture)
-        #expect(fixture.press(activity))
-        await fixture.settle { vm.selectedActivationID == "older-attempt" }
-        #expect(vm.selectedActivationID == "older-attempt", "A selected older activation must not silently jump to the latest")
-        let latest = try await reveal("Show latest steps", using: scroll, fixture: fixture)
-        #expect(fixture.press(latest))
-        await fixture.settle { vm.selectedActivationID == nil }
-        #expect(vm.selectedActivationID == nil)
-
         // when / then: root runs retain the same request, with their original disclosure label.
         try await checkRootRequest(vm: vm, raw: raw, scroll: scroll, fixture: fixture)
+
+        // Hiding and restoring the selected sidebar keeps the default inspector's
+        // disclosure state and reading position. This observes the visible default
+        // surface after the selected sidebar is dismissed.
+        let retainedOrigin = scroll.contentView.bounds.origin
+        vm.selectedNodeID = nodeID
+        await fixture.settle { fixture.element("workflow-selected-sidebar") != nil }
+        #expect(fixture.element("workflow-selected-sidebar") != nil)
+        vm.selectedNodeID = nil
+        await fixture.settle { fixture.element("workflow-selected-sidebar") == nil && fixture.element("Original request") != nil }
+        #expect(fixture.element("workflow-selected-sidebar") == nil)
+        #expect(fixture.element("Original request") != nil)
+        #expect(abs(scroll.contentView.bounds.origin.y - retainedOrigin.y) < 2)
+        #expect(containsText("Prepare the release:", in: fixture))
     }
 
     private func reveal(_ label: String, using scroll: NSScrollView, fixture: RedesignHost) async throws -> NSObject {
@@ -98,7 +160,7 @@ import Testing
                                     visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.definition = preview.definition
         vm.selectedRun = WorkflowRunModel(raw: raw)
-        vm.selectedNodeID = nodeID
+        vm.selectedNodeID = nil
         return (vm, routing, raw, nodeID)
     }
 
@@ -138,6 +200,16 @@ import Testing
             ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
                 fixture.string(element, $0)?.contains(text) == true
             }
+        }
+    }
+
+    private func activityScroll(in fixture: RedesignHost) -> NSScrollView? {
+        guard let sidebar = fixture.element("workflow-selected-sidebar"),
+              let sidebarFrame = fixture.frame(sidebar) else { return nil }
+        return fixture.descendants.compactMap { $0 as? NSScrollView }.first { scroll in
+            guard scroll.hasHorizontalScroller else { return false }
+            let frame = scroll.convert(scroll.bounds, to: fixture.host)
+            return frame.intersects(sidebarFrame)
         }
     }
 }
