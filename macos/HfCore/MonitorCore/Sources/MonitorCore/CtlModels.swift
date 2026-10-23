@@ -104,7 +104,45 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     public var group: String? { string("group").flatMap { $0.isEmpty ? nil : $0 } }
     public var lineageDetected: String? { string("lineage_detected") }
     public var liveInput: Bool { raw["live_input"]?.boolValue ?? false }
-    public var notices: [String] { raw["notices"]?.arrayValue?.compactMap(\.stringValue) ?? [] }
+    public var notices: [String] {
+        var result = raw["notices"]?.arrayValue?.compactMap(\.stringValue) ?? []
+        result += supervision?.notices ?? []
+        result += raw["recovery_activity"]?["notices"]?.arrayValue?.compactMap(\.stringValue)
+            .map { "Backend transcript: \($0)" } ?? []
+        if let bound = backgroundIdleSeconds {
+            result.append("Background idle bound: \(bound) seconds (live-input runs only).")
+        }
+        if failureDiagnostic?.category == "background_abandoned_at_idle_bound",
+           let diagnostic = raw["failure_diagnostic"]?.objectValue {
+            if let reason = failureDiagnostic?.reason { result.append(reason) }
+            if let wait = diagnostic["elapsed_background_wait_seconds"]?.doubleValue {
+                result.append("Background idle wait: \(wait) seconds.")
+            }
+            if let successful = diagnostic["successful_agent_result"]?.boolValue {
+                result.append(successful
+                    ? "The agent reported success; background work remained unfinished."
+                    : "The latest agent result did not report success.")
+            }
+            if let latest = diagnostic["latest_result"]?.objectValue {
+                let status = latest["status"]?.stringValue ?? (latest["is_error"]?.boolValue == true ? "error" : "result")
+                if let summary = latest["summary"]?.stringValue, !summary.isEmpty {
+                    result.append("Latest agent result (\(status)): \(summary)")
+                }
+            }
+            for background in diagnostic["background_tasks"]?.arrayValue ?? [] {
+                guard let item = background.objectValue else { continue }
+                let description = item["description"]?.stringValue ?? item["id"]?.stringValue ?? "Background task"
+                let elapsed = item["elapsed_seconds"]?.doubleValue.map { " (\($0) seconds elapsed)" } ?? ""
+                result.append("Unfinished background work: \(description)\(elapsed).")
+            }
+        }
+        var seen = Set<String>()
+        return result.filter { seen.insert($0).inserted }
+    }
+    /// Effective engine-resolved bound; absent in historical records.
+    public var backgroundIdleSeconds: Double? { raw["background_idle_seconds"]?.doubleValue }
+    /// Independent evidence about ownership, capture and the input channel.
+    public var supervision: TaskSupervision? { raw["supervision"].flatMap(TaskSupervision.init) }
     public var takenOver: Bool { raw["taken_over"]?.boolValue ?? false }
     public var takenOverNote: String? { string("taken_over_note") }
     public var ownedByLiveServer: Bool? { raw["owned_by_live_server"]?.boolValue }

@@ -6,6 +6,8 @@ Version 0.0.2 is under development. On Apple Silicon with macOS 26, the app prep
 
 Workflow runs show selected node activity in the Graph sidebar, with attempt selection and on-demand call history. Deselect a node to return to the retained run plan. The bottom summary expands above the graph; Parallel shows all current workflow task columns.
 
+Compatible engines expose capture ownership, live-input availability and background idle-cutoff diagnostics in the existing inspector notices. Lost-capture tasks can show source-labelled backend transcript activity; it is display only and does not establish completion or restore messaging. The app retains its explicitly paired engine version; older engines keep their existing captured activity.
+
 See [managed runtime](docs/managed-runtime.md) for acquisition, storage, retry, and current distribution limits.
 
 See [development](docs/development.md), [architecture](docs/architecture.md), [profiling](docs/monitor-performance.md), and [signing preparation](docs/ci-signing.md).

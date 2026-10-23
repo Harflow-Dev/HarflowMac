@@ -83,6 +83,16 @@ public struct TaskEvent: Equatable, Identifiable, Sendable {
         return false
     }
 
+    /// Display-only activity supplied by an independent engine source. The identifier belongs to
+    /// the adapter's reserved namespace and is never an event-log cursor or settlement evidence.
+    public init(displayID: Int, sourceTimestamp: Date?, kind: Kind, rawLine: String) {
+        seq = displayID
+        observedAt = nil
+        self.sourceTimestamp = sourceTimestamp
+        self.kind = kind
+        self.rawLine = rawLine
+    }
+
     /// nil for a line that is not a v1 event at all (not JSON, no `kind`, another `v`).
     public init?(line: String) {
         guard let object = JSONValue.parse(Data(line.utf8))?.objectValue,

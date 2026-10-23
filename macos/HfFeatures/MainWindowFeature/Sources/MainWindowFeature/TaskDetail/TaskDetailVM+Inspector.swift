@@ -48,7 +48,7 @@ extension TaskDetailVM {
             siblings: siblings.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             detail: detail,
             hasSnapshot: snapshot != nil,
-            notices: InspectorModel.distinctNotices(task.notices),
+            notices: InspectorModel.distinctNotices(detail.notices),
             // Summary-tab item 15: "What was enforced" moved from the Summary tab to the
             // Inspector's "Technical info" disclosure — mapped here (decision 9) from the same
             // `HfUI.EnforcementText` source, read off the snapshot-or-listing `detail` exactly

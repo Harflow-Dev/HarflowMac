@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Show engine capture/input evidence and background idle-bound diagnostics in inspector notices.
+- Add bounded, source-labelled backend transcript recovery activity without changing task outcomes or captured summaries.
+
 - Move Graph activity into a wider selection sidebar with attempt switching, native execution activity and on-demand call history.
 - Keep the run summary in a collapsible bottom strip that expands above the canvas.
 

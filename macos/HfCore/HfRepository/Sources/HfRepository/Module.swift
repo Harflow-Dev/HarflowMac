@@ -29,7 +29,8 @@ public final class Module: HfModule {
         let runtime = ManagedRuntimeCoordinator(installer: installer)
         let toolEnvironment = ManagedToolEnvironmentRepository(coordinator: runtime, layout: layout, baseEnvironment: baseEnvironment)
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
-        let eventStream = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler)
+        let capturedEvents = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler)
+        let eventStream = RecoveryEventStreamRepository(base: capturedEvents, environment: toolEnvironment, snapshots: snapshot, scheduler: scheduler)
         let finishNotifier = FinishNotifierImpl(settings: settings)
         let taskList = TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment,
