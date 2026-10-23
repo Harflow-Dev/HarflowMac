@@ -6,7 +6,7 @@ import SwiftUI
 import Testing
 
 @MainActor @Suite(.serialized) struct ActivityFeedNativeScrollerIntentTests {
-    @Test(arguments: [NSScroller.Part.decrementLine, .decrementPage, .knob])
+    @Test(arguments: [NSScroller.Part.decrementPage, .knob])
     func givenFollowingFeed_whenNativeScrollerActionMovesWithinFollowBand_thenPublicationKeepsActualViewportPaused(part: NSScroller.Part) async throws {
         let state = ParallelColumnUIState()
         let host = NSHostingView(rootView: feed(state, revision: 0))

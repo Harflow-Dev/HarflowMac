@@ -446,7 +446,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             seedExplicitTitles(from: page.items)
         } catch {
             historyLock.withLock {
-                historyStateValue.error = error as? ToolError ?? .unreadable(tool: "harflow-ctl", exitCode: 0, stderr: String(describing: error))
+                historyStateValue.error = error
             }
         }
     }

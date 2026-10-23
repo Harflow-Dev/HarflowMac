@@ -100,7 +100,7 @@ enum ActivityFeedNativeListMetrics {
     }
 
     override func sendAction(_ action: Selector?, to target: Any?) -> Bool {
-        let upward = hitPart == .decrementLine || hitPart == .decrementPage
+        let upward = hitPart == .decrementPage
             || (hitPart == .knob && doubleValue < previousTrackingValue)
         if upward {
             owner?.noteUserScrollEvent()

@@ -148,7 +148,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             promptEditor
             HStack(spacing: HfRadius.Metrics.spacing12) {
                 Text("Name").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-                TextField("Optional — shown in the sidebar, e.g. MT-2477 iOS review", text: binding(\.name, viewModel.didChangeName))
+                TextField("Optional — shown in the sidebar, e.g. MT-2477 iOS review", text: binding(\.name, { viewModel.didChangeName($0) }))
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Name")
             }
@@ -156,7 +156,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var promptEditor: some View {
-        TextEditor(text: binding(\.message, viewModel.didChangeMessage))
+        TextEditor(text: binding(\.message, { viewModel.didChangeMessage($0) }))
             .font(.hf(.body))
             // Bounded scope (§6.6): the task editor's own scroll view, if one exists; a quiet
             // no-op otherwise, with the shared field editor never targeted.
@@ -205,7 +205,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 HStack(spacing: HfRadius.Metrics.spacing8) {
                     Image(systemName: "folder").foregroundStyle(Color.secondaryText)
-                    TextField("/path/to/repo", text: binding(\.repo, viewModel.didChangeRepo))
+                    TextField("/path/to/repo", text: binding(\.repo, { viewModel.didChangeRepo($0) }))
                         .textFieldStyle(.plain)
                         .font(.hf(.secondary, design: .monospaced))
                         .accessibilityLabel("Repository path")
@@ -274,7 +274,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             if viewModel.showsEffort {
                 GridRow {
                     Text("Reasoning effort").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-                    Picker("Reasoning effort", selection: binding(\.effort, viewModel.didChangeEffort)) {
+                    Picker("Reasoning effort", selection: binding(\.effort, { viewModel.didChangeEffort($0) })) {
                         Text("Default").tag("")
                         ForEach(viewModel.effortOptions, id: \.self) { Text($0).tag($0) }
                     }
@@ -285,7 +285,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             if viewModel.showsModel {
                 GridRow {
                     Text("Model").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-                    ModelCombo(text: viewModel.model, choices: viewModel.modelChoices, onChange: viewModel.didChangeModel)
+                    ModelCombo(text: viewModel.model, choices: viewModel.modelChoices, onChange: { viewModel.didChangeModel($0) })
                 }
             }
             if let note = viewModel.modelUnavailableNote {
@@ -310,7 +310,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                 GridRow {
                     Text("Turn limit").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
                     VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-                        TextField("Empty uses the default", text: binding(\.turnLimit, viewModel.didChangeTurnLimit))
+                        TextField("Empty uses the default", text: binding(\.turnLimit, { viewModel.didChangeTurnLimit($0) }))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: HfRadius.Metrics.newSessionAdvancedFieldWidth)
                             .accessibilityLabel("Turn limit")
@@ -353,8 +353,8 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         Text(text).font(.hf(.body, weight: .semibold))
     }
 
-    private func binding(_ keyPath: KeyPath<VM, String>, _ set: @escaping (String) -> Void) -> Binding<String> {
-        Binding(get: { viewModel[keyPath: keyPath] }, set: set)
+    private func binding(_ keyPath: KeyPath<VM, String>, _ set: @escaping @MainActor (String) -> Void) -> Binding<String> {
+        Binding(get: { viewModel[keyPath: keyPath] }, set: { set($0) })
     }
 }
 

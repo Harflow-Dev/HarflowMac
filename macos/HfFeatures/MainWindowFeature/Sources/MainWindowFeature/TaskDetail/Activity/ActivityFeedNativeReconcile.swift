@@ -26,7 +26,7 @@ struct ActivityFeedNativeReadingCapture {
 
 extension ActivityFeedNativeList.Coordinator {
     func reconcile(environmentHeightsInvalidated: Bool, rootsNeedRefresh: Bool) {
-        guard !reconciling, let model, let state, let table else { return }
+        guard !reconciling, let model, let state, table != nil else { return }
         reconciling = true
         defer { reconciling = false }
 

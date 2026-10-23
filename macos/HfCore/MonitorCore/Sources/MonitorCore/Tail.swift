@@ -258,7 +258,7 @@ public final class EventFileTailer {
         guard !stopped else { return }
         if !seeded { seed(reset: false); return }
         var collected: [TaskEvent] = []
-        var reset = false
+        let reset = false
         var opened = false
         // Bounded: a few chunks per wake-up, the poll picks up the rest.
         for _ in 0..<1 {

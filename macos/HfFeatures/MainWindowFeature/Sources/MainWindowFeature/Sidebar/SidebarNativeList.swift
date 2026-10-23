@@ -30,7 +30,6 @@ struct SidebarNativeList: NSViewRepresentable {
         outline.headerView = nil
         outline.style = .sourceList
         outline.rowSizeStyle = .medium
-        outline.selectionHighlightStyle = .sourceList
         outline.backgroundColor = .clear
         outline.floatsGroupRows = false
         outline.indentationPerLevel = HfRadius.Metrics.spacing12

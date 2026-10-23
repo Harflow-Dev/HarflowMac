@@ -138,7 +138,7 @@ private func parallelLaneSurfacePreview() -> some View {
         "status": .string("running"),
         "repo_path": .string("/tmp")
     ]))!
-    return ParallelLaneSurface(statusTint: ParallelLaneTint.color(for: task.status)) {
+    ParallelLaneSurface(statusTint: ParallelLaneTint.color(for: task.status)) {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 StatusIcon(status: task.status)

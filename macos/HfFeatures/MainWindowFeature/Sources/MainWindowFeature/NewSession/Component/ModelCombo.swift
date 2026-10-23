@@ -23,11 +23,11 @@ struct ModelCombo: View {
 
     let text: String
     let choices: [ModelChoiceModel]
-    let onChange: (String) -> Void
+    let onChange: @MainActor (String) -> Void
 
     var body: some View {
         HStack(spacing: 4) {
-            TextField("Default", text: Binding(get: { text }, set: onChange))
+            TextField("Default", text: Binding(get: { text }, set: { onChange($0) }))
                 .textFieldStyle(.plain)
                 .accessibilityLabel("Model")
             Menu {

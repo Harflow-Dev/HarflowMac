@@ -387,9 +387,9 @@ final class ParallelScrollObservationView: NSView {
             guard let scroller = scroll.verticalScroller,
                   scroller.bounds.contains(scroller.convert(event.locationInWindow, from: nil)) else { return }
             let part = scroller.testPart(event.locationInWindow)
-            if part == .decrementLine || part == .decrementPage {
+            if part == .decrementPage {
                 signalUpwardIntent()
-            } else if part == .incrementLine || part == .incrementPage || part == .knob {
+            } else if part == .incrementPage || part == .knob {
                 cancelAnchorReference()
             }
         default: break
