@@ -8,6 +8,8 @@ import SwiftUI
 struct ParallelColumnsContent: View {
     let columns: [ParallelColumnModel]
     let availableSize: CGSize
+    var contextID: String = "parallel-preview"
+    var explicitNavigationID: String?
     let stateForColumn: (String) -> ParallelColumnUIState
     let onViewport: (CGFloat, CGFloat) -> Void
 
@@ -26,7 +28,9 @@ struct ParallelColumnsContent: View {
             }
         }
         .background(ParallelScrollObserver(axis: .horizontal, columnIDs: columns.map(\.id),
-                                           columnStride: columnWidth + ParallelLayout.dividerWidth) { offset, _, viewport in
+                                           columnStride: columnWidth + ParallelLayout.dividerWidth,
+                                           workingColumnIDs: Set(columns.filter(\.task.status.isRunning).map(\.id)),
+                                           contextID: contextID, explicitNavigationID: explicitNavigationID) { offset, _, viewport in
             onViewport(offset, viewport)
         })
     }

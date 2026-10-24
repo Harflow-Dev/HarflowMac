@@ -38,6 +38,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
                 GeometryReader { viewport in
                     ScrollView(.horizontal) {
                         ParallelColumnsContent(columns: activity.columns, availableSize: viewport.size,
+                                               contextID: "selection:" + String(describing: ObjectIdentifier(activity)),
                                                stateForColumn: activity.columnState(for:),
                                                onViewport: { activity.updateViewport(offset: $0, width: $1) })
                     }

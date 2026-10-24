@@ -126,12 +126,14 @@ extension TaskDetailVM {
         let revision = timelineRevision
         let latency = MonitorMetrics.begin()
         let build = timelineBuild
-        let worker = Task.detached(priority: .utility) { await build(input) }
+        let appliedInput = input
+        let worker = Task.detached(priority: .utility) { await build(appliedInput) }
         timelineWorker = Task { [weak self] in
             let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
             guard let self else { return }
             timelineWorker = nil
             if timelineEpoch == epoch, timelineRevision == revision, let result {
+                appliedTimelineInput = appliedInput
                 applyTimeline(result)
                 MonitorMetrics.end(latency, stage: .detailUpdateLatency)
             }

@@ -226,36 +226,18 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         return NewSessionView(vm).eraseToAnyView()
     }
     
-    /// A fresh VM every call: the app target's detail pane switches `.group(let name):` inside a
-    /// plain `switch`, not a coordinator-owned navigation stack, so this is called on every render
-    /// of that switch case. `.id(name)` is applied **here**, wrapping the whole `ParallelView(vm)`
-    /// value, not inside `ParallelView.body` — `ParallelView` itself owns `@State var viewModel`, and
-    /// that state is tied to *its own* identity as seen by this call site, not to anything inside its
-    /// body. An `.id()` applied inside `body` only re-identifies that body's descendants, so it
-    /// cannot reset `ParallelView`'s own `@State` when `name` changes (a real bug caught in review:
-    /// selecting a different group kept showing the previous group's VM and leases). Applying it here
-    /// makes SwiftUI treat two different group names as two different view identities — discarding
-    /// the old `@State`-held VM (running its `didDisappear()`) and adopting the fresh one passed in —
-    /// while same-name re-renders keep reusing the existing VM as intended.
-    /// (`TaskDetailView.swift`'s analogous `.id(taskID)` works differently and is not a counter-
-    /// example: that view holds no `@State` of its own, so applying `.id()` inside its body to
-    /// `EventScope` — which does hold `@State` — is the correct spot there.)
-    ///
-    /// `withPresentationContext()` (`HfUI`) is applied once, at `MainWindowNavigationView`'s own
-    /// root — not here any more. Applying it a second time per screen (as an earlier phase did) would
-    /// give Parallel/TaskDetail their own isolated `@Environment(\.viewEvent)`, nested inside the one
-    /// the navigation view already provides, which is harmless only by accident; moving it up here
-    /// keeps every screen sharing the single environment/state the window root owns.
+    /// A selected group's stable presenter observes membership for its entire visible lifetime.
     public func buildParallelView(name: String) -> AnyView {
-        // A group of one agent is not a parallel run: it gets the ordinary task screen.
-        if let taskID = Self.soleConversationID(inGroup: name, tasks: taskListRepository.tasks) {
-            return buildTaskDetailView(id: taskID)
-        }
-        let useCase = ParallelViewRepository()
-        let vm = ParallelVM(groupName: name, useCase: useCase, routing: self)
-        return ParallelView(vm).id(name).eraseToAnyView()
+        let vm = GroupPresentationVM(groupName: name,
+            useCase: GroupPresentationViewRepository(taskListRepository: taskListRepository),
+            makeDetail: { [self] id in
+                TaskDetailVM(taskID: id, useCase: TaskDetailViewRepository(), routing: self)
+            }, makeParallel: { [self] in
+                ParallelVM(groupName: name, useCase: ParallelViewRepository(), routing: self)
+            })
+        return GroupPresentationView(vm).id(name).eraseToAnyView()
     }
-    
+
     /// The first task of the group's only agent conversation, or `nil` when the group has none or
     /// several (then it is a real parallel run). Membership is read when the view is built.
     nonisolated static func soleConversationID(inGroup name: String, tasks: [TaskInfo]) -> String? {

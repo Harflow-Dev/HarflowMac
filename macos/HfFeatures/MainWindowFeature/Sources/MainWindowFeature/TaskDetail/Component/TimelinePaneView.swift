@@ -108,7 +108,12 @@ struct TimelinePaneModel {
 
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
-    @State private var state = ParallelColumnUIState()
+    @State private var state: ParallelColumnUIState
+
+    init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil) {
+        self.model = model
+        _state = State(initialValue: state ?? ParallelColumnUIState())
+    }
 
     var body: some View {
         VStack(spacing: HfRadius.Metrics.zero) {

@@ -58,10 +58,12 @@ struct ParallelView<VM: ParallelViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    private let initiallyPrepared: Bool
     
     // MARK: - Init
     
-    init(_ viewModel: VM) {
+    init(_ viewModel: VM, initiallyPrepared: Bool = false) {
+        self.initiallyPrepared = initiallyPrepared
         _viewModel = State(initialValue: viewModel)
     }
     
@@ -76,14 +78,20 @@ struct ParallelView<VM: ParallelViewModel>: View {
     /// `realContent`, not the placeholder, so leases start once the real screen actually mounts —
     /// one committed frame after the selection, not on the very first frame.
     var body: some View {
-        DeferredContent {
-            placeholderContent
-        } content: {
-            withToolbar { realContent }
-                .onAppear { viewModel.didAppear() }
-                .onDisappear { viewModel.didDisappear() }
+        Group {
+            if initiallyPrepared {
+                mountedContent
+            } else {
+                DeferredContent { placeholderContent } content: { mountedContent }
+            }
         }
         .publishViewEvent(from: viewModel, to: viewEvent)
+    }
+
+    private var mountedContent: some View {
+        withToolbar { realContent }
+            .onAppear { viewModel.didAppear() }
+            .onDisappear { viewModel.didDisappear() }
     }
 
     private var realContent: some View {
@@ -106,6 +114,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
                 GeometryReader { proxy in
                     ScrollView(.horizontal) {
                         ParallelColumnsContent(columns: viewModel.columns, availableSize: proxy.size,
+                                               contextID: "group:" + viewModel.groupName,
                                                stateForColumn: viewModel.columnState(for:),
                                                onViewport: { viewModel.updateViewport(offset: $0, width: $1) })
                             // The document probe (§6.5): inside the real lane's own document, so

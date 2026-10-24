@@ -12,6 +12,7 @@ extension TaskDetailVM {
             guard !Task.isCancelled else { return }
             if initial { recomputeMembersAndLeases() }
             guard let session = (resolved ?? task)?.sessionID else {
+                conversationHistoryResolved = true
                 conversationLoading = false
                 olderActivityReady = true
                 recompute()
@@ -21,6 +22,8 @@ extension TaskDetailVM {
                 if let page = try await useCase.conversationHistory(sessionID: session, cursor: initial ? nil : conversationCursor) {
                     guard !Task.isCancelled else { return }
                     applyConversationPage(page, initial: initial)
+                } else {
+                    conversationHistoryResolved = true
                 }
             } catch {
                 guard !Task.isCancelled else { return }
@@ -33,6 +36,7 @@ extension TaskDetailVM {
     }
 
     func applyConversationPage(_ page: TaskHistoryPage, initial: Bool) {
+        conversationHistoryResolved = true
         if !initial, conversationCursor == page.page.nextCursor, page.page.hasMore, !page.page.bootstrapPending {
             conversationError = "Conversation history did not advance. Retry to continue."
         }

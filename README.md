@@ -6,6 +6,8 @@ Version 0.0.2 is under development. On Apple Silicon with macOS 26, the app prep
 
 Workflow runs show selected node activity in the Graph sidebar, with attempt selection and on-demand call history. Deselect a node to return to the retained run plan. The bottom summary expands above the graph; Parallel shows all current workflow task columns.
 
+An open single-conversation group switches to Parallel as independent conversations join, retaining the original activity and reading position. Parallel activity follows newly arriving working conversations while the horizontal viewport is at its left edge; scrolling away keeps the current conversation in view.
+
 Streaming replies retain completed Markdown blocks while preparing the changing tail in the background. Activity feeds use the same prepared layout for measurement and display.
 
 Compatible engines expose capture ownership, live-input availability and background idle-cutoff diagnostics in the existing inspector notices. Lost-capture tasks can show source-labelled backend transcript activity; it is display only and does not establish completion or restore messaging. The app retains its explicitly paired engine version; older engines keep their existing captured activity.

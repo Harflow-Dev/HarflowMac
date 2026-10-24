@@ -104,6 +104,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
+    @State private var activityState: ParallelColumnUIState
     private let isEmbedded: Bool
     private let onToolbarEvaluation: (() -> Void)?
     @State private var embeddedInspectorVisible = false
@@ -115,7 +116,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     
     // MARK: - Init
     
-    init(_ viewModel: VM, isEmbedded: Bool = false, onToolbarEvaluation: (() -> Void)? = nil) {
+    init(_ viewModel: VM, isEmbedded: Bool = false, activityState: ParallelColumnUIState? = nil, onToolbarEvaluation: (() -> Void)? = nil) {
+        _activityState = State(initialValue: activityState ?? ParallelColumnUIState())
         self.onToolbarEvaluation = onToolbarEvaluation
         self.isEmbedded = isEmbedded
         _viewModel = State(initialValue: viewModel)
@@ -439,7 +441,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var content: some View {
         switch viewModel.tab {
         case .activity:
-            TimelinePaneView(model: viewModel.timelineModel)
+            TimelinePaneView(model: viewModel.timelineModel, state: activityState)
         case .summary:
             SummaryPaneView(model: viewModel.summaryModel, artifactMembers: viewModel.artifactMembers,
                             loadArtifacts: { viewModel.didLoadArtifacts(taskID: $0) })

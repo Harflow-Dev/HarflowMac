@@ -502,6 +502,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         WorkflowActivityColumns(
             viewModel: viewModel.parallel,
             selectedTaskID: nil,
+            contextID: "workflow:" + (viewModel.selectedRun?.id ?? "none"),
             showsPrestartPlaceholder: WorkflowExecutionPresentation.showsPrestartPlaceholder(
                 activations: viewModel.selectedRun?.activations ?? []))
         .background(Color.cardFill)

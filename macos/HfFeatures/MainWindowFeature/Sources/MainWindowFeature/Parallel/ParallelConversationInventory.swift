@@ -40,6 +40,8 @@ final class ParallelConversationInventory {
                 state.inventorySession = session
                 state.inventoryCursor = nil
                 state.inventoryComplete = false
+                state.inventoryIncomplete = false
+                state.inventoryError = nil
                 state.inventoryMembers.removeAll()
                 state.activityMembers = [conversation.current.taskID]
                 state.oldestSequences.removeAll()
@@ -57,17 +59,21 @@ final class ParallelConversationInventory {
         }
     }
 
-    func hasMore(_ id: String) -> Bool { bindings[id].map { !$0.state.inventoryComplete } ?? false }
+    func hasMore(_ id: String) -> Bool { bindings[id].map { !$0.state.inventoryComplete || $0.state.inventoryIncomplete } ?? false }
     func isLoading(_ id: String) -> Bool { bindings[id].map { tasks[ObjectIdentifier($0.state)] != nil } ?? false }
-    func error(_ id: String) -> String? { bindings[id].flatMap { errors[ObjectIdentifier($0.state)] } }
+    func error(_ id: String) -> String? { bindings[id].flatMap { errors[ObjectIdentifier($0.state)] ?? $0.state.inventoryError
+            ?? ($0.state.inventoryIncomplete ? "Conversation history is incomplete. Retry to continue." : nil)
+    } }
 
     @discardableResult func loadOlder(_ id: String) -> Bool {
-        guard visible.contains(id), let binding = bindings[id], !binding.state.inventoryComplete else { return false }
+        guard visible.contains(id), let binding = bindings[id],
+              !binding.state.inventoryComplete || binding.state.inventoryIncomplete || error(id) != nil else { return false }
         let key = ObjectIdentifier(binding.state)
         guard tasks[key] == nil else { return false }
         let token = UUID()
         tokens[key] = token
         errors[key] = nil
+        binding.state.inventoryError = nil
         let cursor = binding.state.inventoryCursor
         tasks[key] = Task { [weak self] in
             guard let self else { return }
@@ -105,6 +111,7 @@ final class ParallelConversationInventory {
             errors[key] = "Conversation history did not advance. Retry to continue."
             return
         }
+        binding.state.inventoryIncomplete = page.page.historyIncomplete
         binding.state.inventoryCursor = page.page.nextCursor
         binding.state.inventoryComplete = !more
         let byID = Dictionary((Array(binding.state.inventoryMembers.values) + page.items + page.relatedItems

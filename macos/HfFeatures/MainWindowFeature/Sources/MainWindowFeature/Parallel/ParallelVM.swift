@@ -39,18 +39,18 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var itemCancellables: [String: AnyCancellable] = [:]
     @ObservationIgnored private var availabilityCancellables: [String: AnyCancellable] = [:]
     @ObservationIgnored private var leaseGenerations: [String: UUID] = [:]
-    @ObservationIgnored private var ownerByMember: [String: String] = [:]
-    @ObservationIgnored private var conversationByID: [String: Conversation] = [:]
+    @ObservationIgnored var ownerByMember: [String: String] = [:]
+    @ObservationIgnored var conversationByID: [String: Conversation] = [:]
     @ObservationIgnored private var leases: [String: any EventStreamLease] = [:]
     @ObservationIgnored private var itemsByTask: [String: [TimelineItem]] = [:]
     @ObservationIgnored private var availabilityByTask: [String: EventAvailability] = [:]
-    @ObservationIgnored private var didSubscribe = false
+    @ObservationIgnored var didSubscribe = false
     @ObservationIgnored private var latestTasks: [TaskInfo] = []
     @ObservationIgnored private var latestSnapshots: [String: TaskInfo] = [:]
     @ObservationIgnored private var latestBusy: Set<String> = []
     @ObservationIgnored private var latestOutcomes: [String: String] = [:]
-    @ObservationIgnored private var memberIDs: [String] = []
-    @ObservationIgnored private var conversations: [Conversation] = []
+    @ObservationIgnored var memberIDs: [String] = []
+    @ObservationIgnored var conversations: [Conversation] = []
     @ObservationIgnored private var groupStartedAt: Date?
     @ObservationIgnored private var workflowTaskIDs: [String]?
     @ObservationIgnored private var workflowFocusedTaskIDs: Set<String>?
@@ -61,7 +61,7 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var viewportOffset: CGFloat = 0
     @ObservationIgnored private var viewportWidth: CGFloat = 0
     @ObservationIgnored private var residentIDs: Set<String> = []
-    @ObservationIgnored private var refreshingRetainedIDs: Set<String> = []
+    @ObservationIgnored var refreshingRetainedIDs: Set<String> = []
     @ObservationIgnored private var visibleIDs: Set<String> = []
     @ObservationIgnored private var neededMemberIDs: Set<String> = []
     @ObservationIgnored private lazy var history = ParallelActivityHistory(useCase: useCase,
@@ -75,10 +75,10 @@ final class ParallelVM: ParallelViewModel {
         guard let self else { return }
         history.update(conversations: orderedConversations, visible: visibleIDs, states: uiStates)
     })
-    @ObservationIgnored private var uiStates: [String: ParallelColumnUIState] = [:]
-    @ObservationIgnored private var descriptors: [String: ParallelColumnPresentation] = [:]
-    @ObservationIgnored private var presentations: [String: ParallelColumnPresentation] = [:]
-    @ObservationIgnored private var completedInputs: [String: ParallelColumnInput] = [:]
+    @ObservationIgnored var uiStates: [String: ParallelColumnUIState] = [:]
+    @ObservationIgnored var descriptors: [String: ParallelColumnPresentation] = [:]
+    @ObservationIgnored var presentations: [String: ParallelColumnPresentation] = [:]
+    @ObservationIgnored var completedInputs: [String: ParallelColumnInput] = [:]
     @ObservationIgnored private var desiredInputs: [String: ParallelColumnInput] = [:]
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var pendingInputs: [String: ParallelColumnInput]?
@@ -90,7 +90,7 @@ final class ParallelVM: ParallelViewModel {
     var leasedMemberCount: Int { leases.count }
     var residentColumnCount: Int { residentIDs.count }
     var retainedColumnStateCount: Int { uiStates.count }
-    @ObservationIgnored private var orderedConversations: [Conversation] = []
+    @ObservationIgnored var orderedConversations: [Conversation] = []
     @ObservationIgnored private var arrivals: Set<String> = []
     @ObservationIgnored private(set) var presentationWriteCount = 0
     @ObservationIgnored private(set) var builtColumnCount = 0
@@ -484,7 +484,7 @@ final class ParallelVM: ParallelViewModel {
             memberTaskIDs: Set(conversation.members.map(\.taskID)))
     }
 
-    private func publishColumns() {
+    func publishColumns() {
         let start = MonitorMetrics.begin()
         let oldWrites = presentationWriteCount
         defer {

@@ -1,6 +1,14 @@
 import AppKit
 import SwiftUI
 
+/// A synchronous cancellation handoff tied to the observer's current scoped native binding.
+struct ParallelScrollRestorationCancellation {
+    let observer: ParallelScrollObservationView
+    let scrollView: NSScrollView
+    let generation: Int
+    let isUpward: Bool
+}
+
 // MARK: - ParallelScrollObserver
 
 /// Native observation also covers scrollbar and keyboard movement on macOS 14.
@@ -9,6 +17,9 @@ struct ParallelScrollObserver: NSViewRepresentable {
     let axis: Axis
     var columnIDs: [String] = []
     var columnStride: CGFloat = 0
+    var workingColumnIDs: Set<String> = []
+    var contextID: String?
+    var explicitNavigationID: String?
     var restorationOffset: CGFloat?
     var restorationActive = false
     var restorationGeneration = 0
@@ -54,8 +65,12 @@ struct ParallelScrollObserver: NSViewRepresentable {
             view.anchorProvider = nativeIdentity.resolvedAnchorProvider(fallback: anchorProvider)
         } else { view.anchorProvider = anchorProvider }
         view.updateWheelMonitor()
+        view.horizontalConfiguration = contextID.map {
+            ParallelHorizontalConfiguration(workingColumnIDs: workingColumnIDs, contextID: $0, explicitNavigationID: explicitNavigationID)
+        }
         view.configure(ids: columnIDs, stride: columnStride, restorationOffset: restorationOffset,
                        restorationActive: restorationActive, generation: restorationGeneration)
         view.bindNativeIdentity(nativeIdentity)
+        view.updateWheelMonitor()
     }
 }

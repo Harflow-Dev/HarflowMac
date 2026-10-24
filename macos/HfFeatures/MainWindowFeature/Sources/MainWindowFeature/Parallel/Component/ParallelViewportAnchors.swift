@@ -30,6 +30,8 @@ final class ParallelColumnUIState {
     @ObservationIgnored var inventorySession: String?
     @ObservationIgnored var inventoryCursor: String?
     @ObservationIgnored var inventoryComplete = false
+    @ObservationIgnored var inventoryIncomplete = false
+    @ObservationIgnored var inventoryError: String?
 }
 
 // MARK: - ParallelVerticalAnchor

@@ -75,6 +75,66 @@ import Testing
         #expect(position.reports > reports)
     }
 
+    @Test func givenLeadingViewport_whenNewColumnAppearsAtLeadingEdge_thenViewportRemainsAtLeadingEdge() async throws {
+        // given
+        _ = NSApplication.shared
+        let position = Position()
+        let host = NSHostingView(rootView: fixture(ids: ["a", "b"], position: position,
+                                                   workingIDs: ["working"], contextID: "group"))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 430, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil { host.layoutSubtreeIfNeeded(); return position.width > 0 }
+        let reportsBeforeInsertion = position.reports
+        // when — membership publication inserts a newly working column before the existing ones.
+        host.rootView = fixture(ids: ["working", "a", "b"], position: position,
+                                workingIDs: ["working"], contextID: "group")
+        await waitUntil {
+            host.layoutSubtreeIfNeeded()
+            return position.reports > reportsBeforeInsertion + 1
+        }
+
+        // then — a reader at the leading edge should see the new column, rather than being
+        // anchored to the former first column one stride to the right.
+        #expect(abs(position.offset) < 2)
+    }
+
+    @Test func givenAwayFromLeadingEdge_whenWorkingColumnAppearsAtLeadingEdge_thenReadingAnchorIsRetained() async throws {
+        // given
+        _ = NSApplication.shared
+        let position = Position()
+        let host = NSHostingView(rootView: fixture(ids: ["a", "b", "c"], position: position,
+                                                   workingIDs: ["working"], contextID: "group"))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 430, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil { host.layoutSubtreeIfNeeded(); return position.width > 0 }
+        let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+        scroll.contentView.scroll(to: CGPoint(x: 480, y: 0))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await waitUntil { abs(position.offset - 480) < 2 }
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
+        let reportsBeforeInsertion = position.reports
+
+        // when
+        host.rootView = fixture(ids: ["working", "a", "b", "c"], position: position,
+                                workingIDs: ["working"], contextID: "group")
+        await waitUntil {
+            host.layoutSubtreeIfNeeded()
+            return position.reports > reportsBeforeInsertion + 1 && abs(position.offset - 901) < 2
+        }
+
+        // then
+        #expect(abs(position.offset - 901) < 2)
+    }
+
     @Test func givenEvictedColumn_whenMountedAgain_thenDisclosureReadingOffsetAndFollowPreferenceAreRestored() async throws {
         // given
         _ = NSApplication.shared
@@ -144,7 +204,8 @@ import Testing
         // given
         _ = NSApplication.shared
         let vm = ViewportVM(columns: try ["a", "b", "c", "d", "e"].map { try column(id: $0, rows: 0) })
-        let host = NSHostingView(rootView: WorkflowActivityColumns(viewModel: vm, selectedTaskID: nil))
+        let host = NSHostingView(rootView: WorkflowActivityColumns(viewModel: vm, selectedTaskID: nil,
+                                                                    contextID: "workflow-test"))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 430, height: 500),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -153,7 +214,8 @@ import Testing
         defer { window.contentView = nil; window.close() }
         await waitUntil { host.layoutSubtreeIfNeeded(); return vm.width > 400 }
         // when
-        host.rootView = WorkflowActivityColumns(viewModel: vm, selectedTaskID: "c")
+        host.rootView = WorkflowActivityColumns(viewModel: vm, selectedTaskID: "c",
+                                                contextID: "workflow-test")
         await waitUntil { host.layoutSubtreeIfNeeded(); return vm.offset > 800 }
         // then
         #expect(vm.offset > 800)
@@ -455,12 +517,14 @@ import Testing
         var width: CGFloat = 0
     }
 
-    private func fixture(ids: [String], position: Position) -> some View {
+    private func fixture(ids: [String], position: Position, workingIDs: Set<String> = [],
+                         contextID: String? = nil) -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 ForEach(ids, id: \.self) { id in Text(id).frame(width: 421, height: 200) }
             }
-            .background(ParallelScrollObserver(axis: .horizontal, columnIDs: ids, columnStride: 421) { offset, _, width in
+            .background(ParallelScrollObserver(axis: .horizontal, columnIDs: ids, columnStride: 421,
+                                               workingColumnIDs: workingIDs, contextID: contextID) { offset, _, width in
                 position.reports += 1
                 position.offset = offset
                 position.width = width

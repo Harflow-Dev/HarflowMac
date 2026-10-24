@@ -88,6 +88,7 @@ struct WorkflowStepFlowLayout: Layout {
 struct WorkflowActivityColumns: View {
     let columns: [ParallelColumnModel]
     let selectedTaskID: String?
+    let contextID: String
     /// True only while existing activations prove no worker step has started. When a step has
     /// started but its activity columns are still empty, the panel stays an honest empty card —
     /// no prestart placeholder and no invented loading or unavailable copy.
@@ -95,17 +96,19 @@ struct WorkflowActivityColumns: View {
     private let onViewport: (CGFloat, CGFloat) -> Void
     private let stateForColumn: (String) -> ParallelColumnUIState
 
-    init(viewModel: any ParallelViewModel, selectedTaskID: String?, showsPrestartPlaceholder: Bool = true) {
+    init(viewModel: any ParallelViewModel, selectedTaskID: String?, contextID: String = "workflow-preview", showsPrestartPlaceholder: Bool = true) {
         self.columns = viewModel.columns
         self.selectedTaskID = selectedTaskID
+        self.contextID = contextID
         self.showsPrestartPlaceholder = showsPrestartPlaceholder
         self.onViewport = { viewModel.updateViewport(offset: $0, width: $1) }
         self.stateForColumn = viewModel.columnState(for:)
     }
 
-    init(columns: [ParallelColumnModel], selectedTaskID: String?, showsPrestartPlaceholder: Bool = true) {
+    init(columns: [ParallelColumnModel], selectedTaskID: String?, contextID: String = "workflow-preview", showsPrestartPlaceholder: Bool = true) {
         self.columns = columns
         self.selectedTaskID = selectedTaskID
+        self.contextID = contextID
         self.showsPrestartPlaceholder = showsPrestartPlaceholder
         self.onViewport = { _, _ in }
         let states = Dictionary(uniqueKeysWithValues: columns.map { ($0.id, ParallelColumnUIState()) })
@@ -130,6 +133,7 @@ struct WorkflowActivityColumns: View {
                             }
                         } else {
                             ParallelColumnsContent(columns: columns, availableSize: proxy.size,
+                                                   contextID: contextID, explicitNavigationID: selectedTaskID,
                                                    stateForColumn: stateForColumn, onViewport: onViewport)
                         }
                     }

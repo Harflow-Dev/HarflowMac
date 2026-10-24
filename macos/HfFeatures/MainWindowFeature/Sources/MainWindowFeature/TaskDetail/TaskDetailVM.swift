@@ -207,6 +207,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored var timelineWorker: Task<Void, Never>?
     @ObservationIgnored var pendingTimelineInput: TaskDetailTimelineInput?
     @ObservationIgnored var latestTimelineInput: TaskDetailTimelineInput?
+    @ObservationIgnored var appliedTimelineInput: TaskDetailTimelineInput?
     @ObservationIgnored var appliedTimelinePresentation: TaskDetailTimelinePresentation?
     @ObservationIgnored var activityPaginationRevision = 0
     @ObservationIgnored var olderActivityRequest = false
@@ -226,6 +227,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// moment it exists.
     @ObservationIgnored var conversationCursor: String?
     @ObservationIgnored var conversationHasMore = false
+    @ObservationIgnored var conversationHistoryResolved = false
     @ObservationIgnored var conversationHistoryIncomplete = false
     @ObservationIgnored var conversationLoading = false
     @ObservationIgnored var conversationError: String?
@@ -307,6 +309,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         pendingTimelineInput = nil
         latestTimelineInput = nil
         appliedTimelinePresentation = nil
+        appliedTimelineInput = nil
         olderActivityRequest = false
         conversationLookup?.cancel()
         conversationLookup = nil
@@ -342,6 +345,17 @@ final class TaskDetailVM: TaskDetailViewModel {
     }
 
     // MARK: - Internal Methods
+
+    /// The group presenter calls this only after proving that a new survivor belongs to the
+    /// same actual conversation. An atomic prune/resume can introduce a member this VM never saw.
+    func retainConversationIdentity(through memberID: String) {
+        guard identityTaskID != memberID else { return }
+        identityTaskID = memberID
+        if !lastKnownMemberIDsOldestFirst.contains(memberID) {
+            lastKnownMemberIDsOldestFirst.append(memberID)
+        }
+        if didSubscribe { recomputeMembersAndLeases() }
+    }
 
     /// Recomputes conversation membership (Design point 6) from `identityTaskID` — the conversation's
     /// own normalised identity, NOT the fixed `taskID` this VM was opened through (Codex review
@@ -497,6 +511,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         pendingTimelineInput = nil
         latestTimelineInput = nil
         appliedTimelinePresentation = nil
+        appliedTimelineInput = nil
         olderActivityRequest = false
         title = ""
         ancestorCrumbs = []

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Promote open single-conversation groups to Parallel when independent conversations join, preserving loaded activity and reading state.
+- Follow newly inserted working Parallel columns from the horizontal left edge while preserving readers who have scrolled away.
+
 - Show engine capture/input evidence and background idle-bound diagnostics in inspector notices.
 - Add bounded, source-labelled backend transcript recovery activity without changing task outcomes or captured summaries.
 

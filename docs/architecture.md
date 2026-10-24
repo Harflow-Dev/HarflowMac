@@ -14,6 +14,14 @@ Graph keeps a full-height canvas and a resizable inspector (420 pt initially, 22
 
 The bottom summary reserves one collapsed line; its bounded scrolling expansion overlays upward without moving the canvas. Parallel retains all current workflow task columns. Selected activity has independent viewport leases and retained per-attempt feed state. Immutable, equality-checked sidebar derivation runs outside the main actor and discards superseded results.
 
+## Group activity presentation
+
+A group-scoped presenter observes membership independently of task completion and derives conversation classification outside the main actor. A single conversation keeps its detail model through resumes and pruning. Adding another independent conversation promotes the mounted group to Parallel until that group is closed or another destination is selected; shrinking membership retains that renderer.
+
+Promotion captures the last applied activity input and presentation before detail teardown. Parallel receives the original rows, Markdown snapshots, shared reading/disclosure/follow state, loaded-member frontier, event boundaries and conversation-history inventory. Visible columns reacquire their own leases and refresh retained activity; the hidden detail owns no polling or leases.
+
+Standalone groups and workflow activity share native horizontal insertion following. A genuinely new working conversation follows only when the pre-insertion viewport is within 2 pt of the physical left edge. The newest relevant inserted lane is leading-aligned after measured layout. Other membership changes preserve the logical reading anchor. Horizontal wheel, trackpad, scroller and keyboard intent cancel queued movement; explicit workflow task navigation takes priority. Initial population, status changes, reordering, resizing and context switches do not initiate insertion following.
+
 ## Streaming Markdown
 
 Task, Parallel, and native workflow activity prepare immutable Markdown blocks outside the main actor. Each conversation row retains its own parser snapshot, keyed by its task and event sequence. Appended text reparses the unresolved suffix; completed blocks retain source-offset identities and prepared inline attributes. Superseded presentation builds cannot publish their parser state. Removed rows and full teardown discard it; hidden visited Parallel columns retain it with their activity snapshot.
