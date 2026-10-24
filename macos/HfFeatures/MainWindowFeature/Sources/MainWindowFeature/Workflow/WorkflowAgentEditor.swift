@@ -10,6 +10,21 @@ import SwiftUI
 enum WorkflowAgentEditorPresentation {
     static func showsModelAndEffort(backend: String) -> Bool { backend != "vibe" }
 
+    /// Retains the supplied frequency order and the saved backend without duplicates.
+    static func backendOptions(_ available: [String], current: String, preferred: String?) -> [String] {
+        var seen = Set<String>()
+        let first = preferred.flatMap { available.contains($0) ? $0 : nil }.map { [$0] } ?? []
+        return (first + available + [current].filter { !$0.isEmpty }).filter { seen.insert($0).inserted }
+    }
+
+    /// A supported exact orchestrator model precedes Default for node menus only.
+    static func modelOptions(_ available: [ModelChoiceModel], preferred: String?) -> [ModelChoiceModel] {
+        var seen = Set<String>()
+        let unique = available.filter { seen.insert($0.id).inserted }
+        guard let preferred, !preferred.isEmpty, let match = unique.first(where: { $0.id == preferred }) else { return unique }
+        return [match] + unique.filter { $0.id != preferred }
+    }
+
     static func modelValue(_ text: String) -> JSONValue? {
         text.isEmpty ? nil : .string(text)
     }
@@ -62,10 +77,18 @@ struct WorkflowAgentEditor: View {
     let loadModels: (String) -> Void
     var allowsFallbacks = true
     var callerApprovalBackends: Set<String> = []
+    var preferredAgent: [String: JSONValue]?
     @State private var approvalNote: String?
 
     private var backend: String { candidate["backend"]?.stringValue ?? "" }
-    private var allBackends: [String] { Array(Set(backendIDs + [backend].filter { !$0.isEmpty })).sorted() }
+    private var allBackends: [String] {
+        WorkflowAgentEditorPresentation.backendOptions(backendIDs, current: backend, preferred: preferredAgent?["backend"]?.stringValue)
+    }
+
+    private var displayedModels: [ModelChoiceModel] {
+        WorkflowAgentEditorPresentation.modelOptions(modelChoices[backend] ?? [ModelChoiceModel(id: "", title: "Default")],
+                                                     preferred: preferredAgent?["model"]?.stringValue)
+    }
 
     private var approvalDescription: String {
         candidate["max_turns"] == nil || candidate["max_turns"] == .null
@@ -89,7 +112,7 @@ struct WorkflowAgentEditor: View {
                     WorkflowFormRow(label: "Model") {
                         ModelCombo(
                             text: candidate["model"]?.stringValue ?? "",
-                            choices: modelChoices[backend] ?? [ModelChoiceModel(id: "", title: "Default")]
+                            choices: displayedModels
                         ) {
                             candidate["model"] = WorkflowAgentEditorPresentation.modelValue($0)
                         }

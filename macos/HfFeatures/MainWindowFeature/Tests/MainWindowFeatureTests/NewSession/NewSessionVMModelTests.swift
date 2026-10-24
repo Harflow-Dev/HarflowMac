@@ -10,7 +10,7 @@ import Testing
 @MainActor
 @Suite struct NewSessionVMModelTests {
 
-    private func makeSUT(catalog: BackendCatalog = .empty, models: [String: [ModelOption]] = [:]) -> (
+    private func makeSUT(catalog: BackendCatalog = .empty, models: [String: [ModelOption]] = [:], usage: AgentUsageSnapshot = .init()) -> (
         sut: NewSessionVM, useCase: MockNewSessionUseCase, routing: MockNewSessionRouting, catalogSubject: PassthroughSubject<BackendCatalog, Never>
     ) {
         let useCase = MockNewSessionUseCase()
@@ -20,6 +20,8 @@ import Testing
         given(useCase).tasks.willReturn([])
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(useCase).models(for: .any).willProduce { models[$0] ?? [] }
+        given(useCase).agentUsageSnapshot.willReturn(usage)
+        given(useCase).agentUsagePublisher().willReturn(Just(usage).eraseToAnyPublisher())
         return (NewSessionVM(useCase: useCase, routing: routing), useCase, routing, catalogSubject)
     }
 
@@ -46,6 +48,7 @@ import Testing
     @Test func givenAnAgentWithKnownModels_whenTheSheetAppears_thenDefaultComesFirstThenTheModels() async {
         // given
         let (sut, _, _, _) = makeSUT(models: ["claude": [opusOption, sonnetOption]])
+        sut.didChangeBackend("claude")
         #expect(sut.modelChoices == [ModelChoiceModel(id: "", title: "Default")])
 
         // when
@@ -56,6 +59,28 @@ import Testing
         #expect(sut.modelChoices == [
             ModelChoiceModel(id: "", title: "Default"), ModelChoiceModel(id: "opus", title: "Opus"), ModelChoiceModel(id: "sonnet", title: "Sonnet")
         ])
+    }
+
+    @Test func givenUsageAcrossBackends_whenTheSheetOpens_thenBackendsAndModelsAreRankedWithoutChangingLabels() async {
+        // given
+        let usage = AgentUsageSnapshot(counts: [
+            AgentUsageIdentity(backend: "codex", model: "gpt-5"): 4,
+            AgentUsageIdentity(backend: "claude", model: "opus"): 2
+        ])
+        let (sut, _, _, _) = makeSUT(
+            catalog: catalog([("claude", true), ("codex", true)]),
+            models: ["codex": [ModelOption(value: "gpt-5", label: "GPT 5"), ModelOption(value: "mini", label: "Mini")]],
+            usage: usage
+        )
+
+        // when
+        sut.didAppear()
+        await waitUntil { sut.modelChoices.count == 3 }
+
+        // then
+        #expect(sut.agentOptions.map(\.id) == ["codex", "claude"])
+        #expect(sut.modelChoices.map(\.id) == ["", "gpt-5", "mini"])
+        #expect(sut.modelChoices.map(\.title) == ["Default", "GPT 5", "Mini"])
     }
 
     @Test(.timeLimit(.minutes(1))) func givenAnAgentWithNoKnownModels_whenTheSheetAppears_thenOnlyDefaultIsOffered() async {
@@ -147,6 +172,7 @@ import Testing
     @Test func givenASuggestionIsPicked_whenStarted_thenItsValueIsTheModel() async {
         // given
         let (sut, useCase, routing, _) = makeSUT(models: ["claude": [opusOption]])
+        sut.didChangeBackend("claude")
         sut.didAppear()
         await waitUntil { sut.modelChoices.count == 2 }
 

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -151,6 +152,8 @@ import Testing
         let routing = MockWorkflowRouting()
         given(routing).openWorkflowRun(id: .any).willReturn()
         let useCase = MockWorkflowUseCase()
+        given(useCase).agentUsageSnapshot.willReturn(.init())
+        given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).backendIDs.willReturn(["codex", "claude"])
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()

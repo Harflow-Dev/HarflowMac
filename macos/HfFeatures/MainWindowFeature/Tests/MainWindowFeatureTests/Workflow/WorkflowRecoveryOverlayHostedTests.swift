@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import HfTestUtilities
 import HfUI
 @testable import MainWindowFeature
@@ -13,6 +14,7 @@ import Testing
     @Test func givenEligibleWorkflow_whenOverlayCloses_thenDiagnosticsGeometryAndInputRemainStable() async throws {
         // given
         let harness = WorkflowTests().makeVM()
+        given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
         defer { vm.didDisappear() }
         var raw: [String: JSONValue] = [
@@ -74,6 +76,7 @@ import Testing
     @Test func givenLongRecoveryQuestionInNarrowWorkflow_whenOverlayIsShown_thenQuestionAndActionsRemainReachable() async throws {
         // given
         let harness = WorkflowTests().makeVM()
+        given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
         defer { vm.didDisappear() }
         var raw: [String: JSONValue] = [

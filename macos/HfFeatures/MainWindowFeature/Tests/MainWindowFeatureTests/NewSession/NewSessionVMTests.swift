@@ -21,6 +21,8 @@ import Testing
         given(useCase).tasks.willReturn(tasks)
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(useCase).models(for: .any).willReturn([])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
+        given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let sut = NewSessionVM(useCase: useCase, routing: routing)
         return (sut, useCase, routing, catalogSubject)
     }
@@ -48,14 +50,12 @@ import Testing
 
     // MARK: - Defaults (headless-only)
 
-    @Test func givenDefaults_whenTheSheetOpens_thenClaudeReadOnlyAndEmptyFieldsShow() {
-        // given / when — the catalog hasn't reported yet (`.empty` = `.loading`), so the picker
-        // falls back to `BackendStyle.known`, whose first entry is "claude" (Design's New Session
-        // section: this fallback, not a hardcoded default, is why "claude" is still what shows).
+    @Test func givenDefaults_whenTheSheetOpens_thenTheFirstIdentityReadOnlyAndEmptyFieldsShow() {
+        // given / when — loading uses known harnesses with zero usage, so binary identity breaks ties.
         let (sut, _, _, _) = makeSUT()
 
         // then
-        #expect(sut.backend == "claude")
+        #expect(sut.backend == "antigravity")
         #expect(sut.freedom == "read_only")
         #expect(sut.repo == "")
         #expect(sut.message == "")
@@ -228,10 +228,10 @@ import Testing
         let (sut, _, _, _) = makeSUT(catalog: BackendCatalog(entries: [], state: .degraded))
 
         // then
-        #expect(sut.agentOptions.map(\.id) == BackendStyle.known)
+        #expect(sut.agentOptions.map(\.id) == ["antigravity", "claude", "codex", "opencode", "vibe"])
         #expect(sut.agentOptions.allSatisfy { !$0.isNotFound })
         #expect(sut.agentListUnavailableNote == "Backend list unavailable — update harflow.")
-        #expect(sut.backend == BackendStyle.known.first)
+        #expect(sut.backend == "antigravity")
     }
 
     @Test func givenTheCatalogIsStillLoading_whenTheSheetOpens_thenItFallsBackToTheKnownBackendsWithNoNote() {
@@ -239,7 +239,7 @@ import Testing
         let (sut, _, _, _) = makeSUT(catalog: .empty)
 
         // then
-        #expect(sut.agentOptions.map(\.id) == BackendStyle.known)
+        #expect(sut.agentOptions.map(\.id) == ["antigravity", "claude", "codex", "opencode", "vibe"])
         #expect(sut.agentListUnavailableNote == nil)
     }
 
@@ -256,11 +256,11 @@ import Testing
         catalogSubject.send(catalog([("vibe", true), ("codex", true), ("claude", true)]))
 
         // then
-        await waitUntil { sut.agentOptions.map(\.id) == ["vibe", "codex", "claude"] }
+        await waitUntil { sut.agentOptions.map(\.id) == ["claude", "codex", "vibe"] }
         #expect(sut.backend == "codex")
     }
 
-    @Test func givenTheSelectedBackendLeavesTheCatalog_whenReplaced_thenSelectionFallsToTheFirstEntry() async {
+    @Test func givenTheSelectedBackendLeavesTheCatalog_whenReplaced_thenSelectionFallsToTheFirstRankedEntry() async {
         // given
         let (sut, _, _, catalogSubject) = makeSUT(catalog: catalog([("claude", true), ("codex", true)]))
         sut.didAppear()
@@ -271,8 +271,8 @@ import Testing
         catalogSubject.send(catalog([("vibe", true), ("claude", true)]))
 
         // then
-        await waitUntil { sut.backend == "vibe" }
-        #expect(sut.backend == "vibe")
+        await waitUntil { sut.backend == "claude" }
+        #expect(sut.backend == "claude")
     }
 
     @Test func givenAnEmptySuccessfulCatalog_whenReplaced_thenBackendClearsAndStartDisables() async {
@@ -410,6 +410,7 @@ import Testing
     @Test func givenAModelAndTurnLimit_whenStarted_thenTheyReachTheRequest() async {
         // given
         let (sut, useCase, routing, _) = makeSUT()
+        sut.didChangeBackend("claude")
         sut.didChangeModel(" gpt-x ")
         sut.didChangeTurnLimit(" 40 ")
 
@@ -437,8 +438,9 @@ import Testing
 
     @Test(arguments: ["abc", "0", "-3", "1.5", "99999999999999999999"])
     func givenAnInvalidTurnLimit_whenReady_thenStartIsHeldBackWithAReason(_ text: String) {
-        // given — the default agent (claude) takes a turn limit.
+        // given — explicitly select a harness that accepts a turn limit.
         let (sut, _, _, _) = makeSUT()
+        sut.didChangeBackend("claude")
         sut.didChangeMessage("Fix it")
         sut.didChangeRepo("/repo")
 
@@ -453,6 +455,7 @@ import Testing
     @Test func givenABlankTurnLimit_whenStarted_thenMaxTurnsIsNilAndStartIsAllowed() async {
         // given
         let (sut, useCase, routing, _) = makeSUT()
+        sut.didChangeBackend("claude")
         sut.didChangeTurnLimit("   ")
 
         // when
@@ -468,6 +471,7 @@ import Testing
     @Test func givenAnAgentThatTakesEffort_whenEffortIsChosen_thenItReachesTheRequestAndOptionsAreListed() async {
         // given
         let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true), ("vibe", true)]))
+        sut.didChangeBackend("claude")
         #expect(sut.showsEffort)
         #expect(sut.effortOptions == ["low", "medium", "high", "xhigh"])
 
@@ -534,6 +538,7 @@ import Testing
     @Test func givenXhighSelectedThenAntigravityChosen_whenStarted_thenTheInvalidEffortIsNotSent() async {
         // given
         let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true), ("antigravity", true)]))
+        sut.didChangeBackend("claude")
         sut.didChangeEffort("xhigh")
         #expect(sut.effort == "xhigh")
 

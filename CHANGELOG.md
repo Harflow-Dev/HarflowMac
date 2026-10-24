@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rank agent and model menus by acknowledged app submissions, with supported orchestrator preferences in workflow node menus.
+
 - Promote open single-conversation groups to Parallel when independent conversations join, preserving loaded activity and reading state.
 - Follow newly inserted working Parallel columns from the horizontal left edge while preserving readers who have scrolled away.
 

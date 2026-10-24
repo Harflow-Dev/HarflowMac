@@ -282,7 +282,8 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     ),
                     backendIDs: viewModel.backendIDs,
                     modelChoices: viewModel.modelChoices,
-                    loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends
+                    loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends,
+                    preferredAgent: viewModel.definition["orchestrator"]?.objectValue
                 )
                 executionSetting(node)
                 sessionSetting(node)

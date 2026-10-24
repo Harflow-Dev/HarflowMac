@@ -24,6 +24,8 @@ import Testing
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn(["codex", "claude"])
         given(useCase).modelOptions(backend: .any).willReturn([])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
+        given(useCase).recordAgentUsage(.any, acknowledgementID: .any).willReturn()
         given(useCase).refreshTasks().willReturn()
         given(routing).chooseDirectory().willReturn(nil)
         given(routing).selectTask(.any).willReturn()
@@ -584,6 +586,7 @@ extension WorkflowTests {
         // given
         let useCase = MockWorkflowUseCase()
         given(useCase).backendIDs.willReturn(["codex"])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
         let routing = MockWorkflowRouting()
         given(routing).openWorkflowRun(id: .any).willReturn()
         let sut = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,

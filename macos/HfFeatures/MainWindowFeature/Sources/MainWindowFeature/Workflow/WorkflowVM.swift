@@ -18,11 +18,17 @@ protocol WorkflowUseCase: Sendable {
     func artifactPage(runID: String, executionID: String, cursor: String?) async -> Result<WorkflowArtifactPage, ToolError>
     func refreshTasks() async
     var backendIDs: [String] { get }
+    var agentUsageSnapshot: AgentUsageSnapshot { get }
+    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never>
+    func recordAgentUsage(_ identity: AgentUsageIdentity, acknowledgementID: String) async
     var callerApprovalBackends: Set<String> { get }
     func modelOptions(backend: String) async -> [ModelOption]
 }
 
 extension WorkflowUseCase {
+    var agentUsageSnapshot: AgentUsageSnapshot { .init() }
+    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
+    func recordAgentUsage(_: AgentUsageIdentity, acknowledgementID _: String) async {}
     var callerApprovalBackends: Set<String> { [] }
     func artifactPage(runID _: String, executionID _: String, cursor _: String?) async -> Result<WorkflowArtifactPage, ToolError> {
         .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
@@ -121,6 +127,10 @@ final class WorkflowVM: WorkflowViewModel {
     var generationAgent: [String: JSONValue] = ["backend": .string("codex")]
     var generationFallbacks: [[String: JSONValue]] = []
     var modelChoices: [String: [ModelChoiceModel]] = [:]
+    var agentUsageSnapshot = AgentUsageSnapshot()
+    @ObservationIgnored private var usageSubscription: AnyCancellable?
+    @ObservationIgnored private var modelTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var modelGeneration = UUID()
     var showsRunSheet = false { didSet { if showsRunSheet != oldValue { scheduleLaunchPreview() } } }
     var launchPreview: WorkflowPermissionPreview?
     var launchPreviewMessage: String?
@@ -174,6 +184,7 @@ final class WorkflowVM: WorkflowViewModel {
         self.parallel = parallel
         self.visibility = visibility
         self.scheduler = scheduler
+        self.agentUsageSnapshot = useCase.agentUsageSnapshot
         parallel.setWorkflowTaskIDs([])
     }
 
@@ -196,7 +207,8 @@ final class WorkflowVM: WorkflowViewModel {
         }
     }
 
-    var backendIDs: [String] { useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs }
+    // Only the small available harness menu is ordered here; the draft remains untouched.
+    var backendIDs: [String] { agentUsageSnapshot.rankedBackends(useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs) }
     var selectedEdge: WorkflowEdgeModel? { edges.first { $0.id == selectedEdgeID } }
     var canSave: Bool {
         initialLoadingKind == nil && !initialLoadFailed && !checkingEditorBaseline
@@ -225,6 +237,10 @@ final class WorkflowVM: WorkflowViewModel {
             return
         }
         didSubscribe = true
+        applyUsageSnapshot(useCase.agentUsageSnapshot)
+        usageSubscription = useCase.agentUsagePublisher().receive(on: DispatchQueue.main).sink { [weak self] snapshot in
+            self?.applyUsageSnapshot(snapshot)
+        }
         if selectedRun?.raw["status"]?.stringValue == nil, selectedRun != nil {
             initialLoadingKind = "run"
             initialLoadFailed = false
@@ -265,6 +281,11 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        usageSubscription = nil
+        for task in modelTasks.values { task.cancel() }
+        modelTasks.removeAll()
+        modelGeneration = UUID()
+
         sidebarTask?.cancel()
         sidebarTask = nil
         sidebarGeneration = UUID()
@@ -376,6 +397,9 @@ final class WorkflowVM: WorkflowViewModel {
             return
         }
         let capturedName = loadedName
+        let capturedDefinition = definition
+        let candidate = overrideOrchestrator ? launchAgent : (capturedDefinition["orchestrator"]?.objectValue ?? [:])
+        let capturedIdentity = AgentUsageIdentity(backend: candidate["backend"]?.stringValue ?? "", model: candidate["model"]?.stringValue)
         let goalOptions = goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["--goal=\(goal)"]
         let capturedOptions = goalOptions + launchPreviewOptions + ["--monitor", "--prompt=\(prompt)", "--expected-preview-hash=\(preview.hash)"]
         perform { [weak self] in
@@ -388,13 +412,15 @@ final class WorkflowVM: WorkflowViewModel {
                 scheduleLaunchPreview()
                 throw error
             }
-            guard let id = response["workflow_run_id"]?.stringValue else {
+            guard let id = response["workflow_run_id"]?.stringValue, !id.isEmpty else {
                 throw WorkflowUIError.missingRun
             }
+            await useCase.recordAgentUsage(capturedIdentity, acknowledgementID: "workflow:" + id)
             showsRunSheet = false
             initialLoadingKind = "run"
             initialLoadFailed = false
-            selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "workflow_name": .string(loadedName), "definition": .object(definition)])
+            selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "workflow_name": .string(capturedName),
+                                                 "definition": .object(capturedDefinition)])
             isEditing = false
             if routesStartedRun {
                 routing.openWorkflowRun(id: id)
@@ -468,16 +494,32 @@ final class WorkflowVM: WorkflowViewModel {
         }
     }
 
+    private func applyUsageSnapshot(_ snapshot: AgentUsageSnapshot) {
+        guard agentUsageSnapshot != snapshot else { return }
+        agentUsageSnapshot = snapshot
+        let loaded = Set(modelChoices.keys).union(modelTasks.keys)
+        for task in modelTasks.values { task.cancel() }
+        modelTasks.removeAll()
+        modelGeneration = UUID()
+        for backend in loaded { requestModels(backend) }
+    }
+
     func loadModels(_ backend: String) {
-        guard modelChoices[backend] == nil else {
-            return
-        }
-        Task { [weak self] in
-            guard let self else {
-                return
-            }
+        guard modelChoices[backend] == nil else { return }
+        requestModels(backend)
+    }
+
+    private func requestModels(_ backend: String) {
+        guard modelTasks[backend] == nil else { return }
+        let generation = modelGeneration
+        modelTasks[backend] = Task { [weak self, useCase] in
             let options = await useCase.modelOptions(backend: backend)
-            modelChoices[backend] = [ModelChoiceModel(id: "", title: "Default")] + options.map { ModelChoiceModel(id: $0.value, title: $0.label) }
+            let usage = useCase.agentUsageSnapshot
+            let ranked = await Task.detached { usage.rankedModels(options, backend: backend) }.value
+            guard !Task.isCancelled, let self, modelGeneration == generation else { return }
+            let choices = [ModelChoiceModel(id: "", title: "Default")] + ranked.map { ModelChoiceModel(id: $0.value, title: $0.label) }
+            if modelChoices[backend] != choices { modelChoices[backend] = choices }
+            modelTasks[backend] = nil
         }
     }
 

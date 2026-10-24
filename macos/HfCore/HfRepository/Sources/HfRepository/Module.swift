@@ -18,6 +18,7 @@ public final class Module: HfModule {
         let scheduler = SystemScheduler()
         let visibility = SystemMonitorVisibility()
         let settings = SettingsRepositoryImpl()
+        let agentUsage = AgentUsageRepositoryImpl()
         let layout = ManagedRuntimeLayout(home: ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory())
         let baseEnvironment = ProcessInfo.processInfo.environment
         let installer: any ManagedRuntimeInstalling
@@ -51,6 +52,7 @@ public final class Module: HfModule {
             .environment(\.scheduling, scheduler)
             .environment(\.monitorVisibility, visibility)
             .environment(\.settingsRepository, settings)
+            .environment(\.agentUsageRepository, agentUsage)
             .environment(\.toolEnvironmentRepository, toolEnvironment)
             .environment(\.taskSnapshotRepository, snapshot)
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))

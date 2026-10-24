@@ -22,6 +22,7 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.backendsRepository) private var backendsRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.modelCatalogRepository) private var modelCatalogRepository
+    @GlobalEnvironment(\.agentUsageRepository) private var agentUsageRepository
 
     // MARK: - Init
 
@@ -29,12 +30,14 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
         taskActionRepository: (any TaskActionRepository)? = nil,
         backendsRepository: (any BackendsRepository)? = nil,
         taskListRepository: (any TaskListRepository)? = nil,
-        modelCatalogRepository: (any ModelCatalogRepository)? = nil
+        modelCatalogRepository: (any ModelCatalogRepository)? = nil,
+        agentUsageRepository: (any AgentUsageRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskActionRepository { self.taskActionRepository = taskActionRepository }
         if let backendsRepository { self.backendsRepository = backendsRepository }
         if let modelCatalogRepository { self.modelCatalogRepository = modelCatalogRepository }
+        if let agentUsageRepository { self.agentUsageRepository = agentUsageRepository }
     }
 
     // MARK: - NewSessionUseCase Methods
@@ -51,8 +54,14 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
     }
 
     func run(_ request: RunRequest) async throws -> String {
-        try await taskActionRepository.run(request)
+        let identity = AgentUsageIdentity(backend: request.backend, model: request.model)
+        let id = try await taskActionRepository.run(request)
+        if !id.isEmpty { await agentUsageRepository.record(identity, acknowledgementID: "task:" + id) }
+        return id
     }
+
+    var agentUsageSnapshot: AgentUsageSnapshot { agentUsageRepository.snapshot }
+    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { agentUsageRepository.snapshotPublisher() }
 
     var tasks: [TaskInfo] { taskListRepository.tasks }
 

@@ -59,6 +59,42 @@ import Testing
         #expect(id == "new-id")
     }
 
+    @Test func givenRunSucceedsWithAnID_whenCalled_thenItRecordsTheImmutableSubmittedIdentity() async throws {
+        // given
+        let taskAction = MockTaskActionRepository()
+        let usage = MockAgentUsageRepository()
+        let request = RunRequest(backend: "claude", repo: "/tmp", prompt: "hi", model: "sonnet")
+        given(taskAction).run(.value(request)).willReturn("new-id")
+        given(usage).record(.any, acknowledgementID: .any).willReturn()
+        let sut = NewSessionViewRepository(taskActionRepository: taskAction, agentUsageRepository: usage)
+
+        // when
+        _ = try await sut.run(request)
+
+        // then
+        verify(usage)
+.record(
+            .value(AgentUsageIdentity(backend: "claude", model: "sonnet")), acknowledgementID: .value("task:new-id")
+        )
+.called(1)
+    }
+
+    @Test func givenRunReturnsNoID_whenCalled_thenUsageIsNotRecorded() async throws {
+        // given
+        let taskAction = MockTaskActionRepository()
+        let usage = MockAgentUsageRepository()
+        let request = RunRequest(backend: "claude", repo: "/tmp", prompt: "hi")
+        given(taskAction).run(.value(request)).willReturn("")
+        given(usage).record(.any, acknowledgementID: .any).willReturn()
+        let sut = NewSessionViewRepository(taskActionRepository: taskAction, agentUsageRepository: usage)
+
+        // when
+        #expect(try await sut.run(request) == "")
+
+        // then
+        verify(usage).record(.any, acknowledgementID: .any).called(0)
+    }
+
     // MARK: - Backend catalog (Monitor piece 6)
 
     @Test func givenBackendCatalogValues_whenReadOrSubscribed_thenTheyPassThroughToBackendsRepository() {

@@ -19,6 +19,46 @@ struct WorkflowAgentEditorTests {
         #expect(WorkflowAgentEditorPresentation.modelValue("opus") == .string("opus"))
     }
 
+    @Test func givenSupportedPreferredBackend_whenOptionsAreBuilt_thenItLeadsOnceAheadOfFrequencyOrder() {
+        let options = WorkflowAgentEditorPresentation.backendOptions(
+            ["codex", "codex", "claude"], current: "claude", preferred: "claude")
+
+        #expect(options == ["claude", "codex"])
+    }
+
+    @Test func givenUnavailablePreferredBackend_whenOptionsAreBuilt_thenCurrentSelectionIsRetainedWithoutDuplicates() {
+        let options = WorkflowAgentEditorPresentation.backendOptions(
+            ["codex", "codex"], current: "claude", preferred: "vibe")
+
+        #expect(options == ["codex", "claude"])
+    }
+
+    @Test func givenSupportedPreferredModelAcrossBackends_whenModelMenuIsBuilt_thenExactModelLeadsDefault() {
+        let options = WorkflowAgentEditorPresentation.modelOptions(
+            [
+                ModelChoiceModel(id: "", title: "Default"),
+                ModelChoiceModel(id: "gpt-5", title: "GPT-5"),
+                ModelChoiceModel(id: "gpt-5", title: "Duplicate GPT-5")
+            ], preferred: "gpt-5")
+
+        #expect(options.map(\.id) == ["gpt-5", ""])
+        #expect(options.first?.title == "GPT-5")
+    }
+
+    @Test func givenIncompatiblePreferredModel_whenEditorOptionsAreBuilt_thenSelectionAndCandidateRemainUnchanged() {
+        let candidate: [String: JSONValue] = ["backend": .string("vibe"), "model": .string("custom")]
+        let options = WorkflowAgentEditorPresentation.modelOptions(
+            [ModelChoiceModel(id: "", title: "Default"), ModelChoiceModel(id: "gpt-5", title: "GPT-5")],
+            preferred: "claude-opus")
+        let backends = WorkflowAgentEditorPresentation.backendOptions(
+            ["vibe", "vibe", "codex"], current: candidate["backend"]?.stringValue ?? "", preferred: "claude")
+
+        #expect(options.map(\.id) == ["", "gpt-5"])
+        #expect(backends == ["vibe", "codex"])
+        #expect(candidate["backend"]?.stringValue == "vibe")
+        #expect(candidate["model"]?.stringValue == "custom")
+    }
+
     @Test func givenOrderedFallbacks_whenAdded_thenNewFallbackAppendsLast() {
         // given
         var candidate: [String: JSONValue] = ["backend": .string("codex")]

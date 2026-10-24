@@ -32,12 +32,20 @@ protocol NewSessionUseCase: Sendable {
 
     // MARK: Backend catalog (Monitor piece 6)
 
+    var agentUsageSnapshot: AgentUsageSnapshot { get }
+    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never>
+
     var backendCatalog: BackendCatalog { get }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never>
 
     /// The known models for `backend` (no "Default" entry); empty when there are none or discovery
     /// failed. Never throws and never blocks the caller beyond the discovery itself.
     func models(for backend: String) async -> [ModelOption]
+}
+
+extension NewSessionUseCase {
+    var agentUsageSnapshot: AgentUsageSnapshot { .init() }
+    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
 }
 
 // MARK: - NewSessionRouting
@@ -189,6 +197,7 @@ final class NewSessionVM: NewSessionViewModel {
 
     private var recentRepoPaths: [String] = []
     private var modelOptions: [ModelOption] = []
+    private var usage = AgentUsageSnapshot()
     @ObservationIgnored private let useCase: any NewSessionUseCase
     @ObservationIgnored private let routing: any NewSessionRouting
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
@@ -200,6 +209,7 @@ final class NewSessionVM: NewSessionViewModel {
     init(useCase: any NewSessionUseCase, routing: any NewSessionRouting) {
         self.useCase = useCase
         self.routing = routing
+        self.usage = useCase.agentUsageSnapshot
         applyCatalog(useCase.backendCatalog)
         refreshRecentRepos()
     }
@@ -320,7 +330,9 @@ final class NewSessionVM: NewSessionViewModel {
         modelsTask = Task { [weak self, useCase] in
             let options = await useCase.models(for: requested)
             guard !Task.isCancelled, let self, backend == requested else { return }
-            modelOptions = options
+            let ranked = await Task.detached { [usage = useCase.agentUsageSnapshot] in usage.rankedModels(options, backend: requested) }.value
+            guard !Task.isCancelled, backend == requested else { return }
+            if modelOptions != ranked { modelOptions = ranked }
         }
     }
 
@@ -339,6 +351,15 @@ final class NewSessionVM: NewSessionViewModel {
     private func subscribeIfNeeded() {
         guard !didSubscribe else { return }
         didSubscribe = true
+        useCase.agentUsagePublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] usage in
+                guard let self, self.usage != usage else { return }
+                self.usage = usage
+                rankAgentOptions()
+                loadModels()
+            }
+            .store(in: &cancellables)
         useCase.backendCatalogPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] catalog in self?.applyCatalog(catalog) }
@@ -351,14 +372,24 @@ final class NewSessionVM: NewSessionViewModel {
     private func applyCatalog(_ catalog: BackendCatalog) {
         approvalBackends = catalog.state == .available ? Set(catalog.entries.filter(\.supportsCallerApprovals).map(\.backend)) : []
         let (options, unavailableNote) = Self.computeAgentOptions(from: catalog)
-        agentOptions = options
+        let order = usage.rankedBackends(options.map(\.id))
+        let ranked = order.compactMap { id in options.first { $0.id == id } }
+        if agentOptions != ranked { agentOptions = ranked }
         agentListUnavailableNote = unavailableNote
         let previous = backend
         if !options.contains(where: { $0.id == backend }) {
-            backend = options.first?.id ?? ""
+            backend = agentOptions.first?.id ?? ""
         }
         recomputeAgentNotFoundNote()
         if backend != previous, didSubscribe { agentDidChange() }
+    }
+
+    // Catalogs contain a bounded handful of harnesses; this pure presentation ordering never
+    // reconciles selection or changes a submitted request.
+    private func rankAgentOptions() {
+        let order = usage.rankedBackends(agentOptions.map(\.id))
+        let ranked = order.compactMap { id in agentOptions.first { $0.id == id } }
+        if agentOptions != ranked { agentOptions = ranked }
     }
 
     private func recomputeAgentNotFoundNote() {

@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import HfRepository
 import HfTestUtilities
@@ -14,6 +15,8 @@ import Testing
         let store = WorkflowDraftTests().store()
         let useCase = MockWorkflowUseCase()
         given(useCase).backendIDs.willReturn(["codex"])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
+        given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         if failRead {
             given(useCase).command(.value("get"), options: .any, positionals: .any).willThrow(WorkflowUIError.missingRun)
@@ -143,6 +146,8 @@ import Testing
         let useCase = MockWorkflowUseCase()
         let references: [JSONValue] = [.object(["target_workflow_id": .string("missing"), "node_id": .string("verify")])]
         given(useCase).backendIDs.willReturn(["codex"])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
+        given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false), "error": .string("Missing workflow"),
                                                             "missing_references": .array(references), "missing_references_truncated": .bool(true)])
         let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,

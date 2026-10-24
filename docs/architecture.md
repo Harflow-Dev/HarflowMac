@@ -8,6 +8,12 @@ The local package build packages the app icon and both menu template images, the
 
 Ctl/setup commands and asynchronous store readers validate the selected runtime and lexical state root before operations. See [MonitorCore compatibility](../macos/HfCore/MonitorCore/README.md). Managed readiness precedes those gates; no task history is scanned while preparation or qualification is unavailable.
 
+## Agent picker ranking
+
+`AgentUsageRepository` shares lifetime usage across New Session, workflow orchestrator and workflow node menus. One private actor atomically persists counts and processed acknowledgement IDs in one `UserDefaults` value. Acknowledged standalone submissions use task IDs; workflow starts and builder submissions use workflow run IDs. Failed commands, configured nodes, follow-ups, retries and engine-selected fallbacks do not add counts. Exact backend and full model values identify usage; nil and empty model values share the harness-default identity.
+
+Available catalog copies sort by descending count, with binary identity ties and stable identity deduplication. Default stays first in ordinary model menus. Node menus first offer the definition's orchestrator backend when available and its exact model when the current backend supports it, including a supported model shared across backends. Menu ordering never rewrites selected candidates, drafts or fallback execution arrays. Counts retain identities that are temporarily unavailable. Model sorting runs outside the main actor; small backend and preferred-option menu permutations use precomputed counts without scanning history.
+
 ## Workflow run presentation
 
 Graph keeps a full-height canvas and a resizable inspector (420 pt initially, 220–500 pt, with a 400 pt canvas floor). Agent selection shows the running or latest attempt and permits selecting earlier attempts. Native executions use their activity reader; on-demand nodes show their call history or Not called. Structural and orchestrator selection retains the run summary. Deselecting restores the default inspector's disclosure and scroll state.

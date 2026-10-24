@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import HfRepository
 import MonitorCore
@@ -12,6 +13,7 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.taskListRepository) private var taskList
     @GlobalEnvironment(\.backendsRepository) private var backends
     @GlobalEnvironment(\.modelCatalogRepository) private var models
+    @GlobalEnvironment(\.agentUsageRepository) private var usage
 
     func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
         try await repository.command(command, options: options, positionals: positionals)
@@ -33,6 +35,12 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     var callerApprovalBackends: Set<String> {
         backends.catalog.state == .available
             ? Set(backends.catalog.entries.filter(\.supportsCallerApprovals).map(\.backend)) : []
+    }
+
+    var agentUsageSnapshot: AgentUsageSnapshot { usage.snapshot }
+    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { usage.snapshotPublisher() }
+    func recordAgentUsage(_ identity: AgentUsageIdentity, acknowledgementID: String) async {
+        await usage.record(identity, acknowledgementID: acknowledgementID)
     }
 
     var backendIDs: [String] { backends.catalog.entries.map(\.backend) }

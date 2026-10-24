@@ -12,6 +12,8 @@ Streaming replies retain completed Markdown blocks while preparing the changing 
 
 Compatible engines expose capture ownership, live-input availability and background idle-cutoff diagnostics in the existing inspector notices. Lost-capture tasks can show source-labelled backend transcript activity; it is display only and does not establish completion or restore messaging. The app retains its explicitly paired engine version; older engines keep their existing captured activity.
 
+Agent and model menus share lifetime usage ranking from successful app submissions. Workflow node menus prefer a supported orchestrator agent and model while preserving saved selections.
+
 See [managed runtime](docs/managed-runtime.md) for acquisition, storage, retry, and current distribution limits.
 
 See [development](docs/development.md), [architecture](docs/architecture.md), [profiling](docs/monitor-performance.md), and [signing preparation](docs/ci-signing.md).

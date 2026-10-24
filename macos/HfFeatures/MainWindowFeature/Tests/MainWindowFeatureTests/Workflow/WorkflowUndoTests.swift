@@ -129,6 +129,7 @@ import Testing
         // given
         let helper = WorkflowDraftTests()
         let useCase = MockWorkflowUseCase()
+        given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
         let sut = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: helper.store(),

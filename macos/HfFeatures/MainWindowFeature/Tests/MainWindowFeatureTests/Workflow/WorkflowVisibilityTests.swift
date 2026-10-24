@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import HfCommon
 import HfRepository
@@ -19,6 +20,8 @@ import Testing
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn(["codex", "claude"])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
+        given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
         given(useCase).command(.any, options: .any, positionals: .any).willProduce { _, _, _ in
@@ -113,6 +116,7 @@ import Testing
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn([])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
         given(useCase).command(.any, options: .any, positionals: .any).willProduce { command, _, _ in
@@ -165,6 +169,7 @@ import Testing
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn([])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
         given(useCase).command(.any, options: .any, positionals: .any).willProduce { command, _, _ in
@@ -232,6 +237,7 @@ import Testing
         let status = PollCounter()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn([])
+        given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
         given(useCase).command(.any, options: .any, positionals: .any).willProduce { [raw] _, _, _ in

@@ -12,6 +12,8 @@ import Testing
     private func makeRunner() throws -> (WorkflowVM, MockWorkflowUseCase, MockWorkflowRouting) {
         let useCase = MockWorkflowUseCase()
         let routing = MockWorkflowRouting()
+        given(useCase).agentUsageSnapshot.willReturn(.init())
+        given(useCase).recordAgentUsage(.any, acknowledgementID: .any).willReturn()
         given(useCase).refreshTasks().willReturn()
         given(routing).openWorkflowRun(id: .any).willReturn()
         let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,

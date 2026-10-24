@@ -2,12 +2,82 @@ import Foundation
 import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
+import Mockable
 import MonitorCore
 import Testing
 
 // MARK: - WorkflowTests agent editing
 
 extension WorkflowTests {
+    @Test func givenBuilderIsSuspended_whenCandidateChanges_thenAcknowledgementUsesCapturedCandidate() async throws {
+        // given
+        let useCase = RecordingWorkflowBuilderUseCase()
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                            visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
+        vm.definition = try fixture("definition")
+        vm.name = "generated"
+        vm.repo = "/tmp"
+        vm.prompt = "build this"
+        vm.generationAgent = ["backend": .string("codex"), "model": .string("gpt-5")]
+
+        // when
+        vm.generate()
+        await waitUntil { useCase.pending != nil }
+        vm.generationAgent = ["backend": .string("vibe"), "model": .string("fast")]
+        useCase.pending?.resume(returning: ["workflow_run_id": .string("builder-1")])
+        useCase.pending = nil
+        await waitUntil { !vm.isBusy }
+
+        // then
+        #expect(useCase.recordedIdentity == AgentUsageIdentity(backend: "codex", model: "gpt-5"))
+        #expect(useCase.recordedAcknowledgementID == "workflow:builder-1")
+    }
+
+    @Test func givenBuilderReturnsNoRunID_whenGenerateCompletes_thenUsageIsNotRecorded() async throws {
+        // given
+        let harness = makeVM()
+        let vm = harness.sut
+        vm.definition = try fixture("definition")
+        vm.name = "generated"
+        vm.repo = "/tmp"
+        vm.prompt = "build this"
+        vm.generationAgent = ["backend": .string("codex"), "model": .string("gpt-5")]
+        given(harness.useCase)
+.command(.value("build"), options: .any, positionals: .value(["generated"]))
+            .willReturn([:])
+
+        // when
+        vm.generate()
+        await waitUntil { !vm.isBusy }
+
+        // then
+        verify(harness.useCase).recordAgentUsage(.any, acknowledgementID: .any).called(0)
+        #expect(vm.errorText == WorkflowUIError.missingRun.errorDescription)
+    }
+
+    @Test func givenBuilderFails_whenGenerateCompletes_thenCandidateUsageIsNotRecorded() async throws {
+        // given
+        let harness = makeVM()
+        let vm = harness.sut
+        vm.definition = try fixture("definition")
+        vm.name = "generated"
+        vm.repo = "/tmp"
+        vm.prompt = "build this"
+        vm.generationAgent = ["backend": .string("vibe"), "model": .string("fast")]
+        given(harness.useCase)
+.command(.value("build"), options: .any, positionals: .value(["generated"]))
+            .willThrow(WorkflowUIError.missingRun)
+
+        // when
+        vm.generate()
+        await waitUntil { !vm.isBusy }
+
+        // then
+        verify(harness.useCase).recordAgentUsage(.any, acknowledgementID: .any).called(0)
+        #expect(vm.errorText == WorkflowUIError.missingRun.errorDescription)
+    }
+
     @Test func givenBuilderPublishingDrafts_whenMapped_thenSourceIsInitialAndLatestPreviewDoesNotMutateEditor() throws {
         // given
         let vm = makeVM().sut
@@ -187,6 +257,8 @@ extension WorkflowTests {
 private final class RecordingWorkflowBuilderUseCase: WorkflowUseCase, @unchecked Sendable {
     var options: [String] = []
     var pending: CheckedContinuation<[String: JSONValue], Never>?
+    var recordedIdentity: AgentUsageIdentity?
+    var recordedAcknowledgementID: String?
     var backendIDs: [String] { ["codex"] }
     func command(_ command: String, options: [String], positionals _: [String]) async throws -> [String: JSONValue] {
         guard command == "build" else { return [:] }
@@ -198,4 +270,8 @@ private final class RecordingWorkflowBuilderUseCase: WorkflowUseCase, @unchecked
     func save(name _: String, definition _: JSONValue, expectedRevision _: Int, expectedWorkflowID _: String?) async throws -> [String: JSONValue] { [:] }
     func refreshTasks() async {}
     func modelOptions(backend _: String) async -> [ModelOption] { [] }
+    func recordAgentUsage(_ identity: AgentUsageIdentity, acknowledgementID: String) async {
+        recordedIdentity = identity
+        recordedAcknowledgementID = acknowledgementID
+    }
 }

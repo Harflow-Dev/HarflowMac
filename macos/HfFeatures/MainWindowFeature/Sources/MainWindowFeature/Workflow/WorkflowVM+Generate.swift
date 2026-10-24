@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import MonitorCore
 
 // MARK: - WorkflowVM generation
@@ -36,6 +37,8 @@ extension WorkflowVM {
                 clearBuilderDispatch(context: editorContext, key: capturedKey)
                 throw WorkflowUIError.missingRun
             }
+            let identity = AgentUsageIdentity(backend: candidate["backend"]?.stringValue ?? "", model: candidate["model"]?.stringValue)
+            await useCase.recordAgentUsage(identity, acknowledgementID: "workflow:" + id)
             var initialRun: [String: JSONValue] = ["workflow_run_id": .string(id), "workflow_name": .string(capturedName),
                                                  "kind": .string("builder"), "status": .string("starting")]
             if let context { initialRun["editing_definition"] = .object(context.definition) }
