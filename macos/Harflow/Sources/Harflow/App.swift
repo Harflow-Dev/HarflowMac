@@ -458,12 +458,16 @@ struct HarflowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private let coordinator: AppCoordinator
     private let menuBarIcon: NSImage?
+    let appearanceController: AppAppearanceController
 
     init() {
         // Decision 13: modules register (lowest layer first), synchronously, before anything reads
         // `GlobalValues` — `AppCoordinator()` below resolves its feature factories and repositories
         // from `GlobalValues` in its own `init`, so it must run after this line, not before it.
         ApplicationModules(modules: AppModulesRegistry.allModules).initialize()
+
+        // Set the process appearance before SwiftUI constructs any application scenes.
+        self.appearanceController = AppAppearanceController(settingsRepository: GlobalValues.settingsRepository)
 
         let coordinator = AppCoordinator()
         self.coordinator = coordinator

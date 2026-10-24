@@ -16,6 +16,10 @@ import SwiftUI
 @MainActor
 protocol SidebarUseCase: Sendable {
 
+    var appAppearance: AppAppearance { get }
+    func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never>
+    func setAppAppearance(_ appearance: AppAppearance)
+
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never>
     func listErrorPublisher() -> AnyPublisher<ToolError?, Never>
     func hasListedPublisher() -> AnyPublisher<Bool, Never>
@@ -55,6 +59,12 @@ protocol SidebarUseCase: Sendable {
     @discardableResult
     func installAnyway() async -> Bool
     func reset()
+}
+
+extension SidebarUseCase {
+    var appAppearance: AppAppearance { .system }
+    func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { Just(.system).eraseToAnyPublisher() }
+    func setAppAppearance(_: AppAppearance) {}
 }
 
 // MARK: - PendingReveal

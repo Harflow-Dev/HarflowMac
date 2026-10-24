@@ -100,6 +100,8 @@ public enum HfRadius {
         public static let sidebarFilterDotSize: CGFloat = 7
         public static let sidebarProgressHeight: CGFloat = 3
         public static let sidebarConnectionDotSize: CGFloat = 7
+        /// Square target for the sidebar's Light/Dark/System appearance buttons.
+        public static let appearanceControlSize: CGFloat = 32
         /// Sidebar control adaptation and preview canvases.
         public static let sidebarSearchMinimumWidth: CGFloat = 120
         public static let sidebarPreviewWidth: CGFloat = 272

@@ -47,6 +47,7 @@ final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, Sideb
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
     @GlobalEnvironment(\.backendsRepository) private var backendsRepository
+    @GlobalEnvironment(\.settingsRepository) private var settingsRepository
 
     // MARK: - Init
 
@@ -54,17 +55,22 @@ final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, Sideb
         taskListRepository: (any TaskListRepository)? = nil,
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
         installRepository: (any InstallRepository)? = nil,
-        backendsRepository: (any BackendsRepository)? = nil
+        backendsRepository: (any BackendsRepository)? = nil,
+        settingsRepository: (any SettingsRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
         if let installRepository { self.installRepository = installRepository }
         if let backendsRepository { self.backendsRepository = backendsRepository }
+        if let settingsRepository { self.settingsRepository = settingsRepository }
     }
 
     // MARK: - SidebarUseCase Methods
 
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }
+    var appAppearance: AppAppearance { settingsRepository.appAppearance }
+    func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { settingsRepository.appAppearancePublisher() }
+    func setAppAppearance(_ appearance: AppAppearance) { settingsRepository.setAppAppearance(appearance) }
     func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { taskListRepository.listErrorPublisher() }
     func hasListedPublisher() -> AnyPublisher<Bool, Never> { taskListRepository.hasListedPublisher() }
     func titlesPublisher() -> AnyPublisher<[String: String], Never> { taskListRepository.titlesPublisher() }

@@ -13,12 +13,14 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
     public static let toolDirectoryKey = "toolDirectory"
     public static let openWindowOnStartKey = "openWindowOnStart"
     public static let notifyOnFinishKey = "notifyOnFinish"
+    public static let appAppearanceKey = "harflow.appAppearance"
 
     private let defaults: UserDefaults
 
     @Subjected private var toolDirectoryValue: String
     @Subjected private var openWindowOnStartValue: Bool
     @Subjected private var notifyOnFinishValue: Bool
+    @Subjected private var appAppearanceValue: AppAppearance
 
     /// Registers the defaults (`register(defaults:)`, never `set`) so a key that was never written
     /// reads its documented default rather than `UserDefaults`' own type default (`false` for a
@@ -33,15 +35,18 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
         _toolDirectoryValue = Subjected(wrappedValue: defaults.string(forKey: Self.toolDirectoryKey) ?? "")
         _openWindowOnStartValue = Subjected(wrappedValue: defaults.object(forKey: Self.openWindowOnStartKey) as? Bool ?? true)
         _notifyOnFinishValue = Subjected(wrappedValue: defaults.object(forKey: Self.notifyOnFinishKey) as? Bool ?? true)
+        _appAppearanceValue = Subjected(wrappedValue: defaults.string(forKey: Self.appAppearanceKey).flatMap(AppAppearance.init(rawValue:)) ?? .system)
     }
 
     public var toolDirectory: String { toolDirectoryValue }
     public var openWindowOnStart: Bool { openWindowOnStartValue }
     public var notifyOnFinish: Bool { notifyOnFinishValue }
+    public var appAppearance: AppAppearance { appAppearanceValue }
 
     public func toolDirectoryPublisher() -> AnyPublisher<String, Never> { $toolDirectoryValue.removeDuplicates().eraseToAnyPublisher() }
     public func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { $openWindowOnStartValue.removeDuplicates().eraseToAnyPublisher() }
     public func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { $notifyOnFinishValue.removeDuplicates().eraseToAnyPublisher() }
+    public func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { $appAppearanceValue.removeDuplicates().eraseToAnyPublisher() }
 
     public func setToolDirectory(_ value: String) {
         defaults.set(value, forKey: Self.toolDirectoryKey)
@@ -56,5 +61,10 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
     public func setNotifyOnFinish(_ value: Bool) {
         defaults.set(value, forKey: Self.notifyOnFinishKey)
         notifyOnFinishValue = value
+    }
+
+    public func setAppAppearance(_ value: AppAppearance) {
+        defaults.set(value.rawValue, forKey: Self.appAppearanceKey)
+        appAppearanceValue = value
     }
 }

@@ -8,6 +8,12 @@ The local package build packages the app icon and both menu template images, the
 
 Ctl/setup commands and asynchronous store readers validate the selected runtime and lexical state root before operations. See [MonitorCore compatibility](../macos/HfCore/MonitorCore/README.md). Managed readiness precedes those gates; no task history is scanned while preparation or qualification is unavailable.
 
+## Application appearance
+
+The sidebar footer offers Light, Dark, and System appearance choices, following the approved populated sidebar state in [HarflowDesign `features/preferences.html` at `bf5b907`](https://github.com/Harflow-Dev/HarflowDesign/blob/bf5b907/features/preferences.html). `SettingsRepository` stores the choice as `light`, `dark`, or `system` under `harflow.appAppearance`; a missing or invalid value resolves to System without changing other settings. Writes update `UserDefaults` immediately and publish the new snapshot to the sidebar and app shell.
+
+`HarflowApp` creates and retains one `AppAppearanceController` after module initialization and before constructing the coordinator or any scenes. It applies the saved value synchronously, then follows live repository updates. Light maps to `NSAppearance.aqua`, Dark to `NSAppearance.darkAqua`, and System clears `NSApp.appearance` so macOS remains in control. The app-level appearance covers its windows, sheets, Settings scene, menu bar content, and windows created later; feature views do not force a color scheme.
+
 ## Agent picker ranking
 
 `AgentUsageRepository` shares lifetime usage across New Session, workflow orchestrator and workflow node menus. One private actor atomically persists counts and processed acknowledgement IDs in one `UserDefaults` value. Acknowledged standalone submissions use task IDs; workflow starts and builder submissions use workflow run IDs. Failed commands, configured nodes, follow-ups, retries and engine-selected fallbacks do not add counts. Exact backend and full model values identify usage; nil and empty model values share the harness-default identity.

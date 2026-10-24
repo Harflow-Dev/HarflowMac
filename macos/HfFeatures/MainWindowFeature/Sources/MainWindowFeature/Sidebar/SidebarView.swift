@@ -39,6 +39,7 @@ protocol SidebarViewModel: ViewModel {
     /// install banner already occupying the space — see `SidebarVM.recompute()`.
     var showsLoadingSkeleton: Bool { get }
     var isConnected: Bool { get }
+    var appAppearance: AppAppearance { get }
     var connectionLine: String { get }
     var backendTabs: [BackendTab] { get }
     var selectedBackend: String { get }
@@ -55,6 +56,7 @@ protocol SidebarViewModel: ViewModel {
     func isExecutionParentExpanded(_ id: String) -> Bool
 
     func didAppear()
+    func didSelectAppearance(_ appearance: AppAppearance)
     func didDisappear()
     func didChangeSearchQuery(_ text: String)
     func didSelectBackendFilter(_ backend: String)
@@ -72,6 +74,8 @@ protocol SidebarViewModel: ViewModel {
 }
 
 extension SidebarViewModel {
+    var appAppearance: AppAppearance { .system }
+    func didSelectAppearance(_: AppAppearance) {}
     var savedWorkflows: [WorkflowRecord] { [] }
     var workflowErrorMessage: String? { nil }
     func didTapNewWorkflow() {}
@@ -368,13 +372,20 @@ struct SidebarView<VM: SidebarViewModel>: View {
                     .foregroundStyle(Color.secondaryText)
                     .lineLimit(1)
                     .help(viewModel.listErrorMessage ?? viewModel.connectionLine)
-                Spacer()
+                Spacer(minLength: HfRadius.Metrics.zero)
+            }
+            .padding(.horizontal, HfRadius.Metrics.spacing16)
+            .padding(.top, HfRadius.Metrics.spacing12)
+            HStack(spacing: HfRadius.Metrics.spacing6) {
+                SidebarAppearanceControl(appearance: viewModel.appAppearance, onSelect: viewModel.didSelectAppearance)
+                Spacer(minLength: HfRadius.Metrics.zero)
                 SettingsLink { Image(systemName: "gearshape") }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Settings")
             }
             .padding(.horizontal, HfRadius.Metrics.spacing16)
-            .padding(.vertical, HfRadius.Metrics.spacing12)
+            .padding(.top, HfRadius.Metrics.spacing8)
+            .padding(.bottom, HfRadius.Metrics.spacing12)
         }
     }
 }

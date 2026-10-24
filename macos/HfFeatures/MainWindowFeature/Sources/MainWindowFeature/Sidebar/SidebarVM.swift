@@ -107,12 +107,8 @@ final class SidebarVM: SidebarViewModel {
         }
     }
 
-    /// The precedence-ordered empty-state message for the list body, or `nil` when real content (or
-    /// a connection/error/banner state that already owns the space) makes one unnecessary — see
-    /// `computeEmptyStateMessage()` for the exact rule (Monitor piece 6, Review round 1 item 3).
-    /// Written from `SidebarVM+InstallBanner.swift`'s `recomputeInstallBanner()` too (Code review
-    /// round 1, finding 4 — the message depends on `installBannerModel`, so a banner change must
-    /// recompute it), so it cannot be `private(set)` — `private` is file-scoped, same reasoning as `installBannerModel` below.
+    /// The precedence-ordered empty-list message, also recomputed by the install-banner extension.
+    /// Its setter stays internal because Swift private access is file-scoped.
     @ObservationIgnored private var renderedEmptyStateMessage: String?
     var emptyStateMessage: String? {
         get { access(keyPath: \.emptyStateMessage); return renderedEmptyStateMessage }
@@ -123,16 +119,8 @@ final class SidebarVM: SidebarViewModel {
         }
     }
 
-    /// A shimmer placeholder instead of an empty list (Plan review round 1 item 4) — true only
-    /// before the first listing arrives, with no error and no install banner already occupying the
-    /// space (see `computeShowsLoadingSkeleton()`). Starts `true`: before ANY publisher has fired at
-    /// all (the gap between `didAppear()` and the first `recompute()`), the list is otherwise blank
-    /// with no message at all — exactly the stall this shimmer replaces.
-    ///
-    /// Not `private(set)`: `SidebarVM+InstallBanner.swift`'s `recomputeInstallBanner()` writes this
-    /// too (Codex review round 1, finding 3) — a banner appearing or clearing before the first
-    /// listing arrives must recompute it there too, same reasoning as `emptyStateMessage` above.
-    /// `private` is file-scoped in Swift.
+    /// Shows a placeholder before the first listing when no error or install banner takes precedence.
+    /// Starts true to cover initial subscription setup; the install-banner extension also updates it.
     @ObservationIgnored private var renderedShowsLoadingSkeleton: Bool = true
     var showsLoadingSkeleton: Bool {
         get { access(keyPath: \.showsLoadingSkeleton); return renderedShowsLoadingSkeleton }
@@ -153,6 +141,7 @@ final class SidebarVM: SidebarViewModel {
         }
     }
 
+    @ObservationIgnored var renderedAppAppearance: AppAppearance = .system
     @ObservationIgnored private var renderedConnectionLine: String
     private(set) var connectionLine: String {
         get { access(keyPath: \.connectionLine); return renderedConnectionLine }
@@ -243,11 +232,7 @@ final class SidebarVM: SidebarViewModel {
     }
 
     @ObservationIgnored var selectionRevision = 0
-    /// The install/update banner to show in place of the red error section, or `nil` when nothing
-    /// needs surfacing (settled plan, section 5's precedence rules). Written from
-    /// `SidebarVM+InstallBanner.swift` too, so it cannot be `private(set)` — `private` is
-    /// file-scoped in Swift (same reasoning as `TaskDetailVM`'s own cross-file-written properties).
-    /// It stays non-public regardless: no external module can write it.
+    /// The install/update banner selected by precedence rules, also written by the install-banner extension.
     @ObservationIgnored private var renderedInstallBannerModel: InstallBanner.Model?
     var installBannerModel: InstallBanner.Model? {
         get { access(keyPath: \.installBannerModel); return renderedInstallBannerModel }
@@ -306,6 +291,7 @@ final class SidebarVM: SidebarViewModel {
         self.routing = routing
         self.clock = SidebarPresentationClock(visibility: visibility, scheduler: scheduler)
         self.renderedConnectionLine = useCase.connectionLine
+        self.renderedAppAppearance = useCase.appAppearance
         let initialSelection = routing.selection
         self.renderedSelection = initialSelection
         self.desiredSelection = initialSelection

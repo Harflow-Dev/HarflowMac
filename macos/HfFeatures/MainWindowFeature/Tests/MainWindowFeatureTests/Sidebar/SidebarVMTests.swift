@@ -116,6 +116,7 @@ import Testing
         given(useCase).checkAgain().willReturn()
         given(useCase).installAnyway().willReturn(true)
         given(useCase).reset().willReturn()
+        stubAppearance(useCase)
 
         let sut = SidebarVM(useCase: useCase, routing: routing, workflowUseCase: workflowUseCase,
                                                  visibility: visibility, scheduler: scheduler)
@@ -128,7 +129,7 @@ import Testing
             revealSubject: revealSubject, pendingRevealBox: pendingRevealBox, catalogSubject: catalogSubject, catalogBox: catalogBox
         )
     }
-    
+
     // MARK: - Search / filter (MS-SIDE-1)
     
     @Test func givenAMixedCaseQuery_whenFiltering_thenTitleIdAndRepoAllMatch() async {

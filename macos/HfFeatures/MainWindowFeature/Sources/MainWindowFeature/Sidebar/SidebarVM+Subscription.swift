@@ -8,6 +8,7 @@ extension SidebarVM {
     func subscribeIfNeeded() {
         guard !didSubscribe else { return }
         didSubscribe = true
+        subscribeToAppAppearance()
 
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)

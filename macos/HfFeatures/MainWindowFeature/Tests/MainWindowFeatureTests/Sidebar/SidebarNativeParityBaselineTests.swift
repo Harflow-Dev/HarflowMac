@@ -70,7 +70,8 @@ import Testing
         #expect(baseline.searchFrame.maxY <= baseline.contentLayoutRect.maxY + 1)
         #expect(baseline.scrollFrame.minY >= baseline.contentLayoutRect.minY - 1)
         #expect(baseline.scrollFrame.maxY <= baseline.contentLayoutRect.maxY + 1)
-        #expect(baseline.effectiveViewportBottom == 49)
+        // The footer reserves the connection status and application appearance controls.
+        #expect(baseline.effectiveViewportBottom == 106)
         #expect(baseline.effectiveViewportTop == 666)
         #expect(baseline.firstRowFrame.minY >= baseline.effectiveViewportBottom - 1)
         #expect(baseline.firstRowFrame.maxY <= baseline.searchFrame.minY)

@@ -21,6 +21,49 @@ import Testing
         #expect(sut.toolDirectory == "")
         #expect(sut.openWindowOnStart == true)
         #expect(sut.notifyOnFinish == true)
+        #expect(sut.appAppearance == .system)
+    }
+
+    @Test func givenAnInvalidAppearanceValue_whenConstructed_thenSystemIsUsedAndOtherSettingsSurvive() {
+        // given
+        let defaults = freshDefaults()
+        defaults.set("unsupported", forKey: SettingsRepositoryImpl.appAppearanceKey)
+        defaults.set(false, forKey: SettingsRepositoryImpl.notifyOnFinishKey)
+
+        // when
+        let sut = SettingsRepositoryImpl(defaults: defaults)
+
+        // then
+        #expect(sut.appAppearance == .system)
+        #expect(sut.notifyOnFinish == false)
+    }
+
+    @Test func givenAppearanceSubscribers_whenValuesRepeat_thenInitialAndChangedValuesRemain() {
+        // given
+        let sut = SettingsRepositoryImpl(defaults: freshDefaults())
+        var values: [AppAppearance] = []
+        let token = sut.appAppearancePublisher().sink { values.append($0) }
+
+        // when
+        sut.setAppAppearance(.dark)
+        sut.setAppAppearance(.dark)
+        sut.setAppAppearance(.light)
+
+        // then
+        #expect(values == [.system, .dark, .light])
+        withExtendedLifetime(token) {}
+    }
+
+    @Test func givenAppearanceWasPersisted_whenRepositoryRestarts_thenItIsReconstructed() {
+        // given
+        let defaults = freshDefaults()
+        SettingsRepositoryImpl(defaults: defaults).setAppAppearance(.dark)
+
+        // when
+        let restored = SettingsRepositoryImpl(defaults: defaults)
+
+        // then
+        #expect(restored.appAppearance == .dark)
     }
 
     @Test func givenAKeyNeverWrittenBefore_whenReadAsABool_thenTheRegisteredDefaultIsUsedNotFalse() {
