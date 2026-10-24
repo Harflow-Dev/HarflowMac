@@ -4,7 +4,10 @@ Native macOS application for Harflow: the task and workflow monitor, managed eng
 lifecycle, platform integration, signing, and application releases. The engine (MCP server,
 `harflow-ctl`, `harflow-setup`, state persistence) lives in the separate `HarflowMCP` repository;
 interface designs belong in `HarflowDesign`
-(https://github.com/Harflow-Dev/HarflowDesign), edited and previewed in Open Design.
+(https://github.com/Harflow-Dev/HarflowDesign), edited directly in Git and previewed
+in a browser. Do not use OpenDesign or create a separate managed design copy.
+The publication target is https://design.harflow.dev; verify its deployed revision
+before using it as an implementation reference.
 Refine interface changes there first and reference the approved design commit,
 file path, and screen state during implementation. Never make a build, test or release here depend
 on a sibling checkout.
