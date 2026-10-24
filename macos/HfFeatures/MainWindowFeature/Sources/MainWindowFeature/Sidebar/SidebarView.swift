@@ -5,7 +5,7 @@
 //  The redesigned sidebar (Monitor redesign Phase 1, SPEC §6.1): a fixed New session button (the
 //  old toolbar "+" action) above the search field and the compact backend-dot filter, the Running /
 //  Today / Earlier list (whole trees and parallel groups, settled plan D10), history diagnostics
-//  with a manual Load older control while more pages exist, and a connection footer. Search is
+//  with a manual Load older control while more pages exist. Search is
 //  trimmed, lowercased and case-insensitive over title/ID/repo; the backend filter composes with
 //  lineage retention. `SettingsLink` stays.
 //
@@ -363,19 +363,6 @@ struct SidebarView<VM: SidebarViewModel>: View {
     private var footer: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             Divider()
-            HStack(spacing: HfRadius.Metrics.spacing6) {
-                Circle()
-                    .fill(viewModel.isConnected ? Color.doneGreen : Color.failedRed)
-                    .frame(width: HfRadius.Metrics.sidebarConnectionDotSize, height: HfRadius.Metrics.sidebarConnectionDotSize)
-                Text(viewModel.isConnected ? "Connected" : "Disconnected")
-                    .font(.hf(.secondary))
-                    .foregroundStyle(Color.secondaryText)
-                    .lineLimit(1)
-                    .help(viewModel.listErrorMessage ?? viewModel.connectionLine)
-                Spacer(minLength: HfRadius.Metrics.zero)
-            }
-            .padding(.horizontal, HfRadius.Metrics.spacing16)
-            .padding(.top, HfRadius.Metrics.spacing12)
             HStack(spacing: HfRadius.Metrics.spacing6) {
                 SidebarAppearanceControl(appearance: viewModel.appAppearance, onSelect: viewModel.didSelectAppearance)
                 Spacer(minLength: HfRadius.Metrics.zero)

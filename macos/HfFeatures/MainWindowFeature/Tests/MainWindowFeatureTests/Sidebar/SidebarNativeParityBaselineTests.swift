@@ -70,8 +70,9 @@ import Testing
         #expect(baseline.searchFrame.maxY <= baseline.contentLayoutRect.maxY + 1)
         #expect(baseline.scrollFrame.minY >= baseline.contentLayoutRect.minY - 1)
         #expect(baseline.scrollFrame.maxY <= baseline.contentLayoutRect.maxY + 1)
-        // The footer reserves the connection status and application appearance controls.
-        #expect(baseline.effectiveViewportBottom == 106)
+        // The compact footer reserves only the appearance icons and Settings control; connection
+        // status now lives in the main window title bar.
+        #expect(baseline.effectiveViewportBottom == 61)
         #expect(baseline.effectiveViewportTop == 666)
         #expect(baseline.firstRowFrame.minY >= baseline.effectiveViewportBottom - 1)
         #expect(baseline.firstRowFrame.maxY <= baseline.searchFrame.minY)

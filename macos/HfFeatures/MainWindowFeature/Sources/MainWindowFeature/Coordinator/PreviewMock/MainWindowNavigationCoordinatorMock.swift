@@ -33,6 +33,10 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     func handle(path _: any PathDestination) {}
     
     func buildSidebarView() -> AnyView { SidebarView(SidebarViewModelMock()).eraseToAnyView() }
+    func buildConnectionStatusView() -> AnyView {
+        ConnectionStatusView(ConnectionStatusPreviewMock()).eraseToAnyView()
+    }
+
     func buildNewSessionView() -> AnyView { NewSessionView(NewSessionViewModelMock()).eraseToAnyView() }
     func buildParallelView(name: String) -> AnyView { Text("Parallel: \(name)").eraseToAnyView() }
     func buildTaskDetailView(id: String) -> AnyView { Text("Task: \(id)").eraseToAnyView() }

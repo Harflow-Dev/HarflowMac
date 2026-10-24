@@ -62,6 +62,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
 
     /// Builds the sidebar (task list, search/filter, parallel runs).
     func buildSidebarView() -> AnyView
+    /// Builds the main window title's connection indicator.
+    func buildConnectionStatusView() -> AnyView
     /// Builds the New Session sheet's content.
     func buildNewSessionView() -> AnyView
     /// Builds the Parallel screen for the group named `name`.
@@ -75,6 +77,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
 }
 
 public extension MainWindowNavigationCoordinator {
+    func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
+
     /// Derives modal state for lightweight preview and test coordinators.
     var presentedSheet: MainWindowSheet? {
         get {
@@ -215,6 +219,10 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     public func buildSidebarView() -> AnyView {
         SidebarView(sharedSidebarVM()).eraseToAnyView()
+    }
+
+    public func buildConnectionStatusView() -> AnyView {
+        ConnectionStatusView(ConnectionStatusVM(useCase: SidebarViewRepository())).eraseToAnyView()
     }
     
     /// A fresh VM every call, deliberately not cached: the sheet's defaults (claude/interactive/

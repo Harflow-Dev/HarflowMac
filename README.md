@@ -14,7 +14,7 @@ Compatible engines expose capture ownership, live-input availability and backgro
 
 Agent and model menus share lifetime usage ranking from successful app submissions. Workflow node menus prefer a supported orchestrator agent and model while preserving saved selections.
 
-Choose Light, Dark, or System in the sidebar footer to set the appearance across Harflow. System follows this Mac's appearance setting.
+The title bar shows Harflow's engine connection status. Choose Light, Dark, or System from the sidebar footer icons to set the appearance across Harflow. System follows this Mac's appearance setting.
 
 See [managed runtime](docs/managed-runtime.md) for acquisition, storage, retry, and current distribution limits.
 

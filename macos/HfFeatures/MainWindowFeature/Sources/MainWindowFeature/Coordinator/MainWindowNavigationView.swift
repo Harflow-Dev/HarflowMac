@@ -57,6 +57,15 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 emptyDetailView
             }
         }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: HfRadius.Metrics.spacing6) {
+                    Text("Harflow").font(.hf(.headline, weight: .bold))
+                    coordinator.buildConnectionStatusView()
+                }
+                .accessibilityElement(children: .contain)
+            }
+        }
         .sheet(item: Binding(get: { coordinator.presentedSheet }, set: { coordinator.presentedSheet = $0 })) { destination in
             switch destination {
             case .newSession: coordinator.buildNewSessionView()

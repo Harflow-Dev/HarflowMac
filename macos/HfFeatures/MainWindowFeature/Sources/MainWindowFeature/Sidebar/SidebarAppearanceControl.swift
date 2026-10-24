@@ -10,36 +10,31 @@ struct SidebarAppearanceControl: View {
     let onSelect: (AppAppearance) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-            Text("Appearance")
-                .font(.hf(.caption))
-                .foregroundStyle(Color.secondaryText)
-            HStack(spacing: HfRadius.Metrics.spacing4) {
-                ForEach(AppAppearance.allCases) { option in
-                    Button {
-                        onSelect(option)
-                    } label: {
-                        Image(systemName: symbol(for: option))
-                            .font(.hf(.caption, weight: .medium))
-                            .frame(width: HfRadius.Metrics.appearanceControlSize, height: HfRadius.Metrics.appearanceControlSize)
-                            .background {
-                                RoundedRectangle(cornerRadius: HfRadius.button)
-                                    .fill(appearance == option ? Color.pillFill : Color.clear)
-                            }
-                            .overlay {
-                                RoundedRectangle(cornerRadius: HfRadius.button)
-                                    .strokeBorder(
-                                        appearance == option ? Color.secondaryText.opacity(0.45) : Color.clear,
-                                        lineWidth: HfRadius.Metrics.hairlineStroke
-                                    )
-                            }
+        HStack(spacing: HfRadius.Metrics.spacing4) {
+            ForEach(AppAppearance.allCases) { option in
+                Button {
+                    onSelect(option)
+                } label: {
+                    Image(systemName: symbol(for: option))
+                        .font(.hf(.caption, weight: .medium))
+                        .frame(width: HfRadius.Metrics.appearanceControlSize, height: HfRadius.Metrics.appearanceControlSize)
+                        .background {
+                            RoundedRectangle(cornerRadius: HfRadius.button)
+                                .fill(appearance == option ? Color.pillFill : Color.clear)
                         }
-                    .buttonStyle(.borderless)
-                    .help(help(for: option))
-                    .accessibilityLabel(title(for: option))
-                    .accessibilityValue(appearance == option ? "Selected" : "")
-                    .accessibilityAddTraits(appearance == option ? .isSelected : [])
+                        .overlay {
+                            RoundedRectangle(cornerRadius: HfRadius.button)
+                                .strokeBorder(
+                                    appearance == option ? Color.secondaryText.opacity(0.45) : Color.clear,
+                                    lineWidth: HfRadius.Metrics.hairlineStroke
+                                )
+                        }
                 }
+                .buttonStyle(.borderless)
+                .help(help(for: option))
+                .accessibilityLabel(title(for: option))
+                .accessibilityValue(appearance == option ? "Selected" : "")
+                .accessibilityAddTraits(appearance == option ? .isSelected : [])
             }
         }
         .accessibilityElement(children: .contain)

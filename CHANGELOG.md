@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Move engine connection status into the window title bar and simplify the sidebar footer to appearance and settings icons.
 - Add a persisted app-wide Light, Dark, or System appearance choice in the sidebar footer.
 - Rank agent and model menus by acknowledged app submissions, with supported orchestrator preferences in workflow node menus.
 
