@@ -8,6 +8,7 @@
 import Combine
 import Foundation
 import HfCommon
+import HfRepository
 import HfUtilities
 import SwiftUI
 
@@ -25,6 +26,15 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     var path: [PathDestination] { [] }
     
     var selection: MonitorDestination?
+    var runtimeIsReady: Bool
+    /// One retained sidebar VM, so a `runtimeSetupState` change reaches the mounted `SidebarView`
+    /// (which holds its VM in `@State`) the way the production VM's published state does.
+    let sidebarViewModel: SidebarViewModelMock
+    var runtimeSetupState: RuntimeSetupState {
+        get { sidebarViewModel.runtimeSetupState }
+        set { sidebarViewModel.runtimeSetupState = newValue }
+    }
+
     func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never> { Empty().eraseToAnyPublisher() }
     
     var isNewSessionPresented = false
@@ -32,7 +42,10 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     
     func handle(path _: any PathDestination) {}
     
-    func buildSidebarView() -> AnyView { SidebarView(SidebarViewModelMock()).eraseToAnyView() }
+    func buildSidebarView() -> AnyView {
+        SidebarView(sidebarViewModel).eraseToAnyView()
+    }
+
     func buildConnectionStatusView() -> AnyView {
         ConnectionStatusView(ConnectionStatusPreviewMock()).eraseToAnyView()
     }
@@ -42,6 +55,14 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     func buildTaskDetailView(id: String) -> AnyView { Text("Task: \(id)").eraseToAnyView() }
     
     func start() -> AnyView { MainWindowNavigationView(self).eraseToAnyView() }
+
+    init(
+        runtimeIsReady: Bool = true,
+        runtimeSetupState: RuntimeSetupState = .ready
+    ) {
+        self.runtimeIsReady = runtimeIsReady
+        self.sidebarViewModel = SidebarViewModelMock(runtimeSetupState: runtimeSetupState)
+    }
 }
 
 #endif

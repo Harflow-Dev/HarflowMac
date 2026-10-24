@@ -8,7 +8,8 @@ import Testing
 
     @Test func givenEachTextStyle_whenAskedForItsPointSize_thenPinsTheNativeMacSize() {
         let expected: [(style: HfTextStyle, size: CGFloat)] = [
-            (.caption, 11), (.secondary, 12), (.body, 13), (.reading, 14), (.headline, 15), (.title, 18), (.hero, 22)
+            (.setupEyebrow, 9), (.setupFootnote, 10), (.caption, 11), (.secondary, 12), (.body, 13), (.reading, 14),
+            (.headline, 15), (.title, 18), (.setupWelcomeTitle, 20), (.hero, 22)
         ]
         for (style, size) in expected {
             // given

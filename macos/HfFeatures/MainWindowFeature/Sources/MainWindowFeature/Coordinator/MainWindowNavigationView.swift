@@ -43,8 +43,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 .navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
         } detail: {
             if !coordinator.runtimeIsReady {
-                ContentUnavailableView("Finish setting up Harflow", systemImage: "shippingbox",
-                                       description: Text("Use the sidebar to install the runtime before starting sessions or workflows."))
+                RuntimeSetupWelcomeView()
             } else {
             switch coordinator.selection {
             case .task(let id):
@@ -65,11 +64,16 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: HfRadius.Metrics.spacing6) {
+                    if let emblem = MainWindowEmblem.image {
+                        Image(nsImage: emblem)
+                            .accessibilityHidden(true)
+                    }
                     Text("Harflow").font(.hf(.headline, weight: .bold))
                     coordinator.buildConnectionStatusView()
                 }
                 .accessibilityElement(children: .contain)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .sheet(item: Binding(get: { coordinator.presentedSheet }, set: { coordinator.presentedSheet = $0 })) { destination in
             switch destination {

@@ -44,6 +44,17 @@ public enum HfRadius {
         public static let spacing20: CGFloat = 20
         public static let spacing24: CGFloat = 24
         public static let spacing28: CGFloat = 28
+        /// Compact setup card padding and content rhythm.
+        public static let setupCardPadding: CGFloat = 13
+        public static let setupCardSpacing: CGFloat = 7
+        public static let setupVersionRowSpacing: CGFloat = 2
+        /// 9 pt setup eyebrow tracking (.075 em).
+        public static let setupEyebrowTracking: CGFloat = 0.675
+        /// Compact setup action target height.
+        public static let setupButtonHeight: CGFloat = 34
+        /// Setup detail text and centered content bounds.
+        public static let setupWelcomeTextWidth: CGFloat = 390
+        public static let setupWelcomeContainerWidth: CGFloat = 470
         /// Compact native form-control button target and value width.
         public static let compactControlHeight: CGFloat = 24
         public static let compactValueWidth: CGFloat = 28

@@ -16,6 +16,7 @@ import SwiftUI
 
 /// Preview mock for `SidebarView`.
 @MainActor
+@Observable
 final class SidebarViewModelMock: SidebarViewModel {
 
     var sections: [SidebarSection]
@@ -36,6 +37,8 @@ final class SidebarViewModelMock: SidebarViewModel {
     var taskHistoryState: HistoryLoadingState
     var workflowHistoryState: HistoryLoadingState
     var workflowErrorMessage: String?
+    var runtimeSetupState: RuntimeSetupState
+    var runtimeSetupTapCount = 0
     var newSessionTapCount = 0
     var loadOlderTasksTapCount = 0
     var loadOlderWorkflowsTapCount = 0
@@ -55,7 +58,8 @@ final class SidebarViewModelMock: SidebarViewModel {
         installBannerModel: InstallBanner.Model? = nil,
         taskHistoryState: HistoryLoadingState = HistoryLoadingState(),
         workflowHistoryState: HistoryLoadingState = HistoryLoadingState(),
-        workflowErrorMessage: String? = nil
+        workflowErrorMessage: String? = nil,
+        runtimeSetupState: RuntimeSetupState = .ready
     ) {
         self.sections = sections
         self.listErrorMessage = listErrorMessage
@@ -72,6 +76,7 @@ final class SidebarViewModelMock: SidebarViewModel {
         self.taskHistoryState = taskHistoryState
         self.workflowHistoryState = workflowHistoryState
         self.workflowErrorMessage = workflowErrorMessage
+        self.runtimeSetupState = runtimeSetupState
     }
 
     /// A Running tree (expanded, with a running child), a parallel run and finished Today/Earlier rows.
@@ -115,6 +120,7 @@ final class SidebarViewModelMock: SidebarViewModel {
     func didSelectBackendFilter(_ backend: String) { selectedBackend = backend }
     func didSelect(_ destination: MonitorDestination?) { selection = destination }
     func didTapNewSession() { newSessionTapCount += 1 }
+    func didTapRuntimeSetup() { runtimeSetupTapCount += 1 }
     func didTapInstallBannerPrimary() {}
     func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}

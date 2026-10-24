@@ -135,16 +135,26 @@ struct SidebarView<VM: SidebarViewModel>: View {
     var body: some View {
         Group {
             if viewModel.runtimeSetupState.isReady {
-                list.safeAreaInset(edge: .top, spacing: HfRadius.Metrics.zero) { header.background(.bar) }
+                list
+                    .safeAreaInset(edge: .top, spacing: HfRadius.Metrics.zero) { header.background(.bar) }
+                    .safeAreaInset(edge: .bottom, spacing: HfRadius.Metrics.zero) { footer.background(.bar) }
             } else {
-                RuntimeSetupCard(state: viewModel.runtimeSetupState, action: viewModel.didTapRuntimeSetup)
-                    .padding()
-.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // The ScrollView owns the top safe area, so the card stays below the unified toolbar;
+                // the fixed footer stays at the bottom.
+                VStack(spacing: HfRadius.Metrics.zero) {
+                    ScrollView {
+                        RuntimeSetupCard(state: viewModel.runtimeSetupState, action: viewModel.didTapRuntimeSetup)
+                            .padding(.horizontal, HfRadius.Metrics.spacing16)
+                            .padding(.top, HfRadius.Metrics.spacing16)
+                            .padding(.bottom, HfRadius.Metrics.spacing16)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    .scrollIndicators(.hidden)
+                    footer.background(.bar)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-            // Let the native sidebar List own the titlebar safe area. A surrounding VStack
-            // can be extended underneath the unified toolbar when leaving full screen.
-            .safeAreaInset(edge: .bottom, spacing: HfRadius.Metrics.zero) { footer.background(.bar) }
         // New session moved from the toolbar into the column itself (SPEC §6.1): the same
         // `didTapNewSession` action, now a fixed full-width button above the search field — never
         // a scrollable List row. The window controls and the sidebar toggle stay system-owned.

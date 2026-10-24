@@ -4,6 +4,7 @@
 
 - Pair the current source with engine 0.0.2 and vendor its complete additive v1 state-recovery contract bundle.
 - Add sidebar and Settings setup controls with explicit installation/update, shared progress, retained failures and qualified runtime reuse without startup downloads.
+- Match the approved first-run setup layout with a scrollable sidebar card, retained appearance/settings footer and setup-required detail pane.
 - Add shared store-attention and Settings recovery panels with public inspection, exact-operation confirmation, cancellation, interrupted continuation, partial-backup evidence and retained Finder backup receipts.
 
 - Move engine connection status into the window title bar and simplify the sidebar footer to appearance and settings icons.
