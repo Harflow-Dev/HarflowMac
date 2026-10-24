@@ -52,6 +52,8 @@ public protocol TaskListRepository: Sendable {
     /// Called by the Settings screen after `SettingsRepository.setToolDirectory` — triggers a
     /// refresh only; the login-PATH/`uv` probes never rerun (F4-05).
     func settingsChanged()
+    /// Rechecks readiness and restarts watchers without discarding recovery receipts.
+    func runtimeBecameReady()
 
     func title(_ taskID: String) -> String
     func task(_ id: String) -> TaskInfo?
@@ -92,6 +94,7 @@ public struct HistoryLoadingState: Equatable, Sendable {
 }
 
 public extension TaskListRepository {
+    func runtimeBecameReady() { settingsChanged() }
     var historyState: HistoryLoadingState { HistoryLoadingState() }
     func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { Just(historyState).eraseToAnyPublisher() }
     func loadMoreHistory() async {}

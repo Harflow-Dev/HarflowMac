@@ -43,4 +43,19 @@ public struct ManagedRuntimeReady: Equatable, Sendable {
 /// Constructor-injected installer seam; an attempt either returns a qualified generation or fails.
 public protocol ManagedRuntimeInstalling: Sendable {
     func prepare() async throws -> ManagedRuntimeReady
+    /// Checks only existing managed software; never acquires a runtime.
+    func checkExisting() async throws -> ManagedRuntimeAvailability
+}
+
+/// Result of bounded managed runtime qualification before explicit acquisition.
+public enum ManagedRuntimeAvailability: Equatable, Sendable {
+    case ready(ManagedRuntimeReady)
+    case requiresInstallation(installedVersion: String?, requiredVersion: String)
+}
+
+public extension ManagedRuntimeInstalling {
+    /// Legacy adapters cannot acquire implicitly when they have no reuse-only implementation.
+    func checkExisting() async throws -> ManagedRuntimeAvailability {
+        .requiresInstallation(installedVersion: nil, requiredVersion: HarflowVersion.current)
+    }
 }

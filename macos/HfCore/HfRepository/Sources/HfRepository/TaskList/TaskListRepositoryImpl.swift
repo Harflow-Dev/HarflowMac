@@ -9,6 +9,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private let snapshotRepository: any TaskSnapshotRepository
     private let eventStreamRepository: any EventStreamRepository
     private let finishNotifier: any FinishNotifier
+    let stateRecovery: any StateRecoveryRepository
     let scheduler: any Scheduling
     let visibility: any MonitorVisibility
 
@@ -74,9 +75,11 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         finishNotifier: any FinishNotifier,
         scheduler: any Scheduling,
         visibility: any MonitorVisibility,
-        compatibilityCheck: StoreCompatibilityCheck? = nil
+        compatibilityCheck: StoreCompatibilityCheck? = nil,
+        stateRecovery: (any StateRecoveryRepository)? = nil
     ) {
         self.toolEnvironment = toolEnvironment
+        self.stateRecovery = stateRecovery ?? NullStateRecoveryRepository()
         self.snapshotRepository = snapshotRepository
         self.eventStreamRepository = eventStreamRepository
         self.finishNotifier = finishNotifier
@@ -198,6 +201,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         let compatibility = await compatibilityCheck(root)
         guard refreshIsCurrent(generation) else { return .failure(Self.supersededRefresh) }
         if case .failure(let error) = compatibility {
+            stateRecovery.report(error)
             listErrorValue = error
             historyLock.withLock { historyStateValue.error = error }
             return .failure(error)
@@ -265,6 +269,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             guard refreshIsCurrent(generation) else { return .failure(Self.supersededRefresh) }
             return .success(())
         case .failure(let error):
+            stateRecovery.report(error)
             listErrorValue = error
             historyLock.withLock {
                 historyRefreshFailed = true

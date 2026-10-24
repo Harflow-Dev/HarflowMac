@@ -13,10 +13,11 @@ import SwiftEnvironment
 
 /// Concrete `GeneralSettingsUseCase` backed by `SettingsRepository` and `ToolEnvironmentRepository`.
 @MainActor
-final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Sendable {
+final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupObserving, StoreRecoveryUseCase, @unchecked Sendable {
     
     // MARK: - Private Properties
     
+    @GlobalEnvironment(\.stateRecoveryRepository) private var stateRecoveryRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
     @GlobalEnvironment(\.settingsRepository) private var settingsRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
@@ -30,8 +31,10 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Se
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
         taskListRepository: (any TaskListRepository)? = nil,
         backendsRepository: (any BackendsRepository)? = nil,
-        installRepository: (any InstallRepository)? = nil
+        installRepository: (any InstallRepository)? = nil,
+        stateRecoveryRepository: (any StateRecoveryRepository)? = nil
     ) {
+        if let stateRecoveryRepository { self.stateRecoveryRepository = stateRecoveryRepository }
         if let installRepository { self.installRepository = installRepository }
         if let settingsRepository { self.settingsRepository = settingsRepository }
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
@@ -48,6 +51,24 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, @unchecked Se
     
     // MARK: - GeneralSettingsUseCase Methods
     
+    var runtimeSetupState: RuntimeSetupState { installRepository.setupState }
+    func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never> { installRepository.setupStatePublisher() }
+    func installRuntime() async { await installRepository.install() }
+    var lastCompletedReceipt: StateRecoveryResult? { stateRecoveryRepository.lastCompletedReceipt }
+    var recoveryState: StoreRecoveryState { stateRecoveryRepository.state }
+    func recoveryStatePublisher() -> AnyPublisher<StoreRecoveryState, Never> { stateRecoveryRepository.statePublisher() }
+    func inspectStore() async { await stateRecoveryRepository.inspect() }
+    func confirmRecovery(_ inspection: StateInspection) { stateRecoveryRepository.requestConfirmation(inspection: inspection) }
+    func cancelRecovery() { stateRecoveryRepository.cancelConfirmation() }
+    func recoverStore(_ inspection: StateInspection) async {
+        guard case .confirming(let current) = stateRecoveryRepository.state, current == inspection else { return }
+        await stateRecoveryRepository.recover(inspection: inspection)
+        guard let proposal = inspection.recovery, let receipt = stateRecoveryRepository.lastCompletedReceipt,
+              receipt.stateRoot == inspection.stateRoot, receipt.engineVersion == inspection.engineVersion,
+              receipt.operationID == proposal.operationID, receipt.backupPath == proposal.backupPath else { return }
+        taskListRepository.runtimeBecameReady()
+    }
+
     func installStatePublisher() -> AnyPublisher<InstallState, Never> { installRepository.statePublisher() }
     func retryRuntime() async { await installRepository.retry() }
 

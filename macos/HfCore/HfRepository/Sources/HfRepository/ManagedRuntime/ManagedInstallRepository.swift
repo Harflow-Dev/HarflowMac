@@ -15,6 +15,23 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
         self.taskListRepository = taskListRepository
     }
 
+    public var setupState: RuntimeSetupState { Self.setupState(coordinator.state) }
+    public func setupStatePublisher() -> AnyPublisher<RuntimeSetupState, Never> {
+        coordinator.statePublisher().map(Self.setupState).removeDuplicates().eraseToAnyPublisher()
+    }
+
+    private static func setupState(_ state: ManagedRuntimeState) -> RuntimeSetupState {
+        switch state {
+        case .preparing: .checking
+        case .installationRequired(let installed, let required): .installationRequired(installedVersion: installed, requiredVersion: required)
+        case .installing: .installing
+        case .updating(let installed, let required): .updating(installedVersion: installed, requiredVersion: required)
+        case .updateFailed(let message, let installed, let required): .updateFailed(message: message, installedVersion: installed, requiredVersion: required)
+        case .failed(let message): .failed(message)
+        case .ready: .ready
+        }
+    }
+
     public var state: InstallState { Self.installState(coordinator.state) }
     public func statePublisher() -> AnyPublisher<InstallState, Never> {
         coordinator.statePublisher().map(Self.installState).removeDuplicates().eraseToAnyPublisher()
@@ -43,15 +60,20 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
     public func retry() async {
         guard await retryOwner.claim(isFailed: { [coordinator] in
             if case .failed = coordinator.state { return true }
+            if case .updateFailed = coordinator.state { return true }
+            if case .installationRequired = coordinator.state { return true }
             return false
         }) else { return }
-        if case .success = await coordinator.retry() { taskListRepository.settingsChanged() }
+        if case .success = await coordinator.retry() { taskListRepository.runtimeBecameReady() }
         await retryOwner.finish()
     }
 
     private static func installState(_ state: ManagedRuntimeState) -> InstallState {
         switch state {
-        case .preparing: .running(.harflow)
+        case .preparing: .running(.validate)
+        case .installing, .updating: .running(.harflow)
+        case .updateFailed(let message, _, _): .failed(stage: .harflow, message: message)
+        case .installationRequired: .idle
         case .ready: .installed
         case .failed(let message): .failed(stage: .harflow, message: message)
         }

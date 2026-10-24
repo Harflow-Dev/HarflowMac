@@ -262,6 +262,9 @@ final class SidebarVM: SidebarViewModel {
     @ObservationIgnored var latestCatalog: BackendCatalog
     /// The clock Today/Earlier bucketing reads; tests replace it.
     @ObservationIgnored var currentDate: (() -> Date)?
+    private(set) var storeNeedsAttention = false
+    private(set) var runtimeSetupState: RuntimeSetupState = .ready
+
     @ObservationIgnored var installState: InstallState = .idle
     @ObservationIgnored var lastCheckMessage: String?
     @ObservationIgnored var installAnywayBlockedMessage: String?
@@ -296,9 +299,11 @@ final class SidebarVM: SidebarViewModel {
         self.renderedSelection = initialSelection
         self.desiredSelection = initialSelection
         self.installState = useCase.installState
+        self.runtimeSetupState = (useCase as? any RuntimeSetupObserving)?.runtimeSetupState ?? .ready
         self.lastCheckMessage = useCase.lastCheckMessage
         self.installAnywayBlockedMessage = useCase.installAnywayBlockedMessage
         self.latestCatalog = useCase.backendCatalog
+        if let recovery = useCase as? any SidebarStoreRecoveryObserving { applyStoreRecovery(recovery.storeRecoveryState) }
         recomputeInstallBanner()
         recomputeBackendTabs()
     }
@@ -372,7 +377,26 @@ final class SidebarVM: SidebarViewModel {
         routing.select(destination)
     }
 
+    func applyStoreRecovery(_ state: StoreRecoveryState) {
+        let attention: Bool = switch state {
+        case .idle, .completed: false
+        case .inspected(let inspection): inspection.status == .incompatible || inspection.status == .interrupted
+        default: true
+        }
+        if storeNeedsAttention != attention { storeNeedsAttention = attention }
+    }
+
+    func applyRuntimeSetup(_ state: RuntimeSetupState) {
+        if runtimeSetupState != state { runtimeSetupState = state }
+    }
+
+    func didTapRuntimeSetup() {
+        guard runtimeSetupState.actionTitle != nil, let setup = useCase as? any RuntimeSetupObserving else { return }
+        Task { await setup.installRuntime() }
+    }
+
     func didTapNewSession() {
+        guard runtimeSetupState.isReady else { return }
         routing.openNewSession()
     }
 
@@ -414,33 +438,6 @@ final class SidebarVM: SidebarViewModel {
         case .right: didPressExpand()
         default: break
         }
-    }
-
-    // MARK: - Install banner actions (settled plan, section 5)
-
-    func didTapInstallBannerPrimary() {
-        switch installState {
-        case .needsGit:
-            Task { [weak self] in await self?.useCase.install() }
-        case .needsUv:
-            publishInstallUvDialog()
-        case .failed:
-            Task { [weak self] in await self?.useCase.retry() }
-        case .unresolved:
-            Task { [weak self] in await self?.useCase.checkAgain() }
-        case .running:
-            break
-        case .idle, .installed:
-            if let need = currentInstallNeed { publishInstallOrUpdateDialog(need: need) }
-        }
-    }
-
-    func didTapInstallBannerSecondary() {
-        if case .unresolved = installState { publishInstallAnywayDialog() }
-    }
-
-    func didTapInstallBannerDismiss() {
-        useCase.reset()
     }
 
     // MARK: - Private Methods

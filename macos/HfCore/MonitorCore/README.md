@@ -10,6 +10,10 @@ The canonical [wire specification](https://github.com/Harflow-Dev/HarflowMCP/blo
 
 Tests vendor exact engine-owned fixtures under `Tests/MonitorCoreTests/Resources/ContractsV1`, including the engine manifest and its SHA256 digest. The package has no sibling-repository dependency or fixture download step. These envelopes do not establish storage ownership or runtime authenticity.
 
+## State recovery
+
+`CtlClient.inspectState()` and `recoverState(inspection:)` require the pure handshake’s `state-recovery.v1` capability before launching public ctl commands. Inspection and completion receipts validate the selected root and operation identity. `ToolError.structuredRefusal` retains additive engine `error.data`, including partial-backup evidence, while legacy errors preserve their existing shape. Store refusal never changes executable qualification.
+
 ## Build and test
 
 ```sh

@@ -3,9 +3,11 @@
 //  SettingsFeature
 //
 
+import AppKit
 import Foundation
 import HfCommon
 import HfUtilities
+import MonitorCore
 import SwiftUI
 
 // MARK: - SettingsNavigationCoordinator
@@ -47,7 +49,7 @@ public final class SettingsCoordinator: SettingsNavigationCoordinator {
     
     public func buildGeneralSettingsView() -> AnyView {
         let useCase = GeneralSettingsViewRepository()
-        let vm = GeneralSettingsVM(useCase: useCase)
+        let vm = GeneralSettingsVM(useCase: useCase, recoveryRouting: self)
         return GeneralSettingsView(vm).eraseToAnyView()
     }
     
@@ -64,5 +66,13 @@ public final class SettingsCoordinator: SettingsNavigationCoordinator {
     
     public func start() -> AnyView {
         SettingsNavigationView(coordinator: self).eraseToAnyView()
+    }
+}
+
+// MARK: - StoreRecoveryRouting
+
+extension SettingsCoordinator: StoreRecoveryRouting {
+    func revealBackup(_ receipt: StateRecoveryResult) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: receipt.backupPath)])
     }
 }

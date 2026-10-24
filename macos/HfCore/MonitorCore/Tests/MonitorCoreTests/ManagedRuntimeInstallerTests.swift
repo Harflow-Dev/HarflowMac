@@ -27,19 +27,19 @@ struct ManagedRuntimeInstallerTests {
                 sha256: Self.digest(dependency), size: dependency.count
             )
             self.specification = ManagedRuntimeSpecification(
-                engineVersion: "0.0.1", pythonVersion: "3.13.16", python: pythonArtifact,
+                engineVersion: "0.0.2", pythonVersion: "3.13.16", python: pythonArtifact,
                 dependencies: [dependencyArtifact], provenance: "test fixture"
             )
-            let engineURL = "https://files.pythonhosted.org/packages/harflow_mcp-0.0.1-py3-none-any.whl"
+            let engineURL = "https://files.pythonhosted.org/packages/harflow_mcp-0.0.2-py3-none-any.whl"
             let file: [String: Any] = [
-                "filename": "harflow_mcp-0.0.1-py3-none-any.whl",
+                "filename": "harflow_mcp-0.0.2-py3-none-any.whl",
                 "packagetype": "bdist_wheel", "python_version": "py3", "size": engine.count,
                 "url": engineURL, "digests": ["sha256": Self.digest(engine)],
                 "yanked": yanked, "yanked_reason": yanked ? "fixture reason" : NSNull()
             ]
             let urls = canonicalFile ? [file] : [[String: Any](uniqueKeysWithValues: file.filter { $0.key != "filename" }.map { ($0.key, $0.value) })]
             self.metadata = (try? JSONSerialization.data(withJSONObject: [
-                "info": ["name": "harflow-mcp", "version": "0.0.1"], "urls": urls
+                "info": ["name": "harflow-mcp", "version": "0.0.2"], "urls": urls
             ])) ?? Data()
         }
 
@@ -510,10 +510,10 @@ struct ManagedRuntimeInstallerTests {
         let fixture = Fixture()
         let downloader = Downloader(fixture: fixture)
         downloader.metadataOverride = try JSONSerialization.data(withJSONObject: [
-            "info": ["name": "harflow-mcp", "version": "0.0.1"], "urls": [[
-                "filename": "harflow_mcp-0.0.1-py3-none-any.whl", "packagetype": "bdist_wheel",
+            "info": ["name": "harflow-mcp", "version": "0.0.2"], "urls": [[
+                "filename": "harflow_mcp-0.0.2-py3-none-any.whl", "packagetype": "bdist_wheel",
                 "python_version": "py3", "size": fixture.engine.count,
-                "url": "https://example.com/harflow_mcp-0.0.1-py3-none-any.whl",
+                "url": "https://example.com/harflow_mcp-0.0.2-py3-none-any.whl",
                 "digests": ["sha256": Fixture.digest(fixture.engine)], "yanked": false
             ]]
         ])
@@ -548,7 +548,7 @@ struct ManagedRuntimeInstallerTests {
                 return
             }
             #expect(code == "incompatible_runtime")
-            #expect(message == "Incompatible Harflow runtime: product major/minor release line differs from 0.0.1")
+            #expect(message == "Incompatible Harflow runtime: product major/minor release line differs from 0.0.2")
         } catch {
             Issue.record("Expected ToolError refusal, got \(error)")
         }

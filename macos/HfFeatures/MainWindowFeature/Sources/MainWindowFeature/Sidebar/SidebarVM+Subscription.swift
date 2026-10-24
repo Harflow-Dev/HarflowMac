@@ -33,7 +33,8 @@ extension SidebarVM {
                 guard let self else { return }
                 latestListError = error
                 currentInstallNeed = error.flatMap { useCase.installNeed(for: $0) }
-                listErrorMessage = currentInstallNeed == nil && error?.isManagedRuntimeUnavailable != true ? error?.message : nil
+                let dedicatedError = error?.isManagedRuntimeUnavailable == true || error?.isStateRecoveryRefusal == true
+                listErrorMessage = currentInstallNeed == nil && !dedicatedError ? error?.message : nil
                 recomputeInstallBanner()
                 recompute()
             }

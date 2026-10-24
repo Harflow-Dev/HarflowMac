@@ -62,6 +62,8 @@ final class StubProcessRunner: ProcessRunning, @unchecked Sendable {
         return _calls
     }
 
+    var allCalls: [Call] { calls }
+
     let answer: @Sendable (Call) -> Result<ProcessOutput, ToolError>
 
     init(answer: @escaping @Sendable (Call) -> Result<ProcessOutput, ToolError>) {

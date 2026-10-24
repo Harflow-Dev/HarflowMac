@@ -23,20 +23,22 @@ public protocol WorkflowRepository: Sendable {
 /// Resolves the configured CLI for every operation, including settings changes.
 public struct WorkflowRepositoryImpl: WorkflowRepository {
     private let toolEnvironment: any ToolEnvironmentRepository
+    private let stateRecovery: any StateRecoveryRepository
 
     /// Creates a workflow repository with the Monitor's shared tool discovery.
-    public init(toolEnvironment: any ToolEnvironmentRepository) {
+    public init(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: (any StateRecoveryRepository)? = nil) {
         self.toolEnvironment = toolEnvironment
+        self.stateRecovery = stateRecovery ?? NullStateRecoveryRepository()
     }
 
     public func historyBatch(runIDs: [String]) async throws -> HistoryPage {
         let ctl = try toolEnvironment.ctl().get()
-        return try await ctl.workflowHistoryPage(runIDs: runIDs).get()
+        return try observed(await ctl.workflowHistoryPage(runIDs: runIDs))
     }
 
     public func historyPage(cursor: String? = nil, activeOnly: Bool = false, relatedRunID: String? = nil) async throws -> HistoryPage {
         let ctl = try toolEnvironment.ctl().get()
-        return try await ctl.workflowHistoryPage(cursor: cursor, activeOnly: activeOnly, relatedRunID: relatedRunID).get()
+        return try observed(await ctl.workflowHistoryPage(cursor: cursor, activeOnly: activeOnly, relatedRunID: relatedRunID))
     }
 
     public func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
@@ -50,17 +52,24 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
         if command == "list", !processOptions.contains("--monitor-view") {
             processOptions.append("--monitor-view")
         }
-        return try await ctl.workflow(command, options: processOptions, positionals: positionals).get()
+        return try observed(await ctl.workflow(command, options: processOptions, positionals: positionals))
     }
 
     public func validate(definition: JSONValue) async throws -> [String: JSONValue] {
         let ctl = try toolEnvironment.ctl().get()
-        return try await ctl.validateWorkflow(definition: definition).get()
+        return try observed(await ctl.validateWorkflow(definition: definition))
     }
 
     public func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue] {
         let ctl = try toolEnvironment.ctl().get()
-        return try await ctl.saveWorkflow(name: name, definition: definition, expectedRevision: expectedRevision, expectedWorkflowID: expectedWorkflowID).get()
+        return try observed(await ctl.saveWorkflow(
+            name: name, definition: definition, expectedRevision: expectedRevision, expectedWorkflowID: expectedWorkflowID
+        ))
+    }
+
+    private func observed<Value>(_ result: Result<Value, ToolError>) throws -> Value {
+        if case .failure(let error) = result { stateRecovery.report(error) }
+        return try result.get()
     }
 }
 

@@ -142,6 +142,7 @@ import Testing
         harness.tasksSubject.send([first, second])
         try await waitUntil {
             harness.sut.isPresentationSettled && harness.sut.columns.first?.rows.isEmpty == false
+                && Set(harness.sut.columns.map(\.id)) == Set(["first", "second"])
         }
         #expect(harness.sut.columnState(for: "first") === state)
         #expect(state.expandedGroups == ["retained-tool"])

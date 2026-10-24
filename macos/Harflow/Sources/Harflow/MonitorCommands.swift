@@ -12,10 +12,13 @@ struct MonitorCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Session…") { coordinator.handle(path: MonitorDestination.newSession) }
                 .keyboardShortcut("n")
+                .disabled(coordinator.mainWindowNavigationCoordinator?.runtimeIsReady == false)
             Button("Create Workflow…") { coordinator.createWorkflow() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(coordinator.mainWindowNavigationCoordinator?.runtimeIsReady == false)
             Button("Run Workflow…") { coordinator.runWorkflow() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(coordinator.mainWindowNavigationCoordinator?.runtimeIsReady == false)
         }
         CommandGroup(replacing: .appSettings) {
             SettingsLink { Text("Settings…") }

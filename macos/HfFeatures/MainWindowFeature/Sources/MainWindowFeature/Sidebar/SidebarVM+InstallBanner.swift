@@ -23,6 +23,18 @@ extension SidebarVM {
     /// hence no access modifier (internal), not `private`, on this and the other cross-file members
     /// below.
     func subscribeToInstallState() {
+        if let recovery = useCase as? any SidebarStoreRecoveryObserving {
+            recovery.storeRecoveryPublisher()
+.receive(on: DispatchQueue.main)
+                .sink { [weak self] in self?.applyStoreRecovery($0) }
+.store(in: &cancellables)
+        }
+        if let setup = useCase as? any RuntimeSetupObserving {
+            setup.runtimeSetupPublisher()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] in self?.applyRuntimeSetup($0) }
+                .store(in: &cancellables)
+        }
         useCase.installStatePublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -200,4 +212,35 @@ extension SidebarVM {
         if case .unresolved = state { return true }
         return false
     }
+}
+
+extension SidebarVM {
+
+    // MARK: - Install banner actions (settled plan, section 5)
+
+    func didTapInstallBannerPrimary() {
+        switch installState {
+        case .needsGit:
+            Task { [weak self] in await self?.useCase.install() }
+        case .needsUv:
+            publishInstallUvDialog()
+        case .failed:
+            Task { [weak self] in await self?.useCase.retry() }
+        case .unresolved:
+            Task { [weak self] in await self?.useCase.checkAgain() }
+        case .running:
+            break
+        case .idle, .installed:
+            if let need = currentInstallNeed { publishInstallOrUpdateDialog(need: need) }
+        }
+    }
+
+    func didTapInstallBannerSecondary() {
+        if case .unresolved = installState { publishInstallAnywayDialog() }
+    }
+
+    func didTapInstallBannerDismiss() {
+        useCase.reset()
+    }
+
 }

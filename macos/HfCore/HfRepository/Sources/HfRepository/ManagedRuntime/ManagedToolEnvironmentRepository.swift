@@ -71,7 +71,9 @@ public final class ManagedToolEnvironmentRepository: ToolEnvironmentRepository, 
     private func snapshot() -> Result<ManagedRuntimeReady, ToolError> {
         switch coordinator.state {
         case .ready(let ready): .success(ready)
-        case .preparing: .failure(.refused(code: "managed_runtime_preparing", message: "Preparing the managed Harflow runtime…"))
+        case .installationRequired: .failure(.refused(code: "managed_runtime_install_required", message: "Finish runtime setup to continue."))
+        case .updateFailed(let message, _, _): .failure(.refused(code: "managed_runtime_failed", message: message))
+        case .preparing, .installing, .updating: .failure(.refused(code: "managed_runtime_preparing", message: "Preparing the managed Harflow runtime…"))
         case .failed(let message): .failure(.refused(code: "managed_runtime_failed", message: message))
         }
     }

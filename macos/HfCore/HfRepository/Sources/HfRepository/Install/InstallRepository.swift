@@ -46,6 +46,10 @@ public enum InstallState: Equatable, Sendable {
 @Mockable
 public protocol InstallRepository: Sendable {
 
+    /// Typed shared managed setup state. Legacy adapters default to ready.
+    var setupState: RuntimeSetupState { get }
+    func setupStatePublisher() -> AnyPublisher<RuntimeSetupState, Never>
+
     var state: InstallState { get }
     func statePublisher() -> AnyPublisher<InstallState, Never>
 

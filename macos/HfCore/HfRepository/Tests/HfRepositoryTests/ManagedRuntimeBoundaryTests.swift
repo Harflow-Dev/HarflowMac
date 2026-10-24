@@ -11,6 +11,10 @@ struct ManagedRuntimeBoundaryTests {
         func prepare() async throws -> ManagedRuntimeReady {
             throw ManagedRuntimeFailure("fixture runtime failure")
         }
+
+        func checkExisting() async throws -> ManagedRuntimeAvailability {
+            throw ManagedRuntimeFailure("fixture runtime failure")
+        }
     }
 
     private struct ReadyInstaller: ManagedRuntimeInstalling {
@@ -20,6 +24,8 @@ struct ManagedRuntimeBoundaryTests {
                 "HARFLOW_STATE_ROOT": "/tmp/Harflow Home/.harflow"
             ])
         }
+
+        func checkExisting() async throws -> ManagedRuntimeAvailability { .ready(try await prepare()) }
     }
 
     private func makeCoordinator() -> ManagedRuntimeCoordinator {

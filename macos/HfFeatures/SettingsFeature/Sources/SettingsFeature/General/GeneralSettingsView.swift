@@ -8,6 +8,7 @@
 
 import Foundation
 import HfCommon
+import HfRepository
 import HfUI
 import SwiftUI
 
@@ -28,6 +29,14 @@ protocol GeneralSettingsViewModel: ViewModel {
     /// The text field's live value — loaded from the committed setting on `didAppear`, then edited
     /// locally until `didTapApply`/`didTapSearchAgain` commits it. Never overwritten by a live
     /// settings update from elsewhere, matching the old `SettingsView`'s local `@State`.
+    var runtimeSetupState: RuntimeSetupState { get }
+    var recoveryPresentation: StoreRecoveryPresentation { get }
+    func didTapInstallRuntime()
+    func didTapInspectStore()
+    func didTapRequestRecovery()
+    func didTapCancelRecovery()
+    func didTapConfirmRecovery()
+    func didTapRevealBackup()
     var runtimeStatus: String { get }
     var runtimeCanRetry: Bool { get }
     func didTapRetryRuntime()
@@ -46,6 +55,17 @@ protocol GeneralSettingsViewModel: ViewModel {
     func didTapSearchAgain()
     func didToggleOpenWindowOnStart(_ isOn: Bool)
     func didToggleNotifyOnFinish(_ isOn: Bool)
+}
+
+extension GeneralSettingsViewModel {
+    var runtimeSetupState: RuntimeSetupState { .ready }
+    var recoveryPresentation: StoreRecoveryPresentation { StoreRecoveryPresentation(state: .idle) }
+    func didTapInstallRuntime() {}
+    func didTapInspectStore() {}
+    func didTapRequestRecovery() {}
+    func didTapCancelRecovery() {}
+    func didTapConfirmRecovery() {}
+    func didTapRevealBackup() {}
 }
 
 // MARK: - GeneralSettingsView
@@ -71,12 +91,19 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
     var body: some View {
         Form {
             Section("Managed runtime") {
-                Text(viewModel.runtimeStatus)
-                if viewModel.runtimeCanRetry {
-                    Button("Try again") { viewModel.didTapRetryRuntime() }
+                Text(viewModel.runtimeSetupState.title)
+                Text(viewModel.runtimeSetupState.detail).foregroundStyle(.secondary)
+                if viewModel.runtimeSetupState.isBusy { ProgressView().controlSize(.small) }
+                if let action = viewModel.runtimeSetupState.actionTitle {
+                    Button(action) { viewModel.didTapInstallRuntime() }.accessibilityIdentifier("settings-runtime-action")
                 }
-                Text("The app prepares its paired runtime automatically. MCP registrations are managed in Harnesses.")
-                    .foregroundStyle(.secondary)
+            }
+            Section("Task store") {
+                StoreRecoveryPanel(model: viewModel.recoveryPresentation,
+                                   inspect: viewModel.didTapInspectStore, request: viewModel.didTapRequestRecovery,
+                                   cancel: viewModel.didTapCancelRecovery, confirm: viewModel.didTapConfirmRecovery,
+                                   reveal: viewModel.didTapRevealBackup)
+                    .disabled(!viewModel.runtimeSetupState.isReady)
             }
             Section("Behaviour") {
                 Toggle(

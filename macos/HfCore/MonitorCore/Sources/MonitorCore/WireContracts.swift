@@ -23,7 +23,7 @@ public struct HarflowVersion: Equatable, Sendable {
     public let major: Int
     public let minor: Int
     public let patch: Int
-    public static let current = "0.0.1"
+    public static let current = "0.0.2"
 
     public init?(_ text: String) {
         guard text.count <= 256 else { return nil }

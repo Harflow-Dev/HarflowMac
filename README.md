@@ -2,7 +2,7 @@
 
 Harflow is a native macOS interface for agent tasks and workflow nodes. Installed command-line tools are called harnesses; the AI workers they run are agents.
 
-Version 0.0.2 is under development. On Apple Silicon with macOS 26, the app prepares its exact paired HarflowMCP runtime and reuses a qualified installation without network access. First preparation requires the paired release on PyPI. Harness MCP registrations remain explicit actions in Settings → Harnesses. The app does not adopt legacy or external runtimes.
+Version 0.0.2 is under development. On Apple Silicon with macOS 26, the app checks for its exact paired HarflowMCP runtime without downloading software. If installation or an update is needed, choose Install required components or Update required components in the sidebar or Settings → General. The current source pairs with engine 0.0.2; explicit installation requires that exact release on PyPI. A qualified installation is reused without network access. Harness MCP registrations remain explicit actions in Settings → Harnesses. The app does not adopt legacy or external runtimes.
 
 Workflow runs show selected node activity in the Graph sidebar, with attempt selection and on-demand call history. Deselect a node to return to the retained run plan. The bottom summary expands above the graph; Parallel shows all current workflow task columns.
 
@@ -15,6 +15,8 @@ Compatible engines expose capture ownership, live-input availability and backgro
 Agent and model menus share lifetime usage ranking from successful app submissions. Workflow node menus prefer a supported orchestrator agent and model while preserving saved selections.
 
 The title bar shows Harflow's engine connection status. Choose Light, Dark, or System from the sidebar footer icons to set the appearance across Harflow. System follows this Mac's appearance setting.
+
+Store incompatibility retains the qualified runtime and shows a sidebar attention entry. Settings → General offers read-only inspection and explicit backup and reset, bound to the inspected operation. Interrupted recovery requires a fresh inspection and confirmation. The engine-returned backup receipt remains available for Finder reveal after recovery. See the [managed runtime guide](docs/managed-runtime.md#store-readiness-and-recovery).
 
 See [managed runtime](docs/managed-runtime.md) for acquisition, storage, retry, and current distribution limits.
 

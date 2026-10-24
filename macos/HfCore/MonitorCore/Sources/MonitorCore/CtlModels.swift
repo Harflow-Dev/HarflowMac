@@ -289,6 +289,8 @@ public enum ToolError: Error, Equatable, Sendable {
     case unreadable(tool: String, exitCode: Int32, stderr: String)
     /// The command ran and refused, with harflow's own stable code.
     case refused(code: String, message: String)
+    /// A refusal retaining additive engine-owned diagnostic data.
+    case structuredRefusal(code: String, message: String, data: [String: JSONValue])
     /// A `run`/`resume` whose owner never answered: a task may or may not exist.
     case unknownOutcome(message: String)
     case launchFailed(tool: String, detail: String)
@@ -311,7 +313,7 @@ public enum ToolError: Error, Equatable, Sendable {
             let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             return "`\(tool)` exited \(exitCode) without a JSON answer"
                 + (detail.isEmpty ? "." : ": \(detail.suffix(400))")
-        case .refused(let code, let message):
+        case .refused(let code, let message), .structuredRefusal(let code, let message, _):
             return TakeoverRefusal.explanation(code: code, message: message)
         case .unknownOutcome(let message):
             return message.isEmpty ? "No answer from harflow; check the task list." : message
@@ -323,8 +325,10 @@ public enum ToolError: Error, Equatable, Sendable {
     }
 
     public var refusalCode: String? {
-        if case .refused(let code, _) = self { return code }
-        return nil
+        switch self {
+        case .refused(let code, _), .structuredRefusal(let code, _, _): return code
+        default: return nil
+        }
     }
 
     /// The versions understood for `tool`'s own contract, rendered for the unsupported-version
@@ -501,6 +505,9 @@ public enum CtlDocument: Equatable, Sendable {
             if code == "usage", message.contains("invalid choice") || message.contains("unrecognized arguments") {
                 return .failure(.unsupportedCommand(tool: tool, command: command, detail: message))
             }
+            if let data = error["data"]?.objectValue {
+                return .failure(.structuredRefusal(code: code, message: message, data: data))
+            }
             return .success(.error(code: code, message: message))
         }
         return .success(.document(document))
@@ -584,15 +591,5 @@ extension Result where Failure == ToolError {
             default: return .success(document)
             }
         }
-    }
-}
-
-// MARK: - Managed runtime readiness errors
-
-public extension ToolError {
-    /// Preparation and acquisition failure share the install-status surface, never a list incident.
-    var isManagedRuntimeUnavailable: Bool {
-        guard case .refused(let code, _) = self else { return false }
-        return code == "managed_runtime_preparing" || code == "managed_runtime_failed"
     }
 }

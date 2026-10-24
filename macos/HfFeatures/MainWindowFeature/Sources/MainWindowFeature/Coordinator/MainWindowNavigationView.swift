@@ -42,6 +42,10 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             coordinator.buildSidebarView()
                 .navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
         } detail: {
+            if !coordinator.runtimeIsReady {
+                ContentUnavailableView("Finish setting up Harflow", systemImage: "shippingbox",
+                                       description: Text("Use the sidebar to install the runtime before starting sessions or workflows."))
+            } else {
             switch coordinator.selection {
             case .task(let id):
                 coordinator.buildTaskDetailView(id: id)
@@ -55,6 +59,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 coordinator.buildWorkflowRunView(id: id)
             case .newSession, .openWindow, nil:
                 emptyDetailView
+            }
             }
         }
         .toolbar {

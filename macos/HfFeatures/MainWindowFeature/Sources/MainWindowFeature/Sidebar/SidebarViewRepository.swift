@@ -13,7 +13,8 @@ import SwiftEnvironment
 
 /// Concrete `SidebarUseCase` backed by `TaskListRepository`.
 @MainActor
-final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, SidebarHistoryUseCase, @unchecked Sendable {
+final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, SidebarHistoryUseCase,
+    RuntimeSetupObserving, SidebarStoreRecoveryObserving, @unchecked Sendable {
     @GlobalEnvironment(\.workflowRepository) private var workflowRepository
 
     func workflowSnapshot() async throws -> SidebarWorkflowSnapshot {
@@ -43,6 +44,7 @@ final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, Sideb
 
     // MARK: - Private Properties
 
+    @GlobalEnvironment(\.stateRecoveryRepository) private var stateRecoveryRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
@@ -86,6 +88,13 @@ final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, Sideb
 
     var backendCatalog: BackendCatalog { backendsRepository.catalog }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { backendsRepository.catalogPublisher() }
+
+    var storeRecoveryState: StoreRecoveryState { stateRecoveryRepository.state }
+    func storeRecoveryPublisher() -> AnyPublisher<StoreRecoveryState, Never> { stateRecoveryRepository.statePublisher() }
+
+    var runtimeSetupState: RuntimeSetupState { installRepository.setupState }
+    func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never> { installRepository.setupStatePublisher() }
+    func installRuntime() async { await installRepository.install() }
 
     // MARK: Install
 

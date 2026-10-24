@@ -54,7 +54,10 @@ struct SidebarWorkflowPollState: Equatable {
 }
 
 extension SidebarVM {
-    func didTapNewWorkflow() { routing.select(.newWorkflow(UUID())) }
+    func didTapNewWorkflow() {
+        guard runtimeSetupState.isReady else { return }
+        routing.select(.newWorkflow(UUID()))
+    }
 
     /// The workflow poll's own presentation state, for the before/after comparison.
     var workflowPollState: SidebarWorkflowPollState {
@@ -124,7 +127,7 @@ extension SidebarVM {
     }
 
     private func applyWorkflowReadFailure(_ error: Error) {
-        if (error as? ToolError)?.isManagedRuntimeUnavailable == true {
+        if (error as? ToolError)?.isManagedRuntimeUnavailable == true || (error as? ToolError)?.isStateRecoveryRefusal == true {
             workflowErrorMessage = nil
             publishViewEvent(.incidentResolved(source: "workflow-list"))
         } else {

@@ -29,6 +29,7 @@ public final class Module: HfModule {
         }
         let runtime = ManagedRuntimeCoordinator(installer: installer)
         let toolEnvironment = ManagedToolEnvironmentRepository(coordinator: runtime, layout: layout, baseEnvironment: baseEnvironment)
+        let stateRecovery = StateRecoveryRepositoryImpl(toolEnvironment: toolEnvironment)
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
         let capturedEvents = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler)
         let eventStream = RecoveryEventStreamRepository(base: capturedEvents, environment: toolEnvironment, snapshots: snapshot, scheduler: scheduler)
@@ -39,7 +40,8 @@ public final class Module: HfModule {
             eventStreamRepository: eventStream,
             finishNotifier: finishNotifier,
             scheduler: scheduler,
-            visibility: visibility
+            visibility: visibility,
+            stateRecovery: stateRecovery
         )
         let taskAction = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshot)
         let harness = HarnessRepositoryImpl(toolEnvironment: toolEnvironment)
@@ -54,6 +56,7 @@ public final class Module: HfModule {
             .environment(\.settingsRepository, settings)
             .environment(\.agentUsageRepository, agentUsage)
             .environment(\.toolEnvironmentRepository, toolEnvironment)
+            .environment(\.stateRecoveryRepository, stateRecovery)
             .environment(\.taskSnapshotRepository, snapshot)
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
@@ -66,7 +69,7 @@ public final class Module: HfModule {
             .environment(\.takeoverService, takeover)
             .environment(\.backendsRepository, backends)
             .environment(\.modelCatalogRepository, modelCatalog)
-            .environment(\.workflowRepository, WorkflowRepositoryImpl(toolEnvironment: toolEnvironment))
+            .environment(\.workflowRepository, WorkflowRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
     }
 }
 

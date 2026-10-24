@@ -57,6 +57,11 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     
     // MARK: - GeneralSettingsViewModel Properties
     
+    private(set) var runtimeSetupState: RuntimeSetupState = .ready
+    private(set) var recoveryState: StoreRecoveryState = .idle
+    private(set) var lastCompletedReceipt: StateRecoveryResult?
+    var recoveryPresentation: StoreRecoveryPresentation { StoreRecoveryPresentation(state: recoveryState, receipt: lastCompletedReceipt) }
+    @ObservationIgnored private let recoveryRouting: (any StoreRecoveryRouting)?
     private(set) var runtimeStatus = "Preparing the managed Harflow runtime…"
     private(set) var runtimeCanRetry = false
     private(set) var directoryField: String = ""
@@ -74,8 +79,12 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     
     // MARK: - Init
     
-    init(useCase: any GeneralSettingsUseCase) {
+    init(useCase: any GeneralSettingsUseCase, recoveryRouting: (any StoreRecoveryRouting)? = nil) {
+        self.recoveryRouting = recoveryRouting
         self.useCase = useCase
+        self.runtimeSetupState = (useCase as? any RuntimeSetupObserving)?.runtimeSetupState ?? .ready
+        self.recoveryState = (useCase as? any StoreRecoveryUseCase)?.recoveryState ?? .idle
+        self.lastCompletedReceipt = (useCase as? any StoreRecoveryUseCase)?.lastCompletedReceipt
         self.openWindowOnStart = useCase.openWindowOnStart
         self.notifyOnFinish = useCase.notifyOnFinish
         refreshResolutions()
@@ -89,6 +98,7 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     }
     
     func didDisappear() {
+        (useCase as? any StoreRecoveryUseCase)?.cancelRecovery()
         cancellables.removeAll()
         didSubscribe = false
     }
@@ -124,6 +134,8 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         guard !didSubscribe else { return }
         didSubscribe = true
         
+        subscribeToSetupAndRecovery()
+
         useCase.installStatePublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in self?.applyRuntimeState(state) }
@@ -178,6 +190,51 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         }
         if runtimeStatus != status { runtimeStatus = status }
         if runtimeCanRetry != canRetry { runtimeCanRetry = canRetry }
+    }
+
+    func didTapInstallRuntime() {
+        guard runtimeSetupState.actionTitle != nil, let setup = useCase as? any RuntimeSetupObserving else { return }
+        Task { await setup.installRuntime() }
+    }
+
+    func didTapInspectStore() { Task { await (useCase as? any StoreRecoveryUseCase)?.inspectStore() } }
+    func didTapRequestRecovery() {
+        guard case .inspected(let inspection) = recoveryState else { return }
+        (useCase as? any StoreRecoveryUseCase)?.confirmRecovery(inspection)
+    }
+
+    func didTapCancelRecovery() { (useCase as? any StoreRecoveryUseCase)?.cancelRecovery() }
+    func didTapConfirmRecovery() {
+        guard case .confirming(let inspection) = recoveryState else { return }
+        Task { await (useCase as? any StoreRecoveryUseCase)?.recoverStore(inspection) }
+    }
+
+    func didTapRevealBackup() {
+        guard let receipt = lastCompletedReceipt else { return }
+        recoveryRouting?.revealBackup(receipt)
+    }
+
+    private func subscribeToSetupAndRecovery() {
+        if let setup = useCase as? any RuntimeSetupObserving {
+            setup.runtimeSetupPublisher()
+.receive(on: DispatchQueue.main)
+                .sink { [weak self] state in
+                    guard let self, runtimeSetupState != state else { return }
+                    runtimeSetupState = state
+                }
+.store(in: &cancellables)
+        }
+        if let recovery = useCase as? any StoreRecoveryUseCase {
+            recovery.recoveryStatePublisher()
+.receive(on: DispatchQueue.main)
+                .sink { [weak self] state in
+                    guard let self else { return }
+                    let receipt = recovery.lastCompletedReceipt
+                    if lastCompletedReceipt != receipt { lastCompletedReceipt = receipt }
+                    if recoveryState != state { recoveryState = state }
+                }
+.store(in: &cancellables)
+        }
     }
 
     private func refreshResolutions() {

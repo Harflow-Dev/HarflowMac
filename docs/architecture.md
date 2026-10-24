@@ -6,7 +6,11 @@ Production Module constructs one ManagedRuntimeCoordinator and injects it into M
 
 The local package build packages the app icon and both menu template images, then applies an ad-hoc signature. Developer ID, notarization, distribution, and Xcode Cloud are outside this phase.
 
-Ctl/setup commands and asynchronous store readers validate the selected runtime and lexical state root before operations. See [MonitorCore compatibility](../macos/HfCore/MonitorCore/README.md). Managed readiness precedes those gates; no task history is scanned while preparation or qualification is unavailable.
+Ctl/setup commands and asynchronous store readers validate the selected runtime and lexical state root before operations. See [MonitorCore compatibility](../macos/HfCore/MonitorCore/README.md). Managed readiness precedes those gates; no task history is scanned while preparation or qualification is unavailable. Startup uses a reuse-only installer check under the permanent lock. Explicit install/update alone permits acquisition. `RuntimeSetupState` publishes equality-deduplicated setup status shared by the sidebar, Settings, and coordinator action gates. The window displays a neutral setup detail until qualified readiness.
+
+## Store recovery
+
+`Module` constructs one `StateRecoveryRepositoryImpl` from the qualified tool environment and injects it into task-list and workflow repositories. Their structured store refusals update a shared, equality-deduplicated readiness snapshot without changing managed-runtime acquisition state. MonitorCore owns only typed public-command models and transport; the repository owns single-flight operations, exact inspection/confirmation binding and generation checks. No consumer writes state files. Settings General consumes the same repository through its use-case adapter and VM, and the sidebar exposes a settings attention entry. Exact inspection values bind inline confirmation and cancellation. Recovery completion rechecks listing and watchers through `runtimeBecameReady()` without invalidating the durable completion receipt; later failures retain the last receipt separately from current recovery state. Finder reveal accepts only that engine-returned completed receipt.
 
 ## Application appearance
 

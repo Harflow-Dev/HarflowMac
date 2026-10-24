@@ -32,6 +32,39 @@ public struct ManagedRuntimeInstaller: ManagedRuntimeInstalling {
         return try await prepareLocked()
     }
 
+    /// Qualifies only an existing active generation under the installation lock.
+    public func checkExisting() async throws -> ManagedRuntimeAvailability {
+        try specification.validate()
+        try Task.checkCancellation()
+        try ManagedRuntimeFiles.prepareRoot(layout)
+        let installationLock = try ManagedRuntimeFileLock(path: layout.runtimeRoot + "/installation.lock")
+        defer { withExtendedLifetime(installationLock) {} }
+        if let ready = try await reuseActive() { return .ready(ready) }
+        return .requiresInstallation(installedVersion: observedInstalledVersion(), requiredVersion: specification.engineVersion)
+    }
+
+    private func observedInstalledVersion() -> String? {
+        guard ManagedRuntimeFiles.kind(layout.activePath) == .typeSymbolicLink,
+              let target = try? FileManager.default.destinationOfSymbolicLink(atPath: layout.activePath) else { return nil }
+        let parts = target.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts[0] == "generations", !parts[1].isEmpty,
+              parts[1] != ".", parts[1] != ".." else { return nil }
+        let directory = layout.runtimeRoot + "/" + target
+        let path = directory + "/completion.json"
+        guard ManagedRuntimeFiles.kind(directory) == .typeDirectory,
+              ManagedRuntimeFiles.kind(path) == .typeRegular,
+              let size = try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int,
+              size <= 65536, let data = try? Data(contentsOf: URL(fileURLWithPath: path)), data.count <= 65536,
+              let receipt = try? JSONDecoder().decode(ManagedRuntimeReceipt.self, from: data),
+              receipt.schema == 1, receipt.generation == String(parts[1]), receipt.stateRoot == layout.stateRoot,
+              HarflowVersion(receipt.engineVersion) != nil,
+              receipt.specification.count == 64, receipt.specification.allSatisfy({ $0.isHexDigit && !$0.isUppercase }),
+              receipt.engineSHA256.count == 64, receipt.engineSHA256.allSatisfy({ $0.isHexDigit && !$0.isUppercase }),
+              target.hasPrefix("generations/" + receipt.engineVersion + "-" + receipt.specification + "-"),
+              UUID(uuidString: String(target.suffix(36))) != nil else { return nil }
+        return receipt.engineVersion
+    }
+
     private func prepareLocked() async throws -> ManagedRuntimeReady {
         try ManagedRuntimeFiles.reapStaging(layout)
         if let ready = try await reuseActive() { return ready }

@@ -53,11 +53,18 @@ public struct CtlClient: Sendable {
     /// so a command with its own decoder (`status-batch` keeps `tasks` and `errors` siblings) can
     /// share the transport, timeout and metrics without going through `CtlDocument`.
     public func raw(_ command: String, options: [String] = [], positionals: [String] = [],
-                    timeout: Double = 30) async -> Result<ProcessOutput, ToolError> {
+                    timeout: Double = 30, requiringCapability: String? = nil) async -> Result<ProcessOutput, ToolError> {
         guard operationIsCurrent(), !Task.isCancelled else {
             return .failure(WireEnvelope.incompatibility("operation superseded before compatibility probe"))
         }
-        if case .failure(let error) = await checkCompatibility() { return .failure(error) }
+        let probe = await VersionInfoClient(executable: executable, environment: environment, context: compatibilityContext, runner: runner).check()
+        switch probe {
+        case .failure(let error): return .failure(error)
+        case .success(let info):
+            if let requiringCapability, !info.capabilities.contains(requiringCapability) {
+                return .failure(.unsupportedCommand(tool: "harflow-ctl", command: command, detail: "Missing capability \(requiringCapability)"))
+            }
+        }
         guard operationIsCurrent(), !Task.isCancelled else { return .failure(WireEnvelope.incompatibility("operation cancelled before command launch")) }
         let argv = Self.argv(command, options: options, positionals: positionals)
         let transportStart = MonitorMetrics.begin()
@@ -69,6 +76,9 @@ public struct CtlClient: Sendable {
         return output.flatMap { output in
             if output.timedOut { return .failure(.timedOut(tool: "harflow-ctl \(command)", seconds: timeout)) }
             guard let document = CtlDocument.firstJSONObject(in: output.stdout) else {
+                if output.exitCode == 2, output.stderr.contains("invalid choice") {
+                    return .failure(.unsupportedCommand(tool: "harflow-ctl", command: command, detail: output.stderr))
+                }
                 return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: output.stderr))
             }
             if let error = WireEnvelope.validate(document, contract: .ctl, productVersion: compatibilityContext.productVersion) {

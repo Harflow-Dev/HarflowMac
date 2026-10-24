@@ -23,6 +23,9 @@ import SwiftUI
 protocol SidebarViewModel: ViewModel {
     
     /// Running / Today / Earlier, in that order, empty buckets omitted (settled plan D10).
+    var storeNeedsAttention: Bool { get }
+    var runtimeSetupState: RuntimeSetupState { get }
+    func didTapRuntimeSetup()
     var sections: [SidebarSection] { get }
     var taskHistoryState: HistoryLoadingState { get }
     var workflowHistoryState: HistoryLoadingState { get }
@@ -74,6 +77,9 @@ protocol SidebarViewModel: ViewModel {
 }
 
 extension SidebarViewModel {
+    var storeNeedsAttention: Bool { false }
+    var runtimeSetupState: RuntimeSetupState { .ready }
+    func didTapRuntimeSetup() {}
     var appAppearance: AppAppearance { .system }
     func didSelectAppearance(_: AppAppearance) {}
     var savedWorkflows: [WorkflowRecord] { [] }
@@ -127,12 +133,17 @@ struct SidebarView<VM: SidebarViewModel>: View {
     // MARK: - View Body
     
     var body: some View {
-        list
+        Group {
+            if viewModel.runtimeSetupState.isReady {
+                list.safeAreaInset(edge: .top, spacing: HfRadius.Metrics.zero) { header.background(.bar) }
+            } else {
+                RuntimeSetupCard(state: viewModel.runtimeSetupState, action: viewModel.didTapRuntimeSetup)
+                    .padding()
+.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
             // Let the native sidebar List own the titlebar safe area. A surrounding VStack
             // can be extended underneath the unified toolbar when leaving full screen.
-            .safeAreaInset(edge: .top, spacing: HfRadius.Metrics.zero) {
-                header.background(.bar)
-            }
             .safeAreaInset(edge: .bottom, spacing: HfRadius.Metrics.zero) { footer.background(.bar) }
         // New session moved from the toolbar into the column itself (SPEC §6.1): the same
         // `didTapNewSession` action, now a fixed full-width button above the search field — never
@@ -148,6 +159,15 @@ struct SidebarView<VM: SidebarViewModel>: View {
     /// beside the compact backend-dot filter, then the degraded-catalog note when there is one.
     private var header: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
+            if viewModel.storeNeedsAttention {
+                SettingsLink {
+                    Label("Task store needs attention", systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .help("Open Settings → General to inspect the store and review recovery")
+                .accessibilityIdentifier("sidebar-store-attention")
+            }
             newSessionButton
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: HfRadius.Metrics.spacing6) {

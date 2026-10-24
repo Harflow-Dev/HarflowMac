@@ -14,11 +14,13 @@ struct ManagedRuntimeCoordinatorTests {
         let lock = NSLock()
         private(set) var callCount = 0
         var failures: [Bool]
+        let checkExistingFailure: Bool
 
-        init(ready: ManagedRuntimeReady, gate: AsyncGate? = nil, failures: [Bool] = []) {
+        init(ready: ManagedRuntimeReady, gate: AsyncGate? = nil, failures: [Bool] = [], checkExistingFailure: Bool = false) {
             self.ready = ready
             self.gate = gate
             self.failures = failures
+            self.checkExistingFailure = checkExistingFailure
         }
 
         private func withLock<T>(_ body: () -> T) -> T {
@@ -37,6 +39,24 @@ struct ManagedRuntimeCoordinatorTests {
             gate?.waitSync()
             if shouldFail { throw ManagedRuntimeFailure("fixture acquisition failed") }
             return ready
+        }
+
+        func checkExisting() async throws -> ManagedRuntimeAvailability {
+            if checkExistingFailure { throw ManagedRuntimeFailure("fixture acquisition failed") }
+            withLock { callCount += 1 }
+            gate?.waitSync()
+            return .ready(ready)
+        }
+    }
+
+    private struct InstallationRequiredInstaller: ManagedRuntimeInstalling {
+        let ready: ManagedRuntimeReady
+        let requiredVersion: String
+
+        func prepare() async throws -> ManagedRuntimeReady { ready }
+
+        func checkExisting() async throws -> ManagedRuntimeAvailability {
+            .requiresInstallation(installedVersion: "0.0.1", requiredVersion: requiredVersion)
         }
     }
 
@@ -65,6 +85,25 @@ struct ManagedRuntimeCoordinatorTests {
         #expect(coordinator.state == .ready(ready()))
     }
 
+    @Test func givenExistingRuntimeNeedsInstallation_whenEnsuringReadiness_thenItDoesNotAcquireImplicitly() async {
+        // given
+        let installer = InstallationRequiredInstaller(ready: ready(), requiredVersion: "0.0.2")
+        let coordinator = ManagedRuntimeCoordinator(installer: installer)
+        let repository = ManagedInstallRepository(coordinator: coordinator, taskListRepository: NullTaskListRepository())
+
+        // when
+        let result = await coordinator.ensureReady()
+
+        // then
+        guard case .failure(.refused(let code, _)) = result else {
+            Issue.record("expected explicit installation requirement")
+            return
+        }
+        #expect(code == "managed_runtime_install_required")
+        #expect(coordinator.state == .installationRequired(installedVersion: "0.0.1", requiredVersion: "0.0.2"))
+        #expect(repository.setupState == .installationRequired(installedVersion: "0.0.1", requiredVersion: "0.0.2"))
+    }
+
     @Test func givenStartupCallerIsCancelled_whenTheSharedAttemptContinues_thenASecondCallerStillJoinsIt() async {
         // given
         let gate = AsyncGate()
@@ -87,7 +126,7 @@ struct ManagedRuntimeCoordinatorTests {
 
     @Test func givenAnAcquisitionFailure_whenReadinessIsRetriedWithoutExplicitRetry_thenFailureRemainsRetained() async {
         // given
-        let installer = ControlledInstaller(ready: ready(), failures: [true, false])
+        let installer = ControlledInstaller(ready: ready(), checkExistingFailure: true)
         let coordinator = ManagedRuntimeCoordinator(installer: installer)
 
         // when
@@ -99,7 +138,7 @@ struct ManagedRuntimeCoordinatorTests {
             Issue.record("expected both readiness calls to retain the failure")
             return
         }
-        #expect(installer.currentCallCount == 1)
+        #expect(installer.currentCallCount == 0)
         if case .failed(let message) = coordinator.state {
             #expect(message == "fixture acquisition failed")
         } else {
@@ -109,7 +148,7 @@ struct ManagedRuntimeCoordinatorTests {
 
     @Test func givenRetainedFailure_whenExplicitRetrySucceeds_thenOnlyRetryStartsANewAttempt() async {
         // given
-        let installer = ControlledInstaller(ready: ready(), failures: [true, false])
+        let installer = ControlledInstaller(ready: ready(), failures: [false], checkExistingFailure: true)
         let coordinator = ManagedRuntimeCoordinator(installer: installer)
         _ = await coordinator.ensureReady()
 
@@ -122,7 +161,29 @@ struct ManagedRuntimeCoordinatorTests {
             return
         }
         #expect(actual == ready())
-        #expect(installer.currentCallCount == 2)
+        #expect(installer.currentCallCount == 1)
+        #expect(coordinator.state == .ready(ready()))
+    }
+
+    @Test func givenRetainedFailure_whenConcurrentExplicitRetriesStart_thenTheyShareOnePreparation() async {
+        // given
+        let gate = AsyncGate()
+        let installer = ControlledInstaller(
+            ready: ready(), gate: gate, failures: [false], checkExistingFailure: true
+        )
+        let coordinator = ManagedRuntimeCoordinator(installer: installer)
+        _ = await coordinator.ensureReady()
+
+        // when
+        let first = Task { await coordinator.retry() }
+        await waitUntil { installer.currentCallCount == 1 }
+        let second = Task { await coordinator.retry() }
+        gate.open()
+        let results = await [first.value, second.value]
+
+        // then
+        #expect(installer.currentCallCount == 1)
+        #expect(results.allSatisfy { if case .success = $0 { true } else { false } })
         #expect(coordinator.state == .ready(ready()))
     }
 
@@ -150,11 +211,11 @@ struct ManagedRuntimeCoordinatorTests {
 
     @Test func givenRetainedInstallFailure_whenExplicitRetrySucceeds_thenWatcherRestartsExactlyOnce() async {
         // given
-        let installer = ControlledInstaller(ready: ready(), failures: [true, false])
+        let installer = ControlledInstaller(ready: ready(), failures: [false], checkExistingFailure: true)
         let coordinator = ManagedRuntimeCoordinator(installer: installer)
         let taskList = MockTaskListRepository()
         let settingsChanges = LockedBox(0)
-        given(taskList).settingsChanged().willProduce { settingsChanges.mutate { $0 += 1 } }
+        given(taskList).runtimeBecameReady().willProduce { settingsChanges.mutate { $0 += 1 } }
         let repository = ManagedInstallRepository(coordinator: coordinator, taskListRepository: taskList)
         _ = await coordinator.ensureReady()
         #expect(repository.state == .failed(stage: .harflow, message: "fixture acquisition failed"))

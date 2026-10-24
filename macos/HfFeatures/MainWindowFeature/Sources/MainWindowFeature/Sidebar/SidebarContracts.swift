@@ -67,6 +67,14 @@ extension SidebarUseCase {
     func setAppAppearance(_: AppAppearance) {}
 }
 
+// MARK: - SidebarStoreRecoveryObserving
+
+@MainActor
+protocol SidebarStoreRecoveryObserving: Sendable {
+    var storeRecoveryState: StoreRecoveryState { get }
+    func storeRecoveryPublisher() -> AnyPublisher<StoreRecoveryState, Never>
+}
+
 // MARK: - PendingReveal
 
 /// A navigation-triggered request to reveal (expand the ancestors of) a task in the sidebar's tree —

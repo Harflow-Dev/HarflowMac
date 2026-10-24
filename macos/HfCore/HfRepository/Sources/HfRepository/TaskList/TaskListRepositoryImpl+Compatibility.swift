@@ -97,6 +97,11 @@ extension TaskListRepositoryImpl {
     }
 
     public func settingsChanged() {
+        stateRecovery.invalidate()
+        runtimeBecameReady()
+    }
+
+    public func runtimeBecameReady() {
         startLock.lock()
         compatibilityGeneration += 1
         compatibilityRetryToken?.cancel()

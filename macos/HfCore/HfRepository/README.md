@@ -2,7 +2,7 @@
 
 The repository layer exposes constructor-injected, nonisolated Sendable business contracts over MonitorCore. See [architecture rules](../../AGENTS.md).
 
-Production Module constructs one `ManagedRuntimeCoordinator` and injects it into `ManagedToolEnvironmentRepository` and `ManagedInstallRepository`. Concurrent startup consumers join the same acquisition attempt, including failure. The coordinator retains failure until explicit retry; synchronous ctl/setup access reports distinct preparation/failure refusal codes until a generation is qualified. Only the install adapter restarts the task-list watcher when an explicit post-failure retry succeeds. Initial readiness never triggers that restart.
+Production Module constructs one `ManagedRuntimeCoordinator` and injects it into `ManagedToolEnvironmentRepository` and `ManagedInstallRepository`. Concurrent startup consumers join the same reuse-only qualification attempt, including failure. Acquisition starts only from an explicit install/update/retry action. The coordinator retains failure until explicit retry; synchronous ctl/setup access reports distinct preparation/failure refusal codes until a generation is qualified. Only the install adapter restarts the task-list watcher when an explicit acquisition succeeds. Recovery completion uses the same narrow readiness refresh without invalidating the retained receipt. Initial readiness never triggers that restart.
 
 For an explicitly selected runtime, ctl/setup clients carry the selected absolute state-root context and probe compatibility for every operation. Event activity, summary readers, and task-store watchers await an injected `StoreCompatibilityCheck` before I/O, matching the selected tasks directory's parent. Released leases and obsolete generations cannot start delayed reads or watchers. Compatibility failures are explicit unavailable/error states. The gate checks contracts and release lines; managed completion receipts and qualification independently gate runtime activation.
 
@@ -17,6 +17,7 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 | `TaskArtifactRepository` | Explicit bounded pages of registered standalone-task artifact metadata; unavailable reads remain distinct from an empty manifest. |
 | `TaskSnapshotRepository` | Per-task `harflow-ctl status` snapshots. |
 | `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task; also publishes each task's `EventAvailability` (`loading`/`available`/`unavailable`), so a caller never has to infer "the log couldn't be read" from an empty event list. |
+| `StateRecoveryRepository` | Shared structured store refusals and explicit inspection/confirmation/recovery lifecycle; single-flight operations and stale-result checks remain independent of managed acquisition. |
 | `TaskListRepository` | `harflow-ctl list`, refresh coalescing, titles, the FSEvents throttle, the safety poll, `detail()` precedence. |
 | `FinishNotifier` | User notifications for roots that finished since the last listing. |
 | `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |

@@ -43,6 +43,7 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     /// The currently selected task/group destination, or `nil`. Never set to
     /// `.newSession`/`.openWindow` — those are handled separately (`presentedSheet`, and the
     /// parent's own window-opening seam) — see `MainWindowCoordinator.handle(path:)`.
+    var runtimeIsReady: Bool { get }
     var selection: MonitorDestination? { get set }
     func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never>
 
@@ -77,6 +78,7 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
 }
 
 public extension MainWindowNavigationCoordinator {
+    var runtimeIsReady: Bool { true }
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
 
     /// Derives modal state for lightweight preview and test coordinators.
@@ -129,6 +131,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     public var presentedSheet: MainWindowSheet? {
         didSet {
+            if presentedSheet != nil, !runtimeIsReady { presentedSheet = nil; return }
             let wasNewSession = oldValue == .newSession
             let isNewSession = presentedSheet == .newSession
             guard wasNewSession != isNewSession else { return }
@@ -160,6 +163,9 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     public func presentWorkflowRunner() { isWorkflowRunnerPresented = true }
 
+    public private(set) var runtimeIsReady = true
+    @ObservationIgnored private var runtimeSubscription: AnyCancellable?
+
     // MARK: - Private Properties
 
     @ObservationIgnored private let selectionSubject = CurrentValueSubject<MonitorDestination?, Never>(nil)
@@ -178,9 +184,16 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     // MARK: - Init
 
-    public init(parent: any Coordinator, pasteboard: any PasteboardWriting = NSPasteboard.general) {
+    public init(parent: any Coordinator, pasteboard: any PasteboardWriting = NSPasteboard.general, installRepository: (any InstallRepository)? = nil) {
         self.parent = parent
         self.pasteboard = pasteboard
+        let install = installRepository ?? GlobalValues.installRepository
+        self.runtimeIsReady = install.setupState.isReady
+        self.runtimeSubscription = install.setupStatePublisher().receive(on: DispatchQueue.main).sink { [weak self] state in
+            guard let self else { return }
+            if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
+            if !state.isReady { self.presentedSheet = nil }
+        }
     }
 
     // MARK: - Public Methods
@@ -189,6 +202,12 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         guard let destination = path as? MonitorDestination else {
             parent.handle(path: path)
             return
+        }
+        if !runtimeIsReady {
+            switch destination {
+            case .newSession, .newWorkflow, .workflow: return
+            default: break
+            }
         }
         switch destination {
         case .task(let id):
@@ -304,6 +323,12 @@ extension MainWindowCoordinator: SidebarRouting {
     /// point 5 excludes the sidebar's own selection from the reveal triggers (a click can only
     /// select a row that is already visible).
     public func select(_ destination: MonitorDestination?) {
+        if !runtimeIsReady {
+            switch destination {
+            case .newSession, .newWorkflow, .workflow: return
+            default: break
+            }
+        }
         selection = destination
     }
 
