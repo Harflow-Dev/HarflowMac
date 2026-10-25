@@ -146,6 +146,9 @@ struct CallerApprovalRequestCard: View {
 .font(.system(.caption, design: .monospaced))
                                 .textSelection(.enabled)
 .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 8)
+                                .background(Color.composerFill, in: RoundedRectangle(cornerRadius: 6))
                         }
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
