@@ -110,9 +110,6 @@ struct CallerApprovalRequestCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(model.pending ? Color.warningBG : Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
         .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(model.pending ? Color.warningFG : Color.hairline))
-        .overlay(alignment: .leading) {
-            if model.pending { RoundedRectangle(cornerRadius: 2).fill(Color.warningFG).frame(width: 4).padding(.vertical, 4) }
-        }
         .onChange(of: model.focusToken, initial: true) { _, token in
             guard let token else { return }
             Task { @MainActor in
