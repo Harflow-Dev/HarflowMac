@@ -189,7 +189,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
 
     private var agentSection: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
-            sectionTitle("Agent")
+            sectionTitle("Harness")
             AgentGrid(cards: viewModel.agentCards, onSelect: viewModel.didChangeBackend)
             if let note = viewModel.agentListUnavailableNote {
                 Text(note).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
@@ -235,7 +235,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("What can it change?")
-            Text("How strictly this is enforced depends on the agent. The task's Technical info shows exactly what applied.")
+            Text("How strictly this is enforced depends on the harness. The task's Technical info shows exactly what applied.")
                 .font(.hf(.caption))
                 .foregroundStyle(Color.secondaryText)
         }
@@ -266,7 +266,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     private var approvalDescription: String {
         viewModel.callerApprovalError ?? viewModel.approvalNote ?? (viewModel.supportsCallerApprovals
             ? "Exact action once; requires uncapped repository write or publish access. Existing restrictions still apply."
-            : "Unsupported or unmeasured for this agent.")
+            : "Unsupported or unmeasured for this harness.")
     }
 
     private var advancedFields: some View {

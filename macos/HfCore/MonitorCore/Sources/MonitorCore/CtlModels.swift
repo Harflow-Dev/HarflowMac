@@ -113,7 +113,7 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
         var result = raw["notices"]?.arrayValue?.compactMap(\.stringValue) ?? []
         result += supervision?.notices ?? []
         result += raw["recovery_activity"]?["notices"]?.arrayValue?.compactMap(\.stringValue)
-            .map { "Backend transcript: \($0)" } ?? []
+            .map { "Harness transcript: \($0)" } ?? []
         if let bound = backgroundIdleSeconds {
             result.append("Background idle bound: \(bound) seconds (live-input runs only).")
         }
@@ -357,7 +357,7 @@ public enum TakeoverRefusal {
     public static func headline(code: String) -> String? {
         switch code {
         case "agent_caller":
-            return "Refused: this request came from inside an agent task. Take over is for a person at the Monitor."
+            return "Refused: this request came from inside an agent task. Take over is for a person using Harflow."
         case "caller_undecidable":
             return "Refused: harflow could not confirm this request is not coming from an agent task, so it refuses rather than guess."
         case "descendants_not_stopped":

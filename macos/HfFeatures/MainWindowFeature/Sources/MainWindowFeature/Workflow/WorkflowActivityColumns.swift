@@ -122,7 +122,7 @@ struct WorkflowActivityColumns: View {
                     Group {
                         if columns.isEmpty {
                             if showsPrestartPlaceholder {
-                                Text("Agent activity appears here when a step starts.")
+                                Text("Activity appears here when a node starts.")
 .font(.hf(.body))
 .foregroundStyle(Color.tertiaryText)
                                 .frame(width: proxy.size.width, height: proxy.size.height)

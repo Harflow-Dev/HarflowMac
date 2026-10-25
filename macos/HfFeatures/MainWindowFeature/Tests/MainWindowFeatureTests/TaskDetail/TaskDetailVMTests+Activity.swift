@@ -45,7 +45,7 @@ extension TaskDetailVMTests {
         #expect(model.activityRows.map { $0.group?.summary ?? "row" } == ["row", "Read 2 files", "Ran 1 command"])
         #expect(model.activityRows.first?.group == nil)
         #expect(model.liveStep?.text == "Running swift test…")
-        #expect(model.stepCountText == "5 steps")
+        #expect(model.stepCountText == "5 activity items")
     }
 
     @Test

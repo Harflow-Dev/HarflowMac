@@ -74,7 +74,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                         }
                     }
                     if isGenerating {
-                        SectionLabel(text: "Builder agent")
+                        SectionLabel(text: "Builder harness")
                         WorkflowAgentEditor(
                             candidate: Binding(get: { viewModel.generationAgent }, set: { viewModel.generationAgent = $0 }),
                             backendIDs: viewModel.backendIDs,
@@ -88,7 +88,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             Text(message).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
                         }
                         Toggle(
-                            "Override orchestrator agent",
+                            "Override orchestrator harness",
                             isOn: Binding(get: { viewModel.overrideOrchestrator }, set: { viewModel.overrideOrchestrator = $0 })
                         )
                         if viewModel.overrideOrchestrator {
@@ -99,7 +99,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                                 loadModels: viewModel.loadModels,
                                 allowsFallbacks: false, callerApprovalBackends: viewModel.callerApprovalBackends
                             )
-                            Text("Saved fallback agents remain in effect.").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                            Text("Saved fallback harnesses remain in effect.").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
                         }
                     }
                 }

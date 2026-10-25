@@ -366,7 +366,7 @@ final class CallerApprovalController {
         if let toolError, case .unsupportedCommand = toolError {
             supportsCallerResponses = false
             blocked[request.id] = BlockedResult(request: request,
-                message: "Monitor responses are unavailable with this engine. Respond through the owning caller's MCP or CLI.", capabilityLoss: true)
+                message: "Harflow responses are unavailable with this engine. Respond through the owning caller's MCP or CLI.", capabilityLoss: true)
         } else if let reason {
             let message = CallerApprovalPresentation.refusalMessage(reason)
             blocked[request.id] = BlockedResult(request: request, message: message, capabilityLoss: reason == .unsupported)
@@ -386,7 +386,7 @@ final class CallerApprovalController {
         if let refusal = blocked[request.id], Self.sameCurrent(refusal.request, request) { return refusal.message }
         if !listCurrent { return "The current action could not be refreshed. Responses are unavailable." }
         if !known || request.interactionOwner == nil { return "This engine reported an unrecognized approval state. Responses are unavailable." }
-        if !ownerSupported { return "Caller-owned request. This engine cannot accept a Monitor response. Respond through the owning caller's MCP or CLI." }
+        if !ownerSupported { return "Caller-owned request. This engine cannot accept a Harflow response. Respond through the owning caller's MCP or CLI." }
         if !full { return "The complete current action is unavailable. Approval remains disabled." }
         if (request.deadline ?? .distantPast) <= now { return "The deadline has passed. Waiting for the engine to settle this request." }
         return nil

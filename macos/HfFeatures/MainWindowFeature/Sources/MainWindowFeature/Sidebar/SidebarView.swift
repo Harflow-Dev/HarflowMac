@@ -262,16 +262,16 @@ struct SidebarView<VM: SidebarViewModel>: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize(horizontal: false, vertical: true)
-        .accessibilityLabel("Backend filter")
+        .accessibilityLabel("Harness filter")
         .accessibilityValue(selectedTitle)
     }
 
     private var selectedTitle: String {
-        viewModel.selectedBackend == "all" ? "All agents" : BackendStyle.displayName(viewModel.selectedBackend)
+        viewModel.selectedBackend == "all" ? "All harnesses" : BackendStyle.displayName(viewModel.selectedBackend)
     }
 
     private func menuTitle(for tab: BackendTab) -> String {
-        if tab.id == "all" { return "All agents" }
+        if tab.id == "all" { return "All harnesses" }
         let name = BackendStyle.displayName(tab.id)
         return tab.isNotFound ? "\(name) (not found on PATH)" : name
     }

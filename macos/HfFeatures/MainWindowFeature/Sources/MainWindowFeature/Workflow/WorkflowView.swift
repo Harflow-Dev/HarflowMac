@@ -299,7 +299,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             validationRow
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Workflow steps")
+        .accessibilityLabel("Workflow nodes")
     }
 
     /// The tray's items are drag-only: every chip keeps its existing `.draggable` payload and

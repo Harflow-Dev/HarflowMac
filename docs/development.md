@@ -2,6 +2,8 @@
 
 Build on macOS 26 or later. `macos/build-app.sh` produces `macos/build/Harflow.app` without installing, launching, or registering it.
 
+Use [the terminology guide](terminology.md) for user-facing copy and compatibility mappings.
+
 Validate formatting and lint with the same commands as CI. CI installs the available Homebrew tools; local tools are not pinned by this repository:
 
 ```sh

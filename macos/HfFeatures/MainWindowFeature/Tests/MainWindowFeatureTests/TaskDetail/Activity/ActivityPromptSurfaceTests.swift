@@ -19,7 +19,7 @@ import Testing
         let state = ParallelColumnUIState()
         func root(showPrompt: Bool) -> AnyView {
             if surface == "detail" {
-                return AnyView(TimelinePaneView(model: TimelinePaneModel(stepCountText: "1 step", rows: [row],
+                return AnyView(TimelinePaneView(model: TimelinePaneModel(stepCountText: "1 activity item", rows: [row],
                     start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)))
             }
             let column = ParallelColumnModel(id: task.id, task: task, title: "Prompt fixture", subtitle: "Codex",

@@ -72,7 +72,7 @@ final class ParallelViewModelMock: ParallelViewModel {
                 isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
                 rows: sampleRows, activityRows: ActivityRowsBuilder.build(from: sampleRows), liveStep: nil,
                 isLoading: false,
-                summary: nil, stepCountText: "1 step", noToolCallsText: nil,
+                summary: nil, stepCountText: "1 activity item", noToolCallsText: nil,
                 onTapTakeover: {}, onTapOpenTask: {}
             ),
             ParallelColumnModel(

@@ -177,7 +177,7 @@ private struct GroupedFormPreview: View {
                 GroupedFormPopup("Model", options: ["Default", "Fast", "Balanced"].map { ($0, $0) }, selection: $model)
             }
             GroupedFormDivider()
-            GroupedFormRow("Agent") {
+            GroupedFormRow("Harness") {
                 Text("Claude").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
             }
         }

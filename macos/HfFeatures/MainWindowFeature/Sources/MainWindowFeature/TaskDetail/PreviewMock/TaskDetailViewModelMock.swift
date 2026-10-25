@@ -41,7 +41,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var tabs: [TaskTab] = [.activity, .summary, .prompt]
 
     var timelineModel = TimelinePaneModel(
-        stepCountText: "1 step",
+        stepCountText: "1 activity item",
         rows: [ConversationTimelineRow(
             id: "abc12345#1", taskID: "abc12345", timestamp: .now.addingTimeInterval(-15),
             kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: true
@@ -87,7 +87,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
         mock.canCancel = false
         mock.messageBoxModel = MessageBoxModel(
             canSend: false, canContinue: true, isBusy: false, label: "Continue this session",
-            hint: "Continues the same agent session; the reply appears below as a new turn",
+            hint: "Continues the same harness session; the reply appears below as a new turn",
             placeholder: "Send a follow-up — it continues this conversation", buttonLabel: "Continue"
         )
         return mock

@@ -29,8 +29,8 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
     let children: [TaskDetailTimelineChild]
     let start: Date?
     let stepCount: Int
-    /// The header's step count copy ("1 step"/"N steps"), `nil` while no item row is loaded — a
-    /// zero or still-loading count is omitted rather than claimed as "0 steps".
+    /// The header's activity-item count, `nil` while no item row is loaded — a
+    /// zero or still-loading count is omitted rather than claimed as "0 activity items".
     let stepCountText: String?
     /// The header's conversation-turn text, passed through from the input.
     let turnsText: String?
@@ -95,7 +95,7 @@ enum TaskDetailTimelineBuilder {
         try Task.checkCancellation()
         return TaskDetailTimelinePresentation(rows: rows, activityRows: activity, children: input.children,
             start: input.start, stepCount: count,
-            stepCountText: count > 0 ? "\(count) \(count == 1 ? "step" : "steps")" : nil,
+            stepCountText: count > 0 ? "\(count) \(count == 1 ? "activity item" : "activity items")" : nil,
             turnsText: input.turnsText,
             noToolCallsText: noTools ? "No tool calls recorded" : nil,
             emptyText: rows.isEmpty && !noTools ? (input.task.status.isRunning ? "Waiting for the first event…"

@@ -228,14 +228,14 @@ private final class RecoveryActivitySession: @unchecked Sendable {
         poll = nil
         guard isCurrent(expected) else { return }
         let provenance = notice(
-            "Backend transcript recovery · display only. These entries do not establish task outcome or restore live input.",
+            "Harness transcript recovery · display only. These entries do not establish task outcome or restore live input.",
             sourceID: "provenance"
         )
         var notices: [TaskEvent] = []
         switch result {
         case .failure(let error):
             if case .unsupportedCommand = error { unsupported = true }
-            if let event = notice("Backend transcript recovery unavailable: \(error.message)", sourceID: "error:\(error.message)") { notices.append(event) }
+            if let event = notice("Harness transcript recovery unavailable: \(error.message)", sourceID: "error:\(error.message)") { notices.append(event) }
         case .success(let page):
             notices = applyPage(page)
         }
@@ -261,7 +261,7 @@ private final class RecoveryActivitySession: @unchecked Sendable {
         }
         records = Array(records.suffix(200))
         return page.notices.compactMap { text in
-            notice("Backend transcript: \(text)", sourceID: "notice:\(text)")
+            notice("Harness transcript: \(text)", sourceID: "notice:\(text)")
         }
     }
 

@@ -52,7 +52,7 @@ struct WorkflowOnDemandCall: Identifiable, Equatable {
     var status: String { raw["status"]?.stringValue ?? "unknown" }
     var taskID: String? { raw["task_id"]?.stringValue }
     var origin: String {
-        let title = raw["origin"]?["title"]?.stringValue ?? "step"
+        let title = raw["origin"]?["title"]?.stringValue ?? "node"
         switch raw["origin"]?["kind"]?.stringValue {
         case "node_question": return "Called by the orchestrator while answering \(title)'s question"
         case "child_question": return "Called by the orchestrator for the child workflow's question (\(title))"

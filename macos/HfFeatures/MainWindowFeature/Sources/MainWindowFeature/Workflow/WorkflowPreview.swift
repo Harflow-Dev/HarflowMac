@@ -58,9 +58,9 @@ enum WorkflowPreview {
         let vm = make(run: true)
         var raw = vm.selectedRun?.raw ?? [:]
         raw["input_question"] = .string(
-            "The review step rejected the latest attempt because the public API of TokenStore changed, "
+            "The review node rejected the latest attempt because the public API of TokenStore changed, "
                 + "which the original request explicitly forbids. Decide whether to instruct the implementation "
-                + "step to restore the previous signature or to accept the new API and update the call sites."
+                + "node to restore the previous signature or to accept the new API and update the call sites."
         )
         vm.selectedRun = WorkflowRunModel(raw: raw)
         return vm
@@ -95,7 +95,7 @@ enum WorkflowPreview {
                 "role": .string("orchestrator"),
                 "node_id": .string("implementation"),
                 "status": .string("completed"),
-                "reason": .string("Proceed to the review step after the implementation reported its task IDs.")
+                "reason": .string("Proceed to the review node after the implementation reported its task IDs.")
             ])
         ])
         vm.selectedRun = WorkflowRunModel(raw: raw)

@@ -117,7 +117,7 @@ struct InspectorView: View {
                 Text(call.headline).font(.hf(.secondary, design: .monospaced)).foregroundStyle(Color.secondaryText).lineLimit(3)
                 if let startedAt = current.at {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text("\(Format.clock(context.date.timeIntervalSince(startedAt))) · step \(model.stepCount)")
+                        Text("\(Format.clock(context.date.timeIntervalSince(startedAt))) · activity item \(model.stepCount)")
                             .font(.hf(.caption))
                             .monospacedDigit()
                             .foregroundStyle(Color.secondaryText)
@@ -133,11 +133,11 @@ struct InspectorView: View {
     private func basics(_ model: InspectorModel) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
-                detailName("Agent")
+                detailName("Harness")
                 Spacer(minLength: 8)
                 BackendLabel(backend: model.task.backend).font(.hf(.secondary))
             }
-            detailRow("Access", model.task.freedom.map { AccessLabel.text(freedom: $0) } ?? "—")
+            detailRow("Access level", model.task.freedom.map { AccessLabel.text(freedom: $0) } ?? "—")
             detailRow("Started", Format.time(model.task.startedAt))
             detailRow("Started by", model.startedBy)
         }

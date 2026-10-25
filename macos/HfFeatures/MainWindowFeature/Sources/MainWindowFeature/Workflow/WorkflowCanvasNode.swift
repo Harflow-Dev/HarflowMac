@@ -233,7 +233,7 @@ struct WorkflowCanvasNode: View {
     @ViewBuilder
     private var titleView: some View {
         if canEditTitle, editedTitle != nil {
-            TextField("Step title", text: Binding(get: { editedTitle ?? node.name }, set: { editedTitle = $0 }))
+            TextField("Node title", text: Binding(get: { editedTitle ?? node.name }, set: { editedTitle = $0 }))
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(isCompact ? .center : .leading)
                 .font(.hf(.body, weight: .semibold))
@@ -256,7 +256,7 @@ struct WorkflowCanvasNode: View {
                 Text(node.name).font(.hf(.body, weight: .semibold)).lineLimit(1)
             }
             .buttonStyle(.plain)
-            .help("\(node.name)\nClick to rename this step")
+            .help("\(node.name)\nClick to rename this node")
             .accessibilityLabel("Edit title for \(node.name)")
         } else {
             Text(displayTitle).font(.hf(.body, weight: .semibold)).lineLimit(1).help(displayTitle)

@@ -119,7 +119,7 @@ struct CallerApprovalRequestCard: View {
     private var settledStatus: String {
         var values = [model.request.text("disposition")]
         values += CallerApprovalPresentation.decisionSummary(model.request)
-        if model.request.text("responder") == "monitor" { values.append("Answered from Monitor") }
+        if model.request.text("responder") == "monitor" { values.append("Answered from Harflow") }
         if model.request.text("responder") == "caller" { values.append("Answered by the owning caller") }
         if model.request.text("decided_by") == "harflow" { values.append("Rejected by Harflow") }
         values.append("Delivery: " + model.request.text("delivery"))
@@ -161,7 +161,7 @@ struct CallerApprovalRequestCard: View {
             }
             if !model.pending {
                 ForEach(CallerApprovalPresentation.decisionSummary(model.request), id: \.self) { Text($0).font(.hf(.caption)) }
-                if model.request.text("responder") == "monitor" { Text("Answered from Monitor").font(.hf(.caption)) }
+                if model.request.text("responder") == "monitor" { Text("Answered from Harflow").font(.hf(.caption)) }
                 Text("Delivery: \(model.request.text("delivery"))").font(.hf(.caption))
                 Text("Observed execution: \(model.request.text("execution_outcome"))").font(.hf(.caption))
                 if !model.request.text("system_rejection").isEmpty { Text(model.request.text("system_rejection")).font(.hf(.caption)).textSelection(.enabled) }
@@ -185,9 +185,9 @@ struct CallerApprovalRequestCard: View {
     private var context: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
             if !model.request.text("task_title").isEmpty { Text("Agent task: \(model.request.text("task_title"))") }
-            if !model.request.text("workflow_node_name").isEmpty { Text("Workflow step: \(model.request.text("workflow_node_name"))") }
+            if !model.request.text("workflow_node_name").isEmpty { Text("Workflow node: \(model.request.text("workflow_node_name"))") }
             Text("Working directory: \(model.request.text("cwd"))")
-            Text("Access: \(model.request.text("freedom")) · Scope: \(model.request.text("scope"))")
+            Text("Access level: \(model.request.text("freedom")) · Scope: \(model.request.text("scope"))")
             if let deadline = model.request.deadline { Text("Deadline: \(deadline.formatted())") }
         }
 .font(.hf(.caption))

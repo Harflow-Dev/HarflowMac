@@ -68,7 +68,7 @@ extension ParallelVMTests {
         let presentation = try ParallelPresentationBuilder.build(input)
 
         // then
-        #expect(presentation.stepCountText == "1 step")
+        #expect(presentation.stepCountText == "1 activity item")
         #expect(presentation.noToolCallsText == "No tool calls recorded")
         #expect(presentation.emptyText == nil)
     }

@@ -4,6 +4,8 @@ The main window's whole split view for Harflow — Sidebar, New Session, Paralle
 TaskDetail and Interactive, plus the `NavigationSplitView` itself (`MainWindowNavigationView`) — built
 on the `Coordinator → NavigationView → View → VM → UseCase → ViewRepository` architecture.
 See `AGENTS.md` for the rules this package follows and `../../AGENTS.md` for the shared rulebook.
+See the repository's [product terminology guide](../../../docs/terminology.md) for user-facing
+terminology and retained compatibility names.
 
 ## Build & test
 
@@ -19,7 +21,7 @@ Task approvals share a view-model-owned controller across Activity, Summary and 
 The task Summary includes a separate Registered artifacts section for standalone tasks. Each
 conversation member loads its own bounded metadata page only when requested, with explicit paging
 and refresh. Expand an artifact to read its full verbatim note, source task, registrar, path and
-availability observation. The Monitor never reads artifact contents or treats registration as task
+availability observation. Harflow never reads artifact contents or treats registration as task
 success or an edited-file record. Unsupported older CLIs report metadata unavailable; legacy tasks
 with no manifest show no registered artifacts after a successful read. Workflow artifacts are not
 supported.

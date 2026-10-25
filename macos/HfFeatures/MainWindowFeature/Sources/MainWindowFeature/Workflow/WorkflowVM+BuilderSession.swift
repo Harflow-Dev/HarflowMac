@@ -57,7 +57,7 @@ extension WorkflowVM {
             ])])
             try draftStore.save(draft, key: key)
         } catch {
-            errorText = "Unable to preserve workflow agent session: \(Self.message(error))"
+            errorText = "Unable to preserve workflow harness session: \(Self.message(error))"
         }
     }
 

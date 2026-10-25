@@ -180,7 +180,7 @@ private func previewStack() -> some View {
         )) { _ in true }
         MessageBoxView(model: MessageBoxModel(
             canSend: false, canContinue: true, isBusy: false, label: "Continue this session",
-            hint: "Continues the same agent session; the reply appears below as a new turn", placeholder: "Send a follow-up — it continues this conversation",
+            hint: "Continues the same harness session; the reply appears below as a new turn", placeholder: "Send a follow-up — it continues this conversation",
             buttonLabel: "Continue"
         )) { _ in true }
         MessageBoxView(model: MessageBoxModel(

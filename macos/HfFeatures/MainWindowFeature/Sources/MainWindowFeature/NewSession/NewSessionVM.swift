@@ -95,7 +95,7 @@ final class NewSessionVM: NewSessionViewModel {
     var supportsCallerApprovals: Bool { approvalBackends.contains(backend) }
     var callerApprovalError: String? {
         guard callerApprovals else { return nil }
-        if !supportsCallerApprovals { return "Caller approvals are unavailable for this agent." }
+        if !supportsCallerApprovals { return "Caller approvals are unavailable for this harness." }
         if !["write_in_repo", "publish"].contains(freedom) { return "Caller approvals require repository write or publish access." }
         if !turnLimit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Caller approvals require an empty turn limit." }
         return nil
@@ -311,7 +311,7 @@ final class NewSessionVM: NewSessionViewModel {
     private func agentDidChange() {
         if callerApprovals, !supportsCallerApprovals {
             callerApprovals = false
-            approvalNote = "Caller approvals were cleared because the selected agent does not support them."
+            approvalNote = "Caller approvals were cleared because the selected harness does not support them."
         }
         model = ""
         modelOptions = []
@@ -397,7 +397,7 @@ final class NewSessionVM: NewSessionViewModel {
             agentNotFoundNote = nil
             return
         }
-        agentNotFoundNote = "\(backend) wasn't found on your PATH — starting it may fail."
+        agentNotFoundNote = "\(backend) wasn't found on your PATH — starting this harness may fail."
     }
 
     /// Design's New Session section: every backend harflow reports, in registry order; while
@@ -412,7 +412,7 @@ final class NewSessionVM: NewSessionViewModel {
             guard catalog.entries.isEmpty else {
                 return (catalog.entries.map { BackendTab(id: $0.backend, isNotFound: false) }, nil)
             }
-            return (BackendStyle.known.map { BackendTab(id: $0, isNotFound: false) }, "Backend list unavailable — update harflow.")
+            return (BackendStyle.known.map { BackendTab(id: $0, isNotFound: false) }, "Harness list unavailable — update harflow.")
         case .loading:
             return (BackendStyle.known.map { BackendTab(id: $0, isNotFound: false) }, nil)
         }

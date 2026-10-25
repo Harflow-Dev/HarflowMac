@@ -87,11 +87,11 @@ import Testing
         #expect(fixture.matching("Nothing running").count == 1)
         #expect(fixture.element("Nothing running.") == nil)
         #expect(fixture.element("New session") != nil)
-        #expect(fixture.element("Open Monitor") != nil)
+        #expect(fixture.element("Open Harflow") != nil)
         #expect(fixture.element("⌘O") == nil)
         #expect(model.appearCount == 1)
         let newSession = try #require(fixture.element("New session"))
-        let openMonitor = try #require(fixture.element("Open Monitor"))
+        let openMonitor = try #require(fixture.element("Open Harflow"))
         #expect(fixture.press(newSession))
         await waitUntil { model.newSessionCount == 1 }
         #expect(fixture.press(openMonitor))
@@ -179,7 +179,7 @@ import Testing
 
         // then — long count text must not displace either existing footer action.
         let newSession = try #require(fixture.element("New session"))
-        let openMonitor = try #require(fixture.element("Open Monitor"))
+        let openMonitor = try #require(fixture.element("Open Harflow"))
         let contentFrame = try #require(fixture.contentWindowFrame)
         let newSessionFrame = try #require(fixture.nativeFrame(label: "New session") ?? fixture.screenFrame(newSession))
         let openMonitorFrame = try #require(fixture.windowFrame(openMonitor))

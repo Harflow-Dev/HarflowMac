@@ -301,7 +301,7 @@ private actor DetailBuildGate {
         let presentation = try build(members: members, status: "running")
         // then
         #expect(presentation.noToolCallsText == nil)
-        #expect(presentation.stepCountText == "1 step")
+        #expect(presentation.stepCountText == "1 activity item")
         #expect(presentation.emptyText == nil)
     }
 
@@ -314,7 +314,7 @@ private actor DetailBuildGate {
         let presentation = try build(members: members)
         // then
         #expect(presentation.stepCount == 1)
-        #expect(presentation.stepCountText == "1 step")
+        #expect(presentation.stepCountText == "1 activity item")
     }
 
     @Test func givenSeveralItemRows_whenBuilt_thenTheHeaderUsesThePlural() throws {
@@ -323,11 +323,11 @@ private actor DetailBuildGate {
         // when
         let presentation = try build(members: members)
         // then
-        #expect(presentation.stepCountText == "3 steps")
+        #expect(presentation.stepCountText == "3 activity items")
     }
 
     @Test func givenNoItemRows_whenBuilt_thenTheStepCountIsOmittedNeverZero() throws {
-        // given — nothing loaded yet: the count is omitted rather than claimed as "0 steps".
+        // given — nothing loaded yet: the count is omitted rather than claimed as "0 activity items".
         // when
         let presentation = try build(members: [member(items: [])])
         // then
@@ -355,7 +355,7 @@ private actor DetailBuildGate {
         // when
         let presentation = try build(members: members)
         // then — complete prose-only: the count AND the proven no-tool note.
-        #expect(presentation.stepCountText == "1 step")
+        #expect(presentation.stepCountText == "1 activity item")
         #expect(presentation.noToolCallsText == "No tool calls recorded")
     }
 
@@ -378,7 +378,7 @@ private actor DetailBuildGate {
         // when
         let presentation = try build(members: members)
         // then
-        #expect(presentation.stepCountText == "2 steps")
+        #expect(presentation.stepCountText == "2 activity items")
         #expect(presentation.noToolCallsText == nil)
     }
 

@@ -88,8 +88,8 @@ import Testing
     @Test func givenAModelBuiltFromRows_whenExpansionWouldToggle_thenTheTokenIsUnaffected() {
         // given — expansion is view state keyed by group id; the model (and so the token) never sees it.
         let rows = [Fixture.tool(1, path: "/a"), Fixture.tool(2, path: "/b")]
-        let first = TimelinePaneModel(stepCountText: "2 steps", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
-        let second = TimelinePaneModel(stepCountText: "2 steps", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
+        let first = TimelinePaneModel(stepCountText: "2 activity items", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
+        let second = TimelinePaneModel(stepCountText: "2 activity items", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
         // when / then
         #expect(first.updateToken == second.updateToken)
         #expect(first.activityRows.first?.id == second.activityRows.first?.id)

@@ -108,7 +108,7 @@ private struct MonitorButtonsPreview: View {
                 Button("Glass") {}.buttonStyle(MonitorButtonStyle(.glass)).disabled(true)
             }
             // The menu-bar footer's token-derived 34 pt height (§6.8); the default above stays 30.
-            Button("Open Monitor") {}.buttonStyle(MonitorButtonStyle(.primary, height: HfRadius.Metrics.menuBarFooterButtonHeight))
+            Button("Open Harflow") {}.buttonStyle(MonitorButtonStyle(.primary, height: HfRadius.Metrics.menuBarFooterButtonHeight))
         }
         .padding()
         .background(Color.windowBG)

@@ -2,8 +2,10 @@
 
 ## Unreleased
 
-- Add capability-gated Monitor responses to caller-owned approvals with additive v1 contracts and typed refusal handling.
+- Add capability-gated Harflow responses to caller-owned approvals with additive v1 contracts and typed refusal handling.
 - Move task approvals to Activity with complete action details, pending navigation hints and expandable settled rows; retain workflow approvals in the run sidebar.
+- Prefer a compact 288-point workflow sidebar and retain 420-point selected Activity, with separate remembered divider widths.
+- Apply the canonical product glossary to interface copy and accessibility while preserving public fields and protocol values.
 
 - Pair the current source with engine 0.0.2 and vendor its complete additive v1 state-recovery contract bundle.
 - Add sidebar and Settings setup controls with explicit installation/update, shared progress, retained failures and qualified runtime reuse without startup downloads.

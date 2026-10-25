@@ -63,7 +63,7 @@ struct WorkflowStandaloneBar<VM: WorkflowViewModel>: View {
     }
 
     private var orchestratorSubtitle: String {
-        guard let run = viewModel.selectedRun, !run.isBuilder else { return "Decides each step" }
+        guard let run = viewModel.selectedRun, !run.isBuilder else { return "Decides each node" }
         let title = run.onDemandState["title"]?.stringValue ?? "node"
         switch run.onDemandState["kind"]?.stringValue {
         case "waiting": return "Waiting on \(title)"

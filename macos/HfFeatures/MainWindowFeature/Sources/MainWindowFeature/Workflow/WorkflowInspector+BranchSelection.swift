@@ -27,7 +27,7 @@ extension WorkflowInspector {
 .frame(minHeight: 80)
                 .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.cardBorder))
                 .accessibilityLabel("Selection guidance")
-            Text("Select applicable branch entries before dispatch. Optional steps still follow their normal failure rules.")
+            Text("Select applicable branch entries before dispatch. Optional nodes still follow their normal failure rules.")
                 .font(.hf(.secondary))
 .foregroundStyle(Color.secondaryText)
         }.disabled(viewModel.selectedRun != nil || viewModel.isBusy)

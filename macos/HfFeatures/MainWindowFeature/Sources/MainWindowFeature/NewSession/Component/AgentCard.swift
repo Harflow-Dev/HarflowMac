@@ -167,7 +167,7 @@ private let previewCards = [
     AgentCardModel(id: "mystery", name: "Mystery", helpText: nil, isSelected: false, isNotInstalled: false)
 ]
 
-#Preview("AgentGrid wide, one row of 5 - light") {
+#Preview("Harness grid wide, one row of 5 - light") {
     AgentGrid(cards: previewCards, onSelect: { _ in })
         .padding(HfRadius.Metrics.spacing20)
         .frame(width: HfRadius.Metrics.newSessionSheetWidth - 2 * HfRadius.Metrics.spacing28)
@@ -175,7 +175,7 @@ private let previewCards = [
         .preferredColorScheme(.light)
 }
 
-#Preview("AgentGrid wide, one row of 5 - dark") {
+#Preview("Harness grid wide, one row of 5 - dark") {
     AgentGrid(cards: previewCards, onSelect: { _ in })
         .padding(HfRadius.Metrics.spacing20)
         .frame(width: HfRadius.Metrics.newSessionSheetWidth - 2 * HfRadius.Metrics.spacing28)
@@ -183,7 +183,7 @@ private let previewCards = [
         .preferredColorScheme(.dark)
 }
 
-#Preview("AgentGrid narrow, two columns - light") {
+#Preview("Harness grid narrow, two columns - light") {
     AgentGrid(cards: previewCards, onSelect: { _ in })
         .padding(HfRadius.Metrics.spacing20)
         .frame(width: HfRadius.Metrics.newSessionAgentCardMinimumWidth * 2)
@@ -191,7 +191,7 @@ private let previewCards = [
         .preferredColorScheme(.light)
 }
 
-#Preview("AgentGrid narrow, two columns - dark") {
+#Preview("Harness grid narrow, two columns - dark") {
     AgentGrid(cards: previewCards, onSelect: { _ in })
         .padding(HfRadius.Metrics.spacing20)
         .frame(width: HfRadius.Metrics.newSessionAgentCardMinimumWidth * 2)

@@ -319,7 +319,7 @@ extension HarnessesVM {
                     title: "harflow is installed",
                     detail: "The new install passed its checks.",
                     canDismiss: true,
-                    footnote: "Next: register it with your agents in Settings → Harnesses."
+                    footnote: "Next: register it with your harnesses in Settings → Harnesses."
                 )
             } else {
                 installBannerModel = nil
@@ -349,7 +349,7 @@ extension HarnessesVM {
 
     private func publishInstallOrUpdateDialog(need: InstallNeed) {
         let isMissing = need == .missing
-        let message = "This replaces the harflow installation used by agent sessions. Existing sessions may be disrupted "
+        let message = "This replaces the harflow installation used by harness sessions. Existing sessions may be disrupted "
             + "or fail on later operations. Finish running tasks and close sessions using harflow before continuing. "
             + "harflow will be installed from GitHub with uv." + destinationLine()
         publishDialog(isMissing ? "Install harflow?" : "Update harflow?", description: message) {

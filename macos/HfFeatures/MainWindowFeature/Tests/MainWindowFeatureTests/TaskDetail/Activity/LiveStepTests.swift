@@ -77,7 +77,7 @@ import Testing
         // given
         let rows = [Fixture.tool(1, path: "/a.swift", resolved: false)]
         // when
-        let model = TimelinePaneModel(stepCountText: "1 step", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
+        let model = TimelinePaneModel(stepCountText: "1 activity item", rows: rows, start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
         // then
         #expect(model.liveStep?.text == "Reading a.swift…")
         #expect(model.activityRows.first?.group?.members.map(\.id) == ["t1#1"])

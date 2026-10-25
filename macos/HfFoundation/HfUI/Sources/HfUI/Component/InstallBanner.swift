@@ -26,7 +26,7 @@ public struct InstallBanner: View {
         /// Whether the dismiss (xmark) button shows. Set for `failed` and `installed` only;
         /// dismissal is shared across all views.
         public let canDismiss: Bool
-        /// Shown on success: "Next: register it with your agents in Settings → Harnesses."
+        /// Shown on success: "Next: register it with your harnesses in Settings → Harnesses."
         public let footnote: String?
 
         public init(
@@ -109,7 +109,7 @@ public struct InstallBanner: View {
 #if DEBUG
 #Preview("missing") {
     InstallBanner(
-        model: .init(title: "harflow isn't installed", detail: "Agent sessions need harflow on this Mac.", primaryTitle: "Install harflow"),
+        model: .init(title: "harflow isn't installed", detail: "Harness sessions need harflow on this Mac.", primaryTitle: "Install harflow"),
         onPrimary: {}, onSecondary: {}, onDismiss: {}
     )
     .padding()
@@ -223,7 +223,7 @@ public struct InstallBanner: View {
             title: "harflow is installed",
             detail: "harflow-ctl and harflow-setup were found and validated.",
             canDismiss: true,
-            footnote: "Next: register it with your agents in Settings → Harnesses."
+            footnote: "Next: register it with your harnesses in Settings → Harnesses."
         ),
         onPrimary: {}, onSecondary: {}, onDismiss: {}
     )

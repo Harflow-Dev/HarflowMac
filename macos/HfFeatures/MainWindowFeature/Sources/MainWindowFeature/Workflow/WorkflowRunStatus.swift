@@ -4,12 +4,12 @@ import SwiftUI
 
 // MARK: - WorkflowDecisionFallback
 
-/// The decision line's honest fallback: "Waiting for the first step" appears only while the run
-/// is still starting/running with no reason and no worker step — never beside an attention or
-/// error state, and never after a step has started. The run's own reported reason wins whenever
+/// The decision line's honest fallback: "Waiting for the first node" appears only while the run
+/// is still starting/running with no reason and no worker node — never beside an attention or
+/// error state, and never after a node has started. The run's own reported reason wins whenever
 /// one exists. Pure and testable.
 enum WorkflowDecisionFallback {
-    static let waitingForFirstStep = "Waiting for the first step"
+    static let waitingForFirstStep = "Waiting for the first node"
 
     static func text(status: String, reason: String, hasWorkerStep: Bool, recoveryQuestion: String? = nil) -> String? {
         if let recoveryQuestion,
@@ -63,7 +63,7 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
                     Button("Return to canvas") { viewModel.returnToCanvas() }.buttonStyle(MonitorButtonStyle(.glass))
                 }
                 if viewModel.selectedActivationID != nil {
-                    Button("Show latest steps") { viewModel.selectActivation(nil) }.buttonStyle(MonitorButtonStyle(.glass))
+                    Button("Show latest nodes") { viewModel.selectActivation(nil) }.buttonStyle(MonitorButtonStyle(.glass))
                 }
             }
 .padding(.horizontal, HfRadius.Metrics.spacing16)
@@ -86,7 +86,7 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
             hasWorkerStep: !WorkflowExecutionPresentation.showsPrestartPlaceholder(activations: run.activations)
         )
         let lastReason = last?["reason"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
-        let lineText = deciding ? "Orchestrator is choosing the next step…" : (lastReason ?? fallback)
+        let lineText = deciding ? "Orchestrator is choosing the next node…" : (lastReason ?? fallback)
         // Duplicate suppression is painting-only: while the panel actually shows the recovery
         // question, a reason-only line that repeats it stays in layout but is not painted or
         // spoken — closing the panel reveals it without inserting a row or shifting the panes.

@@ -45,7 +45,8 @@ extension TaskDetailVM {
         var message = isRunning
         ? "The headless run is stopped first (with any sub-tasks), then the same conversation opens in Terminal.app. "
         : "The same conversation opens in Terminal.app. "
-        message += "It runs under your own default permissions, not this task's \(task.freedom ?? "freedom") level. "
+        let requestedAccess = task.freedom.map { " (\(AccessLabel.text(freedom: $0)))" } ?? ""
+        message += "It runs under your own default permissions, not this task's access level\(requestedAccess). "
         + "While the terminal is open, harflow refuses resumes of this session from anywhere else."
         publishDialog(title, description: message) {
             AlertAction(title: buttonTitle) { [weak self] in
@@ -161,7 +162,7 @@ extension TaskDetailVM {
         let label = canSend ? "Message this task" : (canContinue ? "Continue this session" : "Messages")
         let hint = canSend
         ? "Queued; folded into the current turn or sent after it"
-        : (canContinue ? "Continues the same agent session; the reply appears below as a new turn" : "")
+        : (canContinue ? "Continues the same harness session; the reply appears below as a new turn" : "")
         let disabledReason = MessageBoxDisabledReason.reason(for: task)
         let placeholder = if canSend {
             "Message this task while it runs…"

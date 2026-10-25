@@ -16,7 +16,7 @@ struct WorkflowValidationStatus<VM: WorkflowViewModel>: View {
                 Text(conflict).font(.hf(.caption)).lineLimit(2).help(conflict)
                 Button("Save copy and reload") { viewModel.preserveDraftAndReload() }
             } else if let message = viewModel.validationMessage, !message.isEmpty {
-                Text(message + " · \(stepCount) steps · \(viewModel.standaloneNodes.count) on demand")
+                Text(message + " · \(stepCount) nodes · \(viewModel.standaloneNodes.count) on demand")
                     .font(.hf(.caption))
                     .foregroundStyle(Color.secondaryText)
                     .lineLimit(1)
@@ -25,12 +25,12 @@ struct WorkflowValidationStatus<VM: WorkflowViewModel>: View {
                     .padding(.vertical, HfRadius.Metrics.spacing6)
                     .glassEffect(.regular, in: Capsule())
             } else {
-                Text("Drag steps onto the canvas; connect their dots.")
+                Text("Drag nodes onto the canvas; connect their dots.")
                     .font(.hf(.caption))
                     .foregroundStyle(Color.secondaryText)
                     .lineLimit(1)
                     .help("Drag an output dot to an input, or click the output then the destination. "
-                          + "Select a step and press Delete to remove it.")
+                          + "Select a node and press Delete to remove it.")
             }
             if !viewModel.missingReferences.isEmpty {
                 Menu("Review missing workflows") {

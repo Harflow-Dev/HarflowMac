@@ -44,13 +44,13 @@ extension WorkflowInspector {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
             SectionLabel(text: node.name)
             if node.type == "agent" {
-                Text(node.isOptional ? "Optional step" : "Required step")
+                Text(node.isOptional ? "Optional node" : "Required node")
                     .font(.hf(.secondary))
 .foregroundStyle(Color.secondaryText)
             }
             Text(node.instructions).font(.hf(.secondary)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
             selectedArtifacts(node)
-            Button("Show latest steps") { viewModel.selectActivation(nil) }.buttonStyle(QuietButtonStyle())
+            Button("Show latest nodes") { viewModel.selectActivation(nil) }.buttonStyle(QuietButtonStyle())
             ForEach(Array((viewModel.selectedRun?.activations.filter {
                 $0["node_id"]?.stringValue == node.id
             } ?? []).enumerated()), id: \.offset) { index, activation in
@@ -84,7 +84,8 @@ extension WorkflowInspector {
                         HStack(alignment: .top, spacing: HfRadius.Metrics.spacing6) {
                             BackendDot(backend: task["candidate"]?["backend"]?.stringValue ?? "")
                             VStack(alignment: .leading, spacing: HfRadius.Metrics.rowLineSpacing) {
-                                Text("\(attempt == 0 ? "Primary" : "Fallback \(attempt)"): \(task["candidate"]?["backend"]?.stringValue ?? "agent")")
+                                let candidateLabel = attempt == 0 ? "Primary harness" : "Fallback harness \(attempt)"
+                                Text("\(candidateLabel): \(task["candidate"]?["backend"]?.stringValue ?? "Unknown")")
                                 Text(task["status"]?.stringValue ?? "").foregroundStyle(Color.secondaryText)
                                 if let reason = task["reason"]?.stringValue {
                                     Text(reason).foregroundStyle(Color.secondaryText)

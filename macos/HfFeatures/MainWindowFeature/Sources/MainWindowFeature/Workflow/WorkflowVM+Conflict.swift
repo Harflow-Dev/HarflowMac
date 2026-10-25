@@ -60,9 +60,9 @@ extension WorkflowVM {
         guard !affected.isEmpty else { return }
         let snapshot = definition
         let identity = draftID
-        publishDialog("Replace unavailable workflow in \(affected.count) steps?",
+        publishDialog("Replace unavailable workflow in \(affected.count) nodes?",
                       description: affected.map { "\($0.name) (\($0.id))" }.joined(separator: "\n")
-                          + "\n\nUse ‘\(record.id)’ in these steps of this workflow only.") {
+                          + "\n\nUse ‘\(record.id)’ in these nodes of this workflow only.") {
             AlertAction(title: "Replace all") { [weak self] in
                 guard let self, selectedRun == nil, draftID == identity, definition == snapshot else { return }
                 var updated = snapshot

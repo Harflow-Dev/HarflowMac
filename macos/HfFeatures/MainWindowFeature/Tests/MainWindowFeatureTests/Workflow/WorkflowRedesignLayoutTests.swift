@@ -219,7 +219,7 @@ import Testing
         vm.connectionSourceID = "start"
         let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: CGSize(width: width, height: 700))
         defer { vm.didDisappear(); fixture.close() }
-        await fixture.settle { fixture.element("Workflow steps") != nil && fixture.canvasScroll != nil }
+        await fixture.settle { fixture.element("Workflow nodes") != nil && fixture.canvasScroll != nil }
         vm.didDisappear()
         vm.connectionSourceID = "start"
         await fixture.settle { fixture.element("Cancel connection") != nil }
@@ -227,7 +227,7 @@ import Testing
         // when
         let scroll = try #require(fixture.canvasScroll)
         let viewport = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
-        let tray = try #require(fixture.element("Workflow steps"))
+        let tray = try #require(fixture.element("Workflow nodes"))
         let trayFrame = try #require(fixture.frame(tray))
         let chips = try WorkflowRole.palette.map { role in
             let title = WorkflowRole.title(role)
@@ -317,7 +317,7 @@ import Testing
             let reached = try #require(fixture.frame(control))
             #expect(visible.insetBy(dx: -1, dy: -1).contains(reached), "Recovery control must be reachable by native scrolling: \(label)")
         }
-        #expect(fixture.element("Waiting for the first step") == nil)
+        #expect(fixture.element("Waiting for the first node") == nil)
     }
 }
 

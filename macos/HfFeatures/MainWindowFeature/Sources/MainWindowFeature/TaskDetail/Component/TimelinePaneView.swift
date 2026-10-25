@@ -24,8 +24,8 @@ import SwiftUI
 // MARK: - TimelinePaneModel
 
 struct TimelinePaneModel {
-    /// The header's step count copy ("1 step"/"N steps"), `nil` while no item row is loaded — the
-    /// redesign omits a zero count rather than printing "0 steps".
+    /// The header's activity-item count, `nil` while no item row is loaded — the
+    /// redesign omits a zero count rather than printing "0 activity items".
     let stepCountText: String?
     /// The header's conversation-turn text ("N turns"/"N decisions"), `nil` for a plain,
     /// never-followed-up task — passed through from the VM's own `turnsText`.
@@ -95,9 +95,9 @@ struct TimelinePaneModel {
     @MainActor
     static let empty = TimelinePaneModel(stepCountText: nil, rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
 
-    /// The header's one line: steps · turns · no-tool note, each part only when present, with
+    /// The header's one line: activity items · turns · no-tool note, each part only when present, with
     /// tabular digits. Hidden entirely while nothing is loaded (a zero count is omitted, never
-    /// printed as "0 steps").
+    /// printed as "0 activity items").
     var headerText: String? {
         let parts = [stepCountText, turnsText, noToolCallsText].compactMap(\.self)
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -250,7 +250,7 @@ private func previewChild(_ status: String, backend: String = "codex") -> SubTas
 @MainActor
 private var runningModel: TimelinePaneModel {
     TimelinePaneModel(
-        stepCountText: "12 steps", rows: PreviewFixtures.sampleRows(running: true), start: .now.addingTimeInterval(-90),
+        stepCountText: "12 activity items", rows: PreviewFixtures.sampleRows(running: true), start: .now.addingTimeInterval(-90),
         emptyText: nil,
         subTaskStrip: SubTaskStripModel(
             children: [previewChild("running"), previewChild("completed")], start: .now.addingTimeInterval(-90), onSelectTask: { _ in }
@@ -262,7 +262,7 @@ private var runningModel: TimelinePaneModel {
 @MainActor
 private var finishedModel: TimelinePaneModel {
     TimelinePaneModel(
-        stepCountText: "12 steps", rows: PreviewFixtures.sampleRows(running: false), start: .now.addingTimeInterval(-90),
+        stepCountText: "12 activity items", rows: PreviewFixtures.sampleRows(running: false), start: .now.addingTimeInterval(-90),
         emptyText: nil, subTaskStrip: nil, isLoading: false
     )
 }
@@ -275,18 +275,19 @@ private var followUpModel: TimelinePaneModel {
     )
     let reply = PreviewFixtures.row(PreviewFixtures.textItem("Adding the regression test now.", seq: 1), taskID: "t2", live: true)
     return TimelinePaneModel(
-        stepCountText: "13 steps", rows: first + [follow, reply], start: .now.addingTimeInterval(-90), emptyText: nil, subTaskStrip: nil, isLoading: false
+        stepCountText: "13 activity items", rows: first + [follow, reply], start: .now.addingTimeInterval(-90),
+        emptyText: nil, subTaskStrip: nil, isLoading: false
     )
 }
 
-/// A conversation whose turns recorded prose only: the header shows the steps and conversation
+/// A conversation whose turns recorded prose only: the header shows the activity items and conversation
 /// turns plus the proven "No tool calls recorded" note (§4).
 @MainActor
 private var proseOnlyModel: TimelinePaneModel {
     let rows = [PreviewFixtures.row(PreviewFixtures.textItem("Looked at the failing test."), taskID: "t1", live: false)]
     let liveStep = LiveStep(rows: rows)
     return TimelinePaneModel(
-        stepCountText: "3 steps", turnsText: "2 turns", noToolCallsText: "No tool calls recorded",
+        stepCountText: "3 activity items", turnsText: "2 turns", noToolCallsText: "No tool calls recorded",
         rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), start: .now.addingTimeInterval(-90),
         emptyText: nil, subTaskStrip: nil, isLoading: false, liveStep: liveStep,
         updateToken: ActivityUpdateToken(rows: rows, liveStep: liveStep)

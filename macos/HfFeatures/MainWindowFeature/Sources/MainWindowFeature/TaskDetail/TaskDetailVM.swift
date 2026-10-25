@@ -476,7 +476,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         outcomeMessage = latestOutcomes[currentTaskID]
 
         takenOverBannerText = detail.takenOver
-        ? (detail.takenOverNote ?? "This session was handed to a person in the Monitor.")
+        ? (detail.takenOverNote ?? "This session was handed to a person in Harflow.")
         : nil
         if !firstMember.isRoot, let parentID = firstMember.spawnedBy {
             let parentBackend = useCase.task(parentID)?.backend ?? "parent"

@@ -53,7 +53,7 @@ import Testing
         }
         #expect(allAccessibilityObjects(in: host).contains { object in
             ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
-                accessibilityString(object, $0)?.contains("How strictly this is enforced depends on the agent.") == true
+                accessibilityString(object, $0)?.contains("How strictly this is enforced depends on the harness.") == true
             }
         })
     }

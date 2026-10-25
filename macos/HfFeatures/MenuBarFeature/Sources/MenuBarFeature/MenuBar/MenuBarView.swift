@@ -309,7 +309,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
         HStack(spacing: HfRadius.Metrics.spacing8) {
             Button { viewModel.didTapOpenMonitor() } label: {
                 HStack(spacing: HfRadius.Metrics.spacing8) {
-                    Text("Open Monitor")
+                    Text("Open Harflow")
                     Text("⌘O")
                         .font(.hf(.secondary, weight: .medium))
                         .foregroundStyle(Color.shortcutHint)

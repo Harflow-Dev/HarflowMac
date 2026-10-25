@@ -22,8 +22,8 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     var history = EventHistoryState()
     var paginationRevision = 0
     var summary: String?
-    /// The lane feed's step-count copy ("1 step"/"N steps"); `nil` while no item row is loaded —
-    /// a zero or still-loading count is omitted rather than claimed as "0 steps" (§4).
+    /// The lane feed's activity-item count; `nil` while no item row is loaded —
+    /// a zero or still-loading count is omitted rather than claimed as "0 activity items" (§4).
     var stepCountText: String?
     /// "No tool calls recorded", proven only for a terminal current task from the UNFILTERED
     /// member inputs — never from the filtered display rows alone, which compact folding may
@@ -91,10 +91,10 @@ enum ParallelPresentationBuilder {
         result.liveStep = LiveStep(rows: rows, isRunning: result.task.status.isRunning)
         result.pendingMessages = PendingMessage.visible(snapshot: input.snapshot, events: input.events)
         let hasItems = input.members.contains { !$0.items.isEmpty }
-        // The step-count copy (§4): a loaded count of one reads "1 step", a still-loading or
-        // empty feed omits the count rather than claiming "0 steps".
+        // Activity-item counts (§4): a loaded count of one reads "1 activity item", a still-loading
+        // or empty feed omits the count rather than claiming "0 activity items".
         let itemCount = rows.filter { if case .item = $0.kind { return true }; return false }.count
-        result.stepCountText = itemCount > 0 ? "\(itemCount) \(itemCount == 1 ? "step" : "steps")" : nil
+        result.stepCountText = itemCount > 0 ? "\(itemCount) \(itemCount == 1 ? "activity item" : "activity items")" : nil
         // "No tool calls recorded" (§4) is proven only for a terminal current task from the
         // unfiltered member inputs and a settled history window — the same proof TaskDetail's
         // timeline uses, never the compact-folded display rows.

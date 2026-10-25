@@ -41,19 +41,19 @@ struct SidebarBackendFilterLabel: View {
 }
 
 #if DEBUG
-#Preview("Backend filter label - light") {
+#Preview("Harness filter label - light") {
     SidebarBackendFilterLabel(backendIDs: ["claude", "codex", "vibe", "opencode", "antigravity"], selectedTitle: nil)
         .fixedSize()
 .preferredColorScheme(.light)
 }
 
-#Preview("Backend filter label - dark") {
+#Preview("Harness filter label - dark") {
     SidebarBackendFilterLabel(backendIDs: ["claude", "codex", "vibe", "opencode", "antigravity"], selectedTitle: "Claude")
         .fixedSize()
 .preferredColorScheme(.dark)
 }
 
-#Preview("Backend filter label - Reduce Motion") {
+#Preview("Harness filter label - Reduce Motion") {
     SidebarBackendFilterLabel(backendIDs: (0 ..< 40).map { "backend-\($0)" }, selectedTitle: nil)
         .frame(width: HfRadius.Metrics.sidebarPreviewWidth - 2 * HfRadius.Metrics.spacing16)
         .preferredColorScheme(.dark)

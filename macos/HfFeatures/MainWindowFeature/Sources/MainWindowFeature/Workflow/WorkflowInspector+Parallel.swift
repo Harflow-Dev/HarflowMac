@@ -39,7 +39,7 @@ extension WorkflowInspector {
             }
             Text(node.type == "parallel_start"
                 ? "Branch membership is fixed for each invocation. Re-entering the group may make a new selection."
-                : "Waits for every selected branch to resolve before the orchestrator chooses the next step.")
+                : "Waits for every selected branch to resolve before the orchestrator chooses the next node.")
                 .font(.hf(.secondary))
 .foregroundStyle(Color.secondaryText)
             if viewModel.selectedRun == nil {

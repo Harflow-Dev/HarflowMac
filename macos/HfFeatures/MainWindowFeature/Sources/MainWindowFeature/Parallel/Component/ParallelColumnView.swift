@@ -49,8 +49,8 @@ struct ParallelColumnModel: Identifiable {
     /// From the current member's snapshot only — no fallback to `task.summary` (F4-40, a deliberate
     /// difference from `ChangesPane`). A settled lane shows it first, as its result callout.
     let summary: String?
-    /// The lane feed's step-count copy ("1 step"/"N steps"); `nil` while no item row is loaded —
-    /// a zero, still-loading or unavailable feed omits the count rather than claiming "0 steps".
+    /// The lane feed's activity-item count; `nil` while no item row is loaded —
+    /// a zero, still-loading or unavailable feed omits the count rather than claiming "0 activity items".
     var stepCountText: String?
     /// "No tool calls recorded", proven only for a terminal current task from the UNFILTERED
     /// member inputs — never inferred from the visible page having none.
@@ -330,24 +330,24 @@ private func longResultColumnModel() -> ParallelColumnModel {
         .preferredColorScheme(.dark)
 }
 
-#Preview("Live step, three dots - light") {
+#Preview("Live activity, three dots - light") {
     previewColumn(liveStepColumnModel()).preferredColorScheme(.light)
 }
 
-#Preview("Live step, three dots - dark") {
+#Preview("Live activity, three dots - dark") {
     previewColumn(liveStepColumnModel()).preferredColorScheme(.dark)
 }
 
 @MainActor
 private func noToolsColumnModel() -> ParallelColumnModel {
-    // A complete, settled, prose-only turn: the count reads "1 step" and the proven
+    // A complete, settled, prose-only turn: the count reads "1 activity item" and the proven
     // "No tool calls recorded" note shows beside it.
     let rows = [ConversationTimelineRow(
         id: "abc123#1", taskID: "abc123", timestamp: .now.addingTimeInterval(-30),
         kind: .item(PreviewFixtures.textItem("Reviewed the diff and left one comment.")), live: false
     )]
     var model = columnModel(task: previewTask(id: "abc123", age: 30, status: "completed"), rows: rows)
-    model.stepCountText = "1 step"
+    model.stepCountText = "1 activity item"
     model.noToolCallsText = "No tool calls recorded"
     return model
 }
@@ -357,7 +357,7 @@ private func liveStepColumnModel() -> ParallelColumnModel {
     let rows = PreviewFixtures.sampleRows(taskID: "abc123")
     var model = columnModel(task: previewTask(id: "abc123", age: 10), rows: rows,
                             liveStep: LiveStep(rows: rows, isRunning: true))
-    model.stepCountText = "6 steps"
+    model.stepCountText = "6 activity items"
     return model
 }
 #endif

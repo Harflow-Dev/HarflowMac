@@ -99,8 +99,8 @@ struct WorkflowAgentEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
             WorkflowFormGroup {
-                WorkflowFormRow(label: "Agent") {
-                    Picker("Agent", selection: binding("backend")) {
+                WorkflowFormRow(label: "Harness") {
+                    Picker("Harness", selection: binding("backend")) {
                         ForEach(allBackends, id: \.self) { id in BackendLabel(backend: id).tag(id) }
                     }
                     .labelsHidden()
@@ -185,7 +185,7 @@ struct WorkflowAgentEditor: View {
     private var fallbackValues: [[String: JSONValue]] { WorkflowAgentEditorOperations.fallbacks(candidate) }
 
     private var fallbacks: some View {
-        DisclosureGroup("Fallback agents (\(fallbackValues.count))") {
+        DisclosureGroup("Fallback harnesses (\(fallbackValues.count))") {
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
                 ForEach(Array(fallbackValues.enumerated()), id: \.offset) { index, value in
                     VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {

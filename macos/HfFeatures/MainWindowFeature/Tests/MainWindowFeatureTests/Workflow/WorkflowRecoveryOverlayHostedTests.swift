@@ -207,7 +207,7 @@ import Testing
         defer { vm.didDisappear(); fixture.close() }
 
         // when / then
-        await fixture.settle { fixture.element("Workflow steps") != nil }
+        await fixture.settle { fixture.element("Workflow nodes") != nil }
         #expect(!fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView })
         #expect(fixture.element("Close recovery options") == nil)
     }

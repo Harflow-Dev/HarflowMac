@@ -64,7 +64,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing16) {
             Text("Orchestrator").font(.hf(.title, weight: .semibold))
             Text("Every workflow has one. It can't be removed.").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-            SectionLabel(text: "Agent")
+            SectionLabel(text: "Harness")
             WorkflowAgentEditor(
                 candidate: Binding(
                     get: { inspectorDefinition["orchestrator"]?.objectValue ?? ["backend": .string("codex")] },
@@ -157,9 +157,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
     @ViewBuilder
     private func unavailableWorkflowActions(_ node: WorkflowNodeModel) -> some View {
             if !node.workflowID.isEmpty, !viewModel.workflows.contains(where: { $0.workflowID == node.workflowID }) {
-                Text("Unavailable workflow: \(node.workflowID). Choose a replacement for this step, or replace all matching steps below.")
+                Text("Unavailable workflow: \(node.workflowID). Choose a replacement for this node, or replace all matching nodes below.")
                     .font(.hf(.secondary))
-                Menu("Replace all matching steps…") {
+                Menu("Replace all matching nodes…") {
                     ForEach(viewModel.workflows.filter { !$0.workflowID.isEmpty }) { record in
                         Button(record.id) { viewModel.replaceMissingReferences(node.workflowID, with: record.workflowID) }
                     }
@@ -174,9 +174,9 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 Spacer()
                 Button(role: .destructive) { viewModel.deleteSelected() } label: { Image(systemName: "trash") }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("Delete step")
+                    .accessibilityLabel("Delete node")
             }
-            TextField("Step name", text: nodeString(node, "title")).textFieldStyle(.roundedBorder)
+            TextField("Node name", text: nodeString(node, "title")).textFieldStyle(.roundedBorder)
             Picker("Saved workflow", selection: Binding(get: { node.workflowID }, set: { id in
                 viewModel.updateNode(node.id, key: "workflow_ref", value: .object(["workflow_id": .string(id)]))
                 viewModel.updateNode(node.id, key: "workflow_name", value: .string(viewModel.workflows.first { $0.workflowID == id }?.id ?? ""))
@@ -251,11 +251,11 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                 Spacer()
                 Button(role: .destructive) { viewModel.deleteSelected() } label: { Image(systemName: "trash") }
                     .buttonStyle(.borderless)
-.accessibilityLabel("Delete step")
+.accessibilityLabel("Delete node")
             }
             nextPathHint(node)
             if node.type == "agent" {
-                TextField("Step name", text: nodeString(node, "title")).textFieldStyle(.roundedBorder)
+                TextField("Node name", text: nodeString(node, "title")).textFieldStyle(.roundedBorder)
                 Picker("Role", selection: nodeString(node, "role", default: "task")) {
                     ForEach(["planning", "implementation", "review", "task"], id: \.self) { Text($0.capitalized).tag($0) }
                 }
@@ -264,7 +264,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     guard viewModel.selectedRun == nil, !viewModel.isBusy else { return }
                     viewModel.updateNode(node.id, key: "optional", value: .bool($0))
                 }))
-                Text("Continue if this step fails within a parallel branch. Required branches must succeed.")
+                Text("Continue if this node fails within a parallel branch. Required branches must succeed.")
                     .font(.hf(.secondary))
 .foregroundStyle(Color.secondaryText)
                 SectionLabel(text: "Instructions")
@@ -274,7 +274,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     .scrollChromeScope()
 .frame(minHeight: HfRadius.Metrics.recoveryEditorMaximumHeight)
                     .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.cardBorder))
-                    .accessibilityLabel("Step instructions")
+                    .accessibilityLabel("Node instructions")
                 WorkflowAgentEditor(
                     candidate: Binding(
                         get: { viewModel.selectedNode?.raw["agent"]?.objectValue ?? ["backend": .string("codex")] },
@@ -412,7 +412,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
             }
             Text("The orchestrator chooses exactly one outgoing path from ordinary nodes. "
                  + "Parallel start runs every branch; its matching Parallel end waits for all branches. "
-                 + "Returning to an earlier step creates a loop automatically; "
+                 + "Returning to an earlier node creates a loop automatically; "
                  + "Harflow enforces connected paths and attempt limits.")
                 .font(.hf(.secondary))
 .foregroundStyle(Color.secondaryText)
@@ -430,7 +430,7 @@ struct WorkflowInspector<VM: WorkflowViewModel>: View {
                     viewModel.updateEdge(edge.id, key: "max_retries", value: .number(Double($0)))
                 }), in: 0 ... 1000).disabled(!edge.isBackward)
                 Text(edge.isBackward ? "0 disables this retry. Node attempt and workflow limits still apply."
-                     : "This limit applies when the connection returns to an earlier step.")
+                     : "This limit applies when the connection returns to an earlier node.")
                     .font(.hf(.caption))
 .foregroundStyle(Color.secondaryText)
             }
@@ -526,7 +526,7 @@ extension WorkflowInspector {
                 Text("Resume").tag("resume")
                 Text("Agent decides").tag("agent_decides")
             }
-            Text("Resume reuses the latest compatible completed conversation from this step in this parent run. "
+            Text("Resume reuses the latest compatible completed conversation from this node in this parent run. "
                 + "Each invocation starts a new workflow. Explicit Resume refuses when reuse is unavailable.")
                 .font(.hf(.secondary))
                 .foregroundStyle(Color.secondaryText)
