@@ -214,7 +214,7 @@ import Testing
         sut.didChangeBackend("codex")
 
         // then
-        #expect(sut.agentNotFoundNote == "codex wasn't found on your PATH — starting it may fail.")
+        #expect(sut.agentNotFoundNote == "codex wasn't found on your PATH — starting this harness may fail.")
 
         // when — switching back to a found backend clears it.
         sut.didChangeBackend("claude")
@@ -230,7 +230,7 @@ import Testing
         // then
         #expect(sut.agentOptions.map(\.id) == ["antigravity", "claude", "codex", "opencode", "vibe"])
         #expect(sut.agentOptions.allSatisfy { !$0.isNotFound })
-        #expect(sut.agentListUnavailableNote == "Backend list unavailable — update harflow.")
+        #expect(sut.agentListUnavailableNote == "Harness list unavailable — update harflow.")
         #expect(sut.backend == "antigravity")
     }
 

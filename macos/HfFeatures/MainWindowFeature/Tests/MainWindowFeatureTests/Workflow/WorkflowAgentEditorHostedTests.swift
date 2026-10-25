@@ -37,7 +37,7 @@ import Testing
         try assertControlsFit(fixture)
 
         // when: expand and operate the actual ordered-fallback controls.
-        let disclosure = try #require(fixture.element("Fallback agents (2)"))
+        let disclosure = try #require(fixture.element("Fallback harnesses (2)"))
         #expect(fixture.press(disclosure))
         await fixture.settle { fixture.element("Move fallback 1 down") != nil }
         try assertControlsFit(fixture)
@@ -87,11 +87,11 @@ import Testing
         let submit = try #require(fixture.element(isGenerating ? "Generate" : "Run"))
         #expect(!enabled(submit), "The original empty-request submission guard stays in effect")
         if isGenerating {
-            #expect(fixture.element("Fallback agents (0)") != nil)
+            #expect(fixture.element("Fallback harnesses (0)") != nil)
         } else {
-            #expect(fixture.element("Override orchestrator agent") != nil)
-            #expect(fixture.element("Saved fallback agents remain in effect.") != nil)
-            #expect(fixture.element("Fallback agents (0)") == nil)
+            #expect(fixture.element("Override orchestrator harness") != nil)
+            #expect(fixture.element("Saved fallback harnesses remain in effect.") != nil)
+            #expect(fixture.element("Fallback harnesses (0)") == nil)
         }
         let frame = field.convert(field.bounds, to: nil)
         #expect(frame.width > 0 && frame.minX >= 0 && frame.maxX <= 580)
@@ -108,7 +108,7 @@ import Testing
             #expect(frame.width > 0 && frame.minX >= -1 && frame.maxX <= fixture.window.contentLayoutRect.maxX + 1,
                     "Editable field overflow at \(fixture.window.contentLayoutRect.width) points")
         }
-        for label in ["Agent", "Model", "Suggested models", "Effort", "Turn limit"] {
+        for label in ["Harness", "Model", "Suggested models", "Effort", "Turn limit"] {
             let control = try #require(fixture.element(label))
             let frame = try #require(fixture.frame(control))
             #expect(frame.width > 0 && frame.minX >= -1 && frame.maxX <= fixture.window.contentLayoutRect.maxX + 1,

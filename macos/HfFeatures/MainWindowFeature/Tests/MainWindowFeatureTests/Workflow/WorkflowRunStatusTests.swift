@@ -39,7 +39,7 @@ struct WorkflowRunStatusTests {
 
     @Test func givenAttentionOrErrorStateWithoutReason_whenFallbackProjected_thenNoWaitingContradiction() {
         // given / when / then — an attention, input, paused, failed or terminal state never
-        // shows "Waiting for the first step" beside the state that contradicts it.
+        // shows "Waiting for the first node" beside the state that contradicts it.
         for status in ["needs_attention", "needs_input", "paused", "failed", "completed", "cancelled"] {
             #expect(WorkflowDecisionFallback.text(status: status, reason: "", hasWorkerStep: false) == nil, "\(status)")
         }

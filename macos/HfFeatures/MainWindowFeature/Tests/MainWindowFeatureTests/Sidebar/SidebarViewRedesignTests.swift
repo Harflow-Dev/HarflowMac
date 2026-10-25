@@ -182,16 +182,16 @@ import Testing
         let all = try await present(SidebarViewModelMock())
         defer { release(all.window) }
         // Native popup buttons expose their selected value on the associated accessibility cell.
-        let allElement = try #require(elements(labelled: "Backend filter", in: all.host).first {
+        let allElement = try #require(elements(labelled: "Harness filter", in: all.host).first {
             accessibilityString($0, "accessibilityValue") != nil
         })
         // when / then
-        #expect(accessibilityString(allElement, "accessibilityValue") == "All agents")
+        #expect(accessibilityString(allElement, "accessibilityValue") == "All harnesses")
 
         // given — a concrete backend selected, same control, same menu choices.
         let claude = try await present(SidebarViewModelMock(selectedBackend: "claude"))
         defer { release(claude.window) }
-        let claudeElement = try #require(elements(labelled: "Backend filter", in: claude.host).first {
+        let claudeElement = try #require(elements(labelled: "Harness filter", in: claude.host).first {
             accessibilityString($0, "accessibilityValue") != nil
         })
         // when / then — the visible selected name is preserved as the control's value.
@@ -217,7 +217,7 @@ import Testing
 
         // when
         let search = try searchField(in: sut.host)
-        let filter = try #require(elements(labelled: "Backend filter", in: sut.host).first)
+        let filter = try #require(elements(labelled: "Harness filter", in: sut.host).first)
         let filterFrame = try #require(frameInWindow(filter, window: sut.window))
         let searchFrame = search.convert(search.bounds, to: nil)
 
@@ -225,8 +225,8 @@ import Testing
         #expect(searchFrame.width >= HfRadius.Metrics.sidebarSearchMinimumWidth - 2 * HfRadius.Metrics.spacing12)
         #expect(filterFrame.minX >= 0)
         #expect(filterFrame.maxX <= sut.window.contentLayoutRect.maxX + 1)
-        #expect(elements(labelled: "Backend filter", in: sut.host).contains {
-            accessibilityString($0, "accessibilityValue") == "All agents"
+        #expect(elements(labelled: "Harness filter", in: sut.host).contains {
+            accessibilityString($0, "accessibilityValue") == "All harnesses"
         })
         #expect(tabs.count == count + 1)
     }

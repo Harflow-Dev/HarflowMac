@@ -38,7 +38,7 @@ struct TakeoverRefusalCharacterizationTests {
     func givenEveryKnownRefusalCode_whenReadingItsHeadline_thenEachHasItsOwnPlainSentence() {
         // given / when / then
         let known: [String: String] = [
-            "agent_caller": "Refused: this request came from inside an agent task. Take over is for a person at the Monitor.",
+            "agent_caller": "Refused: this request came from inside an agent task. Take over is for a person using Harflow.",
             "caller_undecidable": "Refused: harflow could not confirm this request is not coming from an agent task, so it refuses rather than guess.",
             "descendants_not_stopped": "Refused: a sub-task of this task could not be confirmed stopped, so the session was not handed over.",
             "not_stopped": "Refused: the headless run could not be confirmed stopped.",

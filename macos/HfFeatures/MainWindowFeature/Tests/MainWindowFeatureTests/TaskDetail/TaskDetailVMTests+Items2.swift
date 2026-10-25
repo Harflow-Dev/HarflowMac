@@ -80,7 +80,7 @@ extension TaskDetailVMTests {
         #expect(
             dialog.description
             == "The headless run is stopped first (with any sub-tasks), then the same conversation opens in Terminal.app. It runs under your own"
-            + " default permissions, not this task's read_only level. While the terminal is open, harflow refuses resumes of this session from"
+            + " default permissions, not this task's access level (Read-only). While the terminal is open, harflow refuses resumes of this session from"
             + " anywhere else."
         )
 
@@ -114,7 +114,7 @@ extension TaskDetailVMTests {
         #expect(dialog.actions.first?.title == "Open in terminal")
         #expect(
             dialog.description
-            == "The same conversation opens in Terminal.app. It runs under your own default permissions, not this task's read_only level. While the"
+            == "The same conversation opens in Terminal.app. It runs under your own default permissions, not this task's access level (Read-only). While the"
             + " terminal is open, harflow refuses resumes of this session from anywhere else."
         )
 

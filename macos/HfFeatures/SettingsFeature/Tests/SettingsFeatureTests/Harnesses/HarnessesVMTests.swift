@@ -498,7 +498,7 @@ import Testing
         // then
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.installBannerModel?.title == "harflow is installed")
-        #expect(sut.installBannerModel?.footnote == "Next: register it with your agents in Settings → Harnesses.")
+        #expect(sut.installBannerModel?.footnote == "Next: register it with your harnesses in Settings → Harnesses.")
         #expect(sut.installBannerModel?.canDismiss == true)
         #expect(sut.installBannerModel?.primaryTitle == nil)
     }
