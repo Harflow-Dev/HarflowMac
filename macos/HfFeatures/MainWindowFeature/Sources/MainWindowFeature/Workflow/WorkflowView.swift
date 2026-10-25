@@ -518,7 +518,9 @@ private extension WorkflowView {
         let recoveryRunID = recoveryEligibleRunID
         return GeometryReader { viewport in
             VStack(spacing: HfRadius.Metrics.zero) {
-            WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading, canvasChromeHeight: WorkflowStandaloneLayout.height) {
+            WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading,
+                             canvasChromeHeight: WorkflowStandaloneLayout.height,
+                             presentation: viewMode == "Graph" && !viewModel.runSidebar.isDefault ? .activity : .default) {
                 if isLoading { WorkflowLoadingCanvas() } else {
                     VStack(spacing: HfRadius.Metrics.zero) {
                         WorkflowStandaloneBar(viewModel: viewModel)

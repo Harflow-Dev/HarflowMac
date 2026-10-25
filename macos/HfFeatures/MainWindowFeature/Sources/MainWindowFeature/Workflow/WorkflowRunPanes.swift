@@ -10,8 +10,13 @@ enum WorkflowRunLayout {
     static let canvasIdeal: CGFloat = HfRadius.Metrics.workflowRunCanvasIdealHeight
     static let activityMinimum: CGFloat = HfRadius.Metrics.workflowRunActivityMinimumHeight
     static let inspectorMinimum: CGFloat = HfRadius.Metrics.workflowRunPanelMinimumWidth
+    static let defaultInspectorIdeal: CGFloat = HfRadius.Metrics.workflowRunPanelIdealWidth
     static let inspectorIdeal: CGFloat = ParallelLayout.minimumColumnWidth
     static let inspectorMaximum: CGFloat = HfRadius.Metrics.workflowRunPanelMaximumWidth
+
+    static func inspectorIdeal(for presentation: WorkflowRunPaneSizing) -> CGFloat {
+        presentation == .activity ? inspectorIdeal : defaultInspectorIdeal
+    }
 
     static func minimums(height: CGFloat, canvasChromeHeight: CGFloat = 0) -> (canvas: CGFloat, activity: CGFloat) {
         let available = max(0, height - 2)
@@ -21,6 +26,11 @@ enum WorkflowRunLayout {
     }
 }
 
+enum WorkflowRunPaneSizing: Hashable {
+    case `default`
+    case activity
+}
+
 // MARK: - WorkflowRunPanes
 
 /// Keeps split-view identity and divider positions when placeholders become real content.
@@ -28,6 +38,7 @@ struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
     let isGraph: Bool
     var isLoading = false
     var canvasChromeHeight: CGFloat = 0
+    var presentation: WorkflowRunPaneSizing = .default
     @State private var splitSnapshot = WorkflowRunSplitSnapshot()
     @ViewBuilder let canvas: () -> Canvas
     @ViewBuilder let inspector: () -> Inspector
@@ -53,9 +64,9 @@ struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
         inspector()
 .frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity, minHeight: HfRadius.Metrics.zero, maxHeight: .infinity)
 .clipped()
-            .frame(minWidth: WorkflowRunLayout.inspectorMinimum, idealWidth: WorkflowRunLayout.inspectorIdeal,
+            .frame(minWidth: WorkflowRunLayout.inspectorMinimum, idealWidth: WorkflowRunLayout.inspectorIdeal(for: presentation),
                           maxWidth: WorkflowRunLayout.inspectorMaximum)
-            .background(WorkflowRunSplitPosition(isLoading: isLoading, snapshot: splitSnapshot))
+        .background(WorkflowRunSplitPosition(isLoading: isLoading, presentation: presentation, snapshot: splitSnapshot))
     }
 }
 

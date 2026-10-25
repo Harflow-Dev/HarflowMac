@@ -67,7 +67,9 @@ import Testing
     }
 
     @Test(arguments: [900.0, 1200.0], [ColorScheme.light, .dark])
-    func givenFreshRunPanes_whenLoadingChanges_thenIdealWidthAppliesOnceAndUserResizePersists(width: Double, appearance: ColorScheme) async throws {
+    func givenFreshRunPanes_whenLoadingChanges_thenDefaultIdealAndUserResizePersist(
+        width: Double, appearance: ColorScheme
+    ) async throws {
         // given
         let state = HostedRunPaneState()
         let fixture = RedesignHost(HostedRunPaneFixture(state: state).preferredColorScheme(appearance),
@@ -80,9 +82,9 @@ import Testing
         let allSplitsAreVertical = fixture.descendants.compactMap { $0 as? NSSplitView }.allSatisfy(\.isVertical)
         #expect(allSplitsAreVertical,
                 "Graph mode keeps activity out of a bottom split")
-        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 420) < 1 }
-        #expect(abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 420) < 1,
-                "The native run plan must actually start at the activity column's 420-point ideal")
+        let ideal = WorkflowRunLayout.defaultInspectorIdeal
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - ideal) < 1 }
+        #expect(abs((split.arrangedSubviews.last?.bounds.width ?? 0) - ideal) < 1)
         #expect(WorkflowRunLayout.inspectorMinimum == 220)
         #expect(WorkflowRunLayout.inspectorMaximum == 500)
         #expect(WorkflowInspectorWidth.canvasMinimumWidth == 400)
@@ -100,6 +102,117 @@ import Testing
         #expect(abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 360) < 1)
         #expect((split.arrangedSubviews.first?.bounds.width ?? 0) >= 400)
     }
+
+    @Test
+    func givenActivityPane_whenLoadingChanges_thenActivityIdealAndUserResizePersist() async throws {
+        let state = HostedRunPaneState()
+        state.presentation = .activity
+        let fixture = RedesignHost(HostedRunPaneFixture(state: state), size: CGSize(width: 1200, height: 700))
+        defer { fixture.close() }
+        await fixture.settle { fixture.descendants.compactMap { $0 as? NSSplitView }.contains { $0.isVertical } }
+        let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 420) < 1 }
+        split.setPosition(split.bounds.width - 360 - split.dividerThickness, ofDividerAt: 0)
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 360) < 1 }
+        state.loading = true
+        await fixture.settle { state.hasLoadingContent && abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 360) < 1 }
+        state.loading = false
+        await fixture.settle { !state.hasLoadingContent && abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 360) < 1 }
+        #expect(abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 360) < 1)
+    }
+
+    @Test
+    func givenDefaultPane_whenSelectingActivityAndReturning_thenEachPresentationRestoresItsWidth() async throws {
+        let state = HostedRunPaneState()
+        let fixture = RedesignHost(HostedRunPaneFixture(state: state), size: CGSize(width: 1200, height: 700))
+        defer { fixture.close() }
+        await fixture.settle { fixture.descendants.compactMap { $0 as? NSSplitView }.contains { $0.isVertical } }
+        let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 288) < 1 }
+        state.presentation = .activity
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 420) < 1 }
+        split.setPosition(split.bounds.width - 460 - split.dividerThickness, ofDividerAt: 0)
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 460) < 1 }
+        state.presentation = .default
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 288) < 1 }
+        state.presentation = .activity
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 460) < 1 }
+        #expect(abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 460) < 1)
+    }
+
+    @Test
+    func givenGraphDefaultWidth_whenSwitchingToListAndBack_thenDefaultPreferenceIsShared() async throws {
+        let state = HostedRunPaneState()
+        let fixture = RedesignHost(HostedRunPaneFixture(state: state), size: CGSize(width: 1200, height: 700))
+        defer { fixture.close() }
+        await fixture.settle { fixture.descendants.compactMap { $0 as? NSSplitView }.contains { $0.isVertical } }
+        let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 288) < 1 }
+        split.setPosition(split.bounds.width - 340 - split.dividerThickness, ofDividerAt: 0)
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 340) < 1 }
+
+        state.isGraph = false
+        await fixture.settle {
+            guard let current = fixture.descendants.compactMap({ $0 as? NSSplitView }).first(where: { $0.isVertical }) else {
+                return false
+            }
+            return abs((current.arrangedSubviews.last?.bounds.width ?? 0) - 340) < 1
+        }
+        state.isGraph = true
+        await fixture.settle {
+            guard let current = fixture.descendants.compactMap({ $0 as? NSSplitView }).first(where: { $0.isVertical }) else {
+                return false
+            }
+            return abs((current.arrangedSubviews.last?.bounds.width ?? 0) - 340) < 1
+        }
+        let restored = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
+        #expect(abs((restored.arrangedSubviews.last?.bounds.width ?? 0) - 340) < 1)
+    }
+
+    @Test
+    func givenActivityWidth_whenNarrowWindowClamps_thenWideWindowRestoresUnclampedPreference() async throws {
+        let state = HostedRunPaneState()
+        state.presentation = .activity
+        let fixture = RedesignHost(HostedRunPaneFixture(state: state), size: CGSize(width: 1200, height: 700))
+        defer { fixture.close() }
+        await fixture.settle { fixture.descendants.compactMap { $0 as? NSSplitView }.contains { $0.isVertical } }
+        let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 420) < 1 }
+        split.setPosition(split.bounds.width - 460 - split.dividerThickness, ofDividerAt: 0)
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 460) < 1 }
+
+        fixture.window.setContentSize(CGSize(width: 700, height: 700))
+        fixture.host.frame.size = CGSize(width: 700, height: 700)
+        await fixture.settle {
+            let width = split.arrangedSubviews.last?.bounds.width ?? 0
+            return width >= WorkflowRunLayout.inspectorMinimum && width < 460
+        }
+        #expect((split.arrangedSubviews.last?.bounds.width ?? 0) < 460)
+
+        fixture.window.setContentSize(CGSize(width: 1200, height: 700))
+        fixture.host.frame.size = CGSize(width: 1200, height: 700)
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 460) < 1 }
+        #expect(abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 460) < 1)
+    }
+
+    @Test
+    func givenActivityPane_whenDividerMovesByOnePoint_thenThatUserWidthSurvivesPresentationSwitch() async throws {
+        let state = HostedRunPaneState()
+        state.presentation = .activity
+        let fixture = RedesignHost(HostedRunPaneFixture(state: state), size: CGSize(width: 1200, height: 700))
+        defer { fixture.close() }
+        await fixture.settle { fixture.descendants.compactMap { $0 as? NSSplitView }.contains { $0.isVertical } }
+        let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 420) < 1 }
+
+        split.setPosition(split.bounds.width - 421 - split.dividerThickness, ofDividerAt: 0)
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 421) < 1 }
+        state.presentation = .default
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 288) < 1 }
+        state.presentation = .activity
+        await fixture.settle { abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 421) < 1 }
+        #expect(abs((split.arrangedSubviews.last?.bounds.width ?? 0) - 421) < 1)
+    }
 }
 
 // MARK: - HostedRunPaneState
@@ -107,6 +220,8 @@ import Testing
 @MainActor @Observable private final class HostedRunPaneState {
     var loading = false
     var hasLoadingContent = false
+    var presentation: WorkflowRunPaneSizing = .default
+    var isGraph = true
 }
 
 // MARK: - HostedRunPaneFixture
@@ -114,7 +229,7 @@ import Testing
 private struct HostedRunPaneFixture: View {
     let state: HostedRunPaneState
     var body: some View {
-        WorkflowRunPanes(isGraph: true, isLoading: state.loading) {
+        WorkflowRunPanes(isGraph: state.isGraph, isLoading: state.loading, presentation: state.presentation) {
             if state.loading { WorkflowLoadingCanvas() } else { Color.inspectorFill }
         } inspector: {
             if state.loading {

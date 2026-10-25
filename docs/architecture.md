@@ -26,7 +26,7 @@ Available catalog copies sort by descending count, with binary identity ties and
 
 ## Workflow run presentation
 
-Graph keeps a full-height canvas and a resizable inspector (420 pt initially, 220–500 pt, with a 400 pt canvas floor). Agent selection shows the running or latest attempt and permits selecting earlier attempts. Native executions use their activity reader; on-demand nodes show their call history or Not called. Structural and orchestrator selection retains the run summary. Deselecting restores the default inspector's disclosure and scroll state.
+Graph keeps a full-height canvas and a resizable inspector (288 pt by default, 420 pt for selected-node activity, within 220–500 pt and with a 400 pt canvas floor). Node selection shows the running or latest attempt and permits selecting earlier attempts. Native executions use their activity reader; on-demand nodes show their call history or Not called. Structural and orchestrator selection retains the run summary. Deselecting restores the default inspector's disclosure and scroll state.
 
 The bottom summary reserves one collapsed line; its bounded scrolling expansion overlays upward without moving the canvas. Parallel retains all current workflow task columns. Selected activity has independent viewport leases and retained per-attempt feed state. Immutable, equality-checked sidebar derivation runs outside the main actor and discards superseded results.
 

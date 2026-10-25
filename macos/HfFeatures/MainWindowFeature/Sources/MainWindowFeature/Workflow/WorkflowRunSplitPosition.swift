@@ -8,6 +8,7 @@ import SwiftUI
 /// Retain the last laid-out dividers across that one transition, including user resizing.
 struct WorkflowRunSplitPosition: NSViewRepresentable {
     let isLoading: Bool
+    let presentation: WorkflowRunPaneSizing
     let snapshot: WorkflowRunSplitSnapshot
 
     func makeNSView(context _: Context) -> WorkflowRunSplitProbe {
@@ -15,7 +16,8 @@ struct WorkflowRunSplitPosition: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WorkflowRunSplitProbe, context _: Context) {
-        snapshot.update(isLoading: isLoading)
+        snapshot.update(isLoading: isLoading, presentation: presentation)
+        view.needsLayout = true
     }
 }
 
@@ -26,27 +28,21 @@ struct WorkflowRunSplitPosition: NSViewRepresentable {
 final class WorkflowRunSplitSnapshot {
     var isLoading: Bool?
     var restoring = false
-    var inspectorWidth: CGFloat?
+    var loadingTransition = false
+    var requestedPresentation: WorkflowRunPaneSizing = .default
+    var appliedPresentation: WorkflowRunPaneSizing?
+    var inspectorWidths: [WorkflowRunPaneSizing: CGFloat] = [:]
+    var lastInspectorIdentity: ObjectIdentifier?
+    var lastInspectorBoundsWidth: CGFloat?
+    var lastObservedInspectorWidth: CGFloat?
     var canvasHeight: CGFloat?
-    var didInitializeInspector = false
     weak var inspectorSplit: NSSplitView?
     weak var canvasSplit: NSSplitView?
 
-    func update(isLoading: Bool) {
-        defer { self.isLoading = isLoading }
-        guard let previous = self.isLoading, previous != isLoading, let inspectorWidth else { return }
-        restoring = true
-        let canvasHeight = canvasHeight
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if let split = inspectorSplit {
-                split.setPosition(split.bounds.width - inspectorWidth - split.dividerThickness, ofDividerAt: 0)
-            }
-            if let split = canvasSplit, let canvasHeight {
-                split.setPosition(canvasHeight, ofDividerAt: 0)
-            }
-            restoring = false
-        }
+    func update(isLoading: Bool, presentation: WorkflowRunPaneSizing) {
+        if let previous = self.isLoading, previous != isLoading { loadingTransition = true }
+        self.isLoading = isLoading
+        requestedPresentation = presentation
     }
 }
 
@@ -69,20 +65,49 @@ final class WorkflowRunSplitProbe: NSView {
         for split in ancestorSplits() where split.arrangedSubviews.count == 2 {
             if split.isVertical {
                 snapshot.inspectorSplit = split
-                if !snapshot.didInitializeInspector,
-                   split.bounds.width >= WorkflowInspectorWidth.canvasMinimumWidth + WorkflowRunLayout.inspectorMinimum + split.dividerThickness {
-                    snapshot.didInitializeInspector = true
+                let identity = ObjectIdentifier(split)
+                let boundsWidth = split.bounds.width
+                let requested = snapshot.requestedPresentation
+                let availableForInspector = boundsWidth - WorkflowInspectorWidth.canvasMinimumWidth - split.dividerThickness
+                let canInitialize = availableForInspector >= WorkflowRunLayout.inspectorMinimum
+                let identityChanged = snapshot.lastInspectorIdentity != identity
+                let boundsChanged = snapshot.lastInspectorBoundsWidth != boundsWidth
+                let presentationChanged = snapshot.appliedPresentation != requested
+                let didApply = canInitialize && (presentationChanged || identityChanged || boundsChanged
+                    || (snapshot.loadingTransition && snapshot.appliedPresentation == requested))
+
+                if didApply {
+                    let preferred = snapshot.inspectorWidths[requested] ?? WorkflowRunLayout.inspectorIdeal(for: requested)
+                    let width = WorkflowInspectorWidth.clamped(preferred, available: boundsWidth)
                     snapshot.restoring = true
-                    let width = WorkflowInspectorWidth.clamped(WorkflowRunLayout.inspectorIdeal, available: split.bounds.width)
-                    split.setPosition(split.bounds.width - width - split.dividerThickness, ofDividerAt: 0)
+                    split.setPosition(boundsWidth - width - split.dividerThickness, ofDividerAt: 0)
+                    snapshot.restoring = false
+                    snapshot.appliedPresentation = requested
+                    snapshot.lastObservedInspectorWidth = split.arrangedSubviews[1].frame.width
+                }
+
+                let applied = snapshot.appliedPresentation
+                let width = split.arrangedSubviews[1].frame.width
+                let widthChanged = snapshot.lastObservedInspectorWidth.map { abs(width - $0) > 0.001 } ?? false
+                let safeToCapture = applied == requested && !identityChanged && !boundsChanged
+                    && canInitialize && !didApply && !snapshot.loadingTransition && !snapshot.restoring
+                if safeToCapture, widthChanged, let applied {
+                    snapshot.inspectorWidths[applied] = width
+                }
+                snapshot.lastObservedInspectorWidth = width
+                snapshot.lastInspectorIdentity = identity
+                snapshot.lastInspectorBoundsWidth = boundsWidth
+            } else {
+                if snapshot.loadingTransition, snapshot.canvasSplit === split, let canvasHeight = snapshot.canvasHeight {
+                    snapshot.restoring = true
+                    split.setPosition(canvasHeight, ofDividerAt: 0)
                     snapshot.restoring = false
                 }
-                snapshot.inspectorWidth = split.arrangedSubviews[1].frame.width
-            } else {
                 snapshot.canvasSplit = split
                 snapshot.canvasHeight = split.arrangedSubviews[0].frame.height
             }
         }
+        snapshot.loadingTransition = false
     }
 
     private func ancestorSplits() -> [NSSplitView] {
