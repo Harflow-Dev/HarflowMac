@@ -89,6 +89,11 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     public var sessionID: String? { string("session_id") }
     public var repoPath: String { string("repo_path") ?? "" }
     public var status: TaskStatus { TaskStatus(string("status") ?? "unknown") }
+    /// Engine-authored count of requests still awaiting a decision; nil means this engine does not
+    /// report the additive field, so callers must not infer zero from an older response.
+    public var awaitingDecisionCount: Int? {
+        raw["approval_summary"]?.objectValue?["awaiting_decision_count"]?.intValue
+    }
     public var freedom: String? { string("freedom") }
     public var startedAtRaw: String? { string("started_at") }
     public var durationSeconds: Double? { raw["duration_seconds"]?.doubleValue }

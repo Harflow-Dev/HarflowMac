@@ -14,6 +14,12 @@ public struct CallerApprovalRepository: Sendable {
         return try await client.approvalGet(taskID: request.taskID, requestID: request.id).get()
     }
 
+    /// Reads presentation eligibility; submitting a decision independently rechecks the capability.
+    public func supportsMonitorResponseForCallerApprovals() async throws -> Bool {
+        let client = try environment.ctl().get()
+        return try await client.supportsMonitorResponseForCallerApprovals().get()
+    }
+
     public func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest {
         let client = try environment.ctl().get()
         return try await client.approvalRespond(request, decision: decision).get()

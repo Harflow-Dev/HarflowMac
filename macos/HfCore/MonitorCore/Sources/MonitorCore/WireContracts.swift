@@ -18,6 +18,12 @@ public enum WireContract: String, Sendable, CaseIterable {
     }
 }
 
+/// Capabilities that qualify individual ctl operations beyond the base wire contract.
+public enum CtlCapability {
+    /// Permits the Monitor response channel to answer caller-owned approval requests.
+    public static let callerApprovalMonitorRespond = "caller-approvals.monitor-respond.v1"
+}
+
 /// Numeric semantic version with bounded components and optional build metadata; no prereleases.
 public struct HarflowVersion: Equatable, Sendable {
     public let major: Int

@@ -33,6 +33,38 @@ struct WireContractFixtureTests {
     }
 
     @Test
+    func givenApprovalSummaryFixtures_whenDecoded_thenAwaitingCountIsAdditiveAndReservedRowsRemainPending() throws {
+        let awaiting = CtlDocument.decode(
+            stdout: try fixture("ctl-approval-status-awaiting.json"), stderr: "", exitCode: 0, command: "status"
+        )
+        guard case .success(.task(let awaitingTask)) = awaiting else {
+            Issue.record("expected approval status fixture to decode as a task")
+            return
+        }
+        #expect(awaitingTask.awaitingDecisionCount == 4)
+        #expect(awaitingTask.raw["approval_summary"]?.objectValue?["pending_count"]?.intValue == 5)
+
+        let reserved = CtlDocument.decode(
+            stdout: try fixture("ctl-approval-state-reserved.json"), stderr: "", exitCode: 0, command: "approval-get"
+        )
+        guard case .success(.result(let payload)) = reserved else {
+            Issue.record("expected reserved approval fixture to decode as a result")
+            return
+        }
+        #expect(payload["delivery"]?.stringValue == "reserved")
+        #expect(payload["disposition"]?.stringValue == "pending")
+        #expect(payload["decided_by"]?.stringValue == "caller")
+        #expect(payload["responder"]?.stringValue == "monitor")
+
+        let absent = TaskInfo(.object(["task_id": .string("legacy"), "approval_summary": .object(["pending_count": .number(1)])]))!
+        #expect(absent.awaitingDecisionCount == nil)
+        let zero = TaskInfo(.object(["task_id": .string("settled"), "approval_summary": .object([
+            "pending_count": .number(0), "awaiting_decision_count": .number(0)
+        ])]))!
+        #expect(zero.awaitingDecisionCount == 0)
+    }
+
+    @Test
     func givenVersionInfoFixtures_whenDecoded_thenValidCompatibilityCasesPassAndInvalidCasesFail() throws {
         let valid: [(String, String)] = [
             ("version-info.json", HarflowVersion.current),

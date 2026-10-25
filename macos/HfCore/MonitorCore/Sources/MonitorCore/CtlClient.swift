@@ -37,8 +37,9 @@ public struct CtlClient: Sendable {
         [command] + options + ["--json"] + (positionals.isEmpty ? [] : ["--"] + positionals)
     }
 
-    func call(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout) async -> Result<CtlDocument, ToolError> {
-        await raw(command, options: options, positionals: positionals, timeout: timeout)
+    func call(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout,
+              requiringCapability: String? = nil) async -> Result<CtlDocument, ToolError> {
+        await raw(command, options: options, positionals: positionals, timeout: timeout, requiringCapability: requiringCapability)
             .flatMap { output in
                 let decodeStart = MonitorMetrics.begin()
                 defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
@@ -172,8 +173,10 @@ public struct CtlClient: Sendable {
         return .success(id)
     }
 
-    func result(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout) async -> Result<[String: JSONValue], ToolError> {
-        await call(command, options: options, positionals: positionals, timeout: timeout).requiringSuccess().flatMap { document in
+    func result(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout,
+                requiringCapability: String? = nil) async -> Result<[String: JSONValue], ToolError> {
+        await call(command, options: options, positionals: positionals, timeout: timeout,
+                   requiringCapability: requiringCapability).requiringSuccess().flatMap { document in
             if case .result(let payload) = document { return .success(payload) }
             return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "\(command) returned no result"))
         }
