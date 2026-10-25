@@ -147,6 +147,7 @@ struct ActivityFeedNativeRowRoot: View {
     let showsPromptBubble: Bool
     let environment: EnvironmentValues
     let actions: ActivityFeedNativeActions
+    var approvalFocusReady: () -> Bool = { false }
     var availableWidth: CGFloat?
     var onHostedHeight: (@MainActor @Sendable (CGFloat) -> Void)?
 
@@ -172,7 +173,8 @@ struct ActivityFeedNativeRowRoot: View {
         case .approval(let card, _):
             CallerApprovalRequestCard(model: card, respond: { actions.onApprovalResponse(card.id, $0) },
                                       toggle: { actions.onApprovalToggle(card.id) },
-                                      onFocusAcknowledged: onHostedHeight == nil ? nil : { actions.onApprovalFocusAcknowledged(card.id, $0) })
+                                      onFocusAcknowledged: onHostedHeight == nil ? nil : { actions.onApprovalFocusAcknowledged(card.id, $0) },
+                                      isFocusReady: approvalFocusReady)
         case .bottom:
             Color.clear
                 .frame(height: HfRadius.Metrics.hairlineStroke)

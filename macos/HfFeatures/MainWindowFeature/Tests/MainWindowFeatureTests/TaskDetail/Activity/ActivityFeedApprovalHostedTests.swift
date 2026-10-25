@@ -1,5 +1,6 @@
 import AppKit
 import HfTestUtilities
+import HfUI
 @testable import MainWindowFeature
 import MonitorCore
 import SwiftUI
@@ -127,6 +128,117 @@ struct ActivityFeedApprovalHostedTests {
         #expect(outerScroll.contentView.bounds.origin.y == outerOffset,
                 Comment(rawValue: focusDiagnostic(window)))
         #expect(innerScroll != nil, Comment(rawValue: focusDiagnostic(window)))
+        if let capturePath = ProcessInfo.processInfo.environment["HARFLOW_APPROVAL_BLOCKED_CAPTURE"] {
+            try captureWindowPNG(window, to: URL(fileURLWithPath: capturePath))
+        }
+    }
+
+    @Test
+    func givenPendingApprovalInNonKeyWindow_whenWindowBecomesKey_thenFocusIntentIsRetriedAndKeyboardResponds() async throws {
+        let request = approvalRequest(owner: "caller")
+        let fake = ApprovalFeedFake(request: request, supportsResponses: true)
+        let controller = CallerApprovalController(useCase: fake)
+        await controller.selectTarget(taskID: request.taskID, workflowRunID: nil)
+        controller.revealPending()
+        let state = ParallelColumnUIState()
+        state.followLive.suspend()
+        let host = NSHostingView(rootView: TimelinePaneView(model: model(), state: state, approvalController: controller))
+        let blocker = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 200, height: 100),
+                               styleMask: [.titled], backing: .buffered, defer: false)
+        blocker.isReleasedWhenClosed = false
+        blocker.makeKeyAndOrderFront(nil)
+        let (window, previousActivationPolicy, previousEnhancedAX) = try open(host, makeKey: false)
+        defer {
+            close(window, previousActivationPolicy: previousActivationPolicy, previousEnhancedAX: previousEnhancedAX)
+            blocker.close()
+        }
+
+        await waitUntil(timeout: 3) { controller.cards.first?.focusToken != nil && controller.reveal != nil }
+        #expect(!window.isKeyWindow)
+        #expect(controller.cards.first?.focusToken != nil)
+        #expect(controller.reveal != nil)
+
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        await waitUntil(timeout: 5) {
+            window.isKeyWindow && NSApplication.shared.isActive
+                && controller.cards.first?.focusToken == nil && controller.reveal == nil
+        }
+        try #require(window.isKeyWindow && NSApplication.shared.isActive)
+        sendKey(.space, to: window)
+        await waitUntil(timeout: 2) { fake.responseCount == 1 }
+        #expect(fake.responseCount == 1)
+        #expect(fake.decisions == ["approve"])
+    }
+
+    @Test
+    func givenConsumedApprovalFocus_whenUserMovesToAnotherVisibleControl_thenRefreshDoesNotStealFocus() async throws {
+        let request = approvalRequest(owner: "caller")
+        let fake = ApprovalFeedFake(request: request, supportsResponses: true)
+        let controller = CallerApprovalController(useCase: fake)
+        await controller.selectTarget(taskID: request.taskID, workflowRunID: nil)
+        controller.revealPending()
+        let state = ParallelColumnUIState()
+        state.followLive.suspend()
+        let host = NSHostingView(rootView: TimelinePaneView(model: model(), state: state, approvalController: controller))
+        let (window, previousActivationPolicy, previousEnhancedAX) = try open(host)
+        defer { close(window, previousActivationPolicy: previousActivationPolicy, previousEnhancedAX: previousEnhancedAX) }
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        await waitUntil(timeout: 5) {
+            window.isKeyWindow && NSApplication.shared.isActive && state.viewportPositioned
+                && controller.reveal == nil && controller.cards.first?.focusToken == nil
+        }
+        try #require(window.isKeyWindow && NSApplication.shared.isActive && state.viewportPositioned)
+        let other = NSButton(frame: CGRect(x: 20, y: 20, width: 180, height: 28))
+        other.title = "Unrelated visible control"
+        other.setAccessibilityIdentifier("unrelated-visible-control")
+        host.addSubview(other)
+        try #require(window.makeFirstResponder(other))
+        try #require(window.firstResponder === other)
+        await controller.refresh()
+        await waitUntil(timeout: 2) { window.firstResponder === other }
+        #expect(window.firstResponder === other)
+        #expect(controller.cards.first?.focusToken == nil)
+    }
+
+    @Test
+    func givenNativeMeasurementUpdates_whenAnotherControlIsFocused_thenApprovalFocusIsNotConsumed() async throws {
+        let request = approvalRequest(owner: "caller")
+        let fake = ApprovalFeedFake(request: request, supportsResponses: true)
+        let controller = CallerApprovalController(useCase: fake)
+        await controller.selectTarget(taskID: request.taskID, workflowRunID: nil)
+        var card = try #require(controller.cards.first)
+        card.focusToken = UUID()
+        let actions = ActivityFeedNativeActions()
+        var acknowledgements = 0
+        actions.onApprovalFocusAcknowledged = { _, _ in acknowledgements += 1 }
+        let entry = ActivityFeedNativeEntry.approval(card, topSpacing: HfRadius.Metrics.spacing12)
+        let cell = ActivityFeedNativeCell(frame: CGRect(x: 12, y: 12, width: 496, height: 160))
+        cell.configure(
+            root: ActivityFeedNativeRowRoot(entry: entry, start: nil, horizontalPadding: 12,
+                                            showsPromptBubble: true, environment: EnvironmentValues(),
+                                            actions: actions, approvalFocusReady: { true }, availableWidth: 496),
+            id: entry.id
+        )
+        let host = NSHostingView(rootView: Color.clear.frame(width: 520, height: 300))
+        host.addSubview(cell)
+        let (window, previousActivationPolicy, previousEnhancedAX) = try open(host)
+        defer { close(window, previousActivationPolicy: previousActivationPolicy, previousEnhancedAX: previousEnhancedAX) }
+        await waitUntil(timeout: 5) { window.isKeyWindow && NSApplication.shared.isActive && cell.host != nil && cell.bounds.height > 0 }
+        try #require(window.isKeyWindow && NSApplication.shared.isActive)
+        try #require(cell.host != nil && cell.bounds.height > 0)
+        let other = NSButton(frame: CGRect(x: 20, y: 20, width: 180, height: 28))
+        other.title = "Measurement focus sentinel"
+        host.addSubview(other)
+        try #require(window.makeFirstResponder(other))
+        await Task.yield()
+        host.layoutSubtreeIfNeeded()
+        await Task.yield()
+        #expect(window.firstResponder === other)
+        #expect(card.focusToken != nil)
+        #expect(acknowledgements == 0)
+        #expect(fake.responseCount == 0)
     }
 
     private func model() -> TimelinePaneModel {
@@ -134,8 +246,24 @@ struct ActivityFeedApprovalHostedTests {
             ConversationTimelineRow(id: "history-\(index)", taskID: "approval-task", timestamp: nil,
                 kind: .item(PreviewFixtures.textItem(String(repeating: "Historical activity \(index) ", count: 12), seq: index)), live: false)
         }
-        return TimelinePaneModel(stepCountText: "28 steps", rows: rows, start: nil, emptyText: nil,
+        return TimelinePaneModel(stepCountText: "28 activity items", rows: rows, start: nil, emptyText: nil,
                                  subTaskStrip: nil, isLoading: false)
+    }
+
+    private func captureWindowPNG(_ window: NSWindow, to url: URL) throws {
+        guard let view = window.contentView else { return }
+        view.layoutSubtreeIfNeeded()
+        let width = max(1, Int(view.bounds.width * 2))
+        let height = max(1, Int(view.bounds.height * 2))
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: 2, y: -2)
+        view.layer?.render(in: context)
+        guard let image = context.makeImage(),
+              let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return }
+        try data.write(to: url)
     }
 
     private func approvalRequest(owner: String, longAction: Bool = false) -> CallerApprovalRequest {
@@ -152,7 +280,7 @@ struct ActivityFeedApprovalHostedTests {
         ])
     }
 
-    private func open(_ host: NSHostingView<TimelinePaneView>) throws -> (NSWindow, NSApplication.ActivationPolicy, Bool) {
+    private func open(_ host: NSHostingView<some View>, makeKey: Bool = true) throws -> (NSWindow, NSApplication.ActivationPolicy, Bool) {
         _ = NSApplication.shared
         let previousActivationPolicy = NSApplication.shared.activationPolicy()
         NSApplication.shared.setActivationPolicy(.regular)
@@ -164,7 +292,11 @@ struct ActivityFeedApprovalHostedTests {
                               backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host
-        window.makeKeyAndOrderFront(nil)
+        if makeKey {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            window.orderFront(nil)
+        }
         NSApplication.shared.activate(ignoringOtherApps: true)
         return (window, previousActivationPolicy, previousEnhancedAX)
     }

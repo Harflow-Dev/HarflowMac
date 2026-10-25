@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import HfRepository
 import HfUI
@@ -85,8 +86,7 @@ struct CallerApprovalRequestCard: View {
     let respond: (String) -> Void
     let toggle: () -> Void
     var onFocusAcknowledged: ((UUID) -> Void)?
-    private enum FocusTarget: Hashable { case details, approve }
-    @FocusState private var actionFocus: FocusTarget?
+    var isFocusReady: () -> Bool = { true }
 
     var body: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
@@ -110,18 +110,11 @@ struct CallerApprovalRequestCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(model.pending ? Color.warningBG : Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
         .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(model.pending ? Color.warningFG : Color.hairline))
-        .onChange(of: model.focusToken, initial: true) { _, token in
-            guard let token else { return }
-            Task { @MainActor in
-                await Task.yield()
-                guard model.focusToken == token else { return }
-                actionFocus = model.canRespond && model.showsDecisionControls ? .approve : .details
-                await Task.yield()
-                guard model.focusToken == token else { return }
-                onFocusAcknowledged?(token)
-            }
-        }
     }
+
+    private var focusToken: UUID? { onFocusAcknowledged == nil ? nil : model.focusToken }
+
+    private func acknowledgeFocus(_ token: UUID) { onFocusAcknowledged?(token) }
 
     private var settledStatus: String {
         var values = [model.request.text("disposition")]
@@ -137,7 +130,10 @@ struct CallerApprovalRequestCard: View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
             Text(model.action.title).font(.hf(.secondary, weight: .semibold))
             context
-            ScrollView {
+            ApprovalDetailsScroll(identifier: "approval-details-\(model.id)",
+                                  label: "Requested action details for \(model.action.title)",
+                                  token: model.canRespond ? nil : focusToken,
+                                  isFocusReady: isFocusReady, acknowledge: acknowledgeFocus) {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
                     ForEach(model.action.fields) { field in
                         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
@@ -151,14 +147,11 @@ struct CallerApprovalRequestCard: View {
                                 .background(Color.composerFill, in: RoundedRectangle(cornerRadius: 6))
                         }
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+.frame(maxWidth: .infinity, alignment: .leading)
             }
 .frame(maxHeight: 220)
 .fixedSize(horizontal: false, vertical: true)
-                .focusable(!model.canRespond)
-.accessibilityIdentifier("approval-details-\(model.id)")
-.accessibilityLabel("Requested action details for \(model.action.title)")
-.focused($actionFocus, equals: .details)
             if let reason = model.request.raw["decision_reason"]?.stringValue, !reason.isEmpty {
                 Text("Agent's stated reason").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
                 ScrollView { Text(verbatim: reason).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
@@ -178,10 +171,11 @@ struct CallerApprovalRequestCard: View {
             }
             if model.pending, model.showsDecisionControls {
                 HStack {
-                    Button(model.submitting ? "Submitting…" : "Approve once") { respond("approve") }
-                        .focusable()
-                        .focused($actionFocus, equals: .approve)
-                        .accessibilityIdentifier("approval-approve-\(model.id)")
+                    ApprovalDecisionButton(title: model.submitting ? "Submitting…" : "Approve once",
+                                           enabled: model.canRespond, identifier: "approval-approve-\(model.id)",
+                                           token: focusToken, isFocusReady: isFocusReady, action: { respond("approve") },
+                                           acknowledge: acknowledgeFocus)
+                        .fixedSize()
                     Button("Reject", role: .destructive) { respond("reject") }
                 }.disabled(!model.canRespond)
             }

@@ -120,6 +120,28 @@ struct CallerApprovalWindowCaptureTests {
         #expect(captures.count == 4)
     }
 
+    @Test
+    func givenActionableApprovalUnderDisabledAncestor_whenNativeApproveIsPressed_thenItRemainsDisabled() async throws {
+        let request = captureRequest(owner: "caller")
+        let fake = CallerApprovalCaptureFake(request: request)
+        fake.supportsCallerResponses = true
+        let controller = CallerApprovalController(useCase: fake)
+        await controller.selectTarget(taskID: request.taskID, workflowRunID: nil)
+        await controller.inspect(request)
+        let view = VStack {
+            CallerApprovalCard(controller: controller)
+        }.disabled(true)
+        let host = RedesignHost(view, size: CGSize(width: 700, height: 500))
+        defer { host.close() }
+        host.window.makeKeyAndOrderFront(nil)
+        await host.settle { host.element("Approve once") != nil }
+        let approve = try #require(host.element("Approve once"))
+        let enabled = (approve.value(forKey: "accessibilityEnabled") as? NSNumber)?.boolValue
+        #expect(enabled == false)
+        #expect(host.press(approve) == false)
+        #expect(fake.responseCount == 0)
+    }
+
     private func captureWindowBackedPNG(_ host: RedesignHost, to url: URL) throws {
         host.host.layoutSubtreeIfNeeded()
         host.host.displayIfNeeded()

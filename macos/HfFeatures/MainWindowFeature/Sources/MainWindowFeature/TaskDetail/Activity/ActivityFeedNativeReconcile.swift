@@ -28,7 +28,12 @@ extension ActivityFeedNativeList.Coordinator {
     func reconcile(environmentHeightsInvalidated: Bool, rootsNeedRefresh: Bool) {
         guard !reconciling, let model, let state, table != nil else { return }
         reconciling = true
-        defer { reconciling = false }
+        defer {
+            reconciling = false
+            for cell in cells.values where cell.entryID?.hasPrefix("activity-approval-") == true {
+                CallerApprovalNativeFocus.retry(in: cell)
+            }
+        }
 
         // What an incoherent native window held — a detached document's synthetic moves —
         // resumes first: its paging intent at the offset it reached, then its reading.
@@ -361,6 +366,17 @@ extension ActivityFeedNativeList.Coordinator {
         }
         if reporting {
             let id = box.entry.id
+            if case .approval(let card, _) = box.entry {
+                root.approvalFocusReady = { [weak self] in
+                    guard let self, positioned, !reconciling,
+                          consumedApprovalReveal == card.focusToken,
+                          model?.approvalReveal == nil,
+                          let cell = cells[id], cell.window != nil,
+                          let table, let index = entries.firstIndex(where: { $0.id == id }),
+                          table.view(atColumn: 0, row: index, makeIfNecessary: false) === cell else { return false }
+                    return table.visibleRect.intersects(table.rect(ofRow: index))
+                }
+            }
             let revision = box.revision
             root.onHostedHeight = { [weak self, weak box] height in
                 guard let self, let box, box.entry.id == id else { return }
