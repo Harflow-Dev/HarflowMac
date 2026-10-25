@@ -32,8 +32,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import plistlib
+import uuid
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -72,6 +75,8 @@ DISCOVERY_TIMEOUT_SECONDS = 600
 SUITE_TIMEOUT_SECONDS = 300
 AGGREGATE_TIMEOUT_SECONDS = 1200
 TERM_GRACE_SECONDS = 5.0
+HOSTED_SUITE = "MainWindowFeatureTests.ActivityFeedApprovalHostedTests"
+HOSTED_PACKAGE = "MainWindowFeature"
 
 # Identifier grammar, deliberately minimal: anything outside it is rejected, not
 # escaped. Suite identity is everything before the last slash of a discovered
@@ -152,6 +157,11 @@ class PartitionResult:
     stdout_log: str | None = None
     stderr_log: str | None = None
     events_log: str | None = None
+    backend: str = "swift-test"
+    legacy_probe_stdout: str | None = None
+    legacy_probe_stderr: str | None = None
+    legacy_probe_returncode: int | None = None
+    legacy_probe_timed_out: bool = False
 
 
 @dataclass
@@ -167,6 +177,7 @@ class RunnerResult:
     partitions: list[PartitionResult] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
     manifest_path: str | None = None
+    host_setup: dict = field(default_factory=dict)
 
 
 def suite_identity(test_id: str) -> str:
@@ -611,6 +622,7 @@ def run_process(
     timeout: float,
     stdout_path: str,
     stderr_path: str,
+    env: dict[str, str] | None = None,
 ) -> tuple[int | None, bool, float]:
     """Run argv in its own process group with redirected logs and a bounded timeout.
 
@@ -629,6 +641,7 @@ def run_process(
             stdout=out,
             stderr=err,
             start_new_session=True,
+            env=env,
         )
         # Keep the leader unreaped until all group inspection/signalling ends.
         # Its PID then cannot be reused for an unrelated process group.
@@ -728,6 +741,113 @@ def _log_name(index: int, name: str, suffix: str) -> str:
     return f"{index:02d}-{safe}.{suffix}"
 
 
+@dataclass(frozen=True)
+class AppKitHost:
+    executable: str
+    bundle: str
+    testing_image: str
+    environment: dict[str, str]
+
+
+def requires_appkit_host(package: str, partition: Partition) -> bool:
+    """Select only the explicitly supported package and exact hosted suite."""
+    hosted = [test_id for test_id in partition.ids if suite_identity(test_id) == HOSTED_SUITE]
+    if not hosted:
+        return False
+    if os.path.basename(package) != HOSTED_PACKAGE:
+        raise RunnerError("hosted suite discovered in an unsupported package")
+    if partition.name != HOSTED_SUITE or len(hosted) != len(partition.ids):
+        raise RunnerError("AppKit hosted tests require --mode suites; aggregate is unsupported")
+    if partition.filter_expression != suite_filter(HOSTED_SUITE):
+        raise RunnerError("AppKit hosted partition has an inconsistent filter")
+    return True
+
+
+def prepare_appkit_host(swift: str, package: str, output_dir: str,
+                        deadline: float, evidence: dict) -> AppKitHost:
+    """Build, sign and activation-check an isolated synchronous AppKit application."""
+    def stage(name, argv, env=None):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RunnerError("AppKit host setup exhausted the build budget")
+        stdout = os.path.join(output_dir, name + ".stdout.log")
+        stderr = os.path.join(output_dir, name + ".stderr.log")
+        code, timed_out, elapsed = run_process(argv, package, remaining, stdout, stderr, env=env)
+        evidence[name] = {"argv": argv, "stdout_log": stdout, "stderr_log": stderr,
+                          "returncode": code, "timed_out": timed_out, "duration_seconds": elapsed}
+        if code != 0 or timed_out:
+            raise RunnerError(f"AppKit host {name} failed; logs: {stdout} {stderr}")
+        return _read_text(stdout, strict=True).strip()
+
+    compiler = stage("host-compiler-path", ["xcrun", "--find", "swiftc"])
+    selected_swift = stage("host-swift-path", ["xcrun", "--find", "swift"])
+    actual_swift = shutil.which(swift)
+    if actual_swift is None or os.path.realpath(actual_swift) not in (os.path.realpath(selected_swift), "/usr/bin/swift"):
+        raise RunnerError("AppKit host requires swift from the selected xcrun toolchain")
+    platform = stage("host-platform-path", ["xcrun", "--show-sdk-platform-path"])
+    sdk = stage("host-sdk-path", ["xcrun", "--show-sdk-path"])
+    version = stage("host-compiler-version", [compiler, "--version"])
+    swift_version = stage("host-swift-version", [swift, "--version"])
+    if swift_version != version:
+        raise RunnerError("AppKit host compiler and package Swift versions differ")
+    framework_dir = os.path.join(platform, "Developer", "Library", "Frameworks")
+    testing = os.path.join(framework_dir, "Testing.framework", "Testing")
+    modules = os.path.join(framework_dir, "Testing.framework", "Modules", "Testing.swiftmodule")
+    interfaces = [os.path.join(modules, name) for name in os.listdir(modules)
+                  if name.endswith(".swiftinterface") and not name.endswith(".private.swiftinterface")]
+    if not os.path.isfile(testing) or not interfaces or not all(
+        "-user-module-version 1902" in _read_text(path, strict=True) for path in interfaces
+    ):
+        raise RunnerError("AppKit host requires Testing Library 1902 public interface")
+    evidence["compatibility"] = {"compiler_version": version, "testing_image": testing,
+                                 "testing_library_version": "1902", "schema": "6.3.0"}
+    build_path = stage("host-build-path", [swift, "build", "--show-bin-path"])
+    bundle = os.path.join(build_path, "MainWindowFeaturePackageTests.xctest", "Contents",
+                          "MacOS", "MainWindowFeaturePackageTests")
+    if not os.path.isfile(bundle):
+        raise RunnerError(f"AppKit host test bundle is missing: {bundle}")
+    app = os.path.join(output_dir, "AppKitTestHost-" + uuid.uuid4().hex + ".app")
+    contents = os.path.join(app, "Contents")
+    os.makedirs(os.path.join(contents, "MacOS"))
+    executable = os.path.join(contents, "MacOS", "AppKitTestHost")
+    with open(os.path.join(contents, "Info.plist"), "wb") as handle:
+        plistlib.dump({"CFBundleIdentifier": "dev.harflow.testhost." + uuid.uuid4().hex,
+                      "CFBundleExecutable": "AppKitTestHost", "CFBundlePackageType": "APPL",
+                      "NSHighResolutionCapable": True, "NSQuitAlwaysKeepsWindows": False}, handle)
+    source = os.path.join(os.path.dirname(os.path.abspath(__file__)), "support", "AppKitTestHost.swift")
+    stage("host-compile", [compiler, "-parse-as-library", "-sdk", sdk, source, "-F", framework_dir,
+                           "-framework", "Testing", "-Xlinker", "-rpath", "-Xlinker",
+                           framework_dir, "-o", executable])
+    stage("host-sign", ["codesign", "--force", "--sign", "-", app])
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("DYLD_")}
+    for key in ("HOME", "CFFIXED_USER_HOME", "TMPDIR"):
+        directory = os.path.join(output_dir, "host-scratch", key)
+        os.makedirs(directory, exist_ok=True)
+        environment[key] = directory
+    receipt = stage("host-activation", [executable, "--activation-self-test"], environment)
+    if receipt != "APPKIT_ACTIVATION active=true key=true":
+        raise RunnerError("AppKit host activation self-test did not produce the required receipt")
+    evidence["executable"] = executable
+    evidence["bundle"] = bundle
+    return AppKitHost(executable, bundle, testing, environment)
+
+
+def validate_legacy_probe(text: str) -> list[str]:
+    """Require genuine legacy-only execution reports, each containing zero tests/failures."""
+    reports = list(XCTEST_EXECUTED.finditer(text))
+    if not reports:
+        return ["no legacy XCTest execution report on probe stdout"]
+    return ["legacy XCTest probe reported nonzero tests or failures"
+            for report in reports if int(report.group(1)) or int(report.group(2))]
+
+
+def validate_host_summary(text: str, tests: int, suites: int | None) -> list[str]:
+    """Validate the host's real stderr summary separately from the legacy probe."""
+    # Reuse the existing exact summary checks without introducing synthetic evidence.
+    return [failure.replace("stdout", "host stderr") for failure in
+            validate_stdout(text, tests, suites) if "XCTest" not in failure]
+
+
 def _execute_partition(
     swift: str,
     package: str,
@@ -735,6 +855,7 @@ def _execute_partition(
     timeout: float,
     output_dir: str,
     index: int,
+    host: AppKitHost | None = None,
 ) -> PartitionResult:
     """Run one guarded swift test process and validate its evidence."""
     result = PartitionResult(
@@ -751,23 +872,51 @@ def _execute_partition(
     if os.path.exists(events_log):
         os.remove(events_log)
 
+    hosted = requires_appkit_host(package, partition)
+    if hosted and host is None:
+        raise RunnerError("AppKit hosted partition requires a prepared host; no fallback is allowed")
+    if host is not None and not hosted:
+        raise RunnerError("AppKit host supplied for an unsupported partition")
+    deadline = time.monotonic() + timeout
+    if hosted:
+        result.backend = "appkit-host"
+        result.legacy_probe_stdout = os.path.join(output_dir, _log_name(index, partition.name, "legacy.stdout.log"))
+        result.legacy_probe_stderr = os.path.join(output_dir, _log_name(index, partition.name, "legacy.stderr.log"))
+        probe = [swift, "test", "--skip-build", "--disable-swift-testing", "--filter", partition.filter_expression]
+        code, expired, _ = run_process(probe, package, max(0.001, deadline - time.monotonic()),
+                                      result.legacy_probe_stdout, result.legacy_probe_stderr)
+        result.legacy_probe_returncode = code
+        result.legacy_probe_timed_out = expired
+        if code != 0 or expired:
+            result.failures.append(f"legacy XCTest probe failed (exit {code}, timed_out={expired})")
+        result.failures.extend(validate_legacy_probe(_read_text(result.legacy_probe_stdout, strict=False)))
+        if result.failures or time.monotonic() >= deadline:
+            result.duration_seconds = timeout - max(0, deadline - time.monotonic())
+            result.timed_out = expired or time.monotonic() >= deadline
+            if result.timed_out:
+                result.failures.append("partition deadline exhausted during legacy probe")
+            return result
     argv = [swift, "test", "--skip-build", "--no-parallel"]
     if partition.filter_expression is not None:
         argv += ["--filter", partition.filter_expression]
     argv += ["--event-stream-output-path", events_log]
 
+    if hosted:
+        argv = [host.executable, host.bundle, host.testing_image, partition.filter_expression, events_log]
     returncode, timed_out, elapsed = run_process(
-        argv, cwd=package, timeout=timeout, stdout_path=stdout_log, stderr_path=stderr_log
+        argv, cwd=package, timeout=max(0.001, deadline - time.monotonic()),
+        stdout_path=stdout_log, stderr_path=stderr_log,
+        env=host.environment if hosted else None,
     )
     result.returncode = returncode
     result.timed_out = timed_out
-    result.duration_seconds = elapsed
+    result.duration_seconds = timeout - max(0, deadline - time.monotonic())
     if timed_out:
         result.failures.append(
             f"partition timed out after {timeout:g}s and its process group was terminated"
         )
     if returncode != 0:
-        result.failures.append(f"swift test exited with {returncode}")
+        result.failures.append(f"{result.backend} exited with {returncode}")
 
     stdout_text = _read_text(stdout_log, strict=False)
     if not os.path.exists(events_log):
@@ -782,9 +931,12 @@ def _execute_partition(
     result.suites = validation.suites
     result.skipped = validation.skipped
     result.failures.extend(validation.failures)
-    result.failures.extend(
-        validate_stdout(stdout_text, expected_tests=len(partition.ids), expected_suites=result.suites)
-    )
+    if hosted:
+        result.failures.extend(validate_host_summary(_read_text(stderr_log, strict=False), len(partition.ids), result.suites))
+    else:
+        result.failures.extend(
+            validate_stdout(stdout_text, expected_tests=len(partition.ids), expected_suites=result.suites)
+        )
     result.ok = not result.failures
     return result
 
@@ -815,6 +967,7 @@ def run_package(
         ok=False, package=package, mode=mode, output_dir=os.path.abspath(output_dir)
     )
 
+    build_deadline = time.monotonic() + build_timeout
     build_stdout = os.path.join(overall.output_dir, "build.stdout.log")
     build_stderr = os.path.join(overall.output_dir, "build.stderr.log")
     returncode, timed_out, elapsed = run_process(
@@ -865,6 +1018,16 @@ def run_package(
         _write_manifest(overall)
         return overall
 
+    host = None
+    try:
+        hosted = [part for part in partitions if requires_appkit_host(package, part)]
+        if hosted:
+            host = prepare_appkit_host(swift, package, overall.output_dir, build_deadline, overall.host_setup)
+    except (RunnerError, OSError, UnicodeDecodeError) as error:
+        overall.failures.append(f"AppKit host setup rejected: {error}")
+        _write_manifest(overall)
+        return overall
+
     for index, partition in enumerate(partitions, 1):
         print(
             f"swift-package-runner: START {index}/{len(partitions)} {partition.name} "
@@ -872,7 +1035,8 @@ def run_package(
             flush=True,
         )
         result = _execute_partition(
-            swift, package, partition, partition_timeout, overall.output_dir, index
+            swift, package, partition, partition_timeout, overall.output_dir, index,
+            host=host if requires_appkit_host(package, partition) else None,
         )
         overall.partitions.append(result)
         print(
@@ -893,6 +1057,7 @@ def _write_manifest(result: RunnerResult) -> None:
         "discovered_tests": result.discovered_tests,
         "discovered_suites": result.discovered_suites,
         "failures": result.failures,
+        "host_setup": result.host_setup,
         "partitions": [
             {
                 "name": partition.name,
@@ -908,6 +1073,11 @@ def _write_manifest(result: RunnerResult) -> None:
                 "stdout_log": partition.stdout_log,
                 "stderr_log": partition.stderr_log,
                 "events_log": partition.events_log,
+                "backend": partition.backend,
+                "legacy_probe_stdout": partition.legacy_probe_stdout,
+                "legacy_probe_stderr": partition.legacy_probe_stderr,
+                "legacy_probe_returncode": partition.legacy_probe_returncode,
+                "legacy_probe_timed_out": partition.legacy_probe_timed_out,
             }
             for partition in result.partitions
         ],

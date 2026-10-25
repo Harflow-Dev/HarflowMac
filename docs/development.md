@@ -5,14 +5,14 @@ Build on macOS 26 or later. `macos/build-app.sh` produces `macos/build/Harflow.a
 Validate formatting and lint with the same commands as CI. CI installs the available Homebrew tools; local tools are not pinned by this repository:
 
 ```sh
-swiftformat --lint macos
+swiftformat --lint macos scripts/support
 swiftlint lint --strict
 python3 scripts/check-legacy-names.py
 python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
 macos/build-app.sh
 ```
 
-To apply formatting, run `swiftformat macos` separately.
+To apply formatting, run `swiftformat macos scripts/support` separately.
 
 Run Swift Testing through `scripts/test-swift-package.py`, which validates supported Testing Library 1902/schema 6.3 output and fails closed. MainWindowFeature uses `--mode suites` with `HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1`; the other eight packages use `--mode aggregate` with `HARFLOW_NATIVE_BENCHMARK=1`. Do not run all package tests concurrently.
 
@@ -29,6 +29,23 @@ to cover discovery exactly and disjointly; `--mode aggregate` uses one guarded p
 MainWindowFeature uses suite isolation as an AppKit fixture policy. The cause of premature aggregate
 exit remains unresolved, and suite isolation does not validate shared-process ordering or state
 leakage. An incomplete isolated suite still fails.
+
+The exact `MainWindowFeatureTests.ActivityFeedApprovalHostedTests` suite runs in a temporary,
+ad-hoc signed AppKit application with a synchronous main function and a retained application
+delegate. Its main thread runs `NSApplication.run()` throughout testing. Before loading the actual
+built test bundle, a separate bare application activation check must become active with a key
+fixture window. The host loads the original test bundle locally and invokes the selected toolchain's
+Testing entrypoint with the original anchored suite filter; it never invokes the bundle entrypoint.
+The runner rejects aggregate selections containing these tests and requires `--mode suites`.
+
+The host uses the `xcrun` selected compiler and Testing.framework (Library 1902), checks that exactly
+that Testing image remains loaded, and uses an isolated HOME, CFFIXED_USER_HOME and TMPDIR with
+saved-state restoration disabled. Setup, signing and activation share the build budget. A real
+legacy-only SwiftPM probe and the host share one partition deadline. The probe must exit zero with
+at least one genuine XCTest report, all reporting zero tests/failures. The host's real completion
+summary is validated from stderr separately from the probe's stdout; both original logs and host
+setup/toolchain evidence remain in the manifest. Missing tools, bundle, registration, activation,
+unsupported inputs or incomplete evidence fail without an ordinary-runner fallback.
 
 Each partition must exit zero, define and execute every discovered function exactly once in a
 complete event stream (schema 6.3.0, Testing Library 1902), and print a passing summary with the

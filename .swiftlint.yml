@@ -4,6 +4,7 @@ included:
   - macos/HfCore
   - macos/HfFeatures
   - macos/Harflow
+  - scripts/support
 
 excluded:
   - macos/build

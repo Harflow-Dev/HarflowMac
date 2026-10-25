@@ -303,7 +303,7 @@ def test_run_package_rejects_nonzero_partition_exit_even_with_valid_output(tmp_p
         str(fake.parent / "package"), "suites", swift=str(fake), partition_timeout=2,
     )
     assert not result.ok
-    assert any("swift test exited with 7" in failure
+    assert any("swift-test exited with 7" in failure
                for partition in result.partitions for failure in partition.failures)
 
 
@@ -397,3 +397,284 @@ def test_run_process_records_exit_probe_failures_and_cleans_owned_group(
     assert returncode not in (None, 0)
     assert not timed_out
     assert "exit probe" in stderr_path.read_text(encoding="utf-8").lower()
+
+
+HOSTED_NORMAL = runner.HOSTED_SUITE + "/testApproval()"
+HOSTED_SECOND = runner.HOSTED_SUITE + "/testBlockedApproval()"
+
+
+def hosted_partition(*ids: str) -> runner.Partition:
+    return runner.Partition(
+        runner.HOSTED_SUITE,
+        tuple(ids),
+        runner.suite_filter(runner.HOSTED_SUITE),
+    )
+
+
+def test_appkit_host_allowlist_is_exact_and_aggregate_is_rejected(tmp_path: Path) -> None:
+    package = str(tmp_path / runner.HOSTED_PACKAGE)
+    ordinary = runner.Partition("ordinary", (NORMAL,), runner.suite_filter(runner.suite_identity(NORMAL)))
+    assert not runner.requires_appkit_host(package, ordinary)
+    assert runner.requires_appkit_host(package, hosted_partition(HOSTED_NORMAL, HOSTED_SECOND))
+
+    with pytest.raises(runner.RunnerError, match="unsupported package"):
+        runner.requires_appkit_host(str(tmp_path / "OtherPackage"), hosted_partition(HOSTED_NORMAL))
+    with pytest.raises(runner.RunnerError, match="aggregate"):
+        runner.requires_appkit_host(
+            package,
+            runner.Partition("aggregate", (HOSTED_NORMAL,), None),
+        )
+    with pytest.raises(runner.RunnerError, match="inconsistent filter"):
+        runner.requires_appkit_host(
+            package,
+            runner.Partition(runner.HOSTED_SUITE, (HOSTED_NORMAL,), "wrong-filter"),
+        )
+    with pytest.raises(runner.RunnerError, match="aggregate"):
+        runner.requires_appkit_host(
+            package,
+            runner.Partition(runner.HOSTED_SUITE, (HOSTED_NORMAL, NORMAL), runner.suite_filter(runner.HOSTED_SUITE)),
+        )
+
+
+def test_appkit_probe_and_host_summary_keep_evidence_separate() -> None:
+    assert runner.validate_legacy_probe("Test Suite 'legacy' passed.\nExecuted 0 tests, with 0 failures\n") == []
+    assert runner.validate_legacy_probe("") == ["no legacy XCTest execution report on probe stdout"]
+    assert runner.validate_legacy_probe("Executed 1 test, with 0 failures\n")
+    assert runner.validate_legacy_probe("Executed 0 tests, with 1 failures\n")
+
+    summary = "Test run with 2 tests in 1 suites passed after 0.1 seconds.\n"
+    assert runner.validate_host_summary(summary, 2, 1) == []
+    assert runner.validate_host_summary(
+        "Test run with 1 test in 1 suites passed after 0.1 seconds.\n", 2, 1
+    )
+    assert runner.validate_host_summary(
+        "Test run with 2 tests in 1 suites failed after 0.1 seconds.\n", 2, 1
+    )
+
+
+def _run_fake_host_partition(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    probe_stdout: str = "Executed 0 tests, with 0 failures\n",
+    host_stderr: str | None = None,
+    event_lines: list[str] | None = None,
+    host_returncode: int = 0,
+    host_timed_out: bool = False,
+) -> tuple[runner.PartitionResult, list[tuple[list[str], float]]]:
+    package = tmp_path / runner.HOSTED_PACKAGE
+    package.mkdir()
+    output = tmp_path / "logs"
+    output.mkdir()
+    partition = hosted_partition(HOSTED_NORMAL, HOSTED_SECOND)
+    host = runner.AppKitHost("/fake-host", "/fake-tests.xctest", "/fake/Testing", {})
+    calls: list[tuple[list[str], float]] = []
+    events = event_lines if event_lines is not None else passing_events([HOSTED_NORMAL, HOSTED_SECOND])
+
+    def fake_run_process(argv, cwd, timeout, stdout_path, stderr_path, env=None):
+        del cwd, env
+        calls.append((list(argv), timeout))
+        if "--disable-swift-testing" in argv:
+            Path(stdout_path).write_text(probe_stdout, encoding="utf-8")
+            Path(stderr_path).write_text("legacy stderr\n", encoding="utf-8")
+            return 0, False, 0.01
+        Path(stdout_path).write_text("host stdout is intentionally separate\n", encoding="utf-8")
+        Path(stderr_path).write_text(
+            host_stderr if host_stderr is not None else
+            "Test run with 2 tests in 1 suites passed after 0.1 seconds.\n",
+            encoding="utf-8",
+        )
+        Path(argv[-1]).write_text("\n".join(events) + "\n", encoding="utf-8")
+        return host_returncode, host_timed_out, 0.02
+
+    monkeypatch.setattr(runner, "run_process", fake_run_process)
+    result = runner._execute_partition(
+        "swift", str(package), partition, 5, str(output), 1, host=host,
+    )
+    return result, calls
+
+
+def test_appkit_partition_validates_real_probe_host_stderr_and_events(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, calls = _run_fake_host_partition(monkeypatch, tmp_path)
+    assert result.ok, result.failures
+    assert result.backend == "appkit-host"
+    assert result.legacy_probe_returncode == 0
+    assert len(calls) == 2
+    assert "--disable-swift-testing" in calls[0][0]
+    assert calls[1][0][0] == "/fake-host"
+    assert result.stdout_log and "host stdout is intentionally separate" in Path(result.stdout_log).read_text()
+    assert result.stderr_log and "Test run with 2 tests" in Path(result.stderr_log).read_text()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"probe_stdout": ""}, "no legacy XCTest execution report"),
+        ({"probe_stdout": "Executed 1 test, with 0 failures\n"}, "nonzero tests or failures"),
+        ({"host_stderr": ""}, "host stderr has no Swift Testing completion summary"),
+        ({"event_lines": passing_events([HOSTED_NORMAL])}, "missing function definition"),
+        ({"event_lines": passing_events([HOSTED_NORMAL, HOSTED_SECOND], skip=HOSTED_NORMAL)}, "was skipped"),
+    ],
+)
+def test_appkit_partition_fails_closed_for_probe_summary_identity_and_skip_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kwargs: dict, expected: str,
+) -> None:
+    result, _ = _run_fake_host_partition(monkeypatch, tmp_path, **kwargs)
+    assert not result.ok
+    assert any(expected in failure for failure in result.failures), result.failures
+
+
+def test_appkit_partition_nonzero_host_exit_remains_failure_with_valid_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, _ = _run_fake_host_partition(monkeypatch, tmp_path, host_returncode=9)
+    assert not result.ok
+    assert any("appkit-host exited with 9" in failure for failure in result.failures)
+
+
+def test_appkit_partition_shares_one_deadline_between_probe_and_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, calls = _run_fake_host_partition(monkeypatch, tmp_path, host_timed_out=True)
+    assert not result.ok
+    assert result.timed_out
+    assert len(calls) == 2
+    assert 0 < calls[1][1] < calls[0][1]
+    assert any("timed out" in failure for failure in result.failures)
+
+
+def _fake_host_setup_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    include_bundle: bool = True,
+    include_testing_image: bool = True,
+    version_mismatch: bool = False,
+    selected_swift_mismatch: bool = False,
+    activation_receipt: str = "APPKIT_ACTIVATION active=true key=true",
+    activation_returncode: int = 0,
+) -> tuple[str, Path, dict]:
+    package = tmp_path / runner.HOSTED_PACKAGE
+    package.mkdir(parents=True)
+    toolchain = tmp_path / "toolchain"
+    compiler = toolchain / "swiftc"
+    swift = toolchain / "swift"
+    compiler.parent.mkdir()
+    compiler.touch()
+    swift.touch()
+    platform = tmp_path / "platform"
+    framework = platform / "Developer" / "Library" / "Frameworks" / "Testing.framework"
+    modules = framework / "Modules" / "Testing.swiftmodule"
+    modules.mkdir(parents=True)
+    (modules / "arm64.swiftinterface").write_text("-user-module-version 1902\n", encoding="utf-8")
+    testing_image = framework / "Testing"
+    if include_testing_image:
+        testing_image.touch()
+    sdk = tmp_path / "sdk"
+    build = tmp_path / "build"
+    bundle = build / "MainWindowFeaturePackageTests.xctest" / "Contents" / "MacOS" / "MainWindowFeaturePackageTests"
+    if include_bundle:
+        bundle.parent.mkdir(parents=True)
+        bundle.touch()
+    outputs = {
+        "compiler": str(compiler), "swift": str(swift), "platform": str(platform),
+        "sdk": str(sdk), "build": str(build), "version": "Swift version 6.3.3",
+        "testing": str(testing_image), "bundle": str(bundle),
+    }
+
+    def fake_run_process(argv, cwd, timeout, stdout_path, stderr_path, env=None):
+        del cwd, timeout, env
+        text = ""
+        if argv[:2] == ["xcrun", "--find"]:
+            text = outputs["compiler"] if argv[2] == "swiftc" else outputs["swift"]
+        elif argv[:2] == ["xcrun", "--show-sdk-platform-path"]:
+            text = outputs["platform"]
+        elif argv[:2] == ["xcrun", "--show-sdk-path"]:
+            text = outputs["sdk"]
+        elif len(argv) >= 2 and argv[1] == "build":
+            text = outputs["build"]
+        elif argv[:2] == [str(compiler), "--version"]:
+            text = outputs["version"]
+        elif argv[:2] == [str(swift), "--version"]:
+            text = "Swift version 6.3.4" if version_mismatch else outputs["version"]
+        elif "--activation-self-test" in argv:
+            text = activation_receipt
+        Path(stdout_path).write_text(text + ("\n" if text else ""), encoding="utf-8")
+        Path(stderr_path).write_text("", encoding="utf-8")
+        return (activation_returncode if "--activation-self-test" in argv else 0), False, 0.01
+
+    monkeypatch.setattr(runner, "run_process", fake_run_process)
+    monkeypatch.setattr(runner.shutil, "which", lambda _: str(tmp_path / "other-swift") if selected_swift_mismatch else str(swift))
+    return str(swift), package, outputs
+
+
+def test_prepare_appkit_host_rejects_missing_bundle_and_testing_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    swift, package, _ = _fake_host_setup_environment(
+        tmp_path / "missing-bundle", monkeypatch, include_bundle=False,
+    )
+    (tmp_path / "missing-bundle" / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match="bundle is missing"):
+        runner.prepare_appkit_host(swift, str(package), str(tmp_path / "missing-bundle" / "logs"),
+                                   time.monotonic() + 10, {})
+
+    swift, package, _ = _fake_host_setup_environment(
+        tmp_path / "missing-testing", monkeypatch, include_testing_image=False,
+    )
+    (tmp_path / "missing-testing" / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match="Testing Library 1902"):
+        runner.prepare_appkit_host(swift, str(package), str(tmp_path / "missing-testing" / "logs"),
+                                   time.monotonic() + 10, {})
+
+
+def test_prepare_appkit_host_rejects_toolchain_version_and_path_mismatches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    swift, package, _ = _fake_host_setup_environment(
+        tmp_path / "version", monkeypatch, version_mismatch=True,
+    )
+    (tmp_path / "version" / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match="versions differ"):
+        runner.prepare_appkit_host(swift, str(package), str(tmp_path / "version" / "logs"),
+                                   time.monotonic() + 10, {})
+
+    swift, package, _ = _fake_host_setup_environment(
+        tmp_path / "path", monkeypatch, selected_swift_mismatch=True,
+    )
+    (tmp_path / "path" / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match="selected xcrun toolchain"):
+        runner.prepare_appkit_host(swift, str(package), str(tmp_path / "path" / "logs"),
+                                   time.monotonic() + 10, {})
+
+
+@pytest.mark.parametrize(
+    ("receipt", "returncode", "message"),
+    [
+        ("APPKIT_ACTIVATION active=false key=true", 0, "activation self-test"),
+        ("APPKIT_ACTIVATION active=true key=false", 0, "activation self-test"),
+        ("APPKIT_ACTIVATION active=true key=true", 7, "host-activation failed"),
+    ],
+)
+def test_prepare_appkit_host_rejects_activation_readiness_and_nonzero_setup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, receipt: str, returncode: int, message: str,
+) -> None:
+    root = tmp_path / "activation"
+    swift, package, _ = _fake_host_setup_environment(
+        root, monkeypatch, activation_receipt=receipt, activation_returncode=returncode,
+    )
+    (root / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match=message):
+        runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, {})
+
+
+def test_prepare_appkit_host_rejects_expired_setup_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "expired"
+    swift, package, _ = _fake_host_setup_environment(root, monkeypatch)
+    (root / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match="setup exhausted the build budget"):
+        runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() - 1, {})

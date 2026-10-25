@@ -13,7 +13,7 @@ jobs:
       - run: scripts/check-private-refs.sh
       - run: python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
       - run: brew install swiftformat swiftlint
-      - run: swiftformat --lint macos && swiftlint lint --strict
+      - run: swiftformat --lint macos scripts/support && swiftlint lint --strict
       - run: macos/build-app.sh
       - run: /usr/bin/python3 -I scripts/ci/release.py bundle
       - name: Guarded Swift package tests
