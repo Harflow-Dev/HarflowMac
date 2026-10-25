@@ -57,6 +57,10 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         await taskArtifactRepository.page(taskID: taskID, cursor: cursor)
     }
 
+    func callerApprovalUseCase() -> (any CallerApprovalUseCase)? {
+        CallerApprovalRepository(environment: toolEnvironmentRepository)
+    }
+
     // MARK: - TaskDetailUseCase Methods
     
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }

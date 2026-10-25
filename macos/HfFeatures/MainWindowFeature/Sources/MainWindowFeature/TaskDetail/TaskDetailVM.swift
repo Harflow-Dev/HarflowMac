@@ -18,6 +18,7 @@ import MonitorCore
 @Mockable
 @MainActor
 protocol TaskDetailUseCase: Sendable {
+    func callerApprovalUseCase() -> (any CallerApprovalUseCase)?
     
     // Listing / lineage
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never>
@@ -101,6 +102,7 @@ protocol TaskDetailUseCase: Sendable {
 }
 
 extension TaskDetailUseCase {
+    func callerApprovalUseCase() -> (any CallerApprovalUseCase)? { nil }
     func artifactPage(taskID _: String, cursor _: String?) async -> Result<TaskArtifactPage, ToolError> {
         .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
     }
@@ -176,6 +178,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     // The properties below are written from the `+Timeline`/`+Summary`/`+Actions` extension files
     // (each in its own file, per the screen shape), so they cannot be `private(set)` — `private` is
     // file-scoped in Swift. They stay non-public (no external module can write them).
+    var callerApprovalController: CallerApprovalController?
+    @ObservationIgnored private var isMounted = false
     var tab: TaskTab = .activity
     var tabs: [TaskTab] = [.activity, .summary, .prompt]
 
@@ -286,6 +290,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     // MARK: - TaskDetailViewModel Methods
 
     func didAppear() {
+        isMounted = true
         // Members (and so leases) come first: the repository only has a live stream for a leased
         // task, and a publisher requested before that is an empty one that never updates.
         recomputeMembersAndLeases()
@@ -297,6 +302,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// every subscription, and resets `didSubscribe` so a reappearing screen subscribes and
     /// re-acquires leases fresh.
     func didDisappear() {
+        isMounted = false
+        callerApprovalController?.stop()
         artifactGeneration = UUID()
         for request in artifactRequests.values { request.cancel() }
         artifactRequests.removeAll()
@@ -345,6 +352,22 @@ final class TaskDetailVM: TaskDetailViewModel {
     }
 
     // MARK: - Internal Methods
+
+    private func updateCallerApprovals(task: TaskInfo) {
+        let relevant = task.raw["caller_approvals"]?.boolValue == true || task.raw["caller_write_approvals"]?.boolValue == true
+            || (task.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 || (task.awaitingDecisionCount ?? 0) > 0
+            || callerApprovalController?.hasRetainedRequests(for: task.taskID) == true
+        guard relevant else {
+            callerApprovalController?.stop()
+            callerApprovalController = nil
+            return
+        }
+        if callerApprovalController == nil, let approvalUseCase = useCase.callerApprovalUseCase() {
+            callerApprovalController = CallerApprovalController(useCase: approvalUseCase)
+        }
+        callerApprovalController?.setAwaitingDecisionCount(task.awaitingDecisionCount)
+        callerApprovalController?.start(taskID: task.taskID, polls: task.status == .running)
+    }
 
     /// The group presenter calls this only after proving that a new survivor belongs to the
     /// same actual conversation. An atomic prune/resume can introduce a member this VM never saw.
@@ -421,11 +444,15 @@ final class TaskDetailVM: TaskDetailViewModel {
     func recompute() {
         guard let currentMember = conversationMembers.last, let detail = useCase.detail(currentMember.taskID) else {
             task = nil
+            callerApprovalController?.stop()
             resetForMissingTask()
             return
         }
         task = detail
         currentTaskID = detail.taskID
+        if isMounted {
+            updateCallerApprovals(task: detail)
+        }
         let firstMember = conversationMembers[0]
         let historyKind = detail.raw["workflow_role"]?.stringValue == "orchestrator" ? "decisions" : "turns"
         turnsText = conversationMembers.count > 1 ? "\(conversationMembers.count) \(historyKind)" : nil

@@ -28,6 +28,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     case row(Row)
     /// The live tail below the rows (pending messages, live step, child-task strip).
     case tail(ActivityFeedTailPresentation, topSpacing: CGFloat)
+    case approval(CallerApprovalCardModel, topSpacing: CGFloat)
     /// The bottom sentinel: a hairline plus the feed's closing spacing.
     case bottom(topSpacing: CGFloat)
 
@@ -53,6 +54,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         case .empty: "activity-feed-empty"
         case .row(let row): row.row.id
         case .tail: "activity-feed-tail"
+        case .approval(let card, _): "activity-approval-" + card.id
         case .bottom: "activity-feed-bottom"
         }
     }
@@ -61,7 +63,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var topSpacing: CGFloat {
         switch self {
         case .header: HfRadius.Metrics.spacing12
-        case .empty(_, let spacing), .tail(_, let spacing), .bottom(let spacing): spacing
+        case .empty(_, let spacing), .tail(_, let spacing), .approval(_, let spacing), .bottom(let spacing): spacing
         case .row(let row): row.topSpacing
         }
     }
@@ -70,7 +72,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var anchorID: String? {
         switch self {
         case .row(let row): row.row.id
-        case .tail: id
+        case .tail, .approval: id
         default: nil
         }
     }
@@ -86,12 +88,22 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var onLoadMore: (() -> Bool)?
     var onDisclosure: (String) -> Void = { _ in }
     var onSelectChildTask: (String) -> Void = { _ in }
+    var onApprovalResponse: (String, String) -> Void = { _, _ in }
+    var onApprovalToggle: (String) -> Void = { _ in }
+    var onApprovalLoadMore: () -> Void = {}
+    var onApprovalFocusAcknowledged: (String, UUID) -> Void = { _, _ in }
+    var onApprovalScrollAcknowledged: (String, UUID) -> Void = { _, _ in }
     var retry: () -> Void = {}
 
     func reset() {
         onLoadMore = nil
         onDisclosure = { _ in }
         onSelectChildTask = { _ in }
+        onApprovalResponse = { _, _ in }
+        onApprovalToggle = { _ in }
+        onApprovalLoadMore = {}
+        onApprovalFocusAcknowledged = { _, _ in }
+        onApprovalScrollAcknowledged = { _, _ in }
         retry = {}
     }
 }
@@ -157,6 +169,10 @@ struct ActivityFeedNativeRowRoot: View {
             Text(text).font(.hf(.body)).foregroundStyle(Color.secondaryText)
         case .row(let row): rowContent(row)
         case .tail(let presentation, _): ActivityFeedNativeTailContent(presentation: presentation, actions: actions)
+        case .approval(let card, _):
+            CallerApprovalRequestCard(model: card, respond: { actions.onApprovalResponse(card.id, $0) },
+                                      toggle: { actions.onApprovalToggle(card.id) },
+                                      onFocusAcknowledged: onHostedHeight == nil ? nil : { actions.onApprovalFocusAcknowledged(card.id, $0) })
         case .bottom:
             Color.clear
                 .frame(height: HfRadius.Metrics.hairlineStroke)
@@ -227,6 +243,12 @@ struct ActivityFeedNativeTailContent: View {
                     if let successor = message.successorTaskID {
                         Button("Open \(successor)") { actions.onSelectChildTask(successor) }
                             .buttonStyle(.link)
+                    }
+                }
+                if let notice = standard.approvalNotice {
+                    VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
+                        Text(notice).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                        Button(standard.approvalNoticeActionTitle) { actions.onApprovalLoadMore() }.buttonStyle(.link)
                     }
                 }
                 if let line = standard.liveStep {

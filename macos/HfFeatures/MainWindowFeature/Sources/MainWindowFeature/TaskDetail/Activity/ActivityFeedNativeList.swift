@@ -206,6 +206,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         weak var table: ActivityFeedNativeTableView?
         var model: ActivityFeedNativeModel?
         var previousModel: ActivityFeedNativeModel?
+        var consumedApprovalReveal: UUID?
         var state: ParallelColumnUIState?
         var entries: [ActivityFeedNativeEntry] = []
         var boxes: [ActivityFeedNativeItemBox] = []
@@ -352,6 +353,11 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             self.actions.onLoadMore = actions.onLoadMore
             self.actions.onDisclosure = actions.onDisclosure
             self.actions.onSelectChildTask = actions.onSelectChildTask
+            self.actions.onApprovalResponse = actions.onApprovalResponse
+            self.actions.onApprovalToggle = actions.onApprovalToggle
+            self.actions.onApprovalLoadMore = actions.onApprovalLoadMore
+            self.actions.onApprovalFocusAcknowledged = actions.onApprovalFocusAcknowledged
+            self.actions.onApprovalScrollAcknowledged = actions.onApprovalScrollAcknowledged
             let previous = self.model
             let stateChanged = self.state !== state
             // The supported public inherited environment is stored on every update: a change that
@@ -396,6 +402,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         /// anchor, follow and disclosure, which positioning restores; a remount whose state
         /// object is the same persists all of it, and nothing here runs.
         private func resetForStateOwnerChange() {
+            consumedApprovalReveal = nil
             pendingPage = nil
             pendingPageObservedLoading = false
             rejectedIDs = nil

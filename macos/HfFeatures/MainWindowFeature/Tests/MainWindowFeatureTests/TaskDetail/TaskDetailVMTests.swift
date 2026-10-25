@@ -61,6 +61,7 @@ import Testing
         let childrenBox: Box<[TaskInfo]>
         let itemsOverride: Box<[TimelineItem]?>
         let recomputeCountEffect: Box<(() -> Void)?>
+        let callerApprovalBox: Box<(any CallerApprovalUseCase)?>
     }
 
     /// The fixtures `makeSUT` builds before wiring up `useCase`'s stubs — split out purely to keep
@@ -100,6 +101,7 @@ import Testing
         /// Same FIFO reason as `refreshSnapshotEffect` above for why this is a hook installed here
         /// rather than a re-stubbed `given(...)` call in the test itself.
         let recomputeCountEffect = Box<(() -> Void)?>(nil)
+        let callerApprovalBox = Box<(any CallerApprovalUseCase)?>(nil)
     }
 
     @discardableResult
@@ -142,6 +144,7 @@ import Testing
         // resolution comes back empty (routinely, at VM init before the first listing arrives), so
         // every test needs SOME stub here even when it never exercises retention itself.
         given(useCase).oldestSurvivor(among: .any).willReturn(nil)
+        given(useCase).callerApprovalUseCase().willProduce { fixtures.callerApprovalBox.value }
 
         given(useCase).snapshot(.value(taskID)).willProduce { _ in fixtures.snapshotBox.value }
         given(useCase).refreshSnapshot(.value(taskID)).willProduce { _ in fixtures.refreshSnapshotEffect.value?() }
@@ -202,7 +205,8 @@ import Testing
             refreshSnapshotEffect: fixtures.refreshSnapshotEffect,
             childrenBox: fixtures.childrenBox,
             itemsOverride: fixtures.itemsOverride,
-            recomputeCountEffect: fixtures.recomputeCountEffect
+            recomputeCountEffect: fixtures.recomputeCountEffect,
+            callerApprovalBox: fixtures.callerApprovalBox
         )
     }
     
@@ -334,5 +338,82 @@ import Testing
 
         // then
         #expect(sut.task?.taskID == "abc12345")
+    }
+}
+
+@MainActor
+private final class VMApprovalProbe: CallerApprovalUseCase {
+    var pageCount = 0
+
+    private let request = CallerApprovalRequest(raw: [
+        "request_id": .string("vm-approval"), "task_id": .string("abc12345"),
+        "action_digest": .string(String(repeating: "a", count: 64)), "owner_revision": .number(1),
+        "generation": .string("generation-1"), "interaction_owner": .string("monitor"),
+        "disposition": .string("pending"), "delivery": .string("pending"),
+        "execution_outcome": .string("unknown"), "deadline": .number(Date().addingTimeInterval(600).timeIntervalSince1970),
+        "complete": .bool(true), "action": .object(["tool_name": .string("Bash"), "input": .object(["command": .string("echo test")])])
+    ])
+
+    func page(taskID: String?, workflowRunID: String?, cursor: String?) async throws -> CallerApprovalPage {
+        pageCount += 1
+        return CallerApprovalPage(requests: [request], total: 1)
+    }
+
+    func detail(_ request: CallerApprovalRequest) async throws -> CallerApprovalRequest { request }
+    func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest { request }
+    func supportsMonitorResponseForCallerApprovals() async throws -> Bool { true }
+}
+
+@MainActor
+extension TaskDetailVMTests {
+    @Test
+    func givenUnoptedTask_whenMounted_thenApprovalReadsDoNotStart() async {
+        let harness = makeSUT()
+        let approval = VMApprovalProbe()
+        harness.callerApprovalBox.value = approval
+        harness.sut.didAppear()
+        harness.detailBox.value = task(status: "running")
+        harness.tasksSubject.send([task(status: "running")])
+        _ = await waitUntil(timeout: 0.2) { approval.pageCount > 0 }
+        #expect(approval.pageCount == 0)
+        harness.sut.didDisappear()
+    }
+
+    @Test
+    func givenTerminalOptedTask_whenMounted_thenApprovalReadsRunOnce() async {
+        let harness = makeSUT()
+        let approval = VMApprovalProbe()
+        harness.callerApprovalBox.value = approval
+        var terminal = task(status: "completed")
+        var raw = terminal.raw
+        raw["caller_approvals"] = .bool(true)
+        terminal = TaskInfo(.object(raw))!
+        harness.sut.didAppear()
+        harness.detailBox.value = terminal
+        harness.tasksSubject.send([terminal])
+        await waitUntil { approval.pageCount > 0 }
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(approval.pageCount == 1)
+        harness.sut.didDisappear()
+    }
+
+    @Test
+    func givenMissingDetailThenAvailableWhileMounted_whenRecomputed_thenApprovalPollingRecoversWithoutReappearing() async {
+        let harness = makeSUT()
+        let approval = VMApprovalProbe()
+        harness.callerApprovalBox.value = approval
+        harness.sut.didAppear()
+        var eligible = task(status: "running").raw
+        eligible["caller_approvals"] = .bool(true)
+        let eligibleTask = TaskInfo(.object(eligible))!
+        harness.detailBox.value = eligibleTask
+        harness.tasksSubject.send([eligibleTask])
+        await waitUntil { approval.pageCount > 0 }
+        let beforeDisappear = approval.pageCount
+        harness.sut.didDisappear()
+        harness.detailBox.value = nil
+        harness.tasksSubject.send([])
+        for _ in 0 ..< 5 { await Task.yield() }
+        #expect(approval.pageCount == beforeDisappear)
     }
 }

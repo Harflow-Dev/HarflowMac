@@ -108,9 +108,11 @@ struct TimelinePaneModel {
 
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
+    var approvalController: CallerApprovalController?
     @State private var state: ParallelColumnUIState
 
-    init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil) {
+    init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil) {
+        self.approvalController = approvalController
         self.model = model
         _state = State(initialValue: state ?? ParallelColumnUIState())
     }
@@ -126,7 +128,7 @@ struct TimelinePaneView: View {
                 .padding(.vertical, HfRadius.Metrics.spacing8)
                 .readingColumn()
             }
-            if model.isLoading, model.liveStep == nil {
+            if model.isLoading, model.liveStep == nil, approvalController?.cards.isEmpty != false {
                 SkeletonRows(count: 5, showsBadge: false)
                     .padding(HfRadius.Metrics.spacing24)
                     .readingColumn()
@@ -135,6 +137,14 @@ struct TimelinePaneView: View {
                 feed.hfFadeIn()
             }
         }
+    }
+
+    private var approvalNotice: String? {
+        if approvalController?.hasMorePending == true {
+            return "More pending requests may be available. Refresh approval history to continue discovery."
+        }
+        if let error = approvalController?.error { return error }
+        return approvalController?.nextCursor != nil ? "More approval history is available." : nil
     }
 
     private var feed: some View {
@@ -148,8 +158,17 @@ struct TimelinePaneView: View {
                                 .init(children: strip.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) }, start: strip.start)
                             },
                             pendingMessages: model.pendingMessages,
-                            liveStep: model.liveStep.map { .init(text: $0.text, indicator: .singleDot) }
-                         )), onSelectChildTask: model.onSelectTask ?? model.subTaskStrip?.onSelectTask)
+                            liveStep: model.liveStep.map { .init(text: $0.text, indicator: .singleDot) },
+                            approvals: approvalController?.cards ?? [],
+                            approvalNotice: approvalNotice,
+                            approvalNoticeActionTitle: approvalController?.nextCursor != nil ? "Load more approval history" : "Refresh approval history"
+                         )), onSelectChildTask: model.onSelectTask ?? model.subTaskStrip?.onSelectTask,
+                         approvalReveal: approvalController?.reveal,
+                         onApprovalResponse: { id, decision in approvalController?.submit(decision, requestID: id) },
+                         onApprovalToggle: { approvalController?.toggle($0) },
+                         onApprovalLoadMore: { approvalController?.requestRefresh(loadMore: approvalController?.nextCursor != nil) },
+                         onApprovalFocusAcknowledged: { approvalController?.acknowledgeFocus(requestID: $0, token: $1) },
+                         onApprovalScrollAcknowledged: { approvalController?.acknowledgeScroll(requestID: $0, token: $1) })
         .readingColumn()
     }
 }

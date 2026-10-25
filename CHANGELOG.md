@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add capability-gated Monitor responses to caller-owned approvals with additive v1 contracts and typed refusal handling.
+- Move task approvals to Activity with complete action details, pending navigation hints and expandable settled rows; retain workflow approvals in the run sidebar.
+
 - Pair the current source with engine 0.0.2 and vendor its complete additive v1 state-recovery contract bundle.
 - Add sidebar and Settings setup controls with explicit installation/update, shared progress, retained failures and qualified runtime reuse without startup downloads.
 - Match the approved first-run setup layout with a scrollable sidebar card, retained appearance/settings footer and setup-required detail pane.

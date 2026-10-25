@@ -33,13 +33,20 @@ import Testing
     }
 
     @Test func givenLongRuntimeFailure_whenSidebarFirstMounts_thenFailureContentHasScrollableReachability() async throws {
-        let message = String(repeating: "The managed runtime could not be prepared. ", count: 24)
+        let message = String(repeating: "The managed runtime could not be prepared. ", count: 80)
         let state = RuntimeSetupState.failed(message)
         let viewModel = SidebarViewModelMock(runtimeSetupState: state)
         let fixture = try SidebarFirstRunWindowFixture(viewModel: viewModel, appearanceName: .aqua)
         defer { fixture.close() }
 
         await fixture.waitForSetupControls()
+        await waitUntil {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+            fixture.host.layoutSubtreeIfNeeded()
+            return fixture.descendants.compactMap { $0 as? NSScrollView }.contains { scroll in
+                scroll.hasVerticalScroller || (scroll.documentView?.frame.height ?? 0) > scroll.bounds.height
+            }
+        }
         let scrollViews = fixture.descendants.compactMap { $0 as? NSScrollView }
         let failure = try #require(fixture.element(identifier: "runtimeSetup.error", label: state.detail))
         let retry = try #require(fixture.element(identifier: "runtimeSetup.action", label: state.actionTitle!))
@@ -49,7 +56,17 @@ import Testing
         let footerFrame = try #require(fixture.frame(of: footer))
         let scrollView = try #require(fixture.descendants.compactMap { $0 as? NSScrollView }.first)
 
-        #expect(scrollViews.contains { $0.hasVerticalScroller || $0.documentView?.frame.height ?? 0 > $0.bounds.height })
+        let geometry = scrollViews.enumerated()
+            .map { index, scroll in
+            let document = scroll.documentView?.frame.size ?? .zero
+            return "#\(index) bounds=\(scroll.bounds.size) clip=\(scroll.contentView.bounds.size) "
+                + "document=\(document) vertical=\(scroll.hasVerticalScroller) horizontal=\(scroll.hasHorizontalScroller)"
+            }
+            .joined(separator: "; ")
+        #expect(
+            scrollViews.contains { $0.hasVerticalScroller || $0.documentView?.frame.height ?? 0 > $0.bounds.height },
+            Comment(rawValue: "Expected setup content to be vertically reachable; NSScrollViews=\(scrollViews.count): \(geometry)")
+        )
         #expect(failureFrame.intersects(contentLayout))
         #expect(footerFrame.intersects(contentLayout), "The footer must remain visible while setup content scrolls")
 

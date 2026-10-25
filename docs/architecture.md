@@ -30,6 +30,14 @@ Graph keeps a full-height canvas and a resizable inspector (420 pt initially, 22
 
 The bottom summary reserves one collapsed line; its bounded scrolling expansion overlays upward without moving the canvas. Parallel retains all current workflow task columns. Selected activity has independent viewport leases and retained per-attempt feed state. Immutable, equality-checked sidebar derivation runs outside the main actor and discards superseded results.
 
+## Approval presentation
+
+Approval presentation follows HarflowDesign `7cf777b`, `scripts/task-approvals.js` and `styles/task-approvals.css`: task states `#approvals/*` and workflow sidebar states `#workflow-run/run-approval-*`. Task cards use stable identities at the Activity feed tail, including source attribution. Summary and Prompt hints navigate to Activity with an explicit reveal and keyboard-focus intent. Workflow cards remain in the default run sidebar.
+
+The task view model owns approval polling and current-task selection. Generation checks discard stale target reads; disappearance cancels polling. Pending cards automatically acquire complete details and use warning treatment, including blocked pending requests. A decision collapses the request into a neutral row, regardless of whether Monitor, the caller or the engine decided it. Structured action rendering retains exact authorization values and unknown keys; incomplete coverage disables approval. The existing backend reason is untrusted text labelled "Agent's stated reason".
+
+`CallerApprovalRepository` uses only public ctl commands. Caller-owned responses require `caller-approvals.monitor-respond.v1` on the fresh invocation handshake; Monitor-owned responses remain ungated on older compatible engines. Unknown owners, states and refusal reasons are not actionable. `awaiting_decision_count` discovers undecided requests; legacy `pending_count` retains its engine meaning. Acquisition remains bounded and does not assume pending rows sort first. Submission uncertainty triggers read-only refresh without automatic resubmission. "Answered from Monitor" identifies the claimed response channel, not authenticated human identity; decision, delivery and execution remain separate facts.
+
 ## Group activity presentation
 
 A group-scoped presenter observes membership independently of task completion and derives conversation classification outside the main actor. A single conversation keeps its detail model through resumes and pruning. Adding another independent conversation promotes the mounted group to Parallel until that group is closed or another destination is selected; shrinking membership retains that renderer.

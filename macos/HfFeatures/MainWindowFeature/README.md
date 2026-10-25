@@ -10,8 +10,10 @@ See `AGENTS.md` for the rules this package follows and `../../AGENTS.md` for the
 ```bash
 cd macos/HfFeatures/MainWindowFeature
 swift build
-swift test
+HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 ../../../scripts/test-swift-package.py --package . --mode suites
 ```
+
+Task approvals share a view-model-owned controller across Activity, Summary and Prompt. Activity presents complete pending actions at the feed tail; the other tabs provide an explicit reveal hint. Workflow approvals use the same cards in the run sidebar. Details, request currentness and engine capability remain independent approval gates, and a recorded decision does not imply execution success.
 
 
 The task Summary includes a separate Registered artifacts section for standalone tasks. Each

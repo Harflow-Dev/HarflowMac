@@ -66,6 +66,7 @@ protocol TaskDetailViewModel: ViewModel {
     var tab: TaskTab { get }
     var tabs: [TaskTab] { get }
 
+    var callerApprovalController: CallerApprovalController? { get }
     var timelineModel: TimelinePaneModel { get }
     var artifactMembers: [ArtifactMemberModel] { get }
     func didLoadArtifacts(taskID: String)
@@ -91,6 +92,10 @@ protocol TaskDetailViewModel: ViewModel {
     /// Copies the task's repository path (the header's folder menu).
     func didTapCopyRepoPath()
     @discardableResult func submitMessage(_ text: String) -> Bool
+}
+
+extension TaskDetailViewModel {
+    var callerApprovalController: CallerApprovalController? { nil }
 }
 
 // MARK: - TaskDetailView
@@ -162,9 +167,6 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             }
 .padding(.horizontal, HfRadius.Metrics.spacing16)
 .padding(.vertical, HfRadius.Metrics.spacing8)
-                        }
-                        if task.raw["caller_approvals"]?.boolValue == true || (task.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 {
-                            CallerApprovalPanel(taskID: viewModel.taskID, polls: task.status == .running)
                         }
                         header(task)
                         tabPicker
@@ -441,12 +443,17 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var content: some View {
         switch viewModel.tab {
         case .activity:
-            TimelinePaneView(model: viewModel.timelineModel, state: activityState)
+            TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController)
         case .summary:
-            SummaryPaneView(model: viewModel.summaryModel, artifactMembers: viewModel.artifactMembers,
-                            loadArtifacts: { viewModel.didLoadArtifacts(taskID: $0) })
+            VStack(spacing: 0) {
+                approvalHint
+                SummaryPaneView(model: viewModel.summaryModel, artifactMembers: viewModel.artifactMembers,
+                                loadArtifacts: { viewModel.didLoadArtifacts(taskID: $0) })
+            }
         case .prompt:
-            ScrollView {
+            VStack(spacing: 0) {
+                approvalHint
+                ScrollView {
                 Text(viewModel.promptText)
                     .font(.hf(.reading))
                     .lineSpacing(HfRadius.Metrics.spacing6)
@@ -457,7 +464,33 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     // The document probe (§6.2): inside the prompt pane's own document, so it
                     // can only ever target this scroll view.
                     .background(ScrollChrome())
+                }
             }
+        }
+    }
+
+    @ViewBuilder private var approvalHint: some View {
+        if let controller = viewModel.callerApprovalController,
+           (controller.awaitingDecisionCount.map { $0 > 0 } ?? controller.cards.contains(where: \.pending)) || controller.hasMorePending {
+            Button {
+                viewModel.didSelectTab(.activity)
+                controller.revealPending()
+            } label: {
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
+                    Text("Waiting for approval").font(.hf(.secondary, weight: .semibold)).foregroundStyle(Color.warningFG)
+                    Text(controller.hasMorePending ? "More pending requests · View in Activity"
+                         : controller.awaitingDecisionCount.map { "\($0) pending · View in Activity" } ?? "View request in Activity")
+                        .font(.hf(.caption))
+                }
+.frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(HfRadius.Metrics.spacing12)
+                    .background(Color.warningBG, in: RoundedRectangle(cornerRadius: HfRadius.row))
+                    .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.warningFG))
+            }
+.buttonStyle(.plain)
+.padding(.horizontal, HfRadius.Metrics.spacing24)
+.padding(.vertical, HfRadius.Metrics.spacing8)
+                .readingColumn()
         }
     }
 }

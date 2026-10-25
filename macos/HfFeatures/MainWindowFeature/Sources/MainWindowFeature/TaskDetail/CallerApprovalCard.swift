@@ -5,120 +5,25 @@ import MonitorCore
 import SwiftEnvironment
 import SwiftUI
 
+// MARK: - CallerApprovalUseCase
+
 @MainActor
 protocol CallerApprovalUseCase {
     func page(taskID: String?, workflowRunID: String?, cursor: String?) async throws -> CallerApprovalPage
     func detail(_ request: CallerApprovalRequest) async throws -> CallerApprovalRequest
     func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest
+    func supportsMonitorResponseForCallerApprovals() async throws -> Bool
+}
+
+extension CallerApprovalUseCase {
+    func supportsMonitorResponseForCallerApprovals() async throws -> Bool { false }
 }
 
 extension CallerApprovalRepository: CallerApprovalUseCase {}
 
-@Observable
-@MainActor
-final class CallerApprovalController {
-    private let useCase: any CallerApprovalUseCase
-    private(set) var requests: [CallerApprovalRequest] = []
-    private(set) var total = 0
-    private(set) var nextCursor: String?
-    private(set) var detail: CallerApprovalRequest?
-    private(set) var isCurrentDetail = false
-    private(set) var selectedID: String?
-    private(set) var error: String?
-    private(set) var isLoading = false
-    private(set) var isSubmitting = false
-    private var generation = UUID()
-    private var inspection = UUID()
-    private var targetTask: String?
-    private var targetRun: String?
+// MARK: - CallerApprovalPanel
 
-    init(useCase: any CallerApprovalUseCase) { self.useCase = useCase }
-
-    func selectTarget(taskID: String?, workflowRunID: String?) async {
-        generation = UUID()
-        targetTask = taskID
-        targetRun = workflowRunID
-        requests = []; total = 0; nextCursor = nil; detail = nil; selectedID = nil; error = nil; isCurrentDetail = false
-        isLoading = false; isSubmitting = false
-        await refresh()
-    }
-
-    func refresh(loadMore: Bool = false) async {
-        guard !isLoading, !isSubmitting else { return }
-        let token = generation
-        isLoading = true
-        do {
-            var page = try await useCase.page(taskID: targetTask, workflowRunID: targetRun, cursor: loadMore ? nextCursor : nil)
-            guard generation == token else { return }
-            var values = (loadMore ? requests : []) + page.requests
-            let desiredCount = requests.count
-            var seenCursors = Set<String>()
-            while !loadMore, values.count < desiredCount, let cursor = page.nextCursor, seenCursors.insert(cursor).inserted {
-                page = try await useCase.page(taskID: targetTask, workflowRunID: targetRun, cursor: cursor)
-                guard generation == token else { return }
-                values += page.requests
-            }
-            var seen = Set<String>()
-            requests = values.filter { seen.insert($0.id).inserted }
-            requests.sort(by: CallerApprovalPresentation.orderedBefore)
-            total = page.total; nextCursor = page.nextCursor
-            if let detail, !requests.contains(where: {
-                $0.id == detail.id && $0.digest == detail.digest && $0.revision == detail.revision && $0.isPending
-            }) { isCurrentDetail = false }
-        } catch {
-            guard generation == token else { return }
-            self.error = String(describing: error)
-            isCurrentDetail = false
-        }
-        if generation == token { isLoading = false }
-    }
-
-    func inspect(_ request: CallerApprovalRequest) async {
-        guard !isSubmitting else { return }
-        selectedID = request.id; detail = nil; error = nil; isCurrentDetail = false
-        inspection = UUID()
-        let inspectionToken = inspection
-        let token = generation
-        do {
-            let result = try await useCase.detail(request)
-            guard generation == token, inspection == inspectionToken, selectedID == request.id else { return }
-            guard result.id == request.id, result.taskID == request.taskID, result.digest == request.digest,
-                  result.revision == request.revision, result.complete,
-                  requests.contains(where: {
-                      $0.id == request.id && $0.digest == result.digest && $0.revision == result.revision
-                          && $0.text("disposition") == result.text("disposition")
-                  }) else {
-                error = "The action changed or its full payload is unavailable. Refresh and inspect it again."
-                return
-            }
-            detail = result
-            isCurrentDetail = true
-        } catch {
-            guard generation == token, inspection == inspectionToken, selectedID == request.id else { return }
-            self.error = String(describing: error)
-        }
-    }
-
-    func respond(_ decision: String) async {
-        guard !isSubmitting, isCurrentDetail, let request = detail, request.complete, request.isPending, request.isMonitorOwned,
-              let deadline = request.deadline, deadline > Date() else { return }
-        let token = generation
-        isSubmitting = true; error = nil; isCurrentDetail = false
-        do {
-            let response = try await useCase.respond(request, decision: decision)
-            guard generation == token else { return }
-            detail = response
-        } catch {
-            guard generation == token else { return }
-            self.error = String(describing: error)
-            isCurrentDetail = false
-        }
-        guard generation == token else { return }
-        isSubmitting = false
-        await refresh()
-    }
-}
-
+/// Workflows retain the run-sidebar location. Task detail owns its controller in the VM instead.
 struct CallerApprovalPanel: View {
     var taskID: String?
     var workflowRunID: String?
@@ -135,10 +40,8 @@ struct CallerApprovalPanel: View {
 
     var body: some View {
         Group {
-            if let controller, controller.total > 0 || controller.error != nil {
-                ScrollView { CallerApprovalCard(controller: controller) }
-                    .frame(maxHeight: 320)
-                    .padding(HfRadius.Metrics.spacing12)
+            if let controller, !controller.cards.isEmpty || controller.error != nil {
+                CallerApprovalCard(controller: controller).padding(HfRadius.Metrics.spacing12)
             }
         }
         .task(id: "\(taskID ?? ""):\(workflowRunID ?? "")") {
@@ -147,113 +50,178 @@ struct CallerApprovalPanel: View {
             await value.selectTarget(taskID: taskID, workflowRunID: workflowRunID)
             while polls, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else { break }
                 await value.refresh()
             }
         }
+        .onDisappear { controller?.stop() }
     }
 }
 
-enum CallerApprovalPresentation {
-    static func priority(_ request: CallerApprovalRequest) -> Int {
-        if request.text("delivery") == "delivery_unknown" { return 1 }
-        if request.text("disposition") == "pending" || ["reserved", "sending"].contains(request.text("delivery")) { return 0 }
-        return 2
-    }
-
-    static func orderedBefore(_ lhs: CallerApprovalRequest, _ rhs: CallerApprovalRequest) -> Bool {
-        let leftPriority = priority(lhs)
-        let rightPriority = priority(rhs)
-        if leftPriority != rightPriority { return leftPriority < rightPriority }
-        let leftTime = lhs.raw["created_at"]?.doubleValue ?? 0
-        let rightTime = rhs.raw["created_at"]?.doubleValue ?? 0
-        return leftTime == rightTime ? lhs.id < rhs.id : leftTime < rightTime
-    }
-
-    static func decisionSummary(_ request: CallerApprovalRequest) -> [String] {
-        let original = request.text("decision")
-        let effective = request.text("effective_decision")
-        let delivered = request.text("delivered_decision")
-        var values: [String] = []
-        if !original.isEmpty { values.append("Caller decision: \(original)") }
-        if !effective.isEmpty, effective != original { values.append("Effective decision: \(effective)") }
-        if !delivered.isEmpty, delivered != original { values.append("Delivered decision: \(delivered)") }
-        return values
-    }
-}
+// MARK: - CallerApprovalCard
 
 struct CallerApprovalCard: View {
     @Bindable var controller: CallerApprovalController
     var body: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            HStack {
-                Text("Caller approvals (\(controller.total))").font(.hf(.secondary, weight: .semibold))
-                Spacer()
-                Button("Refresh") { Task { await controller.refresh() } }.disabled(controller.isLoading || controller.isSubmitting)
-            }
-            ForEach(controller.requests) { request in
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-                    Button("Inspect \(request.text("tool_name")) · \(sourceLabel(request))") {
-                        Task { await controller.inspect(request) }
-                    }.disabled(controller.isSubmitting)
-                    Text("\(request.text("disposition")) · Delivery: \(request.text("delivery")) · Observed execution: \(request.text("execution_outcome"))")
-                        .font(.hf(.caption))
-.foregroundStyle(Color.secondaryText)
-                    ForEach(CallerApprovalPresentation.decisionSummary(request), id: \.self) { summary in
-                        Text(summary).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                    }
-                    if let detail = controller.detail, controller.selectedID == request.id {
-                        actionDetail(detail)
-                    }
-                }
+            ForEach(controller.cards) { card in
+                CallerApprovalRequestCard(model: card, respond: { decision in
+                    controller.submit(decision, requestID: card.id)
+                }, toggle: { controller.toggle(card.id) })
             }
             if controller.nextCursor != nil {
-                Button("Load more requests") { Task { await controller.refresh(loadMore: true) } }.disabled(controller.isLoading || controller.isSubmitting)
+                Button("More requests available · Load more") { controller.requestRefresh(loadMore: true) }
+                    .disabled(controller.isLoading || controller.isSubmitting)
             }
             if let error = controller.error { Text(error).font(.hf(.caption)).foregroundStyle(Color.failedRed).textSelection(.enabled) }
         }
-        .buttonStyle(.borderless)
-        .padding(HfRadius.Metrics.spacing12)
-        .background(Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
     }
+}
 
-    private func sourceLabel(_ request: CallerApprovalRequest) -> String {
-        request.text("workflow_node_id").isEmpty ? request.taskID : request.text("workflow_node_id")
-    }
+// MARK: - CallerApprovalRequestCard
 
-    private func actionDetail(_ request: CallerApprovalRequest) -> some View {
+struct CallerApprovalRequestCard: View {
+    let model: CallerApprovalCardModel
+    let respond: (String) -> Void
+    let toggle: () -> Void
+    var onFocusAcknowledged: ((UUID) -> Void)?
+    private enum FocusTarget: Hashable { case details, approve }
+    @FocusState private var actionFocus: FocusTarget?
+
+    var body: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            Text("Working directory: \(request.text("cwd"))\nAccess: \(request.text("freedom"))"
-                 + "\nScope: \(request.text("scope"))\nSource task: \(request.taskID)"
-)
-                .font(.hf(.caption))
-.textSelection(.enabled)
-            if !request.text("root_workflow_run_id").isEmpty {
-                Text("Workflow: \(request.text("root_workflow_run_id"))").font(.hf(.caption)).textSelection(.enabled)
-            }
-            if !request.text("workflow_execution_id").isEmpty {
-                Text("Attempt: \(request.text("workflow_execution_id"))").font(.hf(.caption)).textSelection(.enabled)
-            }
-            if let deadline = request.deadline { Text("Deadline: \(deadline.formatted())").font(.hf(.caption)) }
-            ScrollView([.horizontal, .vertical]) {
-                Text(request.raw["action"]?.rendered(pretty: true) ?? "Complete action unavailable")
-                    .font(.system(.caption, design: .monospaced))
-.textSelection(.enabled)
-                    .fixedSize(horizontal: true, vertical: true)
-                    .accessibilityLabel("Complete exact action")
-            }.frame(maxHeight: 220)
-            Text("Delivery: \(request.text("delivery")) · Observed execution: \(request.text("execution_outcome"))")
-                .font(.hf(.caption))
-            if request.isMonitorOwned {
-                HStack {
-                    Button("Approve once") { Task { await controller.respond("approve") } }
-                    Button("Reject", role: .destructive) { Task { await controller.respond("reject") } }
-                }
-                .disabled(!controller.isCurrentDetail || !request.complete || !request.isPending
-                    || controller.isSubmitting || (request.deadline ?? .distantPast) <= Date())
+            if model.pending {
+                Text(model.source).font(.hf(.secondary, weight: .semibold)).foregroundStyle(Color.warningFG)
             } else {
-                Text("Caller-owned request. Respond through the owning caller's MCP or CLI.").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                Button(action: toggle) {
+                    HStack(alignment: .top) {
+                        Image(systemName: model.expanded ? "chevron.down" : "chevron.right")
+                        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
+                            Text(model.action.title)
+                            Text(settledStatus).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }.buttonStyle(.plain)
+            }
+            if model.expanded || model.pending { detail }
+        }
+        .padding(HfRadius.Metrics.spacing12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(model.pending ? Color.warningBG : Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
+        .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(model.pending ? Color.warningFG : Color.hairline))
+        .overlay(alignment: .leading) {
+            if model.pending { RoundedRectangle(cornerRadius: 2).fill(Color.warningFG).frame(width: 4).padding(.vertical, 4) }
+        }
+        .onChange(of: model.focusToken, initial: true) { _, token in
+            guard let token else { return }
+            Task { @MainActor in
+                await Task.yield()
+                guard model.focusToken == token else { return }
+                actionFocus = model.canRespond && model.showsDecisionControls ? .approve : .details
+                await Task.yield()
+                guard model.focusToken == token else { return }
+                onFocusAcknowledged?(token)
             }
         }
     }
+
+    private var settledStatus: String {
+        var values = [model.request.text("disposition")]
+        values += CallerApprovalPresentation.decisionSummary(model.request)
+        if model.request.text("responder") == "monitor" { values.append("Answered from Monitor") }
+        if model.request.text("responder") == "caller" { values.append("Answered by the owning caller") }
+        if model.request.text("decided_by") == "harflow" { values.append("Rejected by Harflow") }
+        values.append("Delivery: " + model.request.text("delivery"))
+        return values.joined(separator: " · ")
+    }
+
+    private var detail: some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            Text(model.action.title).font(.hf(.secondary, weight: .semibold))
+            context
+            ScrollView {
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                    ForEach(model.action.fields) { field in
+                        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
+                            Text("\(field.label) · \(field.type)").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                            Text(verbatim: field.value)
+.font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+.frame(maxHeight: 220)
+.fixedSize(horizontal: false, vertical: true)
+                .focusable(!model.canRespond)
+.accessibilityIdentifier("approval-details-\(model.id)")
+.accessibilityLabel("Requested action details for \(model.action.title)")
+.focused($actionFocus, equals: .details)
+            if let reason = model.request.raw["decision_reason"]?.stringValue, !reason.isEmpty {
+                Text("Agent's stated reason").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                ScrollView { Text(verbatim: reason).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                    .frame(maxHeight: 96)
+.font(.hf(.caption))
+.fixedSize(horizontal: false, vertical: true)
+            }
+            if !model.pending {
+                ForEach(CallerApprovalPresentation.decisionSummary(model.request), id: \.self) { Text($0).font(.hf(.caption)) }
+                if model.request.text("responder") == "monitor" { Text("Answered from Monitor").font(.hf(.caption)) }
+                Text("Delivery: \(model.request.text("delivery"))").font(.hf(.caption))
+                Text("Observed execution: \(model.request.text("execution_outcome"))").font(.hf(.caption))
+                if !model.request.text("system_rejection").isEmpty { Text(model.request.text("system_rejection")).font(.hf(.caption)).textSelection(.enabled) }
+            }
+            if let notice = model.notice {
+                Text(notice).font(.hf(.caption)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
+            }
+            if model.pending, model.showsDecisionControls {
+                HStack {
+                    Button(model.submitting ? "Submitting…" : "Approve once") { respond("approve") }
+                        .focusable()
+                        .focused($actionFocus, equals: .approve)
+                        .accessibilityIdentifier("approval-approve-\(model.id)")
+                    Button("Reject", role: .destructive) { respond("reject") }
+                }.disabled(!model.canRespond)
+            }
+        }
+    }
+
+    private var context: some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
+            if !model.request.text("task_title").isEmpty { Text("Agent task: \(model.request.text("task_title"))") }
+            if !model.request.text("workflow_node_name").isEmpty { Text("Workflow step: \(model.request.text("workflow_node_name"))") }
+            Text("Working directory: \(model.request.text("cwd"))")
+            Text("Access: \(model.request.text("freedom")) · Scope: \(model.request.text("scope"))")
+            if let deadline = model.request.deadline { Text("Deadline: \(deadline.formatted())") }
+        }
+.font(.hf(.caption))
+.foregroundStyle(Color.secondaryText)
+.textSelection(.enabled)
+    }
 }
+
+#if DEBUG
+@MainActor
+private func approvalPreview(pending: Bool = true) -> some View {
+    let request = CallerApprovalRequest(raw: [
+        "request_id": .string("preview-request"), "task_id": .string("preview-task"),
+        "tool_name": .string("Bash"), "cwd": .string("/workspace/repo"),
+        "freedom": .string("write_in_repo"), "scope": .string("exact_action_once"),
+        "disposition": .string(pending ? "pending" : "decided"),
+        "delivery": .string(pending ? "pending" : "sent"), "execution_outcome": .string("unknown"),
+        "action": .object(["tool_name": .string("Bash"), "input": .object(["command": .string("swift test --filter PersistenceTests")])])
+    ])
+    let model = CallerApprovalCardModel(request: request, action: CallerApprovalAction.build(request),
+                                        pending: pending, expanded: pending, canRespond: pending,
+                                        notice: nil, submitting: false)
+    return CallerApprovalRequestCard(model: model, respond: { _ in }, toggle: {})
+        .padding()
+.frame(width: 288)
+}
+
+#Preview("Pending approval · Light") { approvalPreview().preferredColorScheme(.light) }
+#Preview("Pending approval · Dark") { approvalPreview().preferredColorScheme(.dark) }
+#Preview("Settled approval") { approvalPreview(pending: false) }
+#endif

@@ -9,6 +9,7 @@ import Testing
 private final class CallerApprovalCaptureFake: CallerApprovalUseCase {
     let request: CallerApprovalRequest
     var responseCount = 0
+    var supportsCallerResponses = false
 
     init(request: CallerApprovalRequest) { self.request = request }
 
@@ -22,6 +23,8 @@ private final class CallerApprovalCaptureFake: CallerApprovalUseCase {
         responseCount += 1
         return request
     }
+
+    func supportsMonitorResponseForCallerApprovals() async throws -> Bool { supportsCallerResponses }
 }
 
 private func captureRequest(owner: String) -> CallerApprovalRequest {
@@ -35,6 +38,7 @@ private func captureRequest(owner: String) -> CallerApprovalRequest {
         "task_id": .string("task-capture"),
         "action_digest": .string(String(repeating: "a", count: 64)),
         "owner_revision": .number(4),
+        "generation": .string("generation-capture"),
         "interaction_owner": .string(owner),
         "disposition": .string("pending"),
         "delivery": .string("pending"),
@@ -63,18 +67,20 @@ struct CallerApprovalWindowCaptureTests {
             .appendingPathComponent(configuredRoot == nil ? "hf61-ui-captures-\(UUID().uuidString)" : "")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-        let cases: [(String, ColorScheme?, String)] = [
-            ("caller-approval-light", .light, "monitor"),
-            ("caller-approval-dark", .dark, "monitor"),
-            ("caller-approval-caller-owned", .light, "caller")
+        let cases: [(String, ColorScheme?, String, Bool)] = [
+            ("caller-approval-light", .light, "monitor", false),
+            ("caller-approval-dark", .dark, "monitor", false),
+            ("caller-approval-caller-owned", .light, "caller", false),
+            ("caller-approval-caller-enabled", .dark, "caller", true)
         ]
-        for (name, scheme, owner) in cases {
+        for (name, scheme, owner, supportsCallerResponses) in cases {
             let request = captureRequest(owner: owner)
             let fake = CallerApprovalCaptureFake(request: request)
+            fake.supportsCallerResponses = supportsCallerResponses
             let controller = CallerApprovalController(useCase: fake)
             await controller.selectTarget(taskID: "task-capture", workflowRunID: nil)
             await controller.inspect(request)
-            #expect(controller.isCurrentDetail)
+            #expect(controller.isCurrentDetail == (owner == "monitor" || supportsCallerResponses))
             #expect(controller.detail?.raw["action"]?.rendered(pretty: true).contains("long-command-scroll-probe") == true)
 
             let view = CallerApprovalCard(controller: controller)
@@ -85,22 +91,23 @@ struct CallerApprovalWindowCaptureTests {
             host.window.makeKeyAndOrderFront(nil)
             await host.settle { host.hasRenderedInk }
             #expect(host.hasRenderedInk)
-            if owner == "monitor" {
+            controller.revealPending()
+            await host.settle { host.window.firstResponder != nil }
+            #expect(host.window.firstResponder != nil)
+            if owner == "monitor" || supportsCallerResponses {
                 let approve = try #require(host.element("Approve once"))
                 let reject = try #require(host.element("Reject"))
                 #expect(controller.isCurrentDetail)
                 #expect(approve.responds(to: NSSelectorFromString("accessibilityPerformPress")))
                 #expect(reject.responds(to: NSSelectorFromString("accessibilityPerformPress")))
             } else {
+                #expect(controller.isCurrentDetail == false)
                 #expect(host.element("Approve once") == nil)
                 #expect(host.element("Reject") == nil)
             }
-            let scrollViews = host.descendants.compactMap { $0 as? NSScrollView }
-            #expect(scrollViews.contains { scroll in
-                scroll.hasHorizontalScroller && (scroll.documentView?.frame.width ?? 0) > scroll.contentView.bounds.width
-            })
+            #expect(controller.cards.first?.action.fields.first(where: { $0.id == "input/command" })?.value.contains("long-command-scroll-probe") == true)
             try captureWindowBackedPNG(host, to: root.appendingPathComponent(name + ".png"))
-            if owner == "monitor" {
+            if owner == "monitor" || supportsCallerResponses {
                 let approve = try #require(host.element("Approve once"))
                 #expect(host.press(approve))
                 await host.settle { fake.responseCount == 1 }
@@ -110,7 +117,7 @@ struct CallerApprovalWindowCaptureTests {
         let captures = try FileManager.default
 .contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "png" }
-        #expect(captures.count == 3)
+        #expect(captures.count == 4)
     }
 
     private func captureWindowBackedPNG(_ host: RedesignHost, to url: URL) throws {

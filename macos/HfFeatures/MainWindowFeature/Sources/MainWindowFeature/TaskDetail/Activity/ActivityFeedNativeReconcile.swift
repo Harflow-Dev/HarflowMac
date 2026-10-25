@@ -56,9 +56,25 @@ extension ActivityFeedNativeList.Coordinator {
             if state.retainedFirstID != nil { state.retainedFirstID = nil }
         }
         maybePerformInitialPositioning()
+        revealApprovalIfNeeded()
         publishPosition()
         maybeLoadOlder()
         commitPendingHeader()
+    }
+
+    private func revealApprovalIfNeeded() {
+        guard let reveal = model?.approvalReveal, reveal.token != consumedApprovalReveal,
+              positioned, let table, table.window != nil,
+              let index = entries.firstIndex(where: { $0.id == "activity-approval-" + reveal.requestID }) else { return }
+        consumedApprovalReveal = reveal.token
+        state?.followLive.suspend()
+        writeOffset(table.rect(ofRow: index).minY)
+        layoutNow()
+        _ = table.view(atColumn: 0, row: index, makeIfNecessary: true)
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.actions.onApprovalScrollAcknowledged(reveal.requestID, reveal.token)
+        }
     }
 
     /// An accepted request owns its loading header immediately, even when the caller has
@@ -498,6 +514,7 @@ extension ActivityFeedNativeList.Coordinator {
             guard let self else { return }
             positioningCheckQueued = false
             maybePerformInitialPositioning()
+            revealApprovalIfNeeded()
             publishPosition()
             maybeLoadOlder()
         }

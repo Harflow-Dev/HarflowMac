@@ -32,6 +32,7 @@ struct ActivityFeedNativeModel: Equatable {
     var paginationRevision: Int
     var visible: Bool
     var loading: Bool
+    var approvalReveal: CallerApprovalReveal?
 }
 
 // MARK: - ActivityFeedNativeEntries
@@ -67,10 +68,20 @@ enum ActivityFeedNativeEntries {
                 topSpacing: isFirst ? HfRadius.Metrics.spacing12 : rowTop
             )))
         }
+        if case .standard(let standard) = model.tailPresentation {
+            for card in standard.approvals {
+                entries.append(.approval(card, topSpacing: HfRadius.Metrics.spacing12))
+            }
+        }
         let hasContent = hasHeader || showsEmpty || !model.shownRows.isEmpty
         let hasTail = hasTail(model)
         if hasTail {
-            entries.append(.tail(model.tailPresentation,
+            var tail = model.tailPresentation
+            if case .standard(var standard) = tail {
+                standard.approvals = []
+                tail = .standard(standard)
+            }
+            entries.append(.tail(tail,
                                   topSpacing: hasContent ? HfRadius.Metrics.spacing20 : HfRadius.Metrics.spacing12))
         }
         entries.append(.bottom(topSpacing: (hasContent || hasTail) ? HfRadius.Metrics.spacing20 : HfRadius.Metrics.spacing12))
@@ -78,8 +89,13 @@ enum ActivityFeedNativeEntries {
     }
 
     static func hasTail(_ model: ActivityFeedNativeModel) -> Bool {
-        if case .absent = model.tailPresentation { return false }
-        return true
+        switch model.tailPresentation {
+        case .absent: false
+        case .plainText: true
+        case .standard(let standard):
+            standard.subTaskStrip != nil || !standard.pendingMessages.isEmpty
+                || standard.liveStep != nil || standard.approvalNotice != nil
+        }
     }
 
     static func isExpanded(row: ActivityRow, expandedGroups: Set<String>) -> Bool {

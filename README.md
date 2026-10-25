@@ -6,6 +6,8 @@ Version 0.0.2 is under development. On Apple Silicon with macOS 26, the app chec
 
 Workflow runs show selected node activity in the Graph sidebar, with attempt selection and on-demand call history. Deselect a node to return to the retained run plan. The bottom summary expands above the graph; Parallel shows all current workflow task columns.
 
+Task approvals appear in Activity, with pending hints in Summary and Prompt; workflow approvals remain in the run sidebar. Pending requests show the complete action and stay expanded. Answered requests collapse to an expandable settled row. Compatible engines let Monitor answer caller-owned requests; older engines retain read-only guidance for those requests. Decision acceptance, delivery and observed execution are shown separately.
+
 An open single-conversation group switches to Parallel as independent conversations join, retaining the original activity and reading position. Parallel activity follows newly arriving working conversations while the horizontal viewport is at its left edge; scrolling away keeps the current conversation in view.
 
 Streaming replies retain completed Markdown blocks while preparing the changing tail in the background. Activity feeds use the same prepared layout for measurement and display.

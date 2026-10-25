@@ -7,6 +7,7 @@ import MonitorCore
 @MainActor
 extension MockTaskDetailUseCase {
     func configurePagingDefaults(eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() }) {
+        given(self).callerApprovalUseCase().willReturn(nil)
         given(self).resolveTask(.any).willReturn(nil)
         given(self).conversationHistory(sessionID: .any, cursor: .any).willReturn(nil)
         given(self).eventHistory(for: .any).willProduce(eventHistory)

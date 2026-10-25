@@ -32,12 +32,22 @@ struct ActivityFeedView: View {
     let onLoadMore: (() -> Bool)?
     var tailPresentation = ActivityFeedTailPresentation.absent
     var onSelectChildTask: ((String) -> Void)?
+    var approvalReveal: CallerApprovalReveal?
+    var onApprovalResponse: ((String, String) -> Void)?
+    var onApprovalToggle: ((String) -> Void)?
+    var onApprovalLoadMore: (() -> Void)?
+    var onApprovalFocusAcknowledged: ((String, UUID) -> Void)?
+    var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
 
     init(rows: [ActivityRow], start: Date?, history: EventHistoryState, isLoading: Bool,
          tailValue: ActivityFeedTail = ActivityFeedTail(), paginationRevision: Int = 0, isVisible: Bool = true,
          emptyText: String? = nil, horizontalPadding: CGFloat = HfRadius.Metrics.zero, showsPromptBubble: Bool = true,
          state: ParallelColumnUIState, onLoadMore: (() -> Bool)?,
-         tailPresentation: ActivityFeedTailPresentation = .absent, onSelectChildTask: ((String) -> Void)? = nil) {
+         tailPresentation: ActivityFeedTailPresentation = .absent, onSelectChildTask: ((String) -> Void)? = nil,
+         approvalReveal: CallerApprovalReveal? = nil, onApprovalResponse: ((String, String) -> Void)? = nil,
+         onApprovalToggle: ((String) -> Void)? = nil, onApprovalLoadMore: (() -> Void)? = nil,
+         onApprovalFocusAcknowledged: ((String, UUID) -> Void)? = nil,
+         onApprovalScrollAcknowledged: ((String, UUID) -> Void)? = nil) {
         self.rows = rows
         self.start = start
         self.history = history
@@ -52,6 +62,12 @@ struct ActivityFeedView: View {
         self.onLoadMore = onLoadMore
         self.tailPresentation = tailPresentation
         self.onSelectChildTask = onSelectChildTask
+        self.approvalReveal = approvalReveal
+        self.onApprovalResponse = onApprovalResponse
+        self.onApprovalToggle = onApprovalToggle
+        self.onApprovalLoadMore = onApprovalLoadMore
+        self.onApprovalFocusAcknowledged = onApprovalFocusAcknowledged
+        self.onApprovalScrollAcknowledged = onApprovalScrollAcknowledged
     }
 
     private var ids: [String] { rows.map(\.id) }
@@ -76,7 +92,8 @@ struct ActivityFeedView: View {
             history: history,
             paginationRevision: paginationRevision,
             visible: isVisible,
-            loading: isLoading
+            loading: isLoading,
+            approvalReveal: approvalReveal
         )
     }
 
@@ -89,6 +106,11 @@ struct ActivityFeedView: View {
             if state.expandedGroups.insert(id).inserted == false { state.expandedGroups.remove(id) }
         }
         actions.onSelectChildTask = { id in onSelectChildTask?(id) }
+        actions.onApprovalResponse = { id, decision in onApprovalResponse?(id, decision) }
+        actions.onApprovalToggle = { onApprovalToggle?($0) }
+        actions.onApprovalLoadMore = { onApprovalLoadMore?() }
+        actions.onApprovalFocusAcknowledged = { onApprovalFocusAcknowledged?($0, $1) }
+        actions.onApprovalScrollAcknowledged = { onApprovalScrollAcknowledged?($0, $1) }
         return actions
     }
 }

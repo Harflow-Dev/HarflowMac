@@ -19,6 +19,9 @@ enum ActivityFeedTailPresentation: Equatable {
         var subTaskStrip: Strip?
         var pendingMessages: [PendingMessage] = []
         var liveStep: Line?
+        var approvals: [CallerApprovalCardModel] = []
+        var approvalNotice: String?
+        var approvalNoticeActionTitle = "Refresh approval history"
     }
 
     struct Strip: Equatable {
@@ -33,6 +36,7 @@ enum ActivityFeedTailPresentation: Equatable {
     }
 
     func isVisible(with semanticTail: ActivityFeedTail) -> Bool {
-        semanticTail != ActivityFeedTail() && self != .absent
+        if case .standard(let standard) = self, !standard.approvals.isEmpty || standard.approvalNotice != nil { return true }
+        return semanticTail != ActivityFeedTail() && self != .absent
     }
 }
