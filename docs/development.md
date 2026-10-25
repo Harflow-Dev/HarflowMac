@@ -7,7 +7,7 @@ Use [the terminology guide](terminology.md) for user-facing copy and compatibili
 Validate formatting and lint with the same commands as CI. CI installs the available Homebrew tools; local tools are not pinned by this repository:
 
 ```sh
-swiftformat --lint macos scripts/support
+swiftformat macos scripts/support --lint
 swiftlint lint --strict
 python3 scripts/check-legacy-names.py
 python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
