@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Prevent recovery activity refreshes from deadlocking task snapshot updates and window teardown.
+- Restore horizontal following for new and resumed working conversations, and keep reordered activity within scroll bounds.
+- Refresh New session styling when appearance changes and share install-notice dismissal between the sidebar and menu bar. Place the sidebar notice above its controls.
+
 ## 0.0.3
 
 - Add capability-gated Harflow responses to caller-owned approvals with additive v1 contracts and typed refusal handling.

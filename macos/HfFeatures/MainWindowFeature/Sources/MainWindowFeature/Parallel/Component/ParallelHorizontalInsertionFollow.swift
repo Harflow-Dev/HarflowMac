@@ -23,6 +23,7 @@ final class ParallelHorizontalInsertionFollow {
 
     private var contextID: String?
     private var navigationID: String?
+    private var workingIDs: Set<String> = []
     private var preLayoutOffset: CGFloat?
     private(set) var targetID: String?
     var isEnabled: Bool { contextID != nil }
@@ -31,19 +32,27 @@ final class ParallelHorizontalInsertionFollow {
     func configure(_ input: Input) -> Bool {
         guard let configuration = input.configuration else {
             contextID = nil
+            workingIDs = []
             cancel()
             return true
         }
         let sameContext = contextID == configuration.contextID
         let navigationChanged = navigationID != configuration.explicitNavigationID
+        let resumed = configuration.workingColumnIDs.subtracting(workingIDs)
+        workingIDs = configuration.workingColumnIDs
         contextID = configuration.contextID
         navigationID = configuration.explicitNavigationID
         guard sameContext, !navigationChanged else { cancel(); return false }
         let inserted = Set(input.ids).subtracting(input.previousIDs).intersection(configuration.workingColumnIDs)
-        if !input.previousIDs.isEmpty, !inserted.isEmpty, input.offset <= 2, !input.isUserScrolling {
-            targetID = input.ids.first { inserted.contains($0) }
+        let activated = inserted.union(resumed)
+        // A second publication can arrive after our own first correction moved away from zero.
+        // It belongs to the same follow until actual user input cancels it.
+        if !input.previousIDs.isEmpty, !activated.isEmpty,
+           input.offset <= 2 || targetID != nil, !input.isUserScrolling {
+            targetID = input.ids.first { activated.contains($0) }
         }
-        if let targetID, !input.ids.contains(targetID) { cancel() }
+        if input.isUserScrolling { cancel() }
+        if let targetID, !input.ids.contains(targetID) || !workingIDs.contains(targetID) { cancel() }
         return true
     }
 

@@ -57,16 +57,18 @@ struct RecoveryEventStreamRepositoryTests {
         let baseEvent: TaskEvent
     }
 
-    private func recoveryPage() -> String {
-        #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","task_id":"lost-task","#
-            + #"recovery_activity":{"source":"backend_transcript","display_only":true,"events":["#
-            + #"{"source_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","#
-            + #"kind":"assistant_text","source_ts":"2026-10-23T00:00:00Z","text":"recovered text"},"#
-            + #"{"source_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","#
-            + #"kind":"tool_call","call_id":"read-1","tool":"Read","input_preview":"{}"},"#
-            + #"{"source_id":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","#
-            + #"kind":"tool_result","call_id":"read-1","ok":true,"output_tail":"done"}],"#
-            + #""next_cursor":"same","reset":false,"has_more":false,"notices":[]}}}"#
+    func recoveryPage() -> String {
+        #"""
+        {"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","task_id":"lost-task",
+         "recovery_activity":{"source":"backend_transcript","display_only":true,"events":[
+           {"source_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "kind":"assistant_text","source_ts":"2026-10-23T00:00:00Z","text":"recovered text"},
+           {"source_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "kind":"tool_call","call_id":"read-1","tool":"Read","input_preview":"{}"},
+           {"source_id":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "kind":"tool_result","call_id":"read-1","ok":true,"output_tail":"done"}],
+           "next_cursor":"same","reset":false,"has_more":false,"notices":[]}}
+        """#
     }
 
     private func positiveRig(taskID: String) -> PositiveRig {
@@ -131,6 +133,9 @@ struct RecoveryEventStreamRepositoryTests {
                 && events.contains { if case .toolResult = $0.kind { return true }; return false }
         }
         let recovered = rig.sut.events(for: taskID)
+        #expect(recovered.contains { if case .assistantText(let text, _, _) = $0.kind { return text == "recovered text" }; return false })
+        #expect(recovered.contains { if case .toolCall = $0.kind { return true }; return false })
+        #expect(recovered.contains { if case .toolResult = $0.kind { return true }; return false })
         let recoveredIDs = recovered.filter { $0.seq >= Int.max / 2 }.map(\.seq)
         rig.poll.value?()
         await waitUntil(timeout: 5) { rig.recoveryCalls.value >= 2 }
@@ -143,6 +148,7 @@ struct RecoveryEventStreamRepositoryTests {
         #expect(rig.sut.summary(for: taskID) == EventSummary())
         #expect(rig.sut.prompt(for: taskID) == "captured prompt")
         lease.release()
+        await waitUntil { rig.poll.value == nil }
         #expect(rig.poll.value == nil)
     }
 }

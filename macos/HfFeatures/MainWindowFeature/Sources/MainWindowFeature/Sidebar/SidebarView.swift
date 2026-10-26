@@ -169,6 +169,12 @@ struct SidebarView<VM: SidebarViewModel>: View {
     /// beside the compact backend-dot filter, then the degraded-catalog note when there is one.
     private var header: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
+            if let banner = viewModel.installBannerModel {
+                InstallBanner(model: banner, onPrimary: viewModel.didTapInstallBannerPrimary,
+                              onSecondary: viewModel.didTapInstallBannerSecondary,
+                              onDismiss: viewModel.didTapInstallBannerDismiss)
+                    .accessibilityIdentifier("sidebar-install-notice")
+            }
             if viewModel.storeNeedsAttention {
                 SettingsLink {
                     Label("Task store needs attention", systemImage: "exclamationmark.triangle")
@@ -282,7 +288,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 sections: displayedSections ?? viewModel.sections,
                 workflowTitles: viewModel.savedWorkflows.map(\.id),
                 workflowsExpanded: workflowsExpanded,
-                banner: viewModel.installBannerModel.map(SidebarBannerPresentation.init),
+                banner: nil,
                 listError: viewModel.listErrorMessage,
                 skeleton: viewModel.showsLoadingSkeleton,
                 taskHistory: viewModel.taskHistoryState,

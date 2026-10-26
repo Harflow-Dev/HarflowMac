@@ -8,7 +8,6 @@ import SwiftUI
 final class ParallelScrollObservationView: NSView {
     private weak var nativeIdentityOwner: ParallelScrollNativeIdentity?
     private var isTornDown = false
-
     /// Transfer registration when the representable changes holders; preserve the old holder's
     /// last scoped identity for an observer-only remount.
     func bindNativeIdentity(_ holder: ParallelScrollNativeIdentity?) {
@@ -44,7 +43,6 @@ final class ParallelScrollObservationView: NSView {
     private var documentSubscription: AnyCancellable?
     var horizontalConfiguration: ParallelHorizontalConfiguration?
     private let horizontalFollow = ParallelHorizontalInsertionFollow()
-
     /// Clears delayed insertion and anchor movement before a real horizontal input is delivered.
     func cancelHorizontalMovement() {
         horizontalFollow.cancel()
@@ -75,7 +73,6 @@ final class ParallelScrollObservationView: NSView {
     /// The borrowed insets state of the currently adopted native target, restored on replacement
     /// or detach while the target is still on a window.
     private var nativeInsetBackup: NativeInsetBackup?
-
     /// The inset state this observer explicitly zeroes on an adopted native target so the feed's
     /// document keeps plain zero scroll-view content insets — see `enforceNativeInsets(on:)`.
     private struct NativeInsetBackup {
@@ -141,11 +138,7 @@ final class ParallelScrollObservationView: NSView {
         report(documentGeometryChanged: true)
     }
 
-    /// Detaches the currently adopted native target's notifications, wheel monitor and borrowed
-    /// insets, and ends an armed anchor provider's reference — a detached target's captured
-    /// native package can never be verified again. The queued restoration state
-    /// (`requestedOffset`/`pendingOffset`) deliberately survives — replacement and initial
-    /// attachment must still land a pending restoration.
+    /// Detaches native observation and insets while retaining queued restoration for replacement.
     private func detachNativeTarget() {
         // Only a genuinely held target's reference dies here; the initial adoption passes
         // through with nothing observed and must not end an already-armed provider.
@@ -180,12 +173,8 @@ final class ParallelScrollObservationView: NSView {
         lastOuterScrollWidth = nil
     }
 
-    /// A List-backed feed owns its document's vertical spacing (row padding and explicit gap
-    /// logic inside row content), so the adopted native target's scroll-view insets are
-    /// explicitly owned: automatic native adjustment is disabled and the insets zeroed on
-    /// adoption and re-asserted on every report — keeping this observer's geometry in plain
-    /// document coordinates across later resize and layout passes. The pre-adoption state is
-    /// captured once per target and restored while the target still has a window.
+    /// Keep adopted List scroll insets zero across layout reports, retaining the original
+    /// state for restoration while the native target still has a window.
     ///
     /// Leave native table spacing and sizing to SwiftUI. Mutating them during scroll reports
     /// can repeatedly change row heights and cause visible oscillation on first mount.
@@ -227,7 +216,8 @@ final class ParallelScrollObservationView: NSView {
         let restorationOffset = (suppressed || anchorProvider?.isAnchorRestorationActive == false) ? nil : restorationOffset
         let restorationActive = (suppressed || anchorProvider?.isAnchorRestorationActive == false) ? false : restorationActive
         let geometryChanged = configuredAxis != axis || ids != self.ids || stride != self.stride
-        guard generationChanged || geometryChanged || restorationOffset != requestedOffset || restorationActive != self.restorationActive else { return }
+        guard generationChanged || geometryChanged || pendingOffset != nil
+            || restorationOffset != requestedOffset || restorationActive != self.restorationActive else { return }
         if !restorationActive { pendingPositionAcknowledgement = false }
         if restorationActive, restorationOffset != nil,
            restorationOffset != requestedOffset || restorationActive != self.restorationActive {
@@ -546,6 +536,13 @@ final class ParallelScrollObservationView: NSView {
         }
     }
 
+    private func clampHorizontalOffset(scroll: NSScrollView, document: NSView, length: CGFloat, viewport: CGFloat) {
+        guard axis == .horizontal, !liveUserScroll, !applyingRestoration, viewport > 0,
+              scroll.contentView.bounds.minX > max(0, length - viewport) + 0.5 else { return }
+        applyRestorationTarget(max(0, length - viewport), scroll: scroll, document: document,
+                               geometry: (length, viewport, scroll.documentVisibleRect))
+    }
+
     private func report(observeExternalMovement: Bool = false, documentGeometryChanged: Bool = false) {
         guard !isTornDown, let scroll = observedScrollView, let document = scroll.documentView else { return }
         // Native targets re-assert the zero-inset contract on every report, so a later resize or
@@ -576,11 +573,15 @@ final class ParallelScrollObservationView: NSView {
         let providerTarget = nativeRestorationTarget(document: document, geometryChanged: documentGeometryChanged)
         let horizontalLayoutReady = axis != .horizontal || abs(length - CGFloat(ids.count) * stride) < 2
         if axis == .horizontal { horizontalFollow.rememberOffset(lastOffset, layoutReady: horizontalLayoutReady) }
+        // Keep the lane identity through later native layout passes. A matching document width
+        // alone does not establish that SwiftUI has finished moving the clip bounds.
+        if axis == .horizontal, let targetID = horizontalFollow.targetID,
+           let index = ids.firstIndex(of: targetID) { pendingOffset = CGFloat(index) * stride }
         if restorationActive, pendingOffset == nil, let requestedOffset { pendingOffset = requestedOffset }
         if let target = providerTarget ?? pendingOffset, viewport > 0, horizontalLayoutReady {
             applyRestorationTarget(target, scroll: scroll, document: document, geometry: (length, viewport, visible))
-            if axis == .horizontal { horizontalFollow.cancel() }
         }
+        clampHorizontalOffset(scroll: scroll, document: document, length: length, viewport: viewport)
         let updated = scroll.documentVisibleRect
         lastOffset = axis == .horizontal ? updated.minX : (document.isFlipped ? updated.minY : document.bounds.maxY - updated.maxY)
         let report = CGRect(x: lastOffset, y: 0, width: length, height: viewport)

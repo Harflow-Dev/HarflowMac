@@ -8,7 +8,7 @@ Workflow runs show selected node activity in the Graph sidebar, with attempt sel
 
 Task approvals appear in Activity, with pending hints in Summary and Prompt; workflow approvals remain in the run sidebar. Pending requests show the complete action and stay expanded. Answered requests collapse to an expandable settled row. Compatible engines let Harflow answer caller-owned requests; older engines retain read-only guidance for those requests. Decision acceptance, delivery and observed execution are shown separately.
 
-An open single-conversation group switches to Parallel as independent conversations join, retaining the original activity and reading position. Parallel activity follows newly arriving working conversations while the horizontal viewport is at its left edge; scrolling away keeps the current conversation in view.
+An open single-conversation group switches to Parallel as independent conversations join, retaining the original activity and reading position. Parallel and workflow activity follow new or resumed working conversations while the horizontal viewport is at its left edge; scrolling away keeps the current conversation in view. User scrolling cancels pending automatic movement.
 
 Streaming replies retain completed Markdown blocks while preparing the changing tail in the background. Activity feeds use the same prepared layout for measurement and display.
 
@@ -17,6 +17,8 @@ Compatible engines expose capture ownership, live-input availability and backgro
 Harness and model menus share lifetime usage ranking from successful app submissions. Workflow node menus prefer a supported orchestrator agent and model while preserving saved selections.
 
 The title bar shows Harflow's engine connection status. Choose Light, Dark, or System from the sidebar footer icons to set the appearance across Harflow. System follows this Mac's appearance setting.
+
+After an install or update, its success notice appears above the sidebar controls and in the menu bar popover. Dismissing it hides it in both places. Quitting also ends the notice; reopening with an up-to-date engine does not show it again. Runtime readiness and Settings setup controls remain available.
 
 Store incompatibility retains the qualified runtime and shows a sidebar attention entry. Settings → General offers read-only inspection and explicit backup and reset, bound to the inspected operation. Interrupted recovery requires a fresh inspection and confirmation. The engine-returned backup receipt remains available for Finder reveal after recovery. See the [managed runtime guide](docs/managed-runtime.md#store-readiness-and-recovery).
 

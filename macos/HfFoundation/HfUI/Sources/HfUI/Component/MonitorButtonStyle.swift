@@ -40,6 +40,7 @@ private struct MonitorButtonBody: View {
     let kind: MonitorButtonStyle.Kind
     let height: CGFloat
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var colorScheme
 
     private var shape: Capsule { Capsule() }
 
@@ -53,6 +54,8 @@ private struct MonitorButtonBody: View {
                 .padding(.horizontal, HfRadius.Metrics.secondaryButtonHorizontalPadding)
                 .frame(minHeight: height)
                 .glassEffect(.regular.interactive(isEnabled), in: shape)
+                // Recreate the native material when the effective appearance changes.
+                .id(colorScheme)
                 .contentShape(shape)
         case .primary, .tinted, .destructive:
             configuration.label

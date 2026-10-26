@@ -175,6 +175,24 @@ import Testing
         #expect(vm.newSessionTapCount == 1)
     }
 
+    @Test func givenInstallNotice_whenRendered_thenItSitsAboveNewSessionOutsideTheOutline() async throws {
+        // given
+        let vm = SidebarViewModelMock(installBannerModel: .init(title: "Runtime installed", detail: "Ready for sessions", canDismiss: true))
+        let sut = try await present(vm)
+        defer { release(sut.window) }
+
+        // when
+        let notice = try #require(elements(labelled: "Runtime installed", in: sut.host).first)
+        let button = try #require(elements(labelled: "New session", in: sut.host).first)
+        let noticeFrame = try #require(frameInWindow(notice, window: sut.window))
+        let buttonFrame = try #require(frameInWindow(button, window: sut.window))
+        let outline = try #require(outlineView(sut.host))
+
+        // then
+        #expect(noticeFrame.minY >= buttonFrame.maxY - 0.5)
+        #expect(!accessibilityElements(outline).contains { accessibilityString($0, "accessibilityLabel") == "Runtime installed" })
+    }
+
     // MARK: - Backend filter
 
     @Test func givenTheCompactFilter_whenRendered_thenTheSelectedNameStaysVisibleAndSpoken() async throws {

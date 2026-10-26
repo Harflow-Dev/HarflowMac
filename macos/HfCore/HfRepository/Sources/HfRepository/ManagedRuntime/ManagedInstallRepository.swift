@@ -9,6 +9,13 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
     private let coordinator: ManagedRuntimeCoordinator
     private let taskListRepository: any TaskListRepository
     private let retryOwner = RetryOwner()
+    private enum Notice: Equatable {
+        case none
+        case installed(String)
+        case dismissedFailure(String)
+    }
+
+    private let notice = CurrentValueSubject<Notice, Never>(.none)
 
     public init(coordinator: ManagedRuntimeCoordinator, taskListRepository: any TaskListRepository) {
         self.coordinator = coordinator
@@ -32,9 +39,13 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
         }
     }
 
-    public var state: InstallState { Self.installState(coordinator.state) }
+    public var state: InstallState { Self.installState(coordinator.state, notice: notice.value) }
     public func statePublisher() -> AnyPublisher<InstallState, Never> {
-        coordinator.statePublisher().map(Self.installState).removeDuplicates().eraseToAnyPublisher()
+        coordinator.statePublisher()
+.combineLatest(notice)
+            .map { Self.installState($0, notice: $1) }
+.removeDuplicates()
+.eraseToAnyPublisher()
     }
 
     public var lastCheckMessage: String? { if case .failed(let message) = coordinator.state { message } else { nil } }
@@ -55,7 +66,15 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
     public func installUvThenHarflow() async {}
     public func checkAgain() async { await retry() }
     public func installAnyway() async -> Bool { false }
-    public func reset() {}
+    public func reset() {
+        switch coordinator.state {
+        case .ready:
+            notice.send(.none)
+        case .failed(let message), .updateFailed(let message, _, _):
+            notice.send(.dismissedFailure(message))
+        default: break
+        }
+    }
 
     public func retry() async {
         guard await retryOwner.claim(isFailed: { [coordinator] in
@@ -64,18 +83,22 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
             if case .installationRequired = coordinator.state { return true }
             return false
         }) else { return }
-        if case .success = await coordinator.retry() { taskListRepository.runtimeBecameReady() }
+        notice.send(.none)
+        if case .success(let ready) = await coordinator.retry() {
+            notice.send(.installed(ready.generationDirectory))
+            taskListRepository.runtimeBecameReady()
+        }
         await retryOwner.finish()
     }
 
-    private static func installState(_ state: ManagedRuntimeState) -> InstallState {
+    private static func installState(_ state: ManagedRuntimeState, notice: Notice) -> InstallState {
         switch state {
         case .preparing: .running(.validate)
         case .installing, .updating: .running(.harflow)
-        case .updateFailed(let message, _, _): .failed(stage: .harflow, message: message)
+        case .updateFailed(let message, _, _): notice == .dismissedFailure(message) ? .idle : .failed(stage: .harflow, message: message)
         case .installationRequired: .idle
-        case .ready: .installed
-        case .failed(let message): .failed(stage: .harflow, message: message)
+        case .ready(let ready): notice == .installed(ready.generationDirectory) ? .installed : .idle
+        case .failed(let message): notice == .dismissedFailure(message) ? .idle : .failed(stage: .harflow, message: message)
         }
     }
 

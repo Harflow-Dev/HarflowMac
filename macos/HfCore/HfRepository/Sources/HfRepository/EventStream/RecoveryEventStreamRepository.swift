@@ -35,19 +35,21 @@ public final class RecoveryEventStreamRepository: EventStreamRepository, @unchec
             sessions[taskID] = session
         }
         session.references += 1
-        session.start()
         lock.unlock()
+        session.start()
         return RecoveryActivityLease(taskID: taskID, base: baseLease) { [weak self] in self?.release(taskID) }
     }
 
     private func release(_ taskID: String) {
         lock.lock()
-        defer { lock.unlock() }
-        guard let session = sessions[taskID] else { return }
+        guard let session = sessions[taskID] else { lock.unlock(); return }
         session.references -= 1
         if session.references == 0 {
             sessions[taskID] = nil
+            lock.unlock()
             session.stop()
+        } else {
+            lock.unlock()
         }
     }
 
@@ -62,23 +64,33 @@ public final class RecoveryEventStreamRepository: EventStreamRepository, @unchec
     public func items(for id: String) -> [TimelineItem] { base.items(for: id) + (session(id)?.state.items ?? []) }
     public func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never> {
         guard let session = session(id) else { return base.eventsPublisher(for: id) }
-        return base.eventsPublisher(for: id)
-.combineLatest(session.$state)
+        let merged: AnyPublisher<(generation: UUID?, events: [TaskEvent]), Never> = base.eventsPublisher(for: id)
+.combineLatest(session.publisher)
             .receive(on: presentationQueue)
-.map { $0 + $1.events }
-.removeDuplicates()
-            .receive(on: DispatchQueue.main)
+.map { captured, _ in
+                let recovery = session.state
+                return (generation: recovery.generation, events: captured + recovery.events)
+            }
+.removeDuplicates { $0.generation == $1.generation && $0.events == $1.events }
+.eraseToAnyPublisher()
+        return merged.receive(on: DispatchQueue.main)
+.compactMap { session.accepts($0.generation) ? $0.events : nil }
 .eraseToAnyPublisher()
     }
 
     public func itemsPublisher(for id: String) -> AnyPublisher<[TimelineItem], Never> {
         guard let session = session(id) else { return base.itemsPublisher(for: id) }
-        return base.itemsPublisher(for: id)
-.combineLatest(session.$state)
+        let merged: AnyPublisher<(generation: UUID?, items: [TimelineItem]), Never> = base.itemsPublisher(for: id)
+.combineLatest(session.publisher)
             .receive(on: presentationQueue)
-.map { $0 + $1.items }
-.removeDuplicates()
-            .receive(on: DispatchQueue.main)
+.map { captured, _ in
+                let recovery = session.state
+                return (generation: recovery.generation, items: captured + recovery.items)
+            }
+.removeDuplicates { $0.generation == $1.generation && $0.items == $1.items }
+.eraseToAnyPublisher()
+        return merged.receive(on: DispatchQueue.main)
+.compactMap { session.accepts($0.generation) ? $0.items : nil }
 .eraseToAnyPublisher()
     }
 
@@ -99,6 +111,7 @@ public final class RecoveryEventStreamRepository: EventStreamRepository, @unchec
 // MARK: - RecoveryActivitySession
 
 private struct RecoveryActivityState: Equatable, Sendable {
+    var generation: UUID?
     var events: [TaskEvent] = []
     var items: [TimelineItem] = []
 }
@@ -106,14 +119,63 @@ private struct RecoveryActivityState: Equatable, Sendable {
 private final class RecoveryActivitySession: @unchecked Sendable {
     let taskID: String
     var references = 0
-    @Subjected var state = RecoveryActivityState()
+    @Subjected private var publishedState = RecoveryActivityState()
+    // Only lifetime validity is shared with callers. Never hold this lock across repository
+    // reads, cancellation, subscription setup or synchronous Combine publication.
+    private let lifetimeLock = NSLock()
+    private var active = true
+    private var refreshQueued = false
+    private let queue = DispatchQueue(label: "dev.harflow.mac.recovery.session", qos: .utility)
+    private var started = false
+
+    var state: RecoveryActivityState {
+        let value = publishedState
+        guard isActive, value.generation.map(isValid) ?? true else { return RecoveryActivityState() }
+        return value
+    }
+
+    var publisher: AnyPublisher<RecoveryActivityState, Never> {
+        $publishedState.map { [weak self] value in
+            self?.isActive == true ? value : RecoveryActivityState()
+        }
+.eraseToAnyPublisher()
+    }
+
+    /// A queued merged snapshot is discarded if its recovery generation was invalidated.
+    func accepts(_ generation: UUID?) -> Bool { generation.map(isValid) ?? true }
+
+    private var isActive: Bool {
+        lifetimeLock.lock()
+        defer { lifetimeLock.unlock() }
+        return active
+    }
+
     private let environment: any ToolEnvironmentRepository
     private let snapshots: any TaskSnapshotRepository
     private let scheduler: any Scheduling
-    private let lock = NSRecursiveLock()
+    // The command's synchronous currentness callback reads this token without joining queue work.
     private var generation = UUID()
-    private var active = false
+
+    private func currentGeneration() -> UUID {
+        lifetimeLock.lock()
+        defer { lifetimeLock.unlock() }
+        return generation
+    }
+
+    private func invalidateGeneration() {
+        lifetimeLock.lock()
+        generation = UUID()
+        lifetimeLock.unlock()
+    }
+
+    private func isValid(_ expected: UUID) -> Bool {
+        lifetimeLock.lock()
+        defer { lifetimeLock.unlock() }
+        return active && generation == expected
+    }
+
     private var poll: Task<Void, Never>?
+    private var pollGeneration: UUID?
     private var timer: AnyCancellable?
     private var subscription: AnyCancellable?
     private var cursor: String?
@@ -132,75 +194,112 @@ private final class RecoveryActivitySession: @unchecked Sendable {
     }
 
     func start() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !active else { return }
-        active = true
-        subscription = snapshots.snapshotsPublisher().sink { [weak self] _ in self?.refresh() }
-        timer = scheduler.scheduleRepeating(every: 5) { [weak self] in self?.refresh() }
-        refresh()
+        queue.async { [self] in
+            guard isActive, !started else { return }
+            started = true
+            // A Subjected publisher invokes its sink while its own lock is held. The sink
+            // must only enqueue; it must never synchronously read that repository again.
+            subscription = snapshots.snapshotsPublisher().sink { [weak self] values in
+                guard let self else { return }
+                // Invalidate synchronously from the supplied value, without reading back through
+                // Subjected. A delayed command cannot escape while the queue catches up.
+                if values[taskID]?.supervision?.captureState != "lost_with_owner" { invalidateGeneration() }
+                enqueueRefresh()
+            }
+            timer = scheduler.scheduleRepeating(every: 5) { [weak self] in self?.enqueueRefresh() }
+            refresh()
+        }
     }
 
     func stop() {
-        lock.lock()
-        defer { lock.unlock() }
+        lifetimeLock.lock()
         active = false
-        generation = UUID()
-        poll?.cancel()
-        poll = nil
-        timer?.cancel()
-        timer = nil
-        subscription?.cancel()
-        subscription = nil
+        lifetimeLock.unlock()
+        // UI teardown never joins a blocked snapshot read, publisher or command completion.
+        queue.async { [self] in
+            invalidateGeneration()
+            poll?.cancel()
+            poll = nil
+            pollGeneration = nil
+            timer?.cancel()
+            timer = nil
+            subscription?.cancel()
+            subscription = nil
+        }
     }
 
-    private func isCurrent(_ expected: UUID) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard active, generation == expected else { return false }
-        guard let selectedExecutable, let selectedContext,
-              case .success(let client) = environment.ctl() else { return false }
-        return client.executable == selectedExecutable && client.compatibilityContext == selectedContext
+    private func enqueueRefresh() {
+        lifetimeLock.lock()
+        guard active, !refreshQueued else { lifetimeLock.unlock(); return }
+        refreshQueued = true
+        lifetimeLock.unlock()
+        queue.async { [weak self] in
+            guard let self else { return }
+            lifetimeLock.lock()
+            refreshQueued = false
+            lifetimeLock.unlock()
+            refresh()
+        }
+    }
+
+    private func isCurrent(_ expected: UUID, executable: String, context: RuntimeCompatibilityContext) -> Bool {
+        guard isValid(expected), case .success(let client) = environment.ctl() else { return false }
+        return isValid(expected) && client.executable == executable && client.compatibilityContext == context
     }
 
     private func refresh() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard active else { return }
+        guard isActive else { return }
         guard snapshots.snapshot(taskID)?.supervision?.captureState == "lost_with_owner" else {
-            generation = UUID()
+            invalidateGeneration()
             poll?.cancel()
             poll = nil
+            pollGeneration = nil
             cursor = nil
             records = []
-            if state != RecoveryActivityState() { state = RecoveryActivityState() }
+            if isActive, publishedState != RecoveryActivityState() { publishedState = RecoveryActivityState() }
             return
         }
         if case .success(let client) = environment.ctl(),
            selectedExecutable != client.executable || selectedContext != client.compatibilityContext {
-            generation = UUID()
+            invalidateGeneration()
             poll?.cancel()
             poll = nil
+            pollGeneration = nil
             cursor = nil
             records = []
             unsupported = false
             selectedExecutable = client.executable
             selectedContext = client.compatibilityContext
-            if state != RecoveryActivityState() { state = RecoveryActivityState() }
+            if isActive, publishedState != RecoveryActivityState() { publishedState = RecoveryActivityState() }
         }
-        guard poll == nil, !unsupported else { return }
-        let expected = generation
+        // A healthy → lost burst can be coalesced before this read. The healthy callback
+        // still invalidated the token, so retire that poll even though the latest snapshot
+        // is lost again. Its eventual completion must not clear a replacement poll.
+        let invalidPoll = pollGeneration.map { !isValid($0) } ?? false
+        let invalidState = publishedState.generation.map { !isValid($0) } ?? false
+        if invalidPoll || invalidState {
+            poll?.cancel()
+            poll = nil
+            pollGeneration = nil
+            cursor = nil
+            records = []
+            if isActive, publishedState != RecoveryActivityState() { publishedState = RecoveryActivityState() }
+        }
+        guard isActive, poll == nil, !unsupported,
+              let executable = selectedExecutable, let context = selectedContext else { return }
+        let expected = currentGeneration()
         let cursor = cursor
+        pollGeneration = expected
         poll = Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
             let result: Result<RecoveryActivityPage, ToolError>
             switch environment.ctl() {
             case .failure(let error): result = .failure(error)
             case .success(var client):
-                client.operationIsCurrent = { [weak self] in self?.isCurrent(expected) == true }
+                client.operationIsCurrent = { [weak self] in self?.isCurrent(expected, executable: executable, context: context) == true }
                 result = await client.recoveryActivity(taskID, cursor: cursor)
             }
-            apply(result, generation: expected)
+            queue.async { [weak self] in self?.apply(result, generation: expected) }
         }
     }
 
@@ -222,11 +321,11 @@ private final class RecoveryActivitySession: @unchecked Sendable {
     }
 
     private func apply(_ result: Result<RecoveryActivityPage, ToolError>, generation expected: UUID) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard active, generation == expected, !Task.isCancelled else { return }
+        guard isValid(expected), pollGeneration == expected else { return }
         poll = nil
-        guard isCurrent(expected) else { return }
+        pollGeneration = nil
+        guard let executable = selectedExecutable, let context = selectedContext,
+              isCurrent(expected, executable: executable, context: context) else { return }
         let provenance = notice(
             "Harness transcript recovery · display only. These entries do not establish task outcome or restore live input.",
             sourceID: "provenance"
@@ -246,8 +345,8 @@ private final class RecoveryActivitySession: @unchecked Sendable {
         events += records + notices
         let retained = Set(events.map(\.seq))
         identities = identities.filter { retained.contains($0.value) }
-        let next = RecoveryActivityState(events: events, items: Timeline.items(from: events))
-        if state != next { state = next }
+        let next = RecoveryActivityState(generation: expected, events: events, items: Timeline.items(from: events))
+        if isValid(expected), publishedState != next { publishedState = next }
     }
 
     private func applyPage(_ page: RecoveryActivityPage) -> [TaskEvent] {

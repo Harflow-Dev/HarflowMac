@@ -73,6 +73,59 @@ import Testing
         #expect(abs(position.offset - 421) < 2)
     }
 
+    @Test func givenSameIDs_whenCompletedLaneResumesAfterMeasuredLayout_thenFollowCorrectsLaterNativeMovement() async throws {
+        // given
+        _ = NSApplication.shared
+        let (window, scroll, document, observer, position) = try makeNativeFixture()
+        defer { window.contentView = nil; window.close() }
+        observer.horizontalConfiguration = .init(workingColumnIDs: [], contextID: "group")
+        observer.configure(ids: ["a", "b"], stride: 421, restorationOffset: nil, restorationActive: false)
+        await waitUntil { position.reports > 0 }
+        // when — IDs and width are unchanged, so this must bypass configure's geometry guard.
+        observer.horizontalConfiguration = .init(workingColumnIDs: ["b"], contextID: "group")
+        observer.configure(ids: ["a", "b"], stride: 421, restorationOffset: nil, restorationActive: false)
+        await waitUntil { abs(position.offset - min(421, 842 - position.width)) < 2 }
+        try #require(position.offset > 400)
+        // A later SwiftUI clip correction can occur even after width first matched.
+        scroll.contentView.scroll(to: .zero)
+        NotificationCenter.default.post(name: NSView.frameDidChangeNotification, object: document)
+        await waitUntil { abs(position.offset - min(421, 842 - position.width)) < 2 }
+        // then
+        #expect(position.offset > 400)
+        observer.configure(ids: ["b", "a"], stride: 421, restorationOffset: nil, restorationActive: false)
+        await waitUntil { abs(position.offset) < 2 }
+        scroll.contentView.scroll(to: CGPoint(x: 300, y: 0))
+        NotificationCenter.default.post(name: NSView.frameDidChangeNotification, object: document)
+        #expect(abs(position.offset) < 2)
+        observer.cancelHorizontalMovement()
+        scroll.contentView.scroll(to: CGPoint(x: 70, y: 0))
+        NotificationCenter.default.post(name: NSView.frameDidChangeNotification, object: document)
+        #expect(abs(position.offset - 70) < 2)
+    }
+
+    @Test func givenAwayFromLeft_whenResumeReordersAndDocumentShrinks_thenOffsetStaysInsideMeasuredDocument() async throws {
+        // given
+        _ = NSApplication.shared
+        let (window, scroll, document, observer, position) = try makeNativeFixture()
+        defer { window.contentView = nil; window.close() }
+        document.setFrameSize(CGSize(width: 1684, height: 200))
+        observer.horizontalConfiguration = .init(workingColumnIDs: [], contextID: "group")
+        observer.configure(ids: ["a", "b", "c", "d"], stride: 421, restorationOffset: nil, restorationActive: false)
+        await waitUntil { position.reports > 0 }
+        scroll.contentView.scroll(to: CGPoint(x: 1100, y: 0))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await waitUntil { position.offset > 1000 }
+        // when
+        observer.horizontalConfiguration = .init(workingColumnIDs: ["d"], contextID: "group")
+        observer.configure(ids: ["d", "c"], stride: 421, restorationOffset: nil, restorationActive: false)
+        document.setFrameSize(CGSize(width: 842, height: 200))
+        NotificationCenter.default.post(name: NSView.frameDidChangeNotification, object: document)
+        await waitUntil { position.offset <= 842 - position.width + 1 }
+        // then
+        #expect(scroll.contentView.bounds.minX <= document.bounds.width - scroll.contentView.bounds.width + 1)
+        #expect(position.offset >= 0)
+    }
+
     private final class Position {
         var reports = 0
         var offset: CGFloat = 0

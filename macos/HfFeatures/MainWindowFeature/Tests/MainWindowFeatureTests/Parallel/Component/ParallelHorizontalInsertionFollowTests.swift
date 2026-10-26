@@ -46,6 +46,40 @@ import Testing
         #expect(follow.targetID == nil)
     }
 
+    @Test(arguments: [CGFloat(0), CGFloat(2), CGFloat(3)])
+    func givenCompletedLane_whenItResumesAndReorders_thenOnlyLeadingReaderFollows(offset: CGFloat) {
+        // given
+        let follow = ParallelHorizontalInsertionFollow()
+        _ = follow.configure(.init(previousIDs: [], ids: ["a", "resumed"],
+                                   configuration: .init(workingColumnIDs: [], contextID: "group"),
+                                   offset: offset, isUserScrolling: false))
+        // when
+        _ = follow.configure(.init(previousIDs: ["a", "resumed"], ids: ["resumed", "a"],
+                                   configuration: .init(workingColumnIDs: ["resumed"], contextID: "group"),
+                                   offset: offset, isUserScrolling: false))
+        // then
+        #expect(follow.targetID == (offset <= 2 ? "resumed" : nil))
+    }
+
+    @Test func givenFollowingInsertion_whenAnotherLaneResumesDuringLayout_thenLatestActivationWins() {
+        // given
+        let follow = ParallelHorizontalInsertionFollow()
+        _ = follow.configure(.init(previousIDs: [], ids: ["a", "resumed"],
+                                   configuration: .init(workingColumnIDs: [], contextID: "group"),
+                                   offset: 0, isUserScrolling: false))
+        _ = follow.configure(.init(previousIDs: ["a", "resumed"], ids: ["a", "new", "resumed"],
+                                   configuration: .init(workingColumnIDs: ["new"], contextID: "group"),
+                                   offset: 0, isUserScrolling: false))
+        // when
+        _ = follow.configure(.init(previousIDs: ["a", "new", "resumed"], ids: ["resumed", "a", "new"],
+                                   configuration: .init(workingColumnIDs: ["new", "resumed"], contextID: "group"),
+                                   offset: 421, isUserScrolling: false))
+        // then
+        #expect(follow.targetID == "resumed")
+        follow.cancel()
+        #expect(follow.targetID == nil)
+    }
+
     @Test func givenPendingHorizontalLayoutOffset_whenLayoutCompletes_thenTheRememberedOffsetIsConsumedOnce() {
         // given
         let follow = ParallelHorizontalInsertionFollow()
