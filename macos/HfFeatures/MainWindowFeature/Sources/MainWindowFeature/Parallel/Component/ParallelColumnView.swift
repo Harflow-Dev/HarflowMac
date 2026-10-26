@@ -106,12 +106,12 @@ struct ParallelColumnView: View {
             if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
             Divider()
             resultCallout
-            if model.isLoading, model.liveStep == nil {
+            SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
                 SkeletonRows(count: 4, showsBadge: false)
 .padding(.top, HfRadius.Metrics.spacing4)
                     .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                feed.hfFadeIn()
+            } content: {
+                feed
             }
         }
         .padding(HfRadius.Metrics.spacing16)

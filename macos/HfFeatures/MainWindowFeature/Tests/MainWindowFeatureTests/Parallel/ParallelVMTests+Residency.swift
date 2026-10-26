@@ -22,7 +22,7 @@ extension ParallelVMTests {
 
     @Test func givenManyConversations_whenViewportMoves_thenOnlyVisibleMembersAreLeased() async {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         let tasks = (0 ..< 64).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         harness.sut.didAppear()
@@ -31,7 +31,7 @@ extension ParallelVMTests {
         #expect(harness.sut.residentColumnCount == 2)
         #expect(harness.sut.leasedMemberCount == 2)
         let original = Set(harness.sut.columns.filter(\.isResident).map(\.id))
-        harness.sut.updateViewport(offset: 421 * 20, width: 842)
+        harness.sut.updateViewport(offset: 631 * 20, width: 1262)
         await waitUntil { harness.sut.isPresentationSettled }
         #expect(harness.sut.residentColumnCount == 2)
         #expect(harness.sut.leasedMemberCount == 2)
@@ -61,14 +61,14 @@ extension ParallelVMTests {
 
     @Test func givenRapidViewportChanges_whenWorkerSettles_thenOnlyLatestResidencyApplies() async {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         let tasks = (0 ..< 256).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         harness.sut.didAppear()
         harness.tasksSubject.send(tasks)
         await waitUntil { harness.sut.columns.count == 256 }
-        for index in 0 ..< 30 { harness.sut.updateViewport(offset: CGFloat(index) * 421, width: 842) }
-        harness.sut.updateViewport(offset: 0, width: 842)
+        for index in 0 ..< 30 { harness.sut.updateViewport(offset: CGFloat(index) * 631, width: 1262) }
+        harness.sut.updateViewport(offset: 0, width: 1262)
         await waitUntil { harness.sut.isPresentationSettled }
         #expect(harness.sut.residentColumnCount == 2)
         #expect(harness.sut.leasedMemberCount == 2)
@@ -83,7 +83,7 @@ extension ParallelVMTests {
 
     @Test func givenOneMemberActivity_whenItChanges_thenOnlyItsResidentColumnBuilds() async throws {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         let tasks = (0 ..< 8).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         let subject = PassthroughSubject<[TimelineItem], Never>()
@@ -105,7 +105,7 @@ extension ParallelVMTests {
 
     @Test func givenLongResumeChains_whenOnlyTwoColumnsAreVisible_thenAllTheirTurnsAreLeased() async throws {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         var tasks: [TaskInfo] = []
         for column in 0 ..< 8 {
             for turn in 0 ..< 16 {
@@ -139,11 +139,11 @@ extension ParallelVMTests {
     }
 
     @Test func givenResidencyGeometry_whenOffsetIsClamped_thenIntervalsAreBounded() {
-        #expect(ParallelResidency.indices(count: 64, offset: 0, width: 842, stride: 421) == 0 ..< 3)
-        #expect(ParallelResidency.indices(count: 64, offset: 421, width: 842, stride: 421) == 0 ..< 4)
-        #expect(ParallelResidency.indices(count: 64, offset: -50, width: 842, stride: 421) == 0 ..< 3)
-        #expect(ParallelResidency.indices(count: 64, offset: .infinity, width: 842, stride: 421).isEmpty)
-        #expect(ParallelResidency.indices(count: 64, offset: 0, width: 0, stride: 421).isEmpty)
-        #expect(ParallelResidency.indices(count: 2, offset: 100_000, width: 842, stride: 421) == 0 ..< 2)
+        #expect(ParallelResidency.indices(count: 64, offset: 0, width: 1262, stride: 631) == 0 ..< 3)
+        #expect(ParallelResidency.indices(count: 64, offset: 631, width: 1262, stride: 631) == 0 ..< 4)
+        #expect(ParallelResidency.indices(count: 64, offset: -50, width: 1262, stride: 631) == 0 ..< 3)
+        #expect(ParallelResidency.indices(count: 64, offset: .infinity, width: 1262, stride: 631).isEmpty)
+        #expect(ParallelResidency.indices(count: 64, offset: 0, width: 0, stride: 631).isEmpty)
+        #expect(ParallelResidency.indices(count: 2, offset: 100_000, width: 1262, stride: 631) == 0 ..< 2)
     }
 }

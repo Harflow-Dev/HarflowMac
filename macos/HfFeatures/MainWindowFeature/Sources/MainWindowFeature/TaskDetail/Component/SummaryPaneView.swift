@@ -365,21 +365,25 @@ struct SummaryPaneView: View {
 
     @ViewBuilder
     private var editedFilesSection: some View {
-        switch model.editedFilesAvailability {
-        case .loading:
+        SkeletonContent(isLoading: model.editedFilesAvailability == .loading) {
             section("Files edited") { SkeletonRows(count: 3, showsBadge: false) }
-        case .unavailable:
-            section("Files edited") {
-                Text("Edit history isn't available for this task.").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-            }
-        case .available:
-            if !model.editedFiles.isEmpty {
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-                    SummaryEditedFilesHeading(count: model.editedFiles.count)
-                    if let note = model.editedFilesNote {
-                        Text(note).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+        } content: {
+            switch model.editedFilesAvailability {
+            case .loading:
+                EmptyView()
+            case .unavailable:
+                section("Files edited") {
+                    Text("Edit history isn't available for this task.").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+                }
+            case .available:
+                if !model.editedFiles.isEmpty {
+                    VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                        SummaryEditedFilesHeading(count: model.editedFiles.count)
+                        if let note = model.editedFilesNote {
+                            Text(note).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                        }
+                        editedFilesCard
                     }
-                    editedFilesCard
                 }
             }
         }

@@ -32,6 +32,7 @@ public extension EnvironmentValues {
 // MARK: - ContentFadeIn
 
 private struct ContentFadeIn: ViewModifier {
+    @Environment(\.hfSkeletonHandoffActive) private var handoffActive
     @State private var appeared: Bool
 
     init(animate: Bool) {
@@ -41,7 +42,7 @@ private struct ContentFadeIn: ViewModifier {
     func body(content: Content) -> some View {
         content
             .animation(HfMotion.arrival) { view in
-                view.opacity(appeared ? 1 : 0)
+                view.opacity(appeared || handoffActive ? 1 : 0)
             }
             .onAppear {
                 guard !appeared else { return }

@@ -40,6 +40,7 @@ public final class DeferredContentState {
     public func revealAfterFirstFrame() async {
         guard !isShowingContent else { return }
         await waitForPresentedFrame()
+        guard !Task.isCancelled else { return }
         isShowingContent = true
     }
 }
@@ -139,13 +140,7 @@ public struct DeferredContent<Placeholder: View, Content: View>: View {
     }
 
     public var body: some View {
-        Group {
-            if state.isShowingContent {
-                content()
-            } else {
-                placeholder()
-            }
-        }
+        SkeletonContent(isLoading: !state.isShowingContent, placeholder: placeholder, content: content)
         .task { await state.revealAfterFirstFrame() }
     }
 }

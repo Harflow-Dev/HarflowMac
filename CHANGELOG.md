@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Increase the minimum Parallel panel width from 420 to 630 points.
+- Crossfade loading placeholders into resolved content once per retained selection, with an immediate handoff under Reduce Motion.
 - Refresh vendored v1 contract fixtures for additive engine observer-identity diagnostics; existing decoders and version gates remain compatible.
 - Prevent recovery activity refreshes from deadlocking task snapshot updates and window teardown.
 - Restore horizontal following for new and resumed working conversations, and keep reordered activity within scroll bounds.

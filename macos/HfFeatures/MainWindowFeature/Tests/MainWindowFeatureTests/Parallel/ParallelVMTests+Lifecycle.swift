@@ -47,8 +47,8 @@ extension ParallelVMTests {
         let second = ParallelVM(groupName: "g1", useCase: harness.useCase, routing: harness.routing)
         let tasks = (0 ..< 8).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
-        harness.sut.updateViewport(offset: 0, width: 842)
-        second.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
+        second.updateViewport(offset: 0, width: 1262)
         harness.sut.didAppear()
         second.didAppear()
         harness.tasksSubject.send(tasks)
@@ -56,7 +56,7 @@ extension ParallelVMTests {
         let retained = Set(second.columns.filter(\.isResident).map(\.id))
         #expect(pool.count == 4)
         #expect(retained.allSatisfy { pool.count(for: $0) == 2 })
-        harness.sut.updateViewport(offset: 421 * 4, width: 842)
+        harness.sut.updateViewport(offset: 631 * 4, width: 1262)
         await waitUntil { harness.sut.isPresentationSettled }
         #expect(retained.allSatisfy { pool.count(for: $0) == 1 })
         harness.sut.didDisappear()
@@ -108,7 +108,7 @@ extension ParallelVMTests {
         harness.sut.didDisappear()
         #expect(harness.sut.columns.isEmpty && harness.sut.leasedMemberCount == 0)
         harness.titlesBox.value = [member.taskID: "Reopened"]
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         harness.sut.didAppear()
         harness.tasksSubject.send([member])
         let updates = harness.sut.sourceUpdateCount

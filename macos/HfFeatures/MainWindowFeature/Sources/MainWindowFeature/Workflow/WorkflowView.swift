@@ -13,6 +13,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     @AppStorage("workflowViewMode") private var viewMode = "Graph"
     /// Local presentation state for the non-blocking recovery overlay; never VM state.
     @State private var summaryExpanded = false
+    @State private var lastLoadingWasRun = false
     @State private var recoveryOverlay = WorkflowRecoveryOverlayPresentation()
     /// Focus return to the eligible badge after an explicit dismissal only (best effort).
     @FocusState private var recoveryBadgeFocused: Bool
@@ -37,6 +38,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         }
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
+        .onChange(of: viewModel.initialLoadingKind, initial: true) { _, kind in
+            if let kind { lastLoadingWasRun = kind == "run" }
+        }
         .onChange(of: viewMode, initial: true) { _, mode in viewModel.setRunGraphVisible(mode == "Graph") }
         .onChange(of: viewModel.runSidebar.announcementIdentity) { _, _ in
             guard viewMode == "Graph" else { return }
@@ -58,7 +62,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 
     private var screenHeader: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
-            if viewModel.initialLoadingKind != nil {
+            SkeletonContent(isLoading: viewModel.initialLoadingKind != nil) {
                 HStack {
                     VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
                         SkeletonBlock(width: HfRadius.Metrics.workflowInspectorMinimumWidth, height: HfRadius.Metrics.spacing20)
@@ -68,8 +72,8 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 }
 .padding(.horizontal, HfRadius.Metrics.spacing16)
 .padding(.vertical, HfRadius.Metrics.spacing12)
-            } else {
-                header.disabled(viewModel.initialLoadFailed).hfFadeIn()
+            } content: {
+                header.disabled(viewModel.initialLoadFailed)
             }
             Divider()
             if let error = viewModel.errorText, error != viewModel.readFailureText {
@@ -85,19 +89,27 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     }
 
     @ViewBuilder private var screenContent: some View {
-            if viewModel.initialLoadingKind == "run" ||
-                (viewModel.initialLoadingKind == nil && !viewModel.initialLoadFailed
-                    && viewModel.selectedRun != nil && viewModel.selectedRun?.isBuilder != true) {
-                runContent
-            } else if let loadingKind = viewModel.initialLoadingKind {
-                WorkflowLoadingView(isRun: loadingKind == "run")
-            } else if viewModel.initialLoadFailed {
-                ContentUnavailableView("Workflow could not be loaded", systemImage: "exclamationmark.triangle")
-            } else if viewModel.selectedRun?.isBuilder == true {
-                builderContent.hfFadeIn()
-            } else {
-                editor.hfFadeIn()
+        if viewModel.initialLoadingKind == "run" ||
+            (viewModel.initialLoadingKind == nil && viewModel.selectedRun != nil && viewModel.selectedRun?.isBuilder != true) ||
+            (viewModel.initialLoadFailed && lastLoadingWasRun) {
+            runContent
+        } else {
+            SkeletonContent(isLoading: viewModel.initialLoadingKind != nil) {
+                WorkflowLoadingView(isRun: false)
+            } content: {
+                if viewModel.initialLoadFailed {
+                    runReadError
+                } else if viewModel.selectedRun?.isBuilder == true {
+                    builderContent
+                } else {
+                    editor
+                }
             }
+        }
+    }
+
+    private var runReadError: some View {
+        ContentUnavailableView("Workflow could not be loaded", systemImage: "exclamationmark.triangle")
     }
 
     private var header: some View {
@@ -513,6 +525,18 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 // MARK: - Workflow activity selection
 
 private extension WorkflowView {
+    @ViewBuilder
+    func runSummary(maximumHeight: CGFloat) -> some View {
+        let summary = WorkflowRunSummary(viewModel: viewModel, isExpanded: $summaryExpanded,
+                                         maximumHeight: maximumHeight,
+                                         isRecoveryPanelVisible: recoveryOverlay.isVisible(runID: recoveryEligibleRunID))
+        if viewModel.initialLoadFailed {
+            summary.hidden()
+        } else {
+            summary
+        }
+    }
+
     var runContent: some View {
         let isLoading = viewModel.initialLoadingKind == "run"
         let recoveryRunID = recoveryEligibleRunID
@@ -521,33 +545,41 @@ private extension WorkflowView {
             WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading,
                              canvasChromeHeight: WorkflowStandaloneLayout.height,
                              presentation: viewMode == "Graph" && !viewModel.runSidebar.isDefault ? .activity : .default) {
-                if isLoading { WorkflowLoadingCanvas() } else {
-                    VStack(spacing: HfRadius.Metrics.zero) {
-                        WorkflowStandaloneBar(viewModel: viewModel)
-                        canvas
-                    }.hfFadeIn()
+                SkeletonContent(isLoading: isLoading) { WorkflowLoadingCanvas() } content: {
+                    if viewModel.initialLoadFailed { runReadError } else {
+                        VStack(spacing: HfRadius.Metrics.zero) {
+                            WorkflowStandaloneBar(viewModel: viewModel)
+                            canvas
+                        }
+                    }
                 }
             } inspector: {
-                if isLoading { WorkflowLoadingInspector(isRun: true) } else {
-                    ZStack {
-                        defaultRunSidebar
-                            .opacity(viewMode == "Graph" && !viewModel.runSidebar.isDefault ? 0 : 1)
-                            .allowsHitTesting(viewMode != "Graph" || viewModel.runSidebar.isDefault)
-                            .accessibilityHidden(viewMode == "Graph" && !viewModel.runSidebar.isDefault)
-                        if viewMode == "Graph", !viewModel.runSidebar.isDefault {
-                            WorkflowSelectedSidebar(viewModel: viewModel)
+                SkeletonContent(isLoading: isLoading) { WorkflowLoadingInspector(isRun: true) } content: {
+                    if !viewModel.initialLoadFailed {
+                        ZStack {
+                            defaultRunSidebar
+                                .opacity(viewMode == "Graph" && !viewModel.runSidebar.isDefault ? 0 : 1)
+                                .allowsHitTesting(viewMode != "Graph" || viewModel.runSidebar.isDefault)
+                                .accessibilityHidden(viewMode == "Graph" && !viewModel.runSidebar.isDefault)
+                            if viewMode == "Graph", !viewModel.runSidebar.isDefault {
+                                WorkflowSelectedSidebar(viewModel: viewModel)
+                            }
                         }
                     }
                 }
             } activity: {
-                if isLoading { WorkflowLoadingActivity() } else { activity.hfFadeIn() }
+                SkeletonContent(isLoading: isLoading) { WorkflowLoadingActivity() } content: {
+                    if viewModel.initialLoadFailed { runReadError } else { activity }
+                }
             }
             .overlay(alignment: .topTrailing) {
-                WorkflowRecoveryOverlayHost(
-                    viewModel: viewModel,
-                    presentation: $recoveryOverlay,
-                    onExplicitClose: { recoveryBadgeFocused = true }
-                )
+                if !viewModel.initialLoadFailed {
+                    WorkflowRecoveryOverlayHost(
+                        viewModel: viewModel,
+                        presentation: $recoveryOverlay,
+                        onExplicitClose: { recoveryBadgeFocused = true }
+                    )
+                }
             }
             .onExitCommand {
                 guard !recoveryOverlay.isVisible(runID: recoveryRunID), !viewModel.showsRunSheet,
@@ -556,9 +588,7 @@ private extension WorkflowView {
                 viewModel.selectedNodeID = nil
                 viewModel.selectedEdgeID = nil
             }
-            WorkflowRunSummary(viewModel: viewModel, isExpanded: $summaryExpanded,
-                               maximumHeight: max(44, min(360, viewport.size.height * 0.6)),
-                               isRecoveryPanelVisible: recoveryOverlay.isVisible(runID: recoveryRunID))
+            runSummary(maximumHeight: max(44, min(360, viewport.size.height * 0.6)))
             }
         }
     }

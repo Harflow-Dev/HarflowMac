@@ -15,41 +15,50 @@ import Testing
 
     @Test func givenTwoMembersWithPlentyOfRoom_whenLayingOutColumns_thenTheyEvenlySplitTheWidth() {
         // given / when
-        let width = ParallelLayout.columnWidth(memberCount: 2, availableWidth: 1000)
+        let width = ParallelLayout.columnWidth(memberCount: 2, availableWidth: 1600)
 
-        // then — (1000 - 2 dividers) / 2, comfortably above the 420 floor: no leftover band.
-        #expect(width == (1000 - 2 * ParallelLayout.dividerWidth) / 2)
-        #expect(width * 2 + 2 * ParallelLayout.dividerWidth <= 1000)
+        // then — (1600 - 2 dividers) / 2, comfortably above the 630 floor: no leftover band.
+        #expect(width == (1600 - 2 * ParallelLayout.dividerWidth) / 2)
+        #expect(width * 2 + 2 * ParallelLayout.dividerWidth <= 1600)
     }
 
-    // MARK: - Keeps the 420 floor
+    @Test func givenTwoMembersAtMinimumViewport_whenLayingOutColumns_thenTheFloorOverflowsForHorizontalScrolling() {
+        // given / when
+        let width = ParallelLayout.columnWidth(memberCount: 2, availableWidth: 1000)
+
+        // then — each column keeps its 630pt minimum, so the row scrolls horizontally.
+        #expect(width == 630)
+        #expect(width * 2 + 2 * ParallelLayout.dividerWidth > 1000)
+    }
+
+    // MARK: - Keeps the 630 floor
 
     @Test func givenTooManyMembersForTheWidth_whenLayingOutColumns_thenTheFloorApplies() {
-        // given / when / then — 900/10 is far under 420, so the old fixed-width members-count case
+        // given / when / then — 900/10 is far under 630, so the members-count case
         // still keeps its floor even though the rule is width-driven now.
-        #expect(ParallelLayout.columnWidth(memberCount: 10, availableWidth: 900) == 420)
+        #expect(ParallelLayout.columnWidth(memberCount: 10, availableWidth: 900) == 630)
     }
 
     @Test func givenNoAvailableWidthYet_whenLayingOutColumns_thenTheFloorApplies() {
         // given / when / then — a `GeometryReader` reporting 0 before layout has run must not collapse
         // the columns to nothing.
-        #expect(ParallelLayout.columnWidth(memberCount: 3, availableWidth: 0) == 420)
+        #expect(ParallelLayout.columnWidth(memberCount: 3, availableWidth: 0) == 630)
     }
 
     @Test func givenTenAgentsInFullscreen_whenLayingOutColumns_thenChatStaysWideAndOverflowsForHorizontalScrolling() {
         // given / when
         let width = ParallelLayout.columnWidth(memberCount: 10, availableWidth: 2560)
         // then
-        #expect(width == 420)
+        #expect(width == 630)
         #expect(width * 10 + ParallelLayout.dividerWidth * 10 > 2560)
     }
 
     @Test func givenThreeAgentsWithEnoughRoom_whenLayingOutColumns_thenTheyFillTheViewportAboveReadingMinimum() {
         // given / when
-        let width = ParallelLayout.columnWidth(memberCount: 3, availableWidth: 1500)
+        let width = ParallelLayout.columnWidth(memberCount: 3, availableWidth: 2100)
         // then
         #expect(width > ParallelLayout.minimumColumnWidth)
-        #expect(width * 3 + ParallelLayout.dividerWidth * 3 == 1500)
+        #expect(width * 3 + ParallelLayout.dividerWidth * 3 == 2100)
     }
 
     // MARK: - Does not divide by zero

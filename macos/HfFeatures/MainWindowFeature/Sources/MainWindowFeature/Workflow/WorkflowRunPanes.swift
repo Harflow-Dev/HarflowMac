@@ -11,7 +11,7 @@ enum WorkflowRunLayout {
     static let activityMinimum: CGFloat = HfRadius.Metrics.workflowRunActivityMinimumHeight
     static let inspectorMinimum: CGFloat = HfRadius.Metrics.workflowRunPanelMinimumWidth
     static let defaultInspectorIdeal: CGFloat = HfRadius.Metrics.workflowRunPanelIdealWidth
-    static let inspectorIdeal: CGFloat = ParallelLayout.minimumColumnWidth
+    static let inspectorIdeal: CGFloat = HfRadius.Metrics.workflowRunActivityPanelIdealWidth
     static let inspectorMaximum: CGFloat = HfRadius.Metrics.workflowRunPanelMaximumWidth
 
     static func inspectorIdeal(for presentation: WorkflowRunPaneSizing) -> CGFloat {

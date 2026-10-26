@@ -109,7 +109,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
                 claimStrip
                 // Design point 3: columns fill the available width instead of a fixed 900pt budget —
                 // `GeometryReader` reads the row's actual width so `ParallelLayout.columnWidth(memberCount:availableWidth:)`
-                // can divide it evenly, keeping the 420pt reading-width floor (and the horizontal scroll) once there
+                // can divide it evenly, keeping the 630pt reading-width floor (and the horizontal scroll) once there
                 // are too many members for the window to fit.
                 GeometryReader { proxy in
                     ScrollView(.horizontal) {

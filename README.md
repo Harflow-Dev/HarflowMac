@@ -8,7 +8,9 @@ Workflow runs show selected node activity in the Graph sidebar, with attempt sel
 
 Task approvals appear in Activity, with pending hints in Summary and Prompt; workflow approvals remain in the run sidebar. Pending requests show the complete action and stay expanded. Answered requests collapse to an expandable settled row. Compatible engines let Harflow answer caller-owned requests; older engines retain read-only guidance for those requests. Decision acceptance, delivery and observed execution are shown separately.
 
-An open single-conversation group switches to Parallel as independent conversations join, retaining the original activity and reading position. Parallel and workflow activity follow new or resumed working conversations while the horizontal viewport is at its left edge; scrolling away keeps the current conversation in view. User scrolling cancels pending automatic movement.
+Parallel panels keep a 630-point minimum width and scroll horizontally when they cannot fit. An open single-conversation group switches to Parallel as independent conversations join, retaining the original activity and reading position. Parallel and workflow activity follow new or resumed working conversations while the horizontal viewport is at its left edge; scrolling away keeps the current conversation in view. User scrolling cancels pending automatic movement.
+
+Loading placeholders hand off to resolved content with one short opacity crossfade per retained selection. Reduce Motion switches immediately; live updates and pagination keep content visible.
 
 Streaming replies retain completed Markdown blocks while preparing the changing tail in the background. Activity feeds use the same prepared layout for measurement and display.
 

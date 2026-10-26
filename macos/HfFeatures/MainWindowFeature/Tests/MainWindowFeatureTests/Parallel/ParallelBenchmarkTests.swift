@@ -32,7 +32,7 @@ extension ParallelVMTests {
                                  fixture: (tasks: [TaskInfo], conversations: [Conversation], items: [TimelineItem])) async throws -> [[String: Any]] {
         let harness = makeSUT()
         let recorder = ParallelBenchmarkRecorder(count: count, turns: turns, calls: callCount, sample: sample, sut: harness.sut)
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: fixture.tasks.map { ($0.taskID, $0) })
         harness.itemsBox.value = Dictionary(uniqueKeysWithValues: fixture.tasks.map { ($0.taskID, fixture.items) })
         harness.availabilityBox.value = Dictionary(uniqueKeysWithValues: fixture.tasks.map { ($0.taskID, .available) })
@@ -54,11 +54,11 @@ extension ParallelVMTests {
         #expect(harness.sut.columns.count == count && harness.sut.isPresentationSettled)
         recorder.record("initial_model_settlement", start)
         start = DispatchTime.now().uptimeNanoseconds
-        harness.sut.updateViewport(offset: 421 * 4, width: 842)
+        harness.sut.updateViewport(offset: 631 * 4, width: 1262)
         await waitUntil(timeout: 30) { harness.sut.isPresentationSettled }
         recorder.record("viewport_crossing", start)
         start = DispatchTime.now().uptimeNanoseconds
-        for index in [0, 4, 1, 5, 0] { harness.sut.updateViewport(offset: CGFloat(index) * 421, width: 842) }
+        for index in [0, 4, 1, 5, 0] { harness.sut.updateViewport(offset: CGFloat(index) * 631, width: 1262) }
         await waitUntil(timeout: 30) { harness.sut.isPresentationSettled }
         recorder.record("rapid_reversal", start)
         let event = try #require(TaskEvent(line: "{\"v\":1,\"seq\":99999,\"kind\":\"assistant_text\",\"text\":\"synthetic delta\"}"))

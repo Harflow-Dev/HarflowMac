@@ -1,3 +1,4 @@
+import HfUI
 import MonitorCore
 import SwiftUI
 
@@ -7,6 +8,7 @@ import SwiftUI
 @Observable
 @MainActor
 final class ParallelColumnUIState {
+    let activityHandoff = SkeletonContentState()
     var expandedGroups: Set<String> = []
     @ObservationIgnored private var followState = FollowLiveScrollState()
     private var followsLive = true

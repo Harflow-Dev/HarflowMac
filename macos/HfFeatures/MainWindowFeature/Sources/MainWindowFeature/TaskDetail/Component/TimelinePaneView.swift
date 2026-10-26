@@ -128,13 +128,14 @@ struct TimelinePaneView: View {
                 .padding(.vertical, HfRadius.Metrics.spacing8)
                 .readingColumn()
             }
-            if model.isLoading, model.liveStep == nil, approvalController?.cards.isEmpty != false {
+            SkeletonContent(isLoading: model.isLoading && model.liveStep == nil && approvalController?.cards.isEmpty != false,
+                            state: state.activityHandoff) {
                 SkeletonRows(count: 5, showsBadge: false)
                     .padding(HfRadius.Metrics.spacing24)
                     .readingColumn()
                     .frame(maxHeight: .infinity, alignment: .top)
-            } else {
-                feed.hfFadeIn()
+            } content: {
+                feed
             }
         }
     }

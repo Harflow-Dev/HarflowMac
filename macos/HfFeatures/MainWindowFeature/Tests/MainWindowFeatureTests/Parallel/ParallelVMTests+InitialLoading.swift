@@ -56,7 +56,7 @@ extension ParallelVMTests {
             return result
         })
         let tasks = (0 ..< 3).map { task(id: "staggered-\($0)", status: "completed", startedAt: Date(timeIntervalSince1970: Double($0))) }
-        harness.sut.updateViewport(offset: 0, width: 1263)
+        harness.sut.updateViewport(offset: 0, width: 1893)
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         for task in tasks {
             harness.itemSubjectsBox.value[task.taskID] = PassthroughSubject()
@@ -109,8 +109,8 @@ extension ParallelVMTests {
         let tasks = (0 ..< 3).map { task(id: "shared-\($0)", status: "completed", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         for task in tasks { harness.itemSubjectsBox.value[task.taskID] = PassthroughSubject() }
-        harness.sut.updateViewport(offset: 0, width: 1263)
-        second.updateViewport(offset: 0, width: 1263)
+        harness.sut.updateViewport(offset: 0, width: 1893)
+        second.updateViewport(offset: 0, width: 1893)
         harness.sut.didAppear()
         second.didAppear()
         defer { harness.sut.didDisappear(); second.didDisappear() }
@@ -121,11 +121,11 @@ extension ParallelVMTests {
         #expect(pool.count(for: id) == 2)
 
         // when
-        harness.sut.updateViewport(offset: 0, width: 421)
+        harness.sut.updateViewport(offset: 0, width: 631)
         await waitUntil { harness.sut.isPresentationSettled && pool.count(for: id) == 1 }
         let freshSubject = PassthroughSubject<[TimelineItem], Never>()
         harness.itemSubjectsBox.value[id] = freshSubject
-        harness.sut.updateViewport(offset: 0, width: 1263)
+        harness.sut.updateViewport(offset: 0, width: 1893)
         await waitUntil { harness.sut.isPresentationSettled && pool.count(for: id) == 2 }
         #expect(harness.sut.columns.first { $0.task.taskID == id }?.isLoading == true)
         let freshItem = PreviewFixtures.textItem("Fresh stream")

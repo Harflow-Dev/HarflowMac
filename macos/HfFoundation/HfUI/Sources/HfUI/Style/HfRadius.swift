@@ -232,6 +232,8 @@ public enum HfRadius {
         public static let workflowRunActivityMinimumHeight: CGFloat = 240
         public static let workflowRunPanelMinimumWidth: CGFloat = 220
         public static let workflowRunPanelIdealWidth: CGFloat = 288
+        /// Selected Graph activity keeps its own reading width, independently of Parallel lanes.
+        public static let workflowRunActivityPanelIdealWidth: CGFloat = 420
         public static let workflowRunPanelMaximumWidth: CGFloat = 500
         /// The run plan checklist's 4 pt progress strip.
         public static let workflowPlanProgressHeight: CGFloat = 4

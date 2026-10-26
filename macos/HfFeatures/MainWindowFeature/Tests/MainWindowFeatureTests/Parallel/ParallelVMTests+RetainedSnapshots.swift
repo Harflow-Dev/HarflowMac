@@ -14,7 +14,7 @@ extension ParallelVMTests {
         harness.itemsBox.value["last"] = [PreviewFixtures.textItem("Retained activity")]
         harness.availabilityBox.value["first"] = .available
         harness.availabilityBox.value["last"] = .available
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         harness.sut.didAppear()
         defer { harness.sut.didDisappear() }
         harness.tasksSubject.send([first, last])
@@ -28,7 +28,7 @@ extension ParallelVMTests {
         #expect(harness.sut.leasedMemberCount == 0)
         harness.itemsBox.value["last"] = []
         harness.availabilityBox.value["last"] = .loading
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         await waitUntil { harness.sut.isPresentationSettled && harness.sut.leasedMemberCount == 1 }
         #expect(harness.sut.columns.first?.rows == rows)
     }
@@ -42,7 +42,7 @@ extension ParallelVMTests {
             harness.availabilityBox.value[task.taskID] = .available
             harness.itemSubjectsBox.value[task.taskID] = PassthroughSubject()
         }
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         harness.sut.didAppear()
         defer { harness.sut.didDisappear() }
         harness.tasksSubject.send(tasks)
@@ -56,7 +56,7 @@ extension ParallelVMTests {
         state.anchor = ParallelVerticalAnchor(id: first.activityRows[0].id, index: 0, relativeOffset: -40)
         let anchor = state.anchor
 
-        harness.sut.updateViewport(offset: 421 * 4, width: 842)
+        harness.sut.updateViewport(offset: 631 * 4, width: 1262)
         await waitUntil { harness.sut.isPresentationSettled }
         let paused = try #require(harness.sut.columns.first { $0.id == first.id })
         #expect(!paused.isVisible && paused.isResident)
@@ -75,7 +75,7 @@ extension ParallelVMTests {
         harness.itemSubjectsBox.value[first.task.taskID] = freshSubject
         harness.itemsBox.value[first.task.taskID] = []
         harness.availabilityBox.value[first.task.taskID] = .loading
-        harness.sut.updateViewport(offset: 0, width: 842)
+        harness.sut.updateViewport(offset: 0, width: 1262)
         await waitUntil { harness.sut.isPresentationSettled && harness.sut.leasedMemberCount == 2 }
         #expect(harness.sut.columns.first { $0.id == first.id }?.rows == first.rows)
         #expect(harness.sut.columnState(for: first.id).anchor == anchor)

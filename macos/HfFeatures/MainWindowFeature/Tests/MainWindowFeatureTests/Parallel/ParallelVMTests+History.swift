@@ -84,14 +84,14 @@ extension ParallelVMTests {
         finishPage(harness, id: id, sequence: 50, hasMore: true)
         await waitUntil { harness.sut.columns.first?.history.isLoading == false && harness.sut.isPresentationSettled }
         // when
-        harness.sut.updateViewport(offset: 1684, width: 421)
+        harness.sut.updateViewport(offset: 2524, width: 631)
         await waitUntil { harness.releasedBox.value.contains(id) && harness.sut.isPresentationSettled }
         #expect(harness.sut.columnState(for: id).oldestSequences[id] == 50)
         harness.acquireEffectBox.value = { memberID in
             guard memberID == id else { return }
             self.seedHistory(harness, ids: [id], sequence: 100)
         }
-        harness.sut.updateViewport(offset: 0, width: 421)
+        harness.sut.updateViewport(offset: 0, width: 631)
         await waitUntil { harness.loadCallsBox.value.count == 2 }
         sendHistory(harness, id: id, history: EventHistoryState(hasMore: true, isLoading: true))
         finishPage(harness, id: id, sequence: 50, hasMore: true)
@@ -108,7 +108,7 @@ extension ParallelVMTests {
         await waitUntil { harness.sut.columns.count == 8 && harness.sut.isPresentationSettled }
         let action = harness.sut.columns.first?.onLoadMore
         // when
-        harness.sut.updateViewport(offset: 421, width: 421)
+        harness.sut.updateViewport(offset: 631, width: 631)
         await waitUntil { harness.sut.columns.first?.isVisible == false && harness.sut.isPresentationSettled }
         action?()
         // then
@@ -147,7 +147,7 @@ extension ParallelVMTests {
         await waitUntil { harness.sut.columns.count == 8 && harness.sut.isPresentationSettled }
         let id = try #require(harness.sut.columns.first?.id)
         let oldPublisher = try #require(harness.historySubjectsBox.value[id])
-        harness.sut.updateViewport(offset: 1684, width: 421)
+        harness.sut.updateViewport(offset: 2524, width: 631)
         oldPublisher.send(EventHistoryState(hasMore: true, isLoading: true, error: "obsolete"))
         await waitUntil { harness.sut.isPresentationSettled }
         #expect(harness.sut.columns.first?.history.error == nil)
@@ -236,10 +236,10 @@ extension ParallelVMTests {
         await waitUntil { harness.sut.columns.count == 8 && harness.sut.isPresentationSettled }
         let id = try #require(harness.sut.columns.first?.id)
         harness.sut.columnState(for: id).oldestSequences[id] = 50
-        harness.sut.updateViewport(offset: 1684, width: 421)
+        harness.sut.updateViewport(offset: 2524, width: 631)
         await waitUntil { harness.releasedBox.value.contains(id) && harness.sut.isPresentationSettled }
         harness.loadAdmissionBox.value = false
-        harness.sut.updateViewport(offset: 0, width: 421)
+        harness.sut.updateViewport(offset: 0, width: 631)
         await waitUntil { harness.sut.columns.first?.history.error != nil && harness.sut.isPresentationSettled }
         #expect(harness.sut.columns.first?.history.isLoading == false)
         #expect(harness.sut.columns.first?.history.error?.contains("Retry") == true)
@@ -250,7 +250,7 @@ extension ParallelVMTests {
 
     private func historyHarness() -> SUT {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 421)
+        harness.sut.updateViewport(offset: 0, width: 631)
         let tasks = (0 ..< 8).map { task(id: "history-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         seedHistory(harness, ids: tasks.map(\.taskID), sequence: 100)
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })

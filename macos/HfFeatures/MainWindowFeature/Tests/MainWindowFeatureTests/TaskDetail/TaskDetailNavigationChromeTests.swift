@@ -32,13 +32,17 @@ import Testing
             minimumHeights.append(host.view.fittingSize.height)
             frames.append(window.frame)
             layouts.append(window.contentLayoutRect)
-            identifiers.formUnion(window.toolbar?.items.map(\.itemIdentifier.rawValue) ?? [])
+            let taskItemIDs = window.toolbar?.items.map(\.itemIdentifier.rawValue).filter { $0.hasPrefix("task-detail.") } ?? []
+            #expect(taskItemIDs.count == Set(taskItemIDs).count,
+                    "The outgoing skeleton must not publish native toolbar items alongside the prepared TaskDetail")
+            identifiers.formUnion(taskItemIDs)
             try await Task.sleep(for: .milliseconds(2))
         }
         let frameMovement = frames.map { abs($0.minY - baselineFrame.minY) }.max() ?? 0
         let contentMovement = layouts.map { abs($0.minY - baselineLayout.minY) + abs($0.height - baselineLayout.height) }.max() ?? 0
         print("Deferred navigation chrome: window delta \(frameMovement), content delta \(contentMovement)")
         print("Minimum height \(minimumHeights.max() ?? 0), toolbar slots \(identifiers.sorted())")
+        #expect(identifiers.contains("task-detail.inspector"), "The real task toolbar remains mounted through the handoff")
         #expect(frameMovement < 1)
         #expect(contentMovement < 1)
         #expect((minimumHeights.max() ?? 0) <= size.height, "Deferred loading must not demand a taller scene window")
@@ -52,5 +56,6 @@ import Testing
         }
         .frame(minWidth: 1000, minHeight: 620)
         .withPresentationContext()
+        .environment(\.hfReduceMotionOverride, false)
     }
 }

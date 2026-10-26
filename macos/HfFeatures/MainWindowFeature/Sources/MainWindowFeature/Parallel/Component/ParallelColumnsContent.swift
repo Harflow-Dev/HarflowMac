@@ -12,6 +12,7 @@ struct ParallelColumnsContent: View {
     var explicitNavigationID: String?
     let stateForColumn: (String) -> ParallelColumnUIState
     let onViewport: (CGFloat, CGFloat) -> Void
+    @State var residencyHandoffs = ParallelResidencyHandoffStore()
 
     private var columnWidth: CGFloat {
         ParallelLayout.columnWidth(memberCount: columns.count, availableWidth: availableSize.width)
@@ -20,13 +21,16 @@ struct ParallelColumnsContent: View {
     var body: some View {
         LazyHStack(alignment: .top, spacing: HfRadius.Metrics.zero) {
             ForEach(columns) { column in
+                // Placeholder motion must not create activity inventory or retained membership.
                 ParallelColumnCell(model: column,
                                    state: column.isResident ? stateForColumn(column.id) : nil,
+                                   residencyState: residencyHandoffs.state(for: column.id),
                                    size: CGSize(width: columnWidth, height: max(0, availableSize.height)))
                     .equatable()
                     .id(column.id)
             }
         }
+        .onChange(of: columns.map(\.id), initial: true) { _, ids in residencyHandoffs.retain(ids: Set(ids)) }
         .background(ParallelScrollObserver(axis: .horizontal, columnIDs: columns.map(\.id),
                                            columnStride: columnWidth + ParallelLayout.dividerWidth,
                                            workingColumnIDs: Set(columns.filter(\.task.status.isRunning).map(\.id)),
@@ -69,10 +73,11 @@ struct ParallelLaneSurface<Content: View>: View {
 struct ParallelColumnCell: View, @MainActor Equatable {
     let model: ParallelColumnModel
     let state: ParallelColumnUIState?
+    var residencyState: SkeletonContentState?
     let size: CGSize
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.model.renderValue == rhs.model.renderValue && lhs.state === rhs.state && lhs.size == rhs.size
+        lhs.model.renderValue == rhs.model.renderValue && lhs.state === rhs.state && lhs.residencyState === rhs.residencyState && lhs.size == rhs.size
     }
 
     var body: some View {
@@ -87,11 +92,19 @@ struct ParallelColumnCell: View, @MainActor Equatable {
 
     @ViewBuilder
     private var content: some View {
-        if model.isResident, let state {
-            ParallelColumnView(model: model, state: state)
-                .modifier(PanelArrival(animate: model.animatesArrival))
-                .onAppear(perform: model.onDidPresent)
-        } else {
+        SkeletonContent(isLoading: !model.isResident, state: residencyState) {
+            residentPlaceholder
+        } content: {
+            // Eviction must unmount the feed immediately, independently of the visual handoff.
+            if model.isResident, let state {
+                ParallelColumnView(model: model, state: state)
+                    .onAppear(perform: model.onDidPresent)
+            }
+        }
+        .modifier(PanelArrival(animate: model.animatesArrival))
+    }
+
+    private var residentPlaceholder: some View {
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
                 HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
                     StatusIcon(status: model.task.status)
@@ -111,7 +124,6 @@ struct ParallelColumnCell: View, @MainActor Equatable {
             }
             .padding(HfRadius.Metrics.spacing16)
             .accessibilityIdentifier("parallel-column-placeholder")
-        }
     }
 }
 
@@ -187,3 +199,22 @@ private func parallelLaneSurfacePreview() -> some View {
     .preferredColorScheme(.dark)
 }
 #endif
+
+// MARK: - ParallelResidencyHandoffStore
+
+/// Only placeholder motion is retained for rendered descriptors that have never been resident.
+/// Activity state remains owned by the VM and is acquired only for resident columns.
+@MainActor @Observable final class ParallelResidencyHandoffStore {
+    @ObservationIgnored private var states: [String: SkeletonContentState]
+
+    init(states: [String: SkeletonContentState] = [:]) { self.states = states }
+
+    func state(for id: String) -> SkeletonContentState {
+        if let state = states[id] { return state }
+        let state = SkeletonContentState()
+        states[id] = state
+        return state
+    }
+
+    func retain(ids: Set<String>) { states = states.filter { ids.contains($0.key) } }
+}

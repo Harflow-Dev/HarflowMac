@@ -16,13 +16,13 @@ import Testing
         // activity cards inside the lane are intentionally not sampled here.
         let model = makeModel(state: state)
         let view = ParallelColumnsContent(
-            columns: [model], availableSize: CGSize(width: 420, height: 320),
+            columns: [model], availableSize: CGSize(width: 630, height: 320),
             stateForColumn: { _ in ParallelColumnUIState() }, onViewport: { _, _ in }
         )
-        let image = try render(view.frame(width: 420, height: 320), scheme: scheme)
-        let cardReference = try render(Color.cardFill.frame(width: 420, height: 320), scheme: scheme)
-        let windowReference = try render(Color.windowBG.frame(width: 420, height: 320), scheme: scheme)
-        let clearReference = try render(Color.clear.frame(width: 420, height: 320), scheme: scheme)
+        let image = try render(view.frame(width: 630, height: 320), scheme: scheme)
+        let cardReference = try render(Color.cardFill.frame(width: 630, height: 320), scheme: scheme)
+        let windowReference = try render(Color.windowBG.frame(width: 630, height: 320), scheme: scheme)
+        let clearReference = try render(Color.clear.frame(width: 630, height: 320), scheme: scheme)
 
         // when / then — a rounded pane would expose the transparent parent at both bottom
         // corners. A square flush lane paints cardFill through the full boundary in both modes.
@@ -43,15 +43,15 @@ import Testing
         let first = makeModel(id: "first", state: .loaded)
         let second = makeModel(id: "second", state: .loaded)
         let view = ParallelColumnsContent(
-            columns: [first, second], availableSize: CGSize(width: 900, height: 320),
+            columns: [first, second], availableSize: CGSize(width: 1262, height: 320),
             stateForColumn: { _ in ParallelColumnUIState() }, onViewport: { _, _ in }
         )
-        let image = try render(view.frame(width: 900, height: 320), scheme: .light)
+        let image = try render(view.frame(width: 1262, height: 320), scheme: .light)
 
         // when / then — the divider is still the existing column stride, independent of whether
         // the outer lane surround is rounded or flush.
-        let width = ParallelLayout.columnWidth(memberCount: 2, availableWidth: 900)
-        #expect(width == 449)
+        let width = ParallelLayout.columnWidth(memberCount: 2, availableWidth: 1262)
+        #expect(width == 630)
         #expect(ParallelLayout.dividerWidth == 1)
         let divider = try #require(image.colorAt(x: Int(width), y: image.pixelsHigh / 2))
         let left = try #require(image.colorAt(x: Int(width) - 1, y: image.pixelsHigh / 2))
@@ -222,7 +222,7 @@ import Testing
         let appearance = try #require(NSAppearance(named: scheme == .light ? .aqua : .darkAqua))
         var image: CGImage?
         appearance.performAsCurrentDrawingAppearance {
-            let renderer = ImageRenderer(content: view.environment(\.colorScheme, scheme))
+            let renderer = ImageRenderer(content: view.environment(\.colorScheme, scheme).environment(\.hfReduceMotionOverride, true))
             renderer.scale = 1
             image = renderer.cgImage
         }

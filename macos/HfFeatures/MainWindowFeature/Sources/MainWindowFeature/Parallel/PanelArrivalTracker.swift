@@ -1,4 +1,5 @@
 import Foundation
+import HfUI
 import SwiftUI
 
 // MARK: - PanelArrivalTracker
@@ -32,12 +33,28 @@ struct PanelArrivalTracker {
 
 struct PanelArrival: ViewModifier {
     @State private var animate: Bool
-    init(animate: Bool) { _animate = State(initialValue: animate) }
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    init(animate: Bool) {
+        _animate = State(initialValue: animate)
+        _isArriving = State(initialValue: animate)
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
+    @Environment(\.hfSkeletonHandoffActive) private var ancestorHandoffActive
+    @State private var isArriving: Bool
     @State private var visible = false
 
     func body(content: Content) -> some View {
-        content.opacity(!animate || reduceMotion || visible ? 1 : 0)
-            .onAppear { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { visible = true } }
+        let immediate = HfMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion) || ancestorHandoffActive
+        content
+            .environment(\.hfSkeletonHandoffActive, ancestorHandoffActive || isArriving)
+            .opacity(!animate || immediate || visible ? 1 : 0)
+            .onAppear {
+                withAnimation(immediate ? nil : HfMotion.arrival, completionCriteria: .removed) {
+                    visible = true
+                } completion: {
+                    isArriving = false
+                }
+            }
     }
 }

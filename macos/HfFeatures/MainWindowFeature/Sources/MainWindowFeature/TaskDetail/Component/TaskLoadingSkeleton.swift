@@ -182,6 +182,7 @@ struct TaskLoadingSkeleton: View {
 /// capsule. Embedded details keep these inside their own pane instead of changing the window
 /// toolbar.
 private struct LoadingToolbar: ViewModifier {
+    @Environment(\.hfSkeletonPlaceholderOverlay) private var isPlaceholderOverlay
     let isEmbedded: Bool
 
     func body(content: Content) -> some View {
@@ -196,6 +197,10 @@ private struct LoadingToolbar: ViewModifier {
                 Divider()
                 content
             }
+        } else if isPlaceholderOverlay {
+            // The prepared result already owns these native item identifiers. The outgoing
+            // skeleton is visual-only; publishing both toolbars makes AppKit reject duplicates.
+            content
         } else {
             content.toolbar {
                 ToolbarSpacer(.flexible)

@@ -41,6 +41,22 @@ import Testing
         #expect(state.isShowingContent == true)
     }
 
+    @Test func givenPendingFrame_whenRevealIsCancelled_thenContentIsNotConstructed() async {
+        // given
+        let gate = FrameGate()
+        let state = DeferredContentState(waitForPresentedFrame: { await gate.wait() })
+        let reveal = Task { await state.revealAfterFirstFrame() }
+        await gate.waitUntilEntered()
+
+        // when
+        reveal.cancel()
+        gate.open()
+        await reveal.value
+
+        // then
+        #expect(!state.isShowingContent)
+    }
+
     @Test func givenContentAlreadyShowing_whenRevealAfterFirstFrameIsCalledAgain_thenItStaysShowingContent() async {
         // given — the guard makes a repeated call (e.g. `.task` re-running) a cheap no-op rather than
         // re-running the frame-commit wait.
