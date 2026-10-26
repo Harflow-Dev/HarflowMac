@@ -50,6 +50,38 @@ import Testing
         #expect(abs(position.offset) < 2)
     }
 
+    @Test func givenEstablishedWorkingFollow_whenExplicitNavigationChanges_thenLaterReportsPreserveNavigation() async throws {
+        // given — complete the first correction before navigating to another lane.
+        _ = NSApplication.shared
+        let (window, scroll, document, observer, position) = try makeNativeFixture()
+        defer { window.contentView = nil; window.close() }
+        observer.horizontalConfiguration = .init(workingColumnIDs: [], contextID: "workflow")
+        observer.configure(ids: ["a", "b"], stride: 421, restorationOffset: nil, restorationActive: false)
+        await waitUntil { position.reports > 0 }
+        observer.horizontalConfiguration = .init(workingColumnIDs: ["b"], contextID: "workflow")
+        observer.configure(ids: ["a", "b"], stride: 421, restorationOffset: nil, restorationActive: false)
+        await waitUntil { position.offset > 400 }
+        try #require(position.offset > 400)
+
+        // when — explicit navigation cancels the established follow, not just a queued insertion.
+        observer.horizontalConfiguration = .init(workingColumnIDs: ["b"], contextID: "workflow",
+                                                 explicitNavigationID: "navigate-to-a")
+        observer.configure(ids: ["a", "b"], stride: 421, restorationOffset: nil, restorationActive: false)
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        NotificationCenter.default.post(name: NSView.frameDidChangeNotification, object: document)
+        await waitUntil { abs(position.offset) < 2 }
+
+        // then — repeated layout reports must not reinstate the old follow target.
+        observer.configure(ids: ["a", "b"], stride: 421, restorationOffset: nil, restorationActive: false)
+        NotificationCenter.default.post(name: NSView.frameDidChangeNotification, object: document)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        await Task.yield()
+        #expect(abs(position.offset) < 2)
+    }
+
     @Test func givenLeadingViewport_whenCompletedColumnAppearsAtLeadingEdge_thenLogicalAnchorMovesWithoutAutoFollow() async throws {
         // given
         _ = NSApplication.shared

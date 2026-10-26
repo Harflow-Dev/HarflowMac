@@ -22,13 +22,13 @@ import Testing
         return try! SetupDocument.decode(stdout: Data(JSONValue.object(object).rendered().utf8), stderr: "", exitCode: 0).get()
     }
     
-    private func document(_ json: String) -> SetupDocument {
+    func document(_ json: String) -> SetupDocument {
         Self.document(json)
     }
     
     private static let emptyDocumentJSON = #"{"product":"harflow","format":"harflow.setup","v":1,"product_version":"0.0.1","clients":[]}"#
     
-    private var twoRowsJSON: String {
+    var twoRowsJSON: String {
         #"""
         {"product":"harflow","format":"harflow.setup","v":1,"product_version":"0.0.1","server_path":"/usr/local/bin/harflow","clients":[
             {"key":"claude-code","available":true,"installed":true,"current":true},
@@ -57,14 +57,17 @@ import Testing
     /// `installAnywayBlockedMessage` in `init`, and `didAppear()` subscribes to their publishers —
     /// so any test building its own `MockHarnessesUseCase` (bypassing `makeSUT`) needs these
     /// defaults too, or Mockable fatals on the unstubbed member.
-    private static func stubInstall(
+    static func stubInstall(
         _ useCase: MockHarnessesUseCase,
         installState: InstallState = .idle,
         installStatePublisher: AnyPublisher<InstallState, Never>? = nil,
+        runtimeSetupPublisher: AnyPublisher<RuntimeSetupState, Never>? = nil,
         lastCheckMessagePublisher: AnyPublisher<String?, Never>? = nil,
         installAnywayBlockedMessagePublisher: AnyPublisher<String?, Never>? = nil,
-        installNeed: @escaping (ToolError) -> InstallNeed? = { _ in nil }
+        installNeed: @escaping (ToolError) -> InstallNeed? = { _ in nil },
+        onReset: @escaping () -> Void = {}
     ) {
+        given(useCase).runtimeSetupPublisher().willReturn(runtimeSetupPublisher ?? Just(.ready).eraseToAnyPublisher())
         given(useCase).installState.willReturn(installState)
         given(useCase).installStatePublisher().willReturn(installStatePublisher ?? Empty().eraseToAnyPublisher())
         given(useCase).lastCheckMessage.willReturn(nil)
@@ -78,7 +81,7 @@ import Testing
         given(useCase).retry().willReturn()
         given(useCase).checkAgain().willReturn()
         given(useCase).installAnyway().willReturn(true)
-        given(useCase).reset().willReturn()
+        given(useCase).reset().willProduce(onReset)
     }
     
     /// `publishViewEvent`/`publishDialog` (`HfCommon.ViewModel`) dispatch via `Task { @MainActor in
@@ -563,33 +566,4 @@ import Testing
         #expect(sut.isLoading == true)
     }
 
-    @Test func givenTheStateBecomesInstalled_whenObserved_thenHarnessesReloads() async {
-        // given
-        final class StatusBox {
-            var value: Result<SetupDocument, ToolError>
-            init(_ value: Result<SetupDocument, ToolError>) { self.value = value }
-        }
-        let statusBox = StatusBox(.success(document(HarnessesVMTests.emptyDocumentJSON)))
-        let useCase = MockHarnessesUseCase()
-        given(useCase).status().willProduce { statusBox.value }
-        given(useCase).locate().willReturn(.success(Self.setupClient))
-        let installStateSubject = PassthroughSubject<InstallState, Never>()
-        Self.stubInstall(useCase, installStatePublisher: installStateSubject.eraseToAnyPublisher())
-        let sut = HarnessesVM(useCase: useCase)
-        sut.didAppear()
-        // The initial load must have completed first, or it alone could fetch the two rows below.
-        await verify(useCase).status().calledEventually(1, before: .seconds(5))
-        await waitUntil { sut.isLoading == false }
-        #expect(sut.rows.isEmpty)
-        statusBox.value = .success(document(twoRowsJSON))
-
-        // when
-        installStateSubject.send(.installed)
-
-        // then
-        await verify(useCase).status().calledEventually(2, before: .seconds(5))
-        await waitUntil { sut.rows.count == 2 }
-        #expect(sut.rows.count == 2)
-        #expect(sut.installBannerModel?.title == "harflow is installed")
-    }
 }

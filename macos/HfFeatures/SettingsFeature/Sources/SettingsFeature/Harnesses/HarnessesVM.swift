@@ -32,6 +32,8 @@ protocol HarnessesUseCase: Sendable {
 
     // MARK: Install (settled plan, section 5)
 
+    /// Emits the current readiness snapshot before subsequent runtime changes.
+    func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never>
     func installStatePublisher() -> AnyPublisher<InstallState, Never>
     var installState: InstallState { get }
     func lastCheckMessagePublisher() -> AnyPublisher<String?, Never>
@@ -172,11 +174,23 @@ final class HarnessesVM: HarnessesViewModel {
         guard !didSubscribe else { return }
         didSubscribe = true
 
+        // The initial snapshot is covered by didAppear's load. Later readiness recovery
+        // must refresh even when startup qualification creates no install success notice.
+        useCase.runtimeSetupPublisher()
+            .map(\.isReady)
+            .removeDuplicates()
+            .dropFirst()
+            .filter(\.self)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in await self?.load() }
+            }
+            .store(in: &cancellables)
+
         useCase.installStatePublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
-                let wasInstalled = installState == .installed
                 installState = state
                 if state == .installed {
                     // A load error from before the install is stale the moment validation passes —
@@ -186,11 +200,6 @@ final class HarnessesVM: HarnessesViewModel {
                     errorMessage = nil
                 }
                 recomputeInstallBanner()
-                // Settled plan: reload once installation completes, so the table picks up the
-                // freshly-registered `harflow-ctl`/`harflow-setup` without a manual refresh.
-                if !wasInstalled, state == .installed {
-                    Task { [weak self] in await self?.load() }
-                }
             }
             .store(in: &cancellables)
 

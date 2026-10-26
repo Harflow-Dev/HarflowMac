@@ -131,6 +131,23 @@ import Testing
         verify(install).reset().called(1)
     }
 
+    @Test func givenRuntimeSetupPublisher_whenRead_thenCurrentSnapshotAndChangesPassThrough() {
+        // given
+        let install = MockInstallRepository()
+        let setup = CurrentValueSubject<RuntimeSetupState, Never>(.checking)
+        given(install).setupStatePublisher().willReturn(setup.eraseToAnyPublisher())
+        let sut = HarnessesViewRepository(installRepository: install)
+        var received: [RuntimeSetupState] = []
+
+        // when
+        let token = sut.runtimeSetupPublisher().sink { received.append($0) }
+        setup.send(.ready)
+
+        // then
+        #expect(received == [.checking, .ready])
+        withExtendedLifetime(token) {}
+    }
+
     @Test func givenBothToolsMissing_whenInstallNeedIsComputed_thenTheClassifierSaysMissing() {
         // given — `installNeed(for:)` locates both tools fresh through `ToolEnvironmentRepository`
         // rather than trusting the error's own claim, then hands the classifier both presences.

@@ -51,6 +51,7 @@ final class HarnessesViewRepository: HarnessesUseCase, @unchecked Sendable {
 
     // MARK: Install
 
+    func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never> { installRepository.setupStatePublisher() }
     func installStatePublisher() -> AnyPublisher<InstallState, Never> { installRepository.statePublisher() }
     var installState: InstallState { installRepository.state }
     func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { installRepository.lastCheckMessagePublisher() }

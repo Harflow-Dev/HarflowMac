@@ -23,6 +23,8 @@ The window's principal toolbar item shows “Harflow” followed by a 7-point co
 
 The New session glass material refreshes its identity when the effective color scheme changes, so switching back to Dark does not retain Light material. The install notice sits above the sidebar controls. `ManagedInstallRepository` shares a transient success notice with the menu bar only after an explicit install or update in the current app session. Dismissal or quitting ends that notice; startup reuse of a qualified runtime does not create one. Hiding a notice does not change setup readiness or suppress a future required update.
 
+Harnesses observes runtime readiness separately from install notices. If its initial status load encounters runtime preparation, a later transition to ready reloads the registrations even when no success notice is created. Repeated readiness snapshots and notice dismissal do not trigger extra reloads.
+
 ## Harness picker ranking
 
 `AgentUsageRepository` shares lifetime usage across New Session, workflow orchestrator and workflow node menus. One private actor atomically persists counts and processed acknowledgement IDs in one `UserDefaults` value. Acknowledged standalone submissions use task IDs; workflow starts and builder submissions use workflow run IDs. Failed commands, configured nodes, follow-ups, retries and engine-selected fallbacks do not add counts. Exact backend and full model values identify usage; nil and empty model values share the harness-default identity.
