@@ -36,7 +36,8 @@ struct ManagedRuntimeSpecificationTests {
 
         // then
         #expect(specification.schema == 1)
-        #expect(specification.engineVersion == "0.0.2")
+        #expect(specification.engineVersion == "0.0.3")
+        #expect(specification.engineVersion == HarflowVersion.current)
         #expect(specification.pythonVersion == "3.13.16")
         #expect(specification.python.version == specification.pythonVersion)
         #expect(specification.dependencies.count == 29)
@@ -51,7 +52,7 @@ struct ManagedRuntimeSpecificationTests {
             bundleURL: fixture.bundleURL,
             resourceURL: fixture.resourceURL
         )
-        #expect(specification.engineVersion == "0.0.2")
+        #expect(specification.engineVersion == "0.0.3")
         #expect(specification.pythonVersion == "3.13.16")
     }
 
@@ -79,7 +80,7 @@ struct ManagedRuntimeSpecificationTests {
     @Test func givenNonAppExecution_whenLoaded_thenItRetainsSwiftPMResourceBehavior() throws {
         let fixtureRoot = try makeTempDir("managed-runtime-package")
         let specification = try ManagedRuntimeSpecification.bundled(bundleURL: fixtureRoot, resourceURL: nil)
-        #expect(specification.engineVersion == "0.0.2")
+        #expect(specification.engineVersion == "0.0.3")
     }
 
     @Test(arguments: [

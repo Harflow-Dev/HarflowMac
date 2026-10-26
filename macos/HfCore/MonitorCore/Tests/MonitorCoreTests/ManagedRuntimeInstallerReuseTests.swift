@@ -25,7 +25,7 @@ extension ManagedRuntimeInstallerTests {
         let fixture = Fixture()
         let (installer, downloader, _) = makeInstaller(fixture: fixture, home: home)
         let availability = try await installer.checkExisting()
-        #expect(availability == .requiresInstallation(installedVersion: nil, requiredVersion: "0.0.2"))
+        #expect(availability == .requiresInstallation(installedVersion: nil, requiredVersion: "0.0.3"))
         #expect(downloader.requestCount == 0)
     }
 
@@ -38,7 +38,7 @@ extension ManagedRuntimeInstallerTests {
         try FileManager.default.createDirectory(atPath: layout.runtimeRoot, withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(atPath: layout.activePath, withDestinationPath: "generations/0.0.1-foreign")
         let availability = try await installer.checkExisting()
-        #expect(availability == .requiresInstallation(installedVersion: nil, requiredVersion: "0.0.2"))
+        #expect(availability == .requiresInstallation(installedVersion: nil, requiredVersion: "0.0.3"))
         #expect(downloader.requestCount == 0)
     }
 
@@ -63,7 +63,7 @@ extension ManagedRuntimeInstallerTests {
 
         let availability = try await installer.checkExisting()
 
-        #expect(availability == .requiresInstallation(installedVersion: "0.0.1", requiredVersion: "0.0.2"))
+        #expect(availability == .requiresInstallation(installedVersion: "0.0.1", requiredVersion: "0.0.3"))
         #expect(downloader.requestCount == 0)
     }
 }

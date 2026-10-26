@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.0.4
+
+- Pair the app with HarflowMCP 0.0.3 using regenerated frozen dependency inputs.
+
 - Increase the minimum Parallel panel width from 420 to 630 points.
 - Crossfade loading placeholders into resolved content once per retained selection, with an immediate handoff under Reduce Motion.
 - Refresh vendored v1 contract fixtures for additive engine observer-identity diagnostics; existing decoders and version gates remain compatible.

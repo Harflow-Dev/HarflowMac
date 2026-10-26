@@ -153,7 +153,9 @@ import Testing
         vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("handoff-run"), "status": .string("running")])
         vm.initialLoadingKind = nil
         await fixture.settle {
-            fixture.descendants.contains { $0 === split } && split.arrangedSubviews.map(\.frame.minX) == positions && split.arrangedSubviews.map(\.frame.width) == widths
+            fixture.descendants.contains { $0 === split }
+                && split.arrangedSubviews.map(\.frame.minX) == positions
+                && split.arrangedSubviews.map(\.frame.width) == widths
                 && (mode == "Graph" ? fixture.element("Zoom in") != nil : true)
         }
 
