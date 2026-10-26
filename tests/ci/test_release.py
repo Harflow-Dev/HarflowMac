@@ -24,13 +24,13 @@ ASSET_MODULE_SPEC.loader.exec_module(release_assets)
 
 
 def test_source_accepts_current_plist_and_runtime_pair():
-    assert release.validate_source(ROOT) == ("0.0.2", "0.0.2")
+    assert release.validate_source(ROOT) == ("0.0.3", "0.0.2")
 
 
 def test_source_rejects_tag_mismatch_before_git_lookup():
     with mock.patch.object(release.subprocess, "check_output") as check_output:
         with pytest.raises(release.ReleaseError):
-            release.validate_source(ROOT, tag="v0.0.3", sha="0" * 40)
+            release.validate_source(ROOT, tag="v0.0.4", sha="0" * 40)
     check_output.assert_not_called()
 
 

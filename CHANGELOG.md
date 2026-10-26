@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.3
 
 - Add capability-gated Harflow responses to caller-owned approvals with additive v1 contracts and typed refusal handling.
 - Move task approvals to Activity with complete action details, pending navigation hints and expandable settled rows; retain workflow approvals in the run sidebar.
