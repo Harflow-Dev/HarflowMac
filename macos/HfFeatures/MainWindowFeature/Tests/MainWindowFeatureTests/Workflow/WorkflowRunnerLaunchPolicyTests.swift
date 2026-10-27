@@ -1,4 +1,5 @@
 @testable import MainWindowFeature
+import MonitorCore
 import Testing
 
 // MARK: - WorkflowRunnerLaunchPolicyTests
@@ -25,6 +26,29 @@ import Testing
             #expect(!WorkflowRunnerLaunchPolicy.canLaunch(pendingName: pending, loadedName: loaded, loadingKind: loading,
                                                          loadFailed: failed, hasUnsavedChanges: unsaved))
         }
+    }
+
+    @Test func givenPreselectionRequestedBeforeDefinitionsLoad_whenResolved_thenItWaitsForTheFreshList() {
+        // given
+        let saved = WorkflowRecord(raw: ["name": .string("Review")])
+
+        // when / then
+        #expect(WorkflowRunnerLaunchPolicy.initialWorkflow(name: "Review", loaded: false, workflows: [saved]) == nil)
+        #expect(WorkflowRunnerLaunchPolicy.initialWorkflow(name: "Review", loaded: true, workflows: [saved]) == saved)
+    }
+
+    @Test func givenRequestedDefinitionWasDeleted_whenDefinitionsLoad_thenRunnerKeepsTheChooser() {
+        // given / when
+        let selected = WorkflowRunnerLaunchPolicy.initialWorkflow(name: "Deleted", loaded: true,
+                                                                   workflows: [WorkflowRecord(raw: ["name": .string("Other")])])
+
+        // then
+        #expect(selected == nil)
+    }
+
+    @Test func givenNoPreselection_whenDefinitionsLoad_thenRunnerKeepsTheChooser() {
+        // given / when / then
+        #expect(WorkflowRunnerLaunchPolicy.initialWorkflow(name: nil, loaded: true, workflows: []) == nil)
     }
 
     @MainActor @Test func givenRunnerDraftStore_whenSavedOrRemoved_thenEditorDraftsAreNeverRestored() throws {

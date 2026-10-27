@@ -76,3 +76,59 @@ Loading handoffs follow the owner-approved [HarflowDesign rule at `d975810`](htt
 Deferred content preserves its first presented placeholder frame before constructing expensive content. Prepared content keeps its identity through the reveal, and decorative skeletons never accept interaction or accessibility focus. Inline content retains natural sizing, including omission of an available-empty Files edited section. The outgoing task skeleton stops publishing native toolbar items once prepared content owns that chrome, avoiding duplicate AppKit identifiers. The native sidebar keeps its existing reconciler: replacing its diagnostic skeleton with unrelated rows does not retain removed cells or add a competing overlay.
 
 Parallel panel sizing follows the owner's [630-point minimum amendment at `ac15a82`](https://github.com/Harflow-Dev/HarflowDesign/blob/ac15a82/docs/loading-handoff.md#parallel-panel-width-amendment): standalone group and workflow Parallel lanes share the floor, divide wider available space evenly, and scroll horizontally when the minimum does not fit. The Graph activity sidebar keeps its separate width.
+
+## Start screen
+
+The ready runtime's unselected detail pane follows HarflowDesign `62b9675`,
+`scripts/start-screen.js` and `styles/start-screen.css`, states `tasks/start` and
+`tasks/start-no-workflows`. Runtime setup retains its existing welcome view.
+The coordinator retains one `StartScreenVM` across selection changes so its
+monotonic refresh throttle survives rebuilt views. The VM owns visibility,
+subscriptions and one bounded history scan; an
+actor folds immutable public pages and computes equatable presentation off the
+main actor. Disappearance cancels structured work and invalidates its generation.
+Semantic task and history-readiness changes hide invalidated metrics immediately.
+Readiness deduplication excludes pagination cursor and loading churn. Definitions
+publish alphabetically as soon as their independent read completes, even when
+history remains pending or its metric generation was invalidated. A separate
+mount token rejects all definition callbacks after disappearance. Identical ready
+definition polls retain complete metrics without an intermediate loading state;
+identity, revision and content changes remain observable. Definition failures
+clear cached choices so retry cannot resurrect stale rows. A minimum 30-second
+monotonic interval between scan starts coalesces changes and catches external definition
+and workflow updates. Production snapshot replays are suppressed after semantic
+fingerprint deduplication on a utility queue; only later content changes
+invalidate the scan. A separate clock pulse recomputes local greeting and date
+windows without reading history; late generations cannot restore invalid metrics. Complete presentation is derived
+off the main actor before loading and presentation are applied together without
+suspension.
+
+Task and workflow primary pages are independent of sidebar pagination. Each
+source permits at most 100 pages, 10,000 received primary records and a cooperative
+30-second deadline, checked before and after each await. Commands retain their
+own bounded timeout. Readiness, authority, count completeness, advancing cursors
+and consistent duplicate identities are required; partial totals are never shown.
+Pages are eventually consistent, not a frozen history transaction.
+
+Only exact `running` standalone tasks and non-settling root saved-workflow runs
+contribute to running totals. Workflow-owned tasks, builder runs and nested runs
+are excluded. Task ownership requires explicit `workflow_run_id: null` for a
+proven standalone task; absent or malformed ownership stays unknown. Terminal
+tasks require an ISO completion timestamp. Terminal workflows require numeric
+`finished_at` and must not be settling. A legacy terminal workflow can age out of
+the seven-day summary only when finite `created_at <= updated_at <= now`
+evidence places `updated_at` strictly before that cutoff; it is never used as a completion date. Missing terminal task timestamps
+have no equivalent safe upper bound and keep the summary unavailable.
+
+Ranking counts retained root saved-workflow starts by pinned `workflow_id`,
+independent of outcome, against current saved-definition identities. Unknown
+classification or identity makes all rankings alphabetical without counts.
+Modern identities distinguish deletion and recreation; historical engine identity
+fallbacks may retain same-name ambiguity. The app's engine pairing is unchanged;
+older paired engines intentionally omit metrics they cannot establish.
+
+The coordinator owns a transient workflow runner name, cleared on dismissal or
+another modal. A row opens the existing runner, waits for a fresh saved-definition
+list, loads that persisted definition, and enters permission preview. A missing
+initial definition leaves the chooser available. No start-screen action executes
+a workflow automatically or reads an editor draft.

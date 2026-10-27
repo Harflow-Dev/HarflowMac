@@ -32,7 +32,7 @@ extension MainWindowCoordinator: WorkflowRouting {
         let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel,
                             draftStore: WorkflowRunnerDraftStore(), routesStartedRun: true,
                             visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
-        return WorkflowRunnerView(vm).eraseToAnyView()
+        return WorkflowRunnerView(vm, initialName: initialWorkflowRunnerName).eraseToAnyView()
     }
 
     public func buildWorkflowEditorView(name: String?) -> AnyView {

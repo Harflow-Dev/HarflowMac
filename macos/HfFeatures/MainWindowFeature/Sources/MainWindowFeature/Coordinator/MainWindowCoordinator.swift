@@ -61,6 +61,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     /// Builds the saved-workflow chooser and launch sheet.
     func buildWorkflowRunnerView() -> AnyView
 
+    /// Builds the ready runtime start screen.
+    func buildStartScreenView() -> AnyView
     /// Builds the sidebar (task list, search/filter, parallel runs).
     func buildSidebarView() -> AnyView
     /// Builds the main window title's connection indicator.
@@ -79,6 +81,7 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
 
 public extension MainWindowNavigationCoordinator {
     var runtimeIsReady: Bool { true }
+    func buildStartScreenView() -> AnyView { AnyView(EmptyView()) }
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
 
     /// Derives modal state for lightweight preview and test coordinators.
@@ -131,6 +134,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     public var presentedSheet: MainWindowSheet? {
         didSet {
+            if presentedSheet != .workflowRunner { initialWorkflowRunnerName = nil }
             if presentedSheet != nil, !runtimeIsReady { presentedSheet = nil; return }
             let wasNewSession = oldValue == .newSession
             let isNewSession = presentedSheet == .newSession
@@ -161,7 +165,19 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         }
     }
 
-    public func presentWorkflowRunner() { isWorkflowRunnerPresented = true }
+    public func presentWorkflowRunner() { openWorkflowRunner(name: nil) }
+
+    var initialWorkflowRunnerName: String?
+
+    func openWorkflowRunner(name: String?) {
+        guard runtimeIsReady else { return }
+        initialWorkflowRunnerName = name
+        isWorkflowRunnerPresented = true
+    }
+
+    public func buildStartScreenView() -> AnyView {
+        StartScreenView(sharedStartScreenVM()).eraseToAnyView()
+    }
 
     public private(set) var runtimeIsReady = true
     @ObservationIgnored private var runtimeSubscription: AnyCancellable?
@@ -172,6 +188,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored private let isNewSessionPresentedSubject = CurrentValueSubject<Bool, Never>(false)
     @ObservationIgnored let workflowRunPolling = WorkflowRunPolling()
     @ObservationIgnored private var sidebarVM: SidebarVM?
+    @ObservationIgnored private var startScreenVM: StartScreenVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
     /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
     /// "coordinator owns the pending reveal") — set on every navigation request for a task, so it
@@ -305,6 +322,14 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     
     // MARK: - Private Methods
     
+    /// Retains the refresh throttle when selection changes rebuild the unselected detail pane.
+    func sharedStartScreenVM() -> StartScreenVM {
+        if let startScreenVM { return startScreenVM }
+        let vm = StartScreenVM(useCase: StartScreenViewRepository(), routing: self)
+        startScreenVM = vm
+        return vm
+    }
+
     private func sharedSidebarVM() -> SidebarVM {
         if let sidebarVM { return sidebarVM }
         let useCase = SidebarViewRepository()
@@ -392,3 +417,7 @@ extension MainWindowCoordinator: TaskDetailRouting {
         return pasteboard.setString(text, forType: .string)
     }
 }
+
+// MARK: - StartScreenRouting
+
+extension MainWindowCoordinator: StartScreenRouting {}

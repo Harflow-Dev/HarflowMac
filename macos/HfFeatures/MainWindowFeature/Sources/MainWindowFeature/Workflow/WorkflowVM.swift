@@ -53,6 +53,7 @@ protocol WorkflowRouting: ParallelRouting {
 @MainActor
 final class WorkflowVM: WorkflowViewModel {
     var workflows: [WorkflowRecord] = []
+    var hasLoadedWorkflowList = false
     var runs: [WorkflowRunModel] = []
     var definition: [String: JSONValue] = [:] { didSet { recordEdit(name: name, definition: oldValue); scheduleValidation(); scheduleDraftPersistence() } }
     var name = "" { didSet { recordEdit(name: oldValue, definition: definition); scheduleValidation(); scheduleDraftPersistence() } }

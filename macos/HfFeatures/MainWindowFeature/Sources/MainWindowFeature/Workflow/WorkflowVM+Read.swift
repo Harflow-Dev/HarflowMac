@@ -91,7 +91,8 @@ extension WorkflowVM {
         let metricStart = MonitorMetrics.begin()
         defer { MonitorMetrics.end(metricStart, stage: .workflowViewUpdate) }
         guard context.runID != nil else {
-            workflows = WorkflowJSON.objects(response["workflows"]).map { WorkflowRecord(raw: $0) }
+            workflows = try StartScreenHistoryRepository.parseDefinitions(response: response)
+            hasLoadedWorkflowList = true
             return
         }
         let raw = response["run"]?.objectValue ?? response

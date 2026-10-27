@@ -308,6 +308,26 @@ import Testing
         _ = sut.buildNewSessionView()
         _ = sut.start()
     }
+
+    @Test func givenCoordinatorSelectionChanges_whenStartScreenIsRebuilt_thenItReusesOneViewModelWithoutARetainCycle() {
+        // given
+        var coordinator: MainWindowCoordinator? = MainWindowCoordinator(parent: MockCoordinator())
+        weak var weakCoordinator = coordinator
+        let first = coordinator!.sharedStartScreenVM()
+
+        // when
+        coordinator!.selection = .task("first")
+        let afterTaskSelection = coordinator!.sharedStartScreenVM()
+        coordinator!.selection = .group("group")
+        let afterGroupSelection = coordinator!.sharedStartScreenVM()
+
+        // then
+        #expect(first === afterTaskSelection)
+        #expect(afterTaskSelection === afterGroupSelection)
+        coordinator = nil
+        #expect(weakCoordinator == nil)
+        withExtendedLifetime(first) {}
+    }
     
     @Test func givenTheCoordinator_whenBuildingAParallelView_thenAViewIsProduced() {
         // given

@@ -8,6 +8,7 @@ import SwiftUI
 @MainActor
 protocol WorkflowViewModel: ViewModel {
     var workflows: [WorkflowRecord] { get }
+    var hasLoadedWorkflowList: Bool { get }
     var runs: [WorkflowRunModel] { get }
     var definition: [String: JSONValue] { get set }
     var name: String { get set }

@@ -57,7 +57,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             case .workflowRun(let id):
                 coordinator.buildWorkflowRunView(id: id)
             case .newSession, .openWindow, nil:
-                emptyDetailView
+                coordinator.buildStartScreenView()
             }
             }
         }
@@ -86,17 +86,6 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
         .withPresentationContext()
     }
     
-    // MARK: - Private Views
-    
-    private var emptyDetailView: some View {
-        VStack(spacing: 8) {
-            // swiftlint:disable:next no_literal_font_size - an icon, not text: the empty-state SF Symbol's fixed glyph size.
-            Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 32)).foregroundStyle(.secondary)
-            Text("Select a task").font(.hf(.headline, weight: .bold))
-            Text("Tasks started through harflow show up in the sidebar, live.").foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - HiddenWindowTitle

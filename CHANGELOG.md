@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a local-time start screen with activity summaries, saved workflow ranking, creation shortcuts and persisted-definition launch preview. Keep summary and ranking unavailable when older engines cannot establish their inputs.
+
 ## 0.0.4
 
 - Pair the app with HarflowMCP 0.0.3 using regenerated frozen dependency inputs.

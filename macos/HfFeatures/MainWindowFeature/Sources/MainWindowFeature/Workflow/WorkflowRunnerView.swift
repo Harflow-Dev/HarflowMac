@@ -12,8 +12,12 @@ struct WorkflowRunnerView<VM: WorkflowViewModel>: View {
     @State private var viewModel: VM
     @State private var selectedName = ""
     @State private var pendingLaunchName: String?
+    @State private var initialName: String?
 
-    init(_ viewModel: VM) { _viewModel = State(initialValue: viewModel) }
+    init(_ viewModel: VM, initialName: String? = nil) {
+        _viewModel = State(initialValue: viewModel)
+        _initialName = State(initialValue: initialName)
+    }
 
     var body: some View {
         Group {
@@ -26,6 +30,7 @@ struct WorkflowRunnerView<VM: WorkflowViewModel>: View {
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
         .onChange(of: viewModel.initialLoadingKind) { _, _ in finishLoading() }
+        .onChange(of: viewModel.hasLoadedWorkflowList) { _, _ in selectInitialWorkflow() }
         .onChange(of: viewModel.showsRunSheet) { wasPresented, isPresented in
             if wasPresented, !isPresented { dismiss() }
         }
@@ -78,11 +83,25 @@ struct WorkflowRunnerView<VM: WorkflowViewModel>: View {
         pendingLaunchName = nil
         viewModel.prepareLaunch()
     }
+
+    private func selectInitialWorkflow() {
+        guard viewModel.hasLoadedWorkflowList, let initialName else { return }
+        self.initialName = nil
+        guard let workflow = WorkflowRunnerLaunchPolicy.initialWorkflow(name: initialName, loaded: true, workflows: viewModel.workflows) else { return }
+        selectedName = workflow.id
+        pendingLaunchName = workflow.id
+        viewModel.selectWorkflow(workflow)
+    }
 }
 
 // MARK: - WorkflowRunnerLaunchPolicy
 
 enum WorkflowRunnerLaunchPolicy {
+    static func initialWorkflow(name: String?, loaded: Bool, workflows: [WorkflowRecord]) -> WorkflowRecord? {
+        guard loaded, let name else { return nil }
+        return workflows.first { $0.id == name }
+    }
+
     static func canLaunch(pendingName: String?, loadedName: String, loadingKind: String?, loadFailed: Bool, hasUnsavedChanges: Bool) -> Bool {
         guard let pendingName, !pendingName.isEmpty else { return false }
         return pendingName == loadedName && loadingKind == nil && !loadFailed && !hasUnsavedChanges
