@@ -7,6 +7,15 @@ import SwiftUI
 struct RuntimeSetupWelcomeView: View {
     var body: some View {
         VStack(spacing: HfRadius.Metrics.spacing10) {
+            if let image = MainWindowEmblem.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(Color.primaryText)
+                    .padding(.bottom, 6)
+                    .accessibilityHidden(true)
+            }
+
             Text("SETUP REQUIRED")
                 .font(.hf(.setupEyebrow, weight: .semibold))
                 .foregroundStyle(Color.secondaryText)
