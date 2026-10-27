@@ -18,7 +18,7 @@ struct SidebarNativeHostedScalingTests {
         let state = HostedScalingState(presentation: presentation(count: count))
         let fixture = try await HostedScalingFixture(state: state)
         defer { fixture.close() }
-        await fixture.waitForRows(count + 3, timeout: count >= 10_000 ? 60 : 30)
+        await fixture.waitForRows(count + 5, timeout: count >= 10_000 ? 60 : 30)
         await fixture.waitForSettled(timeout: count >= 10_000 ? 60 : 30)
         let coordinator = fixture.coordinator
         let retainedID = "task:row-0"
@@ -90,11 +90,13 @@ struct SidebarNativeHostedScalingTests {
         let retainedDisplayID = SidebarDisplayID(logicalID: "task:row-0")
         let retainedBox = try #require(coordinator.boxesByID[retainedDisplayID])
         state.presentation = presentation(count: count + 1)
-        await fixture.waitForRows(count + 4, timeout: count >= 10_000 ? 60 : 30)
+        await fixture.waitForRows(count + 6, timeout: count >= 10_000 ? 60 : 30)
         await fixture.waitForSettled(timeout: count >= 10_000 ? 60 : 30)
         let page = fixture.snapshot(stage: "page-append", count: count + 1)
         fixture.log(page)
         #expect(fixture.taskIDs == Set((0 ... count).map { "task:row-\($0)" }))
+        #expect(coordinator.boxesByID[SidebarDisplayID(logicalID: "header:overview")]?.entry.content == .heading("Overview"))
+        #expect(coordinator.boxesByID[SidebarDisplayID(logicalID: "overview:statistics")]?.entry.content == .statistics)
         state.presentation = presentation(rows: rows(count: count + 1).reversed())
         await fixture.waitForOrder(
             rows(count: count + 1).reversed().map { "task:\($0.id)" },
@@ -123,8 +125,8 @@ struct SidebarNativeHostedScalingTests {
         #expect(resized.mainApplySeconds >= 0)
         #expect(resized.naturalMeasurementSeconds >= 0)
         #expect(resized.measurementCount >= reordered.measurementCount)
-        #expect(coordinator.boxes.count == count + 4)
-        #expect(coordinator.boxes.map(\.entry.id).count == count + 4)
+        #expect(coordinator.boxes.count == count + 6)
+        #expect(coordinator.boxes.map(\.entry.id).count == count + 6)
         return reordered
     }
 

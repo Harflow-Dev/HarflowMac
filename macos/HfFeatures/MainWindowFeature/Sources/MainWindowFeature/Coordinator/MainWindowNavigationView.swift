@@ -46,6 +46,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 RuntimeSetupWelcomeView()
             } else {
             switch coordinator.selection {
+            case .statistics:
+                coordinator.buildStatisticsView()
             case .task(let id):
                 coordinator.buildTaskDetailView(id: id)
             case .group(let name):

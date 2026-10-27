@@ -30,3 +30,7 @@ Complete malformed or incompatible event records make activity and summary reads
 ## Managed runtime
 
 `ManagedRuntimeLayout` derives executable storage and the selected `.harflow` store from an injected home without reading history. `ManagedRuntimeInstaller` performs bounded HTTPS acquisition, verifies pinned bytes, installs only locked binary wheels offline under a private pip environment, qualifies the relocated generation, and atomically activates it under a permanent process lock. Completion receipts bind exact engine version, specification, generation, selected store, and observed engine SHA256/yanked metadata. Existing generations are never replaced or collected. The app bundles the specification as a SwiftPM resource; [maintenance and trust details](../../../docs/managed-runtime.md) describe its inputs.
+
+## Statistics history
+
+`CtlClient.statisticsPage` reads bounded typed `StatisticsPage` / `StatisticsFact` values through the public ctl envelope, requiring `statistics-page.v1` on each operation. Unknown states, unsupported capabilities and malformed pages remain unavailable. Token accounting and duration qualification are independent; legacy absent accounting never becomes zero.

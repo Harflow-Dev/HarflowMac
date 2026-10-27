@@ -61,6 +61,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     /// Builds the saved-workflow chooser and launch sheet.
     func buildWorkflowRunnerView() -> AnyView
 
+    /// Builds retained finished-work Statistics.
+    func buildStatisticsView() -> AnyView
     /// Builds the ready runtime start screen.
     func buildStartScreenView() -> AnyView
     /// Builds the sidebar (task list, search/filter, parallel runs).
@@ -83,6 +85,8 @@ public extension MainWindowNavigationCoordinator {
     var runtimeIsReady: Bool { true }
     func buildStartScreenView() -> AnyView { AnyView(EmptyView()) }
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
+
+    func buildStatisticsView() -> AnyView { AnyView(EmptyView()) }
 
     /// Derives modal state for lightweight preview and test coordinators.
     var presentedSheet: MainWindowSheet? {
@@ -189,6 +193,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored let workflowRunPolling = WorkflowRunPolling()
     @ObservationIgnored private var sidebarVM: SidebarVM?
     @ObservationIgnored private var startScreenVM: StartScreenVM?
+    @ObservationIgnored private var statisticsVM: StatisticsVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
     /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
     /// "coordinator owns the pending reveal") — set on every navigation request for a task, so it
@@ -201,7 +206,11 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     // MARK: - Init
 
-    public init(parent: any Coordinator, pasteboard: any PasteboardWriting = NSPasteboard.general, installRepository: (any InstallRepository)? = nil) {
+    public init(
+        parent: any Coordinator,
+        pasteboard: any PasteboardWriting = NSPasteboard.general,
+        installRepository: (any InstallRepository)? = nil
+    ) {
         self.parent = parent
         self.pasteboard = pasteboard
         let install = installRepository ?? GlobalValues.installRepository
@@ -233,14 +242,15 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).
             requestReveal(taskID: id)
-        case .group, .workflow, .newWorkflow, .workflowRun: selection = destination
+        case .group, .workflow, .newWorkflow, .workflowRun, .statistics: selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)
         }
     }
 
     public func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never> { selectionSubject.removeDuplicates().eraseToAnyPublisher() }
-    public func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never> { isNewSessionPresentedSubject.removeDuplicates().eraseToAnyPublisher() }
+    public func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never> { isNewSessionPresentedSubject.removeDuplicates().eraseToAnyPublisher()
+    }
 
     // MARK: - Pending reveal (settled plan, Design point 5)
 
@@ -251,6 +261,12 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         let reveal = PendingReveal(taskID: taskID, requestID: UUID())
         pendingReveal = reveal
         revealSubject.send(reveal)
+    }
+
+    public func buildStatisticsView() -> AnyView {
+        let vm = statisticsVM ?? StatisticsVM(useCase: StatisticsViewRepository())
+        statisticsVM = vm
+        return StatisticsView(vm).eraseToAnyView()
     }
 
     public func buildSidebarView() -> AnyView {
@@ -272,13 +288,16 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     
     /// A selected group's stable presenter observes membership for its entire visible lifetime.
     public func buildParallelView(name: String) -> AnyView {
-        let vm = GroupPresentationVM(groupName: name,
+        let vm = GroupPresentationVM(
+            groupName: name,
             useCase: GroupPresentationViewRepository(taskListRepository: taskListRepository),
             makeDetail: { [self] id in
                 TaskDetailVM(taskID: id, useCase: TaskDetailViewRepository(), routing: self)
-            }, makeParallel: { [self] in
+            },
+            makeParallel: { [self] in
                 ParallelVM(groupName: name, useCase: ParallelViewRepository(), routing: self)
-            })
+            }
+        )
         return GroupPresentationView(vm).id(name).eraseToAnyView()
     }
 
@@ -333,8 +352,13 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     private func sharedSidebarVM() -> SidebarVM {
         if let sidebarVM { return sidebarVM }
         let useCase = SidebarViewRepository()
-        let newVM = SidebarVM(useCase: useCase, routing: self, workflowUseCase: useCase,
-                              visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
+        let newVM = SidebarVM(
+            useCase: useCase,
+            routing: self,
+            workflowUseCase: useCase,
+            visibility: GlobalValues.monitorVisibility,
+            scheduler: GlobalValues.scheduling
+        )
         newVM.invocationDetails = { [weak self] id in self?.workflowRunPolling.cached(id: id) }
         sidebarVM = newVM
         return newVM

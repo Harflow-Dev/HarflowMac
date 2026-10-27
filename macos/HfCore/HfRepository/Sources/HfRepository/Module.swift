@@ -60,6 +60,7 @@ public final class Module: HfModule {
             .environment(\.taskSnapshotRepository, snapshot)
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
+            .environment(\.statisticsRepository, StatisticsRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
             .environment(\.eventStreamRepository, eventStream)
             .environment(\.finishNotifier, finishNotifier)
             .environment(\.taskListRepository, taskList)

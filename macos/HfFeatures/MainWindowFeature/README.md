@@ -25,3 +25,5 @@ availability observation. Harflow never reads artifact contents or treats regist
 success or an edited-file record. Unsupported older CLIs report metadata unavailable; legacy tasks
 with no manifest show no registered artifacts after a successful read. Workflow artifacts are not
 supported.
+
+Statistics is a native Overview destination. Its mounted VM preserves filters, ranking disclosure and node navigation. An actor completes bounded engine pagination before deriving charts/rankings outside the main actor, and equality checks suppress unchanged presentations. The existing paired engine stays pinned; unsupported Statistics has an explicit screen state.

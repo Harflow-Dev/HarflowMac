@@ -53,6 +53,7 @@ struct SidebarBannerPresentation: Equatable, Sendable {
 
 struct SidebarListEntry: Identifiable, Equatable, Sendable {
     enum Content: Equatable, Sendable {
+        case statistics
         case workflowsHeader(expanded: Bool)
         case workflowDefinition(String)
         case heading(String)
@@ -87,6 +88,7 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
     var destination: MonitorDestination? {
         guard !isFading else { return nil }
         switch content {
+        case .statistics: return .statistics
         case .item(let item): return item.destination
         case .workflowDefinition(let title): return .workflow(title)
         default: return nil

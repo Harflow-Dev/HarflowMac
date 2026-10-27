@@ -39,3 +39,5 @@ HARFLOW_NATIVE_BENCHMARK=1 python3 ../../../scripts/test-swift-package.py --pack
 ```
 
 `AppModulesRegistry` registers `HfRepository.Module`; screens access repositories through their own `ViewRepository` contracts.
+
+`StatisticsRepository` exposes explicit public history pages. Its implementation receives tooling and state recovery through constructor injection, checks cancellation, and reports structured store refusal through the shared recovery boundary. The null repository is unavailable, not an empty history.

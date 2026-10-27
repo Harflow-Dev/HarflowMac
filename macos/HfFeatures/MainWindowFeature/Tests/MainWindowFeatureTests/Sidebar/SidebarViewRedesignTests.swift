@@ -143,6 +143,8 @@ import Testing
     private func contentRows(_ outline: NSOutlineView) -> [Int] {
         (0 ..< outline.numberOfRows).filter { row in
             let item = outline.item(atRow: row) as Any
+            guard let box = item as? SidebarNativeItemBox else { return false }
+            if case .statistics = box.entry.content { return false }
             return outline.delegate?.outlineView?(outline, shouldSelectItem: item) == true
         }
     }

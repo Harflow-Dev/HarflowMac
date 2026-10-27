@@ -172,6 +172,8 @@ enum SidebarListReconciler {
 
     private static func flatten(_ input: SidebarListPresentation, previous: [SidebarListEntry], excluding fading: Set<String>) -> Result {
         var entries: [SidebarListEntry] = [
+            .init(id: "header:overview", content: .heading("Overview")),
+            .init(id: "overview:statistics", content: .statistics, minimumHeight: input.minimumRowHeight),
             .init(id: "header:workflows", content: .workflowsHeader(expanded: input.workflowsExpanded))
         ]
         if input.workflowsExpanded {

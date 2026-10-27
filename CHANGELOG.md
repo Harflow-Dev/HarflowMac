@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add Statistics navigation with start-day ranges, workflow/task/harness rankings, requested-model and repository filters, usage coverage and node breakdowns. Read only the engine's capability-gated public projection; the unchanged engine pairing retains an explicit unsupported state until a compatible runtime is paired.
+
 - Add a local-time start screen with activity summaries, saved workflow ranking, creation shortcuts and persisted-definition launch preview. Keep summary and ranking unavailable when older engines cannot establish their inputs.
 
 ## 0.0.4

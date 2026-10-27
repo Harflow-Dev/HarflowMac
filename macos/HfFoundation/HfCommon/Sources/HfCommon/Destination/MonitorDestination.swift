@@ -16,6 +16,8 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
     case task(String)
     /// Select a Parallel run by its group name.
     case group(String)
+    /// Open retained finished-work Statistics.
+    case statistics
     /// Open a saved workflow in the canvas editor.
     case workflow(String)
     /// Create a fresh editor for every add action.
@@ -31,6 +33,7 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
         switch self {
         case .task(let id): "task:\(id)"
         case .group(let name): "group:\(name)"
+        case .statistics: "statistics"
         case .workflow(let name): "workflow:\(name)"
         case .newWorkflow(let id): "newWorkflow:\(id)"
         case .workflowRun(let id): "workflowRun:\(id)"

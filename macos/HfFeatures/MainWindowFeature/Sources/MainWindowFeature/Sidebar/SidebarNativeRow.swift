@@ -76,6 +76,12 @@ struct SidebarNativeRow: View {
 
     @ViewBuilder private var content: some View {
         switch entry.content {
+        case .statistics:
+            Label("Statistics", systemImage: "chart.bar.xaxis")
+                .font(.hf(.body, weight: .medium))
+                .padding(.vertical, HfRadius.Metrics.spacing6)
+                .frame(maxWidth: .infinity, minHeight: entry.minimumHeight, alignment: .leading)
+                .accessibilityLabel("Statistics")
         case .workflowsHeader(let expanded):
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 Button(action: { actions.toggleWorkflows() }) { heading("Workflows") }
