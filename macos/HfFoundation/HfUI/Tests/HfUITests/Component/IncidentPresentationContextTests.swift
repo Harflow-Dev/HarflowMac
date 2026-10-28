@@ -15,6 +15,7 @@ import Testing
         defer { fixture.close() }
         await waitUntil { fixture.host.layoutSubtreeIfNeeded(); return fixture.vm.binding != nil }
         let binding = try #require(fixture.vm.binding)
+        #expect(fixture.vm.incidents === fixture.incidents)
         // when
         binding.wrappedValue = .incident(source: "workflow-list", message: "List unavailable")
         binding.wrappedValue = .incident(source: "workflow-status", message: "Status unavailable")
@@ -90,6 +91,7 @@ import Testing
 
 @MainActor @Observable private final class PresentationFixtureVM: ViewModel {
     var binding: Binding<ViewEvent>?
+    var incidents: IncidentPresentation?
 }
 
 // MARK: - PresentationFixtureView
@@ -97,9 +99,10 @@ import Testing
 private struct PresentationFixtureView: View {
     let vm: PresentationFixtureVM
     @Environment(\.viewEvent) private var viewEvent
+    @Environment(\.incidentPresentation) private var incidents
     var body: some View {
         Color.clear
-            .onAppear { vm.binding = viewEvent }
+            .onAppear { vm.binding = viewEvent; vm.incidents = incidents }
             .publishViewEvent(from: vm, to: viewEvent)
     }
 }

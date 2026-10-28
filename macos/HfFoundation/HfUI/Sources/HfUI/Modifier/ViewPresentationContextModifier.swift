@@ -18,7 +18,6 @@ struct ViewPresentationContextModifier: ViewModifier {
     @State private var viewEvent: ViewEvent = .none
     @State private var incidents = IncidentPresentation()
     @State private var interacting = false
-    @State private var detailsPresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
     
@@ -38,9 +37,9 @@ struct ViewPresentationContextModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.viewEvent, presentationBinding)
+            .environment(\.incidentPresentation, incidents)
             .overlay(alignment: .top) { snackbar }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: incidents.current?.id)
-            .overlay(alignment: .bottomTrailing) { retainedDetails }
             .onReceive(clock) { now in incidents.tick(now: now, paused: interacting || !NSApp.isActive) }
             .alert(
                 viewEvent.alert?.title ?? "",
@@ -82,25 +81,6 @@ struct ViewPresentationContextModifier: ViewModifier {
             IncidentSnackbar(incident: incident, dismiss: { incidents.dismiss() }, interaction: { interacting = $0 })
                 .id(incident.id)
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    @ViewBuilder private var retainedDetails: some View {
-        if !incidents.failures.isEmpty {
-            Button("Workflow errors (\(incidents.failures.count))") { detailsPresented = true }
-                .buttonStyle(.bordered)
-.padding(8)
-                .popover(isPresented: $detailsPresented) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(incidents.failures) { failure in
-                            Text(failure.message).textSelection(.enabled)
-                            if let retry = failure.retry { Button(retry.title, action: retry.action) }
-                        }
-                        Text("Workflow reads retry automatically.").foregroundStyle(.secondary)
-                    }
-.padding()
-.frame(width: 380)
-                }
         }
     }
 

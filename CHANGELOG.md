@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Move retained workflow errors into the sidebar footer so they no longer cover the workflow Summary expand control.
+
 - Show confirmed orchestrator work with the running outline and expose decision history and consultant activity in the workflow inspector.
 
 - Fit selected workflow activity to the inspector width and provide a conversation selector instead of horizontal activity scrolling.

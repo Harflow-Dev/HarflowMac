@@ -399,6 +399,8 @@ struct SidebarView<VM: SidebarViewModel>: View {
     private var footer: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             Divider()
+            WorkflowErrorsEntryView()
+                .padding(.horizontal, HfRadius.Metrics.spacing16)
             HStack(spacing: HfRadius.Metrics.spacing6) {
                 SidebarAppearanceControl(appearance: viewModel.appAppearance, onSelect: viewModel.didSelectAppearance)
                 Spacer(minLength: HfRadius.Metrics.zero)

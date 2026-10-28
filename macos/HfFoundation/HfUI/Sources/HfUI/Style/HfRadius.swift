@@ -375,6 +375,10 @@ public enum HfRadius {
         public static let menuBarRunningRowDetailInset: CGFloat = 24
         /// The menu-bar footer's primary button and gear target height (§6.8).
         public static let menuBarFooterButtonHeight: CGFloat = 34
+        /// Retained workflow-error details preserve their original popover width.
+        public static let workflowErrorsPopoverWidth: CGFloat = 380
+        /// Tall failure histories scroll inside a bounded native popover.
+        public static let workflowErrorsPopoverMaximumHeight: CGFloat = 440
         /// The existing popover width, independent of its displayed task counts.
         public static let menuBarPopoverWidth: CGFloat = 380
         /// Retained height of the menu-bar popover.
