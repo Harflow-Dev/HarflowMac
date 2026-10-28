@@ -80,7 +80,10 @@ import Testing
         NotificationCenter.default.post(name: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil)
         await waitUntil(timeout: 5) {
             fixture.host.layoutSubtreeIfNeeded()
-            return scroll.scrollerStyle == .overlay
+            guard scroll.scrollerStyle == .overlay else { return false }
+            guard scroll.contentView.bounds.size == scroll.bounds.size else { return false }
+            let expectedVisible = probe.convert(scroll.contentView.bounds, from: scroll.contentView)
+            return controller.visibleRect == expectedVisible
         }
         // then
         #expect(scroll.scrollerStyle == .overlay)
@@ -89,6 +92,7 @@ import Testing
         #expect(scroll.horizontalScroller?.controlSize == .small)
         #expect(scroll.documentView === document)
         #expect(scroll.contentView.bounds.origin == originalOrigin)
+        #expect(scroll.contentView.bounds.size == scroll.bounds.size)
         let expectedVisible = probe.convert(scroll.contentView.bounds, from: scroll.contentView)
         #expect(controller.visibleRect == expectedVisible)
     }

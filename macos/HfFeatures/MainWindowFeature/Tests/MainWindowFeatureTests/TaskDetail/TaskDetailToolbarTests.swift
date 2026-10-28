@@ -92,7 +92,8 @@ import Testing
             TaskDetailView(harness.sut, onToolbarEvaluation: { [weak self] in self?.evaluations += 1 })
         }
 .withPresentationContext()
-.defaultAppStorage(defaults)))
+.defaultAppStorage(defaults)
+.environment(\.hfReduceMotionOverride, true)))
         controller.sceneBridgingOptions = .all
         window.contentViewController = controller
         window.orderFront(nil)
@@ -104,9 +105,53 @@ import Testing
     }
 
     func settle() async {
-        await waitUntil { pump(); return evaluations > 0 && window.toolbar?.items.isEmpty == false }
-        await Task.yield()
-        pump()
+        await waitUntil(timeout: 5) {
+            pump()
+            return harness.sut.task != nil
+                && harness.sut.didSubscribe
+                && !harness.sut.conversationLoading
+                && harness.sut.conversationHistoryResolved
+        }
+        #expect(harness.sut.task != nil && harness.sut.didSubscribe
+            && !harness.sut.conversationLoading && harness.sut.conversationHistoryResolved,
+            "Task detail must finish initial model and history loading before taking the toolbar baseline")
+        if let acquisition = harness.sut.memberLeaseAcquisition { await acquisition.value }
+        await waitUntil(timeout: 5) {
+            pump()
+            return harness.sut.timelineWorker == nil && harness.sut.pendingTimelineInput == nil
+        }
+        #expect(harness.sut.timelineWorker == nil && harness.sut.pendingTimelineInput == nil,
+                "Initial timeline presentation must settle before taking the toolbar baseline")
+
+        var previousReport: ToolbarReport?
+        var consecutiveStableReports = 0
+        await waitUntil(timeout: 5) {
+            pump()
+            let report = toolbarReport
+            if report == previousReport {
+                consecutiveStableReports += 1
+            } else {
+                previousReport = report
+                consecutiveStableReports = 1
+            }
+            return report.evaluations > 0 && !report.itemIDs.isEmpty && !report.viewIDs.isEmpty && consecutiveStableReports >= 3
+        }
+        let report = toolbarReport
+        #expect(report.evaluations > 0 && !report.itemIDs.isEmpty && !report.viewIDs.isEmpty && consecutiveStableReports >= 3,
+                "A populated native toolbar must stabilize before taking the baseline")
+    }
+
+    private var toolbarReport: ToolbarReport {
+        let items = window.toolbar?.items ?? []
+        return ToolbarReport(evaluations: evaluations,
+                             itemIDs: items.map(ObjectIdentifier.init),
+                             viewIDs: items.compactMap { $0.view.map(ObjectIdentifier.init) })
+    }
+
+    private struct ToolbarReport: Equatable {
+        let evaluations: Int
+        let itemIDs: [ObjectIdentifier]
+        let viewIDs: [ObjectIdentifier]
     }
 
     func close() { harness.sut.didDisappear(); window.contentViewController = nil; window.close() }
