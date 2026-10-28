@@ -1,3 +1,4 @@
+import AppKit
 import HfCommon
 import HfUI
 import SwiftUI
@@ -26,6 +27,7 @@ protocol StatisticsViewModel: ViewModel {
 struct StatisticsView<VM: StatisticsViewModel>: View {
     @Environment(\.viewEvent) private var viewEvent
     @State private var viewModel: VM
+    @State private var preparedContentWidth: CGFloat = 880
 
     init(_ viewModel: VM) { _viewModel = State(initialValue: viewModel) }
 
@@ -71,12 +73,15 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
     }
 
     private func preparedContent(emptyMessage: String? = nil) -> some View {
-        GeometryReader { viewport in
-            ScrollView([.horizontal, .vertical]) {
-                preparedSurface(emptyMessage: emptyMessage)
-                    .frame(width: max(880, viewport.size.width))
-            }
+        ScrollView([.horizontal, .vertical]) {
+            preparedSurface(emptyMessage: emptyMessage)
+                .frame(width: preparedContentWidth)
+                .background(StatisticsClipWidthReader { width in
+                    let target = max(880, width)
+                    if target != preparedContentWidth { preparedContentWidth = target }
+                })
         }
+        .defaultScrollAnchor(.topLeading, for: .alignment)
     }
 
     /// The production content boundary; scrolling and view-model lifetime remain owned by the screen.
@@ -113,6 +118,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
                 ForEach(StatisticsRange.allCases, id: \.self) { Text("\($0.rawValue) days").tag($0) }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .frame(width: 215)
             .accessibilityLabel("Time range")
             filter(
@@ -137,11 +143,12 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
                 action: viewModel.selectRequestedModel
             )
             Spacer(minLength: 8)
-            Text("Measure").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+            Text("Measure").font(.hf(.caption)).foregroundStyle(Color.secondaryText).accessibilityHidden(true)
             Picker("Measure", selection: Binding(get: { viewModel.presentation.measure }, set: { viewModel.selectMeasure($0) })) {
                 ForEach(StatisticsMeasure.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .frame(width: 150)
             .accessibilityLabel("Measure")
         }
@@ -257,6 +264,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
                     ForEach(StatisticsList.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .frame(width: 245)
                 .accessibilityLabel("Ranking category")
                 Text(viewModel.presentation.listTitle).font(.hf(.body)).bold()
@@ -395,6 +403,76 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         .statisticsCard()
     }
 
+}
+
+// MARK: - StatisticsClipWidthReader
+
+/// Reports the width of the enclosing `NSScrollView`'s clip view, which excludes any legacy scroller
+/// track that SwiftUI's own scroll geometry includes. The hosting `ScrollView` must align undersized content
+/// to the leading edge (`defaultScrollAnchor(.topLeading, for: .alignment)`); otherwise SwiftUI centres the
+/// document with a content inset, which creates horizontal travel.
+private struct StatisticsClipWidthReader: NSViewRepresentable {
+    let onChange: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ClipWidthView { ClipWidthView() }
+
+    func updateNSView(_ view: ClipWidthView, context: Context) {
+        view.onChange = onChange
+        view.report()
+    }
+
+    final class ClipWidthView: NSView {
+        var onChange: ((CGFloat) -> Void)?
+        private weak var observed: NSClipView?
+        private var lastReported: CGFloat?
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            attach()
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil else {
+                NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: nil)
+                observed = nil
+                lastReported = nil
+                return
+            }
+            attach()
+        }
+
+        override func layout() {
+            super.layout()
+            attach()
+            report()
+        }
+
+        private func attach() {
+            let clip = enclosingScrollView?.contentView
+            guard clip !== observed else { return }
+            if let observed {
+                NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: observed)
+            }
+            observed = clip
+            guard let clip else { return }
+            clip.postsFrameChangedNotifications = true
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(clipFrameChanged), name: NSView.frameDidChangeNotification, object: clip
+            )
+            report()
+        }
+
+        @objc private func clipFrameChanged() { report() }
+
+        func report() {
+            guard let width = observed?.bounds.width, width.isFinite, width > 0, width != lastReported else { return }
+            lastReported = width
+            DispatchQueue.main.async { [weak self] in self?.onChange?(width) }
+        }
+
+        deinit { NotificationCenter.default.removeObserver(self) }
+    }
 }
 
 private extension View {

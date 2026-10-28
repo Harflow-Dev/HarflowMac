@@ -83,7 +83,8 @@ extension StatisticsProjection {
                 return stamp >= day.timeIntervalSince1970 && stamp < end.timeIntervalSince1970
             }
             let date = formatter.string(from: day)
-            let labelled = offset.isMultiple(of: stride) || offset == selection.range.rawValue - 1
+            let lastOffset = selection.range.rawValue - 1
+            let labelled = offset == lastOffset || (offset.isMultiple(of: stride) && lastOffset - offset >= stride)
             buckets.append(.init(
                 id: String(offset),
                 label: labelled ? date : "",

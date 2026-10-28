@@ -95,6 +95,41 @@ struct StatisticsProjectionTests {
         #expect(result.chart.bars.first?.workflowFraction ?? 0 > 0)
     }
 
+    @Test func givenRange_whenDayBucketsBuild_thenLabelsStayReadableAndEveryDayRemains() {
+        // given
+        let now = ISO8601DateFormatter().date(from: "2026-10-28T12:00:00-07:00")!
+        let cases: [(range: StatisticsRange, labelOffsets: [Int])] = [
+            (.seven, Array(0 ... 6)),
+            (.thirty, [0, 7, 14, 21, 29]),
+            (.ninety, [0, 22, 44, 66, 89])
+        ]
+
+        for testCase in cases {
+            // when
+            let buckets = StatisticsProjection.dayBuckets(
+                workflows: [], standalone: [], selection: StatisticsSelection(range: testCase.range),
+                now: now, calendar: calendar
+            )
+
+            // then
+            let expectedStart = calendar.date(
+                byAdding: .day, value: 1 - testCase.range.rawValue, to: calendar.startOfDay(for: now)
+            )!
+            let expectedDates = (0 ..< testCase.range.rawValue).map { offset -> String in
+                let day = calendar.date(byAdding: .day, value: offset, to: expectedStart)!
+                let formatter = DateFormatter()
+                formatter.calendar = calendar
+                formatter.timeZone = calendar.timeZone
+                formatter.dateFormat = "MMM d"
+                return formatter.string(from: day)
+            }
+            #expect(buckets.count == testCase.range.rawValue)
+            #expect(buckets.map(\.id) == (0 ..< testCase.range.rawValue).map(String.init))
+            #expect(buckets.map(\.date) == expectedDates)
+            #expect(buckets.indices.filter { !buckets[$0].label.isEmpty } == testCase.labelOffsets)
+        }
+    }
+
     @Test func givenRequestedCalendar_whenMetadataFormatsStart_thenItUsesThatTimezone() {
         // given
         let instant = ISO8601DateFormatter().date(from: "2026-03-10T01:00:00Z")!
