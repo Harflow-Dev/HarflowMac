@@ -75,6 +75,30 @@ import Testing
         }
     }
 
+    @Test(arguments: ["status", "status-batch"])
+    func givenOlderEngineRejectingObserverOption_whenReadingStatus_thenRetriesWithoutOption(command: String) async throws {
+        // given
+        let runner = compatibleRunner { call in
+            if call.arguments.contains("--observer-parent") {
+                return ProcessOutput(exitCode: 2, stdout: Data(), stderr: "unrecognized arguments: --observer-parent")
+            }
+            return ProcessOutput(exitCode: 0, stdout: ctlJSON(command == "status"
+                ? #"{"v":11,"task":{"task_id":"one","status":"running","backend":"claude"}}"#
+                : #"{"v":11,"tasks":[],"errors":{}}"#), stderr: "")
+        }
+        let client = CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
+        // when
+        if command == "status" {
+            _ = try await client.status("one").get()
+        } else {
+            _ = try await client.statusBatch(ids: ["one"]).get()
+        }
+        // then
+        #expect(runner.calls.count == 2)
+        #expect(runner.calls[0].arguments.contains("--observer-parent"))
+        #expect(!runner.calls[1].arguments.contains("--observer-parent"))
+    }
+
     // MARK: - CtlClient.statusBatch
 
     @Test func givenIds_whenStatusBatchIsCalled_thenOneInvocationCarriesThemAll() async throws {

@@ -191,6 +191,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     var promptText = "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
     var rawEvents: [TaskEvent] = []
     var rawEventsPath = "/dev/null"
+    @ObservationIgnored let continuityHistory: any TaskContinuityHistory
     var inspectorModel: InspectorModel?
     var messageBoxModel = MessageBoxModel.disabled
 
@@ -278,8 +279,10 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - Init
 
-    init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting, isWorkflowBuilder: Bool = false) {
+    init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting,
+         continuityHistory: any TaskContinuityHistory, isWorkflowBuilder: Bool = false) {
         self.isWorkflowBuilder = isWorkflowBuilder
+        self.continuityHistory = continuityHistory
         self.taskID = taskID
         self.currentTaskID = taskID
         self.identityTaskID = taskID

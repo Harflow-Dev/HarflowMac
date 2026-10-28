@@ -35,6 +35,7 @@ extension TaskDetailVM {
             return result
         }
         let subtaskCount = allChildren.count
+        continuityHistory.record(detail.supervision?.restartObservation, for: detail.taskID)
         inspectorModel = InspectorModel(
             task: task,
             current: useCase.current(for: currentTaskID),
@@ -48,6 +49,7 @@ extension TaskDetailVM {
             siblings: siblings.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },
             detail: detail,
             hasSnapshot: snapshot != nil,
+            restartHistory: continuityHistory.observations(for: detail.taskID),
             notices: InspectorModel.distinctNotices(detail.notices),
             // Summary-tab item 15: "What was enforced" moved from the Summary tab to the
             // Inspector's "Technical info" disclosure — mapped here (decision 9) from the same

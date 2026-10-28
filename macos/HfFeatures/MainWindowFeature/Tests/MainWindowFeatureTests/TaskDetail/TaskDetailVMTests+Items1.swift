@@ -150,7 +150,7 @@ extension TaskDetailVMTests {
         given(useCase).prompt(for: .any).willReturn(nil)
         given(useCase).send(.any, text: .any).willThrow(TestError.expectedError)
         
-        let sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing)
+        let sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore())
         sut.didAppear()
         tasksSubject.send([running])
         await waitUntil { sut.task != nil }

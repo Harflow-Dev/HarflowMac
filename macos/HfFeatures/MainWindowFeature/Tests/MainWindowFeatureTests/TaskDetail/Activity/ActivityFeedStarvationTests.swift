@@ -201,7 +201,7 @@ import Testing
         self.fullItems = Timeline.items(from: events)
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
-        self.sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing)
+        self.sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore())
         useCase.configurePagingDefaults(eventHistory: { [weak self] _ in self?.history ?? EventHistoryState() })
         TaskDetailVMTests().configureStubs(useCase: useCase, routing: routing, taskID: "abc12345", fixtures: fixtures)
         fixtures.detailBox.value = TaskDetailVMTests().task(status: "completed")

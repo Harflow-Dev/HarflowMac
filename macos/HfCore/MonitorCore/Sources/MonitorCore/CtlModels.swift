@@ -111,7 +111,7 @@ public struct TaskInfo: Equatable, Identifiable, Sendable {
     public var liveInput: Bool { raw["live_input"]?.boolValue ?? false }
     public var notices: [String] {
         var result = raw["notices"]?.arrayValue?.compactMap(\.stringValue) ?? []
-        result += supervision?.notices ?? []
+        result += supervision?.notices(isRunning: status.isRunning) ?? []
         result += raw["recovery_activity"]?["notices"]?.arrayValue?.compactMap(\.stringValue)
             .map { "Harness transcript: \($0)" } ?? []
         if let bound = backgroundIdleSeconds {

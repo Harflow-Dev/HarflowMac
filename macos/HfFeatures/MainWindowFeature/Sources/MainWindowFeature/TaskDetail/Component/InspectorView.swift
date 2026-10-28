@@ -30,6 +30,9 @@ struct InspectorModel {
     let siblings: [SubTaskEntry]
     let detail: TaskInfo
     let hasSnapshot: Bool
+    var restartHistory: [TaskSupervision.RestartObservation] = []
+
+    var showsContinuity: Bool { task.status.isRunning && detail.status.isRunning && detail.supervision?.hasHealthyContinuity == true }
     let notices: [String]
     /// What harflow reports as enforced (`HfUI.EnforcementText.lines(_:)`, mapped in the VM from
     /// the snapshot-or-listing `detail`) — moved here from the Summary tab (item 15). Empty when
@@ -74,9 +77,13 @@ struct InspectorModel {
 
 struct InspectorView: View {
     let model: InspectorModel?
+    var supervisionRequest = 0
     @State private var technicalExpanded = false
+    @FocusState private var supervisionFocused: Bool
+    @AccessibilityFocusState private var supervisionAccessibilityFocused: Bool
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             if let model {
                 VStack(alignment: .leading, spacing: 24) {
@@ -107,6 +114,17 @@ struct InspectorView: View {
             }
         }
         .background(Color.inspectorFill)
+        .onChange(of: supervisionRequest, initial: true) { _, request in
+            guard request > 0 else { return }
+            technicalExpanded = true
+            Task { @MainActor in
+                await Task.yield()
+                proxy.scrollTo("supervision", anchor: .top)
+                supervisionFocused = true
+                supervisionAccessibilityFocused = true
+            }
+        }
+        }
     }
 
     @ViewBuilder
@@ -161,10 +179,52 @@ struct InspectorView: View {
     @ViewBuilder
     private func technicalInfo(_ model: InspectorModel) -> some View {
         VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Supervision")
+                    .focusable()
+                    .focused($supervisionFocused)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($supervisionAccessibilityFocused)
+                supervision(model)
+            }
+            .id("supervision")
             section("Details") { details(model) }
             if !model.task.isRoot { lineage(model) }
             if model.showsEnforcement { section("What was enforced") { enforcement(model) } }
         }
+    }
+
+    @ViewBuilder
+    private func supervision(_ model: InspectorModel) -> some View {
+        if let evidence = model.detail.supervision {
+            detailRow("Owner", evidence.ownerState ?? "Unavailable")
+            detailRow("Process", evidence.processState ?? "Unavailable")
+            detailRow("Capture", evidence.captureState ?? "Unavailable")
+            detailRow("Live input", evidence.liveInputState ?? "Unavailable")
+            if let cutoff = evidence.lastCapturedOutputAt {
+                detailRow("Last raw-log write (approximate capture cutoff)", cutoff)
+                detailRow("Capture source", evidence.lastCapturedOutputSource ?? "Unavailable")
+            }
+        } else {
+            Text("Supervision evidence is unavailable.").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+        }
+        ForEach(Array(model.restartHistory.enumerated()), id: \.offset) { _, observation in
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Server restart observed").font(.hf(.secondary))
+                detailRow("Previous server", identity(observation.previousServer))
+                detailRow(observation.observerKind == "parent_process" ? "Current observing process" : "Current server", identity(observation.observingProcess))
+                if let started = observation.observedProcessStartedAt.flatMap(ISODate.parse) {
+                    detailRow(
+                        observation.observerKind == "parent_process" ? "Observing process started at" : "Observing server started at",
+                        started.formatted(date: .abbreviated, time: .shortened)
+                    )
+                }
+            }
+        }
+    }
+
+    private func identity(_ value: TaskSupervision.ProcessIdentity) -> String {
+        "PID \(value.pid) · \(value.startTime)"
     }
 
     /// "What was enforced" (Summary-tab item 15: the section moved here): the plain

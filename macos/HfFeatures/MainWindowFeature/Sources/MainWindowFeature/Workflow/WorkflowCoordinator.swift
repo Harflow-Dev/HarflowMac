@@ -47,7 +47,7 @@ extension MainWindowCoordinator: WorkflowRouting {
 
     private func buildWorkflowBuilderTaskView(taskID: String, runID: String) -> AnyView {
         let useCase = TaskDetailViewRepository(builderRunID: runID)
-        let vm = TaskDetailVM(taskID: taskID, useCase: useCase, routing: self, isWorkflowBuilder: true)
+        let vm = TaskDetailVM(taskID: taskID, useCase: useCase, routing: self, continuityHistory: continuityHistory, isWorkflowBuilder: true)
         let conversationID = useCase.conversationMembers(of: taskID).first?.id ?? taskID
         return TaskDetailView(vm, isEmbedded: true).id(conversationID).eraseToAnyView()
     }

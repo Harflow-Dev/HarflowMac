@@ -107,13 +107,41 @@ public struct CtlClient: Sendable {
     public func statusBatch(ids: [String]) async -> Result<StatusBatchResult, ToolError> {
         guard !ids.isEmpty else { return .success(StatusBatchResult(tasks: [], errors: [:])) }
         let bounded = Array(ids.prefix(100))
-        return await raw("status-batch", options: ["--task-ids=\(bounded.joined(separator: ","))"])
+        return await observerStatusBatch(options: ["--task-ids=\(bounded.joined(separator: ","))"])
             .flatMap { output in
                 let decodeStart = MonitorMetrics.begin()
                 defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
                 return CtlDocument.decodeBatchResult(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
                                                      command: "status-batch", productVersion: compatibilityContext.productVersion)
             }
+    }
+
+    private func observerStatusBatch(options: [String]) async -> Result<ProcessOutput, ToolError> {
+        let response = await raw("status-batch", options: options + ["--observer-parent"])
+        if case .failure(let error) = response, Self.isObserverParentUsage(error) {
+            return await raw("status-batch", options: options)
+        }
+        if case .success(let output) = response {
+            let decoded = CtlDocument.decodeBatchResult(
+                stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
+                command: "status-batch", productVersion: compatibilityContext.productVersion
+            )
+            if case .failure(let error) = decoded, Self.isObserverParentUsage(error) {
+                return await raw("status-batch", options: options)
+            }
+        }
+        return response
+    }
+
+    private static func isObserverParentUsage(_ error: ToolError) -> Bool {
+        switch error {
+        case .unsupportedCommand(_, _, let detail):
+            detail.contains("unrecognized arguments") && detail.contains("--observer-parent")
+        case .unreadable(_, let code, let detail):
+            code == 2 && detail.contains("unrecognized arguments") && detail.contains("--observer-parent")
+        default:
+            false
+        }
     }
 
     public func list() async -> Result<[TaskInfo], ToolError> {
@@ -124,7 +152,11 @@ public struct CtlClient: Sendable {
     }
 
     public func status(_ taskID: String) async -> Result<TaskInfo, ToolError> {
-        await call("status", positionals: [taskID]).requiringSuccess().flatMap { document in
+        var response = await call("status", options: ["--observer-parent"], positionals: [taskID]).requiringSuccess()
+        if case .failure(let error) = response, Self.isObserverParentUsage(error) {
+            response = await call("status", positionals: [taskID]).requiringSuccess()
+        }
+        return response.flatMap { document in
             if case .task(let task) = document { return .success(task) }
             return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "status returned no task"))
         }

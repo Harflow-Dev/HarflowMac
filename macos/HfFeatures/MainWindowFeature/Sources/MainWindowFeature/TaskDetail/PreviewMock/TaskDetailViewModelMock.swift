@@ -110,6 +110,31 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
         return mock
     }
 
+    /// Isolated deterministic continuity states for previews and native capture checks.
+    static func continuity(status: String = "running", loss: Bool = false) -> TaskDetailViewModelMock {
+        let mock = TaskDetailViewModelMock()
+        let source = """
+        {"task_id":"abc12345","backend":"claude","status":"\(status)",
+         "repo_path":"/tmp/harflow-continuity","started_at":"2026-10-28T09:00:00Z",
+         "supervision":{"owner_state":"alive","process_state":"alive",
+         "capture_state":"\(loss ? "lost_with_owner" : "live")","live_input_state":"open",
+         "adopted_after_restart":{"at":"2026-10-28T09:10:00Z","observer_kind":"parent_process",
+         "previous_server":{"pid":100,"start_time":"Wed Oct 28 09:00:00 2026"},
+         "observing_process":{"pid":200,"start_time":"Wed Oct 28 09:10:00 2026"}}}}
+        """
+        guard let value = try? JSONDecoder().decode(JSONValue.self, from: Data(source.utf8)),
+              let task = TaskInfo(value), let observation = task.supervision?.restartObservation else { return mock }
+        mock.task = task
+        mock.title = "Implement persistence checks"
+        mock.inspectorModel = InspectorModel(
+            task: task, current: nil, stepCount: 0, activity: ActivityCounts(), subtaskCount: 0,
+            ancestors: [], siblings: [], detail: task, hasSnapshot: true, restartHistory: [observation],
+            notices: task.supervision?.notices ?? [], startedBy: "Top-level task", resumeCommand: nil,
+            onCopyResumeCommand: {}, onCopyTaskID: {}, onSelectTask: { _ in }
+        )
+        return mock
+    }
+
     static func sampleTask(status: String = "running", takenOver: Bool = false, spawnedBy: String? = nil) -> TaskInfo {
         var object: [String: JSONValue] = [
             "task_id": .string("abc12345"), "backend": .string("claude"), "status": .string(status),

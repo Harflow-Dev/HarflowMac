@@ -192,7 +192,8 @@ import Testing
         let fixtures = Fixtures()
         let lease = configureStubs(useCase: useCase, routing: routing, taskID: taskID, fixtures: fixtures)
 
-        let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing, isWorkflowBuilder: isWorkflowBuilder)
+        let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing,
+                               continuityHistory: TaskContinuityHistoryStore(), isWorkflowBuilder: isWorkflowBuilder)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: fixtures.tasksSubject,
             hasListedSubject: fixtures.hasListedSubject, snapshotsSubject: fixtures.snapshotsSubject,

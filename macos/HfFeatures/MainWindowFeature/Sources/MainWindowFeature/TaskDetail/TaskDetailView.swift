@@ -114,6 +114,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private let onToolbarEvaluation: (() -> Void)?
     @State private var embeddedInspectorVisible = false
     @State private var isRawEventsPresented = false
+    @State private var supervisionRequest = 0
+    @FocusState private var continuityDetailsFocused: Bool
     @AppStorage("monitor.inspectorVisible") private var isInspectorVisible = false
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -169,6 +171,24 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 .padding(.vertical, HfRadius.Metrics.spacing8)
                         }
                         header(task)
+                        if viewModel.inspectorModel?.showsContinuity == true {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.clockwise").accessibilityHidden(true)
+                                Text("Server restarted · Task still running")
+                                Spacer(minLength: 8)
+                                Button("Details") {
+                                    if isEmbedded { embeddedInspectorVisible = true } else { isInspectorVisible = true }
+                                    supervisionRequest += 1
+                                }
+                                .buttonStyle(.plain)
+                                .focused($continuityDetailsFocused)
+                                .accessibilityLabel("Show supervision details")
+                            }
+                            .font(.hf(.secondary))
+                            .foregroundStyle(Color.secondaryText)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 12)
+                        }
                         tabPicker
                         column
                     }
@@ -177,7 +197,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     if showsInspector {
                         HStack(spacing: HfRadius.Metrics.zero) {
                             Divider()
-                            InspectorView(model: viewModel.inspectorModel)
+                            InspectorView(model: viewModel.inspectorModel, supervisionRequest: supervisionRequest)
                                 .frame(width: HfRadius.Metrics.taskInspectorWidth)
                         }
                         .transition(.move(edge: .trailing))
@@ -187,6 +207,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 // change can land outside the tap's transaction and would then not animate. Reduce
                 // Motion drops the slide (§8); the pane still appears and disappears without motion.
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showsInspector)
+                .onChange(of: showsInspector) { wasVisible, visible in
+                    if wasVisible, !visible, supervisionRequest > 0 { continuityDetailsFocused = true }
+                }
                 .opensFileLinks(repoPath: task.repoPath)
                 .sheet(isPresented: $isRawEventsPresented) {
                     RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }

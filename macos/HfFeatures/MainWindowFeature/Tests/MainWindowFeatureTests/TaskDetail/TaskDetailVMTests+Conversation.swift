@@ -12,8 +12,7 @@ import Testing
 /// Monitor piece 7: a follow-up continues the same conversation. These build their OWN harness
 /// (never `makeSUT()`) because Mockable matches FIFO — `configureStubs`'s own
 /// `conversationMembers(of: .value(taskID))` stub would otherwise win over anything registered
-/// after it for the same id (see `TaskDetailVMTests.swift`'s own note on `copyToPasteboard`), and
-/// every one of these needs a genuinely multi-member conversation the shared harness never builds.
+/// after it for the same id (see `TaskDetailVMTests.swift`'s own note on `copyToPasteboard`).
 @MainActor
 extension TaskDetailVMTests {
 
@@ -163,7 +162,8 @@ extension TaskDetailVMTests {
             return Dictionary(ids.map { ($0, childrenBoxes[$0]?.value ?? []) }, uniquingKeysWith: { first, _ in first })
         }
 
-        let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing, isWorkflowBuilder: isWorkflowBuilder)
+        let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing,
+                               continuityHistory: TaskContinuityHistoryStore(), isWorkflowBuilder: isWorkflowBuilder)
         return ConversationSUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, membersBox: membersBox,
             eventsBox: eventsBoxes, childrenBox: childrenBoxes, childrenOfEachCallCount: childrenOfEachCallCount,

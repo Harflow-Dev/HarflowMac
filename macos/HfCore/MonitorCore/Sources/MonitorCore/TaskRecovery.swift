@@ -4,6 +4,43 @@ import Foundation
 
 /// Engine evidence kept separate from task outcome and process ownership inference.
 public struct TaskSupervision: Equatable, Sendable {
+    /// A process identity requires both PID and start identity, so PID reuse is distinct.
+    public struct ProcessIdentity: Equatable, Hashable, Sendable {
+        public let pid: Int
+        public let startTime: String
+
+        init?(_ value: JSONValue?) {
+            guard let object = value?.objectValue, let pid = object["pid"]?.wireIntegerValue, pid > 0,
+                  let start = object["start_time"]?.stringValue, !start.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  start.utf8.count <= 128 else { return nil }
+            self.pid = pid
+            startTime = start
+        }
+    }
+
+    /// Qualified engine observation; malformed optional evidence is ignored independently.
+    public struct RestartObservation: Equatable, Hashable, Sendable {
+        public let observedProcessStartedAt: String?
+        public let previousServer: ProcessIdentity
+        public let observerKind: String
+        public let observingProcess: ProcessIdentity
+
+        init?(_ value: JSONValue?) {
+            guard let object = value?.objectValue,
+                  let previous = ProcessIdentity(object["previous_server"]) else { return nil }
+            if let kindValue = object["observer_kind"], kindValue != .null, kindValue.stringValue == nil { return nil }
+            let kind = object["observer_kind"]?.stringValue ?? "server"
+            guard kind == "server" || kind == "parent_process",
+                  let current = ProcessIdentity(object[kind == "parent_process" ? "observing_process" : "current_server"]),
+                  current != previous else { return nil }
+            previousServer = previous
+            observerKind = kind
+            observingProcess = current
+            observedProcessStartedAt = object["at"]?.stringValue
+        }
+    }
+
+    public let restartObservation: RestartObservation?
     public let ownerState: String?
     public let processState: String?
     public let captureState: String?
@@ -13,6 +50,7 @@ public struct TaskSupervision: Equatable, Sendable {
 
     public init?(_ value: JSONValue) {
         guard let object = value.objectValue else { return nil }
+        restartObservation = RestartObservation(object["adopted_after_restart"])
         ownerState = object["owner_state"]?.stringValue
         processState = object["process_state"]?.stringValue
         captureState = object["capture_state"]?.stringValue
@@ -21,19 +59,33 @@ public struct TaskSupervision: Equatable, Sendable {
         lastCapturedOutputSource = object["last_captured_output_source"]?.stringValue
     }
 
-    public var notices: [String] {
+    /// Positive evidence required for the quiet running claim.
+    public var hasHealthyContinuity: Bool {
+        restartObservation != nil && ownerState == "alive" && ["alive", "undecidable"].contains(processState ?? "") && captureState == "live"
+            && ["open", "closed", "not_applicable"].contains(liveInputState ?? "")
+    }
+
+    public var notices: [String] { notices(isRunning: true) }
+
+    /// Ownership uncertainty matters while execution is live; observed terminal owners are normally absent.
+    public func notices(isRunning: Bool) -> [String] {
         var result: [String] = []
-        if captureState == "lost_with_owner" {
-            result.append("Output capture was lost with its owner. Process state: \(processState ?? "unknown"). No further captured summary is promised.")
+        if isRunning && ["unknown", "uncertain", "undecidable", "dead"].contains(ownerState ?? "") {
+            result.append("Task connection is uncertain.")
+        }
+        if captureState == "lost_with_owner" || captureState == "lost" {
+            result.append("Output capture stopped; capture was lost with its owner. No further captured summary is promised.")
         } else if captureState == "unknown" {
             result.append("Output capture ownership is unknown.")
         }
-        if liveInputState == "closed_with_owner" { result.append("Live input closed with its owner; messages cannot be delivered through that channel.") }
-        if let lastCapturedOutputAt {
-            result.append("Last raw-log write (approximate capture cutoff): \(lastCapturedOutputAt) (\(lastCapturedOutputSource ?? "unknown source")).")
+        if liveInputState == "closed_with_owner" || liveInputState == "lost" {
+            result.append("Messages can no longer be delivered through the live input channel.")
+        } else if liveInputState == "unknown" {
+            result.append("Live input ownership is unknown.")
         }
         return result
     }
+
 }
 
 // MARK: - RecoveryActivityPage

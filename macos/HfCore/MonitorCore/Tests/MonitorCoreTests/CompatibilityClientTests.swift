@@ -186,7 +186,7 @@ struct CompatibilityClientTests {
             return
         }
         #expect(runner.allCalls.map(\.arguments) == [
-            ["version-info", "--json"], ["status-batch", "--task-ids=one", "--json"],
+            ["version-info", "--json"], ["status-batch", "--task-ids=one", "--observer-parent", "--json"],
             ["version-info", "--json"], ["custom-command", "--json"]
         ])
     }
