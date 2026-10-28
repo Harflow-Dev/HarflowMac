@@ -1,4 +1,3 @@
-import AppKit
 import HfCommon
 import HfUI
 import SwiftUI
@@ -27,7 +26,6 @@ protocol StatisticsViewModel: ViewModel {
 struct StatisticsView<VM: StatisticsViewModel>: View {
     @Environment(\.viewEvent) private var viewEvent
     @State private var viewModel: VM
-    @State private var preparedContentWidth: CGFloat = 880
     /// Reference holder, deliberately not observed: scroll frames must not invalidate this view.
     @State private var viewport = StatisticsViewport()
 
@@ -75,13 +73,8 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
     }
 
     private func preparedContent(emptyMessage: String? = nil) -> some View {
-        ScrollView([.horizontal, .vertical]) {
+        ScrollView(.vertical) {
             preparedSurface(emptyMessage: emptyMessage)
-                .frame(width: preparedContentWidth)
-                .background(StatisticsClipWidthReader { width in
-                    let target = max(880, width)
-                    if target != preparedContentWidth { preparedContentWidth = target }
-                })
                 .coordinateSpace(name: StatisticsViewport.contentSpace)
         }
         .defaultScrollAnchor(.topLeading, for: .alignment)
@@ -113,49 +106,54 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
             }
         }
         .padding(24)
-        .frame(minWidth: 880, maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var controls: some View {
-        HStack(spacing: 10) {
-            Picker("Range", selection: Binding(get: { viewModel.presentation.range }, set: { viewModel.selectRange($0) })) {
-                ForEach(StatisticsRange.allCases, id: \.self) { Text("\($0.rawValue) days").tag($0) }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                rangePicker.frame(width: 215)
+                filterControls
+                Spacer(minLength: 8)
+                measurePicker.frame(width: 150)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 215)
-            .accessibilityLabel("Time range")
-            filter(
-                "Repository",
-                selected: viewModel.presentation.repository,
-                selectedLabel: viewModel.presentation.repositoryLabel,
-                options: viewModel.presentation.repositoryOptions,
-                action: viewModel.selectRepository
-            )
-            filter(
-                "Harness",
-                selected: viewModel.presentation.harness,
-                selectedLabel: viewModel.presentation.harnessLabel,
-                options: viewModel.presentation.harnessOptions,
-                action: viewModel.selectHarness
-            )
-            filter(
-                "Requested model",
-                selected: viewModel.presentation.requestedModel,
-                selectedLabel: viewModel.presentation.modelLabel,
-                options: viewModel.presentation.modelOptions,
-                action: viewModel.selectRequestedModel
-            )
-            Spacer(minLength: 8)
-            Text("Measure").font(.hf(.caption)).foregroundStyle(Color.secondaryText).accessibilityHidden(true)
-            Picker("Measure", selection: Binding(get: { viewModel.presentation.measure }, set: { viewModel.selectMeasure($0) })) {
-                ForEach(StatisticsMeasure.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            VStack(alignment: .leading, spacing: 10) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { rangePicker.frame(width: 215); measurePicker.frame(width: 150) }
+                    VStack(alignment: .leading, spacing: 6) { rangePicker; measurePicker }
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 8) {
+                    filterControls
+                }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 150)
-            .accessibilityLabel("Measure")
         }
+    }
+
+    private var rangePicker: some View {
+        Picker("Range", selection: Binding(get: { viewModel.presentation.range }, set: { viewModel.selectRange($0) })) {
+            ForEach(StatisticsRange.allCases, id: \.self) { Text("\($0.rawValue) days").tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityLabel("Time range")
+    }
+
+    private var measurePicker: some View {
+        Picker("Measure", selection: Binding(get: { viewModel.presentation.measure }, set: { viewModel.selectMeasure($0) })) {
+            ForEach(StatisticsMeasure.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityLabel("Measure")
+    }
+
+    @ViewBuilder private var filterControls: some View {
+        filter("Repository", selected: viewModel.presentation.repository, selectedLabel: viewModel.presentation.repositoryLabel,
+               options: viewModel.presentation.repositoryOptions, action: viewModel.selectRepository)
+        filter("Harness", selected: viewModel.presentation.harness, selectedLabel: viewModel.presentation.harnessLabel,
+               options: viewModel.presentation.harnessOptions, action: viewModel.selectHarness)
+        filter("Requested model", selected: viewModel.presentation.requestedModel, selectedLabel: viewModel.presentation.modelLabel,
+               options: viewModel.presentation.modelOptions, action: viewModel.selectRequestedModel)
     }
 
     private func filter(
@@ -181,15 +179,20 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
     private var chart: some View {
         let chart = viewModel.presentation.chart
         return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(chart.title).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                    Text(chart.total).font(.hf(.title)).foregroundStyle(Color.primaryText)
-                    Text(chart.caption).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top) {
+                    chartSummary(chart)
+                    Spacer(minLength: 12)
+                    legend("Workflow runs", value: chart.workflowTotal, color: .accentColor)
+                    legend("Tasks", value: chart.taskTotal, color: .accentColor.opacity(0.5))
                 }
-                Spacer()
-                legend("Workflow runs", value: chart.workflowTotal, color: .accentColor)
-                legend("Tasks", value: chart.taskTotal, color: .accentColor.opacity(0.5))
+                VStack(alignment: .leading, spacing: 8) {
+                    chartSummary(chart)
+                    HStack(spacing: 16) {
+                        legend("Workflow runs", value: chart.workflowTotal, color: .accentColor)
+                        legend("Tasks", value: chart.taskTotal, color: .accentColor.opacity(0.5))
+                    }
+                }
             }
             HStack(alignment: .bottom, spacing: 6) {
                 VStack(alignment: .trailing) {
@@ -233,6 +236,14 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         .coordinateSpace(name: StatisticsViewport.chartCardSpace)
     }
 
+    private func chartSummary(_ chart: StatisticsChart) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(chart.title).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+            Text(chart.total).font(.hf(.title)).foregroundStyle(Color.primaryText)
+            Text(chart.caption).font(.hf(.caption)).foregroundStyle(Color.secondaryText).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private func legend(_ title: String, value: String, color: Color) -> some View {
         HStack(spacing: 4) {
             RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 9, height: 9)
@@ -243,17 +254,20 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
 
     private var ranking: some View {
         LazyVStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Picker("Ranking", selection: Binding(get: { viewModel.presentation.list }, set: { viewModel.selectList($0) })) {
-                    ForEach(StatisticsList.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    rankingPicker.frame(width: 245)
+                    Text(viewModel.presentation.listTitle).font(.hf(.body)).bold().lineLimit(1)
+                    Spacer(minLength: 0)
+                    metricHeaders(primary: viewModel.presentation.primaryColumn, secondary: viewModel.presentation.secondaryColumn)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 245)
-                .accessibilityLabel("Ranking category")
-                Text(viewModel.presentation.listTitle).font(.hf(.body)).bold()
-                Spacer(minLength: 0)
-                metricHeaders(primary: viewModel.presentation.primaryColumn, secondary: viewModel.presentation.secondaryColumn)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        rankingPicker.frame(maxWidth: 245)
+                        Text(viewModel.presentation.listTitle).font(.hf(.body)).bold().fixedSize(horizontal: false, vertical: true)
+                    }
+                    metricHeaders(primary: viewModel.presentation.primaryColumn, secondary: viewModel.presentation.secondaryColumn)
+                }
             }
             if viewModel.presentation.rows.isEmpty {
                 Text(
@@ -267,6 +281,15 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         }.statisticsCard()
     }
 
+    private var rankingPicker: some View {
+        Picker("Ranking", selection: Binding(get: { viewModel.presentation.list }, set: { viewModel.selectList($0) })) {
+            ForEach(StatisticsList.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityLabel("Ranking category")
+    }
+
     private func metricHeaders(primary: String, secondary: String) -> some View {
         Group {
             Text(primary).frame(width: 90, alignment: .trailing)
@@ -278,28 +301,47 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
 
     private func rankingRow(_ row: StatisticsRow, interactive: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .center, spacing: 8) {
-                if interactive {
-                    Button { viewModel.toggleRow(row.id) } label: {
-                        Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(row.isExpanded ? "Collapse" : "Expand") \(row.title)")
-                    .frame(width: 10)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) {
+                    rowIdentity(row, interactive: interactive)
+                    rankingTrack(row.fraction).frame(width: 200)
+                    if let share = row.share { Text(share).foregroundStyle(Color.secondaryText).frame(width: 70, alignment: .trailing) }
+                    Text(row.value).frame(width: 90, alignment: .trailing)
+                    Text(row.secondaryValue).foregroundStyle(Color.secondaryText).frame(width: 90, alignment: .trailing)
                 }
-                Text(row.rank.map(String.init) ?? "").foregroundStyle(Color.secondaryText).frame(width: 20, alignment: .trailing)
-                rowGlyph(row).frame(width: 14)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.title).font(.hf(.body)).foregroundStyle(Color.primaryText)
-                    Text(row.subtitle).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                }.frame(minWidth: 140, maxWidth: .infinity, alignment: .leading)
-                rankingTrack(row.fraction).frame(width: 200)
-                if let share = row.share { Text(share).foregroundStyle(Color.secondaryText).frame(width: 70, alignment: .trailing) }
-                Text(row.value).frame(width: 90, alignment: .trailing)
-                Text(row.secondaryValue).foregroundStyle(Color.secondaryText).frame(width: 90, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 6) {
+                    rowIdentity(row, interactive: interactive)
+                    HStack(spacing: 8) {
+                        rankingTrack(row.fraction).frame(maxWidth: .infinity)
+                        if let share = row.share { Text(share).foregroundStyle(Color.secondaryText).frame(width: 60, alignment: .trailing) }
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(row.value)
+                            Text(row.secondaryValue).foregroundStyle(Color.secondaryText)
+                        }
+                    }
+                }
             }
             if row.isExpanded, interactive { expandedRows(row) }
             Divider()
+        }
+    }
+
+    private func rowIdentity(_ row: StatisticsRow, interactive: Bool) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            if interactive {
+                Button { viewModel.toggleRow(row.id) } label: {
+                    Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(row.isExpanded ? "Collapse" : "Expand") \(row.title)")
+                .frame(width: 10)
+            }
+            Text(row.rank.map(String.init) ?? "").foregroundStyle(Color.secondaryText).frame(width: 20, alignment: .trailing)
+            rowGlyph(row).frame(width: 14)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title).font(.hf(.body)).foregroundStyle(Color.primaryText).lineLimit(2)
+                Text(row.subtitle).font(.hf(.caption)).foregroundStyle(Color.secondaryText).lineLimit(2)
+            }.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -355,7 +397,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
             Button("Back to statistics", systemImage: "chevron.left") { viewModel.showOverview() }
             Text(page.title).font(.hf(.title))
             Text(page.subtitle).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-            HStack(alignment: .top, spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .top)], alignment: .leading, spacing: 12) {
                 summary("Runs", page.runs, note: page.runsBreakdown)
                 summary("Elapsed run time", page.wallTime, note: "Wall clock, all runs")
                 summary("Summed execution time", page.executionTime, note: "Independent node executions added together")
@@ -387,76 +429,6 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         .statisticsCard()
     }
 
-}
-
-// MARK: - StatisticsClipWidthReader
-
-/// Reports the width of the enclosing `NSScrollView`'s clip view, which excludes any legacy scroller
-/// track that SwiftUI's own scroll geometry includes. The hosting `ScrollView` must align undersized content
-/// to the leading edge (`defaultScrollAnchor(.topLeading, for: .alignment)`); otherwise SwiftUI centres the
-/// document with a content inset, which creates horizontal travel.
-private struct StatisticsClipWidthReader: NSViewRepresentable {
-    let onChange: (CGFloat) -> Void
-
-    func makeNSView(context: Context) -> ClipWidthView { ClipWidthView() }
-
-    func updateNSView(_ view: ClipWidthView, context: Context) {
-        view.onChange = onChange
-        view.report()
-    }
-
-    final class ClipWidthView: NSView {
-        var onChange: ((CGFloat) -> Void)?
-        private weak var observed: NSClipView?
-        private var lastReported: CGFloat?
-
-        override func viewDidMoveToSuperview() {
-            super.viewDidMoveToSuperview()
-            attach()
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            guard window != nil else {
-                NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: nil)
-                observed = nil
-                lastReported = nil
-                return
-            }
-            attach()
-        }
-
-        override func layout() {
-            super.layout()
-            attach()
-            report()
-        }
-
-        private func attach() {
-            let clip = enclosingScrollView?.contentView
-            guard clip !== observed else { return }
-            if let observed {
-                NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: observed)
-            }
-            observed = clip
-            guard let clip else { return }
-            clip.postsFrameChangedNotifications = true
-            NotificationCenter.default.addObserver(
-                self, selector: #selector(clipFrameChanged), name: NSView.frameDidChangeNotification, object: clip
-            )
-            report()
-        }
-
-        @objc private func clipFrameChanged() { report() }
-
-        func report() {
-            guard let width = observed?.bounds.width, width.isFinite, width > 0, width != lastReported else { return }
-            lastReported = width
-            DispatchQueue.main.async { [weak self] in self?.onChange?(width) }
-        }
-
-        deinit { NotificationCenter.default.removeObserver(self) }
-    }
 }
 
 private extension View {

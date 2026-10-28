@@ -1,16 +1,60 @@
 import AppKit
+import HfTestUtilities
 @testable import MainWindowFeature
 import Observation
 import SwiftUI
 import Testing
 
 @MainActor @Suite(.serialized) struct StatisticsPreparedSurfaceCaptureTests {
-    @Test(arguments: [ColorScheme.light, .dark])
-    func givenProductionPreparedSurface_whenRenderedOffscreen_thenBodyPixelsAppear(scheme: ColorScheme) throws {
+    @Test(arguments: [NSScroller.Style.overlay, .legacy])
+    func givenReadyStatistics_whenViewportNarrowsAndWidens_thenDocumentTracksViewportWithoutHorizontalScroll(style: NSScroller.Style) async throws {
+        // given
+        _ = NSApplication.shared
+        let model = CaptureModel()
+        let host = NSHostingView(rootView: StatisticsView(model))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 620), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        host.frame = CGRect(x: 0, y: 0, width: 1000, height: 620)
+        defer { window.contentView = nil; window.close() }
+
+        // when
+        try await assertViewport(style: style, width: 1000, host: host, window: window)
+        try await assertViewport(style: style, width: 640, host: host, window: window)
+        try await assertViewport(style: style, width: 760, host: host, window: window)
+        try await assertViewport(style: style, width: 1000, host: host, window: window)
+    }
+
+    private func assertViewport(style: NSScroller.Style, width: CGFloat, host: NSHostingView<StatisticsView<CaptureModel>>, window: NSWindow) async throws {
+        window.setContentSize(CGSize(width: width, height: 620))
+        host.frame = CGRect(x: 0, y: 0, width: width, height: 620)
+        await waitUntil {
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
+            guard let scroll = Self.descendants(of: host).compactMap({ $0 as? NSScrollView }).first else { return false }
+            scroll.scrollerStyle = style
+            scroll.hasVerticalScroller = true
+            scroll.tile()
+            return abs(host.bounds.width - width) < 2 && scroll.contentView.bounds.width > 0
+        }
+        let scroll = try #require(Self.descendants(of: host).compactMap { $0 as? NSScrollView }.first)
+        let document = try #require(scroll.documentView)
+        // then
+        #expect(scroll.hasHorizontalScroller == false)
+        #expect(document.bounds.width <= scroll.contentView.bounds.width + 1,
+                "Statistics document width must follow the current viewport after resizing to \(width) points")
+    }
+
+    private static func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
+    @Test(arguments: [ColorScheme.light, .dark], [CGFloat(640), 1000, 1180])
+    func givenProductionPreparedSurface_whenRenderedOffscreen_thenBodyPixelsAppear(scheme: ColorScheme, width: CGFloat) throws {
         let model = CaptureModel()
         let surface = StatisticsView(model)
 .preparedSurface()
-            .frame(width: 1180, height: 820, alignment: .topLeading)
+            .frame(width: width, height: 820, alignment: .topLeading)
             .background(Color.windowBG)
             .environment(\.colorScheme, scheme)
         let appearance = try #require(NSAppearance(named: scheme == .light ? .aqua : .darkAqua))
@@ -18,7 +62,7 @@ import Testing
         appearance.performAsCurrentDrawingAppearance {
             let renderer = ImageRenderer(content: surface)
             renderer.scale = 1.5
-            renderer.proposedSize = ProposedViewSize(width: 1180, height: 820)
+            renderer.proposedSize = ProposedViewSize(width: width, height: 820)
             image = renderer.cgImage
         }
         let captured = try #require(image)
@@ -33,7 +77,8 @@ import Testing
         if let path = ProcessInfo.processInfo.environment["HARFLOW_STATISTICS_CAPTURE_DIR"] {
             let directory = URL(fileURLWithPath: path, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let name = scheme == .light ? "statistics-prepared-surface-light.png" : "statistics-prepared-surface-dark.png"
+            let appearanceName = scheme == .light ? "light" : "dark"
+            let name = "statistics-prepared-surface-\(appearanceName)-\(Int(width)).png"
             try #require(bitmap.representation(using: .png, properties: [:])).write(to: directory.appendingPathComponent(name))
         }
     }
@@ -43,7 +88,7 @@ import Testing
             var value = StatisticsPresentation()
             value.state = .ready
             var bars: [StatisticsBar] = []
-            for index in 0 ..< 30 {
+            for index in 0 ..< 90 {
                 let label = index.isMultiple(of: 7) ? "Oct \(index + 1)" : ""
                 let workflowFraction = Double(index % 8 + 1) / 12
                 let taskFraction = Double(index % 3) / 20

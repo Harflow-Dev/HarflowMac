@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Resize the Statistics chart to the available window width, adapt controls and rankings in narrower windows, and retain vertical scrolling for long lists.
+
 ## 0.0.5
 
 - Pair the app with HarflowMCP 0.0.4 using regenerated frozen dependency inputs and refreshed vendored v1 contract fixtures.

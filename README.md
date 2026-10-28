@@ -6,7 +6,7 @@ Version 0.0.5 is under development. On Apple Silicon with macOS 26, the app chec
 
 With no item selected, the start screen offers New session and saved workflow launch shortcuts. It shows local-time activity summaries only when the engine provides complete history and ownership evidence. Compatible histories rank saved workflows by retained run count; older engines keep alphabetical shortcuts without counts. Run opens the saved definition and permission preview before execution.
 
-Statistics opens from Overview in the sidebar. Compatible engines provide retained finished-history time and token accounting for local 7, 30, or 90-day ranges, with repository, harness and requested-model filters. Totals wait for complete bounded history pages; missing accounting stays unavailable and retention is disclosed. This version pairs with engine 0.0.4, which provides `statistics-page.v1`; older engines show an explicit unsupported state.
+Statistics opens from Overview in the sidebar. Its graph fits the available window width; long rankings scroll vertically. Compatible engines provide retained finished-history time and token accounting for local 7, 30, or 90-day ranges, with repository, harness and requested-model filters. Totals wait for complete bounded history pages; missing accounting stays unavailable and retention is disclosed. This version pairs with engine 0.0.4, which provides `statistics-page.v1`; older engines show an explicit unsupported state.
 
 Workflow runs show selected node activity in the Graph sidebar, with attempt selection and on-demand call history. Deselect a node to return to the retained run plan. The bottom summary expands above the graph; Parallel shows all current workflow task columns.
 
