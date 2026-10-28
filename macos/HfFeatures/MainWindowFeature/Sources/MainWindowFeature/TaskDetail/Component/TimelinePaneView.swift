@@ -37,6 +37,7 @@ struct TimelinePaneModel {
     /// The raw rows, one per timeline item — what the inspector's step count reads.
     let rows: [ConversationTimelineRow]
     /// What the feed renders: `rows` with adjacent tool calls folded into cards.
+    var activitySnapshot: ActivityFeedSnapshot?
     let activityRows: [ActivityRow]
     let start: Date?
     let emptyText: String?
@@ -149,7 +150,7 @@ struct TimelinePaneView: View {
     }
 
     private var feed: some View {
-        ActivityFeedView(rows: model.activityRows, start: model.start, history: model.history,
+        ActivityFeedView(rows: model.activityRows, activitySnapshot: model.activitySnapshot, start: model.start, history: model.history,
                          isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages,
                             children: model.subTaskStrip?.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) } ?? []),
                          paginationRevision: model.paginationRevision, emptyText: model.emptyText, horizontalPadding: HfRadius.Metrics.spacing24,

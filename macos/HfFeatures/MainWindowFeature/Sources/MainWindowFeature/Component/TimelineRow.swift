@@ -140,7 +140,6 @@ struct TimelineRow: View {
 /// presentation-only override wins over the system setting, and a change mid-flight stops or
 /// restarts it without waiting for a re-mount.
 struct StreamingCaret: View {
-    @State private var visible = true
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
 
@@ -149,22 +148,18 @@ struct StreamingCaret: View {
     }
 
     var body: some View {
-        Text("▍")
-            .font(.hf(.body, design: .monospaced))
-            .foregroundStyle(Color.secondaryText)
-            .opacity(visible ? 1 : 0.2)
-            .onAppear { updateBlink() }
-            .onChange(of: reduceMotion) { _, _ in updateBlink() }
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+            Text("▍")
+                .font(.hf(.body, design: .monospaced))
+                .foregroundStyle(Color.secondaryText)
+                .opacity(reduceMotion ? 1 : Self.opacity(at: context.date))
+        }
     }
 
-    /// Runs the blink unless Reduce Motion is active, and settles the caret at full opacity when it
-    /// is — a resolved override never leaves the caret dimmed.
-    private func updateBlink() {
-        if reduceMotion {
-            withAnimation(.none) { visible = true }
-            return
-        }
-        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { visible.toggle() }
+    /// A 1.2 second cycle matches the former 0.6 second autoreversing blink. The clock
+    /// belongs to this tiny leaf, keeping its ticks out of the selectable text's transaction.
+    static func opacity(at date: Date) -> Double {
+        0.6 + 0.4 * cos(date.timeIntervalSinceReferenceDate * 2 * .pi / 1.2)
     }
 }
 

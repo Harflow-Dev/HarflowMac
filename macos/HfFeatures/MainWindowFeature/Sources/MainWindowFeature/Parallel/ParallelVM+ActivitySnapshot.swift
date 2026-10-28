@@ -4,6 +4,13 @@ import MonitorCore
 // MARK: - Parallel activity handoff
 
 extension ParallelVM {
+    func preparePreviousActivity(_ dirty: inout [String: ParallelColumnInput]) {
+        for id in dirty.keys {
+            dirty[id]?.previousMarkdown = presentations[id]?.markdown ?? [:]
+            dirty[id]?.previousActivitySnapshot = presentations[id]?.activitySnapshot
+        }
+    }
+
     /// Seeds the already displayed detail before membership subscriptions can refresh its lane.
     func seedConversationActivity(_ snapshot: ConversationActivitySnapshot, state: ParallelColumnUIState) {
         guard !didSubscribe else { return }
@@ -31,6 +38,7 @@ extension ParallelVM {
             start: conversation.first.startedAt, memberTaskIDs: Set(memberIDs))
         if let presentation = snapshot.presentation {
             value.rows = presentation.rows
+            value.activitySnapshot = presentation.activitySnapshot
             value.activityRows = presentation.activityRows
             value.markdown = presentation.markdown
             value.liveStep = presentation.liveStep

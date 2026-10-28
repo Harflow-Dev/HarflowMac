@@ -33,6 +33,21 @@ struct ActivityFeedNativeModel: Equatable {
     var visible: Bool
     var loading: Bool
     var approvalReveal: CallerApprovalReveal?
+    var activitySnapshot: ActivityFeedSnapshot?
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        let rowsEqual: Bool = if let left = lhs.activitySnapshot, let right = rhs.activitySnapshot {
+            left === right && lhs.shownRows.count == rhs.shownRows.count
+                && lhs.shownRows.first?.id == rhs.shownRows.first?.id
+        } else {
+            lhs.shownRows == rhs.shownRows && lhs.allRowIDs == rhs.allRowIDs
+        }
+        return rowsEqual && lhs.start == rhs.start && lhs.emptyText == rhs.emptyText
+            && lhs.horizontalPadding == rhs.horizontalPadding && lhs.showsPromptBubble == rhs.showsPromptBubble
+            && lhs.expandedGroups == rhs.expandedGroups && lhs.tailPresentation == rhs.tailPresentation
+            && lhs.history == rhs.history && lhs.paginationRevision == rhs.paginationRevision
+            && lhs.visible == rhs.visible && lhs.loading == rhs.loading && lhs.approvalReveal == rhs.approvalReveal
+    }
 }
 
 // MARK: - ActivityFeedNativeEntries

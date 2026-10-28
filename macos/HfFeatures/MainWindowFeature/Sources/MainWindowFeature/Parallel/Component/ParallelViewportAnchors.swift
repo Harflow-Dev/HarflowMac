@@ -8,6 +8,7 @@ import SwiftUI
 @Observable
 @MainActor
 final class ParallelColumnUIState {
+    let disclosures = ActivityFeedDisclosures()
     let activityHandoff = SkeletonContentState()
     var expandedGroups: Set<String> = []
     @ObservationIgnored private var followState = FollowLiveScrollState()

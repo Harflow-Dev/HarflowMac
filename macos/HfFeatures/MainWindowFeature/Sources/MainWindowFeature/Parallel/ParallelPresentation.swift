@@ -13,6 +13,7 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     var showPrompt: Bool
     let prompt: String?
     var rows: [ConversationTimelineRow] = []
+    var activitySnapshot: ActivityFeedSnapshot?
     var activityRows: [ActivityRow] = []
     var markdown: [String: StreamingMarkdownState] = [:]
     var liveStep: LiveStep?
@@ -45,6 +46,7 @@ struct ParallelColumnInput: Equatable, Sendable {
     let members: [ParallelMemberInput]
     let events: [TaskEvent]
     let snapshot: TaskInfo?
+    var previousActivitySnapshot: ActivityFeedSnapshot?
     var previousMarkdown: [String: StreamingMarkdownState] = [:]
 }
 
@@ -87,6 +89,7 @@ enum ParallelPresentationBuilder {
         result.rows = rows
         result.markdown = ActivityRowsBuilder.markdownSnapshot(from: rows, previous: input.previousMarkdown)
         result.activityRows = ActivityRowsBuilder.build(from: rows, cancellationAware: true, markdown: result.markdown)
+        result.activitySnapshot = ActivityFeedSnapshot.preparing(result.activityRows, previous: input.previousActivitySnapshot)
         try Task.checkCancellation()
         result.liveStep = LiveStep(rows: rows, isRunning: result.task.status.isRunning)
         result.pendingMessages = PendingMessage.visible(snapshot: input.snapshot, events: input.events)
@@ -230,6 +233,7 @@ extension ParallelColumnModel {
             isBusy: isBusy, outcomeMessage: outcomeMessage, showPrompt: showPrompt, prompt: prompt,
             summary: summary, start: start, memberTaskIDs: memberTaskIDs)
         value.rows = rows
+        value.activitySnapshot = activitySnapshot
         value.activityRows = activityRows
         value.liveStep = liveStep
         value.pendingMessages = pendingMessages

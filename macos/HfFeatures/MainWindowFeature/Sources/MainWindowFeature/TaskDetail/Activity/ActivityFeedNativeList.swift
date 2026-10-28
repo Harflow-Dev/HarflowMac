@@ -49,6 +49,7 @@ enum ActivityFeedNativeListMetrics {
 /// else leaves it untouched.
 @MainActor final class ActivityFeedNativeItemBox {
     var entry: ActivityFeedNativeEntry
+    var renderToken: UUID?
     var revision: Int
     var height: CGFloat?
     var measurementKey: ActivityFeedNativeMeasurementKey?
@@ -212,7 +213,13 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         var boxes: [ActivityFeedNativeItemBox] = []
         var cells: [String: ActivityFeedNativeCell] = [:]
         var measurementHost: NSHostingView<ActivityFeedNativeRowRoot>?
-        var environment = EnvironmentValues()
+        var environment = ActivityFeedNativeEnvironment(EnvironmentValues())
+        var reconcileCount = 0
+        var measurementCount = 0
+        var rootRefreshCount = 0
+        var lastReconciledFollowing: Bool?
+        var lastReconciledBoundary: String?
+        var lastReconciledPendingPage = false
         var environmentRevision = 0
         var rootInputsRevision = 0
         var fingerprint: ActivityFeedNativeEnvironmentFingerprint?
@@ -363,7 +370,8 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             // The supported public inherited environment is stored on every update: a change that
             // leaves the height fingerprint equal may still carry style values the displayed
             // roots must see, so a later refresh must never render a stale capture.
-            self.environment = environment
+            self.environment = ActivityFeedNativeEnvironment(environment)
+            self.actions.openURL = environment.openURL
             let nextFingerprint = ActivityFeedNativeEnvironmentFingerprint(environment)
             let environmentChanged = fingerprint != nextFingerprint
             fingerprint = nextFingerprint
@@ -393,6 +401,16 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             }
             if previous?.history != model.history { rejectedIDs = nil }
             if previous?.expandedGroups != model.expandedGroups { shortFill.replenish() }
+            let localInputsChanged = lastReconciledFollowing != state.followLive.isFollowing
+                || lastReconciledBoundary != state.retainedFirstID
+                || lastReconciledPendingPage != (pendingPage != nil)
+            guard stateChanged || previous != model || environmentChanged || rootInputsChanged || localInputsChanged else {
+                maybePerformInitialPositioning()
+                revealApprovalIfNeeded()
+                maybeLoadOlder()
+                commitPendingHeader()
+                return
+            }
             reconcile(environmentHeightsInvalidated: environmentChanged || rootInputsChanged,
                       rootsNeedRefresh: environmentChanged || rootInputsChanged)
         }

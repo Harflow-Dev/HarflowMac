@@ -16,3 +16,37 @@ within the same structured scan so workflow choices remain available while histo
 continue. There is no per-item detail fanout. Large retained histories can still require
 many CLI processes within those caps; incomplete or over-budget reads show unavailable
 metrics rather than partial totals.
+
+## Activity feed
+
+Native activity rows retain text selection. The table owns displayed hosting views;
+removing a native row releases its hosted content rather than keeping a SwiftUI graph
+for every row visited. Reading anchors and group disclosure remain feed state.
+Only explicit public presentation environment values cross into row hosts. Streaming
+caret drawing uses its own timeline rather than a repeating animation transaction.
+
+Unchanged feed inputs refresh action callbacks without rebuilding native entries or
+remeasuring rows. Background presentation preparation supplies row revisions so native
+reconciliation can distinguish changed content without deep-comparing message and tool
+history on the main thread. Geometry and environment changes still invalidate the
+affected measurements.
+
+Changed snapshots still scan lightweight native entry IDs and measurement keys;
+background preparation compares retained row payloads. The boundary removes deep
+history comparison from native reconciliation, rather than making all update work
+independent of loaded history size.
+
+Hosted regressions cover unchanged-input work, visible host identity, environment
+changes and scrolling retention. These checks do not reproduce the original long-session
+18 GB peak or establish a full application memory ceiling; loaded history itself remains
+retained. Production profiling remains subject to the runtime integration limitation above.
+
+To include the two-minute synthetic 3,000-row streaming soak in the guarded suite:
+
+```sh
+HARFLOW_ACTIVITY_SOAK_SECONDS=120 HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfFeatures/MainWindowFeature --mode suites
+```
+
+The opt-in test reports process CPU, resident memory, physical footprint and native
+host counts, and verifies that settled reconciliation and measurement work stops.
+Without the duration variable, ordinary suite runs do not exercise the timed soak.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bound activity-feed hosting lifetimes, skip unchanged reconciliation, and isolate the streaming caret's animation from selectable message content.
+
 - Match the selected running workflow outline to the selection ring while preserving its unselected inset stroke.
 
 - Move retained workflow errors into the sidebar footer so they no longer cover the workflow Summary expand control.

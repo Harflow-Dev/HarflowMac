@@ -217,7 +217,7 @@ struct ActivityFeedApprovalHostedTests {
         let cell = ActivityFeedNativeCell(frame: CGRect(x: 12, y: 12, width: 496, height: 160))
         cell.configure(
             root: ActivityFeedNativeRowRoot(entry: entry, start: nil, horizontalPadding: 12,
-                                            showsPromptBubble: true, environment: EnvironmentValues(),
+                                            showsPromptBubble: true, environment: ActivityFeedNativeEnvironment(EnvironmentValues()),
                                             actions: actions, approvalFocusReady: { true }, availableWidth: 496),
             id: entry.id
         )

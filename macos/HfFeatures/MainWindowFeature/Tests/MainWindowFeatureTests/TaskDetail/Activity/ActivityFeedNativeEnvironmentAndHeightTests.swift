@@ -106,6 +106,107 @@ import Testing
         #expect(capture.openedURL == URL(string: "https://example.invalid/tool"))
     }
 
+    @Test func givenMountedSelectableText_whenEqualInputsRepeat_thenNoReconcileMeasurementOrRootRefresh() async throws {
+        // given
+        let state = ParallelColumnUIState()
+        let host = NSHostingView(rootView: root(rows: rows(length: 30), state: state))
+        let window = open(host)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil(timeout: 5) { state.viewportPositioned }
+        let table = try #require(descendants(host).compactMap { $0 as? ActivityFeedNativeTableView }.first)
+        let owner = try #require(table.owner)
+        let model = try #require(owner.model)
+        let cell = try #require(owner.cells["height-row"])
+        let mountedHost = try #require(cell.host)
+        owner.update(model: model, state: state, environment: EnvironmentValues(), actions: owner.actions)
+        let baseline = (owner.reconcileCount, owner.measurementCount, owner.rootRefreshCount)
+        // when
+        var callbackRevision = -1
+        for revision in 0 ..< 20 {
+            let callbacks = ActivityFeedNativeActions()
+            callbacks.onSelectChildTask = { _ in callbackRevision = revision }
+            owner.update(model: model, state: state, environment: EnvironmentValues(), actions: callbacks)
+        }
+        owner.actions.onSelectChildTask("selected-child")
+        // then
+        #expect(owner.reconcileCount == baseline.0)
+        #expect(owner.measurementCount == baseline.1)
+        #expect(owner.rootRefreshCount == baseline.2)
+        #expect(cell.host === mountedHost)
+        #expect(callbackRevision == 19)
+    }
+
+    @Test func givenLongFeed_whenScrollingAcrossAllRows_thenRetainedHostsStayBounded() async throws {
+        // given
+        let state = ParallelColumnUIState()
+        let values = (0 ..< 200).map { index in
+            ActivityRow.single(ConversationTimelineRow(id: "bounded-\(index)", taskID: "bounded-task", timestamp: nil,
+                kind: .item(PreviewFixtures.textItem("Selectable paragraph \(index).\n\nAnother paragraph.", seq: index)), live: false))
+        }
+        state.retainedFirstID = "bounded-0"
+        let host = NSHostingView(rootView: root(rows: values, state: state))
+        let window = open(host)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil(timeout: 5) { state.viewportPositioned }
+        let table = try #require(descendants(host).compactMap { $0 as? ActivityFeedNativeTableView }.first)
+        let owner = try #require(table.owner)
+        state.followLive.suspend()
+        // when / then
+        for index in stride(from: 0, to: owner.entries.count, by: 5) {
+            owner.writeOffset(table.rect(ofRow: index).minY)
+            owner.layoutNow()
+            await Task.yield()
+            #expect(owner.cells.count < 40)
+        }
+        #expect(owner.cells.count < owner.entries.count / 2)
+    }
+
+    @Test func givenExpandedPromptAndTool_whenNativeCellsScrollAwayAndBack_thenDisclosureAndMeasuredHeightSurvive() async throws {
+        // given
+        for prompt in [true, false] {
+            let state = ParallelColumnUIState()
+            state.retainedFirstID = "disclosure-row"
+            state.followLive.suspend()
+            let item = prompt
+                ? PreviewFixtures.startedItem(prompt: String(repeating: "A long expanded prompt paragraph.\n", count: 18))
+                : PreviewFixtures.toolItem(outputTail: String(repeating: "Expanded tool output.\n", count: 18), callID: "disclosure-call")
+            let first = ActivityRow.single(ConversationTimelineRow(id: "disclosure-row", taskID: "disclosure-task",
+                timestamp: nil, kind: .item(item), live: false))
+            let remainder = (0 ..< 40).map { index in
+                ActivityRow.single(ConversationTimelineRow(id: "disclosure-filler-\(index)", taskID: "disclosure-task",
+                    timestamp: nil, kind: .item(PreviewFixtures.textItem("A filler paragraph.", seq: index + 10)), live: false))
+            }
+            let host = NSHostingView(rootView: root(rows: [first] + remainder, state: state))
+            let window = open(host)
+            defer { window.contentView = nil; window.close() }
+            await waitUntil(timeout: 5) { state.viewportPositioned }
+            let table = try #require(descendants(host).compactMap { $0 as? ActivityFeedNativeTableView }.first)
+            let owner = try #require(table.owner)
+            let index = try #require(owner.entries.firstIndex { $0.id == "disclosure-row" })
+            owner.writeOffset(table.rect(ofRow: index).minY)
+            owner.layoutNow()
+            let collapsedHeight = table.rect(ofRow: index).height
+            // when: the same retained values that the component's disclosure action writes.
+            if prompt {
+                state.disclosures.expandedPrompts.insert("disclosure-row")
+            } else {
+                state.disclosures.expandedTools.insert("disclosure-task:disclosure-call")
+            }
+            await waitUntil(timeout: 5) { table.rect(ofRow: index).height > collapsedHeight + 30 }
+            let expandedHeight = table.rect(ofRow: index).height
+            owner.writeBottom()
+            owner.layoutNow()
+            await waitUntil(timeout: 5) { owner.cells["disclosure-row"] == nil }
+            owner.writeOffset(table.rect(ofRow: index).minY)
+            owner.layoutNow()
+            await waitUntil(timeout: 5) { owner.cells["disclosure-row"]?.isCoherentNativeMeasurement == true }
+            // then
+            let restored = try #require(owner.cells["disclosure-row"]?.host)
+            #expect(abs(table.rect(ofRow: index).height - expandedHeight) < 3)
+            #expect(abs(restored.fittingSize.height - expandedHeight) < 3)
+        }
+    }
+
     private func rows(length: Int) -> [ActivityRow] {
         [.single(ConversationTimelineRow(id: "height-row", taskID: "height-task", timestamp: nil,
             kind: .item(PreviewFixtures.textItem(String(repeating: "Natural text wrapping determines the native row height. ", count: length),

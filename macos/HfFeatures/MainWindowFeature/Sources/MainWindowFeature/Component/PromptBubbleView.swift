@@ -22,13 +22,32 @@ struct PromptBubbleView: View {
     let text: String
     var caption: String?
     let isPending: Bool
-    @State private var isExpanded: Bool
+    @State private var localExpanded: Bool
+    @Environment(\.activityFeedDisclosure) private var disclosure
+    var disclosureID: String?
 
-    init(text: String, caption: String? = nil, isInitiallyExpanded: Bool = false, isPending: Bool = false) {
+    private var isExpanded: Bool {
+        get {
+            guard let disclosure else { return localExpanded }
+            return disclosure.state.expandedPrompts.contains(disclosureID ?? disclosure.rowID)
+        }
+        nonmutating set {
+            guard let disclosure else { localExpanded = newValue; return }
+            let key = disclosureID ?? disclosure.rowID
+            if newValue {
+                disclosure.state.expandedPrompts.insert(key)
+            } else {
+                disclosure.state.expandedPrompts.remove(key)
+            }
+        }
+    }
+
+    init(text: String, caption: String? = nil, isInitiallyExpanded: Bool = false, isPending: Bool = false, disclosureID: String? = nil) {
         self.text = text
         self.caption = caption
         self.isPending = isPending
-        _isExpanded = State(initialValue: isInitiallyExpanded)
+        self.disclosureID = disclosureID
+        _localExpanded = State(initialValue: isInitiallyExpanded)
     }
 
     /// Whether the text is long enough to be clamped behind "Show more".

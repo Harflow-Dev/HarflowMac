@@ -94,6 +94,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var onApprovalFocusAcknowledged: (String, UUID) -> Void = { _, _ in }
     var onApprovalScrollAcknowledged: (String, UUID) -> Void = { _, _ in }
     var retry: () -> Void = {}
+    var openURL = EnvironmentValues().openURL
 
     func reset() {
         onLoadMore = nil
@@ -105,6 +106,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         onApprovalFocusAcknowledged = { _, _ in }
         onApprovalScrollAcknowledged = { _, _ in }
         retry = {}
+        openURL = EnvironmentValues().openURL
     }
 }
 
@@ -114,8 +116,44 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
 /// environment, including its accessibility bridge. An opaque environment replacement copies
 /// the outer host's runtime state and prevents virtual accessibility descendants from appearing.
 /// Read-only contrast/accessibility settings remain supplied by each host from the system.
+/// Copies only public renderer values; never retain the outer graph's opaque environment.
+struct ActivityFeedNativeEnvironment {
+    let font: Font?
+    let defaultMinListRowHeight: CGFloat
+    let dynamicTypeSize: DynamicTypeSize
+    let locale: Locale
+    let layoutDirection: LayoutDirection
+    let colorScheme: ColorScheme
+    let legibilityWeight: LegibilityWeight?
+    let displayScale: CGFloat
+    let controlSize: ControlSize
+    let isEnabled: Bool
+    let hfReduceMotionOverride: Bool?
+    let shimmerReduceMotionOverride: Bool?
+    let openURL: OpenURLAction
+
+    @MainActor init(_ values: EnvironmentValues) {
+        self.font = values.font
+        self.defaultMinListRowHeight = values.defaultMinListRowHeight
+        self.dynamicTypeSize = values.dynamicTypeSize
+        self.locale = values.locale
+        self.layoutDirection = values.layoutDirection
+        self.colorScheme = values.colorScheme
+        self.legibilityWeight = values.legibilityWeight
+        self.displayScale = values.displayScale
+        self.controlSize = values.controlSize
+        self.isEnabled = values.isEnabled
+        self.hfReduceMotionOverride = values.hfReduceMotionOverride
+        self.shimmerReduceMotionOverride = values.shimmerReduceMotionOverride
+        self.openURL = values.openURL
+    }
+}
+
 struct ActivityFeedNativeInheritedEnvironment: ViewModifier {
-    let environment: EnvironmentValues
+    let environment: ActivityFeedNativeEnvironment
+
+    init(environment: ActivityFeedNativeEnvironment) { self.environment = environment }
+    init(environment: EnvironmentValues) { self.environment = ActivityFeedNativeEnvironment(environment) }
 
     func body(content: Content) -> some View {
         content
@@ -145,14 +183,16 @@ struct ActivityFeedNativeRowRoot: View {
     let start: Date?
     let horizontalPadding: CGFloat
     let showsPromptBubble: Bool
-    let environment: EnvironmentValues
+    let environment: ActivityFeedNativeEnvironment
     let actions: ActivityFeedNativeActions
+    var disclosureContext: ActivityFeedDisclosureContext?
     var approvalFocusReady: () -> Bool = { false }
     var availableWidth: CGFloat?
     var onHostedHeight: (@MainActor @Sendable (CGFloat) -> Void)?
 
     var body: some View {
         content
+            .environment(\.activityFeedDisclosure, disclosureContext)
             .id(entry.id)
             .padding(EdgeInsets(top: entry.topSpacing, leading: horizontalPadding, bottom: 0, trailing: horizontalPadding))
             .frame(width: availableWidth, alignment: .leading)
@@ -161,6 +201,10 @@ struct ActivityFeedNativeRowRoot: View {
                 if let onHostedHeight { onHostedHeight(height) }
             }
             .modifier(ActivityFeedNativeInheritedEnvironment(environment: environment))
+            .environment(\.openURL, OpenURLAction { url in
+                actions.openURL(url)
+                return .handled
+            })
     }
 
     @ViewBuilder private var content: some View {
@@ -241,7 +285,7 @@ struct ActivityFeedNativeTailContent: View {
                     ))
                 }
                 ForEach(standard.pendingMessages) { message in
-                    PromptBubbleView(text: message.text, caption: message.caption, isPending: message.isPending)
+                    PromptBubbleView(text: message.text, caption: message.caption, isPending: message.isPending, disclosureID: message.id)
                     if let successor = message.successorTaskID {
                         Button("Open \(successor)") { actions.onSelectChildTask(successor) }
                             .buttonStyle(.link)
@@ -302,9 +346,21 @@ struct ActivityFeedNativeTailContent: View {
             let host = NSHostingView(rootView: root)
             host.sizingOptions = [.intrinsicContentSize]
             host.autoresizingMask = [.width, .height]
+            // A recycled cell may already have its final bounds. Autoresizing only
+            // reacts to subsequent size changes, so initialize the replacement host
+            // synchronously before a scroll notification can capture reading geometry.
+            host.frame = bounds
             addSubview(host)
             self.host = host
         }
+    }
+
+    func releaseHostedContent() {
+        onMounted = nil
+        host?.removeFromSuperview()
+        host = nil
+        entryID = nil
+        hasMounted = false
     }
 
     func measure(width: CGFloat) -> CGFloat? {

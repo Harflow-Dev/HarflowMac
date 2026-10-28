@@ -20,6 +20,7 @@ struct TaskDetailTimelineInput: Equatable, Sendable {
     /// never-followed-up task), passed through to the pane — conversation members, never the
     /// backend's own `numTurns`.
     var turnsText: String?
+    var previousActivitySnapshot: ActivityFeedSnapshot?
     var previousMarkdown: [String: StreamingMarkdownState] = [:]
 }
 
@@ -45,13 +46,15 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
     let pendingMessages: [PendingMessage]
     let history: EventHistoryState
 
+    var activitySnapshot: ActivityFeedSnapshot?
     var markdown: [String: StreamingMarkdownState] = [:]
 
     func loadingHistory() -> Self {
         Self(rows: rows, activityRows: activityRows, children: children, start: start, stepCount: stepCount,
             stepCountText: stepCountText, turnsText: turnsText, noToolCallsText: nil,
             emptyText: emptyText, isLoading: isLoading, liveStep: liveStep, pendingMessages: pendingMessages,
-            history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation), markdown: markdown)
+            history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation),
+            activitySnapshot: activitySnapshot, markdown: markdown)
     }
 
     /// The history half of the no-tool proof (§4/§8); the builder separately requires a terminal task.
@@ -102,7 +105,8 @@ enum TaskDetailTimelineBuilder {
                 : "This task's event log is empty or was not found.") : nil,
             isLoading: count == 0 && input.members.contains { $0.availability == .loading },
             liveStep: LiveStep(rows: rows, isRunning: input.task.status.isRunning),
-            pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events), history: input.history, markdown: markdown)
+            pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events), history: input.history,
+            activitySnapshot: ActivityFeedSnapshot.preparing(activity, previous: input.previousActivitySnapshot), markdown: markdown)
     }
 }
 
@@ -120,6 +124,7 @@ extension TaskDetailVM {
 
     func startPendingTimeline() {
         guard timelineWorker == nil, var input = pendingTimelineInput else { return }
+        input.previousActivitySnapshot = appliedTimelinePresentation?.activitySnapshot
         input.previousMarkdown = appliedTimelinePresentation?.markdown ?? [:]
         pendingTimelineInput = nil
         let epoch = timelineEpoch
@@ -170,6 +175,7 @@ extension TaskDetailVM {
             updateToken: ActivityUpdateToken(rows: value.rows, liveStep: value.liveStep, pendingMessages: value.pendingMessages),
             pendingMessages: value.pendingMessages, history: value.history,
             paginationRevision: activityPaginationRevision, onLoadMore: { [weak self] in self?.loadMoreConversationActivity() ?? false })
+        timelineModel.activitySnapshot = value.activitySnapshot
         timelineModel.onSelectTask = { [weak self] id in self?.didTapTask(id) }
     }
 }

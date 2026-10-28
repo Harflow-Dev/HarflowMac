@@ -36,6 +36,7 @@ struct ParallelColumnModel: Identifiable {
     /// Raw timeline items and separators for the complete step count.
     let rows: [ConversationTimelineRow]
     /// What the feed renders: `rows` with adjacent tool calls folded into cards.
+    var activitySnapshot: ActivityFeedSnapshot?
     let activityRows: [ActivityRow]
     /// The "what is it doing now" line under the feed; `nil` unless a call is pending in a running turn.
     let liveStep: LiveStep?
@@ -218,7 +219,7 @@ struct ParallelColumnView: View {
                     Spacer()
                 }
             }
-            ActivityFeedView(rows: model.activityRows, start: model.start, history: model.history,
+            ActivityFeedView(rows: model.activityRows, activitySnapshot: model.activitySnapshot, start: model.start, history: model.history,
                              isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages),
                              paginationRevision: model.paginationRevision, isVisible: model.isVisible,
                              emptyText: model.emptyText, showsPromptBubble: false, state: state, onLoadMore: model.onLoadMore,

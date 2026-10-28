@@ -27,8 +27,12 @@ struct ActivityFeedNativeReadingCapture {
 extension ActivityFeedNativeList.Coordinator {
     func reconcile(environmentHeightsInvalidated: Bool, rootsNeedRefresh: Bool) {
         guard !reconciling, let model, let state, table != nil else { return }
+        reconcileCount += 1
         reconciling = true
         defer {
+            lastReconciledFollowing = state.followLive.isFollowing
+            lastReconciledBoundary = state.retainedFirstID
+            lastReconciledPendingPage = pendingPage != nil
             reconciling = false
             for cell in cells.values where cell.entryID?.hasPrefix("activity-approval-") == true {
                 CallerApprovalNativeFocus.retry(in: cell)
@@ -67,7 +71,7 @@ extension ActivityFeedNativeList.Coordinator {
         commitPendingHeader()
     }
 
-    private func revealApprovalIfNeeded() {
+    func revealApprovalIfNeeded() {
         guard let reveal = model?.approvalReveal, reveal.token != consumedApprovalReveal,
               positioned, let table, table.window != nil,
               let index = entries.firstIndex(where: { $0.id == "activity-approval-" + reveal.requestID }) else { return }
@@ -177,13 +181,15 @@ extension ActivityFeedNativeList.Coordinator {
         boxesByID.reserveCapacity(boxes.count)
         for box in boxes { boxesByID[box.entry.id] = box }
         for entry in next {
-            if let retained = boxesByID[entry.id], retained.entry == entry {
+            let token = model?.activitySnapshot?.tokens[entry.id]
+            if let retained = boxesByID[entry.id], entriesEqual(retained, entry, token: token) {
                 nextBoxes.append(retained)
                 continue
             }
             changedIDs.insert(entry.id)
             let previous = boxesByID[entry.id]
             let box = ActivityFeedNativeItemBox(entry: entry, revision: (previous?.revision ?? -1) + 1)
+            box.renderToken = token
             box.height = previous?.height
             nextBoxes.append(box)
             boxesByID[entry.id] = box
@@ -197,6 +203,15 @@ extension ActivityFeedNativeList.Coordinator {
             cells.removeValue(forKey: id)
         }
         return changedIDs
+    }
+
+    /// Opaque row revisions cover payloads; only cheap native presentation inputs remain.
+    private func entriesEqual(_ retained: ActivityFeedNativeItemBox, _ next: ActivityFeedNativeEntry, token: UUID?) -> Bool {
+        if let token, case .row(let old) = retained.entry, case .row(let fresh) = next {
+            return retained.renderToken == token && old.isExpanded == fresh.isExpanded
+                && old.fade == fresh.fade && old.topSpacing == fresh.topSpacing
+        }
+        return retained.entry == next
     }
 
     /// Pre-measures every entry whose box is new or whose cache was invalidated, before the
@@ -230,6 +245,7 @@ extension ActivityFeedNativeList.Coordinator {
             let rect = table.rect(ofRow: index)
             guard rect.intersects(visible) else { continue }
             guard let cell = cells[box.entry.id], cell.entryID == box.entry.id else { continue }
+            rootRefreshCount += 1
             cell.configure(root: root(for: box, reporting: true), id: box.entry.id)
         }
     }
@@ -297,6 +313,15 @@ extension ActivityFeedNativeList.Coordinator {
         return row
     }
 
+    func tableView(_: NSTableView, didRemove rowView: NSTableRowView, forRow _: Int) {
+        for cell in rowView.subviews.compactMap({ $0 as? ActivityFeedNativeCell }) {
+            if let id = cell.entryID, cells[id] === cell {
+                cells.removeValue(forKey: id)
+                cell.releaseHostedContent()
+            }
+        }
+    }
+
     func tableView(_: NSTableView, shouldSelectRow _: Int) -> Bool { false }
 
     // MARK: Measurement
@@ -338,6 +363,7 @@ extension ActivityFeedNativeList.Coordinator {
     }
 
     func measure(_ box: ActivityFeedNativeItemBox, width: CGFloat) -> CGFloat? {
+        measurementCount += 1
         let root = root(for: box)
         // A fresh identity prevents a previous row's SwiftUI state and deferred intrinsic
         // size from becoming the next row's cached geometry.
@@ -363,6 +389,15 @@ extension ActivityFeedNativeList.Coordinator {
             ActivityFeedNativeRowRoot(entry: box.entry, start: nil, horizontalPadding: 0,
                                              showsPromptBubble: false, environment: environment,
                                              actions: actions, availableWidth: nil)
+        }
+        if let state {
+            let taskID: String = if case .row(let value) = box.entry {
+                switch value.row {
+                case .single(let row, _): row.taskID
+                case .toolGroup(let group): group.taskID
+                }
+            } else { box.entry.id }
+            root.disclosureContext = ActivityFeedDisclosureContext(state: state.disclosures, rowID: box.entry.id, taskID: taskID)
         }
         if reporting {
             let id = box.entry.id

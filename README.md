@@ -16,7 +16,7 @@ Parallel panels keep a 630-point minimum width and scroll horizontally when they
 
 Loading placeholders hand off to resolved content with one short opacity crossfade per retained selection. Reduce Motion switches immediately; live updates and pagination keep content visible.
 
-Streaming replies retain completed Markdown blocks while preparing the changing tail in the background. Activity feeds use the same prepared layout for measurement and display.
+Streaming replies retain completed Markdown blocks while preparing the changing tail in the background. Activity feeds use the same prepared layout for measurement and display, keep native row hosts tied to displayed rows, and retain text selection while avoiding row refreshes for unchanged content.
 
 Compatible engines expose capture ownership, live-input availability and background idle-cutoff diagnostics in the existing inspector notices. Lost-capture tasks can show source-labelled harness transcript activity; it is display only and does not establish completion or restore messaging. The app retains its explicitly paired engine version; older engines keep their existing captured activity.
 

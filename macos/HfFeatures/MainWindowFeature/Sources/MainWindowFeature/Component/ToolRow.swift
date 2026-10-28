@@ -28,7 +28,25 @@ struct ToolRowModel {
 /// section), ported unchanged from the old `TimelineViews.swift`.
 struct ToolRow: View {
     let model: ToolRowModel
-    @State private var expanded = false
+    @State private var localExpanded = false
+    @Environment(\.activityFeedDisclosure) private var disclosure
+
+    private var expanded: Bool {
+        get {
+            guard let disclosure else { return localExpanded }
+            return disclosure.state.expandedTools.contains(disclosure.taskID + ":" + model.call.callID)
+        }
+        nonmutating set {
+            guard let disclosure else { localExpanded = newValue; return }
+            let key = disclosure.taskID + ":" + model.call.callID
+            if newValue {
+                disclosure.state.expandedTools.insert(key)
+            } else {
+                disclosure.state.expandedTools.remove(key)
+            }
+        }
+    }
+
     @Environment(\.openURL) private var openURL
     
     var body: some View {

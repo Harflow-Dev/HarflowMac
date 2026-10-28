@@ -52,8 +52,25 @@ import Testing
         #expect(cell.accessibilityRole() == .cell)
     }
 
+    @Test func givenRecycledCellWithUnchangedBounds_whenHostingContentIsRecreated_thenHostGeometryIsReadySynchronously() throws {
+        // given
+        let cell = ActivityFeedNativeCell(frame: CGRect(x: 0, y: 0, width: 403, height: 214))
+        let actions = ActivityFeedNativeActions()
+        let entry = ActivityFeedNativeEntry.tail(.plainText("Replacement hosted content"), topSpacing: 12)
+        cell.configure(root: root(entry, actions: actions), id: entry.id)
+        cell.releaseHostedContent()
+        let originalBounds = cell.bounds
+        // when: native reuse keeps the cell's size, so no autoresizing notification follows.
+        cell.configure(root: root(entry, actions: actions), id: entry.id)
+        // then: no run-loop yield, layout pass, parent update or synthetic movement is needed.
+        let host = try #require(cell.host)
+        #expect(cell.bounds == originalBounds)
+        #expect(host.frame == originalBounds)
+        #expect(host.bounds.size == originalBounds.size)
+    }
+
     private func root(_ entry: ActivityFeedNativeEntry, actions: ActivityFeedNativeActions) -> ActivityFeedNativeRowRoot {
         ActivityFeedNativeRowRoot(entry: entry, start: nil, horizontalPadding: 12, showsPromptBubble: true,
-                                  environment: EnvironmentValues(), actions: actions, availableWidth: 403)
+                                  environment: ActivityFeedNativeEnvironment(EnvironmentValues()), actions: actions, availableWidth: 403)
     }
 }

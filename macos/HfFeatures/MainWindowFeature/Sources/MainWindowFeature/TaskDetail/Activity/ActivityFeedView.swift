@@ -19,6 +19,7 @@ import SwiftUI
 /// Shared reading, progressive reveal and older-page behavior across activity surfaces.
 struct ActivityFeedView: View {
     let rows: [ActivityRow]
+    var activitySnapshot: ActivityFeedSnapshot?
     let start: Date?
     let history: EventHistoryState
     let isLoading: Bool
@@ -39,7 +40,7 @@ struct ActivityFeedView: View {
     var onApprovalFocusAcknowledged: ((String, UUID) -> Void)?
     var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
 
-    init(rows: [ActivityRow], start: Date?, history: EventHistoryState, isLoading: Bool,
+    init(rows: [ActivityRow], activitySnapshot: ActivityFeedSnapshot? = nil, start: Date?, history: EventHistoryState, isLoading: Bool,
          tailValue: ActivityFeedTail = ActivityFeedTail(), paginationRevision: Int = 0, isVisible: Bool = true,
          emptyText: String? = nil, horizontalPadding: CGFloat = HfRadius.Metrics.zero, showsPromptBubble: Bool = true,
          state: ParallelColumnUIState, onLoadMore: (() -> Bool)?,
@@ -49,6 +50,7 @@ struct ActivityFeedView: View {
          onApprovalFocusAcknowledged: ((String, UUID) -> Void)? = nil,
          onApprovalScrollAcknowledged: ((String, UUID) -> Void)? = nil) {
         self.rows = rows
+        self.activitySnapshot = activitySnapshot
         self.start = start
         self.history = history
         self.isLoading = isLoading
@@ -70,7 +72,7 @@ struct ActivityFeedView: View {
         self.onApprovalScrollAcknowledged = onApprovalScrollAcknowledged
     }
 
-    private var ids: [String] { rows.map(\.id) }
+    private var ids: [String] { activitySnapshot?.ids ?? rows.map(\.id) }
     private var shown: [ActivityRow] {
         Array(rows.dropFirst(ActivityFeedWindow.firstIndex(ids: ids, retainedID: state.retainedFirstID)))
     }
@@ -93,7 +95,8 @@ struct ActivityFeedView: View {
             paginationRevision: paginationRevision,
             visible: isVisible,
             loading: isLoading,
-            approvalReveal: approvalReveal
+            approvalReveal: approvalReveal,
+            activitySnapshot: activitySnapshot
         )
     }
 
