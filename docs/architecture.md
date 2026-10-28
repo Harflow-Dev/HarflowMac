@@ -135,7 +135,7 @@ a workflow automatically or reads an editor draft.
 
 ## Statistics
 
-Statistics follows the approved original HarflowDesign `1b1d5d8` / `1c32c2e`, `scripts/statistics.js` and `styles/statistics.css`, overview/system and existing node breakdown compositions. The owner-requested responsive-width refinement (`HarflowDesign` commit `aaa5cdf`, `styles/statistics.css`, overview and node states) removes the horizontal content minimum: the plot fits the detail viewport, controls adapt to narrower widths, and long rankings remain vertically scrollable. The sidebar's native reconciler owns a stable Overview → Statistics destination; the main-window coordinator retains its VM and selections across navigation.
+Statistics follows the approved original HarflowDesign `1b1d5d8` / `1c32c2e`, `scripts/statistics.js` and `styles/statistics.css`, overview/system and existing node breakdown compositions. The owner-requested responsive-width refinement (`HarflowDesign` commit `8b4605d`, `styles/statistics.css`, overview and node states) removes the horizontal content minimum: the plot fits the detail viewport, controls adapt to narrower widths, and long rankings remain vertically scrollable. The sidebar's native reconciler owns a stable Overview → Statistics destination; the main-window coordinator retains its VM and selections across navigation.
 
 MonitorCore gates every `statistics-page` call on a fresh `statistics-page.v1` capability handshake. `StatisticsRepository` uses constructor-injected tooling and state recovery, never private persistence or activity replay. The managed engine pin stays unchanged. Unknown wire states and incomplete history do not authorize aggregates.
 
