@@ -46,6 +46,10 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
             } else {
                 ContentUnavailableView(state.attempts.isEmpty ? "Not started" : "No task activity", systemImage: "text.alignleft")
             }
+            if viewModel.nativeActivity != nil || state.childRunID != nil
+                || viewModel.selectedActivity == nil || viewModel.selectedActivity?.columns.isEmpty == true {
+                WorkflowActivityMessageComposer(viewModel: viewModel)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.cardFill)

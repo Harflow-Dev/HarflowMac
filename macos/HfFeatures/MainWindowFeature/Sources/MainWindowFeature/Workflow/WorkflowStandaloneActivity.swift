@@ -80,7 +80,6 @@ extension WorkflowRunSidebarPresentation {
             ?? attempts.last?.id
         if let activation {
             taskIDs = WorkflowJSON.objects(activation["tasks"])
-                .filter { $0["execution_kind"]?.stringValue != "native_subagent" }
                 .compactMap { $0["task_id"]?.stringValue }
         }
         return true

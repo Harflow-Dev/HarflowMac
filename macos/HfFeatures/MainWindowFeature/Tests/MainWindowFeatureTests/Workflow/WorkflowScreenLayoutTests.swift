@@ -10,6 +10,24 @@ import Testing
 // MARK: - WorkflowScreenLayoutTests
 
 @MainActor @Suite(.serialized) struct WorkflowScreenLayoutTests {
+    @Test func givenBuilderTaskEmbeddedInEditor_whenRendered_thenItsTaskComposerHasNoDuplicateGlobalComposer() async throws {
+        // given
+        let vm = WorkflowPreview.make()
+        defer { vm.didDisappear() }
+        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(String(repeating: "a", count: 32)),
+            "kind": .string("builder"), "status": .string("running"), "builder_draft": .object(vm.definition),
+            "activations": .array([.object(["role": .string("builder"), "tasks": .array([
+                .object(["task_id": .string("builder-task")])])])])])
+        let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { _, _ in
+            AnyView(Text("Embedded builder Activity").accessibilityIdentifier("embedded-builder-activity"))
+        }), size: CGSize(width: 1200, height: 800))
+        defer { fixture.close() }
+        // when
+        await fixture.settle { fixture.element("embedded-builder-activity") != nil }
+        // then
+        #expect(fixture.element("workflow-builder-message-composer") == nil)
+    }
+
     @Test
     func givenLongLoadedRun_whenContentChangesAndWindowResizes_thenNavigationMinimumStaysStable() async throws {
         // given
@@ -33,7 +51,6 @@ import Testing
             Text("Sidebar top").frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } detail: { WorkflowView(vm) }.frame(minWidth: 1000, minHeight: 620), size: CGSize(width: 2210, height: 864))
         let host = fixture.host
-        let size = CGSize(width: 2210, height: 864)
         defer { fixture.close() }
         // when
         await Task.yield()
@@ -53,11 +70,10 @@ import Testing
             await waitUntil {
                 host.layoutSubtreeIfNeeded()
                 RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
-                return compactPanes.bounds.height > size.height - 200
+                return compactPanes.bounds.height > host.bounds.height - 200
             }
             #expect(vm.selectedRun?.status == status)
-            #expect(compactPanes.bounds.height > size.height - 200,
-                    "Compact status must use its intrinsic height, leaving room for the graph and activity")
+            try assertLoadedViewport(compactPanes, in: fixture)
         }
         // when
         raw["status"] = .string("needs_attention")
@@ -80,6 +96,18 @@ import Testing
         #expect(fixture.press(expand))
         await fixture.settle { fixture.element("Collapse summary") != nil }
         try assertAccessiblePanes(in: host)
+    }
+
+    private func assertLoadedViewport(_ split: NSSplitView, in fixture: RedesignHost) throws {
+        let panes = split.convert(split.bounds, to: nil)
+        let content = fixture.window.contentLayoutRect
+        #expect(fixture.element("workflow-builder-message-composer") == nil,
+                "A workflow run must not show the create/edit builder composer below its canvas")
+        #expect(panes.height > fixture.host.bounds.height - 200,
+                "Compact status must retain the full run viewport without a global composer")
+        #expect(abs(panes.minY - content.minY - 36) < 1,
+                "Only the intrinsic collapsed summary should separate the panes from the bottom edge")
+        #expect(panes.minY >= content.minY - 1 && panes.maxY <= content.maxY + 1)
     }
 
     private func assertAccessiblePanes(in host: NSView) throws {

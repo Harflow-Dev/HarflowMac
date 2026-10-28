@@ -106,8 +106,22 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     
     @discardableResult func cancel(_ id: String) async throws -> Bool { try await taskActionRepository.cancel(id) }
     @discardableResult func send(_ id: String, text: String) async throws -> Bool {
-        if builderRunID != nil { _ = try await builderFollowup(id, text: text); return true }
-        return try await taskActionRepository.send(id, text: text)
+        try await taskActionRepository.send(id, text: text)
+    }
+
+    func sendNow(_ id: String, text: String) async throws {
+        let client = try toolEnvironmentRepository.ctl().get()
+        let result = try await client.sendNow(id, text: text).get()
+        taskActionRepository.setOutcome(id, WorkMessageOutcome.describe(result))
+        await taskSnapshotRepository.refresh(id)
+        await taskListRepository.refresh()
+    }
+
+    func cancelMessage(_ id: String, messageID: String) async throws {
+        let client = try toolEnvironmentRepository.ctl().get()
+        _ = try await client.cancelMessage(id, messageID: messageID).get()
+        taskActionRepository.setOutcome(id, "Queued message cancelled.")
+        await taskSnapshotRepository.refresh(id)
     }
 
     @discardableResult func resume(_ id: String, text: String, onResumed: @escaping @Sendable (String) async -> Void) async throws -> String? {

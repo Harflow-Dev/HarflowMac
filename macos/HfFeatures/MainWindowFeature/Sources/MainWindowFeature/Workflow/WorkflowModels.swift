@@ -64,7 +64,7 @@ struct WorkflowRunModel: Identifiable, Equatable {
     var goalRevision: Int { raw["goal_revision"]?.intValue ?? 0 }
     var goalHistory: [[String: JSONValue]] { raw["goal_history"]?.arrayValue?.compactMap(\.objectValue) ?? [] }
     var goalAssessment: [String: JSONValue]? { raw["goal_assessment"]?.objectValue }
-    var canReviseGoal: Bool { allowsMonitorControl && raw["can_revise_goal"]?.boolValue == true }
+    var canReviseGoal: Bool { permitsMonitor("revise_goal", fallback: allowsMonitorControl && raw["can_revise_goal"]?.boolValue == true) }
     var goalRevisionReason: String? { raw["goal_revision_reason"]?.stringValue }
     var isDelegation: Bool { raw["execution_contract"]?.stringValue == "delegation" }
     var orchestratorPermissions: WorkflowPermissionsModel? {
@@ -101,6 +101,39 @@ struct WorkflowRunModel: Identifiable, Equatable {
         return "\(name.isEmpty ? "Child workflow" : name) · \(status.replacingOccurrences(of: "_", with: " "))"
     }
 
+    /// Fresh engine eligibility overrides the conservative legacy owner fallback.
+    func permitsMonitor(_ action: String, fallback: Bool = false) -> Bool {
+        raw["monitor_controls"]?[action]?["allowed"]?.boolValue ?? fallback
+    }
+
+    func hasMonitorEligibility(_ action: String) -> Bool {
+        raw["monitor_controls"]?[action]?["allowed"]?.boolValue != nil
+    }
+
+    var isSchedulerRecovery: Bool {
+        ["starting", "running", "cancelling"].contains(status) && canRecover
+    }
+
+    var recoveryCommand: String { status == "failed" || isSchedulerRecovery ? "recover" : "resume" }
+
+    func canSubmitContinuation(_ command: String, instructions: String) -> Bool {
+        let requiresInput = command == "recover" || status == "needs_input"
+            || raw["orchestrator_usage_recovery"]?.objectValue != nil || raw["worker_usage_recovery"]?.objectValue != nil
+        if requiresInput, instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        if hasMonitorEligibility(command) { return permitsMonitor(command) }
+        return allowsMonitorControl && !isSettling
+            && !(requiresAnswer && instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            && (command != "recover" || canRecover)
+    }
+
+    func monitorReason(_ action: String) -> String? {
+        if hasMonitorEligibility(action), permitsMonitor(action) { return nil }
+        if let reason = raw["monitor_controls"]?[action]?["reason"]?.stringValue, !reason.isEmpty { return reason }
+        if parentRunID != nil { return "Open the root workflow to control this child run." }
+        if !allowsMonitorControl { return "This engine has not granted Harflow control of this caller-owned run." }
+        return nil
+    }
+
     var allowsMonitorControl: Bool {
         guard parentRunID == nil else { return false }
         guard raw["status"]?.stringValue != nil else { return false }
@@ -126,12 +159,12 @@ struct WorkflowRunModel: Identifiable, Equatable {
 
     var isSettling: Bool { raw["settling"]?.boolValue ?? false }
     var canSkipOptionalReview: Bool {
-        isDelegation && allowsMonitorControl && status == "needs_input" && !isSettling
-            && raw["optional_review_skip_available"]?.boolValue == true
-            && !(raw["input_decision_id"]?.stringValue ?? "").isEmpty
+        guard status == "needs_input", raw["optional_review_skip_available"]?.boolValue == true,
+              !(raw["input_decision_id"]?.stringValue ?? "").isEmpty else { return false }
+        return permitsMonitor("skip_optional_review", fallback: isDelegation && allowsMonitorControl && !isSettling)
     }
 
-    var canRecover: Bool { isDelegation && status == "failed" && !isSettling }
+    var canRecover: Bool { permitsMonitor("recover", fallback: allowsMonitorControl && isDelegation && status == "failed" && !isSettling) }
     var requiresAnswer: Bool { isDelegation && ["needs_input", "needs_attention", "failed"].contains(status) }
     var question: String { raw["input_question"]?.stringValue ?? raw["question"]?.stringValue ?? reason }
     var isBuilder: Bool { raw["kind"]?.stringValue == "builder" }

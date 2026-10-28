@@ -100,7 +100,7 @@ struct WorkflowDelegationTests {
         harness.sut.control("recover")
         // then
         await verify(harness.useCase)
-.command(.value("recover"), options: .value(["--reason=Investigated and approved", "--additional-attempts=2"]),
+.command(.value("recover"), options: .value(["--monitor", "--reason=Investigated and approved", "--additional-attempts=2"]),
                                             positionals: .value(["run"]), runtime: .any)
 .calledEventually(1, before: .seconds(5))
     }
@@ -190,7 +190,7 @@ struct WorkflowDelegationTests {
         harness.sut.instructions = "Reviewed failure"
         harness.sut.continueWithOneMoreRetry()
         await verify(harness.useCase)
-.command(.value("recover"), options: .value(["--reason=Reviewed failure", "--additional-attempts=1"]),
+.command(.value("recover"), options: .value(["--monitor", "--reason=Reviewed failure", "--additional-attempts=1"]),
                                             positionals: .value(["run"]), runtime: .any)
 .calledEventually(1, before: .seconds(5))
     }

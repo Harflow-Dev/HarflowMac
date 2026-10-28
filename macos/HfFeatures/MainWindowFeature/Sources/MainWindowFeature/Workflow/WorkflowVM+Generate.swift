@@ -68,7 +68,7 @@ extension WorkflowVM {
     private func generationOptions(
         candidate: [String: JSONValue], repo: String, prompt: String, context: WorkflowRefinementContext?
     ) -> [String] {
-        var options = ["--prompt=\(prompt)", "--fallbacks=\((candidate["fallbacks"] ?? .array([])).rendered())"]
+        var options = ["--monitor", "--prompt=\(prompt)", "--fallbacks=\((candidate["fallbacks"] ?? .array([])).rendered())"]
             + Self.candidateOptions(candidate)
         if !repo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { options.append("--repo=\(repo)") }
         if let context {

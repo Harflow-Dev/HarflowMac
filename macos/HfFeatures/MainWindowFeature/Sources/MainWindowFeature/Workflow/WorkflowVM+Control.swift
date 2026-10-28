@@ -4,10 +4,10 @@ import MonitorCore
 
 extension WorkflowVM {
     func continueWithOneMoreRetry() {
-        guard let run = selectedRun, run.allowsMonitorControl, !run.isSettling,
+        guard let run = selectedRun, run.permitsMonitor("additional_attempts", fallback: run.allowsMonitorControl), !run.isSchedulerRecovery,
               run.raw["exhausted_retry_edges"]?.arrayValue?.isEmpty == false,
-              !(run.requiresAnswer && instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) else { return }
-        let command = run.isDelegation && run.status == "failed" ? "recover" : "resume"
+              run.canSubmitContinuation(run.recoveryCommand, instructions: instructions) else { return }
+        let command = run.recoveryCommand
         guard command != "recover" || run.canRecover else { return }
         additionalAttempts = 1
         control(command)
@@ -18,19 +18,19 @@ extension WorkflowVM {
     }
 
     func control(_ command: String, allowOptionalReviewSkip: Bool) {
-        guard !isBusy, let run = selectedRun, command == "cancel" ? run.canCancelFromMonitor : run.allowsMonitorControl else { return }
+        guard !isBusy, let run = selectedRun,
+              run.permitsMonitor(command, fallback: command == "cancel" ? run.canCancelFromMonitor : run.allowsMonitorControl) else { return }
         guard !allowOptionalReviewSkip || (command == "resume" && run.canSkipOptionalReview) else { return }
         if ["resume", "recover"].contains(command) {
-            guard !run.isSettling,
-                  !(run.requiresAnswer && instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty),
-                  command != "recover" || run.canRecover else { return }
+            guard run.canSubmitContinuation(command, instructions: instructions) else { return }
         }
         // Capture the displayed checkpoint and answer before scheduling asynchronous work.
         let runID = run.id
-        var options: [String] = command == "cancel" || run.raw["interaction_owner"]?.stringValue == "monitor" ? ["--monitor"] : []
+        var options = ["--monitor"]
         if command == "resume" || command == "recover" {
             let reasonFlag = command == "recover" ? "--reason" : "--instructions"
-            options += ["\(reasonFlag)=\(instructions)", "--additional-attempts=\(additionalAttempts)"]
+            options.append("\(reasonFlag)=\(instructions)")
+            if !run.isSchedulerRecovery { options.append("--additional-attempts=\(additionalAttempts)") }
         }
         if command == "resume", let decisionID = run.raw["input_decision_id"]?.stringValue {
             options.append("--decision-id=\(decisionID)")

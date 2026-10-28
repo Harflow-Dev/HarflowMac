@@ -182,7 +182,7 @@ extension SidebarVMTests {
 
 extension SidebarVMTests {
     @Test(arguments: ["running", "completed"], [true, false])
-    func givenNativeControlTransport_whenWorkflowExpanded_thenInternalTaskIsHiddenAndOwnershipRetained(status: String, decorated: Bool) async throws {
+    func givenNativeControlTransport_whenWorkflowExpanded_thenInternalTaskIsDiscoverableUnderItsOwner(status: String, decorated: Bool) async throws {
         // given
         let harness = makeSUT()
         var transport: [String: JSONValue] = ["task_id": .string("transport"), "backend": .string("claude"), "status": .string(status)]
@@ -202,13 +202,16 @@ extension SidebarVMTests {
         await harness.sut.waitForPresentation()
         // then
         #expect(harness.sut.workflowTaskOwners["transport"] == "run")
-        #expect(Set(harness.sut.workflowChildren("run").map(\.taskID)) == ["node", "orchestrator"])
-        #expect(!harness.sut.sections.flatMap(\.items).contains { $0.id == "task:transport" })
+        #expect(Set(harness.sut.workflowChildren("run").map(\.taskID)) == ["node", "orchestrator", "transport"])
+        let rows = harness.sut.sections.flatMap(\.items)
+        #expect(rows.filter { $0.id == "task:transport" }.count == 1)
+        #expect(harness.sut.executionParent(of: "transport") == "workflow:run")
+        #expect(Set(rows.map(\.id)).count == rows.count)
     }
 }
 
 extension SidebarVMTests {
-    @Test func givenNativeControlBeforeWorkflowMetadata_whenListed_thenItNeverAppearsAsStandaloneTask() async throws {
+    @Test func givenNativeControlBeforeWorkflowMetadata_whenListed_thenItFallsBackToStandaloneUntilOwnerArrives() async throws {
         // given
         let harness = makeSUT()
         let control = try #require(TaskInfo(.object(["task_id": .string("transport"), "status": .string("running"),
@@ -219,7 +222,24 @@ extension SidebarVMTests {
         harness.sut.recompute()
         await harness.sut.waitForPresentation()
         // then
-        #expect(!harness.sut.sections.flatMap(\.items).contains { $0.id == "task:transport" })
-        #expect(harness.sut.sections.flatMap(\.items).contains { $0.id == "task:ordinary" })
+        let standalone = harness.sut.sections.flatMap(\.items)
+        #expect(standalone.filter { $0.id == "task:transport" }.count == 1)
+        #expect(standalone.filter { $0.id == "task:ordinary" }.count == 1)
+        #expect(harness.sut.workflowTaskOwners["transport"] == nil)
+
+        // when — the workflow poll supplies the previously unknown ownership.
+        harness.sut.workflowRuns = [SidebarWorkflowRun(raw: ["workflow_run_id": .string("run"), "status": .string("running"),
+            "activations": .array([.object(["role": .string("native_control"),
+                "tasks": .array([.object(["task_id": .string("transport")])])])])])]
+        harness.sut.didToggleExpansion(taskID: "workflow:run")
+        await harness.sut.waitForPresentation()
+        harness.sut.recompute()
+        await harness.sut.waitForPresentation()
+        // then — the same task moves under its owner without a duplicate standalone occurrence.
+        let grouped = harness.sut.sections.flatMap(\.items)
+        #expect(harness.sut.workflowTaskOwners["transport"] == "run")
+        #expect(harness.sut.executionParent(of: "transport") == "workflow:run")
+        #expect(grouped.filter { $0.id == "task:transport" }.count == 1)
+        #expect(Set(grouped.map(\.id)).count == grouped.count)
     }
 }

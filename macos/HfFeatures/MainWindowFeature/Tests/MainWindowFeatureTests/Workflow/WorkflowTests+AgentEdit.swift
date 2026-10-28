@@ -54,6 +54,10 @@ extension WorkflowTests {
         // then
         verify(harness.useCase).recordAgentUsage(.any, acknowledgementID: .any).called(0)
         #expect(vm.errorText == WorkflowUIError.missingRun.errorDescription)
+        verify(harness.useCase)
+.command(.value("build"), options: .matching { $0.contains("--monitor") },
+                                       positionals: .value(["generated"]), runtime: .any)
+.called(1)
     }
 
     @Test func givenBuilderFails_whenGenerateCompletes_thenCandidateUsageIsNotRecorded() async throws {

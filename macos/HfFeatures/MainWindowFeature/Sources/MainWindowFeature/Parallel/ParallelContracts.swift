@@ -35,6 +35,10 @@ protocol ParallelUseCase: Sendable {
     func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never>
     func runningInSubtrees(of ids: [String]) -> [String]
     func cancelAll(_ ids: [String]) async
+    /// Queues or requests immediate delivery through the engine's authorized task route.
+    func sendMessage(_ id: String, text: String, now: Bool) async throws
+    /// Withdraws the exact queued message from the current task's public route.
+    func cancelMessage(_ id: String, messageID: String) async throws
     func setOutcome(_ id: String, _ text: String?)
     /// Starts Terminal takeover synchronously before routing.
     func beginTakeover(taskID: String)

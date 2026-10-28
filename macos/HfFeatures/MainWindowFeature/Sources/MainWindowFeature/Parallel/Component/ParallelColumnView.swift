@@ -71,6 +71,8 @@ struct ParallelColumnModel: Identifiable {
     var history = EventHistoryState()
     var paginationRevision = 0
     var onLoadMore: (() -> Bool)?
+    var onSubmitMessage: ((String, Bool) -> Bool)?
+    var onCancelMessage: ((String) -> Void)?
 
     /// "<Backend> · <repo name>" plus "· N turns" when `turns > 1` — the lane header's subtitle,
     /// without the session id.
@@ -114,10 +116,34 @@ struct ParallelColumnView: View {
             } content: {
                 feed
             }
+            composer
         }
         .padding(HfRadius.Metrics.spacing16)
         .frame(maxHeight: .infinity, alignment: .top)
         .opensFileLinks(repoPath: model.task.repoPath)
+    }
+
+    private var composer: some View {
+        VStack(spacing: HfRadius.Metrics.zero) {
+            WorkMessageQueue(items: WorkMessageQueue.items(raw: model.task.raw), isBusy: model.isBusy || model.onCancelMessage == nil) {
+                model.onCancelMessage?($0)
+            }
+            MessageBoxView(model: MessageBoxModel(
+                canSend: !model.task.takenOver && model.onSubmitMessage != nil, canContinue: false, isBusy: model.isBusy,
+                label: "Message this task", hint: "Send queues; Send now requests immediate delivery when safe",
+                placeholder: model.task.takenOver ? MessageBoxDisabledReason.takenOver.text : "Queue a message…",
+                buttonLabel: "Send", isLocked: model.task.takenOver
+            ), onSubmitNow: { model.onSubmitMessage?($0, true) ?? false }, isCompact: true) { model.onSubmitMessage?($0, false) ?? false }
+            if model.onSubmitMessage == nil {
+                Text("Messaging is unavailable for this activity view.")
+                    .font(.hf(.caption))
+.foregroundStyle(Color.secondaryText)
+            }
+        }
+        .anchorPreference(key: ParallelComposerBounds.self, value: .bounds) { [model.id: $0] }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Messages for \(model.title)")
+        .accessibilityIdentifier("parallel-column-composer")
     }
 
     // MARK: Header
@@ -375,3 +401,13 @@ private func liveStepColumnModel() -> ParallelColumnModel {
     return model
 }
 #endif
+
+// MARK: - ParallelComposerBounds
+
+/// Local layout observation; no product state or rendering publisher consumes these anchors.
+struct ParallelComposerBounds: PreferenceKey {
+    static var defaultValue: [String: Anchor<CGRect>] { [:] }
+    static func reduce(value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, newest in newest })
+    }
+}

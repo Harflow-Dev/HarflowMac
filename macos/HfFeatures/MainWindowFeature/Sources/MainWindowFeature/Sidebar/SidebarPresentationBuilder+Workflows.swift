@@ -12,8 +12,7 @@ extension SidebarPresentationBuilder {
         let known = Set(runs.map(\.id))
         for task in latestTasks {
             guard let id = task.raw["workflow_run_id"]?.stringValue, WorkflowRunIdentity.isValid(id),
-                  !known.contains(id), !runs.contains(where: { $0.id == id }),
-                  task.raw["workflow_builder"]?.boolValue != true else { continue }
+                  !known.contains(id), !runs.contains(where: { $0.id == id }) else { continue }
             runs.append(SidebarWorkflowRun(raw: ["workflow_run_id": .string(id),
                 "name": task.raw["workflow_name"] ?? .string("Workflow"),
                 "status": task.raw["workflow_status"] ?? .string("running"),
@@ -22,7 +21,6 @@ extension SidebarPresentationBuilder {
                 "created_at": .number(task.startedAt?.timeIntervalSince1970 ?? 0)]))
         }
         let matching = runs.filter { run in
-            guard run.raw["kind"]?.stringValue != "builder" else { return false }
             let text = "\(run.name) \(run.id) \(run.raw["repo_path"]?.stringValue ?? "") \(run.raw["prompt"]?.stringValue ?? "")"
             let declaredBackends = Set(run.raw["backends"]?.arrayValue?.compactMap(\.stringValue) ?? [])
             let backends = workflowBackends(run.raw["definition"]?.objectValue ?? [:])

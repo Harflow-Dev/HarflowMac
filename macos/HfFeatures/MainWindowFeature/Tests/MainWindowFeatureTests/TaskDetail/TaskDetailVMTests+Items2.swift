@@ -250,7 +250,7 @@ extension TaskDetailVMTests {
 
         // then — nothing above kept `sut` alive, yet the resume dispatch still completes.
         #expect(weakSUT == nil)
-        await verify(capturedUseCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(5))
+        await verify(capturedUseCase).send(.value("abc12345"), text: .value("follow up")).calledEventually(1, before: .seconds(5))
     }
     
     // MARK: - Item u: sub-task strip and "Open parent" routing

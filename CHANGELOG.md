@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Align task notice and continuity rows with shared icon/text columns and spacing (#38).
+- Add queued Send, Send now, cancellation and message state to task Activity, each Parallel panel, selected node Activity and workflow builders, qualified by `messaging.v1`. Orchestrator opens Activity on the right; the workflow canvas has no global composer (#32).
+- Keep caller-owned, child and internal work discoverable and show workflow controls with engine eligibility and explicit refusal reasons (#39).
+
 - Show Cursor in the New Session fallback grid, harness filter, workflow agent editor, and setup list. Model choices come from `cursor-agent models`. Cursor has no effort control and no turn limit. The v1 wire contract is unchanged, so the vendored fixtures and engine version gate stay on 0.0.4.
 
 - Add explicit harness qualification to New session, workflow launch and Settings, with identity-bound evidence, required-feature checks, progress, cancellation and retry. Engines without `backend-qualification.v1`, including the currently paired 0.0.4, show unsupported qualification and cannot start new sessions or workflows.

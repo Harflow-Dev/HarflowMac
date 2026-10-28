@@ -92,6 +92,8 @@ protocol TaskDetailViewModel: ViewModel {
     /// Copies the task's repository path (the header's folder menu).
     func didTapCopyRepoPath()
     @discardableResult func submitMessage(_ text: String) -> Bool
+    @discardableResult func submitMessageNow(_ text: String) -> Bool
+    func cancelQueuedMessage(_ messageID: String)
 }
 
 extension TaskDetailViewModel {
@@ -171,24 +173,6 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 .padding(.vertical, HfRadius.Metrics.spacing8)
                         }
                         header(task)
-                        if viewModel.inspectorModel?.showsContinuity == true {
-                            HStack(spacing: 8) {
-                                Image(systemName: "arrow.clockwise").accessibilityHidden(true)
-                                Text("Server restarted · Task still running")
-                                Spacer(minLength: 8)
-                                Button("Details") {
-                                    if isEmbedded { embeddedInspectorVisible = true } else { isInspectorVisible = true }
-                                    supervisionRequest += 1
-                                }
-                                .buttonStyle(.plain)
-                                .focused($continuityDetailsFocused)
-                                .accessibilityLabel("Show supervision details")
-                            }
-                            .font(.hf(.secondary))
-                            .foregroundStyle(Color.secondaryText)
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 12)
-                        }
                         tabPicker
                         column
                     }
@@ -250,22 +234,52 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             if let text = viewModel.spawnedByBannerText {
                 Banner(icon: "arrow.turn.down.right", title: "Sub-task started by another agent", text: text)
             }
-            if let noticeText = NoticeSummary.text(count: viewModel.inspectorModel?.notices.count ?? 0) {
-                Button {
-                    setInspectorVisible(true)
-                } label: {
-                    Label(noticeText, systemImage: "exclamationmark.triangle")
-                        .font(.hf(.secondary))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.warningFG)
+            if NoticeSummary.text(count: viewModel.inspectorModel?.notices.count ?? 0) != nil
+                || viewModel.inspectorModel?.showsContinuity == true {
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+                    if let noticeText = NoticeSummary.text(count: viewModel.inspectorModel?.notices.count ?? 0) {
+                        Button {
+                            setInspectorVisible(true)
+                        } label: {
+                            HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
+                                supplementalIcon("exclamationmark.triangle")
+                                Text(noticeText).monospacedDigit()
+                            }
+                            .foregroundStyle(Color.warningFG)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Show the notices in the inspector")
+                    }
+                    if viewModel.inspectorModel?.showsContinuity == true {
+                        HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
+                            supplementalIcon("arrow.clockwise")
+                            Text("Server restarted · Task still running")
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: HfRadius.Metrics.spacing8)
+                            Button("Details") {
+                                setInspectorVisible(true)
+                                supervisionRequest += 1
+                            }
+                            .buttonStyle(.plain)
+                            .focused($continuityDetailsFocused)
+                            .accessibilityLabel("Show supervision details")
+                        }
+                        .foregroundStyle(Color.secondaryText)
+                    }
                 }
-                .buttonStyle(.borderless)
-                .help("Show the notices in the inspector")
+                .font(.hf(.secondary))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, isEmbedded ? HfRadius.Metrics.spacing16 : HfRadius.Metrics.spacing24)
         .padding(.top, HfRadius.Metrics.spacing12)
+        .padding(.bottom, HfRadius.Metrics.spacing12)
+    }
+
+    private func supplementalIcon(_ name: String) -> some View {
+        Image(systemName: name)
+            .frame(width: HfRadius.Metrics.spacing16)
+            .accessibilityHidden(true)
     }
 
     /// Attaches the toolbar layout the running OS supports; the glass-free one needs macOS 26 APIs.
@@ -391,10 +405,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     @ViewBuilder
     private var takeoverButton: some View {
-        if !isEmbedded, WorkflowNodePresentation.allowsTerminal(viewModel.task) {
+        if !isEmbedded {
             TerminalActionButton(viewModel.takeoverButtonLabel, action: viewModel.didTapTakeover)
-                .disabled(!viewModel.canTakeover)
-                .help(viewModel.takeoverHelp)
+                .disabled(!viewModel.canTakeover || !WorkflowNodePresentation.allowsTerminal(viewModel.task))
+                .help(WorkflowNodePresentation.allowsTerminal(viewModel.task) ? viewModel.takeoverHelp
+                      : "This managed or native task cannot be taken over. Open its owning workflow for supported controls.")
         }
     }
 
@@ -457,7 +472,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var column: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             content
-            MessageBoxView(model: viewModel.messageBoxModel) { text in viewModel.submitMessage(text) }
+            WorkMessageQueue(items: WorkMessageQueue.items(raw: viewModel.inspectorModel?.detail.raw ?? viewModel.task?.raw ?? [:]),
+                             isBusy: viewModel.isBusy, onCancel: viewModel.cancelQueuedMessage)
+            MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow) { text in viewModel.submitMessage(text) }
                 .readingColumn()
         }
     }
@@ -526,67 +543,3 @@ enum NoticeSummary {
         count > 0 ? "\(count) notice\(count == 1 ? "" : "s")" : nil
     }
 }
-
-#if DEBUG
-@MainActor
-private func previewDetail(_ mock: TaskDetailViewModelMock = TaskDetailViewModelMock()) -> some View {
-    NavigationStack { TaskDetailView(mock) }
-        .frame(width: HfRadius.Metrics.taskDetailPreviewWidth, height: HfRadius.Metrics.taskDetailPreviewHeight)
-}
-
-#Preview("Long title - narrow") {
-    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle()) }
-        .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
-        .preferredColorScheme(.light)
-}
-
-#Preview("Long title - narrow dark") {
-    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle()) }
-        .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Long title - wide") {
-    previewDetail(.longTitle())
-}
-
-#Preview("Unbroken title - narrow") {
-    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle(unbroken: true)) }
-        .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
-        .preferredColorScheme(.light)
-}
-
-#Preview("Unbroken title - narrow dark") {
-    NavigationStack { TaskDetailView(TaskDetailViewModelMock.longTitle(unbroken: true)) }
-        .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Long title - embedded") {
-    TaskDetailView(TaskDetailViewModelMock.longTitle(), isEmbedded: true)
-        .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
-        .preferredColorScheme(.light)
-}
-
-#Preview("Long title - embedded dark") {
-    TaskDetailView(TaskDetailViewModelMock.longTitle(), isEmbedded: true)
-        .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Running - light") {
-    previewDetail().preferredColorScheme(.light)
-}
-
-#Preview("Running - dark") {
-    previewDetail().preferredColorScheme(.dark)
-}
-
-#Preview("Finished - light") {
-    previewDetail(.finished()).preferredColorScheme(.light)
-}
-
-#Preview("Finished - dark") {
-    previewDetail(.finished()).preferredColorScheme(.dark)
-}
-#endif

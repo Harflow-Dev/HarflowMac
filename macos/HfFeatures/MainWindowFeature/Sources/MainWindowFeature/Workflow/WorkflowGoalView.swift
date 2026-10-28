@@ -43,7 +43,7 @@ struct WorkflowGoalView<VM: WorkflowViewModel>: View {
                     }
                 }
             }
-            if run.canReviseGoal {
+            if run.canReviseGoal || editing {
                 if editing {
                     TextEditor(text: $revisionText)
 .font(.hf(.body))
@@ -54,7 +54,7 @@ struct WorkflowGoalView<VM: WorkflowViewModel>: View {
                         Button("Cancel") { editing = false }.buttonStyle(QuietButtonStyle())
                         Button("Save goal") {
                             viewModel.reviseGoal(revisionText, runID: run.id, expectedRevision: expectedRevision)
-                        }.disabled(viewModel.isBusy || revisionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }.disabled(viewModel.isBusy || !run.canReviseGoal || revisionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 } else {
                     Button("Revise goal…") {
@@ -65,8 +65,11 @@ struct WorkflowGoalView<VM: WorkflowViewModel>: View {
                         .buttonStyle(QuietButtonStyle())
 .disabled(viewModel.isBusy)
                 }
-            } else if let reason = run.goalRevisionReason {
-                Text(reason).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+            } else {
+                Button("Revise goal…") {}.buttonStyle(QuietButtonStyle()).disabled(true)
+                if let reason = run.monitorReason("revise_goal") ?? run.goalRevisionReason {
+                    Text(reason).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+                }
             }
         }
         .font(.hf(.secondary))

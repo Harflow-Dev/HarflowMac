@@ -192,10 +192,10 @@ struct WorkflowRecoveryOverlayPresentationTests {
         ) == nil)
         #expect(WorkflowRecoveryOverlayPresentation.eligibleRunID(
             run: callerOwned, initialLoadingKind: nil, initialLoadFailed: false
-        ) == nil)
+        ) == "run-a")
         #expect(WorkflowRecoveryOverlayPresentation.eligibleRunID(
             run: child, initialLoadingKind: nil, initialLoadFailed: false
-        ) == nil)
+        ) == "run-a")
         #expect(WorkflowRecoveryOverlayPresentation.eligibleRunID(
             run: builder, initialLoadingKind: nil, initialLoadFailed: false
         ) == nil)

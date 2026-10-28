@@ -29,7 +29,7 @@ final class ParallelVM: ParallelViewModel {
     private(set) var selectedConversationID: String?
     @ObservationIgnored private var isWorkflowInspector = false
     static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
-    @ObservationIgnored private let useCase: any ParallelUseCase
+    @ObservationIgnored let useCase: any ParallelUseCase
     @ObservationIgnored private let routing: any ParallelRouting
     @ObservationIgnored private let buildColumns: ParallelColumnsBuild
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
@@ -43,9 +43,10 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var availabilityByTask: [String: EventAvailability] = [:]
     @ObservationIgnored var didSubscribe = false
     @ObservationIgnored private var latestTasks: [TaskInfo] = []
-    @ObservationIgnored private var latestSnapshots: [String: TaskInfo] = [:]
-    @ObservationIgnored private var latestBusy: Set<String> = []
+    @ObservationIgnored var latestSnapshots: [String: TaskInfo] = [:]
+    @ObservationIgnored var latestBusy: Set<String> = []
     @ObservationIgnored private var latestOutcomes: [String: String] = [:]
+    @ObservationIgnored var messageDispatches: Set<String> = []
     @ObservationIgnored var memberIDs: [String] = []
     @ObservationIgnored var conversations: [Conversation] = []
     @ObservationIgnored private var groupStartedAt: Date?
@@ -184,18 +185,6 @@ final class ParallelVM: ParallelViewModel {
             residentColumns: residentIDs.count, leasedMembers: leases.count)
     }
 
-    func didTapCancelAll() {
-        guard canCancelAll else { return }
-        publishDialog("Cancel every running task in this group?") {
-            AlertAction(title: "Cancel all", role: .destructive) { [weak self] in
-                guard let self else { return }
-                // Resolve membership at confirmation so newly resumed tasks are included.
-                let ids = useCase.runningInSubtrees(of: memberIDs)
-                Task { [useCase] in await useCase.cancelAll(ids) }
-            }
-        }
-    }
-
     // MARK: - Private Methods
 
     private func subscribeIfNeeded() {
@@ -332,7 +321,7 @@ final class ParallelVM: ParallelViewModel {
     }
 
     /// Refresh metadata, retaining the ownership skeleton for activity and viewport updates.
-    private func recompute() {
+    func recompute() {
         let preparationStart = MonitorMetrics.begin()
         defer { MonitorMetrics.end(preparationStart, stage: .parallelPreparation, residentColumns: residentIDs.count, leasedMembers: leases.count) }
         let freshened = conversations.map { conversation in
@@ -466,7 +455,7 @@ final class ParallelVM: ParallelViewModel {
         return ParallelColumnPresentation(id: conversation.id, task: current,
             title: workflowTitles[currentID] ?? useCase.title(conversation.first.taskID),
             subtitle: ParallelColumnModel.subtitle(repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count),
-            isBusy: latestBusy.contains(currentID), outcomeMessage: latestOutcomes[currentID], showPrompt: showPrompt,
+            isBusy: latestBusy.contains(currentID) || messageDispatches.contains(currentID), outcomeMessage: latestOutcomes[currentID], showPrompt: showPrompt,
             prompt: prompt, summary: summary, start: conversation.first.startedAt,
             memberTaskIDs: Set(conversation.members.map(\.taskID)))
     }
@@ -484,6 +473,8 @@ final class ParallelVM: ParallelViewModel {
             var column = ParallelColumnModelBuilder.build(presentation: presentation, metadata: metadata,
                 onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: metadata.task.taskID) },
                 onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) }, onSelectTask: { [weak self] in self?.routing.selectTask($0) })
+            column.onSubmitMessage = { [weak self] text, now in self?.submitMessage(text, conversationID: conversation.id, now: now) ?? false }
+            column.onCancelMessage = { [weak self] messageID in self?.cancelMessage(messageID, conversationID: conversation.id) }
             column.animatesArrival = arrivals.contains(column.id)
             column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }
             column.isResident = presentations[column.id] != nil || residentIDs.contains(column.id)

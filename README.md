@@ -49,3 +49,5 @@ See the [Changelog](CHANGELOG.md) for change history.
 Licensed under Apache 2.0. Copyright Nayanda Haberty.
 
 Release validation and distribution prerequisites are documented in [Releasing](docs/releasing.md).
+
+Task Activity, each Parallel panel and each selected node’s right-hand Activity have message boxes that queue by default, with secondary Send now and visible engine refusal reasons. The workflow canvas has no global message box; select Orchestrator to message it in Activity. See [interaction surfaces](docs/interaction-surfaces.md) for ownership, recovery and compatibility behavior.

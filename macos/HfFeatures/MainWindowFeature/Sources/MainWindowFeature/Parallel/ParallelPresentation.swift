@@ -208,6 +208,8 @@ struct ParallelColumnRenderValue: Equatable {
     let animatesArrival: Bool
     let isResident: Bool
     let isVisible: Bool
+    var hasMessageActions = false
+    var hasMessageCancellation = false
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         let left = lhs.presentation
@@ -224,6 +226,7 @@ struct ParallelColumnRenderValue: Equatable {
             && left.noToolCallsText == right.noToolCallsText && left.start == right.start
             && left.memberTaskIDs == right.memberTaskIDs && lhs.animatesArrival == rhs.animatesArrival
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
+            && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
     }
 }
 
@@ -243,6 +246,7 @@ extension ParallelColumnModel {
         value.paginationRevision = paginationRevision
         value.stepCountText = stepCountText
         value.noToolCallsText = noToolCallsText
-        return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible)
+        return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
+                                        hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil)
     }
 }

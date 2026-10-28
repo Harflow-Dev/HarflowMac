@@ -97,6 +97,14 @@ protocol WorkflowViewModel: ViewModel {
     func prepareGeneration(refining: Bool)
     func returnToCanvas()
     func applyAgentProposal()
+    func submitWorkMessage(_ text: String, now: Bool) -> Bool
+    func cancelWorkMessage(_ messageID: String)
+    var activityMessageTarget: WorkflowActivityMessageTarget { get }
+    var activityMessageItems: [WorkMessageQueue.Item] { get }
+    var activityMessageReadError: String? { get }
+    func refreshActivityMessageState() async
+    func submitActivityMessage(_ text: String, now: Bool) -> Bool
+    func cancelActivityMessage(_ messageID: String)
     func control(_ command: String)
     func control(_ command: String, allowOptionalReviewSkip: Bool)
     func continueWithOneMoreRetry()
@@ -118,6 +126,14 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
+    func submitWorkMessage(_: String, now _: Bool) -> Bool { false }
+    func cancelWorkMessage(_: String) {}
+    var activityMessageTarget: WorkflowActivityMessageTarget { .resolve(run: selectedRun, sidebar: runSidebar) }
+    var activityMessageItems: [WorkMessageQueue.Item] { [] }
+    var activityMessageReadError: String? { nil }
+    func refreshActivityMessageState() async {}
+    func submitActivityMessage(_: String, now _: Bool) -> Bool { false }
+    func cancelActivityMessage(_: String) {}
     var runSidebar: WorkflowRunSidebarPresentation { .init() }
     var selectedActivity: ParallelVM? { nil }
     func setRunGraphVisible(_: Bool) {}

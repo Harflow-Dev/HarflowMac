@@ -137,13 +137,13 @@ extension TaskDetailVMTests {
         // when
         // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
         let invocation = AsyncStream<Bool>.makeStream()
-        when(useCase).send(.value("abc12345"), text: .value("hello")).perform { invocation.continuation.yield(true) }
+        when(useCase).send(.value("abc12345"), text: .value("  hello  ")).perform { invocation.continuation.yield(true) }
         let cleared = sut.submitMessage("  hello  ")
         
         // then — eligible, so the caller is told to clear the field immediately.
         #expect(cleared)
         #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
-        verify(useCase).send(.value("abc12345"), text: .value("hello")).called(1)
+        verify(useCase).send(.value("abc12345"), text: .value("  hello  ")).called(1)
     }
     
     @Test(.timeLimit(.minutes(1))) func givenAnEligibleResume_whenItSucceeds_thenItDispatchesButDoesNotNavigate() async {
@@ -165,13 +165,13 @@ extension TaskDetailVMTests {
         // when
         // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
         let invocation = AsyncStream<Bool>.makeStream()
-        when(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).perform { invocation.continuation.yield(true) }
+        when(useCase).send(.value("abc12345"), text: .value("follow up")).perform { invocation.continuation.yield(true) }
         let cleared = sut.submitMessage("follow up")
 
         // then
         #expect(cleared)
         #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
-        verify(useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).called(1)
+        verify(useCase).send(.value("abc12345"), text: .value("follow up")).called(1)
         try? await Task.sleep(for: .milliseconds(50))
         verify(routing).selectTask(.any).called(0)
     }
@@ -183,7 +183,7 @@ extension TaskDetailVMTests {
         let useCase = harness.useCase
         let tasksSubject = harness.tasksSubject
         let detailBox = harness.detailBox
-        let running = task(status: "running", liveInput: false)
+        let running = task(status: "running", liveInput: false, takenOver: true)
         detailBox.value = running
         sut.didAppear()
         tasksSubject.send([running])

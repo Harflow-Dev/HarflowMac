@@ -5,7 +5,7 @@ import Testing
 // MARK: - WorkflowRunSidebarPresentationTests
 
 struct WorkflowRunSidebarPresentationTests {
-    @Test func givenAgentWithMultipleAttempts_whenBuilding_thenRequestedAttemptWinsAndNativeTasksAreExcluded() {
+    @Test func givenAgentWithMultipleAttempts_whenBuilding_thenRequestedAttemptWinsAndEveryTaskRemainsDiscoverable() {
         let run = makeRun(nodes: [["id": .string("agent"), "type": .string("agent"), "title": .string("Draft")]], activations: [
             activation(id: "first", nodeID: "agent", status: "completed", tasks: [task("headless-1"), task("native-1", kind: "native_subagent")]),
             activation(id: "live", nodeID: "agent", status: "running", tasks: [task("headless-2")])
@@ -16,10 +16,11 @@ struct WorkflowRunSidebarPresentationTests {
         #expect(presentation.title == "Draft")
         #expect(presentation.attempts.map(\.id) == ["first", "live"])
         #expect(presentation.activationID == "first")
-        #expect(presentation.taskIDs == ["headless-1"])
-        #expect(presentation.allTaskIDs == ["headless-1", "headless-2"])
+        #expect(presentation.taskIDs == ["headless-1", "native-1"])
+        #expect(presentation.allTaskIDs == ["headless-1", "native-1", "headless-2"])
         #expect(presentation.latestTaskIDs == ["headless-2"])
         #expect(presentation.titles["headless-1"] == "Draft · 1")
+        #expect(presentation.titles["native-1"] == "Draft · 1 · Fallback 1")
     }
 
     @Test func givenRunningAttemptWithoutExplicitSelection_whenBuilding_thenRunningAttemptIsSelected() {

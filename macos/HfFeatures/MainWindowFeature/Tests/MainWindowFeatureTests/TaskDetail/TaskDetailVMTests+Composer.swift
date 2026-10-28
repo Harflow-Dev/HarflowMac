@@ -17,7 +17,7 @@ extension TaskDetailVMTests {
         return harness.sut.messageBoxModel
     }
 
-    @Test func givenManagedWorkflowTask_whenSubmittingDirectMessage_thenComposerIsLockedAndSubmitRefuses() async throws {
+    @Test func givenManagedWorkflowTask_whenSubmittingDirectMessage_thenComposerQueuesThroughEngine() async throws {
         // given
         let harness = makeSUT()
         var raw = task(status: "running", liveInput: true, takenOver: false).raw
@@ -30,20 +30,20 @@ extension TaskDetailVMTests {
         harness.tasksSubject.send([managed])
         await waitUntil { harness.sut.task != nil }
         // when / then
-        #expect(harness.sut.messageBoxModel.isLocked)
-        #expect(!harness.sut.messageBoxModel.canSend && !harness.sut.messageBoxModel.canContinue)
-        #expect(!harness.sut.submitMessage("Bypass the workflow"))
+        #expect(!harness.sut.messageBoxModel.isLocked)
+        #expect(harness.sut.messageBoxModel.canSend && !harness.sut.messageBoxModel.canContinue)
+        #expect(harness.sut.submitMessage("Route through the workflow"))
         harness.sut.didDisappear()
     }
 
-    @Test func givenARunningTaskWithoutLiveInput_whenRenderingTheComposer_thenItIsLockedWithTheLiveInputCopy() async {
+    @Test func givenARunningTaskWithoutLiveInput_whenRenderingTheComposer_thenItCanQueue() async {
         // given / when
         let model = await shownModel(task(status: "running", liveInput: false, takenOver: false))
 
         // then
-        #expect(model.placeholder == "Messages are off — this task wasn't started with live input")
-        #expect(model.isLocked)
-        #expect(!model.canSend)
+        #expect(model.placeholder == "Queue a message…")
+        #expect(!model.isLocked)
+        #expect(model.canSend)
         #expect(!model.canContinue)
     }
 
@@ -71,7 +71,7 @@ extension TaskDetailVMTests {
         let model = await shownModel(task(status: "completed", sessionID: nil))
 
         // then
-        #expect(model.placeholder == "This task has no session to continue.")
+        #expect(model.placeholder == "Queue a message…")
         #expect(!model.isLocked)
         #expect(!model.canContinue)
     }
@@ -83,7 +83,7 @@ extension TaskDetailVMTests {
         // then
         #expect(model.canSend)
         #expect(!model.isLocked)
-        #expect(model.placeholder == "Message this task while it runs…")
+        #expect(model.placeholder == "Queue a message…")
     }
 
     @Test func givenAFinishedTaskWithASession_whenRenderingTheComposer_thenItOffersAFollowUp() async {
@@ -91,9 +91,9 @@ extension TaskDetailVMTests {
         let model = await shownModel(task(status: "completed"))
 
         // then
-        #expect(model.canContinue)
+        #expect(model.canSend)
         #expect(!model.isLocked)
-        #expect(model.buttonLabel == "Continue")
+        #expect(model.buttonLabel == "Send")
     }
 
     @Test func givenEachDisabledReason_whenAskingForLocks_thenOnlyTheMessagesAreOffReasonsLock() {

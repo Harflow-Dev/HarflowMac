@@ -15,7 +15,7 @@ final class PositiveCtlRunner: ProcessRunning, @unchecked Sendable {
             let json = "{\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
                 "\"product_version\":\"0.0.1\",\"component\":\"engine\",\"state_root\":\"\(root)\"," +
                 "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}}," +
-                "\"capabilities\":[\"ctl.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+                "\"capabilities\":[\"ctl.v1\",\"messaging.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
             return .success(stdout(json))
         }
         return await delegate.run(executable: executable, arguments: arguments, environment: environment,

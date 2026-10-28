@@ -26,12 +26,12 @@ enum WorkflowDecisionFallback {
 /// The existing recovery eligibility, shared by the banner and its duplicate-reason suppression.
 enum WorkflowRecoveryPresentation {
     static func showsRecovery(status: String, allowsMonitorControl: Bool, isDelegation: Bool) -> Bool {
-        allowsMonitorControl && (["needs_attention", "paused", "needs_input"].contains(status)
-            || (isDelegation && status == "failed"))
+        ["needs_attention", "paused", "needs_input"].contains(status)
+            || (isDelegation && status == "failed")
     }
 
     static func showsRecovery(_ run: WorkflowRunModel) -> Bool {
-        showsRecovery(status: run.status, allowsMonitorControl: run.allowsMonitorControl, isDelegation: run.isDelegation)
+        run.isSchedulerRecovery || showsRecovery(status: run.status, allowsMonitorControl: run.allowsMonitorControl, isDelegation: run.isDelegation)
     }
 }
 

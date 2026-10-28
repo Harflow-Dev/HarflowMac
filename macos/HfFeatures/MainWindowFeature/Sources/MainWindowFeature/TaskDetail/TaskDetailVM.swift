@@ -64,6 +64,8 @@ protocol TaskDetailUseCase: Sendable {
     // Actions
     @discardableResult func cancel(_ id: String) async throws -> Bool
     @discardableResult func send(_ id: String, text: String) async throws -> Bool
+    func sendNow(_ id: String, text: String) async throws
+    func cancelMessage(_ id: String, messageID: String) async throws
     /// `onResumed` fires right after the new task id comes back — before busy releases, the outcome
     /// writes, or either refresh runs (see `TaskActionRepository.resume(_:text:onResumed:)`'s doc
     /// for the exact ordering guarantee). Continue no longer navigates on success (Monitor piece 7,

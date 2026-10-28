@@ -119,8 +119,19 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
     public func send(_ taskID: String, text: String) async throws -> Bool {
         try await perform(taskID) { client in
             switch await client.send(taskID, text: text) {
-            case .success: .success("Queued — not yet delivered. The timeline shows it once the agent receives it.")
-            case .failure(let error): .failure(error)
+            case .success(let result):
+                let explanation = result["refusal"]?["message"]?.stringValue ?? result["reason"]?.stringValue
+                let message: String = switch result["status"]?.stringValue {
+                case "queued":
+                    explanation.map { "Queued — " + $0 } ?? "Queued — not yet delivered. The timeline shows it once the agent receives it."
+                case "undeliverable":
+                    explanation.map { "Undeliverable — " + $0 } ?? "The message could not be delivered."
+                case "delivering": explanation ?? "Delivery is in progress."
+                case "delivered": explanation ?? "Message delivered."
+                default: explanation ?? "Message request accepted; delivery status is unavailable."
+                }
+                return .success(message)
+            case .failure(let error): return .failure(error)
             }
         }
     }

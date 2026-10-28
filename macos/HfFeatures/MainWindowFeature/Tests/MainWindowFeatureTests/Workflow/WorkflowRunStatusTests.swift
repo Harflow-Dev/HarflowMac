@@ -14,7 +14,7 @@ struct WorkflowRunStatusTests {
         #expect(WorkflowDecisionFallback.text(status: "needs_attention", reason: reason, hasWorkerStep: true,
             recoveryQuestion: "Which approach should continue?") == reason)
         #expect(WorkflowRecoveryPresentation.showsRecovery(status: "needs_attention", allowsMonitorControl: true, isDelegation: false))
-        #expect(!WorkflowRecoveryPresentation.showsRecovery(status: "needs_attention", allowsMonitorControl: false, isDelegation: false))
+        #expect(WorkflowRecoveryPresentation.showsRecovery(status: "needs_attention", allowsMonitorControl: false, isDelegation: false))
         #expect(WorkflowRecoveryPresentation.showsRecovery(status: "failed", allowsMonitorControl: true, isDelegation: true))
         #expect(!WorkflowRecoveryPresentation.showsRecovery(status: "failed", allowsMonitorControl: true, isDelegation: false))
     }

@@ -36,6 +36,8 @@ final class WorkflowRunSplitSnapshot {
     var lastInspectorBoundsWidth: CGFloat?
     var lastObservedInspectorWidth: CGFloat?
     var canvasHeight: CGFloat?
+    var defaultInspectorOrigin: NSPoint?
+    weak var defaultInspectorScroll: NSScrollView?
     weak var inspectorSplit: NSSplitView?
     weak var canvasSplit: NSSplitView?
 
@@ -77,10 +79,18 @@ final class WorkflowRunSplitProbe: NSView {
                     || (snapshot.loadingTransition && snapshot.appliedPresentation == requested))
 
                 if didApply {
+                    let defaultScroll = snapshot.defaultInspectorScroll
+                    if presentationChanged, snapshot.appliedPresentation == .default {
+                        snapshot.defaultInspectorOrigin = defaultScroll?.contentView.bounds.origin
+                    }
                     let preferred = snapshot.inspectorWidths[requested] ?? WorkflowRunLayout.inspectorIdeal(for: requested)
                     let width = WorkflowInspectorWidth.clamped(preferred, available: boundsWidth)
                     snapshot.restoring = true
                     split.setPosition(boundsWidth - width - split.dividerThickness, ofDividerAt: 0)
+                    if presentationChanged, requested == .default,
+                       let origin = snapshot.defaultInspectorOrigin, let defaultScroll {
+                        restore(origin, in: defaultScroll, afterLayoutOf: split)
+                    }
                     snapshot.restoring = false
                     snapshot.appliedPresentation = requested
                     snapshot.lastObservedInspectorWidth = split.arrangedSubviews[1].frame.width
@@ -97,6 +107,11 @@ final class WorkflowRunSplitProbe: NSView {
                 snapshot.lastObservedInspectorWidth = width
                 snapshot.lastInspectorIdentity = identity
                 snapshot.lastInspectorBoundsWidth = boundsWidth
+                if requested == .default {
+                    // Capture the owner while only the default inspector is visible;
+                    // an activity feed may precede it in the native tree when selected.
+                    snapshot.defaultInspectorScroll = firstScrollView(in: split.arrangedSubviews[1])
+                }
             } else {
                 if snapshot.loadingTransition, snapshot.canvasSplit === split, let canvasHeight = snapshot.canvasHeight {
                     snapshot.restoring = true
@@ -108,6 +123,21 @@ final class WorkflowRunSplitProbe: NSView {
             }
         }
         snapshot.loadingTransition = false
+    }
+
+    private func restore(_ origin: NSPoint, in scroll: NSScrollView, afterLayoutOf split: NSSplitView) {
+        // The hidden inspector can clamp its origin while it reflows at the activity width.
+        // Restore only after its saved divider width and document layout apply again.
+        split.layoutSubtreeIfNeeded()
+        scroll.layoutSubtreeIfNeeded()
+        scroll.contentView.scroll(to: origin)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        snapshot.defaultInspectorOrigin = nil
+    }
+
+    private func firstScrollView(in view: NSView) -> NSScrollView? {
+        if let scroll = view as? NSScrollView { return scroll }
+        return view.subviews.lazy.compactMap { self.firstScrollView(in: $0) }.first
     }
 
     private func ancestorSplits() -> [NSSplitView] {

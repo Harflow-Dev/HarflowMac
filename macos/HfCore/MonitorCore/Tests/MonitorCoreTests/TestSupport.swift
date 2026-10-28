@@ -81,7 +81,7 @@ func compatibleRunner(answer: @escaping @Sendable (RecordingRunner.Call) -> Proc
                 "\"product_version\":\"\(HarflowVersion.current)\",\"component\":\"engine\",\"state_root\":\"\(root)\"," +
                 "\"contracts\":{\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1}," +
                 "\"setup\":{\"format\":\"harflow.setup\",\"v\":1},\"events\":{\"format\":\"harflow.event\",\"v\":1}}," +
-                "\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
+                "\"capabilities\":[\"ctl.v1\",\"setup.v1\",\"events.v1\",\"messaging.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
             return ProcessOutput(exitCode: 0, stdout: json(document), stderr: "")
         }
         return answer(call)

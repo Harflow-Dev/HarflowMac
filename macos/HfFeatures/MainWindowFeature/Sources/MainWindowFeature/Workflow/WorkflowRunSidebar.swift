@@ -45,7 +45,7 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
             counts[id, default: 0] += 1
             let title = nodes.first { $0["id"]?.stringValue == id }?["title"]?.stringValue ?? id
             let fallbacks = WorkflowExecutionAttempts.fallbackIndices(activation)
-            for task in WorkflowJSON.objects(activation["tasks"]) where task["execution_kind"]?.stringValue != "native_subagent" {
+            for task in WorkflowJSON.objects(activation["tasks"]) {
                 guard let taskID = task["task_id"]?.stringValue else { continue }
                 if seen.insert(taskID).inserted { result.allTaskIDs.append(taskID) }
                 let fallback = fallbacks[taskID] ?? 0
@@ -80,7 +80,6 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
 
     private static func headlessTaskIDs(_ activation: [String: JSONValue]) -> [String] {
         WorkflowJSON.objects(activation["tasks"])
-.filter { $0["execution_kind"]?.stringValue != "native_subagent" }
             .compactMap { $0["task_id"]?.stringValue }
     }
 }

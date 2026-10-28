@@ -63,7 +63,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     )
     var messageBoxModel = MessageBoxModel(
         canSend: true, canContinue: false, isBusy: false, label: "Message this task",
-        hint: "Queued; folded into the current turn or sent after it", placeholder: "Message this task while it runs…",
+        hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
         buttonLabel: "Send"
     )
 
@@ -77,6 +77,8 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     func didTapCopyTaskID() {}
     func didTapCopyRepoPath() {}
     var loadingHeader: TaskLoadingHeader? = TaskLoadingHeader(title: "Fix the login bug", repoName: "repo")
+    func submitMessageNow(_ text: String) -> Bool { !text.isEmpty }
+    func cancelQueuedMessage(_ messageID: String) {}
     @discardableResult func submitMessage(_: String) -> Bool { true }
 
     /// A finished task: "Open in terminal", the composer offering a follow-up, no cancel.
@@ -86,9 +88,9 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
         mock.takeoverButtonLabel = "Open in terminal"
         mock.canCancel = false
         mock.messageBoxModel = MessageBoxModel(
-            canSend: false, canContinue: true, isBusy: false, label: "Continue this session",
-            hint: "Continues the same harness session; the reply appears below as a new turn",
-            placeholder: "Send a follow-up — it continues this conversation", buttonLabel: "Continue"
+            canSend: true, canContinue: false, isBusy: false, label: "Message this task",
+            hint: "Send queues; Send now requests immediate delivery when safe",
+            placeholder: "Queue a message…", buttonLabel: "Send"
         )
         return mock
     }
@@ -111,11 +113,11 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     }
 
     /// Isolated deterministic continuity states for previews and native capture checks.
-    static func continuity(status: String = "running", loss: Bool = false) -> TaskDetailViewModelMock {
+    static func continuity(status: String = "running", loss: Bool = false, notices: [String] = []) -> TaskDetailViewModelMock {
         let mock = TaskDetailViewModelMock()
         let source = """
         {"task_id":"abc12345","backend":"claude","status":"\(status)",
-         "repo_path":"/tmp/harflow-continuity","started_at":"2026-10-28T09:00:00Z",
+         "repo_path":"/tmp/hf37-app-smoke","freedom":"write_in_repo","started_at":"2026-10-28T09:00:00Z",
          "supervision":{"owner_state":"alive","process_state":"alive",
          "capture_state":"\(loss ? "lost_with_owner" : "live")","live_input_state":"open",
          "adopted_after_restart":{"at":"2026-10-28T09:10:00Z","observer_kind":"parent_process",
@@ -129,7 +131,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
         mock.inspectorModel = InspectorModel(
             task: task, current: nil, stepCount: 0, activity: ActivityCounts(), subtaskCount: 0,
             ancestors: [], siblings: [], detail: task, hasSnapshot: true, restartHistory: [observation],
-            notices: task.supervision?.notices ?? [], startedBy: "Top-level task", resumeCommand: nil,
+            notices: notices + (task.supervision?.notices ?? []), startedBy: "Top-level task", resumeCommand: nil,
             onCopyResumeCommand: {}, onCopyTaskID: {}, onSelectTask: { _ in }
         )
         return mock

@@ -15,7 +15,7 @@ extension TaskDetailVMTests {
     
     // MARK: - Item a: canSend truth table
     
-    @Test func givenEveryCombinationOfLiveInputRunningAndTakenOver_whenComputingCanSend_thenOnlyAllThreeTogetherEnableIt() async {
+    @Test func givenEveryCombinationOfLiveInputRunningAndTakenOver_whenComputingCanSend_thenEveryUntakenTaskCanQueue() async {
         // given — canSend = liveInput && running && !takenOver (`TaskDetailVM+Actions.swift`).
         let harness = makeSUT()
         harness.sut.didAppear()
@@ -23,11 +23,11 @@ extension TaskDetailVMTests {
         let combinations: [(liveInput: Bool, status: String, takenOver: Bool, expected: Bool)] = [
             (true, "running", false, true),
             (true, "running", true, false),
-            (true, "completed", false, false),
+            (true, "completed", false, true),
             (true, "completed", true, false),
-            (false, "running", false, false),
+            (false, "running", false, true),
             (false, "running", true, false),
-            (false, "completed", false, false),
+            (false, "completed", false, true),
             (false, "completed", true, false)
         ]
         for combo in combinations {
@@ -56,7 +56,7 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         
         let combinations: [(status: String, sessionID: String?, expected: Bool)] = [
-            ("completed", "sess-1234567890", true),
+            ("completed", "sess-1234567890", false),
             ("completed", nil, false),
             ("running", "sess-1234567890", false),
             ("running", nil, false)
@@ -78,7 +78,7 @@ extension TaskDetailVMTests {
     
     // MARK: - Item c: trimming
     
-    @Test func givenMessageWithSurroundingWhitespace_whenSubmittedAsSendOrResume_thenBothAreTrimmedBeforeDispatch() async {
+    @Test func givenMessageWithSurroundingWhitespace_whenSubmittedAsSendOrResume_thenExactTextIsQueued() async {
         // given — Send, eligible
         let send = makeSUT()
         let running = task(status: "running", liveInput: true)
@@ -91,7 +91,7 @@ extension TaskDetailVMTests {
         #expect(send.sut.submitMessage("  hello there  "))
         
         // then
-        await verify(send.useCase).send(.value("abc12345"), text: .value("hello there")).calledEventually(1, before: .seconds(5))
+        await verify(send.useCase).send(.value("abc12345"), text: .value("  hello there  ")).calledEventually(1, before: .seconds(5))
         
         // given — Continue (resume), eligible
         let resume = makeSUT()
@@ -105,7 +105,7 @@ extension TaskDetailVMTests {
         #expect(resume.sut.submitMessage("  follow up  "))
         
         // then
-        await verify(resume.useCase).resume(.value("abc12345"), text: .value("follow up"), onResumed: .any).calledEventually(1, before: .seconds(5))
+        await verify(resume.useCase).send(.value("abc12345"), text: .value("  follow up  ")).calledEventually(1, before: .seconds(5))
     }
     
     // MARK: - Item d: the busy guard rejecting the action still clears the text
@@ -149,6 +149,7 @@ extension TaskDetailVMTests {
         given(useCase).current(for: .any).willReturn(nil)
         given(useCase).prompt(for: .any).willReturn(nil)
         given(useCase).send(.any, text: .any).willThrow(TestError.expectedError)
+        given(useCase).setOutcome(.any, .any).willReturn()
         
         let sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore())
         sut.didAppear()
@@ -162,6 +163,9 @@ extension TaskDetailVMTests {
         // this return, because it is decided before the `Task { }` closure ever runs.
         #expect(cleared)
         await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(5))
+        await verify(useCase)
+.setOutcome(.value("abc12345"), .value("Couldn't send the message: \(TestError.expectedError.localizedDescription)"))
+            .calledEventually(1, before: .seconds(5))
     }
     
     // MARK: - Item e: default tab

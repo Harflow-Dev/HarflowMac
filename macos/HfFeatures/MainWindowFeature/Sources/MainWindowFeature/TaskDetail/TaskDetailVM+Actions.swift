@@ -139,86 +139,56 @@ extension TaskDetailVM {
         useCase.setOutcome(currentTaskID, succeeded ? "Copied path." : "Couldn't copy to the clipboard.")
     }
 
-    /// Send requires `liveInput && running && !takenOver`; Continue (resume) requires a terminal
-    /// status plus a session (`TaskDetailView.swift:299-300`). When neither is eligible the
-    /// composer is disabled with the copy of the specific `MessageBoxDisabledReason` (settled plan
-    /// D7) — a taken-over running task no longer claims it "was not started with live input".
+    /// The engine owns authorization; a non-live task can still queue a follow-up.
     func recomputeMessageBox(task: TaskInfo) {
-        if isWorkflowBuilder {
-            messageBoxModel = MessageBoxModel(canSend: task.status.isRunning, canContinue: task.status.isTerminal, isBusy: isBusy,
-                                              label: "Message this task",
-                                              hint: "Messages join the current turn when supported, or queue for the next builder turn",
-                                              placeholder: "Ask for changes to this workflow…", buttonLabel: task.status.isRunning ? "Send" : "Continue")
-            return
-        }
-        if WorkflowNodePresentation.blocksDirectMessages(task) {
-            messageBoxModel = MessageBoxModel(canSend: false, canContinue: false, isBusy: isBusy,
-                                              label: "Workflow-managed task", hint: "Answer workflow questions from the workflow run",
-                                              placeholder: "The workflow controls this task until the run has settled", buttonLabel: "Send", isLocked: true)
-            return
-        }
-        let canSend = task.liveInput && task.status.isRunning && !task.takenOver
-        let canContinue = task.status.isTerminal && task.sessionID != nil
-        let label = canSend ? "Message this task" : (canContinue ? "Continue this session" : "Messages")
-        let hint = canSend
-        ? "Queued; folded into the current turn or sent after it"
-        : (canContinue ? "Continues the same harness session; the reply appears below as a new turn" : "")
-        let disabledReason = MessageBoxDisabledReason.reason(for: task)
-        let placeholder = if canSend {
-            "Message this task while it runs…"
-        } else if canContinue {
-            "Send a follow-up — it continues this conversation"
-        } else {
-            disabledReason.text
-        }
+        let eligible = !task.takenOver
         messageBoxModel = MessageBoxModel(
-            canSend: canSend, canContinue: canContinue, isBusy: isBusy,
-            label: label, hint: hint, placeholder: placeholder, buttonLabel: canSend ? "Send" : "Continue",
-            isLocked: !canSend && !canContinue && disabledReason.showsLock
+            canSend: eligible, canContinue: false, isBusy: isBusy,
+            label: isWorkflowBuilder ? "Message the workflow builder" : "Message this task",
+            hint: "Send queues; Send now requests immediate delivery when safe",
+            placeholder: eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
+            buttonLabel: "Send", isLocked: !eligible
         )
     }
 
-    /// Trims the message, then dispatches Send or Continue. Returns `true` (so the caller clears its
-    /// field immediately, regardless of the later outcome) for any eligible dispatch; `false` for a
-    /// blank or ineligible submit, which keeps the text (`TaskDetailView.swift:336-345`).
     @discardableResult
     func submitMessage(_ text: String) -> Bool {
-        let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty else { return false }
-        guard let task else { return false }
-        if isWorkflowBuilder {
-            guard task.status.isRunning || task.status.isTerminal else { return false }
-            let capturedUseCase = useCase
-            let id = currentTaskID
-            Task {
-                do {
-                    _ = try await capturedUseCase.send(id, text: message)
-                } catch {
-                    capturedUseCase.setOutcome(id, "Couldn't queue the builder message: \(error.localizedDescription)")
+        dispatchMessage(text, now: false)
+    }
+
+    @discardableResult
+    func submitMessageNow(_ text: String) -> Bool {
+        dispatchMessage(text, now: true)
+    }
+
+    private func dispatchMessage(_ text: String, now: Bool) -> Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let task, !task.takenOver, !isBusy else { return false }
+        let capturedUseCase = useCase
+        let id = currentTaskID
+        Task {
+            do {
+                if now {
+                    try await capturedUseCase.sendNow(id, text: text)
+                } else {
+                    _ = try await capturedUseCase.send(id, text: text)
                 }
+            } catch {
+                capturedUseCase.setOutcome(id, "Couldn't send the message: \(error.localizedDescription)")
             }
-            return true
         }
-        guard !WorkflowNodePresentation.blocksDirectMessages(task) else { return false }
-        let canSend = task.liveInput && task.status.isRunning && !task.takenOver
-        let canContinue = task.status.isTerminal && task.sessionID != nil
-        if canSend {
-            let capturedUseCase = useCase
-            let id = currentTaskID
-            Task { try? await capturedUseCase.send(id, text: message) }
-            return true
-        } else if canContinue {
-            // Capture `useCase` strongly before awaiting, so a resume that outlives this VM (the
-            // selection moved elsewhere) still lands. Continue no longer navigates (Design point 7):
-            // the conversation stays selected, and the new turn appears once the listing refreshes
-            // and this VM's own `tasksPublisher` sink picks up the new member.
-            let capturedUseCase = useCase
-            let id = currentTaskID
-            Task {
-                _ = try? await capturedUseCase.resume(id, text: message) { _ in }
+        return true
+    }
+
+    func cancelQueuedMessage(_ messageID: String) {
+        let capturedUseCase = useCase
+        let id = currentTaskID
+        Task {
+            do {
+                try await capturedUseCase.cancelMessage(id, messageID: messageID)
+            } catch {
+                capturedUseCase.setOutcome(id, "Couldn't cancel the message: \(error.localizedDescription)")
             }
-            return true
         }
-        return false
     }
 }

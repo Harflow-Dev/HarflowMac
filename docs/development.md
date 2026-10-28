@@ -69,3 +69,5 @@ and SwiftLint `--strict`, `macos/build-app.sh`, a packaged-startup bundle check,
 Swift package tests. `release.yml` and `apple-signing-preflight.yml` cover releases and credential
 preflight; see `docs/releasing.md` and `docs/ci-signing.md`. Signed runs upload the app to Apple and,
 like pushes and releases, need explicit owner authorization in the active task.
+
+Interaction presentation and public routes are documented in [interaction surfaces](interaction-surfaces.md). Native fixture captures are separate evidence from browser specimens.

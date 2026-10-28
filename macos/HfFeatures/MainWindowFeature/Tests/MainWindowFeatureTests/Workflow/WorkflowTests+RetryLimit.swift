@@ -74,7 +74,7 @@ extension WorkflowTests {
         // then
         await verify(harness.useCase)
 .command(.value("resume"),
-                                             options: .value(["--instructions=Try the alternate fix", "--additional-attempts=1"]),
+                                             options: .value(["--monitor", "--instructions=Try the alternate fix", "--additional-attempts=1"]),
                                              positionals: .value(["run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         #expect(vm.additionalAttempts == 1)

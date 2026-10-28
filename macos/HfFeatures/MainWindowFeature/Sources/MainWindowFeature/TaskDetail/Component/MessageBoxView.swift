@@ -80,35 +80,72 @@ struct MessageBoxModel {
 /// button already declares — it must not imply a new key behavior.
 struct MessageBoxView: View {
     let model: MessageBoxModel
+    var onSubmitNow: ((String) -> Bool)?
+    var isCompact = false
     let onSubmit: (String) -> Bool
     @State private var text = ""
+    @FocusState private var fieldFocused: Bool
 
     private var isEnabled: Bool { model.canSend || model.canContinue }
 
     var body: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            HStack(alignment: .center, spacing: HfRadius.Metrics.spacing10) {
-                field
-                sendButton
-            }
-            .padding(.leading, HfRadius.Metrics.spacing16)
-            .padding(.trailing, HfRadius.Metrics.spacing16)
+            controls
+            .padding(.horizontal, isCompact ? HfRadius.Metrics.spacing12 : HfRadius.Metrics.spacing16)
             .padding(.vertical, HfRadius.Metrics.spacing12)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: HfRadius.Metrics.composerCornerRadius))
             if isEnabled {
-                Text("⌘↩ to send")
+                Text(model.hint.isEmpty ? "⌘↩ to send" : model.hint + " · ⌘↩ to send")
                     .font(.hf(.caption))
                     .foregroundStyle(Color.tertiaryText)
                     .padding(.leading, HfRadius.Metrics.spacing16)
             }
         }
-        .padding(.horizontal, HfRadius.Metrics.spacing24)
+        .padding(.horizontal, isCompact ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing24)
         .padding(.top, HfRadius.Metrics.spacing12)
         .padding(.bottom, HfRadius.Metrics.spacing20)
     }
 
     private var canSubmit: Bool {
         isEnabled && !model.isBusy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    @ViewBuilder private var controls: some View {
+        if isCompact {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: HfRadius.Metrics.spacing10) {
+                    field.frame(minWidth: 120)
+                    actions
+                }
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                    field
+                    HStack(spacing: HfRadius.Metrics.spacing10) {
+                        Spacer(minLength: 0)
+                        actions
+                    }
+                }
+            }
+        } else {
+            HStack(spacing: HfRadius.Metrics.spacing10) {
+                field
+                actions
+            }
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        if let onSubmitNow {
+            Button("Send now") { if onSubmitNow(text) { text = "" } }
+                .buttonStyle(.plain)
+                .foregroundStyle(canSubmit ? Color.primaryText : Color.tertiaryText)
+                .disabled(!canSubmit)
+                .help("Ask for immediate delivery; an engine refusal keeps the message queued")
+        }
+        if !isCompact || fieldFocused {
+            sendButton.keyboardShortcut(.return, modifiers: .command)
+        } else {
+            sendButton
+        }
     }
 
     /// A circular 32 pt `accentFill` button (§6.2); `buttonLabel` ("Send"/"Continue") is its tooltip
@@ -126,7 +163,6 @@ struct MessageBoxView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .keyboardShortcut(.return, modifiers: .command)
         .disabled(!canSubmit)
         .help("\(model.buttonLabel) (⌘↩)")
         .accessibilityLabel(model.buttonLabel)
@@ -146,6 +182,7 @@ struct MessageBoxView: View {
             .accessibilityElement(children: .combine)
         } else {
             TextField(model.placeholder, text: $text, axis: .vertical)
+                .focused($fieldFocused)
                 // Bounded scope (§6.2): the multiline composer's own dedicated scroll view, when
                 // one exists, carries thin overlay chrome; a field with none stays a quiet no-op,
                 // and the shared field editor is never targeted. The outer pane is untouched.
@@ -170,22 +207,22 @@ private func previewStack() -> some View {
     VStack(spacing: HfRadius.Metrics.spacing8) {
         MessageBoxView(model: MessageBoxModel(
             canSend: true, canContinue: false, isBusy: false, label: "Message this task",
-            hint: "Queued; folded into the current turn or sent after it", placeholder: "Message this task while it runs…",
+            hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
             buttonLabel: "Send"
         )) { _ in true }
         MessageBoxView(model: MessageBoxModel(
             canSend: true, canContinue: false, isBusy: true, label: "Message this task",
-            hint: "Queued; folded into the current turn or sent after it", placeholder: "Message this task while it runs…",
+            hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
             buttonLabel: "Send"
         )) { _ in true }
         MessageBoxView(model: MessageBoxModel(
-            canSend: false, canContinue: true, isBusy: false, label: "Continue this session",
-            hint: "Continues the same harness session; the reply appears below as a new turn", placeholder: "Send a follow-up — it continues this conversation",
-            buttonLabel: "Continue"
+            canSend: true, canContinue: false, isBusy: false, label: "Message this settled task",
+            hint: "Send queues; Send now starts a continuation when safe", placeholder: "Queue a message…",
+            buttonLabel: "Send"
         )) { _ in true }
         MessageBoxView(model: MessageBoxModel(
-            canSend: false, canContinue: false, isBusy: false, label: "Messages", hint: "",
-            placeholder: MessageBoxDisabledReason.notLiveInput.text, buttonLabel: "Send", isLocked: true
+            canSend: true, canContinue: false, isBusy: false, label: "Message this task without live input",
+            hint: "Queued for the next continuation", placeholder: "Queue a message…", buttonLabel: "Send"
         )) { _ in true }
         MessageBoxView(model: MessageBoxModel(
             canSend: false, canContinue: false, isBusy: false, label: "Messages", hint: "",

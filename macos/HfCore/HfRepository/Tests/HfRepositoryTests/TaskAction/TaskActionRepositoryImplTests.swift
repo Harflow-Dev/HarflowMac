@@ -124,7 +124,7 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
     @Test func givenAnAcceptedAction_whenItCompletes_thenItReturnsTrueAndBusyIsClearedThenOutcomeThenListThenSnapshotRefresh() async throws {
         // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        let runner = StubProcessRunner(output: actionCtl(#"{"result":{}}"#))
+        let runner = StubProcessRunner(output: actionCtl(#"{"result":{"status":"queued"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let taskListRepository = MockTaskListRepository()
         let snapshotRepository = MockTaskSnapshotRepository()
@@ -142,6 +142,30 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         #expect(sut.busy.contains("t1") == false)
         #expect(sut.outcome("t1") == "Queued — not yet delivered. The timeline shows it once the agent receives it.")
         #expect(order == ["list", "snapshot"])
+    }
+
+    @Test(arguments: ["queued", "undeliverable", "delivering", "unknown"])
+    func givenSendResponse_whenDeliveryStateIsReported_thenOutcomePreservesTheEngineEvidence(_ status: String) async throws {
+        // given
+        let toolEnvironment = MockToolEnvironmentRepository()
+        let payload: [String: JSONValue] = status == "unknown" ? [:] : [
+            "status": .string(status), "reason": .string("The workflow ended before another dispatch.")]
+        let document = JSONValue.object(["result": .object(payload)]).rendered()
+        let runner = StubProcessRunner(output: actionCtl(document))
+        given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
+        let sut = makeSUT(toolEnvironment: toolEnvironment)
+        // when
+        #expect(try await sut.send("node-task", text: "Keep this exact text"))
+        // then
+        let expected = switch status {
+        case "queued": "Queued — The workflow ended before another dispatch."
+        case "undeliverable": "Undeliverable — The workflow ended before another dispatch."
+        case "delivering": "The workflow ended before another dispatch."
+        default: "Message request accepted; delivery status is unavailable."
+        }
+        #expect(sut.outcome("node-task") == expected)
+        #expect(runner.calls.count == 1)
+        #expect(sut.busy.isEmpty)
     }
 
     // MARK: exact copy strings (F4-16/MS-ACTIONS-2)

@@ -213,12 +213,15 @@ import Testing
     }
 
     private func activityScroll(in fixture: RedesignHost) -> NSScrollView? {
-        guard let sidebar = fixture.element("workflow-selected-sidebar"),
-              let sidebarFrame = fixture.frame(sidebar) else { return nil }
-        return fixture.descendants.compactMap { $0 as? NSScrollView }.first { scroll in
+        guard fixture.element("workflow-selected-sidebar") != nil,
+              let split = fixture.descendants.compactMap({ $0 as? NSSplitView }).last(where: { $0.isVertical }),
+              let inspector = split.arrangedSubviews.last else { return nil }
+        // The sidebar AX identifier can expose only its title's content frame.
+        // Find the feed's owned native surface inside the actual inspector pane.
+        return allViews(inspector).compactMap { $0 as? ActivityFeedNativeScrollView }.first { scroll in
             guard scroll.hasVerticalScroller, !scroll.hasHorizontalScroller, scroll.documentView is NSTableView else { return false }
-            let frame = scroll.convert(scroll.bounds, to: fixture.host)
-            return frame.intersects(sidebarFrame)
+            let frame = scroll.convert(scroll.bounds, to: inspector)
+            return frame.width > 0 && frame.height > 0 && inspector.bounds.intersects(frame)
         }
     }
 }

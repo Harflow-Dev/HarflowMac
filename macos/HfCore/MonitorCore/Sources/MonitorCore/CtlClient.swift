@@ -174,7 +174,17 @@ public struct CtlClient: Sendable {
     }
 
     public func send(_ taskID: String, text: String) async -> Result<[String: JSONValue], ToolError> {
-        await result("send", positionals: [taskID, text])
+        await result("send", options: ["--delivery=queue", "--monitor"], positionals: [taskID, text], requiringCapability: "messaging.v1")
+    }
+
+    /// Queues a message and asks the engine to deliver it immediately when safe.
+    public func sendNow(_ taskID: String, text: String) async -> Result<[String: JSONValue], ToolError> {
+        await result("send", options: ["--delivery=now", "--monitor"], positionals: [taskID, text], requiringCapability: "messaging.v1")
+    }
+
+    /// Withdraws a queued task message, including a workflow-routed node message.
+    public func cancelMessage(_ taskID: String, messageID: String) async -> Result<[String: JSONValue], ToolError> {
+        await result("cancel-message", options: ["--monitor"], positionals: [taskID, messageID], requiringCapability: "messaging.v1")
     }
 
     public func cancel(_ taskID: String) async -> Result<[String: JSONValue], ToolError> {

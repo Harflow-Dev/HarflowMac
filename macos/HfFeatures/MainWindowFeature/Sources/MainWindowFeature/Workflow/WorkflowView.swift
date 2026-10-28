@@ -26,7 +26,14 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         WorkflowScreenLayout {
             screenHeader
         } content: {
-            screenContent
+            VStack(spacing: HfRadius.Metrics.zero) {
+                screenContent
+                if viewModel.initialLoadingKind == nil, !viewModel.initialLoadFailed,
+                   viewModel.selectedRun == nil || (viewModel.selectedRun?.isBuilder == true
+                    && (viewModel.selectedRun?.builderTaskID == nil || builderTaskView == nil)) {
+                    workMessageBox
+                }
+            }
         }
         .background(Color.windowBG)
         .modifier(WorkflowRecoveryOverlayLifecycle(presentation: $recoveryOverlay, eligibleRunID: recoveryEligibleRunID))
@@ -106,10 +113,6 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 }
             }
         }
-    }
-
-    private var runReadError: some View {
-        ContentUnavailableView("Workflow could not be loaded", systemImage: "exclamationmark.triangle")
     }
 
     private var header: some View {
@@ -212,13 +215,17 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 .pickerStyle(.segmented)
                 .frame(width: HfRadius.Metrics.workflowRunCanvasMinimumHeight)
             }
-            if run.allowsMonitorControl, ["running", "starting"].contains(run.status) {
-                Button("Pause") { viewModel.control("pause") }.buttonStyle(MonitorButtonStyle(.glass))
+            if ["running", "starting"].contains(run.status) {
+                Button("Pause") { viewModel.control("pause") }
+.buttonStyle(MonitorButtonStyle(.glass))
+                    .disabled(viewModel.isBusy || !run.permitsMonitor("pause", fallback: run.allowsMonitorControl))
+                    .help(run.monitorReason("pause") ?? "Pause workflow scheduling")
             }
-            if run.canCancelFromMonitor {
+            if !["completed", "failed", "cancelled", "cancelling"].contains(run.status) {
                 Button("Cancel run", role: .destructive) { viewModel.control("cancel") }
                     .buttonStyle(MonitorButtonStyle(.destructive))
-                    .disabled(viewModel.isBusy)
+                    .disabled(viewModel.isBusy || !run.canCancelFromMonitor)
+                    .help(run.monitorCancelRefusalReason ?? run.monitorReason("cancel") ?? "Cancel this run")
             } else if run.status == "cancelling" {
                 Text("Cancelling…").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
             }
@@ -518,7 +525,6 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 activations: viewModel.selectedRun?.activations ?? []))
         .background(Color.cardFill)
     }
-
 }
 
 // MARK: - Workflow activity selection
@@ -591,5 +597,4 @@ private extension WorkflowView {
             }
         }
     }
-
 }

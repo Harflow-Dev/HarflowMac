@@ -5,7 +5,9 @@ import Foundation
 public extension CtlClient {
     /// Calls the versioned workflow CLI boundary. State is owned exclusively by Harflow.
     func workflow(_ command: String, options: [String] = [], positionals: [String] = []) async -> Result<[String: JSONValue], ToolError> {
-        await result("workflow-\(command)", options: options, positionals: positionals, timeout: Self.startTimeout)
+        await result("workflow-\(command)", options: options, positionals: positionals, timeout: Self.startTimeout,
+                     requiringCapability: ["send", "cancel-message"].contains(command)
+                         || command == "build" && options.contains("--monitor") ? "messaging.v1" : nil)
     }
 
     /// Validates through Harflow without creating a saved definition or run.

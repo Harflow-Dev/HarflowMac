@@ -18,6 +18,7 @@ extension TaskDetailViewRepositoryTests {
 .command(.value("builder-followup"), options: .value(["--prompt=add review"]), positionals: .value(["builder-run"]))
             .willReturn(["status": .string("queued_next_turn")])
         given(actions).setOutcome(.any, .any).willReturn()
+        given(actions).send(.any, text: .any).willReturn(true)
         given(listing).refresh().willReturn()
         let sut = TaskDetailViewRepository(taskListRepository: listing, taskActionRepository: actions,
                                            builderRunID: "builder-run", workflowRepository: workflow)
@@ -29,11 +30,16 @@ extension TaskDetailViewRepositoryTests {
             #expect(try await sut.send("task", text: "add review"))
         }
         // then
-        verify(workflow)
-.command(.value("builder-followup"), options: .value(["--prompt=add review"]), positionals: .value(["builder-run"]))
-            .called(1)
-        verify(actions).setOutcome(.value("task"), .value("Queued for the next builder turn.")).called(1)
-        verify(actions).send(.any, text: .any).called(0)
+        if continuing {
+            verify(workflow)
+                .command(.value("builder-followup"), options: .value(["--prompt=add review"]), positionals: .value(["builder-run"]))
+                .called(1)
+            verify(actions).setOutcome(.value("task"), .value("Queued for the next builder turn.")).called(1)
+            verify(actions).send(.any, text: .any).called(0)
+        } else {
+            verify(actions).send(.value("task"), text: .value("add review")).called(1)
+            verify(workflow).command(.any, options: .any, positionals: .any).called(0)
+        }
         verify(actions).resume(.any, text: .any, onResumed: .any).called(0)
     }
 }

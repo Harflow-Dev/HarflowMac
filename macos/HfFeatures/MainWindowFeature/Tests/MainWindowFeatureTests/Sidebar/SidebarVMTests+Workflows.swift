@@ -7,13 +7,13 @@ import MonitorCore
 import Testing
 
 extension SidebarVMTests {
-    @Test func givenBuilderTasksAndRuns_whenListed_thenOnlyExecutionAppearsInHistory() async {
+    @Test func givenBuilderTasksAndRuns_whenListed_thenBuilderWorkRemainsDiscoverableUnderItsRun() async {
         // given
         let harness = makeSUT()
         harness.sut.workflowRuns = [SidebarWorkflowRun(raw: ["kind": .string("builder"), "workflow_run_id": .string("builder"),
             "status": .string("running"), "activations": .array([.object(["tasks": .array([.object(["task_id": .string("legacy")])])])])])]
         let builder = TaskInfo(.object(["task_id": .string("edit"), "backend": .string("codex"), "status": .string("running"),
-            "workflow_builder": .bool(true)]))!
+            "workflow_builder": .bool(true), "workflow_run_id": .string("builder")]))!
         harness.sut.didAppear()
         await harness.sut.waitForPresentation()
         // when
@@ -21,8 +21,18 @@ extension SidebarVMTests {
         await waitUntil { harness.sut.runningRows.map(\.id) == ["execution"] }
         await harness.sut.waitForPresentation()
         // then
-        #expect(harness.sut.filteredWorkflowRuns().isEmpty)
+        #expect(harness.sut.filteredWorkflowRuns().map(\.id) == ["builder"])
         #expect(harness.sut.latestTasks.contains { $0.taskID == "execution" })
+        #expect(harness.sut.workflowTaskOwners["edit"] == "builder")
+        #expect(harness.sut.workflowTaskOwners["legacy"] == "builder")
+        harness.sut.didToggleExpansion(taskID: "workflow:builder")
+        await harness.sut.waitForPresentation()
+        let rows = harness.sut.sections.flatMap(\.items)
+        #expect(Set(harness.sut.workflowChildren("builder").map(\.taskID)) == ["edit", "legacy"])
+        #expect(harness.sut.executionParent(of: "edit") == "workflow:builder")
+        #expect(harness.sut.executionParent(of: "legacy") == "workflow:builder")
+        #expect(Set(rows.map(\.id)) == ["workflow:builder", "task:edit", "task:legacy", "task:execution"])
+        #expect(rows.count == 4)
         harness.sut.didDisappear()
     }
 

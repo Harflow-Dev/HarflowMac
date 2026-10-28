@@ -102,7 +102,7 @@ struct SidebarPresentationBuilder: Sendable {
 
     init(input: SidebarPresentationInput) {
         self.input = input
-        self.latestTasks = input.tasks.filter { $0.raw["workflow_builder"]?.boolValue != true }
+        self.latestTasks = input.tasks
         self.selectedBackend = input.backend
         self.selection = input.selection
         self.collapsedTaskIDs = input.collapsed
@@ -127,7 +127,7 @@ struct SidebarPresentationBuilder: Sendable {
         let backend = selectedBackend
         let builderIDs = Set(indexedOwners.keys)
         func matches(_ task: TaskInfo) -> Bool {
-            !WorkflowNodePresentation.isNativeControl(task) && !builderIDs.contains(task.taskID)
+            !builderIDs.contains(task.taskID)
                 && (backend == "all" || task.backend == backend)
                 && (query.isEmpty || title(task.taskID).lowercased().contains(query)
                     || task.taskID.lowercased().contains(query) || task.repoPath.lowercased().contains(query))
@@ -158,7 +158,7 @@ struct SidebarPresentationBuilder: Sendable {
             .filter { $0["role"]?.stringValue == "native_control" }
             .flatMap { WorkflowJSON.objects($0["tasks"]).compactMap { $0["task_id"]?.stringValue } })
         let grouped = Dictionary(grouping: latestTasks.filter {
-            indexedOwners[$0.taskID] != nil && !WorkflowNodePresentation.isNativeControl($0) && !transportIDs.contains($0.taskID)
+            indexedOwners[$0.taskID] != nil
         }, by: { indexedOwners[$0.taskID]! })
         for (id, tasks) in grouped {
             try Task.checkCancellation()

@@ -56,7 +56,7 @@ struct WorkflowStandaloneActivityTests {
     }
 
     @Test(arguments: ["headless", "native_subagent"])
-    func givenConsultantCall_whenItsExactExecutionExists_thenActivityUsesThatExecution(kind: String) {
+    func givenConsultantCall_whenItsExactExecutionExists_thenActivityUsesEveryTaskOfThatExecution(kind: String) {
         // given
         var exact = activation("exact", role: "node", taskStatus: "running")
         exact["execution_kind"] = .string(kind)
@@ -71,7 +71,7 @@ struct WorkflowStandaloneActivityTests {
         #expect(projection.isOnDemand)
         #expect(projection.activationID == "exact")
         #expect(projection.calls.first?["reason"]?.stringValue == "Verify evidence")
-        #expect(projection.taskIDs == (kind == "headless" ? ["consultant-task"] : []))
+        #expect(projection.taskIDs == ["consultant-task"])
         #expect(WorkflowExecutionPresentation(raw: exact).isSubagent == (kind == "native_subagent"))
         #expect(WorkflowStandaloneActivity.status(nodeID: "consultant", run: raw) == "running")
     }

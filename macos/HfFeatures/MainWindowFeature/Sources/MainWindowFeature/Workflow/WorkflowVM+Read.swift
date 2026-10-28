@@ -62,6 +62,7 @@ extension WorkflowVM {
             case .ready:
                 try applyWorkflowRead(response, context: context)
                 resolveReadFailure(source: context.source)
+                await refreshActivityMessageState()
             }
         } catch is CancellationError {
             // A newer poll or command refresh superseded this read; it is not a load failure.

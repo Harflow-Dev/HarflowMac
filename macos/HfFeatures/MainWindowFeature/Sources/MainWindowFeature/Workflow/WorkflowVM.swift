@@ -114,6 +114,9 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var sidebarGeneration = UUID()
     @ObservationIgnored var activityCache: [String: ParallelVM] = [:]
     @ObservationIgnored var activityRunID: String?
+    var activityMessageReadError: String?
+    var activityMessageSnapshot: [String: JSONValue]?
+    var activityMessageSnapshotRunID: String?
     @ObservationIgnored var runGraphVisible = true
     var nativeActivity: WorkflowNativeActivityModel?
     @ObservationIgnored var nativeActivityTask: Task<Void, Never>?

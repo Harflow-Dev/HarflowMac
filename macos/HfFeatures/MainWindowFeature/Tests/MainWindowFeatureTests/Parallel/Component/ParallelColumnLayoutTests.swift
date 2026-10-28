@@ -1,5 +1,6 @@
 import AppKit
 import HfTestUtilities
+import HfUI
 @testable import MainWindowFeature
 import MonitorCore
 import SwiftUI
@@ -7,7 +8,7 @@ import Testing
 
 @MainActor @Suite(.serialized) struct ParallelColumnLayoutTests {
     @Test(arguments: [0, 2, 6, 12])
-    func givenShortOrWindowedHistory_whenHostedInsideParallelCells_thenActivityViewportFillsCell(count: Int) async throws {
+    func givenShortOrWindowedHistory_whenHostedInsideParallelCells_thenActivityFillsSpaceAboveTheColumnComposer(count: Int) async throws {
         // given
         _ = NSApplication.shared
         let task = try #require(TaskInfo(.object([
@@ -18,18 +19,18 @@ import Testing
             ConversationTimelineRow(id: "row\($0)", taskID: task.id, timestamp: nil,
                                     kind: .item(PreviewFixtures.textItem("Step \($0)", seq: $0)), live: false)
         }
-        let model = ParallelColumnModel(id: task.id, task: task, title: "Cell fixture", subtitle: "Codex",
+        var model = ParallelColumnModel(id: task.id, task: task, title: "Cell fixture", subtitle: "Codex",
                                         isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
                                         rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
                                         isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
-        let host = NSHostingView(rootView: WorkflowActivityColumns(columns: [model], selectedTaskID: nil))
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 380, height: 700),
-                              styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = host
+        model.onSubmitMessage = { _, _ in false }
+        model.onCancelMessage = { _ in }
+        let measured = ComposerFrameCapture()
+        let content = measuringComposer(WorkflowActivityColumns(columns: [model], selectedTaskID: nil), taskID: task.id, capture: measured)
+        let fixture = RedesignHost(content, size: CGSize(width: 380, height: 700))
+        defer { fixture.close() }
+        let host = fixture.host
         // when
-        window.orderFront(nil)
-        defer { window.contentView = nil; window.close() }
         await waitUntil {
             host.layoutSubtreeIfNeeded()
             return descendants(host)
@@ -49,10 +50,21 @@ import Testing
         }
         let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.hasVerticalScroller })
         let viewport = host.convert(scroll.contentView.bounds, from: scroll.contentView)
-        // then
-        #expect(abs(viewport.maxY - (host.bounds.maxY - 16)) < 2,
-                "The activity viewport must reach the cell's bottom padding, even before Show all")
-        #expect(viewport.height > 500)
+        let composer = try #require(fixture.element("parallel-column-composer"))
+        #expect(fixture.string(composer, "accessibilityRole") == NSAccessibility.Role.group.rawValue)
+        await waitUntil { measured.frame != nil }
+        let composerFrame = try #require(measured.frame)
+        let field = try #require(descendants(host)
+.compactMap { $0 as? NSTextField }
+            .first { $0.placeholderString == "Queue a message…" })
+        let fieldFrame = host.convert(field.bounds, from: field)
+        // then — activity fills exactly the region above the actual composer, which owns the bottom band.
+        #expect(abs(viewport.maxY + HfRadius.Metrics.spacing10 - composerFrame.minY) < 2,
+                "Activity must reach the composer with the production column's 10-point stack gap")
+        #expect(abs(composerFrame.maxY - (host.bounds.maxY - HfRadius.Metrics.spacing16)) < 2,
+                "The composer must fit inside the cell's bottom padding")
+        #expect(composerFrame.contains(fieldFrame), "The native message field must remain inside its composer")
+        #expect(viewport.height > 0 && composerFrame.height > fieldFrame.height)
         if count == 12 {
             #expect((scroll.documentView?.bounds.height ?? 0) > 400,
                     "Short older activity should fill the roomy cell without tapping Show all")
@@ -117,6 +129,18 @@ import Testing
         #expect(bottomDistance(scroll) > 1000, "Resize must not jump manual reading back to live")
     }
 
+    private func measuringComposer(_ content: some View, taskID: String, capture: ComposerFrameCapture) -> some View {
+        content.overlayPreferenceValue(ParallelComposerBounds.self) { anchors in
+            GeometryReader { geometry in
+                Color.clear.onGeometryChange(for: CGRect?.self) { _ in
+                    anchors[taskID].map { geometry[$0] }
+                } action: { capture.frame = $0 }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
     private func bottomDistance(_ scroll: NSScrollView) -> CGFloat {
         guard let document = scroll.documentView else { return .infinity }
         let visible = scroll.documentVisibleRect
@@ -126,4 +150,8 @@ import Testing
     private func descendants(_ view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants($0) }
     }
+}
+
+@MainActor private final class ComposerFrameCapture {
+    var frame: CGRect?
 }

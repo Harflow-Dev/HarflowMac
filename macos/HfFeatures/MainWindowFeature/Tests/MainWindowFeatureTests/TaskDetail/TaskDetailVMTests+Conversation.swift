@@ -420,12 +420,12 @@ extension TaskDetailVMTests {
         // when
         // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
         let invocation = AsyncStream<Bool>.makeStream()
-        when(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).perform { invocation.continuation.yield(true) }
+        when(harness.useCase).send(.value("a"), text: .value("one more thing")).perform { invocation.continuation.yield(true) }
         #expect(harness.sut.submitMessage("one more thing"))
 
         // then
         #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
-        verify(harness.useCase).resume(.value("a"), text: .value("one more thing"), onResumed: .any).called(1)
+        verify(harness.useCase).send(.value("a"), text: .value("one more thing")).called(1)
         try? await Task.sleep(for: .milliseconds(50))
         verify(harness.routing).selectTask(.any).called(0)
     }

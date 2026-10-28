@@ -4,14 +4,10 @@ import SwiftUI
 
 // MARK: - WorkflowRecoveryForm
 
-/// The existing attempt-limit recovery form (SPEC §6.4), extracted unchanged out of document
-/// flow into the non-blocking floating panel (user amendment): the existing question (or the
-/// existing "Scheduling is paused." fallback) and settling line, the compact growing multiline
-/// editor, the 0…100 extra-attempts stepper, one-more-retry, the optional reviewer consent and
-/// the Resume/Recover primary with its identical busy/settling/requires-answer guards. Nothing
-/// is invented and no guard changes; the only additions are the close control and the
-/// accessible recovery title. The view takes the VM, never a captured run, so every control
-/// acts on the current selected run through the existing VM bindings.
+/// Recovery details remain visible across launch origins. Fresh engine eligibility controls
+/// actions, while required answers and reasons stay local input requirements. Child controls
+/// navigate to the root checkpoint; interrupted scheduler recovery grants no extra attempts.
+/// The view reads the current VM so a stale captured run cannot retarget a user action.
 struct WorkflowRecoveryForm<VM: WorkflowViewModel>: View {
     var viewModel: VM
     /// An explicit-open editor focus request passed through to the editor; `false` keeps the
@@ -26,7 +22,6 @@ struct WorkflowRecoveryForm<VM: WorkflowViewModel>: View {
 
     var body: some View {
         if let run = viewModel.selectedRun {
-            let missingAnswer = run.requiresAnswer && viewModel.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
                 HStack(alignment: .center, spacing: HfRadius.Metrics.spacing8) {
                     Text("Recovery options")
@@ -71,10 +66,10 @@ struct WorkflowRecoveryForm<VM: WorkflowViewModel>: View {
                 )
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .center, spacing: HfRadius.Metrics.spacing8) {
-                        recoveryControls(run: run, missingAnswer: missingAnswer)
+                        recoveryControls(run: run)
                     }
                     VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-                        recoveryControls(run: run, missingAnswer: missingAnswer)
+                        recoveryControls(run: run)
                     }
                 }
                 .font(.hf(.body))
@@ -92,7 +87,8 @@ struct WorkflowRecoveryForm<VM: WorkflowViewModel>: View {
     }
 
     @ViewBuilder
-    private func recoveryControls(run: WorkflowRunModel, missingAnswer: Bool) -> some View {
+    private func recoveryControls(run: WorkflowRunModel) -> some View {
+        if !run.isSchedulerRecovery {
         Stepper(
             "Extra attempts: \(viewModel.additionalAttempts)",
             value: Binding(get: { viewModel.additionalAttempts }, set: { viewModel.additionalAttempts = $0 }),
@@ -100,21 +96,32 @@ struct WorkflowRecoveryForm<VM: WorkflowViewModel>: View {
         )
             .fixedSize()
             .monospacedDigit()
+            .disabled(!run.permitsMonitor("additional_attempts", fallback: run.allowsMonitorControl) || viewModel.isBusy)
         if run.raw["exhausted_retry_edges"]?.arrayValue?.isEmpty == false {
             Button("Continue with one more retry") { viewModel.continueWithOneMoreRetry() }
                 .buttonStyle(MonitorButtonStyle(.glass))
-                .disabled(viewModel.isBusy || run.isSettling || missingAnswer)
+                .disabled(viewModel.isBusy || !run.canSubmitContinuation(run.recoveryCommand, instructions: viewModel.instructions)
+                          || !run.permitsMonitor("additional_attempts", fallback: run.allowsMonitorControl))
         }
-        if run.canSkipOptionalReview {
+        }
+        if run.raw["optional_review_skip_available"]?.boolValue == true {
             Button("Proceed without optional reviewer") {
                 viewModel.control("resume", allowOptionalReviewSkip: true)
             }
             .buttonStyle(MonitorButtonStyle(.glass))
-            .disabled(viewModel.isBusy || run.isSettling || missingAnswer)
+            .disabled(viewModel.isBusy || !run.canSkipOptionalReview
+                      || !run.canSubmitContinuation("resume", instructions: viewModel.instructions))
         }
-        Button(run.status == "failed" ? "Recover" : "Resume") { viewModel.control(run.status == "failed" ? "recover" : "resume") }
+        Button(run.recoveryCommand == "recover" ? "Recover" : "Resume") { viewModel.control(run.recoveryCommand) }
             .buttonStyle(MonitorButtonStyle(.primary))
-            .disabled(viewModel.isBusy || run.isSettling || missingAnswer)
+            .disabled(viewModel.isBusy || !run.canSubmitContinuation(run.recoveryCommand, instructions: viewModel.instructions))
+        if let reason = run.monitorReason(run.recoveryCommand) {
+            Text(reason).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+        }
+        if run.parentRunID != nil {
+            Button("Open root workflow") { viewModel.openRun(run.rootRunID) }
+                .buttonStyle(QuietButtonStyle())
+        }
     }
 }
 

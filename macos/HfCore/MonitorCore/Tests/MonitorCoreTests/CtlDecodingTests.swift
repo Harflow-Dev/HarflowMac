@@ -359,7 +359,7 @@ struct CtlClientTests {
         try #expect(try started.get() == "new1")
         try #expect(try resumed.get() == "new1")
         #expect(runner.calls.map(\.arguments) == [
-            ["send", "--json", "--", "t1", "hi"],
+            ["send", "--delivery=queue", "--monitor", "--json", "--", "t1", "hi"],
             ["cancel", "--json", "--", "t1"],
             ["takeover", "--json", "--", "t1"],
             ["run", "--backend=codex", "--repo=/r", "--prompt=p", "--json"],

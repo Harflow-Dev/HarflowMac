@@ -311,9 +311,8 @@ public enum ToolError: Error, Equatable, Sendable {
             let plural = understood.contains(" or ") || understood.contains(",")
             return "`\(tool)` answered with contract version \(version); this app understands version\(plural ? "s" : "") \(understood). "
                 + "Update the app or harflow so they match."
-        case .unsupportedCommand(let tool, let command, _):
-            return "The installed `\(tool)` has no `\(command)` command — it predates this app. "
-                + "Use a compatible managed Harflow runtime."
+        case .unsupportedCommand(let tool, let command, let detail):
+            return Self.unsupportedCommandMessage(tool: tool, command: command, detail: detail)
         case .unreadable(let tool, let exitCode, let stderr):
             let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             return "`\(tool)` exited \(exitCode) without a JSON answer"
