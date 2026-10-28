@@ -28,7 +28,7 @@ struct PackagedStartupTests {
         let object = try #require(JSONSerialization.jsonObject(with: result.output) as? [String: String])
         #expect(object["status"] == "ok")
         #expect(object["appVersion"] == "0.0.2")
-        #expect(object["engineVersion"] == "0.0.3")
+        #expect(object["engineVersion"] == "0.0.4")
     }
 
     @Test func givenInvalidPackagedIdentity_whenChecked_thenItFailsBeforeLoadingSpecification() {

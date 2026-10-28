@@ -24,13 +24,13 @@ ASSET_MODULE_SPEC.loader.exec_module(release_assets)
 
 
 def test_source_accepts_current_plist_and_runtime_pair():
-    assert release.validate_source(ROOT) == ("0.0.4", "0.0.3")
+    assert release.validate_source(ROOT) == ("0.0.5", "0.0.4")
 
 
 def test_source_rejects_tag_mismatch_before_git_lookup():
     with mock.patch.object(release.subprocess, "check_output") as check_output:
         with pytest.raises(release.ReleaseError):
-            release.validate_source(ROOT, tag="v0.0.5", sha="0" * 40)
+            release.validate_source(ROOT, tag="v0.0.6", sha="0" * 40)
     check_output.assert_not_called()
 
 
@@ -150,13 +150,13 @@ def test_validate_bundle_requires_exact_packaged_runtime_path_and_rejects_duplic
         (resources / name).write_bytes(b"asset")
 
     good_process = lambda *args, **kwargs: subprocess.CompletedProcess(
-        args[0], 0, b'{"appVersion":"0.0.3","engineVersion":"0.0.3","status":"ok"}\n', b""
+        args[0], 0, b'{"appVersion":"0.0.4","engineVersion":"0.0.4","status":"ok"}\n', b""
     )
-    with mock.patch.object(release, "validate_source", return_value=("0.0.3", "0.0.3")), \
-            mock.patch.object(release, "validate_plist", return_value="0.0.3"), \
+    with mock.patch.object(release, "validate_source", return_value=("0.0.4", "0.0.4")), \
+            mock.patch.object(release, "validate_plist", return_value="0.0.4"), \
             mock.patch.object(release, "code_paths", return_value=[]), \
             mock.patch.object(release, "verify_signature"):
-        assert release.validate_bundle(app, root, startup_process=good_process) == ("0.0.3", "0.0.3")
+        assert release.validate_bundle(app, root, startup_process=good_process) == ("0.0.4", "0.0.4")
         duplicate = resources / "Other.bundle/ManagedRuntime.json"
         duplicate.parent.mkdir()
         duplicate.write_bytes(runtime.read_bytes())

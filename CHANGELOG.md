@@ -2,9 +2,14 @@
 
 ## Unreleased
 
-- Add Statistics navigation with start-day ranges, workflow/task/harness rankings, requested-model and repository filters, usage coverage and node breakdowns. Read only the engine's capability-gated public projection; the unchanged engine pairing retains an explicit unsupported state until a compatible runtime is paired.
+## 0.0.5
 
+- Pair the app with HarflowMCP 0.0.4 using regenerated frozen dependency inputs and refreshed vendored v1 contract fixtures.
+- Add Statistics navigation with start-day ranges, workflow/task/harness rankings, requested-model and repository filters, usage coverage and node breakdowns. Read only the engine's capability-gated public projection; engines without `statistics-page.v1` retain an explicit unsupported state.
+- Fix Statistics viewport overflow, picker labels and axis labels.
+- Add a chart hover card showing the values under the pointer in Statistics.
 - Add a local-time start screen with activity summaries, saved workflow ranking, creation shortcuts and persisted-definition launch preview. Keep summary and ranking unavailable when older engines cannot establish their inputs.
+- Show the Harflow emblem in the detail pane before runtime setup completes.
 
 ## 0.0.4
 

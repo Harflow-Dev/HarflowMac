@@ -127,7 +127,7 @@ struct ManagedRuntimeCoordinatorTests {
 
         // A later required update may produce its own current-session success notice.
         let next = ManagedRuntimeReady(generationDirectory: ready().generationDirectory + "-next", environment: [:])
-        let updateCoordinator = ManagedRuntimeCoordinator(installer: InstallationRequiredInstaller(ready: next, requiredVersion: "0.0.3"))
+        let updateCoordinator = ManagedRuntimeCoordinator(installer: InstallationRequiredInstaller(ready: next, requiredVersion: "0.0.4"))
         let update = ManagedInstallRepository(coordinator: updateCoordinator, taskListRepository: NullTaskListRepository())
         _ = await updateCoordinator.ensureReady()
         #expect(update.state == .idle)
