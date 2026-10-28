@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show Cursor in the New Session fallback grid, harness filter, workflow agent editor, and setup list. Model choices come from `cursor-agent models`. Cursor has no effort control and no turn limit. The v1 wire contract is unchanged, so the vendored fixtures and engine version gate stay on 0.0.4.
+
 - Add explicit harness qualification to New session, workflow launch and Settings, with identity-bound evidence, required-feature checks, progress, cancellation and retry. Engines without `backend-qualification.v1`, including the currently paired 0.0.4, show unsupported qualification and cannot start new sessions or workflows.
 
 - Remove automatic horizontal movement in standalone and workflow Parallel activity, retaining manual positions across navigation and native remounts while preserving vertical live-follow and panel arrival animation.

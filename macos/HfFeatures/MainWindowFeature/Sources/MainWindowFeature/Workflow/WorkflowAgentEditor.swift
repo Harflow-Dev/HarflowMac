@@ -8,7 +8,14 @@ import SwiftUI
 /// (config-only, several layers removed from the command line), and a custom model entry that is
 /// empty reverts to the backend's default.
 enum WorkflowAgentEditorPresentation {
-    static func showsModelAndEffort(backend: String) -> Bool { backend != "vibe" }
+    static func showsModel(backend: String) -> Bool { backend != "vibe" }
+
+    /// Cursor accepts a model id and has no separate effort flag.
+    static func showsEffort(backend: String) -> Bool {
+        showsModel(backend: backend) && !BackendStyle.effortLevels(backend).isEmpty
+    }
+
+    static func showsModelAndEffort(backend: String) -> Bool { showsModel(backend: backend) }
 
     /// Retains the supplied frequency order and the saved backend without duplicates.
     static func backendOptions(_ available: [String], current: String, preferred: String?) -> [String] {
@@ -107,7 +114,7 @@ struct WorkflowAgentEditor: View {
                     .pickerStyle(.menu)
                     .fixedSize()
                 }
-                if WorkflowAgentEditorPresentation.showsModelAndEffort(backend: backend) {
+                if WorkflowAgentEditorPresentation.showsModel(backend: backend) {
                     WorkflowFormDivider()
                     WorkflowFormRow(label: "Model") {
                         ModelCombo(
@@ -119,15 +126,17 @@ struct WorkflowAgentEditor: View {
                         .frame(maxWidth: HfRadius.Metrics.workflowInspectorMinimumWidth)
                     }
                     .frame(minHeight: HfRadius.Metrics.formRowHeight)
-                    WorkflowFormDivider()
-                    WorkflowFormRow(label: "Effort") {
-                        Picker("Effort", selection: binding("reasoning_effort")) {
-                            Text("Default").tag("")
-                            ForEach(BackendStyle.effortLevels(backend), id: \.self) { Text($0.capitalized).tag($0) }
+                    if WorkflowAgentEditorPresentation.showsEffort(backend: backend) {
+                        WorkflowFormDivider()
+                        WorkflowFormRow(label: "Effort") {
+                            Picker("Effort", selection: binding("reasoning_effort")) {
+                                Text("Default").tag("")
+                                ForEach(BackendStyle.effortLevels(backend), id: \.self) { Text($0.capitalized).tag($0) }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
                     }
                 }
                 if BackendStyle.supportsTurnLimit(backend) {

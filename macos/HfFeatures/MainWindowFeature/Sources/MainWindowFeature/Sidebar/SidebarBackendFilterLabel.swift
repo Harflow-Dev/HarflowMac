@@ -42,13 +42,13 @@ struct SidebarBackendFilterLabel: View {
 
 #if DEBUG
 #Preview("Harness filter label - light") {
-    SidebarBackendFilterLabel(backendIDs: ["claude", "codex", "vibe", "opencode", "antigravity"], selectedTitle: nil)
+    SidebarBackendFilterLabel(backendIDs: ["claude", "codex", "vibe", "opencode", "antigravity", "cursor"], selectedTitle: nil)
         .fixedSize()
 .preferredColorScheme(.light)
 }
 
 #Preview("Harness filter label - dark") {
-    SidebarBackendFilterLabel(backendIDs: ["claude", "codex", "vibe", "opencode", "antigravity"], selectedTitle: "Claude")
+    SidebarBackendFilterLabel(backendIDs: ["claude", "codex", "vibe", "opencode", "antigravity", "cursor"], selectedTitle: "Claude")
         .fixedSize()
 .preferredColorScheme(.dark)
 }

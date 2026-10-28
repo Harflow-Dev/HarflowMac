@@ -11,6 +11,9 @@ struct WorkflowAgentEditorTests {
         #expect(!WorkflowAgentEditorPresentation.showsModelAndEffort(backend: "vibe"))
         #expect(WorkflowAgentEditorPresentation.showsModelAndEffort(backend: "codex"))
         #expect(WorkflowAgentEditorPresentation.showsModelAndEffort(backend: "claude"))
+        #expect(WorkflowAgentEditorPresentation.showsModel(backend: "cursor"))
+        #expect(!WorkflowAgentEditorPresentation.showsEffort(backend: "cursor"))
+        #expect(WorkflowAgentEditorPresentation.showsEffort(backend: "codex"))
     }
 
     @Test func givenCustomModelEntry_whenApplied_thenEmptyRevertsToDefaultAndTextIsKept() {

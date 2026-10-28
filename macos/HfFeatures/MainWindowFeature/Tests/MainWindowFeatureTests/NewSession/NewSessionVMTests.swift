@@ -235,7 +235,7 @@ import Testing
         let (sut, _, _, _) = makeSUT(catalog: BackendCatalog(entries: [], state: .degraded))
 
         // then
-        #expect(sut.agentOptions.map(\.id) == ["antigravity", "claude", "codex", "opencode", "vibe"])
+        #expect(sut.agentOptions.map(\.id) == ["antigravity", "claude", "codex", "cursor", "opencode", "vibe"])
         #expect(sut.agentOptions.allSatisfy { !$0.isNotFound })
         #expect(sut.agentListUnavailableNote == "Harness list unavailable — update harflow.")
         #expect(sut.backend == "antigravity")
@@ -246,7 +246,7 @@ import Testing
         let (sut, _, _, _) = makeSUT(catalog: .empty)
 
         // then
-        #expect(sut.agentOptions.map(\.id) == ["antigravity", "claude", "codex", "opencode", "vibe"])
+        #expect(sut.agentOptions.map(\.id) == ["antigravity", "claude", "codex", "cursor", "opencode", "vibe"])
         #expect(sut.agentListUnavailableNote == nil)
     }
 
@@ -516,6 +516,15 @@ import Testing
         #expect(sut.effortOptions.isEmpty)
         #expect(sut.showsModel == false)
         #expect(sut.showsTurnLimit == true)
+    }
+
+    @Test func givenCursorSelected_whenAdvancedIsRead_thenEffortAndTurnLimitAreHiddenAndModelStays() {
+        // given / when — cursor has no effort flag and no turn cap.
+        let (sut, _, _, _) = makeSUT(catalog: catalog([("cursor", true), ("claude", true)]))
+        sut.didChangeBackend("cursor")
+
+        // then
+        #expect(!sut.showsEffort && sut.effortOptions.isEmpty && sut.showsModel && !sut.showsTurnLimit)
     }
 
     @Test func givenEffortAndModelSetThenVibeChosen_whenStarted_thenNeitherIsSent() async {

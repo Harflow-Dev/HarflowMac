@@ -35,10 +35,9 @@ import Testing
         #expect(BackendStyle.helpText("mystery") == nil)
     }
 
-    @Test func givenTheKnownBackendsList_whenReadingIt_thenContainsExactlyTheFiveSupportedBackends() {
+    @Test func givenTheKnownBackendsList_whenReadingIt_thenContainsExactlyTheSupportedBackends() {
         // given / when / then
-        #expect(BackendStyle.known == ["claude", "codex", "opencode", "vibe", "antigravity"])
-        #expect(!BackendStyle.known.contains("cursor"))
+        #expect(BackendStyle.known == ["claude", "codex", "opencode", "vibe", "antigravity", "cursor"])
     }
     
     @Test func givenEachKnownBackend_whenReadingItsColors_thenReturnsADistinctPair() {

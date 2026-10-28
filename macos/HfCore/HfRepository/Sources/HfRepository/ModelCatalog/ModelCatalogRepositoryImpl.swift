@@ -4,7 +4,7 @@ import MonitorCore
 // MARK: - ModelCatalogRepositoryImpl
 
 /// Discovers model lists per backend. The process runner and file reader are injected so tests never
-/// spawn `opencode` or read a real `~/.codex`.
+/// spawn `opencode`, `agy`, or `cursor-agent`, or read a real `~/.codex`.
 public final class ModelCatalogRepositoryImpl: ModelCatalogRepository, Sendable {
 
     private let toolEnvironment: any ToolEnvironmentRepository
@@ -17,6 +17,9 @@ public final class ModelCatalogRepositoryImpl: ModelCatalogRepository, Sendable 
 
     /// How long `agy models` may run before it is abandoned.
     static let agyTimeout: Double = 8
+
+    /// How long `cursor-agent models` may run before it is abandoned.
+    static let cursorTimeout: Double = 8
 
     /// The aliases `claude --help` documents for `--model`.
     static let claudeAliases = ["fable", "opus", "sonnet"]
@@ -41,6 +44,7 @@ public final class ModelCatalogRepositoryImpl: ModelCatalogRepository, Sendable 
         switch backend {
         case "opencode": await opencodeModels()
         case "antigravity": await agyModels()
+        case "cursor": await cursorModels()
         case "codex": codexModels()
         case "claude": Self.claudeAliases.map { ModelOption(value: $0, label: $0.capitalized) }
         default: []
@@ -72,6 +76,32 @@ public final class ModelCatalogRepositoryImpl: ModelCatalogRepository, Sendable 
                     .map { $0.trimmingCharacters(in: .whitespaces) }
                 let id = fields.first ?? ""
                 let label = fields.count > 1 && !fields[1].isEmpty ? fields[1] : id
+                return ModelOption(value: id, label: label)
+            }
+    }
+
+    /// `cursor-agent models` prints a header, then `<id> - <label>` lines, then a tip.
+    /// Measured on 2026.10.22-27dcf5f. A line whose id contains a space is not a model.
+    private func cursorModels() async -> [ModelOption] {
+        let result = await runner.run(
+            executable: "/usr/bin/env", arguments: ["cursor-agent", "models"],
+            environment: toolEnvironment.environment(), currentDirectory: toolEnvironment.home,
+            timeout: Self.cursorTimeout
+        )
+        guard case .success(let output) = result, !output.timedOut, output.exitCode == 0 else { return [] }
+        return Self.parseCursor(output.stdout)
+    }
+
+    static func parseCursor(_ data: Data) -> [ModelOption] {
+        var seen = Set<String>()
+        return (String(data: data, encoding: .utf8) ?? "")
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .compactMap { line -> ModelOption? in
+                guard let separator = line.range(of: " - ") else { return nil }
+                let id = String(line[..<separator.lowerBound])
+                let label = String(line[separator.upperBound...]).trimmingCharacters(in: .whitespaces)
+                guard !id.isEmpty, !id.contains(where: \.isWhitespace), !label.isEmpty, seen.insert(id).inserted else { return nil }
                 return ModelOption(value: id, label: label)
             }
     }

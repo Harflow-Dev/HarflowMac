@@ -157,8 +157,8 @@ final class NewSessionVM: NewSessionViewModel {
         }
     }
 
-    /// Vibe has no reasoning-effort setting; every other agent takes harflow's vocabulary.
-    var showsEffort: Bool { backend != "vibe" }
+    /// Vibe keeps effort in its own config. Cursor has no effort flag, so its level list is empty.
+    var showsEffort: Bool { backend != "vibe" && !BackendStyle.effortLevels(backend).isEmpty }
     /// The Model combo's suggestions: "Default" (the agent's own model, an empty value) first, then
     /// the agent's known models. Only "Default" until a discovery finishes or when there are none.
     var modelChoices: [ModelChoiceModel] {
@@ -172,12 +172,12 @@ final class NewSessionVM: NewSessionViewModel {
         backend == "vibe" ? "Vibe uses the model set in its own config (~/.vibe/config.toml)." : nil
     }
 
-    /// Only agents harflow can cap (claude, vibe); codex and opencode would reject the run.
+    /// Only agents harflow can cap (claude, vibe). Cursor has no turn-cap flag.
     var showsTurnLimit: Bool { BackendStyle.supportsTurnLimit(backend) }
     /// The effort levels offered for the chosen backend: antigravity takes only `low`/`medium`/
-    /// `high` (it refuses `xhigh`), the others take harflow's full vocabulary — the per-backend
-    /// table lives in `BackendStyle`, and `didChangeBackend` resets an effort the new backend
-    /// does not offer.
+    /// `high` (it refuses `xhigh`), cursor takes none, and the others take harflow's full
+    /// vocabulary. The table lives in `BackendStyle`, and `didChangeBackend` resets an effort
+    /// the new backend does not offer.
     var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
 
     var canStart: Bool {

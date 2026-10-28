@@ -208,6 +208,51 @@ import Testing
         #expect(await sut.models(for: "antigravity").isEmpty)
     }
 
+    // MARK: - cursor
+
+    @Test func givenCursorStdoutWithAHeaderAndTip_whenAsked_thenOneOptionPerIdAndLabel() async {
+        // given — measured shape on 2026.10.22-27dcf5f: a header, `<id> - <label>`, then a tip.
+        let text = "Available models\n\nauto - Auto (current, default)\ncomposer-2.5 - Composer 2.5\n\n"
+            + "Tip: use --model <id> to switch.\n"
+        let runner = RecordingRunner(answer: .success(stdout(text)))
+        let (sut, _, _) = makeSUT(runner: runner)
+
+        // when
+        let models = await sut.models(for: "cursor")
+
+        // then
+        #expect(models == [
+            ModelOption(value: "auto", label: "Auto (current, default)"),
+            ModelOption(value: "composer-2.5", label: "Composer 2.5")
+        ])
+    }
+
+    @Test func givenCursor_whenAsked_thenItRunsWithTheDiscoveredEnvironmentFromHomeWithATimeout() async {
+        // given
+        let (sut, runner, _) = makeSUT(environment: ["PATH": "/login/bin:/interactive/bin"])
+
+        // when
+        _ = await sut.models(for: "cursor")
+
+        // then
+        #expect(runner.calls == [
+            .init(
+                executable: "/usr/bin/env", arguments: ["cursor-agent", "models"],
+                environment: ["PATH": "/login/bin:/interactive/bin"], currentDirectory: "/home/me", timeout: 8
+            )
+        ])
+    }
+
+    @Test func givenCursorExitsNonZeroOrTimesOut_whenAsked_thenTheListIsEmpty() async {
+        // given
+        let failed = RecordingRunner(answer: .success(ProcessOutput(exitCode: 1, stdout: Data("auto - Auto\n".utf8), stderr: "boom")))
+        let timedOut = RecordingRunner(answer: .success(ProcessOutput(exitCode: 0, stdout: Data("auto - Auto\n".utf8), stderr: "", timedOut: true)))
+
+        // then
+        #expect(await makeSUT(runner: failed).sut.models(for: "cursor").isEmpty)
+        #expect(await makeSUT(runner: timedOut).sut.models(for: "cursor").isEmpty)
+    }
+
     // MARK: - codex
 
     @Test func givenACodexCache_whenAsked_thenOnlyListedModelsComeBackByAscendingPriority() async {

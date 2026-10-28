@@ -48,7 +48,7 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     }
 
     var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
-    var showsEffort: Bool { backend != "vibe" }
+    var showsEffort: Bool { backend != "vibe" && !BackendStyle.effortLevels(backend).isEmpty }
     var showsModel: Bool { backend != "vibe" }
     var showsTurnLimit: Bool { true }
     var modelUnavailableNote: String? {

@@ -7,11 +7,11 @@ import Testing
 // MARK: - SidebarBackendFilterLabelTests
 
 @MainActor @Suite(.serialized) struct SidebarBackendFilterLabelTests {
-    @Test(arguments: [5, 40], [ColorScheme.light, .dark])
+    @Test(arguments: [6, 40], [ColorScheme.light, .dark])
     func givenCatalogDots_whenRenderedWithChevron_thenTheirPaintedBoundsDoNotOverlap(count: Int, scheme: ColorScheme) throws {
         // given — the actual menu label, independently rendered so native menu chrome cannot
         // obscure its internal geometry. The large catalog exercises the wrapped grid path.
-        let known = ["claude", "codex", "vibe", "opencode", "antigravity"]
+        let known = ["claude", "codex", "vibe", "opencode", "antigravity", "cursor"]
         let backends = (0 ..< count - known.count).map { "backend-\($0)" } + known
         let label = SidebarBackendFilterLabel(backendIDs: backends, selectedTitle: nil)
             .frame(width: HfRadius.Metrics.sidebarPreviewWidth - 2 * HfRadius.Metrics.spacing16)

@@ -536,7 +536,7 @@ import Testing
         #expect(vm.nodes.first { $0.id == "review" }?.raw["branch_mode"] == .string("choose_one"))
     }
 
-    @Test(arguments: ["claude", "vibe", "codex", "opencode", "antigravity"])
+    @Test(arguments: ["claude", "vibe", "codex", "opencode", "antigravity", "cursor"])
     func givenWorkflowCandidate_whenDefaultingTurnBudget_thenImplicitCapIsAbsent(_ backend: String) {
         let candidate = WorkflowCandidateSettings.make(backend: backend)
         #expect(candidate["max_turns"] == nil)

@@ -133,8 +133,9 @@ public enum BackendStyle {
         }
     }
 
-    /// The backends the New session sheet offers. Display list only; `run` validates the choice itself.
-    public static let known = ["claude", "codex", "opencode", "vibe", "antigravity"]
+    /// The backends the New session sheet offers when the engine catalog is missing.
+    /// Display list only; `run` validates the choice itself.
+    public static let known = ["claude", "codex", "opencode", "vibe", "antigravity", "cursor"]
 }
 
 public struct Chip: View {

@@ -44,9 +44,19 @@ import Testing
         #expect(AgentGrid.nextIndex(from: 0, direction: .down, enabled: enabled) == nil)
     }
 
+    @Test func givenSixCards_whenMovingAcrossTheUsualTwoColumnGrid_thenTheLastRowRemainsReachable() {
+        // given — six cards is the fallback catalog; the fifth and sixth share the last row.
+        let enabled = [true, true, true, true, true, true]
+
+        // when / then
+        #expect(AgentGrid.nextIndex(from: 2, direction: .down, enabled: enabled) == 4)
+        #expect(AgentGrid.nextIndex(from: 3, direction: .down, enabled: enabled) == 5)
+        #expect(AgentGrid.nextIndex(from: 4, direction: .up, enabled: enabled) == 2)
+        #expect(AgentGrid.nextIndex(from: 5, direction: .up, enabled: enabled) == 3)
+    }
+
     @Test func givenFiveCards_whenMovingAcrossTheUsualTwoColumnGrid_thenTheLastRowRemainsReachable() {
-        // given — BackendStyle.known currently supplies five cards; the fifth wraps to a final
-        // one-card row and must still be reachable from the card above it.
+        // given — BackendStyle.known used to be five cards; this case keeps the one-card last row reachable.
         let enabled = [true, true, true, true, true]
 
         // when / then

@@ -226,6 +226,7 @@ struct DesignFoundationFixture: View {
                 BackendLabel(backend: "claude")
                 BackendLabel(backend: "vibe")
                 BackendLabel(backend: "antigravity")
+                BackendLabel(backend: "cursor")
                 BackendDotStack(backends: ["codex", "opencode"])
             }
         }
