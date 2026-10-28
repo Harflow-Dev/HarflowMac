@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Match the selected running workflow outline to the selection ring while preserving its unselected inset stroke.
+
 - Move retained workflow errors into the sidebar footer so they no longer cover the workflow Summary expand control.
 
 - Show confirmed orchestrator work with the running outline and expose decision history and consultant activity in the workflow inspector.

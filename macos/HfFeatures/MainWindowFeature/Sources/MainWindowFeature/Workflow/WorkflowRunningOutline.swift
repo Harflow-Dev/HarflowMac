@@ -20,12 +20,18 @@ struct WorkflowRunningOutline: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
             let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3) / 3
-            RoundedRectangle(cornerRadius: HfRadius.card + (isSelected ? 3 : 0))
-                .inset(by: isSelected ? -3 : 0)
-                .strokeBorder(AngularGradient(
+            let gradient = AngularGradient(
                     colors: [.accentLink.opacity(0.15), .accentLink.opacity(0.15), .accentLink, .accentLink.opacity(0.15)],
                     center: .center, startAngle: .degrees(phase * 360), endAngle: .degrees(phase * 360 + 360)
-                ), lineWidth: 2)
+                )
+            if isSelected {
+                RoundedRectangle(cornerRadius: HfRadius.card)
+                    .stroke(gradient, lineWidth: HfRadius.Metrics.workflowNodeRingWidth)
+                    .padding(-HfRadius.Metrics.workflowNodeRingInset)
+            } else {
+                RoundedRectangle(cornerRadius: HfRadius.card)
+                    .strokeBorder(gradient, lineWidth: 2)
+            }
         }
     }
 }
