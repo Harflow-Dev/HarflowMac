@@ -1,8 +1,8 @@
 # Managed runtime
 
-The current Harflow for Mac source pairs with HarflowMCP 0.0.4 on Apple Silicon/macOS 26. It never discovers or adopts an ambient Python, uv, Git checkout, Homebrew installation, or external engine.
+The current Harflow for Mac source pairs with HarflowMCP 0.0.5 on Apple Silicon/macOS 26. It never discovers or adopts an ambient Python, uv, Git checkout, Homebrew installation, or external engine.
 
-Startup only checks and qualifies existing managed software under the installation lock. It never downloads components. A missing, outdated, or damaged runtime presents explicit installation or update controls in the sidebar and Settings → General. Installation requests only the exact release-specific PyPI JSON endpoint and canonical `harflow_mcp-0.0.4-py3-none-any.whl`. PyPI TLS/account ownership provides engine publication trust; the observed PyPI SHA256 provides transfer integrity and is retained in the completion receipt. It is not an app-signed publisher attestation. An exact-version yanked wheel remains eligible, with its yanked metadata recorded. Missing or malformed releases fail clearly with no fallback.
+Startup only checks and qualifies existing managed software under the installation lock. It never downloads components. A missing, outdated, or damaged runtime presents explicit installation or update controls in the sidebar and Settings → General. Installation requests only the exact release-specific PyPI JSON endpoint and canonical `harflow_mcp-0.0.5-py3-none-any.whl`. PyPI TLS/account ownership provides engine publication trust; the observed PyPI SHA256 provides transfer integrity and is retained in the completion receipt. It is not an app-signed publisher attestation. An exact-version yanked wheel remains eligible, with its yanked metadata recorded. Missing or malformed releases fail clearly with no fallback.
 
 The bundled specification pins self-contained non-free-threaded CPython 3.13.16, python-build-standalone release 20261020, and 29 active Darwin arm64/pure dependency wheels from the engine lock. Downloads are HTTPS-only with bounded responses and redirect checks. Every artifact's expected size and SHA256 are checked before installation. Both pip installs run offline with hashes, binary-only inputs, no dependency resolution, no cache, no version check, and no user input. A private installer HOME/TMPDIR, a scrubbed environment, and `PIP_CONFIG_FILE=/dev/null` prevent inherited pip target/prefix/user/configuration settings from changing the installation. Ordinary engine launches preserve user HOME and harness authentication, isolate Python imports with `-I`, and select the managed state root/PATH after sanitizing inherited runtime variables. Bounded login and interactive-login zsh probes discover harness directories for Finder launches; login directories remain first, unique interactive additions follow, and the managed bin directory leads the final PATH. Invalid or timed-out shell output falls back to the inherited/system PATH. The same discovered environment reaches reused runtimes and explicit setup registrations.
 
@@ -35,7 +35,7 @@ TARGET_PYTHON -I scripts/generate-managed-runtime.py \
   --lock /absolute/path/to/uv.lock \
   --requirements /absolute/path/to/production-locked.txt \
   --interpreter scripts/managed-runtime-interpreter.json \
-  --engine-version 0.0.4 \
+  --engine-version 0.0.5 \
   --provenance 'HarflowMCP lock revision and production export command' \
   --output macos/HfCore/MonitorCore/Sources/MonitorCore/Resources/ManagedRuntime.json
 ```

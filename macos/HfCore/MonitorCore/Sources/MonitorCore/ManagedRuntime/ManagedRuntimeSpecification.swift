@@ -90,7 +90,7 @@ public struct ManagedRuntimeSpecification: Codable, Equatable, Sendable {
 
     /// Refuses unsupported or malformed pins before filesystem acquisition or execution.
     public func validate() throws {
-        guard schema == 1, engineVersion == "0.0.4", pythonVersion == "3.13.16",
+        guard schema == 1, engineVersion == "0.0.5", pythonVersion == "3.13.16",
               python.version == pythonVersion, !dependencies.isEmpty,
               Set(dependencies.map(\.name)).count == dependencies.count,
               Set(dependencies.map(\.filename)).count == dependencies.count else {
