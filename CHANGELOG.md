@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Remove automatic horizontal movement in standalone and workflow Parallel activity, retaining manual positions across navigation and native remounts while preserving vertical live-follow and panel arrival animation.
+
+- Keep workflow runs ordered by creation time while node activity updates; use this stable fallback until the engine exposes explicit caller-resume timestamps.
+
 - Bound activity-feed hosting lifetimes, skip unchanged reconciliation, and isolate the streaming caret's animation from selectable message content.
 
 - Match the selected running workflow outline to the selection ring while preserving its unselected inset stroke.

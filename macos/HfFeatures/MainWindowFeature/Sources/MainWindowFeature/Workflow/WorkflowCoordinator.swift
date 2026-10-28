@@ -36,7 +36,8 @@ extension MainWindowCoordinator: WorkflowRouting {
     }
 
     public func buildWorkflowEditorView(name: String?) -> AnyView {
-        let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
+        let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self,
+                                  horizontalPosition: parallelPosition(for: "workflow:" + (name ?? "new")))
         let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel,
                             draftStore: WorkflowDraftStore.applicationStore(),
                             visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
@@ -63,7 +64,8 @@ extension MainWindowCoordinator: WorkflowRouting {
     }
 
     public func buildWorkflowRunView(id: String) -> AnyView {
-        let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
+        let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self,
+                                  horizontalPosition: parallelPosition(for: "workflow-run:" + id))
         let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel,
                             draftStore: WorkflowDraftStore.applicationStore(),
                             visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)

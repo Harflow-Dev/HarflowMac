@@ -21,10 +21,8 @@ final class ParallelScrollObservationView: NSView {
     var axis = ParallelScrollObserver.Axis.horizontal
     var onPosition: ((CGFloat, CGFloat, CGFloat) -> Void)?
     var onViewportSize: ((CGSize) -> Void)?
-    /// Native vertical geometry separates the clip viewport from scrollbar-independent outer width.
     var onNativeViewportGeometry: ((CGSize, CGFloat) -> Void)?
     var onUpwardIntent: (() -> Void)?
-    /// Opt-in bounded native report diagnostics; no message construction while unset.
     var restorationDiagnostic: ((String) -> Void)?
     /// The reading-anchor provider of the adopted native target, held weakly: it dies with the
     /// lease that created it. Nil for every default observer.
@@ -37,17 +35,15 @@ final class ParallelScrollObservationView: NSView {
     private var liveUserScroll = false
     private var reevaluatingRestoration = false
     private weak var observedScrollView: NSScrollView?
-    /// The document currently observed; a scroll view can replace it without changing identity.
     private weak var observedDocument: NSView?
     private var subscriptions = Set<AnyCancellable>()
     private var documentSubscription: AnyCancellable?
-    var horizontalConfiguration: ParallelHorizontalConfiguration?
-    private let horizontalFollow = ParallelHorizontalInsertionFollow()
-    /// Clears delayed insertion and anchor movement before a real horizontal input is delivered.
-    func cancelHorizontalMovement() {
-        horizontalFollow.cancel()
-        pendingOffset = nil
-    }
+    var horizontalPosition: ParallelViewportPosition?
+    var explicitNavigationID: String?
+    private var preservedHorizontalOffset: CGFloat?
+    private var configuredHorizontalPosition = false
+    private var previousNavigationID: String?
+    func cancelHorizontalMovement() { pendingOffset = nil; preservedHorizontalOffset = nil }
 
     private var ids: [String] = []
     private var stride: CGFloat = 0
@@ -63,9 +59,7 @@ final class ParallelScrollObservationView: NSView {
     private var lastReported: CGRect?
     private var lastViewportSize: CGSize?
     private var lastOuterScrollWidth: CGFloat?
-    /// True when a scoped native identity (`nativeIdentity`) owns attachment: the observation
-    /// view then never attaches through its own `enclosingScrollView` — including never to an
-    /// enclosing horizontal lane — and every attach/detach comes from `adoptNativeIdentity`.
+    /// Scoped native identity owns attachment, never an enclosing scroll view.
     var usesNativeIdentity = false
     /// The most recently delivered scoped identity, kept even while it cannot attach yet (a
     /// native document view that has not laid out): the bounded lifecycle events re-attempt it.
@@ -204,11 +198,15 @@ final class ParallelScrollObservationView: NSView {
     }
 
     func configure(ids: [String], stride: CGFloat, restorationOffset: CGFloat?, restorationActive: Bool, generation: Int = 0) {
-        let horizontalOffset = horizontalFollow.consumeOffset(fallback: lastOffset)
-        let preserveHorizontalAnchor = axis != .horizontal || horizontalFollow.configure(
-            .init(previousIDs: self.ids, ids: ids, configuration: horizontalConfiguration, offset: horizontalOffset, isUserScrolling: liveUserScroll))
-        if !preserveHorizontalAnchor { pendingOffset = nil }
-        if let target = horizontalFollow.targetID, let index = ids.firstIndex(of: target) { pendingOffset = CGFloat(index) * stride }
+        let navigationChanged = configuredHorizontalPosition && explicitNavigationID != previousNavigationID
+        if axis == .horizontal {
+            if !configuredHorizontalPosition {
+                pendingOffset = horizontalPosition?.offset
+                configuredHorizontalPosition = true
+            }
+            if navigationChanged { cancelHorizontalMovement() }
+            previousNavigationID = explicitNavigationID
+        }
         let generationChanged = generation != restorationGeneration
         restorationGeneration = generation
         let suppressed = usesNativeIdentity && axis == .vertical && cancelledGeneration.map { generation <= $0 } == true
@@ -225,11 +223,10 @@ final class ParallelScrollObservationView: NSView {
         }
         configuredAxis = axis
         self.restorationActive = restorationActive
-        if axis == .horizontal, preserveHorizontalAnchor, horizontalFollow.targetID == nil,
-           ids != self.ids || stride != self.stride,
-           let anchor = ParallelHorizontalAnchor.capture(ids: self.ids, stride: self.stride,
-               offset: horizontalOffset) {
-            pendingOffset = anchor.offset(ids: ids, stride: stride)
+        if axis == .horizontal, !liveUserScroll, !navigationChanged, pendingOffset == nil,
+           ids != self.ids || stride != self.stride {
+            pendingOffset = preservedHorizontalOffset ?? lastOffset
+            preservedHorizontalOffset = self.ids.first.map { _ in preservedHorizontalOffset ?? lastOffset }
         }
         self.ids = ids
         self.stride = stride
@@ -244,7 +241,7 @@ final class ParallelScrollObservationView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil {
-            if axis == .horizontal { cancelHorizontalMovement() }
+            if axis == .horizontal { pendingOffset = horizontalPosition?.offset ?? pendingOffset }
             liveUserScroll = false
             anchorProvider?.cancelAnchorRestoration()
             subscriptions.removeAll()
@@ -295,7 +292,7 @@ final class ParallelScrollObservationView: NSView {
                 .sink { [weak self] _ in self?.report(observeExternalMovement: name == NSView.boundsDidChangeNotification) }
                 .store(in: &subscriptions)
         }
-        if usesNativeIdentity || (axis == .horizontal && horizontalFollow.isEnabled) {
+        if usesNativeIdentity || axis == .horizontal {
             scroll.postsFrameChangedNotifications = true
             NotificationCenter.default
                 .publisher(for: NSView.frameDidChangeNotification, object: scroll)
@@ -333,16 +330,16 @@ final class ParallelScrollObservationView: NSView {
     }
 
     func updateWheelMonitor() {
-        guard onUpwardIntent != nil || (axis == .horizontal && horizontalFollow.isEnabled), observedScrollView?.window != nil else {
+        guard onUpwardIntent != nil || (axis == .horizontal && (pendingOffset != nil || preservedHorizontalOffset != nil)),
+              observedScrollView?.window != nil else {
             removeWheelMonitor()
             return
         }
         guard wheelMonitor == nil else { return }
-        let events: NSEvent.EventTypeMask = usesNativeIdentity || (axis == .horizontal && horizontalFollow.isEnabled)
+        let events: NSEvent.EventTypeMask = usesNativeIdentity || axis == .horizontal
             ? [.scrollWheel, .keyDown, .leftMouseDown] : .scrollWheel
         wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
-            if let self, axis == .horizontal, horizontalFollow.isEnabled, let scroll = observedScrollView,
-               ParallelHorizontalInsertionFollow.isHorizontalIntent(event, in: scroll) { cancelHorizontalMovement() }
+            self?.observeHorizontalNavigationIntent(event)
             if event.type == .scrollWheel {
                 self?.observeWheelIntent(event)
             } else {
@@ -350,6 +347,12 @@ final class ParallelScrollObservationView: NSView {
             }
             return event
         }
+    }
+
+    func observeHorizontalNavigationIntent(_ event: NSEvent) {
+        guard axis == .horizontal, let scroll = observedScrollView,
+              ParallelScrollObserver.isHorizontalNavigation(event, in: scroll) else { return }
+        cancelHorizontalMovement()
     }
 
     func removeWheelMonitor() {
@@ -441,6 +444,7 @@ final class ParallelScrollObservationView: NSView {
     /// Observe an upward reading move before a queued layout restoration can replace it.
     /// Content shrinkage and viewport resizing remain layout changes, not user scroll evidence.
     private func observeExternalUpwardScroll(visible: CGRect, document: NSView, length: CGFloat, viewport: CGFloat) {
+        guard axis == .vertical else { return }
         let offset = document.isFlipped ? visible.minY : document.bounds.maxY - visible.maxY
         if usesNativeIdentity, liveUserScroll, offset < lastOffset - 0.5 { signalUpwardIntent() }
         guard axis == .vertical, let lastReported, offset < lastOffset - 0.5,
@@ -498,7 +502,6 @@ final class ParallelScrollObservationView: NSView {
         diagnose("apply after target=\(target)")
     }
 
-    /// Synchronous callback-only retry; nested provider retries are dropped without ending the lease.
     func reevaluateAnchorProvider(_ provider: ParallelScrollAnchorProvider) {
         guard !reevaluatingRestoration, anchorProvider === provider, provider.isAnchorRestorationActive,
               observedScrollView?.documentView === observedDocument else { return }
@@ -571,19 +574,18 @@ final class ParallelScrollObservationView: NSView {
         // movement observation, so a user move that cancels the provider this same report
         // cannot leave a stale correction to apply.
         let providerTarget = nativeRestorationTarget(document: document, geometryChanged: documentGeometryChanged)
-        let horizontalLayoutReady = axis != .horizontal || abs(length - CGFloat(ids.count) * stride) < 2
-        if axis == .horizontal { horizontalFollow.rememberOffset(lastOffset, layoutReady: horizontalLayoutReady) }
-        // Keep the lane identity through later native layout passes. A matching document width
-        // alone does not establish that SwiftUI has finished moving the clip bounds.
-        if axis == .horizontal, let targetID = horizontalFollow.targetID,
-           let index = ids.firstIndex(of: targetID) { pendingOffset = CGFloat(index) * stride }
+        let horizontalLayoutReady = axis != .horizontal || (!ids.isEmpty && stride > 0 && abs(length - CGFloat(ids.count) * stride) < 2)
         if restorationActive, pendingOffset == nil, let requestedOffset { pendingOffset = requestedOffset }
-        if let target = providerTarget ?? pendingOffset, viewport > 0, horizontalLayoutReady {
+        if let target = providerTarget ?? preservedHorizontalOffset ?? pendingOffset, viewport > 0, horizontalLayoutReady {
             applyRestorationTarget(target, scroll: scroll, document: document, geometry: (length, viewport, visible))
         }
-        clampHorizontalOffset(scroll: scroll, document: document, length: length, viewport: viewport)
+        if horizontalLayoutReady { clampHorizontalOffset(scroll: scroll, document: document, length: length, viewport: viewport) }
         let updated = scroll.documentVisibleRect
         lastOffset = axis == .horizontal ? updated.minX : (document.isFlipped ? updated.minY : document.bounds.maxY - updated.maxY)
+        if axis == .horizontal, horizontalLayoutReady, viewport > 0, pendingOffset == nil {
+            horizontalPosition?.offset = max(0, lastOffset)
+            preservedHorizontalOffset = preservedHorizontalOffset.map { _ in max(0, lastOffset) }
+        }
         let report = CGRect(x: lastOffset, y: 0, width: length, height: viewport)
         let acknowledgesRestoration = pendingPositionAcknowledgement && viewport > 0 && horizontalLayoutReady && pendingOffset == nil
         if acknowledgesRestoration {

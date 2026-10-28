@@ -33,6 +33,7 @@ protocol ParallelViewModel: ViewModel {
     var canCancelAll: Bool { get }
     var isEmpty: Bool { get }
     var columns: [ParallelColumnModel] { get }
+    var horizontalPosition: ParallelViewportPosition? { get }
 
     func didAppear()
     func didDisappear()
@@ -43,6 +44,7 @@ protocol ParallelViewModel: ViewModel {
 }
 
 extension ParallelViewModel {
+    var horizontalPosition: ParallelViewportPosition? { nil }
     func updateViewport(offset: CGFloat, width: CGFloat) {}
     func columnState(for id: String) -> ParallelColumnUIState { ParallelColumnUIState() }
 }
@@ -114,7 +116,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
                 GeometryReader { proxy in
                     ScrollView(.horizontal) {
                         ParallelColumnsContent(columns: viewModel.columns, availableSize: proxy.size,
-                                               contextID: "group:" + viewModel.groupName,
+                                               horizontalPosition: viewModel.horizontalPosition,
                                                stateForColumn: viewModel.columnState(for:),
                                                onViewport: { viewModel.updateViewport(offset: $0, width: $1) })
                             // The document probe (§6.5): inside the real lane's own document, so

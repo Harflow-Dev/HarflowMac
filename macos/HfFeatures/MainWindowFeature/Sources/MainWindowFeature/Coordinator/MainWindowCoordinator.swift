@@ -286,6 +286,15 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         return NewSessionView(vm).eraseToAnyView()
     }
     
+    @ObservationIgnored private var parallelPositions: [String: ParallelViewportPosition] = [:]
+
+    func parallelPosition(for key: String) -> ParallelViewportPosition {
+        if let position = parallelPositions[key] { return position }
+        let position = ParallelViewportPosition()
+        parallelPositions[key] = position
+        return position
+    }
+
     /// A selected group's stable presenter observes membership for its entire visible lifetime.
     public func buildParallelView(name: String) -> AnyView {
         let vm = GroupPresentationVM(
@@ -295,7 +304,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
                 TaskDetailVM(taskID: id, useCase: TaskDetailViewRepository(), routing: self)
             },
             makeParallel: { [self] in
-                ParallelVM(groupName: name, useCase: ParallelViewRepository(), routing: self)
+                ParallelVM(groupName: name, useCase: ParallelViewRepository(), routing: self, horizontalPosition: parallelPosition(for: "group:" + name))
             }
         )
         return GroupPresentationView(vm).id(name).eraseToAnyView()

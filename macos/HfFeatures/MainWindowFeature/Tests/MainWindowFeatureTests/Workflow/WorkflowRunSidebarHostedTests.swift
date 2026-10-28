@@ -38,7 +38,7 @@ import Testing
         parallelHarness.tasksSubject.send(Array(parallelHarness.tasksBox.value.values))
         await fixture.settle { fixture.element("workflow-selected-sidebar") != nil }
         parallelHarness.tasksSubject.send(Array(parallelHarness.tasksBox.value.values))
-        await fixture.settle { vm.selectedActivity?.leasedMemberCount == 1 }
+        await fixture.settle { vm.selectedActivity?.leasedMemberCount == 1 && activityScroll(in: fixture) != nil }
         #expect(vm.selectedActivity?.leasedMemberCount == 1)
         let firstScroll = try #require(activityScroll(in: fixture))
 
@@ -59,6 +59,7 @@ import Testing
         parallelHarness.tasksSubject.send(Array(parallelHarness.tasksBox.value.values))
         await fixture.settle {
             fixture.element("workflow-selected-sidebar") != nil
+                && activityScroll(in: fixture) != nil
                 && activityScroll(in: fixture) !== secondScroll
         }
         let restoredScroll = try #require(activityScroll(in: fixture))

@@ -79,32 +79,10 @@ struct ParallelVerticalAnchor: Equatable {
     }
 }
 
-// MARK: - ParallelHorizontalAnchor
+// MARK: - ParallelViewportPosition
 
-struct ParallelHorizontalAnchor: Equatable {
-    let id: String
-    let index: Int
-    let relativeOffset: CGFloat
-    let previousIDs: [String]
-
-    static func capture(ids: [String], stride: CGFloat, offset: CGFloat) -> Self? {
-        guard !ids.isEmpty, stride > 0 else { return nil }
-        let index = min(ids.count - 1, max(0, Int(floor(max(0, offset) / stride))))
-        return Self(id: ids[index], index: index, relativeOffset: offset - CGFloat(index) * stride, previousIDs: ids)
-    }
-
-    func offset(ids: [String], stride: CGFloat) -> CGFloat {
-        guard !ids.isEmpty else { return 0 }
-        let positions = Dictionary(ids.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
-        var position = positions[id]
-        if position == nil {
-            for distance in 1 ... max(1, previousIDs.count) {
-                let next = index + distance
-                let previous = index - distance
-                if next < previousIDs.count, let survivor = positions[previousIDs[next]] { position = survivor; break }
-                if previous >= 0, let survivor = positions[previousIDs[previous]] { position = survivor; break }
-            }
-        }
-        return CGFloat(position ?? min(index, ids.count - 1)) * stride + min(relativeOffset, max(0, stride - 1))
-    }
+/// Coordinator-retained pixel position, independent of lane membership and native mounts.
+@MainActor
+final class ParallelViewportPosition {
+    var offset: CGFloat = 0
 }

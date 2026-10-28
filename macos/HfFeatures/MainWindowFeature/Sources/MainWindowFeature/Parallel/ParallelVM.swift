@@ -13,7 +13,7 @@ import MonitorCore
 @Observable
 @MainActor
 final class ParallelVM: ParallelViewModel {
-
+    let horizontalPosition: ParallelViewportPosition?
     let groupName: String
     private(set) var headerSubtitle = ""
     /// Truthful current-membership counts, included before metadata in the description.
@@ -115,16 +115,16 @@ final class ParallelVM: ParallelViewModel {
     }
 
     init(groupName: String, useCase: any ParallelUseCase, routing: any ParallelRouting,
+         horizontalPosition: ParallelViewportPosition = ParallelViewportPosition(),
          buildColumns: @escaping ParallelColumnsBuild = ParallelPresentationBuilder.buildColumns) {
+        self.horizontalPosition = horizontalPosition
         self.groupName = groupName
         self.useCase = useCase
         self.routing = routing
         self.buildColumns = buildColumns
     }
 
-    func didAppear() {
-        subscribeIfNeeded()
-    }
+    func didAppear() { subscribeIfNeeded() }
 
     /// Workflow membership follows persisted dispatch associations.
     func setWorkflowTaskIDs(_ ids: [String], focusedTaskIDs: Set<String>? = nil, titles: [String: String] = [:]) {

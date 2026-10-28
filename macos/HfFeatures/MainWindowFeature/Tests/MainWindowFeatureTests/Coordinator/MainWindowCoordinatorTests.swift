@@ -11,6 +11,24 @@ import Testing
 @MainActor
 @Suite struct MainWindowCoordinatorTests {
     
+    @Test func givenGroupAndWorkflowPositions_whenSwitchingAtoBtoA_thenEachContextKeepsItsPixelOffset() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        let groupA = sut.parallelPosition(for: "group:A")
+        groupA.offset = 745
+        let workflowA = sut.parallelPosition(for: "workflow-run:A")
+        workflowA.offset = 301
+        // when
+        sut.parallelPosition(for: "group:B").offset = 90
+        sut.parallelPosition(for: "workflow-run:B").offset = 110
+        // then
+        #expect(sut.parallelPosition(for: "group:A") === groupA)
+        #expect(sut.parallelPosition(for: "group:A").offset == 745)
+        #expect(sut.parallelPosition(for: "workflow-run:A") === workflowA)
+        #expect(sut.parallelPosition(for: "workflow-run:A").offset == 301)
+        #expect(sut.parallelPosition(for: "group:B").offset == 90)
+    }
+
     @Test func givenNewSessionSheet_whenWorkflowRunnerRequested_thenRunnerReplacesSession() {
         // given
         let sut = MainWindowCoordinator(parent: MockCoordinator())

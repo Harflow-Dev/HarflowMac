@@ -6,27 +6,6 @@ import SwiftUI
 import Testing
 
 @MainActor @Suite(.serialized) struct ParallelViewportTests {
-    @Test func givenHorizontalAnchor_whenColumnsReorderResizeOrDisappear_thenIdentityAndRelativeOffsetAreRetained() throws {
-        // given
-        let anchor = try #require(ParallelHorizontalAnchor.capture(ids: ["a", "b", "c", "d"], stride: 421, offset: 480))
-        // when / then
-        #expect(anchor.id == "b")
-        #expect(anchor.offset(ids: ["a", "c", "b", "d"], stride: 501) == 1061)
-        #expect(anchor.offset(ids: ["a", "c", "d"], stride: 421) == 480)
-        #expect(anchor.offset(ids: [], stride: 421) == 0)
-        let removed = try #require(ParallelHorizontalAnchor.capture(ids: ["a", "b", "c", "d"], stride: 421, offset: 900))
-        #expect(removed.offset(ids: ["x", "y", "a", "b", "d"], stride: 421) == 1742)
-        #expect(removed.offset(ids: ["x", "b", "a"], stride: 421) == 479)
-    }
-
-    @Test func givenUnknownOrEmptyViewport_whenCapturingHorizontalAnchor_thenNoInvalidIndexIsProduced() {
-        // given / when / then
-        #expect(ParallelHorizontalAnchor.capture(ids: [], stride: 421, offset: 0) == nil)
-        #expect(ParallelHorizontalAnchor.capture(ids: ["a"], stride: 0, offset: 0) == nil)
-        #expect(ParallelHorizontalAnchor.capture(ids: ["a", "b"], stride: 421, offset: -20)?.id == "a")
-        #expect(ParallelHorizontalAnchor.capture(ids: ["a", "b"], stride: 421, offset: 9000)?.id == "b")
-    }
-
     @Test func givenVerticalFrames_whenCapturingReadingAnchor_thenFirstIntersectingRowAndRelativeOffsetAreSaved() throws {
         // given
         let frames = ["a": CGRect(x: 0, y: -160, width: 420, height: 100),
@@ -43,7 +22,7 @@ import Testing
         #expect(shortened.offset(in: CGRect(x: 0, y: 100, width: 420, height: 80)) == 179)
     }
 
-    @Test func givenMountedHorizontalObserver_whenNativeScrollAndOrderChange_thenMeasuredViewportAndAnchorArePreserved() async throws {
+    @Test func givenMountedHorizontalObserver_whenNativeScrollAndOrderChange_thenMeasuredViewportAndPixelOffsetArePreserved() async throws {
         // given
         _ = NSApplication.shared
         let position = Position()
@@ -62,9 +41,9 @@ import Testing
         scroll.reflectScrolledClipView(scroll.contentView)
         await waitUntil { abs(position.offset - 480) < 2 }
         host.rootView = fixture(ids: ["a", "c", "b", "d", "e"], position: position)
-        await waitUntil { host.layoutSubtreeIfNeeded(); return abs(position.offset - 901) < 2 }
+        await waitUntil { host.layoutSubtreeIfNeeded(); return abs(position.offset - 480) < 2 }
         // then
-        #expect(abs(position.offset - 901) < 2)
+        #expect(abs(position.offset - 480) < 2)
         #expect(position.width > 400)
         // Reattachment must emit even when geometry is unchanged: the VM resets residency
         // on teardown and needs a fresh viewport before it can reacquire activity.
@@ -79,8 +58,7 @@ import Testing
         // given
         _ = NSApplication.shared
         let position = Position()
-        let host = NSHostingView(rootView: fixture(ids: ["a", "b"], position: position,
-                                                   workingIDs: ["working"], contextID: "group"))
+        let host = NSHostingView(rootView: fixture(ids: ["a", "b"], position: position))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 430, height: 300),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -90,11 +68,10 @@ import Testing
         await waitUntil { host.layoutSubtreeIfNeeded(); return position.width > 0 }
         let reportsBeforeInsertion = position.reports
         // when — membership publication inserts a newly working column before the existing ones.
-        host.rootView = fixture(ids: ["working", "a", "b"], position: position,
-                                workingIDs: ["working"], contextID: "group")
+        host.rootView = fixture(ids: ["working", "a", "b"], position: position)
         await waitUntil {
             host.layoutSubtreeIfNeeded()
-            return position.reports > reportsBeforeInsertion + 1
+            return position.reports > reportsBeforeInsertion
         }
 
         // then — a reader at the leading edge should see the new column, rather than being
@@ -102,12 +79,11 @@ import Testing
         #expect(abs(position.offset) < 2)
     }
 
-    @Test func givenAwayFromLeadingEdge_whenWorkingColumnAppearsAtLeadingEdge_thenReadingAnchorIsRetained() async throws {
+    @Test func givenAwayFromLeadingEdge_whenWorkingColumnAppearsAtLeadingEdge_thenPixelOffsetIsRetained() async throws {
         // given
         _ = NSApplication.shared
         let position = Position()
-        let host = NSHostingView(rootView: fixture(ids: ["a", "b", "c"], position: position,
-                                                   workingIDs: ["working"], contextID: "group"))
+        let host = NSHostingView(rootView: fixture(ids: ["a", "b", "c"], position: position))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 430, height: 300),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -122,17 +98,18 @@ import Testing
         await waitUntil { abs(position.offset - 480) < 2 }
         NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
         let reportsBeforeInsertion = position.reports
+        try capture(host, name: "observer-before-insertion")
 
         // when
-        host.rootView = fixture(ids: ["working", "a", "b", "c"], position: position,
-                                workingIDs: ["working"], contextID: "group")
+        host.rootView = fixture(ids: ["working", "a", "b", "c"], position: position)
         await waitUntil {
             host.layoutSubtreeIfNeeded()
-            return position.reports > reportsBeforeInsertion + 1 && abs(position.offset - 901) < 2
+            return position.reports > reportsBeforeInsertion && abs(position.offset - 480) < 2
         }
 
         // then
-        #expect(abs(position.offset - 901) < 2)
+        #expect(abs(position.offset - 480) < 2)
+        try capture(host, name: "observer-after-insertion")
     }
 
     @Test func givenEvictedColumn_whenMountedAgain_thenDisclosureReadingOffsetAndFollowPreferenceAreRestored() async throws {
@@ -204,8 +181,7 @@ import Testing
         // given
         _ = NSApplication.shared
         let vm = ViewportVM(columns: try ["a", "b", "c", "d", "e"].map { try column(id: $0, rows: 0) })
-        let host = NSHostingView(rootView: WorkflowActivityColumns(viewModel: vm, selectedTaskID: nil,
-                                                                    contextID: "workflow-test"))
+        let host = NSHostingView(rootView: WorkflowActivityColumns(viewModel: vm, selectedTaskID: nil))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 430, height: 500),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -214,12 +190,64 @@ import Testing
         defer { window.contentView = nil; window.close() }
         await waitUntil { host.layoutSubtreeIfNeeded(); return vm.width > 400 }
         // when
-        host.rootView = WorkflowActivityColumns(viewModel: vm, selectedTaskID: "c",
-                                                contextID: "workflow-test")
+        host.rootView = WorkflowActivityColumns(viewModel: vm, selectedTaskID: "c")
         await waitUntil { host.layoutSubtreeIfNeeded(); return vm.offset > 800 }
         // then
         #expect(vm.offset > 800)
         #expect(vm.width > 400)
+    }
+
+    @Test(arguments: [true, false])
+    func givenProductionActivityAtRight_whenWorkingLaneArrives_thenPixelPositionIsPreserved(workflow: Bool) async throws {
+        // given
+        _ = NSApplication.shared
+        let vm = ViewportVM(columns: try ["a", "b", "c"].map { try column(id: $0, rows: 0) })
+        let host = NSHostingView(rootView: activitySurface(vm: vm, workflow: workflow))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 500),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        await waitUntil { host.layoutSubtreeIfNeeded(); return vm.width > 700 }
+        let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.hasHorizontalScroller })
+        scroll.contentView.scroll(to: CGPoint(x: 700, y: 0))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await waitUntil { abs(vm.offset - 700) < 2 }
+        let surface = workflow ? "workflow" : "parallel"
+        try capture(host, name: surface + "-before-insertion")
+        // when
+        vm.columns.insert(try column(id: "working", rows: 0), at: 0)
+        host.rootView = activitySurface(vm: vm, workflow: workflow)
+        await waitUntil {
+            host.layoutSubtreeIfNeeded()
+            return (scroll.documentView?.bounds.width ?? 0) > 2500 && abs(vm.offset - 700) < 2
+        }
+        // then
+        #expect(abs(vm.offset - 700) < 2)
+        try capture(host, name: surface + "-after-insertion")
+    }
+
+    private func activitySurface(vm: ViewportVM, workflow: Bool) -> AnyView {
+        if workflow { return AnyView(WorkflowActivityColumns(viewModel: vm, selectedTaskID: nil)) }
+        return AnyView(GeometryReader { proxy in
+            ScrollView(.horizontal) {
+                ParallelColumnsContent(columns: vm.columns, availableSize: proxy.size,
+                                       horizontalPosition: vm.horizontalPosition,
+                                       stateForColumn: vm.columnState(for:),
+                                       onViewport: { vm.updateViewport(offset: $0, width: $1) })
+            }
+        })
+    }
+
+    private func capture(_ host: NSView, name: String) throws {
+        guard let path = ProcessInfo.processInfo.environment["HARFLOW_HORIZONTAL_CAPTURE_DIR"], !path.isEmpty else { return }
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let png = try #require(bitmap.representation(using: .png, properties: [:]))
+        try png.write(to: directory.appendingPathComponent(name + ".png"))
     }
 
     @Test func givenPausedReading_whenColumnWidthReflows_thenVisibleAnchorAndRelativeOffsetAreRestored() async throws {
@@ -491,6 +519,7 @@ import Testing
     }
 
     @Observable final class ViewportVM: ParallelViewModel {
+        let horizontalPosition: ParallelViewportPosition? = ParallelViewportPosition()
         var groupName = "viewport"
         var headerSubtitle = ""
         var statusSummary: String?
@@ -517,14 +546,12 @@ import Testing
         var width: CGFloat = 0
     }
 
-    private func fixture(ids: [String], position: Position, workingIDs: Set<String> = [],
-                         contextID: String? = nil) -> some View {
+    private func fixture(ids: [String], position: Position) -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 ForEach(ids, id: \.self) { id in Text(id).frame(width: 421, height: 200) }
             }
-            .background(ParallelScrollObserver(axis: .horizontal, columnIDs: ids, columnStride: 421,
-                                               workingColumnIDs: workingIDs, contextID: contextID) { offset, _, width in
+            .background(ParallelScrollObserver(axis: .horizontal, columnIDs: ids, columnStride: 421) { offset, _, width in
                 position.reports += 1
                 position.offset = offset
                 position.width = width

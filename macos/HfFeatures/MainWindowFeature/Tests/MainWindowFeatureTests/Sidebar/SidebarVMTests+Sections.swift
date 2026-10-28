@@ -164,24 +164,64 @@ extension SidebarVMTests {
         #expect(sut.groups(in: .earlier).isEmpty)
     }
 
-    @Test func givenYesterdayWorkflowContinuedToday_whenItStops_thenItStaysFirstInToday() async {
+    @Test func givenActiveWorkflows_whenOlderRunProgresses_thenCreationOrderStaysUnchanged() async {
+        // given
+        let harness = makeBucketSUT()
+        let sut = harness.sut
+        var older: [String: JSONValue] = ["workflow_run_id": .string("older"), "status": .string("running"),
+                                        "created_at": .number(noon.addingTimeInterval(-7200).timeIntervalSince1970),
+                                        "updated_at": .number(noon.addingTimeInterval(-7200).timeIntervalSince1970)]
+        let newer = SidebarWorkflowRun(raw: ["workflow_run_id": .string("newer"), "status": .string("running"),
+                                            "created_at": .number(noon.addingTimeInterval(-3600).timeIntervalSince1970)])
+        sut.workflowRuns = [SidebarWorkflowRun(raw: older), newer]
+        let before = sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: [])
+        #expect(before.first?.items.map(\.id) == ["workflow:newer", "workflow:older"])
+        // when
+        older["updated_at"] = .number(noon.addingTimeInterval(-60).timeIntervalSince1970)
+        sut.workflowRuns = [SidebarWorkflowRun(raw: older), newer]
+        // then
+        let after = sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: [])
+        #expect(after.map(\.bucket) == [.running])
+        #expect(after.first?.items.map(\.id) == before.first?.items.map(\.id))
+    }
+
+    @Test func givenYesterdayCompletedWorkflow_whenUpdatedToday_thenItStaysInEarlier() async {
+        // given
+        let harness = makeBucketSUT()
+        let sut = harness.sut
+        var run: [String: JSONValue] = ["workflow_run_id": .string("old"), "status": .string("completed"),
+                                      "created_at": .number(noon.addingTimeInterval(-86400).timeIntervalSince1970),
+                                      "updated_at": .number(noon.addingTimeInterval(-86400).timeIntervalSince1970)]
+        sut.workflowRuns = [SidebarWorkflowRun(raw: run)]
+        #expect(sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: []).first?.bucket == .earlier)
+        // when
+        run["updated_at"] = .number(noon.addingTimeInterval(-60).timeIntervalSince1970)
+        sut.workflowRuns = [SidebarWorkflowRun(raw: run)]
+        // then
+        let sections = sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: [])
+        #expect(sections.map(\.bucket) == [.earlier])
+        #expect(sections.first?.items.map(\.id) == ["workflow:old"])
+    }
+
+    @Test func givenYesterdayWorkflowUpdatedToday_whenItStops_thenItReturnsToEarlier() async {
         // given
         let harness = makeBucketSUT()
         let sut = harness.sut
         var run: [String: JSONValue] = ["workflow_run_id": .string("repeat"), "status": .string("running"),
                                       "created_at": .number(noon.addingTimeInterval(-86400).timeIntervalSince1970),
                                       "updated_at": .number(noon.addingTimeInterval(-60).timeIntervalSince1970)]
-        let older = SidebarWorkflowRun(raw: ["workflow_run_id": .string("older"), "status": .string("completed"),
+        let today = SidebarWorkflowRun(raw: ["workflow_run_id": .string("today"), "status": .string("completed"),
                                             "created_at": .number(noon.addingTimeInterval(-3600).timeIntervalSince1970)])
-        sut.workflowRuns = [SidebarWorkflowRun(raw: run), older]
+        sut.workflowRuns = [SidebarWorkflowRun(raw: run), today]
         #expect(sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: []).first?.bucket == .running)
         // when
         run["status"] = .string("completed")
-        sut.workflowRuns = [SidebarWorkflowRun(raw: run), older]
+        sut.workflowRuns = [SidebarWorkflowRun(raw: run), today]
         // then
         let sections = sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: [])
-        #expect(sections.map(\.bucket) == [.today])
-        #expect(sections.first?.items.map(\.id) == ["workflow:repeat", "workflow:older"])
+        #expect(sections.map(\.bucket) == [.today, .earlier])
+        #expect(sections.first?.items.map(\.id) == ["workflow:today"])
+        #expect(sections.last?.items.map(\.id) == ["workflow:repeat"])
     }
 
     @Test func givenAGroupAndTasksInOneBucket_whenListed_thenTheyInterleaveNewestStartFirst() async {

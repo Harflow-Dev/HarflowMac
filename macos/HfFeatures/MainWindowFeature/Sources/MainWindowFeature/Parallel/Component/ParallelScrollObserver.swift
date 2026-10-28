@@ -17,8 +17,7 @@ struct ParallelScrollObserver: NSViewRepresentable {
     let axis: Axis
     var columnIDs: [String] = []
     var columnStride: CGFloat = 0
-    var workingColumnIDs: Set<String> = []
-    var contextID: String?
+    var horizontalPosition: ParallelViewportPosition?
     var explicitNavigationID: String?
     var restorationOffset: CGFloat?
     var restorationActive = false
@@ -65,12 +64,35 @@ struct ParallelScrollObserver: NSViewRepresentable {
             view.anchorProvider = nativeIdentity.resolvedAnchorProvider(fallback: anchorProvider)
         } else { view.anchorProvider = anchorProvider }
         view.updateWheelMonitor()
-        view.horizontalConfiguration = contextID.map {
-            ParallelHorizontalConfiguration(workingColumnIDs: workingColumnIDs, contextID: $0, explicitNavigationID: explicitNavigationID)
-        }
+        view.horizontalPosition = horizontalPosition
+        view.explicitNavigationID = explicitNavigationID
         view.configure(ids: columnIDs, stride: columnStride, restorationOffset: restorationOffset,
                        restorationActive: restorationActive, generation: restorationGeneration)
         view.bindNativeIdentity(nativeIdentity)
         view.updateWheelMonitor()
+    }
+}
+
+// MARK: - Horizontal native input
+
+extension ParallelScrollObserver {
+    static func isHorizontalNavigation(_ event: NSEvent, in scroll: NSScrollView) -> Bool {
+        guard event.window === scroll.window else { return false }
+        switch event.type {
+        case .keyDown:
+            guard let responder = scroll.window?.firstResponder as? NSView,
+                  responder === scroll || responder.isDescendant(of: scroll),
+                  let key = event.charactersIgnoringModifiers?.unicodeScalars.first?.value,
+                  [UInt32(NSLeftArrowFunctionKey), UInt32(NSRightArrowFunctionKey), UInt32(NSHomeFunctionKey),
+                   UInt32(NSEndFunctionKey), UInt32(NSPageUpFunctionKey), UInt32(NSPageDownFunctionKey)].contains(key) else { return false }
+        case .scrollWheel:
+            guard scroll.bounds.contains(scroll.convert(event.locationInWindow, from: nil)),
+                  event.scrollingDeltaX != 0 || (event.modifierFlags.contains(.shift) && event.scrollingDeltaY != 0) else { return false }
+        case .leftMouseDown:
+            guard let scroller = scroll.horizontalScroller, !scroller.isHidden,
+                  scroller.bounds.contains(scroller.convert(event.locationInWindow, from: nil)) else { return false }
+        default: return false
+        }
+        return true
     }
 }

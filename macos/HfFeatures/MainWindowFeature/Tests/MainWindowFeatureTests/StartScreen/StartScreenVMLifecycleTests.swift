@@ -391,6 +391,7 @@ actor StartScreenProbeSource: StartScreenHistorySource {
         fixture.sut.didAppear()
         await taskGate.waitUntilBlocked()
         await workflowGate.waitUntilBlocked()
+        await fixture.source.waitForReadCounts(1)
         let inFlightReads = await fixture.source.counts()
 
         // when
