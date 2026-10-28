@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show confirmed orchestrator work with the running outline and expose decision history and consultant activity in the workflow inspector.
+
 - Fit selected workflow activity to the inspector width and provide a conversation selector instead of horizontal activity scrolling.
 
 - Resize the Statistics chart to the available window width, adapt controls and rankings in narrower windows, and retain vertical scrolling for long lists.

@@ -68,7 +68,7 @@ struct WorkflowStandaloneBar<VM: WorkflowViewModel>: View {
         switch run.onDemandState["kind"]?.stringValue {
         case "waiting": return "Waiting on \(title)"
         case "answering": return "Answering \(title)'s question"
-        default: return "Deciding"
+        default: return viewModel.runSidebar.standaloneStatuses[WorkflowStandalone.orchestratorID] == "running" ? "Deciding" : "Idle"
         }
     }
 
@@ -83,7 +83,7 @@ struct WorkflowStandaloneBar<VM: WorkflowViewModel>: View {
     }
 
     private func card(_ node: WorkflowNodeModel, subtitle: String) -> some View {
-        WorkflowCanvasNode(node: node, status: node.raw["active_call_id"]?.stringValue == nil ? "pending" : "running",
+        WorkflowCanvasNode(node: node, status: viewModel.runSidebar.standaloneStatuses[node.id] ?? "pending",
                            attempt: 0, isSelected: viewModel.selectedNodeID == node.id, isEditable: false, zoom: 1,
                            childRunID: nil, onOpenRun: { _ in }, onSelect: { viewModel.selectStandalone(node.id) },
                            onMove: { _ in }, onDragEnded: {}, onConnect: {}, onRename: { _ in }, onTitleEditingChanged: { _ in },

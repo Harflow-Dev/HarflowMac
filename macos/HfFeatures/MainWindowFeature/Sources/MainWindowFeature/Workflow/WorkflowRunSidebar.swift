@@ -12,6 +12,7 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
         let raw: [String: JSONValue]
     }
 
+    var standaloneStatuses: [String: String] = [:]
     var node: [String: JSONValue]?
     var attempts: [Attempt] = []
     var activationID: String?
@@ -30,6 +31,7 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
 
     static func build(run: [String: JSONValue], nodeID: String?, attemptID: String?) -> Self {
         var result = Self()
+        result.standaloneStatuses = WorkflowStandaloneActivity.statuses(run: run)
         let definition = run["definition"]?.objectValue ?? [:]
         let nodes = WorkflowJSON.objects(definition["nodes"])
         let activations = WorkflowJSON.objects(run["activations"])
@@ -52,17 +54,7 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
         }
         result.latestTaskIDs = Set(latest.values.flatMap(headlessTaskIDs))
         guard let nodeID else { return result }
-        let standalone = WorkflowJSON.objects(run["on_demand_nodes"]).map { entry in
-            var node = entry
-            node["id"] = entry["node_id"]
-            return node
-        }
-        if let node = standalone.first(where: { $0["id"]?.stringValue == nodeID }) {
-            result.node = node
-            result.isOnDemand = true
-            result.calls = WorkflowJSON.objects(run["on_demand_calls"]).filter { $0["node_id"]?.stringValue == nodeID }
-            return result
-        }
+        if result.selectStandalone(run: run, nodeID: nodeID, attemptID: attemptID) { return result }
         guard let node = nodes.first(where: { $0["id"]?.stringValue == nodeID }) else {
             result.selectedNodeExists = nodeID == WorkflowStandalone.orchestratorID
             return result

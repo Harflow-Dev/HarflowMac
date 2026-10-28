@@ -34,6 +34,7 @@ enum WorkflowOnDemandPreview {
                 "node_id": .string("implementation"),
                 "workflow_run_id": .string("preview-run")
             ]),
+            "execution_id": .string("specialist-\(number)"),
             "status": .string(status), "started_at": .number(Date.now.timeIntervalSince1970 - 72), "task_id": .string("preview-task")
         ]
         if status != "running" {
@@ -67,6 +68,15 @@ enum WorkflowOnDemandPreview {
                 "kind": .string(status == "running" ? "waiting" : "deciding"),
                 "title": .string("API researcher")
             ])
+            let decisionStatus = orchestrator && status == "running" ? "running" : "completed"
+            raw["activations"] = .array(calls(status: status).map { call in
+                .object(["id": .string("specialist-\(call.number)"), "node_id": .string("preview-run:research"),
+                         "role": .string("node"), "status": .string(call.status),
+                         "tasks": .array([.object(["task_id": .string("preview-task"),
+                                                   "status": .string(call.status == "running" ? "running" : "completed")])])])
+            } + [.object(["id": .string("decision-preview"), "node_id": .string("implementation"), "role": .string("orchestrator"),
+                          "status": .string("running"), "tasks": .array([.object(["task_id": .string("decision-task"),
+                                                                                  "status": .string(decisionStatus)])])])])
             raw["definition"] = .object(vm.definition)
             vm.selectedRun = WorkflowRunModel(raw: raw)
         }
@@ -74,6 +84,26 @@ enum WorkflowOnDemandPreview {
         vm.selectStandalone(orchestrator ? WorkflowStandalone.orchestratorID : run ? "preview-run:research" : "research")
         return vm
     }
+}
+
+#Preview("Orchestrator running light") {
+    WorkflowStandaloneBar(viewModel: WorkflowOnDemandPreview.make(run: true, orchestrator: true))
+        .preferredColorScheme(.light)
+}
+
+#Preview("Orchestrator running dark") {
+    WorkflowStandaloneBar(viewModel: WorkflowOnDemandPreview.make(run: true, orchestrator: true))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Orchestrator idle light") {
+    WorkflowStandaloneBar(viewModel: WorkflowOnDemandPreview.make(run: true, orchestrator: true, status: "succeeded"))
+        .preferredColorScheme(.light)
+}
+
+#Preview("Orchestrator idle dark") {
+    WorkflowStandaloneBar(viewModel: WorkflowOnDemandPreview.make(run: true, orchestrator: true, status: "succeeded"))
+        .preferredColorScheme(.dark)
 }
 
 #Preview("On-demand editor light") { WorkflowView(WorkflowOnDemandPreview.make())

@@ -43,7 +43,7 @@ import Testing
         await vm.sidebarTask?.value
         vm.selectStandalone("preview-run:research")
         await vm.sidebarTask?.value
-        await fixture.settle { fixture.element("#2 · Confirm the refresh endpoint's error response.") != nil }
+        try await openCallHistory(in: fixture)
 
         // then
         #expect(fixture.element("Open task") != nil)
@@ -53,6 +53,13 @@ import Testing
         let firstFrame = try #require(fixture.frame(first))
         let secondFrame = try #require(fixture.frame(second))
         #expect(firstFrame.minY > secondFrame.minY)
+    }
+
+    private func openCallHistory(in fixture: RedesignHost) async throws {
+        await fixture.settle { fixture.element("Call history · 2 calls") != nil }
+        let disclosure = try #require(fixture.element("Call history · 2 calls"))
+        #expect(fixture.press(disclosure))
+        await fixture.settle { fixture.element("#2 · Confirm the refresh endpoint's error response.") != nil }
     }
 
     @Test
@@ -78,7 +85,8 @@ import Testing
             await fixture.settle { fixture.element("Standalone nodes, outside the workflow path") != nil }
             if run {
                 vm.selectStandalone("preview-run:research")
-                await fixture.settle { fixture.element("#2 · Confirm the refresh endpoint's error response.") != nil }
+                await vm.sidebarTask?.value
+                try await openCallHistory(in: fixture)
             }
             await fixture.settle { fixture.hasStableRenderedFrame }
             try fixture.capturePNG(to: url.appendingPathComponent(suffix + ".png"))

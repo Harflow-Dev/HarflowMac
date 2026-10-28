@@ -27,9 +27,14 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
             }
             Divider()
             if let raw = state.node, state.isOnDemand {
-                WorkflowOnDemandCallsView(node: WorkflowNodeModel(raw: raw),
-                                          calls: state.calls.map { WorkflowOnDemandCall(raw: $0) }, onOpenTask: viewModel.openOwnerTask)
-            } else if let native = viewModel.nativeActivity {
+                DisclosureGroup("Call history · \(state.calls.count) calls") {
+                    WorkflowOnDemandCallsView(node: WorkflowNodeModel(raw: raw),
+                                              calls: state.calls.map { WorkflowOnDemandCall(raw: $0) }, onOpenTask: viewModel.openOwnerTask)
+                        .frame(maxHeight: 220)
+                }.padding(12)
+                Divider()
+            }
+            if let native = viewModel.nativeActivity {
                 WorkflowNativeActivityView(model: native)
             } else if let child = state.childRunID {
                 Button("Open workflow") { viewModel.openRun(child) }.padding(12)
