@@ -13,8 +13,6 @@ import MonitorCore
 @Observable
 @MainActor
 final class ParallelVM: ParallelViewModel {
-    
-    // MARK: - ParallelViewModel Properties
 
     let groupName: String
     private(set) var headerSubtitle = ""
@@ -28,9 +26,8 @@ final class ParallelVM: ParallelViewModel {
     private(set) var canCancelAll = false
     private(set) var isEmpty = false
     private(set) var columns: [ParallelColumnModel] = []
-    
-    // MARK: - Private Properties
-
+    private(set) var selectedConversationID: String?
+    @ObservationIgnored private var isWorkflowInspector = false
     static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
     @ObservationIgnored private let useCase: any ParallelUseCase
     @ObservationIgnored private let routing: any ParallelRouting
@@ -109,31 +106,20 @@ final class ParallelVM: ParallelViewModel {
         viewportOffset = offset
         viewportWidth = width
         guard didSubscribe else { return }
-        let stride = ParallelLayout.columnWidth(memberCount: orderedConversations.count, availableWidth: width)
-            + ParallelLayout.dividerWidth
-        let shown = ParallelResidency.visibleIndices(count: orderedConversations.count, offset: offset, width: width, stride: stride)
-        let nextVisible = Set(shown.map { orderedConversations[$0].id })
+        let nextVisible = ParallelActivityViewport.conversationIDs(orderedConversations, inspector: isWorkflowInspector,
+                                                              selectedID: selectedConversationID, offset: viewportOffset, width: viewportWidth)
         guard nextVisible != visibleIDs else { return }
         let inputs = updateResidency()
         publishColumns()
         schedule(inputs)
     }
-    
-    // MARK: - Init
-    
+
     init(groupName: String, useCase: any ParallelUseCase, routing: any ParallelRouting,
          buildColumns: @escaping ParallelColumnsBuild = ParallelPresentationBuilder.buildColumns) {
         self.groupName = groupName
         self.useCase = useCase
         self.routing = routing
         self.buildColumns = buildColumns
-    }
-    
-    // MARK: - ParallelViewModel Methods
-    
-    /// Independent workflow inspector ownership with the same activity dependencies.
-    func makeWorkflowActivity() -> ParallelVM {
-        ParallelVM(groupName: groupName, useCase: useCase, routing: routing, buildColumns: buildColumns)
     }
 
     func didAppear() {
@@ -148,7 +134,7 @@ final class ParallelVM: ParallelViewModel {
         workflowTitles = titles
         if didSubscribe { recomputeMembersAndLeases() }
     }
-    
+
     func didDisappear() {
         epoch &+= 1
         revision &+= 1
@@ -166,6 +152,7 @@ final class ParallelVM: ParallelViewModel {
         visibleIDs.removeAll()
         uiStates.removeAll()
         orderedConversations.removeAll()
+        selectedConversationID = nil
         viewportWidth = 0
         columns.removeAll()
         cancellables.removeAll()
@@ -184,7 +171,7 @@ final class ParallelVM: ParallelViewModel {
         initialMembershipResolved = false
         arrivalTracker = PanelArrivalTracker()
     }
-    
+
     func didTapViewPrompt() {
         let start = MonitorMetrics.begin()
         showPrompt.toggle()
@@ -196,7 +183,7 @@ final class ParallelVM: ParallelViewModel {
         MonitorMetrics.end(start, stage: .parallelPreparation,
             residentColumns: residentIDs.count, leasedMembers: leases.count)
     }
-    
+
     func didTapCancelAll() {
         guard canCancelAll else { return }
         publishDialog("Cancel every running task in this group?") {
@@ -208,9 +195,9 @@ final class ParallelVM: ParallelViewModel {
             }
         }
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func subscribeIfNeeded() {
         guard !didSubscribe else { return }
         didSubscribe = true
@@ -269,7 +256,7 @@ final class ParallelVM: ParallelViewModel {
             }
             .store(in: &cancellables)
     }
-    
+
     /// Resolves membership before viewport residency.
     private func recomputeMembersAndLeases() {
         let preparation = MonitorMetrics.begin()
@@ -301,7 +288,7 @@ final class ParallelVM: ParallelViewModel {
         MonitorMetrics.end(preparation, stage: .parallelPreparation, residentColumns: residentIDs.count, leasedMembers: leases.count)
         recompute()
     }
-    
+
     /// Items and availability change independently, so each keeps its own subscription.
     private func acquireLease(_ taskID: String) {
         guard leases[taskID] == nil else { return }
@@ -343,7 +330,7 @@ final class ParallelVM: ParallelViewModel {
         itemsByTask[taskID] = nil
         availabilityByTask[taskID] = nil
     }
-    
+
     /// Refresh metadata, retaining the ownership skeleton for activity and viewport updates.
     private func recompute() {
         let preparationStart = MonitorMetrics.begin()
@@ -353,6 +340,9 @@ final class ParallelVM: ParallelViewModel {
         }
         orderedConversations = Lineage.parallelColumnOrder(freshened)
         conversationByID = Dictionary(uniqueKeysWithValues: orderedConversations.map { ($0.id, $0) })
+        if isWorkflowInspector, selectedConversationID.map({ conversationByID[$0] == nil }) ?? true {
+            selectedConversationID = orderedConversations.first?.id
+        }
         ownerByMember = [:]
         for conversation in orderedConversations {
             for member in conversation.members { ownerByMember[member.taskID] = conversation.id }
@@ -380,11 +370,8 @@ final class ParallelVM: ParallelViewModel {
     }
 
     private func updateResidency() -> [String: ParallelColumnInput] {
-        let stride = ParallelLayout.columnWidth(memberCount: orderedConversations.count, availableWidth: viewportWidth)
-            + ParallelLayout.dividerWidth
-        let shown = ParallelResidency.visibleIndices(count: orderedConversations.count, offset: viewportOffset,
-                                                     width: viewportWidth, stride: stride)
-        visibleIDs = Set(shown.map { orderedConversations[$0].id })
+        visibleIDs = ParallelActivityViewport.conversationIDs(orderedConversations, inspector: isWorkflowInspector,
+                                                              selectedID: selectedConversationID, offset: viewportOffset, width: viewportWidth)
         let returning = visibleIDs.subtracting(residentIDs).filter { presentations[$0] != nil }
         refreshingRetainedIDs.formUnion(returning)
         refreshingRetainedIDs.formIntersection(visibleIDs)
@@ -587,6 +574,27 @@ extension ParallelVM {
         leases.removeAll()
         leaseGenerations.removeAll()
         didSubscribe = false
+    }
+}
+
+// MARK: - Workflow inspector residency
+
+extension ParallelVM {
+    /// Independent workflow inspector ownership with the same activity dependencies.
+    func makeWorkflowActivity() -> ParallelVM {
+        let activity = ParallelVM(groupName: groupName, useCase: useCase, routing: routing, buildColumns: buildColumns)
+        activity.isWorkflowInspector = true
+        return activity
+    }
+
+    /// Explicit inspector selection changes residency even when its geometry is unchanged.
+    func selectConversation(_ id: String) {
+        guard isWorkflowInspector, conversationByID[id] != nil, selectedConversationID != id else { return }
+        selectedConversationID = id
+        guard didSubscribe else { return }
+        let inputs = updateResidency()
+        publishColumns()
+        schedule(inputs)
     }
 
 }

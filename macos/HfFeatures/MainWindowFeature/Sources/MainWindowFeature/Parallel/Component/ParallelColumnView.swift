@@ -135,18 +135,31 @@ struct ParallelColumnView: View {
                 Spacer(minLength: HfRadius.Metrics.spacing8)
                 TaskStatusLabel(task: model.task).fixedSize()
             }
-            HStack(spacing: HfRadius.Metrics.spacing10) {
-                Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
-                Spacer(minLength: HfRadius.Metrics.spacing8)
-                if model.isBusy { ProgressView().controlSize(.small) }
-                if WorkflowNodePresentation.allowsTerminal(model.task) {
-                // §4: one action, one name — "Take over in terminal" for an active AND a settled
-                // lane; the confirmation dialog matches this copy for both.
-                TerminalActionButton("Take over in terminal", action: model.onTapTakeover)
-                    .disabled(model.task.sessionID == nil || model.isBusy)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: HfRadius.Metrics.spacing10) {
+                    openTaskAction
+                    Spacer(minLength: HfRadius.Metrics.spacing8)
+                    terminalAction
+                }
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                    openTaskAction
+                    terminalAction
                 }
             }
             .font(.hf(.secondary))
+        }
+    }
+
+    private var openTaskAction: some View {
+        Button("Open task") { model.onTapOpenTask() }.buttonStyle(.link)
+    }
+
+    @ViewBuilder
+    private var terminalAction: some View {
+        if model.isBusy { ProgressView().controlSize(.small) }
+        if WorkflowNodePresentation.allowsTerminal(model.task) {
+            TerminalActionButton("Take over in terminal", action: model.onTapTakeover)
+                .disabled(model.task.sessionID == nil || model.isBusy)
         }
     }
 

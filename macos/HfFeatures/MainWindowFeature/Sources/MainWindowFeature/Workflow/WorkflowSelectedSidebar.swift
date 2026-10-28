@@ -35,21 +35,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
                 Button("Open workflow") { viewModel.openRun(child) }.padding(12)
                 Spacer()
             } else if let activity = viewModel.selectedActivity {
-                GeometryReader { viewport in
-                    ScrollView(.horizontal) {
-                        ParallelColumnsContent(columns: activity.columns, availableSize: viewport.size,
-                                               contextID: "selection:" + String(describing: ObjectIdentifier(activity)),
-                                               stateForColumn: activity.columnState(for:),
-                                               onViewport: { activity.updateViewport(offset: $0, width: $1) })
-                    }
-                    .onDisappear { activity.updateViewport(offset: 0, width: 0) }
-                    .overlay {
-                        if activity.columns.isEmpty {
-                            ContentUnavailableView("Activity unavailable", systemImage: "text.alignleft",
-                                                   description: Text("The task record is not available."))
-                        }
-                    }
-                }
+                WorkflowSelectedActivityView(activity: activity)
                 .id(ObjectIdentifier(activity))
                 .publishViewEvent(from: activity, to: viewEvent)
             } else {

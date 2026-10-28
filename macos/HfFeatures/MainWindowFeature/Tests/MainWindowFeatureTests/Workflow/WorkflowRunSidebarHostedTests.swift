@@ -28,6 +28,10 @@ import Testing
         let parallelHarness = parallelTests.makeSUT()
         parallelHarness.tasksBox.value["task-0"] = parallelTests.task(id: "task-0", status: "completed")
         parallelHarness.tasksBox.value["task-1"] = parallelTests.task(id: "task-1", status: "completed")
+        parallelHarness.itemsBox.value["task-0"] = [PreviewFixtures.textItem("First node activity")]
+        parallelHarness.itemsBox.value["task-1"] = [PreviewFixtures.textItem("Second node activity")]
+        parallelHarness.availabilityBox.value["task-0"] = .available
+        parallelHarness.availabilityBox.value["task-1"] = .available
         vm.parallel = parallelHarness.sut
         let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 900, height: 700))
         defer { fixture.close() }
@@ -62,7 +66,7 @@ import Testing
         #expect(vm.selectedActivity?.leasedMemberCount == 1)
 
         #expect(restoredScroll !== secondScroll)
-        #expect(restoredScroll !== firstScroll, "A same-width owner swap must recreate the observer mount so leases reacquire")
+        #expect(restoredScroll !== firstScroll, "A same-width owner swap must recreate the feed mount so leases reacquire")
     }
 
     @Test(arguments: [220.0, 288.0], [ColorScheme.light, .dark])
@@ -210,7 +214,7 @@ import Testing
         guard let sidebar = fixture.element("workflow-selected-sidebar"),
               let sidebarFrame = fixture.frame(sidebar) else { return nil }
         return fixture.descendants.compactMap { $0 as? NSScrollView }.first { scroll in
-            guard scroll.hasHorizontalScroller else { return false }
+            guard scroll.hasVerticalScroller, !scroll.hasHorizontalScroller, scroll.documentView is NSTableView else { return false }
             let frame = scroll.convert(scroll.bounds, to: fixture.host)
             return frame.intersects(sidebarFrame)
         }

@@ -98,8 +98,11 @@ no embedded terminal anywhere in this package:
   old id to its conversation's new one.
 - Parallel keeps complete group membership for summaries and actions, but acquires activity leases
   only for members of viewport-intersecting conversations; do not prefetch neighboring columns.
-  The standalone group and workflow activity pane share the measured viewport surface. Lazy view
-  appearance is not visibility evidence. Never-visited conversations keep lightweight descriptors.
+  The standalone group and workflow Parallel view share the measured horizontal viewport surface.
+  The Graph selected-node inspector instead renders one width-fitting conversation at a time; its
+  explicit selector determines residency while its measured width is positive. Zero width or hiding
+  releases its leases. Keep selection and visited reading state across switches and suspension; new
+  arrivals and reordering preserve a valid manual selection. Lazy view appearance is not visibility evidence. Never-visited conversations keep lightweight descriptors.
   Leaving the viewport releases only this VM's leases and subscriptions and stops activity updates,
   while retaining the visited conversation's loaded presentation, history boundaries, scroll anchor,
   disclosure and live-follow state until removal or full teardown. Reentry displays the snapshot
