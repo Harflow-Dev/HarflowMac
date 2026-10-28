@@ -46,6 +46,8 @@ import Testing
         installNeed: @escaping (ToolError) -> InstallNeed? = { _ in nil }
     ) -> (sut: HarnessesVM, useCase: MockHarnessesUseCase) {
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(status)
         given(useCase).locate().willReturn(locate)
         Self.stubInstall(useCase, installState: installState, installNeed: installNeed)
@@ -138,6 +140,8 @@ import Testing
         // given
         let failure = ToolError.notFound(tool: "harflow-setup", searched: ["/usr/local/bin"])
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.failure(failure))
         given(useCase).locate().willReturn(.success(Self.setupClient))
         Self.stubInstall(useCase, installNeed: { $0 == failure ? .incomplete : nil })
@@ -226,6 +230,8 @@ import Testing
     @Test func givenAHarnessActionSucceeds_whenCompleted_thenOnlyThatRowUpdates() async {
         // given — existing issue, preserved: the other row must be untouched by the action's result.
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(twoRowsJSON)))
         let installedDocument = document(#"""
         {"v":1,"clients":[{"key":"codex","available":true,"installed":true,"current":true,"action":"install"}]}
@@ -257,6 +263,8 @@ import Testing
     @Test func givenAHarnessActionFails_whenCompleted_thenTheErrorMessageIsSetAndRowsAreUnchanged() async {
         // given
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(twoRowsJSON)))
         let failure = ToolError.notFound(tool: "harflow-setup", searched: ["/usr/local/bin"])
         given(useCase).perform(.any, client: .value("claude-code"), using: .any).willReturn(.failure(failure))
@@ -282,6 +290,8 @@ import Testing
     @Test func givenInstalled_whenAHarnessActionFails_thenTheErrorOutranksTheSuccessBanner() async {
         // given — the success banner is showing after an install.
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(twoRowsJSON)))
         let failure = ToolError.launchFailed(tool: "harflow-setup", detail: "crashed")
         given(useCase).perform(.any, client: .value("claude-code"), using: .any).willReturn(.failure(failure))
@@ -313,6 +323,8 @@ import Testing
         // locate the original ran again inside `run` fails.
         let locateFailure = ToolError.notFound(tool: "harflow-setup", searched: ["/usr/local/bin"])
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(twoRowsJSON)))
         given(useCase).locate().willReturn(.failure(locateFailure))
         given(useCase).perform(.any, client: .any, using: .any).willReturn(.failure(locateFailure))
@@ -449,6 +461,8 @@ import Testing
     @Test func givenAStaleConfirm_whenTheStateChangedBeforeConfirming_thenInstallUvThenHarflowIsNotCalled() async {
         // given — the state changes between the dialog publishing and the person confirming it.
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(HarnessesVMTests.emptyDocumentJSON)))
         given(useCase).locate().willReturn(.success(Self.setupClient))
         let installStateSubject = PassthroughSubject<InstallState, Never>()
@@ -471,6 +485,8 @@ import Testing
     @Test func givenUnresolvedWithAnInstallAnywayBlockedMessage_whenShown_thenItOutranksTheLastCheckMessage() async {
         // given
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(HarnessesVMTests.emptyDocumentJSON)))
         given(useCase).locate().willReturn(.success(Self.setupClient))
         let lastCheckMessageSubject = PassthroughSubject<String?, Never>()
@@ -546,6 +562,8 @@ import Testing
         let sutBox = SUTBox()
         let staleDocumentJSON = #"{"v":1,"clients":[{"key":"claude-code","available":true,"installed":true,"current":true}]}"#
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willProduce {
             sutBox.sut?.loadGeneration += 1
             return .success(Self.document(staleDocumentJSON))

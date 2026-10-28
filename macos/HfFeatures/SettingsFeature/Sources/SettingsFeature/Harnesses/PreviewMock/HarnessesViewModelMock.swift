@@ -14,7 +14,10 @@ import MonitorCore
 /// Preview mock for `HarnessesView`.
 @MainActor
 final class HarnessesViewModelMock: HarnessesViewModel {
-    
+    var qualificationCards: [QualificationCard] = [.init(id: "fixture", model: .init(
+        identity: "Fixture harness · fixture version", state: .ready, message: "Fixture required features are ready.",
+        features: [.init(id: "fixture_feature", result: "Ready · seeded")]))]
+
     var rows: [HarnessRow]
     var serverPath: String?
     var errorMessage: String?

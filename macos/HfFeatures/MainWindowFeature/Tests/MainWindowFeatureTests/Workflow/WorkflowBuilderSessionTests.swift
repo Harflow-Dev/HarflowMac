@@ -158,7 +158,7 @@ final class BuilderSessionUseCase: WorkflowUseCase, @unchecked Sendable {
     func refreshTasks() async {}
     func validate(definition _: JSONValue) async throws -> [String: JSONValue] { ["valid": .bool(true)] }
     func save(name _: String, definition _: JSONValue, expectedRevision _: Int, expectedWorkflowID _: String?) async throws -> [String: JSONValue] { [:] }
-    func command(_ command: String, options _: [String], positionals _: [String]) async throws -> [String: JSONValue] {
+    func command(_ command: String, options _: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         if command == "build" {
             buildCount += 1
             if buildResponse == "failure" { throw CocoaError(.fileReadUnknown) }

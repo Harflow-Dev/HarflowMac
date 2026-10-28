@@ -110,7 +110,7 @@ private final class PreviewWorkflowUseCase: WorkflowUseCase, @unchecked Sendable
     var backendIDs: [String] { ["codex", "claude", "vibe"] }
     func modelOptions(backend _: String) async -> [ModelOption] { [] }
     func refreshTasks() async {}
-    func command(_ command: String, options _: [String], positionals _: [String]) async throws -> [String: JSONValue] {
+    func command(_ command: String, options _: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         command == "status" ? run : [:]
     }
 

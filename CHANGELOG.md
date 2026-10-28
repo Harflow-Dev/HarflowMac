@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add explicit harness qualification to New session, workflow launch and Settings, with identity-bound evidence, required-feature checks, progress, cancellation and retry. Engines without `backend-qualification.v1`, including the currently paired 0.0.4, show unsupported qualification and cannot start new sessions or workflows.
+
 - Remove automatic horizontal movement in standalone and workflow Parallel activity, retaining manual positions across navigation and native remounts while preserving vertical live-follow and panel arrival animation.
 
 - Keep workflow runs ordered by creation time while node activity updates; use this stable fallback until the engine exposes explicit caller-resume timestamps.

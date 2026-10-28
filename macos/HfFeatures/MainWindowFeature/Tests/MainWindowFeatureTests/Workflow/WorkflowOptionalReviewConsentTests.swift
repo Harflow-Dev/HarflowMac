@@ -25,7 +25,7 @@ struct WorkflowOptionalReviewConsentTests {
         let harness = WorkflowTests().makeVM()
         let vm = harness.sut
         defer { vm.didDisappear() }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         vm.selectedRun = inputRun()
         vm.instructions = "Keep the required review"
         vm.additionalAttempts = 2
@@ -48,7 +48,7 @@ struct WorkflowOptionalReviewConsentTests {
                        "--decision-id=child-question"]
         if explicitConsent { options.append("--allow-optional-review-skip") }
         await verify(harness.useCase)
-            .command(.value("resume"), options: .value(options), positionals: .value(["root-run"]))
+            .command(.value("resume"), options: .value(options), positionals: .value(["root-run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
     }
 
@@ -66,7 +66,7 @@ struct WorkflowOptionalReviewConsentTests {
 
         // then
         #expect(!run.canSkipOptionalReview)
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
     }
 
     @Test(arguments: ["hint", "decision", "delegation", "settling", "caller", "child", "answer", "command"])
@@ -90,6 +90,6 @@ struct WorkflowOptionalReviewConsentTests {
         // when
         harness.sut.control(condition == "command" ? "recover" : "resume", allowOptionalReviewSkip: true)
         // then
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
     }
 }

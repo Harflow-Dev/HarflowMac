@@ -15,6 +15,7 @@ import Testing
         sut: NewSessionVM, useCase: MockNewSessionUseCase, routing: MockNewSessionRouting, catalogSubject: PassthroughSubject<BackendCatalog, Never>
     ) {
         let useCase = MockNewSessionUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockNewSessionRouting()
         let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
         given(useCase).backendCatalog.willReturn(catalog)
@@ -24,6 +25,7 @@ import Testing
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let sut = NewSessionVM(useCase: useCase, routing: routing)
+        sut.didAppear()
         return (sut, useCase, routing, catalogSubject)
     }
 
@@ -37,9 +39,10 @@ import Testing
     private func start(_ sut: NewSessionVM, _ useCase: MockNewSessionUseCase, _ routing: MockNewSessionRouting) async {
         given(routing).didStart(taskID: .any).willReturn()
         given(useCase).resolvedRepoPath(.any).willReturn("/tmp/repo")
-        given(useCase).run(.any).willReturn("id")
+        given(useCase).run(.any, runtime: .any).willReturn("id")
         sut.didChangeRepo("/tmp/repo")
         sut.didChangeMessage("do the thing")
+        await waitUntil { sut.canStart }
         sut.didTapStart()
         await waitUntil { sut.isStarting == false }
     }
@@ -64,7 +67,7 @@ import Testing
 
     // MARK: - Start-button enable rules
 
-    @Test func givenABlankMessage_whenCanStartIsRead_thenItIsFalse() {
+    @Test func givenABlankMessage_whenCanStartIsRead_thenItIsFalse() async {
         // given
         let (sut, _, _, _) = makeSUT()
         sut.didChangeRepo("/tmp/repo")
@@ -76,6 +79,7 @@ import Testing
         sut.didChangeMessage("do the thing")
 
         // then
+        await waitUntil { sut.canStart }
         #expect(sut.canStart == true)
     }
 
@@ -92,7 +96,7 @@ import Testing
 
     // MARK: - Repo path validation (exact copy)
 
-    @Test func givenARelativeOrMissingPath_whenStarted_thenTheExactValidationTextIsShown() {
+    @Test func givenARelativeOrMissingPath_whenStarted_thenTheExactValidationTextIsShown() async {
         // given
         let (sut, useCase, _, _) = makeSUT()
         given(useCase).resolvedRepoPath(.any).willReturn(nil)
@@ -100,6 +104,7 @@ import Testing
         sut.didChangeMessage("do the thing")
 
         // when
+        await waitUntil { sut.canStart }
         sut.didTapStart()
 
         // then
@@ -112,12 +117,13 @@ import Testing
         // given
         let (sut, useCase, routing, _) = makeSUT()
         given(useCase).resolvedRepoPath(.any).willReturn("/tmp/repo")
-        given(useCase).run(.any).willReturn("new-task-id")
+        given(useCase).run(.any, runtime: .any).willReturn("new-task-id")
         given(routing).didStart(taskID: .any).willReturn()
         sut.didChangeRepo("/tmp/repo")
         sut.didChangeMessage("do the thing")
 
         // when
+        await waitUntil { sut.canStart }
         sut.didTapStart()
 
         // then — `isStarting` flips synchronously, then clears once the (mocked, immediate) run
@@ -133,11 +139,12 @@ import Testing
         // given
         let (sut, useCase, _, _) = makeSUT()
         given(useCase).resolvedRepoPath(.any).willReturn("/tmp/repo")
-        given(useCase).run(.any).willThrow(ToolError.notFound(tool: "harflow-ctl", searched: []))
+        given(useCase).run(.any, runtime: .any).willThrow(ToolError.notFound(tool: "harflow-ctl", searched: []))
         sut.didChangeRepo("/tmp/repo")
         sut.didChangeMessage("do the thing")
 
         // when
+        await waitUntil { sut.canStart }
         sut.didTapStart()
 
         // then
@@ -281,6 +288,7 @@ import Testing
         sut.didAppear()
         sut.didChangeRepo("/tmp")
         sut.didChangeMessage("do the thing")
+        await waitUntil { sut.canStart }
         #expect(sut.canStart == true)
 
         // when — harflow itself reports no registered backends at all.
@@ -290,6 +298,8 @@ import Testing
         await waitUntil { sut.backend.isEmpty }
         #expect(sut.backend.isEmpty)
         #expect(sut.canStart == false)
+        #expect(sut.qualificationCards.isEmpty)
+        sut.didDisappear()
     }
 
     // MARK: - Agent cards
@@ -392,7 +402,7 @@ import Testing
         await start(sut, useCase, routing)
 
         // then
-        verify(useCase).run(.matching { $0.title == "MT-1 review" }).called(1)
+        verify(useCase).run(.matching { $0.title == "MT-1 review" }, runtime: .any).called(1)
     }
 
     @Test func givenABlankName_whenStarted_thenTheTitleIsNil() async {
@@ -404,7 +414,7 @@ import Testing
         await start(sut, useCase, routing)
 
         // then
-        verify(useCase).run(.matching { $0.title == nil && $0.model == nil && $0.maxTurns == nil && $0.reasoningEffort == nil }).called(1)
+        verify(useCase).run(.matching { $0.title == nil && $0.model == nil && $0.maxTurns == nil && $0.reasoningEffort == nil }, runtime: .any).called(1)
     }
 
     @Test func givenAModelAndTurnLimit_whenStarted_thenTheyReachTheRequest() async {
@@ -418,7 +428,7 @@ import Testing
         await start(sut, useCase, routing)
 
         // then
-        verify(useCase).run(.matching { $0.model == "gpt-x" && $0.maxTurns == 40 }).called(1)
+        verify(useCase).run(.matching { $0.model == "gpt-x" && $0.maxTurns == 40 }, runtime: .any).called(1)
     }
 
     @Test(arguments: ["codex", "opencode"])
@@ -433,7 +443,7 @@ import Testing
 
         // then
         #expect(!sut.showsTurnLimit)
-        verify(useCase).run(.matching { $0.maxTurns == nil }).called(1)
+        verify(useCase).run(.matching { $0.maxTurns == nil }, runtime: .any).called(1)
     }
 
     @Test(arguments: ["abc", "0", "-3", "1.5", "99999999999999999999"])
@@ -463,7 +473,7 @@ import Testing
 
         // then
         #expect(sut.turnLimitError == nil)
-        verify(useCase).run(.matching { $0.maxTurns == nil }).called(1)
+        verify(useCase).run(.matching { $0.maxTurns == nil }, runtime: .any).called(1)
     }
 
     // MARK: - Advanced options per backend
@@ -480,7 +490,7 @@ import Testing
         await start(sut, useCase, routing)
 
         // then
-        verify(useCase).run(.matching { $0.reasoningEffort == "high" }).called(1)
+        verify(useCase).run(.matching { $0.reasoningEffort == "high" }, runtime: .any).called(1)
     }
 
     @Test func givenAnUnknownEffort_whenChosen_thenItFallsBackToDefault() {
@@ -520,7 +530,7 @@ import Testing
 
         // then
         #expect(sut.effort == "")
-        verify(useCase).run(.matching { $0.backend == "vibe" && $0.reasoningEffort == nil && $0.model == nil }).called(1)
+        verify(useCase).run(.matching { $0.backend == "vibe" && $0.reasoningEffort == nil && $0.model == nil }, runtime: .any).called(1)
     }
 
     @Test func givenAntigravitySelected_whenEffortOptionsAreRead_thenOnlyItsThreeLevelsAreOffered() {
@@ -548,7 +558,7 @@ import Testing
 
         // then — the switch resets an effort the new backend does not offer.
         #expect(sut.effort == "")
-        verify(useCase).run(.matching { $0.backend == "antigravity" && $0.reasoningEffort == nil }).called(1)
+        verify(useCase).run(.matching { $0.backend == "antigravity" && $0.reasoningEffort == nil }, runtime: .any).called(1)
     }
 
     // MARK: - Freedom
@@ -574,6 +584,6 @@ import Testing
 
         // then
         #expect(sut.accessOptions.map(\.isSelected) == [false, false, true, false])
-        verify(useCase).run(.matching { $0.freedom == "publish" }).called(1)
+        verify(useCase).run(.matching { $0.freedom == "publish" }, runtime: .any).called(1)
     }
 }

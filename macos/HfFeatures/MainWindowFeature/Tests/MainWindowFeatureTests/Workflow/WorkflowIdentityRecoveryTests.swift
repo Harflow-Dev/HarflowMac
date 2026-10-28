@@ -28,7 +28,7 @@ import Testing
         let polling = WorkflowRunPolling()
         var response: [String: JSONValue] = ["status": .string("running")]
         if !responseID.isEmpty { response["workflow_run_id"] = .string(responseID) }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(response)
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(response)
         // when
         _ = try await polling.load(id: "run", useCase: harness.useCase)
         harness.sut.prepareRun(id: "run", polling: polling)

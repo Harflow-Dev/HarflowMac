@@ -41,7 +41,7 @@ struct WorkflowGoalRevisionTests {
         // given
         let harness = WorkflowTests().makeVM()
         defer { harness.sut.didDisappear() }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willThrow(CancellationError())
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willThrow(CancellationError())
         harness.sut.selectedRun = WorkflowRunModel(raw: [
             "workflow_run_id": .string(String(repeating: "a", count: 32)), "status": .string("paused")
         ])
@@ -56,7 +56,7 @@ struct WorkflowGoalRevisionTests {
         // given
         let harness = WorkflowTests().makeVM()
         defer { harness.sut.didDisappear() }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: [
             "workflow_run_id": .string("run"), "goal_revision": .number(3), "status": .string("paused"),
             "interaction_owner": .string("monitor"), "can_revise_goal": .bool(true)
@@ -67,7 +67,7 @@ struct WorkflowGoalRevisionTests {
         // then
         let options = ["--monitor", "--goal=  Verify\nall states  ", "--expected-revision=3"]
         await verify(harness.useCase)
-.command(.value("revise-goal"), options: .value(options), positionals: .value(["run"]))
+.command(.value("revise-goal"), options: .value(options), positionals: .value(["run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
     }
 
@@ -84,6 +84,6 @@ struct WorkflowGoalRevisionTests {
         harness.sut.reviseGoal(goal, runID: "run", expectedRevision: 0)
         // then
         #expect(harness.sut.errorText != nil)
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
     }
 }

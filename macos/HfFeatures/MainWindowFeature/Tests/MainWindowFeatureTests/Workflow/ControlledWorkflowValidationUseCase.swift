@@ -54,7 +54,7 @@ final class ControlledWorkflowValidationUseCase: WorkflowUseCase, @unchecked Sen
         pending.removeValue(forKey: index)?.resume(with: result)
     }
 
-    func command(_ command: String, options _: [String], positionals _: [String]) async throws -> [String: JSONValue] {
+    func command(_ command: String, options _: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         if ["list", "status"].contains(command), delayRefresh {
             return await withCheckedContinuation { pendingRefresh = $0 }
         }

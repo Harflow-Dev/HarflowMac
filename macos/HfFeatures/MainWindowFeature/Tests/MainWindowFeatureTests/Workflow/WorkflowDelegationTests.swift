@@ -84,14 +84,14 @@ struct WorkflowDelegationTests {
         // when
         harness.sut.control("recover")
         // then
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
         #expect(harness.sut.selectedRun?.canRecover == false)
     }
 
     @Test func givenFailedDelegation_whenRecovered_thenReasonAndGrantSubmitted() async {
         // given
         let harness = WorkflowTests().makeVM()
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "execution_contract": .string("delegation"),
                                                        "status": .string("failed")])
         harness.sut.instructions = "Investigated and approved"
@@ -101,7 +101,7 @@ struct WorkflowDelegationTests {
         // then
         await verify(harness.useCase)
 .command(.value("recover"), options: .value(["--reason=Investigated and approved", "--additional-attempts=2"]),
-                                            positionals: .value(["run"]))
+                                            positionals: .value(["run"]), runtime: .any)
 .calledEventually(1, before: .seconds(5))
     }
 
@@ -109,7 +109,7 @@ struct WorkflowDelegationTests {
     func givenUnansweredInputRun_whenCancelled_thenCancellationBypassesRecoveryGuards(settling: Bool) async {
         // given
         let harness = WorkflowTests().makeVM()
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "execution_contract": .string("delegation"),
                                                        "status": .string("needs_input"), "settling": .bool(settling)])
         harness.sut.instructions = ""
@@ -117,7 +117,7 @@ struct WorkflowDelegationTests {
         harness.sut.control("cancel")
         // then
         await verify(harness.useCase)
-.command(.value("cancel"), options: .value(["--monitor"]), positionals: .value(["run"]))
+.command(.value("cancel"), options: .value(["--monitor"]), positionals: .value(["run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
     }
 
@@ -151,7 +151,7 @@ struct WorkflowDelegationTests {
     @Test func givenMonitorInputQuestion_whenAnswered_thenOwnershipAndDecisionIdentitySubmitted() async {
         // given
         let harness = WorkflowTests().makeVM()
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "execution_contract": .string("delegation"),
                                                        "status": .string("needs_input"), "interaction_owner": .string("monitor"),
                                                        "input_decision_id": .string("question-1")])
@@ -162,7 +162,7 @@ struct WorkflowDelegationTests {
         await verify(harness.useCase)
 .command(.value("resume"),
             options: .value(["--monitor", "--instructions=Use existing implementation", "--additional-attempts=0", "--decision-id=question-1"]),
-            positionals: .value(["run"]))
+            positionals: .value(["run"]), runtime: .any)
 .calledEventually(1, before: .seconds(5))
     }
 
@@ -179,7 +179,7 @@ struct WorkflowDelegationTests {
     @Test func givenFailedRetryBudget_whenOneMoreRetryApproved_thenRecoverGetsOneGrant() async {
         // given
         let harness = WorkflowTests().makeVM()
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "execution_contract": .string("delegation"),
                                                        "status": .string("failed"), "exhausted_retry_edges": .array([.string("retry")])])
         harness.sut.additionalAttempts = 8
@@ -191,7 +191,7 @@ struct WorkflowDelegationTests {
         harness.sut.continueWithOneMoreRetry()
         await verify(harness.useCase)
 .command(.value("recover"), options: .value(["--reason=Reviewed failure", "--additional-attempts=1"]),
-                                            positionals: .value(["run"]))
+                                            positionals: .value(["run"]), runtime: .any)
 .calledEventually(1, before: .seconds(5))
     }
 

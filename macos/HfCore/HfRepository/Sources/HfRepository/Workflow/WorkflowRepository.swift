@@ -12,6 +12,8 @@ public protocol WorkflowRepository: Sendable {
     func historyPage(cursor: String?, activeOnly: Bool, relatedRunID: String?) async throws -> HistoryPage
     /// Executes a workflow command and returns its versioned result payload.
     func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue]
+    /// Binds this operation to the runtime that produced its qualification evidence.
+    func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken) async throws -> [String: JSONValue]
     /// Validates an editable graph without saving workflow state.
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
     /// Saves against the revision the editor loaded, refusing concurrent edits.
@@ -42,7 +44,15 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
     }
 
     public func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
-        let ctl = try toolEnvironment.ctl().get()
+        try await self.command(command, options: options, positionals: positionals, using: toolEnvironment.ctl().get())
+    }
+
+    /// Binds this operation to the runtime that produced its qualification evidence.
+    public func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken) async throws -> [String: JSONValue] {
+        try await self.command(command, options: options, positionals: positionals, using: runtime.boundClient(tooling: toolEnvironment))
+    }
+
+    private func command(_ command: String, options: [String], positionals: [String], using ctl: CtlClient) async throws -> [String: JSONValue] {
         // Workflow prompts, control instructions and builder JSON are logical payloads, never argv entries.
         // Keep its disposable files alive until the CLI has finished, including failures.
         let payloadCommands = ["build", "start", "builder-followup", "resume", "recover", "revise-goal"]
@@ -104,4 +114,10 @@ public struct NullWorkflowRepository: WorkflowRepository {
 public extension GlobalValues {
     /// Shared workflow CLI repository.
     @GlobalEntry var workflowRepository: any WorkflowRepository = NullWorkflowRepository()
+}
+
+public extension WorkflowRepository {
+    func command(_: String, options _: [String], positionals _: [String], runtime _: QualificationRuntimeToken) async throws -> [String: JSONValue] {
+        throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "workflow", detail: "Runtime-bound command unavailable")
+    }
 }

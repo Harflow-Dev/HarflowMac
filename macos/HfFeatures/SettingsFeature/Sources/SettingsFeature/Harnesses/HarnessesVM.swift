@@ -22,6 +22,8 @@ import MonitorCore
 @Mockable
 @MainActor
 protocol HarnessesUseCase: Sendable {
+    func qualificationSession() -> QualificationSession
+    func qualificationBackends() async throws -> [String]
     func status() async -> Result<SetupDocument, ToolError>
     func perform(_ action: SetupClient.Action, client: String?, using setupClient: SetupClient) async -> Result<SetupDocument, ToolError>
     /// Locates `harflow-setup` only, mirroring the original's `model.setup()` pre-check in `run`
@@ -63,6 +65,53 @@ final class HarnessesVM: HarnessesViewModel {
     
     // MARK: - HarnessesViewModel Properties
     
+    private var qualifications: [String: QualificationPresentation] = [:]
+    @ObservationIgnored private var qualificationTask: Task<Void, Never>?
+    @ObservationIgnored private var qualificationGeneration = UUID()
+    private var qualificationFailure: String?
+    var qualificationCards: [QualificationCard] {
+        if let qualificationFailure {
+            return [.init(id: "discovery", model: .init(identity: "Harness discovery", state: .failed,
+                                                        message: qualificationFailure, features: []))]
+        }
+        return qualifications.keys.sorted().flatMap { backend in
+            (qualifications[backend]?.cards ?? []).map { card in
+                QualificationCard(id: backend + ":" + card.id, model: card.model, owner: backend)
+            }
+        }
+    }
+
+    func didTapQualification(_ id: String) {
+        if id == "discovery" { loadQualifications(); return }
+        guard let backend = qualificationCards.first(where: { $0.id == id })?.owner,
+              let controller = qualifications[backend] else { return }
+        if controller.isChecking { controller.cancel() } else { controller.check() }
+    }
+
+    private func loadQualifications() {
+        qualificationTask?.cancel()
+        qualifications.values.forEach { $0.stop() }
+        qualifications = [:]
+        qualificationFailure = nil
+        let generation = UUID()
+        qualificationGeneration = generation
+        qualificationTask = Task { [weak self, useCase] in
+            let backends: [String]
+            do { backends = try await useCase.qualificationBackends() } catch {
+                guard let self, !Task.isCancelled, generation == qualificationGeneration else { return }
+                qualificationFailure = String(((error as? ToolError)?.message ?? String(describing: error)).prefix(1000))
+                return
+            }
+            guard let self, !Task.isCancelled, generation == qualificationGeneration else { return }
+            for backend in backends {
+                let controller = QualificationPresentation(session: useCase.qualificationSession())
+                qualifications[backend] = controller
+                _ = await controller.discover(.harness(backend: backend))
+                guard !Task.isCancelled, generation == qualificationGeneration else { controller.stop(); return }
+            }
+        }
+    }
+
     private(set) var rows: [HarnessRow] = []
     private(set) var serverPath: String?
     private(set) var errorMessage: String?
@@ -103,16 +152,21 @@ final class HarnessesVM: HarnessesViewModel {
     // MARK: - HarnessesViewModel Methods
 
     func didAppear() {
+        loadQualifications()
         subscribeIfNeeded()
         Task { [weak self] in await self?.load() }
     }
 
     func didDisappear() {
+        qualificationGeneration = UUID()
+        qualificationTask?.cancel()
+        qualifications.values.forEach { $0.stop() }
         cancellables.removeAll()
         didSubscribe = false
     }
 
     func didTapRefresh() {
+        loadQualifications()
         Task { [weak self] in await self?.load() }
     }
     
@@ -183,6 +237,7 @@ final class HarnessesVM: HarnessesViewModel {
             .filter(\.self)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                self?.loadQualifications()
                 Task { [weak self] in await self?.load() }
             }
             .store(in: &cancellables)
@@ -416,4 +471,9 @@ extension HarnessesVM {
         if case .unresolved = state { return true }
         return false
     }
+}
+
+extension HarnessesUseCase {
+    func qualificationSession() -> QualificationSession { QualificationSession(repository: NullQualificationRepository()) }
+    func qualificationBackends() async throws -> [String] { [] }
 }

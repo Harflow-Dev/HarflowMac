@@ -18,6 +18,7 @@ import MonitorCore
 @Mockable
 @MainActor
 protocol NewSessionUseCase: Sendable {
+    func qualificationSession() -> QualificationSession
     /// Expands `~`, then validates the result is an absolute path to an existing directory
     /// (F4-44). Returns the resolved path, or `nil` when the exact validation text
     /// "Choose an existing folder." should be shown.
@@ -25,7 +26,7 @@ protocol NewSessionUseCase: Sendable {
 
     /// Refreshes the listing before returning, so a caller can route to the new task once this
     /// returns (F4-17) — inherited unchanged from `TaskActionRepository.run`.
-    func run(_ request: RunRequest) async throws -> String
+    func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String
 
     /// The current task listing; the VM derives the "Recent" repositories from it.
     var tasks: [TaskInfo] { get }
@@ -44,6 +45,7 @@ protocol NewSessionUseCase: Sendable {
 }
 
 extension NewSessionUseCase {
+    func qualificationSession() -> QualificationSession { QualificationSession(repository: NullQualificationRepository()) }
     var agentUsageSnapshot: AgentUsageSnapshot { .init() }
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
 }
@@ -81,6 +83,22 @@ protocol NewSessionRouting: Sendable {
 final class NewSessionVM: NewSessionViewModel {
 
     // MARK: - NewSessionViewModel Properties
+
+    private var qualification: QualificationPresentation?
+    @ObservationIgnored private var qualificationTask: Task<Void, Never>?
+    var qualificationCards: [QualificationCard] {
+        guard !backend.isEmpty else { return [] }
+        if let agentNotFoundNote {
+            return [.init(id: "unavailable/" + backend, model: .init(identity: BackendStyle.displayName(backend),
+                state: .unavailable, message: agentNotFoundNote, features: [], canCheck: false))]
+        }
+        return qualification?.cards ?? []
+    }
+
+    func didTapQualification() {
+        guard !backend.isEmpty, agentNotFoundNote == nil, let qualification else { return }
+        if qualification.isChecking { qualification.cancel() } else { qualification.check() }
+    }
 
     private(set) var backend = ""
     private(set) var repo = ""
@@ -163,7 +181,8 @@ final class NewSessionVM: NewSessionViewModel {
     var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
 
     var canStart: Bool {
-        !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        agentNotFoundNote == nil && qualification?.isReady == true && !isStarting && !backend.isEmpty && !repo.isEmpty
+            && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && turnLimitError == nil && callerApprovalError == nil
     }
 
@@ -217,12 +236,16 @@ final class NewSessionVM: NewSessionViewModel {
     // MARK: - NewSessionViewModel Methods
 
     func didAppear() {
+        if qualification == nil { qualification = QualificationPresentation(session: useCase.qualificationSession()) }
+        refreshQualification()
         refreshRecentRepos()
         subscribeIfNeeded()
         loadModels()
     }
 
     func didDisappear() {
+        qualificationTask?.cancel()
+        qualification?.stop()
         cancellables.removeAll()
         didSubscribe = false
         modelsTask?.cancel()
@@ -235,26 +258,29 @@ final class NewSessionVM: NewSessionViewModel {
         if !effortOptions.contains(effort) { effort = "" }
         recomputeAgentNotFoundNote()
         if value != previous { agentDidChange() }
+        refreshQualification()
     }
 
-    func didChangeRepo(_ value: String) { repo = value }
-    func didChangeFreedom(_ value: String) { freedom = value }
-    func didChangeMessage(_ value: String) { message = value }
-    func didChangeName(_ value: String) { name = value }
-    func didChangeModel(_ value: String) { model = value }
-    func didChangeTurnLimit(_ value: String) { turnLimit = value }
-    func didChangeCallerApprovals(_ value: Bool) { callerApprovals = value && supportsCallerApprovals; approvalNote = nil }
-    func didChangeEffort(_ value: String) { effort = effortOptions.contains(value) ? value : "" }
-    func didTapRecentRepo(_ path: String) { repo = path }
+    func didChangeRepo(_ value: String) { repo = value; refreshQualification() }
+    func didChangeFreedom(_ value: String) { freedom = value; refreshQualification() }
+    func didChangeMessage(_ value: String) { message = value; refreshQualification() }
+    func didChangeName(_ value: String) { name = value; refreshQualification() }
+    func didChangeModel(_ value: String) { model = value; refreshQualification() }
+    func didChangeTurnLimit(_ value: String) { turnLimit = value; refreshQualification() }
+    func didChangeCallerApprovals(_ value: Bool) { callerApprovals = value && supportsCallerApprovals; approvalNote = nil; refreshQualification() }
+    func didChangeEffort(_ value: String) { effort = effortOptions.contains(value) ? value : ""; refreshQualification() }
+    func didTapRecentRepo(_ path: String) { repo = path; refreshQualification() }
 
     func didTapChooseDirectory() {
         Task { [weak self] in
             guard let path = await self?.routing.chooseDirectory() else { return }
             self?.repo = path
+            self?.refreshQualification()
         }
     }
 
     func didTapCancel() {
+        qualification?.stop()
         routing.dismiss()
     }
 
@@ -272,16 +298,22 @@ final class NewSessionVM: NewSessionViewModel {
         // while the request was in flight) — decision 3/F4-17's "capture Routing strongly" rule.
         // Only the failure path touches `self` (to show the error inline), weakly — there is
         // nothing left to show inline if the VM is already gone.
+        guard let qualification else { isStarting = false; return }
         let capturedUseCase = useCase
         let capturedRouting = routing
         Task { [weak self] in
             do {
-                let id = try await capturedUseCase.run(request)
+                guard await qualification.discover(Self.qualificationRequest(request)),
+                      let self, let runtime = qualification.runtime, makeRequest(repo: path) == request, isStarting else {
+                    self?.isStarting = false
+                    return
+                }
+                let id = try await capturedUseCase.run(request, runtime: runtime)
                 // Reset `isStarting` before routing, exactly like the old `NewSessionSheet`'s
                 // completion handler always did regardless of outcome — moot for the user (the
                 // coordinator dismisses the sheet right after), but keeps the VM's own state
                 // consistent for as long as it survives.
-                self?.isStarting = false
+                isStarting = false
                 capturedRouting.didStart(taskID: id)
             } catch {
                 self?.isStarting = false
@@ -291,6 +323,26 @@ final class NewSessionVM: NewSessionViewModel {
     }
 
     // MARK: - Private Methods
+
+    private static func qualificationRequest(_ request: RunRequest) -> QualificationRequest {
+        var options = ["--backend=\(request.backend)", "--repo=\(request.repo)"]
+        if let freedom = request.freedom { options.append("--freedom=\(freedom)") }
+        if request.callerApprovals { options.append("--caller-approvals") }
+        return .task(options: options)
+    }
+
+    private func refreshQualification() {
+        qualificationTask?.cancel()
+        guard let qualification else { return }
+        guard !backend.isEmpty, agentNotFoundNote == nil else { qualification.stop(); return }
+        let request = makeRequest(repo: repo)
+        qualification.prepare(request: Self.qualificationRequest(request))
+        qualificationTask = Task {
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            guard !Task.isCancelled else { return }
+            _ = await qualification.discover(Self.qualificationRequest(request))
+        }
+    }
 
     /// Empty optional fields become `nil`, so they are never passed to `ctl run` (an invalid turn
     /// limit never gets here: it holds `canStart` back).
@@ -370,6 +422,7 @@ final class NewSessionVM: NewSessionViewModel {
     /// catalog; otherwise fall to the catalog's first entry — or to nothing at all when the catalog
     /// is empty, which is what disables Start.
     private func applyCatalog(_ catalog: BackendCatalog) {
+        let previousNotFoundNote = agentNotFoundNote
         approvalBackends = catalog.state == .available ? Set(catalog.entries.filter(\.supportsCallerApprovals).map(\.backend)) : []
         let (options, unavailableNote) = Self.computeAgentOptions(from: catalog)
         let order = usage.rankedBackends(options.map(\.id))
@@ -381,7 +434,12 @@ final class NewSessionVM: NewSessionViewModel {
             backend = agentOptions.first?.id ?? ""
         }
         recomputeAgentNotFoundNote()
-        if backend != previous, didSubscribe { agentDidChange() }
+        if backend != previous, didSubscribe {
+            agentDidChange()
+            refreshQualification()
+        } else if didSubscribe, previousNotFoundNote != agentNotFoundNote {
+            refreshQualification()
+        }
     }
 
     // Catalogs contain a bounded handful of harnesses; this pure presentation ordering never

@@ -14,11 +14,12 @@ import Testing
     func harness(current: [String: JSONValue]) -> (WorkflowVM, WorkflowDraftStore) {
         let store = WorkflowDraftTests().store()
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
-        given(useCase).command(.value("get"), options: .any, positionals: .any).willReturn(current)
+        given(useCase).command(.value("get"), options: .any, positionals: .any, runtime: .any).willReturn(current)
         return (WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
                 visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler()), store)
     }

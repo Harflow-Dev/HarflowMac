@@ -11,6 +11,7 @@ extension WorkflowTests {
     @Test func givenCanonicalRetryMetadata_whenLimitsAndTopologyChange_thenDraftStaysRawAndInferenceNeverStales() async throws {
         // given
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).agentUsageSnapshot.willReturn(.init())
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
@@ -63,7 +64,7 @@ extension WorkflowTests {
         // given
         let harness = makeVM()
         let vm = harness.sut
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "status": .string("needs_attention"),
                                                "exhausted_retry_edges": .array([.string("retry")])])
         vm.instructions = "Try the alternate fix"
@@ -74,7 +75,7 @@ extension WorkflowTests {
         await verify(harness.useCase)
 .command(.value("resume"),
                                              options: .value(["--instructions=Try the alternate fix", "--additional-attempts=1"]),
-                                             positionals: .value(["run"]))
+                                             positionals: .value(["run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         #expect(vm.additionalAttempts == 1)
     }

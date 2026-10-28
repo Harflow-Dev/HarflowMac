@@ -11,6 +11,7 @@ import Testing
 @Suite struct WorkflowUsageTests {
     private func makeVM(routesStartedRun: Bool = false) -> (WorkflowVM, MockWorkflowUseCase) {
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn(["codex", "claude"])
@@ -67,9 +68,10 @@ import Testing
         vm.repo = "/tmp"; vm.showsRunSheet = true; vm.overrideOrchestrator = true
         vm.launchAgent = ["backend": .string("vibe"), "model": .string("fast")]
         vm.launchPreviewTask?.cancel()
+        _ = await vm.qualification?.discover(.workflow(name: vm.loadedName, options: vm.launchPreviewOptions))
         vm.launchPreview = try preview(backend: "vibe"); vm.launchPreviewMessage = nil
         given(useCase)
-.command(.value("start"), options: .any, positionals: .value(["implement-review"]))
+.command(.value("start"), options: .any, positionals: .value(["implement-review"]), runtime: .any)
             .willReturn(["workflow_run_id": .string("run-1")])
 
         #expect(vm.canStartWithPreview)
@@ -78,7 +80,7 @@ import Testing
         vm.start(); await waitUntil { !vm.isBusy }
 
         // then
-        verify(useCase).command(.value("start"), options: .any, positionals: .value(["implement-review"])).called(1)
+        verify(useCase).command(.value("start"), options: .any, positionals: .value(["implement-review"]), runtime: .any).called(1)
         verify(useCase)
 .recordAgentUsage(.value(AgentUsageIdentity(backend: "vibe", model: "fast")),
                                          acknowledgementID: .value("workflow:run-1"))
@@ -93,10 +95,11 @@ import Testing
         vm.definition = raw; vm.savedDefinition = raw; vm.name = "implement-review"; vm.loadedName = "implement-review"
         vm.repo = "/tmp"; vm.showsRunSheet = true
         vm.launchPreviewTask?.cancel()
+        _ = await vm.qualification?.discover(.workflow(name: vm.loadedName, options: vm.launchPreviewOptions))
         vm.launchPreview = try preview(backend: "codex")
         vm.launchPreviewMessage = nil
         given(useCase)
-.command(.value("start"), options: .any, positionals: .value(["implement-review"]))
+.command(.value("start"), options: .any, positionals: .value(["implement-review"]), runtime: .any)
             .willReturn([:])
 
         #expect(vm.canStartWithPreview)
@@ -105,7 +108,7 @@ import Testing
         vm.start(); await waitUntil { !vm.isBusy }
 
         // then
-        verify(useCase).command(.value("start"), options: .any, positionals: .value(["implement-review"])).called(1)
+        verify(useCase).command(.value("start"), options: .any, positionals: .value(["implement-review"]), runtime: .any).called(1)
         verify(useCase).recordAgentUsage(.any, acknowledgementID: .any).called(0)
         #expect(vm.errorText == WorkflowUIError.missingRun.errorDescription)
     }

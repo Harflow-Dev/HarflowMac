@@ -16,6 +16,8 @@ import SwiftUI
 /// View model protocol for the New Session sheet.
 @MainActor
 protocol NewSessionViewModel: ViewModel {
+    var qualificationCards: [QualificationCard] { get }
+    func didTapQualification()
 
     var backend: String { get }
     var repo: String { get }
@@ -191,6 +193,9 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
             sectionTitle("Harness")
             AgentGrid(cards: viewModel.agentCards, onSelect: viewModel.didChangeBackend)
+            ForEach(viewModel.qualificationCards) { card in
+                HarnessQualificationCard(model: card.model, action: viewModel.didTapQualification)
+            }
             if let note = viewModel.agentListUnavailableNote {
                 Text(note).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             } else if let note = viewModel.agentNotFoundNote {
@@ -380,4 +385,9 @@ extension NewSessionViewModel {
     var callerApprovalError: String? { nil }
     var approvalNote: String? { nil }
     func didChangeCallerApprovals(_ value: Bool) {}
+}
+
+extension NewSessionViewModel {
+    var qualificationCards: [QualificationCard] { [] }
+    func didTapQualification() {}
 }

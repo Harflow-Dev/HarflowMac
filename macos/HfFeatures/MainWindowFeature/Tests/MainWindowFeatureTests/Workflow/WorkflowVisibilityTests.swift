@@ -17,6 +17,7 @@ import Testing
     private func makeVM(visibility: FakeMonitorVisibility, scheduler: CapturingScheduler, reads: PollCounter,
                         raw: [String: JSONValue]) -> WorkflowVM {
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn(["codex", "claude"])
@@ -24,7 +25,7 @@ import Testing
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
-        given(useCase).command(.any, options: .any, positionals: .any).willProduce { _, _, _ in
+        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { _, _, _, _ in
             reads.increment()
             return raw
         }
@@ -113,13 +114,14 @@ import Testing
         let page: [String: JSONValue] = ["events": .array([]), "has_more": .bool(true)]
         let inspects = PollCounter()
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn([])
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
-        given(useCase).command(.any, options: .any, positionals: .any).willProduce { command, _, _ in
+        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { command, _, _, _ in
             if command == "inspect" { inspects.increment(); return page }
             return runRaw
         }
@@ -166,13 +168,14 @@ import Testing
             "activations": .array([.object(activation)])
         ]
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         given(useCase).backendIDs.willReturn([])
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
-        given(useCase).command(.any, options: .any, positionals: .any).willProduce { command, _, _ in
+        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { command, _, _, _ in
             guard command == "inspect" else { return runRaw }
             inspects.increment()
             if inspects.value <= failures { throw InspectFailure() }
@@ -233,6 +236,7 @@ import Testing
     @Test func givenAChangedRun_whenRefreshed_thenSelectedRunIsReassigned() async {
         // given
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         let status = PollCounter()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
@@ -240,7 +244,7 @@ import Testing
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
-        given(useCase).command(.any, options: .any, positionals: .any).willProduce { [raw] _, _, _ in
+        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { [raw] _, _, _, _ in
             status.increment()
             var next = raw
             next["status"] = .string(status.value > 1 ? "paused" : "running")

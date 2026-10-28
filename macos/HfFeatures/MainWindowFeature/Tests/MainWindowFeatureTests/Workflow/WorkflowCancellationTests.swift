@@ -10,7 +10,7 @@ import Testing
     @Test func givenIdleCallerOwnedRun_whenCancelled_thenHumanFlagSentAndOwnershipPreserved() async {
         // given
         let harness = WorkflowTests().makeVM()
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "status": .string("needs_input"),
             "interaction_owner": .string("caller"), "can_cancel_from_monitor": .bool(true)])
         harness.sut.instructions = "Unsaved caller answer"
@@ -19,7 +19,7 @@ import Testing
         harness.sut.control("cancel")
         // then
         await verify(harness.useCase)
-.command(.value("cancel"), options: .value(["--monitor"]), positionals: .value(["run"]))
+.command(.value("cancel"), options: .value(["--monitor"]), positionals: .value(["run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         #expect(harness.sut.instructions == "Unsaved caller answer")
         #expect(harness.sut.selectedRun?.allowsMonitorControl == false)
@@ -33,7 +33,7 @@ import Testing
         // when
         harness.sut.control("cancel")
         // then
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
     }
 
     @Test(arguments: ["completed", "failed", "cancelled", "cancelling"])

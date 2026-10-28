@@ -33,7 +33,7 @@ import Testing
         #expect(didClose)
         #expect(vm.instructions == "Keep the existing implementation.")
         #expect(vm.additionalAttempts == 7)
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
     }
 
     @Test func givenBlankRequiredAnswer_whenHosted_thenResumeRemainsDisabled() async throws {
@@ -53,7 +53,7 @@ import Testing
         // when / then
         let resume = try #require(fixture.element("Resume"))
         #expect(fixture.press(resume) == false)
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
     }
 
     @Test func givenFailedRecoveryWithAnswer_whenHosted_thenShowsRecoverAndBoundedNativeStepper() async throws {
@@ -143,7 +143,7 @@ private func run(status: String, question: String, delegation: Bool = false) -> 
         vm.instructions = "Continue with the current approach."
         let fixture = RedesignHost(WorkflowRecoveryForm(viewModel: vm, onClose: {}), size: CGSize(width: 520, height: 360))
         defer { fixture.close() }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         await fixture.settle { fixture.element("Resume") != nil }
 
         // when
@@ -152,7 +152,7 @@ private func run(status: String, question: String, delegation: Bool = false) -> 
 
         // then
         await verify(harness.useCase)
-.command(.value("resume"), options: .any, positionals: .value(["recovery-form-run"]))
+.command(.value("resume"), options: .any, positionals: .value(["recovery-form-run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         await fixture.settle { !vm.isBusy }
     }
@@ -171,7 +171,7 @@ private func run(status: String, question: String, delegation: Bool = false) -> 
         vm.instructions = "Recover the existing work."
         let fixture = RedesignHost(WorkflowRecoveryForm(viewModel: vm, onClose: {}), size: CGSize(width: 520, height: 360))
         defer { fixture.close() }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([:])
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         await fixture.settle { fixture.element("Recover") != nil }
 
         // when
@@ -180,7 +180,7 @@ private func run(status: String, question: String, delegation: Bool = false) -> 
 
         // then
         await verify(harness.useCase)
-.command(.value("recover"), options: .any, positionals: .value(["recovery-form-run"]))
+.command(.value("recover"), options: .any, positionals: .value(["recovery-form-run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         await fixture.settle { !vm.isBusy }
     }

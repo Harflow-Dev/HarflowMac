@@ -22,6 +22,7 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 | `FinishNotifier` | User notifications for roots that finished since the last listing. |
 | `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |
 | `TakeoverService` | Opens a task's session in Terminal.app — `ctl takeover` grant → hand-off files → `open -a Terminal`; the only take-over destination the Monitor offers. |
+| `QualificationRepository` | Cached engine-owned feature requirements and explicit checks, with per-consumer cancellation, identity validation and runtime-bound launch tokens. |
 | `HarnessRepository` | `harflow-setup` status/install/remove. |
 | `InstallRepository` | Shared managed preparation/status/retry; row setup actions remain explicit MCP registration. |
 | `DirectoryWatcher` | FSEvents on the tasks folder, moved here in Swift 6 mode with a `@Sendable` handler. |

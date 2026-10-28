@@ -13,6 +13,8 @@ extension HarnessesVMTests {
     @Test func givenPreparationFailure_whenRuntimeBecomesReadyWithoutInstallNotice_thenHarnessesReloads() async {
         // given
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         final class CallCount { var value = 0 }
         let calls = CallCount()
         let populated = document(twoRowsJSON)
@@ -52,6 +54,8 @@ extension HarnessesVMTests {
     @Test func givenExplicitInstall_whenReadyAndInstalledArrive_thenHarnessesRefreshesOnceAndDismissalIsQuiet() async {
         // given
         let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
         final class CallCount { var value = 0 }
         let calls = CallCount()
         let populated = document(twoRowsJSON)

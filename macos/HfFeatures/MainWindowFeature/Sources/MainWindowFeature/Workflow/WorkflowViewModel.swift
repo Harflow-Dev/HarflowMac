@@ -7,6 +7,8 @@ import SwiftUI
 
 @MainActor
 protocol WorkflowViewModel: ViewModel {
+    var qualificationCards: [QualificationCard] { get }
+    func didTapQualification()
     var workflows: [WorkflowRecord] { get }
     var hasLoadedWorkflowList: Bool { get }
     var runs: [WorkflowRunModel] { get }
@@ -145,3 +147,8 @@ extension WorkflowViewModel {
 
 @MainActor
 extension WorkflowViewModel { var callerApprovalBackends: Set<String> { [] } }
+
+extension WorkflowViewModel {
+    var qualificationCards: [QualificationCard] { [] }
+    func didTapQualification() {}
+}

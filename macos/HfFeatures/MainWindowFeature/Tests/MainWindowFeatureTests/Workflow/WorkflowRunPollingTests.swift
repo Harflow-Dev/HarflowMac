@@ -148,7 +148,7 @@ private final class PollingUseCase: WorkflowUseCase, @unchecked Sendable {
     var editingContent = "null"
     var staleOnce = false
     var staleRaised = false
-    func command(_ command: String, options: [String], positionals _: [String]) async throws -> [String: JSONValue] {
+    func command(_ command: String, options: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         if command == "status" {
             statusOptions.append(options)
             if snapshotMode {

@@ -49,11 +49,11 @@ import Testing
         // given
         let taskAction = MockTaskActionRepository()
         let request = RunRequest(backend: "claude", repo: "/tmp", prompt: "hi")
-        given(taskAction).run(.value(request)).willReturn("new-id")
+        given(taskAction).run(.value(request), runtime: .any).willReturn("new-id")
         let sut = NewSessionViewRepository(taskActionRepository: taskAction)
         
         // when
-        let id = try await sut.run(request)
+        let id = try await sut.run(request, runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         
         // then
         #expect(id == "new-id")
@@ -64,12 +64,12 @@ import Testing
         let taskAction = MockTaskActionRepository()
         let usage = MockAgentUsageRepository()
         let request = RunRequest(backend: "claude", repo: "/tmp", prompt: "hi", model: "sonnet")
-        given(taskAction).run(.value(request)).willReturn("new-id")
+        given(taskAction).run(.value(request), runtime: .any).willReturn("new-id")
         given(usage).record(.any, acknowledgementID: .any).willReturn()
         let sut = NewSessionViewRepository(taskActionRepository: taskAction, agentUsageRepository: usage)
 
         // when
-        _ = try await sut.run(request)
+        _ = try await sut.run(request, runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
 
         // then
         verify(usage)
@@ -84,12 +84,12 @@ import Testing
         let taskAction = MockTaskActionRepository()
         let usage = MockAgentUsageRepository()
         let request = RunRequest(backend: "claude", repo: "/tmp", prompt: "hi")
-        given(taskAction).run(.value(request)).willReturn("")
+        given(taskAction).run(.value(request), runtime: .any).willReturn("")
         given(usage).record(.any, acknowledgementID: .any).willReturn()
         let sut = NewSessionViewRepository(taskActionRepository: taskAction, agentUsageRepository: usage)
 
         // when
-        #expect(try await sut.run(request) == "")
+        #expect(try await sut.run(request, runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))) == "")
 
         // then
         verify(usage).record(.any, acknowledgementID: .any).called(0)

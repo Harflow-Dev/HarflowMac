@@ -18,6 +18,9 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
 
     // MARK: - Private Properties
 
+    @GlobalEnvironment(\.qualificationRepository) private var qualificationRepository
+    func qualificationSession() -> QualificationSession { QualificationSession(repository: qualificationRepository) }
+
     @GlobalEnvironment(\.taskActionRepository) private var taskActionRepository
     @GlobalEnvironment(\.backendsRepository) private var backendsRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
@@ -53,9 +56,9 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
         return path
     }
 
-    func run(_ request: RunRequest) async throws -> String {
+    func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String {
         let identity = AgentUsageIdentity(backend: request.backend, model: request.model)
-        let id = try await taskActionRepository.run(request)
+        let id = try await taskActionRepository.run(request, runtime: runtime)
         if !id.isEmpty { await agentUsageRepository.record(identity, acknowledgementID: "task:" + id) }
         return id
     }

@@ -8,6 +8,9 @@ import SwiftEnvironment
 
 @MainActor
 final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
+    @GlobalEnvironment(\.qualificationRepository) private var qualificationRepository
+    func qualificationSession() -> QualificationSession { QualificationSession(repository: qualificationRepository) }
+
     @GlobalEnvironment(\.workflowArtifactRepository) private var artifacts
     @GlobalEnvironment(\.workflowRepository) private var repository
     @GlobalEnvironment(\.taskListRepository) private var taskList
@@ -15,8 +18,9 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.modelCatalogRepository) private var models
     @GlobalEnvironment(\.agentUsageRepository) private var usage
 
-    func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
-        try await repository.command(command, options: options, positionals: positionals)
+    func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
+        if let runtime { return try await repository.command(command, options: options, positionals: positionals, runtime: runtime) }
+        return try await repository.command(command, options: options, positionals: positionals)
     }
 
     func validate(definition: JSONValue) async throws -> [String: JSONValue] {

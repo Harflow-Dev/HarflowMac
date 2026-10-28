@@ -77,6 +77,8 @@ public protocol TaskActionRepository: Sendable {
     /// Refreshes the listing before returning, so a caller can route to the new task once this
     /// returns (F4-17). Throws to the caller on failure; never writes an outcome line.
     func run(_ request: RunRequest) async throws -> String
+    /// Binds this operation to the runtime that produced its qualification evidence.
+    func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String
 
     /// Raw passthrough to `ctl takeover` — touches neither busy nor outcome. Takes the `CtlClient`
     /// the caller already located, so `TakeoverService` never has to re-locate one.
@@ -111,4 +113,10 @@ public extension GlobalValues {
 
     /// Global task-action repository.
     @GlobalEntry var taskActionRepository: any TaskActionRepository = NullTaskActionRepository()
+}
+
+public extension TaskActionRepository {
+    func run(_: RunRequest, runtime _: QualificationRuntimeToken) async throws -> String {
+        throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "run", detail: "Runtime-bound launch unavailable")
+    }
 }

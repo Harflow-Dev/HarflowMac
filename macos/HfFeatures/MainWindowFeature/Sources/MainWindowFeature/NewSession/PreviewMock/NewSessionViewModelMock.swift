@@ -13,6 +13,9 @@ import HfUI
 /// Preview mock for `NewSessionView`.
 @MainActor
 final class NewSessionViewModelMock: NewSessionViewModel {
+    var qualificationCards: [QualificationCard] = [.init(id: "fixture", model: .init(
+        identity: "Fixture harness · fixture version", state: .ready, message: "Fixture required features are ready.",
+        features: [.init(id: "fixture_feature", result: "Ready · seeded")]))]
 
     var backend: String
     var repo: String
@@ -57,7 +60,8 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     }
 
     var canStart: Bool {
-        !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !qualificationCards.isEmpty && qualificationCards.allSatisfy { $0.model.state == .ready }
+            && !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     init(

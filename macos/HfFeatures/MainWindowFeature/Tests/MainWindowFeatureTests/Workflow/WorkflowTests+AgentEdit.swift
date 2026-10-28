@@ -44,7 +44,7 @@ extension WorkflowTests {
         vm.prompt = "build this"
         vm.generationAgent = ["backend": .string("codex"), "model": .string("gpt-5")]
         given(harness.useCase)
-.command(.value("build"), options: .any, positionals: .value(["generated"]))
+.command(.value("build"), options: .any, positionals: .value(["generated"]), runtime: .any)
             .willReturn([:])
 
         // when
@@ -66,7 +66,7 @@ extension WorkflowTests {
         vm.prompt = "build this"
         vm.generationAgent = ["backend": .string("vibe"), "model": .string("fast")]
         given(harness.useCase)
-.command(.value("build"), options: .any, positionals: .value(["generated"]))
+.command(.value("build"), options: .any, positionals: .value(["generated"]), runtime: .any)
             .willThrow(WorkflowUIError.missingRun)
 
         // when
@@ -260,7 +260,7 @@ private final class RecordingWorkflowBuilderUseCase: WorkflowUseCase, @unchecked
     var recordedIdentity: AgentUsageIdentity?
     var recordedAcknowledgementID: String?
     var backendIDs: [String] { ["codex"] }
-    func command(_ command: String, options: [String], positionals _: [String]) async throws -> [String: JSONValue] {
+    func command(_ command: String, options: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         guard command == "build" else { return [:] }
         self.options = options
         return await withCheckedContinuation { pending = $0 }

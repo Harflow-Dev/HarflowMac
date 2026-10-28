@@ -25,6 +25,16 @@ The New session glass material refreshes its identity when the effective color s
 
 Harnesses observes runtime readiness separately from install notices. If its initial status load encounters runtime preparation, a later transition to ready reloads the registrations even when no success notice is created. Repeated readiness snapshots and notice dismissal do not trigger extra reloads.
 
+## Harness qualification
+
+`MonitorCore` consumes capability-gated cached qualification plans and explicit feature checks through public ctl commands. Missing `backend-qualification.v1` is unsupported. `QualificationRepository` binds every operation to the selected executable, environment and compatibility context. Per-consumer actor sessions publish equality-checked snapshots, identify the backend/version currently being checked, and reconcile fresh cached evidence after explicit checks. Cancellation and changed request/runtime generations prevent stale adoption; feature and executable identities must match before readiness. Failed command results remain evidence, not launch authorization.
+
+The shared `HarnessQualificationCard` follows approved HarflowDesign `5d48a18`, `features/qualification.html`, across its nine states (approval recorded in `b07b973`). New session, workflow launch and Settings consume independent lifecycle sessions. Opening forms reads cached plans without provider probes; explicit actions check the required feature groups. Workflow qualification precedes ordinary permission preview. Launch rediscovery and runtime-bound repository commands prevent stale evidence from authorizing another executable or selection, while preserving permission payloads and workflow preview hashes. Cancelling stops result adoption; it does not claim to undo engine checks.
+
+Settings routes each action to its backend and keeps qualification separate from MCP registration. Known unavailable task harnesses cannot launch even when no feature checks are required. Workflow requirements and candidates remain engine-owned.
+
+The app still selects released engine `0.0.4`, which lacks `backend-qualification.v1`. It therefore displays unsupported qualification and disables new session and workflow launches. A supporting engine release must be explicitly paired before those launches become available; this change does not publish or select such a release.
+
 ## Harness picker ranking
 
 `AgentUsageRepository` shares lifetime usage across New Session, workflow orchestrator and workflow node menus. One private actor atomically persists counts and processed acknowledgement IDs in one `UserDefaults` value. Acknowledged standalone submissions use task IDs; workflow starts and builder submissions use workflow run IDs. Failed commands, configured nodes, follow-ups, retries and engine-selected fallbacks do not add counts. Exact backend and full model values identify usage; nil and empty model values share the harness-default identity.

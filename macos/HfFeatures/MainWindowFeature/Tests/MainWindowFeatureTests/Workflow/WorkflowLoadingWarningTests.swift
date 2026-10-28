@@ -15,7 +15,9 @@ import Testing
         let harness = WorkflowTests().makeVM()
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run")])
         harness.sut.errorText = WorkflowRunPolling.staleDetailMessage
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(["workflow_run_id": .string("run"), "status": .string("running")])
+        given(harness.useCase)
+.command(.any, options: .any, positionals: .any, runtime: .any)
+            .willReturn(["workflow_run_id": .string("run"), "status": .string("running")])
         // when
         await harness.sut.refresh()
         // then
@@ -28,7 +30,9 @@ import Testing
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run")])
         harness.sut.refreshErrorText = "Invalid or expired Monitor snapshot cursor; refresh the workflow"
         harness.sut.errorText = harness.sut.refreshErrorText
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(["workflow_run_id": .string("run"), "status": .string("running")])
+        given(harness.useCase)
+.command(.any, options: .any, positionals: .any, runtime: .any)
+            .willReturn(["workflow_run_id": .string("run"), "status": .string("running")])
         // when
         await harness.sut.refresh()
         // then
@@ -41,7 +45,9 @@ import Testing
         let harness = WorkflowTests().makeVM()
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run")])
         harness.sut.errorText = "Could not cancel the run"
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(["workflow_run_id": .string("run"), "status": .string("running")])
+        given(harness.useCase)
+.command(.any, options: .any, positionals: .any, runtime: .any)
+            .willReturn(["workflow_run_id": .string("run"), "status": .string("running")])
         // when
         await harness.sut.refresh()
         // then
@@ -53,7 +59,7 @@ import Testing
         let harness = WorkflowTests().makeVM()
         let raw: [String: JSONValue] = ["workflow_run_id": .string("run"), "status": .string("running")]
         harness.sut.selectedRun = WorkflowRunModel(raw: raw)
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn([
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([
             "catalog_state": .object(["status": .string("preparing"), "source": .string("workflow_catalog")])
         ])
         // when
@@ -82,7 +88,7 @@ import Testing
         let box = Responses()
         let harness = WorkflowTests().makeVM()
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run")])
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willProduce { _, _, _ in
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { _, _, _, _ in
             box.ready ? ["workflow_run_id": .string("run"), "status": .string("running")]
                 : ["catalog_state": .object(["status": .string("blocked"), "reason": .string("Record too large")])]
         }
@@ -130,7 +136,7 @@ import Testing
         harness.sut.initialLoadingKind = "run"
         var response: [String: JSONValue] = ["status": .string("running")]
         if !responseID.isEmpty { response["workflow_run_id"] = .string(responseID) }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(response)
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(response)
         // when
         await harness.sut.refresh()
         // then
@@ -149,7 +155,7 @@ import Testing
         harness.sut.selectedRun = WorkflowRunModel(raw: loaded)
         var response: [String: JSONValue] = ["status": .string("completed")]
         if !responseID.isEmpty { response["workflow_run_id"] = .string(responseID) }
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(response)
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(response)
         // when
         await harness.sut.refresh()
         // then
@@ -164,7 +170,7 @@ import Testing
         let placeholder: [String: JSONValue] = ["workflow_run_id": .string("run")]
         harness.sut.selectedRun = WorkflowRunModel(raw: placeholder)
         harness.sut.initialLoadingKind = "run"
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(placeholder)
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(placeholder)
         // when
         await harness.sut.refresh()
         // then

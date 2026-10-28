@@ -14,14 +14,15 @@ import Testing
     func makeVM(failRead: Bool = false, failSave: Bool = false) -> (WorkflowVM, WorkflowDraftStore, MockWorkflowUseCase) {
         let store = WorkflowDraftTests().store()
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
         if failRead {
-            given(useCase).command(.value("get"), options: .any, positionals: .any).willThrow(WorkflowUIError.missingRun)
+            given(useCase).command(.value("get"), options: .any, positionals: .any, runtime: .any).willThrow(WorkflowUIError.missingRun)
         } else {
-            given(useCase).command(.value("get"), options: .any, positionals: .any).willReturn(current)
+            given(useCase).command(.value("get"), options: .any, positionals: .any, runtime: .any).willReturn(current)
         }
         if failSave {
             given(useCase).save(name: .any, definition: .any, expectedRevision: .any, expectedWorkflowID: .any).willThrow(WorkflowUIError.missingRun)
@@ -144,6 +145,7 @@ import Testing
     @Test func givenImmediateSaveValidationFailure_whenReferenceMissing_thenStructuredDiagnosticsRemainActionable() async {
         // given
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let references: [JSONValue] = [.object(["target_workflow_id": .string("missing"), "node_id": .string("verify")])]
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).agentUsageSnapshot.willReturn(.init())

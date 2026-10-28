@@ -129,6 +129,7 @@ import Testing
         // given
         let helper = WorkflowDraftTests()
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
@@ -150,7 +151,7 @@ import Testing
         #expect(sut.savedDefinition == saved)
         #expect(sut.canDiscard)
         given(useCase)
-.command(.value("get"), options: .any, positionals: .any)
+.command(.value("get"), options: .any, positionals: .any, runtime: .any)
             .willReturn(["name": .string("Saved"), "revision": .number(9), "definition": .object(saved)])
         sut.discardChanges()
         await waitUntil { !sut.isBusy }

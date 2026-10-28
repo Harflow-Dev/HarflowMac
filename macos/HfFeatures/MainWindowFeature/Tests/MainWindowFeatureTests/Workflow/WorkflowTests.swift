@@ -18,25 +18,6 @@ import Testing
         return try #require(JSONValue.parse(Data(contentsOf: url))?.objectValue)
     }
 
-    func makeVM() -> (sut: WorkflowVM, useCase: MockWorkflowUseCase) {
-        let useCase = MockWorkflowUseCase()
-        let routing = MockWorkflowRouting()
-        given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
-        given(useCase).backendIDs.willReturn(["codex", "claude"])
-        given(useCase).modelOptions(backend: .any).willReturn([])
-        given(useCase).agentUsageSnapshot.willReturn(.init())
-        given(useCase).recordAgentUsage(.any, acknowledgementID: .any).willReturn()
-        given(useCase).refreshTasks().willReturn()
-        given(routing).chooseDirectory().willReturn(nil)
-        given(routing).selectTask(.any).willReturn()
-        given(routing).didSaveWorkflow(name: .any).willReturn()
-        given(routing).openWorkflowEditor(name: .any).willReturn()
-        let store = WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
-                visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
-        return (vm, useCase)
-    }
-
     @Test func givenCanonicalEngineDefinition_whenMapped_thenCanvasReadsConnectionsTitlesRolesAndCandidates() throws {
         // given
         let raw = try fixture("definition")
@@ -118,8 +99,8 @@ import Testing
 .save(name: .value("implement-review"), definition: .value(.object(canonical)),
                                     expectedRevision: .value(7), expectedWorkflowID: .any)
 .willReturn(saved)
-        given(harness.useCase).command(.value("list"), options: .any, positionals: .any).willReturn(["workflows": .array([])])
-        given(harness.useCase).command(.value("list-runs"), options: .any, positionals: .any).willReturn(["runs": .array([])])
+        given(harness.useCase).command(.value("list"), options: .any, positionals: .any, runtime: .any).willReturn(["workflows": .array([])])
+        given(harness.useCase).command(.value("list-runs"), options: .any, positionals: .any, runtime: .any).willReturn(["runs": .array([])])
         // when
         await waitUntil { harness.sut.canSave }
         harness.sut.save()
@@ -585,6 +566,7 @@ extension WorkflowTests {
     @Test func givenChildLink_whenOpened_thenCoordinatorReceivesRunDestination() {
         // given
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).agentUsageSnapshot.willReturn(.init())
         let routing = MockWorkflowRouting()

@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -83,7 +84,7 @@ extension WorkflowTests {
         let harness = makeVM()
         let vm = harness.sut
         let response = permissionPreview()
-        given(harness.useCase).command(.value("preview"), options: .any, positionals: .any).willReturn(response)
+        given(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).willReturn(response)
         vm.definition = WorkflowVM.starterDefinition()
         vm.loadedName = "Workflow"
         vm.name = "Workflow"
@@ -106,7 +107,7 @@ extension WorkflowTests {
         // given
         let harness = makeVM()
         let vm = harness.sut
-        given(harness.useCase).command(.value("preview"), options: .any, positionals: .any).willReturn(permissionPreview())
+        given(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).willReturn(permissionPreview())
         vm.definition = WorkflowVM.starterDefinition()
         vm.loadedName = "Workflow"
         vm.name = "Workflow"
@@ -125,7 +126,7 @@ extension WorkflowTests {
         #expect(vm.launchPreview?.hash == hash)
         #expect(vm.canStartWithPreview)
         #expect(vm.launchPreviewMessage == nil)
-        verify(harness.useCase).command(.value("preview"), options: .any, positionals: .any).called(1)
+        verify(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).called(1)
         vm.showsRunSheet = false
     }
 
@@ -133,7 +134,7 @@ extension WorkflowTests {
         // given
         let harness = makeVM()
         let vm = harness.sut
-        given(harness.useCase).command(.value("preview"), options: .any, positionals: .any).willReturn(permissionPreview())
+        given(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).willReturn(permissionPreview())
         vm.definition = WorkflowVM.starterDefinition()
         vm.loadedName = "Workflow"
         vm.name = "Workflow"
@@ -160,7 +161,7 @@ extension WorkflowTests {
         #expect(vm.launchPreviewID == requestID)
         #expect(vm.launchPreview?.hash == hash)
         #expect(vm.canStartWithPreview)
-        verify(harness.useCase).command(.value("preview"), options: .any, positionals: .any).called(1)
+        verify(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).called(1)
         vm.repo = "/tmp/another-repository"
         #expect(vm.launchPreviewID != requestID)
         #expect(vm.launchPreview == nil)
@@ -182,4 +183,71 @@ extension WorkflowTests {
         #expect(vm.selectedRun == nil)
         #expect(vm.errorText == "Wait for the orchestrator permission preview before running.")
     }
+
+    @Test func givenFailedRequiredQualification_whenOpeningRunner_thenOrdinaryPermissionPreviewWaitsForExplicitRecovery() async {
+        // given
+        let fixture = QualificationFixture(ready: false, additionalBackend: "second")
+        let harness = makeVM(qualification: fixture)
+        let vm = harness.sut
+        given(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).willReturn(permissionPreview())
+        vm.definition = WorkflowVM.starterDefinition()
+        vm.name = "Workflow"; vm.loadedName = "Workflow"; vm.savedDefinition = vm.definition
+        vm.repo = "/fixture/repo"
+        // when
+        vm.prepareLaunch()
+        await waitUntil { vm.qualificationCards.first?.model.state == .failed }
+        // then
+        verify(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).called(0)
+        #expect(!vm.canStartWithPreview)
+        fixture.setReady(true)
+        vm.didTapQualification()
+        await waitUntil { vm.canStartWithPreview }
+        #expect(fixture.checks == 2)
+        #expect(vm.qualificationCards.count == 2)
+        #expect(vm.launchPreview?.hash == "preview-one")
+        vm.didDisappear()
+    }
+
+    @Test func givenUnsupportedEngine_whenRunnerOpens_thenNoOrdinaryPermissionPreviewOrStart() async {
+        // given
+        let harness = makeVM(qualification: QualificationFixture(error: .unsupportedCommand(tool: "harflow-ctl", command: "qualification", detail: "fixture")))
+        let vm = harness.sut
+        vm.definition = WorkflowVM.starterDefinition()
+        vm.name = "Workflow"; vm.loadedName = "Workflow"; vm.savedDefinition = vm.definition
+        vm.repo = "/fixture/repo"
+        // when
+        vm.prepareLaunch()
+        await waitUntil { vm.qualificationCards.first?.model.state == .unsupported }
+        vm.start()
+        // then
+        #expect(!vm.canStartWithPreview)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
+        vm.didDisappear()
+    }
+
+    @Test func givenCheckingWorkflowHarnesses_whenCancelTapped_thenNoPermissionPreviewOrLaunch() async {
+        // given
+        let fixture = QualificationFixture(ready: false, additionalBackend: "second")
+        let gate = QualificationCheckGate()
+        let session = QualificationSession(repository: SuspendedQualificationFixture(base: fixture, gate: gate))
+        let harness = makeVM(qualification: fixture, session: session)
+        let vm = harness.sut
+        vm.definition = WorkflowVM.starterDefinition()
+        vm.name = "Workflow"; vm.loadedName = "Workflow"; vm.savedDefinition = vm.definition
+        vm.repo = "/fixture/repo"; vm.prepareLaunch()
+        await waitUntil { vm.qualificationCards.count == 2 && vm.qualificationCards.allSatisfy { $0.model.state == .failed } }
+        vm.didTapQualification()
+        await gate.waitForEntry()
+        await waitUntil { vm.qualificationCards.first?.model.state == .checking }
+        // when
+        vm.didTapQualification()
+        await waitUntil { vm.qualificationCards.allSatisfy { $0.model.state == .cancelled } }
+        await gate.open()
+        // then
+        #expect(!vm.canStartWithPreview)
+        verify(harness.useCase).command(.value("preview"), options: .any, positionals: .any, runtime: .any).called(0)
+        verify(harness.useCase).command(.value("start"), options: .any, positionals: .any, runtime: .any).called(0)
+        vm.didDisappear()
+    }
+
 }

@@ -161,10 +161,15 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
     static let postRunListAttempts = 3
 
     public func run(_ request: RunRequest) async throws -> String {
-        switch toolEnvironment.ctl() {
-        case .failure(let error):
-            throw error
-        case .success(let client):
+        try await run(request, using: toolEnvironment.ctl().get())
+    }
+
+    /// Binds this operation to the runtime that produced its qualification evidence.
+    public func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String {
+        try await run(request, using: runtime.boundClient(tooling: toolEnvironment))
+    }
+
+    private func run(_ request: RunRequest, using client: CtlClient) async throws -> String {
             switch await client.run(request) {
             case .success(let id):
                 // `refreshAndWait`, not `refresh`: with a pass already in flight `refresh()` only
@@ -187,7 +192,6 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
             case .failure(let error):
                 throw error
             }
-        }
     }
 
     // MARK: takeover (raw — touches neither busy nor outcome; TakeoverService owns that)

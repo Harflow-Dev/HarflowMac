@@ -157,12 +157,13 @@ import Testing
         let routing = MockWorkflowRouting()
         given(routing).openWorkflowRun(id: .any).willReturn()
         let useCase = MockWorkflowUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).backendIDs.willReturn(["codex", "claude"])
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
-        given(useCase).command(.any, options: .any, positionals: .any).willReturn(raw)
+        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(raw)
         let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
                                     visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())

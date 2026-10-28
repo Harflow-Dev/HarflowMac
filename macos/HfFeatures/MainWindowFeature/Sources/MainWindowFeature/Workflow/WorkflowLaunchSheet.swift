@@ -101,6 +101,11 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             )
                             Text("Saved fallback harnesses remain in effect.").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
                         }
+                        LazyVStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+                            ForEach(viewModel.qualificationCards) { card in
+                                HarnessQualificationCard(model: card.model, action: viewModel.didTapQualification)
+                            }
+                        }
                     }
                 }
 .padding(HfRadius.Metrics.spacing28)

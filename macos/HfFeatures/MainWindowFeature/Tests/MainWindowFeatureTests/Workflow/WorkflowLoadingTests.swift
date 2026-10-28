@@ -32,7 +32,7 @@ struct WorkflowLoadingTests {
     @Test func givenRunLoadFailure_whenRefreshReturns_thenSkeletonEndsAndFailureIsVisible() async {
         // given
         let harness = WorkflowTests().makeVM()
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willThrow(WorkflowUIError.missingRun)
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willThrow(WorkflowUIError.missingRun)
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("missing")])
         harness.sut.initialLoadingKind = "run"
         // when
@@ -60,7 +60,7 @@ struct WorkflowLoadingTests {
         let harness = WorkflowTests().makeVM()
         let raw: [String: JSONValue] = ["workflow_run_id": .string("run"), "status": .string("running")]
         harness.sut.selectedRun = WorkflowRunModel(raw: raw)
-        given(harness.useCase).command(.any, options: .any, positionals: .any).willReturn(raw)
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(raw)
         // when
         await harness.sut.refresh()
         // then
@@ -119,16 +119,16 @@ struct WorkflowLoadingTests {
     @Test func givenEditorWithoutSelectedRun_whenRefreshingRepeatedly_thenLoadsDefinitionsWithoutRetainedRunHistory() async {
         let harness = WorkflowTests().makeVM()
         let saved: [String: JSONValue] = ["name": .string("saved"), "definition": .object(WorkflowVM.starterDefinition())]
-        given(harness.useCase).command(.value("list"), options: .any, positionals: .any).willReturn(["workflows": .array([.object(saved)])])
-        given(harness.useCase).command(.value("list-runs"), options: .any, positionals: .any).willThrow(WorkflowUIError.missingRun)
+        given(harness.useCase).command(.value("list"), options: .any, positionals: .any, runtime: .any).willReturn(["workflows": .array([.object(saved)])])
+        given(harness.useCase).command(.value("list-runs"), options: .any, positionals: .any, runtime: .any).willThrow(WorkflowUIError.missingRun)
 
         await harness.sut.refresh()
         await harness.sut.refresh()
 
         #expect(harness.sut.workflows.map(\.id) == ["saved"])
         #expect(harness.sut.errorText == nil)
-        verify(harness.useCase).command(.value("list"), options: .any, positionals: .any).called(2)
-        verify(harness.useCase).command(.value("list-runs"), options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.value("list"), options: .any, positionals: .any, runtime: .any).called(2)
+        verify(harness.useCase).command(.value("list-runs"), options: .any, positionals: .any, runtime: .any).called(0)
         harness.sut.didDisappear()
     }
 }

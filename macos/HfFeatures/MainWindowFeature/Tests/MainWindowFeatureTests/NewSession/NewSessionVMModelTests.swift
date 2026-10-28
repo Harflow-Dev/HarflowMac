@@ -10,10 +10,11 @@ import Testing
 @MainActor
 @Suite struct NewSessionVMModelTests {
 
-    private func makeSUT(catalog: BackendCatalog = .empty, models: [String: [ModelOption]] = [:], usage: AgentUsageSnapshot = .init()) -> (
+    private func makeSUT(catalog: BackendCatalog = .empty, models: [String: [ModelOption]] = [:], usage: AgentUsageSnapshot = .init(), appear: Bool = true) -> (
         sut: NewSessionVM, useCase: MockNewSessionUseCase, routing: MockNewSessionRouting, catalogSubject: PassthroughSubject<BackendCatalog, Never>
     ) {
         let useCase = MockNewSessionUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockNewSessionRouting()
         let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
         given(useCase).backendCatalog.willReturn(catalog)
@@ -22,16 +23,19 @@ import Testing
         given(useCase).models(for: .any).willProduce { models[$0] ?? [] }
         given(useCase).agentUsageSnapshot.willReturn(usage)
         given(useCase).agentUsagePublisher().willReturn(Just(usage).eraseToAnyPublisher())
-        return (NewSessionVM(useCase: useCase, routing: routing), useCase, routing, catalogSubject)
+        let sut = NewSessionVM(useCase: useCase, routing: routing)
+        if appear { sut.didAppear() }
+        return (sut, useCase, routing, catalogSubject)
     }
 
     /// Starts a valid session and waits for the mocked run to complete.
     private func start(_ sut: NewSessionVM, _ useCase: MockNewSessionUseCase, _ routing: MockNewSessionRouting) async {
         given(routing).didStart(taskID: .any).willReturn()
         given(useCase).resolvedRepoPath(.any).willReturn("/tmp/repo")
-        given(useCase).run(.any).willReturn("id")
+        given(useCase).run(.any, runtime: .any).willReturn("id")
         sut.didChangeRepo("/tmp/repo")
         sut.didChangeMessage("do the thing")
+        await waitUntil { sut.canStart }
         sut.didTapStart()
         await waitUntil { sut.isStarting == false }
     }
@@ -85,7 +89,7 @@ import Testing
 
     @Test(.timeLimit(.minutes(1))) func givenAnAgentWithNoKnownModels_whenTheSheetAppears_thenOnlyDefaultIsOffered() async {
         // given
-        let (sut, useCase, _, _) = makeSUT()
+        let (sut, useCase, _, _) = makeSUT(appear: false)
 
         // when
         // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
@@ -127,7 +131,7 @@ import Testing
 
         // then
         #expect(sut.model == "")
-        verify(useCase).run(.matching { $0.backend == "codex" && $0.model == nil }).called(1)
+        verify(useCase).run(.matching { $0.backend == "codex" && $0.model == nil }, runtime: .any).called(1)
     }
 
     @Test func givenAModelWasTyped_whenTheSameAgentIsChosenAgain_thenTheModelIsKept() {
@@ -166,7 +170,7 @@ import Testing
         await start(sut, useCase, routing)
 
         // then
-        verify(useCase).run(.matching { $0.model == nil }).called(1)
+        verify(useCase).run(.matching { $0.model == nil }, runtime: .any).called(1)
     }
 
     @Test func givenASuggestionIsPicked_whenStarted_thenItsValueIsTheModel() async {
@@ -181,7 +185,7 @@ import Testing
         await start(sut, useCase, routing)
 
         // then
-        verify(useCase).run(.matching { $0.model == "opus" }).called(1)
+        verify(useCase).run(.matching { $0.model == "opus" }, runtime: .any).called(1)
     }
 
     @Test func givenVibeSelected_whenTheSheetAppears_thenNoModelListIsRequested() async {

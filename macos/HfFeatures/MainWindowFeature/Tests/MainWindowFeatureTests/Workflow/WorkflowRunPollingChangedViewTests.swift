@@ -83,7 +83,7 @@ private final class ChangedViewPollingUseCase: WorkflowUseCase, @unchecked Senda
     private var live: JSONValue { .object(["id": .string("live"), "status": .string(executionStatus)]) }
     private var index: JSONValue { .array([.object(["id": .string("old"), "digest": .string("old")]),
         .object(["id": .string("live"), "digest": .string(executionStatus)])]) }
-    func command(_ command: String, options: [String], positionals _: [String]) async throws -> [String: JSONValue] {
+    func command(_ command: String, options: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         if command == "status" {
             statusOptions.append(options)
             let raw: [String: JSONValue] = ["workflow_run_id": .string("run"), "status": .string(status),

@@ -58,7 +58,7 @@ import Testing
         #expect(splitFrames(in: fixture) == splitFramesBefore)
         #expect(vm.instructions == inputBefore)
         #expect(vm.selectedRun?.id == raw["workflow_run_id"]?.stringValue)
-        verify(harness.useCase).command(.any, options: .any, positionals: .any).called(0)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
         #expect(!panel.keyboard.isAttached(panelRoot: panel))
 
         // when — the eligible status badge reopens the same panel without changing pane layout.

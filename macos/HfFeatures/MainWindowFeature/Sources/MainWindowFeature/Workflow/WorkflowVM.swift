@@ -12,7 +12,8 @@ import MonitorCore
 @Mockable
 @MainActor
 protocol WorkflowUseCase: Sendable {
-    func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue]
+    func qualificationSession() -> QualificationSession
+    func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken?) async throws -> [String: JSONValue]
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
     func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue]
     func artifactPage(runID: String, executionID: String, cursor: String?) async -> Result<WorkflowArtifactPage, ToolError>
@@ -26,6 +27,11 @@ protocol WorkflowUseCase: Sendable {
 }
 
 extension WorkflowUseCase {
+    func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
+        try await self.command(command, options: options, positionals: positionals, runtime: nil)
+    }
+
+    func qualificationSession() -> QualificationSession { QualificationSession(repository: NullQualificationRepository()) }
     var agentUsageSnapshot: AgentUsageSnapshot { .init() }
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
     func recordAgentUsage(_: AgentUsageIdentity, acknowledgementID _: String) async {}
@@ -133,6 +139,13 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored private var modelTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var modelGeneration = UUID()
     var showsRunSheet = false { didSet { if showsRunSheet != oldValue { scheduleLaunchPreview() } } }
+    var qualification: QualificationPresentation?
+    var qualificationCards: [QualificationCard] { qualification?.cards ?? [] }
+    func didTapQualification() {
+        guard let qualification else { return }
+        if qualification.isChecking { qualification.cancel() } else { qualification.check { [weak self] in self?.scheduleLaunchPreview() } }
+    }
+
     var launchPreview: WorkflowPermissionPreview?
     var launchPreviewMessage: String?
     @ObservationIgnored var launchPreviewTask: Task<Void, Never>?
@@ -168,7 +181,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var validationSuspended = false
     @ObservationIgnored private var operation: Task<Void, Never>?
 
-    @ObservationIgnored private let routesStartedRun: Bool
+    @ObservationIgnored let routesStartedRun: Bool
     /// Whether anyone can see the Monitor — pauses this screen's poll while the window is hidden,
     /// with the showing window waking it for an immediate refresh.
     @ObservationIgnored private let visibility: any MonitorVisibility
@@ -234,6 +247,7 @@ final class WorkflowVM: WorkflowViewModel {
     var hasUnsavedChanges: Bool { loadedName.isEmpty || name != loadedName || !WorkflowDraftEquality.matches(definition, savedDefinition) }
 
     func didAppear() {
+        if showsRunSheet { scheduleLaunchPreview() }
         guard !didSubscribe else {
             return
         }
@@ -282,6 +296,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        qualification?.stop()
         usageSubscription = nil
         for task in modelTasks.values { task.cancel() }
         modelTasks.removeAll()
@@ -380,57 +395,6 @@ final class WorkflowVM: WorkflowViewModel {
         launchAgent = definition["orchestrator"]?.objectValue ?? ["backend": .string("codex")]
         overrideOrchestrator = false
         showsRunSheet = true
-    }
-
-    func start() {
-        guard !loadedName.isEmpty else {
-            errorText = "Save the workflow before running it."; return
-        }
-        guard !hasUnsavedChanges else {
-            errorText = "Save your changes before running this workflow."; return
-        }
-        guard let preview = launchPreview, canStartWithPreview else {
-            errorText = "Wait for the orchestrator permission preview before running."
-            return
-        }
-        guard goal.utf8.count <= 65_536 else {
-            errorText = "Goal must be at most 64 KiB of UTF-8 text."
-            return
-        }
-        let capturedName = loadedName
-        let capturedDefinition = definition
-        let candidate = overrideOrchestrator ? launchAgent : (capturedDefinition["orchestrator"]?.objectValue ?? [:])
-        let capturedIdentity = AgentUsageIdentity(backend: candidate["backend"]?.stringValue ?? "", model: candidate["model"]?.stringValue)
-        let goalOptions = goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["--goal=\(goal)"]
-        let capturedOptions = goalOptions + launchPreviewOptions + ["--monitor", "--prompt=\(prompt)", "--expected-preview-hash=\(preview.hash)"]
-        perform { [weak self] in
-            guard let self else { return }
-            let options = capturedOptions
-            let response: [String: JSONValue]
-            do {
-                response = try await useCase.command("start", options: options, positionals: [capturedName])
-            } catch {
-                scheduleLaunchPreview()
-                throw error
-            }
-            guard let id = response["workflow_run_id"]?.stringValue, !id.isEmpty else {
-                throw WorkflowUIError.missingRun
-            }
-            await useCase.recordAgentUsage(capturedIdentity, acknowledgementID: "workflow:" + id)
-            showsRunSheet = false
-            initialLoadingKind = "run"
-            initialLoadFailed = false
-            selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(id), "workflow_name": .string(capturedName),
-                                                 "definition": .object(capturedDefinition)])
-            isEditing = false
-            if routesStartedRun {
-                routing.openWorkflowRun(id: id)
-                await useCase.refreshTasks()
-                return
-            }
-            await useCase.refreshTasks()
-            await refresh()
-        }
     }
 
     func addNode(_ kind: String, at point: CGPoint? = nil) {

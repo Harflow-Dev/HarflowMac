@@ -17,6 +17,17 @@ final class HarnessesViewRepository: HarnessesUseCase, @unchecked Sendable {
     
     // MARK: - Private Properties
     
+    @GlobalEnvironment(\.qualificationRepository) private var qualificationRepository
+    @GlobalEnvironment(\.backendsRepository) private var backendsRepository
+    func qualificationSession() -> QualificationSession { QualificationSession(repository: qualificationRepository) }
+    func qualificationBackends() async throws -> [String] {
+        await backendsRepository.refresh()
+        guard backendsRepository.catalog.state == .available else {
+            throw ToolError.unreadable(tool: "harflow-ctl backends", exitCode: 0, stderr: "Harness qualification discovery is unavailable. Refresh to retry.")
+        }
+        return backendsRepository.catalog.entries.map(\.backend)
+    }
+
     @GlobalEnvironment(\.harnessRepository) private var harnessRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.installRepository) private var installRepository

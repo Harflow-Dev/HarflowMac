@@ -13,6 +13,8 @@ import SwiftUI
 /// View model protocol for the Harnesses settings tab.
 @MainActor
 protocol HarnessesViewModel: ViewModel {
+    var qualificationCards: [QualificationCard] { get }
+    func didTapQualification(_ id: String)
     
     var rows: [HarnessRow] { get }
     var serverPath: String? { get }
@@ -83,7 +85,8 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
             } else if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage).font(.hf(.secondary)).foregroundStyle(Color.failedRed).textSelection(.enabled)
             }
-            List(viewModel.rows) { row in
+            List {
+                ForEach(viewModel.rows) { row in
                 HarnessRowView(
                     row: row,
                     isWorking: viewModel.workingKey == row.key,
@@ -92,6 +95,12 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
                     onRemove: { viewModel.didTapRemove(row) },
                     onAllowlist: { allowlistRow = row }
                 )
+            }
+                Section("Harness qualification") {
+                    ForEach(viewModel.qualificationCards) { card in
+                        HarnessQualificationCard(model: card.model) { viewModel.didTapQualification(card.id) }
+                    }
+                }
             }
             // Bounded scope (§6.7): the native List's own scroll view carries thin overlay
             // chrome, independent of row presence — empty and repopulated lists keep it.
@@ -143,3 +152,8 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
         .preferredColorScheme(.dark)
 }
 #endif
+
+extension HarnessesViewModel {
+    var qualificationCards: [QualificationCard] { [] }
+    func didTapQualification(_: String) {}
+}
