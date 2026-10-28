@@ -12,6 +12,7 @@ import Testing
         #expect(BackendStyle.letter("opencode") == "O")
         #expect(BackendStyle.letter("vibe") == "V")
         #expect(BackendStyle.letter("antigravity") == "A")
+        #expect(BackendStyle.letter("cursor") == "R")
     }
     
     @Test func givenAnUnknownBackend_whenReadingItsLetter_thenFallsBackToItsUppercasedFirstCharacter() {
@@ -26,6 +27,7 @@ import Testing
         #expect(BackendStyle.helpText("vibe") == "Mistral Vibe CLI, using your configured model")
         #expect(BackendStyle.helpText("opencode") == "Opencode CLI")
         #expect(BackendStyle.helpText("antigravity") == "Google Antigravity CLI")
+        #expect(BackendStyle.helpText("cursor") == "Cursor Agent CLI")
     }
 
     @Test func givenAnUnknownBackend_whenReadingItsHelpText_thenReturnsNil() {
@@ -36,6 +38,7 @@ import Testing
     @Test func givenTheKnownBackendsList_whenReadingIt_thenContainsExactlyTheFiveSupportedBackends() {
         // given / when / then
         #expect(BackendStyle.known == ["claude", "codex", "opencode", "vibe", "antigravity"])
+        #expect(!BackendStyle.known.contains("cursor"))
     }
     
     @Test func givenEachKnownBackend_whenReadingItsColors_thenReturnsADistinctPair() {
@@ -107,6 +110,7 @@ import Testing
         #expect(!BackendStyle.supportsTurnLimit("codex"))
         #expect(!BackendStyle.supportsTurnLimit("opencode"))
         #expect(!BackendStyle.supportsTurnLimit("antigravity"))
+        #expect(!BackendStyle.supportsTurnLimit("cursor"))
         #expect(!BackendStyle.supportsTurnLimit("someday"))
     }
 
@@ -116,5 +120,6 @@ import Testing
         #expect(BackendStyle.effortLevels("codex") == ["low", "medium", "high", "xhigh"])
         #expect(BackendStyle.effortLevels("opencode") == ["low", "medium", "high", "xhigh"])
         #expect(BackendStyle.effortLevels("antigravity") == ["low", "medium", "high"])
+        #expect(BackendStyle.effortLevels("cursor") == [])
     }
 }

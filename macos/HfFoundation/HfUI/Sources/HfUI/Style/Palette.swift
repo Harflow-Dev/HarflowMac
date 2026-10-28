@@ -176,6 +176,9 @@ enum Palette {
     static let vibeFG = Entry("vibeFG", light: 0x6B2FA0, dark: 0xC99BF0)
     static let antigravityBG = Entry("antigravityBG", light: 0xF6E1EC, dark: 0x45213A)
     static let antigravityFG = Entry("antigravityFG", light: 0x8F2F5E, dark: 0xF4A6C9)
+    // Chosen Cursor identity (letter R). Not part of the older palette pin.
+    static let cursorBG = Entry("cursorBG", light: 0xE4F1FA, dark: 0x143044)
+    static let cursorFG = Entry("cursorFG", light: 0x0C4F7A, dark: 0x8ECAF2)
     static let otherBackendBG = Entry("otherBackendBG", light: 0xEEEEF0, dark: 0x3A3A3C)
     static let otherBackendFG = Entry("otherBackendFG", light: 0x3A3A3C, dark: 0xD1D1D6)
 
@@ -192,6 +195,7 @@ enum Palette {
     static let dotVibe = Entry("dot.vibe", light: 0x7A4FE0, dark: 0xA68BFA)
     static let dotAntigravity = Entry("dot.antigravity", light: 0xB4417A, dark: 0xF08AB8)
     static let dotOpencode = Entry("dot.opencode", light: 0x0B8A7C, dark: 0x2CC2B0)
+    static let dotCursor = Entry("dot.cursor", light: 0x1574B3, dark: 0x6EB6E6)
     static let dotOther = Entry("dot.other", light: 0x8E8E93, dark: 0x98989D)
 
     static let all: [Entry] = [
@@ -201,8 +205,8 @@ enum Palette {
         recoveryBorder, recoveryShadow, warningBorder, codeFill,
         editPreviewFill, inspectorFill, diffHunkFill, diffAddedFill, diffRemovedFill, claudeBG,
         claudeFG, codexBG, codexFG, opencodeBG, opencodeFG, vibeBG, vibeFG, antigravityBG,
-        antigravityFG, otherBackendBG, otherBackendFG,
+        antigravityFG, cursorBG, cursorFG, otherBackendBG, otherBackendFG,
         windowBG, sidebarBG, cardFill, cardBorder, composerFill, promptBubble, pillFill,
-        selectedSegment, dotClaude, dotCodex, dotVibe, dotAntigravity, dotOpencode, dotOther
+        selectedSegment, dotClaude, dotCodex, dotVibe, dotAntigravity, dotOpencode, dotCursor, dotOther
     ]
 }

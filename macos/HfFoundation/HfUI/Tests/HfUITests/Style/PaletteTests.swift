@@ -57,6 +57,8 @@ import Testing
         ("vibeFG", 0x6B2FA0, 0xC99BF0),
         ("antigravityBG", 0xF6E1EC, 0x45213A),
         ("antigravityFG", 0x8F2F5E, 0xF4A6C9),
+        ("cursorBG", 0xE4F1FA, 0x143044),
+        ("cursorFG", 0x0C4F7A, 0x8ECAF2),
         ("otherBackendBG", 0xEEEEF0, 0x3A3A3C),
         ("otherBackendFG", 0x3A3A3C, 0xD1D1D6),
         ("warningBorder", 0x924D00, 0xF2A93B),
@@ -73,6 +75,7 @@ import Testing
         ("dot.vibe", 0x7A4FE0, 0xA68BFA),
         ("dot.antigravity", 0xB4417A, 0xF08AB8),
         ("dot.opencode", 0x0B8A7C, 0x2CC2B0),
+        ("dot.cursor", 0x1574B3, 0x6EB6E6),
         ("dot.other", 0x8E8E93, 0x98989D)
     ]
 
@@ -288,7 +291,7 @@ import Testing
 
     @Test func givenEachBackendDot_whenResolvedInBothModes_thenLightAndDarkValuesDiffer() {
         // given
-        let dots = [Palette.dotClaude, Palette.dotCodex, Palette.dotVibe, Palette.dotOpencode, Palette.dotAntigravity, Palette.dotOther]
+        let dots = [Palette.dotClaude, Palette.dotCodex, Palette.dotVibe, Palette.dotOpencode, Palette.dotAntigravity, Palette.dotCursor, Palette.dotOther]
 
         // when / then — antigravity is magenta now (0xB4417A/0xF08AB8), so no agent dot shares
         // the accent hue; each dot still carries a dark variant and sits in `Palette.all`.
@@ -310,7 +313,9 @@ import Testing
             return (backend, foreground, background)
         }
         let (neutralBackground, neutralForeground) = BackendStyle.colors("unknown-backend")
+        let (cursorBackground, cursorForeground) = BackendStyle.colors("cursor")
         pairs += [
+            ("cursor", cursorForeground, cursorBackground),
             ("unknown backend", neutralForeground, neutralBackground),
             ("chip", .neutralText, .neutralFill),
             ("warning", .warningFG, .warningBG),

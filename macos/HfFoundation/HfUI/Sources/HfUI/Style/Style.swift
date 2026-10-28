@@ -64,6 +64,7 @@ public enum BackendStyle {
         case "opencode": "O"
         case "vibe": "V"
         case "antigravity": "A"
+        case "cursor": "R"
         default: String(backend.prefix(1)).uppercased()
         }
     }
@@ -75,6 +76,7 @@ public enum BackendStyle {
         case "opencode": (Palette.opencodeBG.color, Palette.opencodeFG.color)
         case "vibe": (Palette.vibeBG.color, Palette.vibeFG.color)
         case "antigravity": (Palette.antigravityBG.color, Palette.antigravityFG.color)
+        case "cursor": (Palette.cursorBG.color, Palette.cursorFG.color)
         default: (Palette.otherBackendBG.color, Palette.otherBackendFG.color)
         }
     }
@@ -96,6 +98,7 @@ public enum BackendStyle {
         case "opencode": Palette.dotOpencode
         case "vibe": Palette.dotVibe
         case "antigravity": Palette.dotAntigravity
+        case "cursor": Palette.dotCursor
         default: Palette.dotOther
         }
     }
@@ -109,19 +112,25 @@ public enum BackendStyle {
         case "vibe": "Mistral Vibe CLI, using your configured model"
         case "opencode": "Opencode CLI"
         case "antigravity": "Google Antigravity CLI"
+        case "cursor": "Cursor Agent CLI"
         default: nil
         }
     }
 
     /// Whether harflow accepts a turn cap — mirrors each backend's `supports_turn_cap`
-    /// (claude and vibe; codex, opencode, antigravity and unknown backends get no field at all).
+    /// (claude and vibe; codex, opencode, antigravity, cursor and unknown backends get no field at all).
     public nonisolated static func supportsTurnLimit(_ backend: String) -> Bool {
         backend == "claude" || backend == "vibe"
     }
 
-    /// The reasoning-effort levels harflow accepts for `backend` — antigravity refuses `xhigh`; the catalog carries no levels, so this is New Session's table.
+    /// The reasoning-effort levels harflow accepts for `backend` — antigravity refuses `xhigh`;
+    /// cursor has no effort flag. The catalog carries no levels, so this is New Session's table.
     public static func effortLevels(_ backend: String) -> [String] {
-        backend == "antigravity" ? ["low", "medium", "high"] : ["low", "medium", "high", "xhigh"]
+        switch backend {
+        case "antigravity": ["low", "medium", "high"]
+        case "cursor": []
+        default: ["low", "medium", "high", "xhigh"]
+        }
     }
 
     /// The backends the New session sheet offers. Display list only; `run` validates the choice itself.
