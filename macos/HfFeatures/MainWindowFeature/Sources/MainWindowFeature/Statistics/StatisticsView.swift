@@ -28,6 +28,8 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
     @Environment(\.viewEvent) private var viewEvent
     @State private var viewModel: VM
     @State private var preparedContentWidth: CGFloat = 880
+    /// Reference holder, deliberately not observed: scroll frames must not invalidate this view.
+    @State private var viewport = StatisticsViewport()
 
     init(_ viewModel: VM) { _viewModel = State(initialValue: viewModel) }
 
@@ -80,8 +82,10 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
                     let target = max(880, width)
                     if target != preparedContentWidth { preparedContentWidth = target }
                 })
+                .coordinateSpace(name: StatisticsViewport.contentSpace)
         }
         .defaultScrollAnchor(.topLeading, for: .alignment)
+        .onScrollGeometryChange(for: CGRect.self, of: { $0.visibleRect }, action: { _, rect in viewport.update(rect) })
     }
 
     /// The production content boundary; scrolling and view-model lifetime remain owned by the screen.
@@ -194,35 +198,13 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
                 .font(.hf(.caption))
                 .foregroundStyle(Color.secondaryText)
                 .frame(width: 42, height: 180)
-                GeometryReader { geometry in
-                    HStack(alignment: .bottom, spacing: chart.gap) {
-                        ForEach(chart.bars) { bar in
-                            VStack(spacing: 0) {
-                                Spacer(minLength: 0)
-                                Rectangle().fill(Color.accentColor.opacity(0.5)).frame(height: geometry.size.height * max(
-                                    0,
-                                    min(1, bar.taskFraction)
-                                ))
-                                Rectangle().fill(Color.accentColor).frame(height: geometry.size.height * max(0, min(1, bar.workflowFraction)))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(bar.accessibilityLabel)
-                            .help(bar.accessibilityLabel)
-                        }
-                    }
-                    .frame(height: geometry.size.height)
-                    .background {
-                        VStack(spacing: 0) {
-                            Rectangle().fill(Color.cardBorder).frame(height: 1)
-                            Spacer(minLength: 0)
-                            Rectangle().fill(Color.cardBorder).frame(height: 1)
-                            Spacer(minLength: 0)
-                            Rectangle().fill(Color.cardBorder).frame(height: 1)
-                        }.accessibilityHidden(true)
-                    }
-                }.frame(height: 180)
+                StatisticsChartPlot(
+                    chart: chart,
+                    viewport: viewport,
+                    minimumCardWidth: viewModel.presentation.measure == .usage ? 240 : 220
+                )
             }
+            .zIndex(1)
             HStack(spacing: chart.gap) {
                 ForEach(chart.bars) { bar in
                     Color.clear
@@ -246,7 +228,9 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
                 .padding(12)
                 .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
-        }.statisticsCard()
+        }
+        .statisticsCard()
+        .coordinateSpace(name: StatisticsViewport.chartCardSpace)
     }
 
     private func legend(_ title: String, value: String, color: Color) -> some View {

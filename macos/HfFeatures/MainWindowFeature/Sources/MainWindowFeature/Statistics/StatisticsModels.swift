@@ -18,6 +18,16 @@ struct StatisticsBar: Identifiable, Equatable, Sendable {
     var accessibilityLabel: String
     var workflowFraction: Double
     var taskFraction: Double
+    /// Weekday and date shown in the hover card, e.g. "Wed, Oct 21".
+    var hoverDate = ""
+    /// The day's total in the selected measure; the zero value for a day without finished work.
+    var hoverTotal = ""
+    var hoverWorkflow = ""
+    var hoverTasks = ""
+    /// `false` when the day has no workflow or standalone facts at all; the card then omits the series rows.
+    var hasFinishedWork = true
+    /// Secondary hover line; set only for the usage measure.
+    var hoverNote: String?
 }
 
 struct StatisticsChart: Equatable, Sendable {

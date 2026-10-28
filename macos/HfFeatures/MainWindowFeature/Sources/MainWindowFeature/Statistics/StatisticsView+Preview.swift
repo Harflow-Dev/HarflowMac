@@ -15,13 +15,19 @@
             for index in 0 ..< 30 {
                 let workflow = Double(index % 8 + 1) / 12.0
                 let task = Double(index % 3) / 20.0
+                let workflowText = String(format: "%.1f h", workflow * 10), taskText = String(format: "%.1f h", task * 10)
+                let total = String(format: "%.1f h", (workflow + task) * 10)
                 let label = index.isMultiple(of: 7) ? "Oct \(index + 1)" : ""
                 bars.append(StatisticsBar(
                     id: String(index),
                     label: label,
-                    accessibilityLabel: "Day \(index + 1)",
+                    accessibilityLabel: "Wed, Oct \(index + 1): total \(total), workflows \(workflowText), tasks \(taskText)",
                     workflowFraction: workflow,
-                    taskFraction: task
+                    taskFraction: task,
+                    hoverDate: "Wed, Oct \(index + 1)",
+                    hoverTotal: total,
+                    hoverWorkflow: workflowText,
+                    hoverTasks: taskText
                 ))
             }
             value.chart = StatisticsChart(
