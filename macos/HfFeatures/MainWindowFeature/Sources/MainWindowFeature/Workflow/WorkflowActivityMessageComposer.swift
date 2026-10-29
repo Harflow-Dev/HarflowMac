@@ -46,12 +46,17 @@ struct WorkflowActivityMessageTarget: Equatable, Hashable {
 /// Headless conversations use the same footer inside their Parallel column.
 struct WorkflowActivityMessageComposer<VM: WorkflowViewModel>: View {
     var viewModel: VM
+    /// Native Activity draws its bubbles in the transcript. This footer keeps them when it is the
+    /// only transcript on the surface.
+    var showsBubbles = true
 
     var body: some View {
         let target = viewModel.activityMessageTarget
         VStack(spacing: HfRadius.Metrics.zero) {
-            WorkMessageQueue(items: viewModel.activityMessageItems, isBusy: viewModel.isBusy,
-                             onCancel: viewModel.cancelActivityMessage)
+            if showsBubbles {
+                WorkMessageBubblesView(bubbles: viewModel.activityMessageBubbles, onCancel: viewModel.cancelActivityMessage,
+                                         isCancelDisabled: viewModel.isBusy)
+            }
             if let reason = viewModel.activityMessageReadError {
                 Text(reason).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }

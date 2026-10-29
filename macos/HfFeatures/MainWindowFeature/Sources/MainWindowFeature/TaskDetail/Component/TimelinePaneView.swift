@@ -52,6 +52,8 @@ struct TimelinePaneModel {
     /// Changes when the feed grows or changes in place; Follow live scrolls on it.
     let updateToken: ActivityUpdateToken
     let pendingMessages: [PendingMessage]
+    var workMessages: [WorkMessageBubble] = []
+    var onCancelQueuedMessage: ((String) -> Void)?
     let history: EventHistoryState
     let paginationRevision: Int
     let onLoadMore: (() -> Bool)?
@@ -110,10 +112,13 @@ struct TimelinePaneModel {
 struct TimelinePaneView: View {
     let model: TimelinePaneModel
     var approvalController: CallerApprovalController?
+    var isCancelDisabled = false
     @State private var state: ParallelColumnUIState
 
-    init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil) {
+    init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil,
+         isCancelDisabled: Bool = false) {
         self.approvalController = approvalController
+        self.isCancelDisabled = isCancelDisabled
         self.model = model
         _state = State(initialValue: state ?? ParallelColumnUIState())
     }
@@ -160,17 +165,20 @@ struct TimelinePaneView: View {
                                 .init(children: strip.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) }, start: strip.start)
                             },
                             pendingMessages: model.pendingMessages,
+                            workMessages: model.workMessages,
                             liveStep: model.liveStep.map { .init(text: $0.text, indicator: .singleDot) },
                             approvals: approvalController?.cards ?? [],
                             approvalNotice: approvalNotice,
-                            approvalNoticeActionTitle: approvalController?.nextCursor != nil ? "Load more approval history" : "Refresh approval history"
+                            approvalNoticeActionTitle: approvalController?.nextCursor != nil ? "Load more approval history" : "Refresh approval history",
+                            cancel: model.onCancelQueuedMessage == nil ? .hidden : (isCancelDisabled ? .disabled : .enabled)
                          )), onSelectChildTask: model.onSelectTask ?? model.subTaskStrip?.onSelectTask,
                          approvalReveal: approvalController?.reveal,
                          onApprovalResponse: { id, decision in approvalController?.submit(decision, requestID: id) },
                          onApprovalToggle: { approvalController?.toggle($0) },
                          onApprovalLoadMore: { approvalController?.requestRefresh(loadMore: approvalController?.nextCursor != nil) },
                          onApprovalFocusAcknowledged: { approvalController?.acknowledgeFocus(requestID: $0, token: $1) },
-                         onApprovalScrollAcknowledged: { approvalController?.acknowledgeScroll(requestID: $0, token: $1) })
+                         onApprovalScrollAcknowledged: { approvalController?.acknowledgeScroll(requestID: $0, token: $1) },
+                         onCancelQueuedMessage: model.onCancelQueuedMessage)
         .readingColumn()
     }
 }

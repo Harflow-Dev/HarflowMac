@@ -22,28 +22,56 @@ struct WorkflowNativeActivityModel: Equatable {
 
 struct WorkflowNativeActivityView: View {
     let model: WorkflowNativeActivityModel
+    var messages: [WorkMessageBubble] = []
+    var onCancel: ((String) -> Void)?
+    var isCancelDisabled = false
+    @State private var atEnd = true
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
-                Text(model.title + " · Subagent").font(.hf(.body, weight: .semibold))
-                Text(model.status).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                if model.limited { Text("Activity limited").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
-                if let error = model.error { Text(error).font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
-                if model.hasEarlierActivity { Text("Showing the latest 200 activity events.").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
-                ForEach(model.items) { item in
-                    TimelineRow(model: TimelineRowModel(item: item, start: nil,
-                        live: ["running", "launch_requested"].contains(model.status), markdown: model.markdown[item.id]))
+        let settled = messages.filter { !$0.isPinned }
+        let pinned = messages.filter(\.isPinned)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+                    Text(model.title + " · Subagent").font(.hf(.body, weight: .semibold))
+                    Text(model.status).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                    if model.limited { Text("Activity limited").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
+                    if let error = model.error { Text(error).font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
+                    if model.hasEarlierActivity { Text("Showing the latest 200 activity events.").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
+                    ForEach(model.items) { item in
+                        TimelineRow(model: TimelineRowModel(item: item, start: nil,
+                            live: ["running", "launch_requested"].contains(model.status), markdown: model.markdown[item.id]))
+                    }
+                    if !settled.isEmpty { WorkMessageBubblesView(bubbles: settled) }
+                    if !pinned.isEmpty {
+                        WorkMessageBubblesView(bubbles: pinned, onCancel: onCancel, isCancelDisabled: isCancelDisabled)
+                            .id("queued-messages")
+                    }
+                }
+                .padding(HfRadius.Metrics.spacing16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // The user-authorized scrollbar amendment: this alternate feed bypasses
+                // ActivityFeedView, so the shared thin, auto-hiding native chrome is attached to
+                // its own enclosing vertical scroll view here — inside the document, exactly as
+                // ActivityFeedView does, with no interaction or accessibility footprint and no
+                // observer, paging or data change.
+                .background(ActivityScrollChrome())
+            }
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentSize.height - geo.contentOffset.y - geo.containerSize.height <= 24
+            } action: { _, ended in
+                atEnd = ended
+            }
+            .onChange(of: pinned.map(\.id)) { _, ids in
+                // Keep the end in view for a new queued bubble, but never pull a reader who has scrolled away.
+                if atEnd, !ids.isEmpty { proxy.scrollTo("queued-messages", anchor: .bottom) }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !atEnd, !pinned.isEmpty {
+                    QueuedMessageJump(count: pinned.count) { proxy.scrollTo("queued-messages", anchor: .bottom) }
                 }
             }
-.padding(HfRadius.Metrics.spacing16)
-.frame(maxWidth: .infinity, alignment: .leading)
-            // The user-authorized scrollbar amendment: this alternate feed bypasses
-            // ActivityFeedView, so the shared thin, auto-hiding native chrome is attached to
-            // its own enclosing vertical scroll view here — inside the document, exactly as
-            // ActivityFeedView does, with no interaction or accessibility footprint and no
-            // observer, paging or data change.
-.background(ActivityScrollChrome())
         }
     }
 }

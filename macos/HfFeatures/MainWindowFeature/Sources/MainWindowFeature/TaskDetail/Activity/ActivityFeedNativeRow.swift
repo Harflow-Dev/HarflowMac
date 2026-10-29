@@ -91,6 +91,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var onApprovalResponse: (String, String) -> Void = { _, _ in }
     var onApprovalToggle: (String) -> Void = { _ in }
     var onApprovalLoadMore: () -> Void = {}
+    var onCancelQueuedMessage: (String) -> Void = { _ in }
     var onApprovalFocusAcknowledged: (String, UUID) -> Void = { _, _ in }
     var onApprovalScrollAcknowledged: (String, UUID) -> Void = { _, _ in }
     var retry: () -> Void = {}
@@ -103,6 +104,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         onApprovalResponse = { _, _ in }
         onApprovalToggle = { _ in }
         onApprovalLoadMore = {}
+        onCancelQueuedMessage = { _ in }
         onApprovalFocusAcknowledged = { _, _ in }
         onApprovalScrollAcknowledged = { _, _ in }
         retry = {}
@@ -264,8 +266,8 @@ struct ActivityFeedNativeRowRoot: View {
 
 // MARK: - ActivityFeedNativeTailContent
 
-/// The tail's rendering, identical to the feed's established presentation: the child-task strip,
-/// pending message bubbles, then the live step line.
+/// The tail's rendering: the child-task strip, pending and settled message bubbles, the live step,
+/// then pinned queued bubbles. Streaming stays above the pinned queue.
 struct ActivityFeedNativeTailContent: View {
     let presentation: ActivityFeedTailPresentation
     let actions: ActivityFeedNativeActions
@@ -291,6 +293,8 @@ struct ActivityFeedNativeTailContent: View {
                             .buttonStyle(.link)
                     }
                 }
+                let settled = standard.workMessages.filter { !$0.isPinned }
+                if !settled.isEmpty { WorkMessageBubblesView(bubbles: settled) }
                 if let notice = standard.approvalNotice {
                     VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
                         Text(notice).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
@@ -302,6 +306,11 @@ struct ActivityFeedNativeTailContent: View {
                     case .singleDot: LiveStepLineView(text: line.text)
                     case .threeDots: LiveStepLineView(text: line.text, indicator: .threeDots)
                     }
+                }
+                let pinned = standard.workMessages.filter(\.isPinned)
+                if !pinned.isEmpty {
+                    WorkMessageBubblesView(bubbles: pinned, onCancel: standard.cancel == .hidden ? nil : actions.onCancelQueuedMessage,
+                                           isCancelDisabled: standard.cancel == .disabled)
                 }
             }
         }

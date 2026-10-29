@@ -109,12 +109,13 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         try await taskActionRepository.send(id, text: text)
     }
 
-    func sendNow(_ id: String, text: String) async throws {
+    func sendNow(_ id: String, text: String) async throws -> [String: JSONValue] {
         let client = try toolEnvironmentRepository.ctl().get()
         let result = try await client.sendNow(id, text: text).get()
         taskActionRepository.setOutcome(id, WorkMessageOutcome.describe(result))
         await taskSnapshotRepository.refresh(id)
         await taskListRepository.refresh()
+        return result
     }
 
     func cancelMessage(_ id: String, messageID: String) async throws {

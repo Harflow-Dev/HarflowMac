@@ -109,7 +109,7 @@ enum ActivityFeedNativeEntries {
         case .plainText: true
         case .standard(let standard):
             standard.subTaskStrip != nil || !standard.pendingMessages.isEmpty
-                || standard.liveStep != nil || standard.approvalNotice != nil
+                || !standard.workMessages.isEmpty || standard.liveStep != nil || standard.approvalNotice != nil
         }
     }
 

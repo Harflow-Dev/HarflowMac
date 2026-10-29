@@ -47,6 +47,8 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored var latestBusy: Set<String> = []
     @ObservationIgnored private var latestOutcomes: [String: String] = [:]
     @ObservationIgnored var messageDispatches: Set<String> = []
+    /// Send-now refusals keyed by task id, then message id.
+    @ObservationIgnored var messageNotes: [String: [String: String]] = [:]
     @ObservationIgnored var memberIDs: [String] = []
     @ObservationIgnored var conversations: [Conversation] = []
     @ObservationIgnored private var groupStartedAt: Date?
@@ -475,6 +477,7 @@ final class ParallelVM: ParallelViewModel {
                 onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) }, onSelectTask: { [weak self] in self?.routing.selectTask($0) })
             column.onSubmitMessage = { [weak self] text, now in self?.submitMessage(text, conversationID: conversation.id, now: now) ?? false }
             column.onCancelMessage = { [weak self] messageID in self?.cancelMessage(messageID, conversationID: conversation.id) }
+            column.workMessages = WorkMessageBubble.applying(column.workMessages, notes: messageNotes[metadata.task.taskID] ?? [:])
             column.animatesArrival = arrivals.contains(column.id)
             column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }
             column.isResident = presentations[column.id] != nil || residentIDs.contains(column.id)

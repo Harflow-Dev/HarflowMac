@@ -21,6 +21,9 @@ struct FollowLiveScrollState {
 
     /// Loading older activity must retain its history anchor even if the feed previously fit.
     mutating func suspend() { isFollowing = false }
+
+    /// A queued-message jump returns the reader to the live end, where the pinned bubbles are.
+    mutating func resumeFollowing() { isFollowing = true }
 }
 
 // MARK: - LiveScrollPositionObserver

@@ -43,6 +43,7 @@ extension ParallelVM {
             value.markdown = presentation.markdown
             value.liveStep = presentation.liveStep
             value.pendingMessages = presentation.pendingMessages
+            value.workMessages = presentation.workMessages
             value.isLoading = presentation.isLoading
             value.emptyText = presentation.emptyText
             value.history = presentation.history

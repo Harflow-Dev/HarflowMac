@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Show queued messages as the user's own bubbles at the end of the activity, captioned Queued, oldest first and newest nearest the composer, replacing the queue strip above the composer on task Activity, each Parallel panel, selected node and Orchestrator Activity, and embedded workflow builder tasks. Streaming output stays above them. A refused Send now keeps the bubble and shows the reason under it; delivered messages appear once in the transcript; undeliverable and uncertain deliveries stay with their caption (#42).
+- Remove the workflow builder composer from the workflow window. Builder tasks start from Generate and Edit with agent, and an embedded builder task keeps its own composer. This supersedes the 0.0.6 create/edit builder-composer wording (#43).
+
 ## 0.0.6
 
 - Pair the app with HarflowMCP 0.0.5 using regenerated frozen dependency inputs and refreshed vendored v1 contract fixtures.

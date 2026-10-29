@@ -115,6 +115,8 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var activityCache: [String: ParallelVM] = [:]
     @ObservationIgnored var activityRunID: String?
     var activityMessageReadError: String?
+    /// Send-now refusals keyed by message id. The durable queue does not store the refusal.
+    var messageNotes: [String: String] = [:]
     var activityMessageSnapshot: [String: JSONValue]?
     var activityMessageSnapshotRunID: String?
     @ObservationIgnored var runGraphVisible = true

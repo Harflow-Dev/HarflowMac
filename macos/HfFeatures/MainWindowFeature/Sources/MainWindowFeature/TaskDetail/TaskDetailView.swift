@@ -472,8 +472,6 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var column: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             content
-            WorkMessageQueue(items: WorkMessageQueue.items(raw: viewModel.inspectorModel?.detail.raw ?? viewModel.task?.raw ?? [:]),
-                             isBusy: viewModel.isBusy, onCancel: viewModel.cancelQueuedMessage)
             MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow) { text in viewModel.submitMessage(text) }
                 .readingColumn()
         }
@@ -483,7 +481,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var content: some View {
         switch viewModel.tab {
         case .activity:
-            TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController)
+            TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
+                             isCancelDisabled: viewModel.isBusy)
         case .summary:
             VStack(spacing: 0) {
                 approvalHint

@@ -25,7 +25,78 @@ import Testing
         // when
         await fixture.settle { fixture.element("embedded-builder-activity") != nil }
         // then
-        #expect(fixture.element("workflow-builder-message-composer") == nil)
+        #expect(!fixture.hasElement(containing: Self.composerLabel))
+    }
+
+    private static let composerLabel = "Message the workflow builder"
+    private nonisolated static let windowSizes = [CGSize(width: 1000, height: 620), CGSize(width: 1440, height: 900)]
+
+    private func builderRun(_ vm: WorkflowVM, taskID: String?) -> WorkflowRunModel {
+        var raw: [String: JSONValue] = ["workflow_run_id": .string(String(repeating: "b", count: 32)),
+            "kind": .string("builder"), "status": .string("running"), "builder_draft": .object(vm.definition)]
+        if let taskID {
+            raw["activations"] = .array([.object(["role": .string("builder"), "tasks": .array([.object(["task_id": .string(taskID)])])])])
+        }
+        return WorkflowRunModel(raw: raw)
+    }
+
+    @Test(arguments: windowSizes, [ColorScheme.light, .dark])
+    func givenEditorWithNoRunSelected_whenHosted_thenNoComposerAndOnlyTheStepTrayIsBelowTheCanvas(size: CGSize, appearance: ColorScheme) async throws {
+        // given
+        let vm = WorkflowPreview.make()
+        defer { vm.didDisappear() }
+        #expect(vm.selectedRun == nil)
+        let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: size, appearance: appearance)
+        defer { fixture.close() }
+        // when
+        await fixture.settle { fixture.canvasScroll != nil }
+        // then
+        #expect(!fixture.hasElement(containing: Self.composerLabel))
+        let canvas = try #require(fixture.canvasScroll)
+        let frame = canvas.convert(canvas.bounds, to: nil)
+        let content = fixture.window.contentLayoutRect
+        let tray = try #require(fixture.element("Workflow nodes"))
+        let trayFrame = try #require(fixture.frame(tray))
+        // The tray's accessibility frame ends at the validation row's text, inside its vertical padding.
+        #expect(abs(trayFrame.minY - (content.minY + HfRadius.Metrics.spacing12 + HfRadius.Metrics.spacing6)) < 2,
+                "The step tray must sit at the bottom edge with only its own padding and no reserved footer")
+        #expect(frame.minY >= trayFrame.maxY - 1, "The canvas must end above the step tray")
+    }
+
+    @Test(arguments: windowSizes, [ColorScheme.light, .dark])
+    func givenBuilderRunAwaitingItsTask_whenHosted_thenNoComposerAndStartingLabelIsShown(size: CGSize, appearance: ColorScheme) async throws {
+        // given
+        let vm = WorkflowPreview.make()
+        defer { vm.didDisappear() }
+        vm.selectedRun = builderRun(vm, taskID: nil)
+        #expect(vm.selectedRun?.builderTaskID == nil)
+        let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { _, _ in AnyView(Text("unexpected")) }).preferredColorScheme(appearance),
+                                   size: size, appearance: appearance)
+        defer { fixture.close() }
+        // when
+        await fixture.settle { fixture.element("Starting workflow builder…") != nil }
+        // then
+        #expect(fixture.element("Starting workflow builder…") != nil)
+        #expect(fixture.element("unexpected") == nil)
+        #expect(!fixture.hasElement(containing: Self.composerLabel))
+    }
+
+    @Test(arguments: windowSizes, [ColorScheme.light, .dark])
+    func givenBuilderRunWithTaskAndInjectedView_whenHosted_thenInjectedViewIsShownWithoutOuterComposer(size: CGSize, appearance: ColorScheme) async throws {
+        // given
+        let vm = WorkflowPreview.make()
+        defer { vm.didDisappear() }
+        vm.selectedRun = builderRun(vm, taskID: "builder-task")
+        #expect(vm.selectedRun?.builderTaskID == "builder-task")
+        let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { taskID, _ in
+            AnyView(Text("Embedded \(taskID)").accessibilityIdentifier("embedded-builder-activity"))
+        }).preferredColorScheme(appearance), size: size, appearance: appearance)
+        defer { fixture.close() }
+        // when
+        await fixture.settle { fixture.element("embedded-builder-activity") != nil }
+        // then
+        #expect(fixture.element("embedded-builder-activity") != nil)
+        #expect(fixture.element("Starting workflow builder…") == nil)
     }
 
     @Test
@@ -101,7 +172,7 @@ import Testing
     private func assertLoadedViewport(_ split: NSSplitView, in fixture: RedesignHost) throws {
         let panes = split.convert(split.bounds, to: nil)
         let content = fixture.window.contentLayoutRect
-        #expect(fixture.element("workflow-builder-message-composer") == nil,
+        #expect(!fixture.hasElement(containing: Self.composerLabel),
                 "A workflow run must not show the create/edit builder composer below its canvas")
         #expect(panes.height > fixture.host.bounds.height - 200,
                 "Compact status must retain the full run viewport without a global composer")
@@ -209,4 +280,13 @@ private struct HeaderGeometryProbe: NSViewRepresentable {
     }
 
     func updateNSView(_: NSView, context _: Context) {}
+}
+
+extension RedesignHost {
+    /// Whether any accessibility element's label, title or value contains `text`.
+    func hasElement(containing text: String) -> Bool {
+        descendants.flatMap { elements(in: $0) }.contains { object in
+            ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { string(object, $0)?.contains(text) == true }
+        }
+    }
 }

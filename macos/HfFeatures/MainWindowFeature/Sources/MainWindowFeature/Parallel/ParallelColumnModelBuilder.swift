@@ -13,6 +13,7 @@ enum ParallelColumnModelBuilder {
             stepCountText: presentation.stepCountText, noToolCallsText: presentation.noToolCallsText,
             onTapTakeover: onTapTakeover, onTapOpenTask: onTapOpenTask, start: presentation.start)
         column.activitySnapshot = presentation.activitySnapshot
+        column.workMessages = presentation.workMessages
         column.emptyText = presentation.emptyText
         column.onSelectTask = onSelectTask
         column.memberTaskIDs = metadata.memberTaskIDs

@@ -41,6 +41,7 @@ struct ParallelColumnModel: Identifiable {
     /// The "what is it doing now" line under the feed; `nil` unless a call is pending in a running turn.
     let liveStep: LiveStep?
     var pendingMessages: [PendingMessage] = []
+    var workMessages: [WorkMessageBubble] = []
     /// True while NO member of this conversation has any timeline item yet AND at least one
     /// member's own event stream is still `.loading` (Monitor piece 12, Design point 4, extended
     /// across every member for piece 13) — the column shows `SkeletonRows` instead of the empty
@@ -125,9 +126,6 @@ struct ParallelColumnView: View {
 
     private var composer: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
-            WorkMessageQueue(items: WorkMessageQueue.items(raw: model.task.raw), isBusy: model.isBusy || model.onCancelMessage == nil) {
-                model.onCancelMessage?($0)
-            }
             MessageBoxView(model: MessageBoxModel(
                 canSend: !model.task.takenOver && model.onSubmitMessage != nil, canContinue: false, isBusy: model.isBusy,
                 label: "Message this task", hint: "Send queues; Send now requests immediate delivery when safe",
@@ -251,8 +249,11 @@ struct ParallelColumnView: View {
                              emptyText: model.emptyText, showsPromptBubble: false, state: state, onLoadMore: model.onLoadMore,
                              tailPresentation: .standard(.init(
                                 pendingMessages: model.pendingMessages,
-                                liveStep: model.liveStep.map { .init(text: $0.text, indicator: .threeDots) }
-                             )), onSelectChildTask: model.onSelectTask)
+                                workMessages: model.workMessages,
+                                liveStep: model.liveStep.map { .init(text: $0.text, indicator: .threeDots) },
+                                cancel: model.onCancelMessage == nil ? .hidden : (model.isBusy ? .disabled : .enabled)
+                             )), onSelectChildTask: model.onSelectTask,
+                             onCancelQueuedMessage: model.onCancelMessage)
         }
     }
 }

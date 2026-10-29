@@ -64,7 +64,7 @@ protocol TaskDetailUseCase: Sendable {
     // Actions
     @discardableResult func cancel(_ id: String) async throws -> Bool
     @discardableResult func send(_ id: String, text: String) async throws -> Bool
-    func sendNow(_ id: String, text: String) async throws
+    func sendNow(_ id: String, text: String) async throws -> [String: JSONValue]
     func cancelMessage(_ id: String, messageID: String) async throws
     /// `onResumed` fires right after the new task id comes back — before busy releases, the outcome
     /// writes, or either refresh runs (see `TaskActionRepository.resume(_:text:onResumed:)`'s doc
@@ -162,6 +162,9 @@ final class TaskDetailVM: TaskDetailViewModel {
     private(set) var ancestorCrumbs: [AncestorCrumb] = []
     private(set) var isBusy = false
     private(set) var outcomeMessage: String?
+    /// Send-now refusals keyed by message id. The engine keeps the message queued and does not
+    /// store the refusal on it, so the bubble reads the note from the send result.
+    var messageNotes: [String: String] = [:]
     private(set) var takenOverBannerText: String?
     private(set) var spawnedByBannerText: String?
     private(set) var canTakeover = false

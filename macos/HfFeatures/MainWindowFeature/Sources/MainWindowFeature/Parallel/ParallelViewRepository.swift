@@ -87,7 +87,7 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
     func cancelAll(_ ids: [String]) async { await taskActionRepository.cancelAll(ids) }
     func setOutcome(_ id: String, _ text: String?) { taskActionRepository.setOutcome(id, text) }
 
-    func sendMessage(_ id: String, text: String, now: Bool) async throws {
+    func sendMessage(_ id: String, text: String, now: Bool) async throws -> [String: JSONValue] {
         try await performMessage(id) { client in
             if now { return try await client.sendNow(id, text: text).get() }
             return try await client.send(id, text: text).get()
@@ -101,7 +101,8 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
         }
     }
 
-    private func performMessage(_ id: String, action: (CtlClient) async throws -> [String: JSONValue]) async throws {
+    @discardableResult
+    private func performMessage(_ id: String, action: (CtlClient) async throws -> [String: JSONValue]) async throws -> [String: JSONValue] {
         guard taskActionRepository.tryBeginBusy(id) else {
             throw ToolError.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "A task action is already in progress.")
         }
@@ -112,6 +113,7 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
             taskActionRepository.setOutcome(id, WorkMessageOutcome.describe(response))
             await taskSnapshotRepository.refresh(id)
             await taskListRepository.refresh()
+            return response
         } catch {
             taskActionRepository.setOutcome(id, (error as? ToolError)?.message ?? error.localizedDescription)
             await taskSnapshotRepository.refresh(id)

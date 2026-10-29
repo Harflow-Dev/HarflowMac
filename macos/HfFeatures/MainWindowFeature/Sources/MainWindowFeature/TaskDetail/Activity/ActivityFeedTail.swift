@@ -18,11 +18,16 @@ enum ActivityFeedTailPresentation: Equatable {
     struct Standard: Equatable {
         var subTaskStrip: Strip?
         var pendingMessages: [PendingMessage] = []
+        var workMessages: [WorkMessageBubble] = []
         var liveStep: Line?
         var approvals: [CallerApprovalCardModel] = []
         var approvalNotice: String?
         var approvalNoticeActionTitle = "Refresh approval history"
+        var cancel = CancelAvailability.enabled
     }
+
+    /// Whether a pinned bubble's Cancel is offered: hidden without a handler, disabled while the surface is busy.
+    enum CancelAvailability: Equatable { case hidden, disabled, enabled }
 
     struct Strip: Equatable {
         let children: [TaskDetailTimelineChild]
@@ -36,7 +41,8 @@ enum ActivityFeedTailPresentation: Equatable {
     }
 
     func isVisible(with semanticTail: ActivityFeedTail) -> Bool {
-        if case .standard(let standard) = self, !standard.approvals.isEmpty || standard.approvalNotice != nil { return true }
+        if case .standard(let standard) = self,
+           !standard.approvals.isEmpty || standard.approvalNotice != nil || !standard.workMessages.isEmpty { return true }
         return semanticTail != ActivityFeedTail() && self != .absent
     }
 }

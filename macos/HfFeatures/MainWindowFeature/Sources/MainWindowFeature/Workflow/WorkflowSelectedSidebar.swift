@@ -35,7 +35,9 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
                 Divider()
             }
             if let native = viewModel.nativeActivity {
-                WorkflowNativeActivityView(model: native)
+                WorkflowNativeActivityView(model: native, messages: viewModel.activityMessageBubbles,
+                                            onCancel: viewModel.cancelActivityMessage,
+                                            isCancelDisabled: viewModel.isBusy)
             } else if let child = state.childRunID {
                 Button("Open workflow") { viewModel.openRun(child) }.padding(12)
                 Spacer()
@@ -48,7 +50,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
             }
             if viewModel.nativeActivity != nil || state.childRunID != nil
                 || viewModel.selectedActivity == nil || viewModel.selectedActivity?.columns.isEmpty == true {
-                WorkflowActivityMessageComposer(viewModel: viewModel)
+                WorkflowActivityMessageComposer(viewModel: viewModel, showsBubbles: viewModel.nativeActivity == nil)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

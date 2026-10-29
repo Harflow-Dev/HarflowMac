@@ -36,7 +36,7 @@ protocol ParallelUseCase: Sendable {
     func runningInSubtrees(of ids: [String]) -> [String]
     func cancelAll(_ ids: [String]) async
     /// Queues or requests immediate delivery through the engine's authorized task route.
-    func sendMessage(_ id: String, text: String, now: Bool) async throws
+    func sendMessage(_ id: String, text: String, now: Bool) async throws -> [String: JSONValue]
     /// Withdraws the exact queued message from the current task's public route.
     func cancelMessage(_ id: String, messageID: String) async throws
     func setOutcome(_ id: String, _ text: String?)

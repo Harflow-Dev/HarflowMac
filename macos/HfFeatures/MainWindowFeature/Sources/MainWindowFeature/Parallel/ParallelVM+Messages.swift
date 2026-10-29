@@ -30,7 +30,10 @@ extension ParallelVM {
                 if self?.didSubscribe == true { self?.recompute() }
             }
             do {
-                try await capturedUseCase.sendMessage(id, text: text, now: now)
+                let result = try await capturedUseCase.sendMessage(id, text: text, now: now)
+                if let messageID = result["message_id"]?.stringValue, let note = WorkMessageBubble.refusalNote(in: result) {
+                    self?.messageNotes[id, default: [:]][messageID] = note
+                }
             } catch {
                 capturedUseCase.setOutcome(id, "Couldn't send the message: \((error as? ToolError)?.message ?? error.localizedDescription)")
             }

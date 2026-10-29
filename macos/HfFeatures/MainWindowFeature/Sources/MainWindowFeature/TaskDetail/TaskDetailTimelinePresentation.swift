@@ -44,6 +44,7 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
     let isLoading: Bool
     let liveStep: LiveStep?
     let pendingMessages: [PendingMessage]
+    var workMessages: [WorkMessageBubble] = []
     let history: EventHistoryState
 
     var activitySnapshot: ActivityFeedSnapshot?
@@ -53,6 +54,7 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
         Self(rows: rows, activityRows: activityRows, children: children, start: start, stepCount: stepCount,
             stepCountText: stepCountText, turnsText: turnsText, noToolCallsText: nil,
             emptyText: emptyText, isLoading: isLoading, liveStep: liveStep, pendingMessages: pendingMessages,
+            workMessages: workMessages,
             history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation),
             activitySnapshot: activitySnapshot, markdown: markdown)
     }
@@ -105,7 +107,9 @@ enum TaskDetailTimelineBuilder {
                 : "This task's event log is empty or was not found.") : nil,
             isLoading: count == 0 && input.members.contains { $0.availability == .loading },
             liveStep: LiveStep(rows: rows, isRunning: input.task.status.isRunning),
-            pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events), history: input.history,
+            pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events),
+            workMessages: WorkMessageBubble.project(raw: input.snapshot?.raw ?? input.task.raw),
+            history: input.history,
             activitySnapshot: ActivityFeedSnapshot.preparing(activity, previous: input.previousActivitySnapshot), markdown: markdown)
     }
 }
@@ -176,6 +180,8 @@ extension TaskDetailVM {
             pendingMessages: value.pendingMessages, history: value.history,
             paginationRevision: activityPaginationRevision, onLoadMore: { [weak self] in self?.loadMoreConversationActivity() ?? false })
         timelineModel.activitySnapshot = value.activitySnapshot
+        timelineModel.workMessages = WorkMessageBubble.applying(value.workMessages, notes: messageNotes)
+        timelineModel.onCancelQueuedMessage = { [weak self] id in self?.cancelQueuedMessage(id) }
         timelineModel.onSelectTask = { [weak self] id in self?.didTapTask(id) }
     }
 }

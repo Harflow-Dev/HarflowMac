@@ -18,6 +18,7 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     var markdown: [String: StreamingMarkdownState] = [:]
     var liveStep: LiveStep?
     var pendingMessages: [PendingMessage] = []
+    var workMessages: [WorkMessageBubble] = []
     var isLoading = true
     var emptyText: String?
     var history = EventHistoryState()
@@ -93,6 +94,7 @@ enum ParallelPresentationBuilder {
         try Task.checkCancellation()
         result.liveStep = LiveStep(rows: rows, isRunning: result.task.status.isRunning)
         result.pendingMessages = PendingMessage.visible(snapshot: input.snapshot, events: input.events)
+        result.workMessages = WorkMessageBubble.project(raw: input.snapshot?.raw ?? result.task.raw)
         let hasItems = input.members.contains { !$0.items.isEmpty }
         // Activity-item counts (§4): a loaded count of one reads "1 activity item", a still-loading
         // or empty feed omits the count rather than claiming "0 activity items".
@@ -220,6 +222,7 @@ struct ParallelColumnRenderValue: Equatable {
             && left.showPrompt == right.showPrompt && left.prompt == right.prompt
             && left.rows == right.rows && left.activityRows == right.activityRows
             && left.liveStep == right.liveStep && left.pendingMessages == right.pendingMessages
+            && left.workMessages == right.workMessages
             && left.isLoading == right.isLoading && left.emptyText == right.emptyText
             && left.history == right.history && left.paginationRevision == right.paginationRevision
             && left.summary == right.summary && left.stepCountText == right.stepCountText
@@ -240,6 +243,7 @@ extension ParallelColumnModel {
         value.activityRows = activityRows
         value.liveStep = liveStep
         value.pendingMessages = pendingMessages
+        value.workMessages = workMessages
         value.isLoading = isLoading
         value.emptyText = emptyText
         value.history = history

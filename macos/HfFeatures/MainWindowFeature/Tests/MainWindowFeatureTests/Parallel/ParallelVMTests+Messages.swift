@@ -16,7 +16,7 @@ extension ParallelVMTests {
         let first = task(id: "first", status: "completed", startedAt: .now.addingTimeInterval(-30))
         let current = task(id: "current", startedAt: .now, parentTaskID: "first")
         harness.tasksBox.value = ["first": first]
-        given(harness.useCase).sendMessage(.any, text: .any, now: .any).willReturn()
+        given(harness.useCase).sendMessage(.any, text: .any, now: .any).willReturn([:])
         harness.sut.didAppear()
         harness.tasksSubject.send([first])
         await waitUntil { harness.sut.columns.count == 1 }
@@ -38,7 +38,7 @@ extension ParallelVMTests {
         let harness = makeSUT()
         let current = task(id: "current")
         harness.tasksBox.value = ["current": current]
-        given(harness.useCase).sendMessage(.any, text: .any, now: .any).willReturn()
+        given(harness.useCase).sendMessage(.any, text: .any, now: .any).willReturn([:])
         harness.sut.didAppear()
         harness.tasksSubject.send([current])
         await waitUntil { harness.sut.columns.count == 1 }

@@ -44,6 +44,9 @@ extension WorkflowVM {
             guard let self else { return }
             let result = try await useCase.command("send", options: options, positionals: [runID, text])
             if activityMessageTarget == target { errorText = WorkMessageOutcome.notice(result) }
+            if let id = result["message_id"]?.stringValue, let note = WorkMessageBubble.refusalNote(in: result) {
+                messageNotes[id] = note
+            }
             await refresh()
         }
         return true
@@ -55,6 +58,7 @@ extension WorkflowVM {
         perform { [weak self] in
             guard let self else { return }
             _ = try await useCase.command("cancel-message", options: ["--monitor"], positionals: [runID, messageID])
+            if activityMessageTarget == target { errorText = "Queued message cancelled." }
             await refresh()
         }
     }

@@ -166,18 +166,33 @@ extension TaskDetailVM {
               let task, !task.takenOver, !isBusy else { return false }
         let capturedUseCase = useCase
         let id = currentTaskID
-        Task {
-            do {
-                if now {
-                    try await capturedUseCase.sendNow(id, text: text)
-                } else {
-                    _ = try await capturedUseCase.send(id, text: text)
+        // The queue path must not capture `self`: Continue stays in flight after the view model
+        // is released. Send now records a refusal on the view model only while it is still alive.
+        if now {
+            Task { [weak self] in
+                do {
+                    let result = try await capturedUseCase.sendNow(id, text: text)
+                    self?.rememberMessageResult(result)
+                } catch {
+                    capturedUseCase.setOutcome(id, "Couldn't send the message: \(error.localizedDescription)")
                 }
-            } catch {
-                capturedUseCase.setOutcome(id, "Couldn't send the message: \(error.localizedDescription)")
+            }
+        } else {
+            Task {
+                do {
+                    _ = try await capturedUseCase.send(id, text: text)
+                } catch {
+                    capturedUseCase.setOutcome(id, "Couldn't send the message: \(error.localizedDescription)")
+                }
             }
         }
         return true
+    }
+
+    func rememberMessageResult(_ result: [String: JSONValue]) {
+        guard let id = result["message_id"]?.stringValue, let note = WorkMessageBubble.refusalNote(in: result) else { return }
+        messageNotes[id] = note
+        timelineModel.workMessages = WorkMessageBubble.applying(timelineModel.workMessages, notes: messageNotes)
     }
 
     func cancelQueuedMessage(_ messageID: String) {

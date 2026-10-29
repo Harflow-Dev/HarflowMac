@@ -39,6 +39,7 @@ struct ActivityFeedView: View {
     var onApprovalLoadMore: (() -> Void)?
     var onApprovalFocusAcknowledged: ((String, UUID) -> Void)?
     var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
+    var onCancelQueuedMessage: ((String) -> Void)?
 
     init(rows: [ActivityRow], activitySnapshot: ActivityFeedSnapshot? = nil, start: Date?, history: EventHistoryState, isLoading: Bool,
          tailValue: ActivityFeedTail = ActivityFeedTail(), paginationRevision: Int = 0, isVisible: Bool = true,
@@ -48,7 +49,8 @@ struct ActivityFeedView: View {
          approvalReveal: CallerApprovalReveal? = nil, onApprovalResponse: ((String, String) -> Void)? = nil,
          onApprovalToggle: ((String) -> Void)? = nil, onApprovalLoadMore: (() -> Void)? = nil,
          onApprovalFocusAcknowledged: ((String, UUID) -> Void)? = nil,
-         onApprovalScrollAcknowledged: ((String, UUID) -> Void)? = nil) {
+         onApprovalScrollAcknowledged: ((String, UUID) -> Void)? = nil,
+         onCancelQueuedMessage: ((String) -> Void)? = nil) {
         self.rows = rows
         self.activitySnapshot = activitySnapshot
         self.start = start
@@ -70,6 +72,7 @@ struct ActivityFeedView: View {
         self.onApprovalLoadMore = onApprovalLoadMore
         self.onApprovalFocusAcknowledged = onApprovalFocusAcknowledged
         self.onApprovalScrollAcknowledged = onApprovalScrollAcknowledged
+        self.onCancelQueuedMessage = onCancelQueuedMessage
     }
 
     private var ids: [String] { activitySnapshot?.ids ?? rows.map(\.id) }
@@ -79,6 +82,21 @@ struct ActivityFeedView: View {
 
     var body: some View {
         ActivityFeedNativeList(model: nativeModel(shownRows: shown), state: state, actions: currentActions)
+            .overlay(alignment: .bottomTrailing) {
+                if let queuedJumpCount, !state.followLive.isFollowing {
+                    QueuedMessageJump(count: queuedJumpCount) {
+                        var follow = state.followLive
+                        follow.resumeFollowing()
+                        state.followLive = follow
+                    }
+                }
+            }
+    }
+
+    private var queuedJumpCount: Int? {
+        guard case .standard(let standard) = tailPresentation else { return nil }
+        let count = standard.workMessages.filter(\.isPinned).count
+        return count > 0 ? count : nil
     }
 
     private func nativeModel(shownRows: [ActivityRow]) -> ActivityFeedNativeModel {
@@ -114,6 +132,7 @@ struct ActivityFeedView: View {
         actions.onApprovalLoadMore = { onApprovalLoadMore?() }
         actions.onApprovalFocusAcknowledged = { onApprovalFocusAcknowledged?($0, $1) }
         actions.onApprovalScrollAcknowledged = { onApprovalScrollAcknowledged?($0, $1) }
+        actions.onCancelQueuedMessage = { onCancelQueuedMessage?($0) }
         return actions
     }
 }

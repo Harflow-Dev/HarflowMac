@@ -22,6 +22,9 @@ struct PromptBubbleView: View {
     let text: String
     var caption: String?
     let isPending: Bool
+    var note: String?
+    var onCancel: (() -> Void)?
+    var isCancelDisabled = false
     @State private var localExpanded: Bool
     @Environment(\.activityFeedDisclosure) private var disclosure
     var disclosureID: String?
@@ -42,11 +45,15 @@ struct PromptBubbleView: View {
         }
     }
 
-    init(text: String, caption: String? = nil, isInitiallyExpanded: Bool = false, isPending: Bool = false, disclosureID: String? = nil) {
+    init(text: String, caption: String? = nil, isInitiallyExpanded: Bool = false, isPending: Bool = false, disclosureID: String? = nil,
+         note: String? = nil, onCancel: (() -> Void)? = nil, isCancelDisabled: Bool = false) {
         self.text = text
         self.caption = caption
         self.isPending = isPending
         self.disclosureID = disclosureID
+        self.note = note
+        self.onCancel = onCancel
+        self.isCancelDisabled = isCancelDisabled
         _localExpanded = State(initialValue: isInitiallyExpanded)
     }
 
@@ -73,6 +80,20 @@ struct PromptBubbleView: View {
                     Button(isExpanded ? "Show less" : "Show more") { isExpanded.toggle() }
                         .buttonStyle(.link)
                         .font(.hf(.secondary))
+                }
+                if let note {
+                    Text(note)
+                        .font(.hf(.secondary))
+                        .foregroundStyle(Color.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let onCancel {
+                    Button("Cancel", action: onCancel)
+                        .buttonStyle(.plain)
+                        .font(.hf(.secondary))
+                        .disabled(isCancelDisabled)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .accessibilityLabel("Cancel queued message")
                 }
             }
             .padding(.horizontal, HfRadius.Metrics.spacing14)

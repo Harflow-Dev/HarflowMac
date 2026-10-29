@@ -97,10 +97,9 @@ protocol WorkflowViewModel: ViewModel {
     func prepareGeneration(refining: Bool)
     func returnToCanvas()
     func applyAgentProposal()
-    func submitWorkMessage(_ text: String, now: Bool) -> Bool
-    func cancelWorkMessage(_ messageID: String)
     var activityMessageTarget: WorkflowActivityMessageTarget { get }
     var activityMessageItems: [WorkMessageQueue.Item] { get }
+    var messageNotes: [String: String] { get }
     var activityMessageReadError: String? { get }
     func refreshActivityMessageState() async
     func submitActivityMessage(_ text: String, now: Bool) -> Bool
@@ -126,10 +125,13 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
-    func submitWorkMessage(_: String, now _: Bool) -> Bool { false }
-    func cancelWorkMessage(_: String) {}
     var activityMessageTarget: WorkflowActivityMessageTarget { .resolve(run: selectedRun, sidebar: runSidebar) }
     var activityMessageItems: [WorkMessageQueue.Item] { [] }
+    var messageNotes: [String: String] { [:] }
+    var activityMessageBubbles: [WorkMessageBubble] {
+        WorkMessageBubble.applying(WorkMessageBubble.project(items: activityMessageItems), notes: messageNotes)
+    }
+
     var activityMessageReadError: String? { nil }
     func refreshActivityMessageState() async {}
     func submitActivityMessage(_: String, now _: Bool) -> Bool { false }

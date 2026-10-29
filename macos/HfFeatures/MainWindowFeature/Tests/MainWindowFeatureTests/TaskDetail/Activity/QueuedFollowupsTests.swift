@@ -30,22 +30,19 @@ import Testing
             item("d", 4, "undeliverable", text: "lost", extra: ["reason": .string("superseded by s2; resend to it")]),
             item("a", 1, "queued", text: "  keep  spacing\n"),
             item("b", 2, "reserved", text: "in flight"),
-            item("c", 3, "consumed", extra: ["successor_task_id": .string("s1")]),
+            item("c", 3, "consumed", text: "Included once.", extra: ["successor_task_id": .string("s1")]),
             item("e", 5, "delivery_unknown", text: "maybe", extra: ["reason": .string("spawn interrupted")]),
             item("f", 6, "cancelled"),
             item("g", 7, "mystery", text: "ignored")
         ])])
         // when
-        let bubbles = PendingMessage.visible(snapshot: try snapshot(ledger), events: [])
+        let bubbles = WorkMessageBubble.project(raw: ["queued_followups": ledger])
         // then
-        #expect(bubbles.map(\.id) == ["followup-a", "followup-b", "followup-c", "followup-d", "followup-e", "followup-f"])
-        #expect(bubbles[0].caption == "Queued for next continuation" && bubbles[0].text == "  keep  spacing\n" && bubbles[0].isPending)
-        #expect(bubbles[1].caption == "Queued for next continuation")
-        #expect(bubbles[2].caption == "Sent to s1" && bubbles[2].successorTaskID == "s1" && !bubbles[2].isPending)
-        #expect(bubbles.map(\.isPending) == [true, true, false, false, false, false]) // only queued/reserved read as pending
-        #expect(bubbles[3].caption == "Undeliverable — superseded by s2; resend to it" && bubbles[3].text == "lost")
-        #expect(bubbles[4].caption == "Delivery unknown — spawn interrupted")
-        #expect(bubbles[5].caption == "Cancelled")
+        #expect(bubbles.map(\.id) == ["a", "b", "d", "e"])
+        #expect(bubbles[0].caption == "Queued" && bubbles[0].text == "  keep  spacing\n" && bubbles[0].isPinned && bubbles[0].canCancel)
+        #expect(bubbles[1].caption == "Queued" && bubbles[1].isPinned && !bubbles[1].canCancel)
+        #expect(bubbles[2].caption == "Undeliverable" && bubbles[2].note == "superseded by s2; resend to it" && !bubbles[2].isPinned)
+        #expect(bubbles[3].caption == "Delivery uncertain" && bubbles[3].note == "spawn interrupted" && !bubbles[3].canCancel)
     }
 
     @Test func givenLivePendingAndQueuedFollowups_whenRead_thenPendingBubblesAreUnchangedAndComeFirst() throws {
@@ -57,9 +54,11 @@ import Testing
         ])))
         // when
         let bubbles = PendingMessage.visible(snapshot: info, events: [])
+        let queued = WorkMessageBubble.project(raw: info.raw)
         // then
-        #expect(bubbles.map(\.id) == ["p", "followup-q"])
+        #expect(bubbles.map(\.id) == ["p"])
         #expect(bubbles[0].caption == "Pending" && bubbles[0].successorTaskID == nil)
+        #expect(queued.map(\.id) == ["q"] && queued[0].caption == "Queued")
     }
 }
 

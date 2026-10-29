@@ -1,9 +1,8 @@
 import Foundation
 import MonitorCore
 
-/// One bubble in the activity tail for a message the caller has sent that is not yet an event in
-/// the feed: a live-input message awaiting its pump ("Pending"), or a follow-up queued for a task's
-/// next continuation and its later states (see `queuedFollowups`).
+/// One bubble in the activity tail for a live-input message awaiting its pump ("Pending").
+/// Durable queued messages are `WorkMessageBubble`s, kept separate so a follow-up is not shown twice.
 struct PendingMessage: Identifiable, Equatable, Sendable {
     let id: String
     let text: String
@@ -27,6 +26,6 @@ struct PendingMessage: Identifiable, Equatable, Sendable {
                   let text = value["text"]?.stringValue, !delivered.contains(id),
                   !delivered.contains(value["delivery_id"]?.stringValue ?? id), seen.insert(id).inserted else { return nil }
             return PendingMessage(id: id, text: text)
-        } + queuedFollowups(snapshot: snapshot)
+        }
     }
 }

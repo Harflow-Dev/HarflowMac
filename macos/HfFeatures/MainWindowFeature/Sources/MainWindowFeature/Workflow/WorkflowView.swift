@@ -26,14 +26,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         WorkflowScreenLayout {
             screenHeader
         } content: {
-            VStack(spacing: HfRadius.Metrics.zero) {
-                screenContent
-                if viewModel.initialLoadingKind == nil, !viewModel.initialLoadFailed,
-                   viewModel.selectedRun == nil || (viewModel.selectedRun?.isBuilder == true
-                    && (viewModel.selectedRun?.builderTaskID == nil || builderTaskView == nil)) {
-                    workMessageBox
-                }
-            }
+            screenContent
         }
         .background(Color.windowBG)
         .modifier(WorkflowRecoveryOverlayLifecycle(presentation: $recoveryOverlay, eligibleRunID: recoveryEligibleRunID))
@@ -93,6 +86,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 Divider()
             }
         }
+    }
+
+    private var runReadError: some View {
+        ContentUnavailableView("Workflow could not be loaded", systemImage: "exclamationmark.triangle")
     }
 
     @ViewBuilder private var screenContent: some View {
