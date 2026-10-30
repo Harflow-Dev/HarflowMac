@@ -24,6 +24,7 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
     var resumes: [(root: String, decision: String?, text: String, attempts: Int?)] = []
     var workflowPageFails = false
     var approvalPageSize = 1000
+    var approvalPageOverride: (@Sendable (String?) -> CallerApprovalPage)?
     var capabilityFails = false
 
     var calls: [String] { lock.withLock { log } }
@@ -65,6 +66,7 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
 
     func approvalPage(taskID: String, cursor: String?) async throws -> CallerApprovalPage {
         record("approvalList:\(taskID)")
+        if let approvalPageOverride { return approvalPageOverride(cursor) }
         let rows = approvalRows[taskID] ?? []
         let start = cursor.flatMap(Int.init) ?? 0
         let slice = Array(rows.dropFirst(start).prefix(approvalPageSize))

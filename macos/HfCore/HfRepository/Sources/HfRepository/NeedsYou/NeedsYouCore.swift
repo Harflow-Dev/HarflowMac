@@ -89,7 +89,9 @@ actor NeedsYouCore {
     /// Sources with any terminal observation (ready, unreadable or unsupported) since launch.
     private var attempted: Set<String> = []
     private var childFailures: [String: Set<String>] = [:]
-    private var childCache: [String: Result<WorkflowMonitorStatus, ChildFailure>] = [:]
+    /// Successful child reads kept per root until the root has been read completely, so an oversized root advances.
+    private var childReads: [String: [String: WorkflowMonitorStatus]] = [:]
+    private var visitFailures: Set<String> = []
     private var approvalProgress: [String: ApprovalProgress] = [:]
     private var unreadable: Set<String> = []
     private var unsupportedRoots: Set<String> = []
@@ -118,7 +120,6 @@ actor NeedsYouCore {
 
     func runPass() async -> Output {
         pass += 1
-        childCache = [:]
         var budget = Budget(remaining: Self.invocationBudget)
         var events: [NeedsYouEvent] = []
         deferred = 0
@@ -275,6 +276,7 @@ actor NeedsYouCore {
         unsupportedRoots.remove(key)
         unreadable.subtract(childFailures.removeValue(forKey: key) ?? [])
         approvalProgress[key] = nil
+        childReads[key] = nil
     }
 
     // MARK: - Workflow roots
@@ -290,12 +292,9 @@ actor NeedsYouCore {
             visited += 1
             let key = "workflow:\(header.id)"
             let observation = await observeRoot(header.id, &budget)
-            // Only a complete read counts as a visit; a partial one is retried first next pass.
-            switch observation {
-            case .deferred: break
-            case .ready(_, let withheld, _) where !withheld.isEmpty: break
-            default: lastVisit[key] = pass
-            }
+            // Every attempted root rotates to the back, so roots with failing or oversized children cannot block the rest;
+            // their persisted child reads let them finish across visits.
+            if case .deferred = observation {} else { lastVisit[key] = pass }
             apply(observation, key: key, events: &events, baseline: baseline)
         }
         deferred += max(0, candidates.count - visited)
@@ -312,17 +311,25 @@ actor NeedsYouCore {
         var items: [NeedsYouItem] = []
         var withheld = Set<String>()
         var failures = Set<String>()
+        var incomplete = false
+        visitFailures = []
         for candidate in plan.questions {
-            switch await offeredAnswers(for: candidate, root: status, &budget) {
+            switch await offeredAnswers(for: candidate, root: status, rootKey: "workflow:\(id)", &budget) {
             case .failure(let failure):
                 // Only this child's entries are held back; the rest of the root is still read.
                 withheld.insert("input:\(id):\(candidate.entry.decisionID)")
-                if failure.deferred { deferred += 1 } else { failures.insert("child:\(candidate.entry.workflowRunID)") }
+                if failure.deferred {
+                    deferred += 1
+                    incomplete = true
+                } else {
+                    failures.insert("child:\(candidate.entry.workflowRunID)")
+                }
             case .success(let offered):
                 items.append(NeedsYouMapper.question(candidate: candidate, root: status, state: state, names: names, offered: offered))
             }
         }
         if let recovery = plan.recovery { items.append(recovery) }
+        if !incomplete { childReads["workflow:\(id)"] = nil }
         return .ready(items, withheld: withheld, childFailures: failures)
     }
 
@@ -331,12 +338,12 @@ actor NeedsYouCore {
     /// Structured usage-limit answers come from the source run's own `usage_limit_recovery`; a worker
     /// usage limit has none and is an ordinary free-text question. Child reads are cached for the pass.
     private func offeredAnswers(
-        for candidate: NeedsYouMapper.Candidate, root: WorkflowMonitorStatus, _ budget: inout Budget
+        for candidate: NeedsYouMapper.Candidate, root: WorkflowMonitorStatus, rootKey: String, _ budget: inout Budget
     ) async -> Result<[String]?, EntryFailure> {
         var recovery = root.usageLimitRecovery
         if candidate.needsSourceRead {
             guard candidate.entry.isUsageLimit else { return .success(nil) }
-            switch await childStatus(candidate.entry.workflowRunID, &budget) {
+            switch await childStatus(candidate.entry.workflowRunID, rootKey: rootKey, &budget) {
             case .failure(let failure): return .failure(EntryFailure(deferred: failure == .deferred))
             case .success(let child): recovery = child.usageLimitRecovery
             }
@@ -345,13 +352,16 @@ actor NeedsYouCore {
         return .success(recovery.choices)
     }
 
-    private func childStatus(_ id: String, _ budget: inout Budget) async -> Result<WorkflowMonitorStatus, ChildFailure> {
-        if let cached = childCache[id] { return cached }
+    private func childStatus(_ id: String, rootKey: String, _ budget: inout Budget) async -> Result<WorkflowMonitorStatus, ChildFailure> {
+        if let read = childReads[rootKey]?[id] { return .success(read) }
+        if visitFailures.contains(id) { return .failure(.unreadable) }
         guard budget.take() else { return .failure(.deferred) }
-        let status = try? await engine.workflowStatus(id)
-        let result: Result<WorkflowMonitorStatus, ChildFailure> = if let status, status.isQualified { .success(status) } else { .failure(.unreadable) }
-        childCache[id] = result
-        return result
+        if let status = try? await engine.workflowStatus(id), status.isQualified {
+            childReads[rootKey, default: [:]][id] = status
+            return .success(status)
+        }
+        visitFailures.insert(id)
+        return .failure(.unreadable)
     }
 
     // MARK: - Tasks and approvals
@@ -400,9 +410,14 @@ actor NeedsYouCore {
         defer { approvalProgress[key] = progress }
         if let stop = await listRows(info, &progress, &budget) { return stop }
         if let stop = await acquireDetails(info, &progress, &budget, capability: &capability) { return stop }
-        let items: [NeedsYouItem] = progress.rows.compactMap { row in
-            if case .eligible(let request)? = progress.details[row.id] { return NeedsYouMapper.approval(request: request, task: info) }
-            return nil
+        // Retained details may be passes old: re-run eligibility (deadline, ownership, capability) right before publishing.
+        var items: [NeedsYouItem] = []
+        for row in progress.rows {
+            guard case .eligible(let request)? = progress.details[row.id] else { continue }
+            switch await eligible(request, &budget, capability: &capability) {
+            case .failure(let failure): return failure.observation
+            case .success(let ok): if ok { items.append(NeedsYouMapper.approval(request: request, task: info)) }
+            }
         }
         progress = ApprovalProgress()
         return .ready(items)
@@ -411,8 +426,8 @@ actor NeedsYouCore {
     /// Decides from the approval summary alone, or nil when approvals must be listed. Uncertainty and
     /// incompleteness come first: an uncertain ledger can report zero awaiting.
     private func summaryOutcome(_ info: TaskInfo) -> Observation? {
-        // No summary at all: this engine reports no approvals for the task.
-        guard let summary = info.raw["approval_summary"]?.objectValue else { return .ready([]) }
+        // An absent or malformed summary is unknown, not empty: withdraw rather than resolve.
+        guard let summary = info.raw["approval_summary"]?.objectValue else { return .unreadable }
         if summary["error"] != nil || summary["interaction_state"]?.stringValue == "approval_state_uncertain" { return .unreadable }
         guard let awaiting = info.awaitingDecisionCount else { return .unreadable }
         return awaiting > 0 ? nil : .ready([])
@@ -426,7 +441,15 @@ actor NeedsYouCore {
                 progress = ApprovalProgress()
                 return .unreadable
             }
-            progress.rows += page.requests.filter(\.mayBeAnsweredFromMonitor)
+            for row in page.requests where row.mayBeAnsweredFromMonitor {
+                // A listing that shifts between pages can repeat a request: keep the last copy, and refetch if it changed.
+                if let index = progress.rows.firstIndex(where: { $0.id == row.id }) {
+                    if progress.rows[index] != row { progress.details[row.id] = nil }
+                    progress.rows[index] = row
+                } else {
+                    progress.rows.append(row)
+                }
+            }
             guard let next = page.nextCursor else {
                 progress.cursor = nil
                 progress.listComplete = true
