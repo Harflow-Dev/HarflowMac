@@ -13,7 +13,7 @@ import SwiftEnvironment
 
 /// Concrete `MenuBarUseCase` backed by `TaskListRepository` and `EventStreamRepository`.
 @MainActor
-final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCase, @unchecked Sendable {
+final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCase, MenuBarNeedsYouUseCase, @unchecked Sendable {
     
     // MARK: - Private Properties
     
@@ -21,6 +21,10 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     @GlobalEnvironment(\.eventStreamRepository) private var eventStreamRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
+    @GlobalEnvironment(\.needsYouRepository) private var needsYouRepository
+
+    var needsYouSnapshot: NeedsYouSnapshot { needsYouRepository.snapshot }
+    func needsYouSnapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never> { needsYouRepository.snapshotPublisher() }
 
     // MARK: - Init
 

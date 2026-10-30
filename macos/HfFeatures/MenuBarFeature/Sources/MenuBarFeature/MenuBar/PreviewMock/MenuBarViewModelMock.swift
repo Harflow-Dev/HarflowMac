@@ -24,6 +24,9 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     var runningCount: Int
     var headerSubline: String { isConnected ? "harflow connected" : connectionLine }
     var installBannerModel: InstallBanner.Model?
+    var needsYou: MenuBarNeedsYouSection?
+    func didSelectNeedsYou(_: String) {}
+    func didTapShowAllNeedsYou() {}
 
     init(
         runningRows: [MenuBarRunningRowModel] = [
@@ -40,7 +43,8 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         isConnected: Bool = true,
         connectionLine: String = "connected · harflow-ctl",
         runningCount: Int = 1,
-        installBannerModel: InstallBanner.Model? = nil
+        installBannerModel: InstallBanner.Model? = nil,
+        needsYou: MenuBarNeedsYouSection? = nil
     ) {
         self.runningRows = runningRows
         self.recentGroups = recentGroups
@@ -50,6 +54,7 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         self.connectionLine = connectionLine
         self.runningCount = runningCount
         self.installBannerModel = installBannerModel
+        self.needsYou = needsYou
     }
 
     /// A populated popover: two running tasks, a parallel group and finished tasks of each outcome.

@@ -125,11 +125,13 @@ final class MenuBarVM: MenuBarViewModel {
     /// The install/update banner to show where the red list error shows today, or `nil` when
     /// nothing needs surfacing (settled plan, section 5's precedence rules).
     private(set) var installBannerModel: InstallBanner.Model?
+    /// The Needs you section; nil until the first complete pass. Subscribed while the popover is open.
+    var needsYou: MenuBarNeedsYouSection?
 
     // MARK: - Private Properties
 
     @ObservationIgnored private let useCase: any MenuBarUseCase
-    @ObservationIgnored private let routing: any MenuBarRouting
+    @ObservationIgnored let routing: any MenuBarRouting
     /// Whether anyone can see the Monitor: feeds the popover-open state (the popover's own
     /// appear/disappear is the one reliable `MenuBarExtra` signal) and paces the minute tick's
     /// popover-content recompute.
@@ -142,6 +144,8 @@ final class MenuBarVM: MenuBarViewModel {
     @ObservationIgnored var minuteTickGeneration = 0
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
+    @ObservationIgnored var needsYouSubscription: AnyCancellable?
+    @ObservationIgnored let needsYouSource: (any MenuBarNeedsYouUseCase)?
     @ObservationIgnored private var latestTasks: [TaskInfo] = []
     @ObservationIgnored private var latestListError: ToolError?
     @ObservationIgnored private var latestHasListed = false
@@ -156,7 +160,8 @@ final class MenuBarVM: MenuBarViewModel {
     // MARK: - Init
 
     init(useCase: any MenuBarUseCase, routing: any MenuBarRouting, workflowStatus: WorkflowMenuBarStatusVM? = nil,
-         visibility: any MonitorVisibility, scheduler: any Scheduling) {
+         visibility: any MonitorVisibility, scheduler: any Scheduling, needsYou needsYouSource: (any MenuBarNeedsYouUseCase)? = nil) {
+        self.needsYouSource = needsYouSource
         self.workflowStatus = workflowStatus
         self.useCase = useCase
         self.routing = routing
@@ -176,6 +181,7 @@ final class MenuBarVM: MenuBarViewModel {
     func didAppear() {
         workflowStatus?.didAppear()
         subscribeIfNeeded()
+        subscribeToNeedsYou()
     }
 
     /// The popover content appeared — distinct from `didAppear()`, which the always-on-screen
@@ -205,6 +211,8 @@ final class MenuBarVM: MenuBarViewModel {
     /// See the type-level comment: this deliberately does not tear down the core subscriptions,
     /// only the per-row event leases.
     func didDisappear() {
+        needsYouSubscription?.cancel()
+        needsYouSubscription = nil
         for (_, lease) in rowLeases { lease.release() }
         rowLeases.removeAll()
         rowCancellables.removeAll()

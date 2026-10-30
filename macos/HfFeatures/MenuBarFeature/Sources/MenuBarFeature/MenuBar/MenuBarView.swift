@@ -49,6 +49,10 @@ protocol MenuBarViewModel: ViewModel {
     /// The install/update banner, or `nil` when nothing needs surfacing — shown where the red list
     /// error shows today (settled plan, section 5).
     var installBannerModel: InstallBanner.Model? { get }
+    /// The Needs you section, or nil while loading.
+    var needsYou: MenuBarNeedsYouSection? { get }
+    func didSelectNeedsYou(_ itemID: String)
+    func didTapShowAllNeedsYou()
 
     func didAppear()
     func didDisappear()
@@ -70,6 +74,12 @@ protocol MenuBarViewModel: ViewModel {
     func didPopoverOpen()
     /// The popover content disappeared.
     func didPopoverClose()
+}
+
+extension MenuBarViewModel {
+    var needsYou: MenuBarNeedsYouSection? { nil }
+    func didSelectNeedsYou(_: String) {}
+    func didTapShowAllNeedsYou() {}
 }
 
 extension MenuBarViewModel {
@@ -120,6 +130,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing16) {
                     notices
+                    needsYou
                     workflows
                     running
                     recent
@@ -253,6 +264,15 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
         }
     }
 
+    @ViewBuilder
+    private var needsYou: some View {
+        if let section = viewModel.needsYou {
+            MenuBarNeedsYouSectionView(
+                section: section, open: { viewModel.didSelectNeedsYou($0) }, showAll: { viewModel.didTapShowAllNeedsYou() }
+            )
+        }
+    }
+
     /// The running rows under their new "Running" caption (§6.8) — the label exists only when rows
     /// do; the rows, leases and order are exactly what they were.
     @ViewBuilder
@@ -346,7 +366,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
 /// glass (user-approved glass-ink amendment), so the label's ink follows the user's
 /// primaryText-on-glass choice. Local to this screen because the shared `SectionLabel` renders
 /// native `.secondary` for its other consumers, which must not be restyled.
-private struct MenuBarSectionLabel: View {
+struct MenuBarSectionLabel: View {
     let text: String
 
     var body: some View {
@@ -367,7 +387,7 @@ private struct MenuBarSectionLabel: View {
 /// plain titles, which carry no explicit style of their own; every other row part (status icon,
 /// dots, chevron, spinner, progress) styles itself explicitly and stays untouched. The blanket
 /// stops at each row's content, so it never leaks into the cards above.
-private struct MenuBarRecentRowButton<Content: View>: View {
+struct MenuBarRecentRowButton<Content: View>: View {
     let action: () -> Void
     @ViewBuilder let content: () -> Content
     @State private var isHovered = false
@@ -463,6 +483,36 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
     func didTapInstallBannerPrimary() {}
     func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}
+}
+
+private func needsYouRows(_ count: Int) -> [MenuBarNeedsYouSection.Row] {
+    [
+        .init(id: "a", kindLabel: "Question", title: "Release checklist", callerEnded: true),
+        .init(id: "b", kindLabel: "Approval", title: "Migrate billing exports", callerEnded: true),
+        .init(id: "c", kindLabel: "Recovery", title: "Audit lockfile", callerEnded: false)
+    ]
+.prefix(count)
+.map(\.self)
+}
+
+#Preview("Menu bar Needs you populated - light") {
+    MenuBarView(MenuBarViewModelMock(needsYou: .init(count: 6, rows: needsYouRows(3)))).preferredColorScheme(.light)
+}
+
+#Preview("Menu bar Needs you populated - dark") {
+    MenuBarView(MenuBarViewModelMock(needsYou: .init(count: 6, rows: needsYouRows(3)))).preferredColorScheme(.dark)
+}
+
+#Preview("Menu bar Needs you few") {
+    MenuBarView(MenuBarViewModelMock(needsYou: .init(count: 2, rows: needsYouRows(2))))
+}
+
+#Preview("Menu bar Needs you empty") {
+    MenuBarView(MenuBarViewModelMock(needsYou: .init(count: 0, rows: [])))
+}
+
+#Preview("Menu bar Needs you older engine") {
+    MenuBarView(MenuBarViewModelMock(needsYou: .init(count: 0, rows: [], olderEngine: true)))
 }
 
 #Preview("Menu bar - light") {

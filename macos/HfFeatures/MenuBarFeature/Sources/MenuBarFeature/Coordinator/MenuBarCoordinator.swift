@@ -79,7 +79,8 @@ public final class MenuBarCoordinator: MenuBarNavigationCoordinator {
         let visibility = GlobalValues.monitorVisibility
         let scheduler = GlobalValues.scheduling
         let status = WorkflowMenuBarStatusVM(useCase: WorkflowMenuBarViewRepository(), visibility: visibility, scheduler: scheduler)
-        let newVM = MenuBarVM(useCase: useCase, routing: self, workflowStatus: status, visibility: visibility, scheduler: scheduler)
+        let newVM = MenuBarVM(useCase: useCase, routing: self, workflowStatus: status, visibility: visibility, scheduler: scheduler,
+                          needsYou: useCase)
         vm = newVM
         return newVM
     }
