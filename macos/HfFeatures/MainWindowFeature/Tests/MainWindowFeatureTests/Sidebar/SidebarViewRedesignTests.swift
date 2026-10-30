@@ -145,6 +145,7 @@ import Testing
             let item = outline.item(atRow: row) as Any
             guard let box = item as? SidebarNativeItemBox else { return false }
             if case .statistics = box.entry.content { return false }
+            if case .needsYou = box.entry.content { return false }
             return outline.delegate?.outlineView?(outline, shouldSelectItem: item) == true
         }
     }

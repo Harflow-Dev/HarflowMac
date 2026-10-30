@@ -90,7 +90,7 @@ struct SidebarNativeHostedScalingTests {
         let retainedDisplayID = SidebarDisplayID(logicalID: "task:row-0")
         let retainedBox = try #require(coordinator.boxesByID[retainedDisplayID])
         state.presentation = presentation(count: count + 1)
-        await fixture.waitForRows(count + 6, timeout: count >= 10_000 ? 60 : 30)
+        await fixture.waitForRows(count + 7, timeout: count >= 10_000 ? 60 : 30)
         await fixture.waitForSettled(timeout: count >= 10_000 ? 60 : 30)
         let page = fixture.snapshot(stage: "page-append", count: count + 1)
         fixture.log(page)
@@ -125,8 +125,8 @@ struct SidebarNativeHostedScalingTests {
         #expect(resized.mainApplySeconds >= 0)
         #expect(resized.naturalMeasurementSeconds >= 0)
         #expect(resized.measurementCount >= reordered.measurementCount)
-        #expect(coordinator.boxes.count == count + 6)
-        #expect(coordinator.boxes.map(\.entry.id).count == count + 6)
+        #expect(coordinator.boxes.count == count + 7)
+        #expect(coordinator.boxes.map(\.entry.id).count == count + 7)
         return reordered
     }
 
