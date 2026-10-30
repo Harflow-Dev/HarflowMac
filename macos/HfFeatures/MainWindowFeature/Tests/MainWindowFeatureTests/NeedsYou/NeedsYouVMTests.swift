@@ -90,18 +90,27 @@ import Testing
         #expect(rig.sut.presentation.isLoading)
     }
 
-    @Test func givenUnchangedSnapshots_whenRepublished_thenPresentationIsNotRewritten() async {
+    @Test func givenUnchangedSnapshots_whenRepublished_thenNoRenderingInvalidationOccursButRealChangesStillArrive() async {
         // given
         let rig = rig(items: [item()])
         rig.sut.didAppear()
         await waitUntil { rig.sut.presentation.rows.count == 1 }
-        let before = rig.sut.presentation
-        // when
-        rig.subject.send(rig.subject.value)
+        let invalidations = LockedRouted()
+        func observe() {
+            withObservationTracking { _ = rig.sut.presentation } onChange: { invalidations.add("changed") }
+        }
+        observe()
+        // when — an equal snapshot is rebuilt; the barrier is the rebuild's own completion counter.
+        let completed = rig.sut.rebuildCompletions
         rig.sut.rebuild()
-        await waitUntil { true }
+        await waitUntil { rig.sut.rebuildCompletions > completed }
         // then
-        #expect(rig.sut.presentation == before)
+        #expect(rig.sut.rebuildCompletions > completed)
+        #expect(invalidations.all.isEmpty)
+        // and a real change still invalidates
+        rig.subject.send(NeedsYouSnapshot(phase: .ready, items: []))
+        await waitUntil { rig.sut.presentation.rows.isEmpty }
+        #expect(invalidations.all.count == 1)
     }
 
     @Test func givenItemID_whenShown_thenDetailIsBuiltWithProvenance() async {

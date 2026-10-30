@@ -55,7 +55,7 @@ struct NeedsYouDetailView<VM: NeedsYouViewModel>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
             .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.hairline))
-        case .answerable, .submitting:
+        case .answerable, .submitting, .withdrawn:
             pendingCard(detail)
         }
     }
@@ -75,18 +75,25 @@ struct NeedsYouDetailView<VM: NeedsYouViewModel>: View {
     }
 
     private func pendingCard(_ detail: NeedsYouDetail) -> some View {
-        let busy = detail.phase == .submitting
+        let withdrawn = detail.phase == .withdrawn
+        let busy = detail.phase == .submitting || withdrawn
         return VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
             Text(detail.sourceLine).font(.hf(.secondary, weight: .semibold)).foregroundStyle(Color.warningFG)
             if detail.kind == .recovery {
                 Text("Attempt limit reached").font(.hf(.headline))
             }
             requestBody(detail)
+            if withdrawn {
+                HStack {
+                    Text("Harflow could not read this request right now.").font(.hf(.secondary)).foregroundStyle(Color.warningFG)
+                    Button("Try again") { viewModel.didTapRetry() }.buttonStyle(.link)
+                }
+            }
             if let error = detail.error {
                 Text(error).font(.hf(.secondary)).foregroundStyle(Color.failedRed).textSelection(.enabled)
             }
             controls(detail, busy: busy)
-            if busy {
+            if detail.phase == .submitting {
                 Text("Submitting your \(detail.kind == .approval ? "decision" : "answer") to the engine…")
                     .font(.hf(.caption))
 .foregroundStyle(Color.secondaryText)
@@ -135,7 +142,7 @@ struct NeedsYouDetailView<VM: NeedsYouViewModel>: View {
         Text(detail.ownershipNote).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
         if detail.kind == .approval {
             HStack {
-                Button(busy ? "Submitting…" : "Approve once") { viewModel.didDecide(approve: true) }
+                Button(detail.phase == .submitting ? "Submitting…" : "Approve once") { viewModel.didDecide(approve: true) }
                     .buttonStyle(.borderedProminent)
                 Button("Reject", role: .destructive) { viewModel.didDecide(approve: false) }
             }
@@ -165,7 +172,7 @@ struct NeedsYouDetailView<VM: NeedsYouViewModel>: View {
         if detail.kind == .recovery, detail.canAddAttempts {
             Stepper("Additional attempts: \(viewModel.additionalAttempts)", value: $model.additionalAttempts, in: 0 ... 99).disabled(busy)
         }
-        Button(busy ? "Submitting…" : detail.kind == .recovery ? "Resume with answer" : "Send answer") { viewModel.didSubmitAnswer() }
+        Button(detail.phase == .submitting ? "Submitting…" : detail.kind == .recovery ? "Resume with answer" : "Send answer") { viewModel.didSubmitAnswer() }
             .buttonStyle(.borderedProminent)
             .disabled(busy || viewModel.answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }

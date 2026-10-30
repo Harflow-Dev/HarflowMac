@@ -55,7 +55,7 @@ import Testing
         // then
         let section = sut.needsYou
         #expect(section?.label == "Needs you · 6" && section?.rows.count == 3 && section?.showsShowAll == true)
-        #expect(section?.showAllTitle == "Show all 6" && section?.rows.first?.callerEnded == true)
+        #expect(section?.showAllTitle == "Show all 6" && section?.rows.first?.subtitle == "Ended · Original caller")
     }
 
     @Test func givenTwoRequests_whenAppeared_thenNoShowAll() {
@@ -68,6 +68,7 @@ import Testing
         let (sut, _, _) = makeSUT(NeedsYouSnapshot(phase: .ready))
         sut.didAppear()
         #expect(sut.needsYou?.rows.isEmpty == true && (sut.needsYou?.count ?? -1) == 0)
+        #expect(sut.needsYou?.label == "Needs you")
     }
 
     @Test func givenLoading_whenAppeared_thenSectionIsHidden() {
@@ -79,7 +80,7 @@ import Testing
     @Test func givenUnreadableSources_whenAppeared_thenCountIsALowerBound() {
         let (sut, _, _) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [item("input:a:1")], unreadableSourceCount: 1))
         sut.didAppear()
-        #expect(sut.needsYou?.label == "Needs you · 1+")
+        #expect(sut.needsYou?.label == "Needs you · 1" && sut.needsYou?.showAllTitle == "Show all 1")
     }
 
     @Test func givenOlderEngine_whenAppeared_thenNoticeIsFlagged() {

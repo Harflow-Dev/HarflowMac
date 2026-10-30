@@ -12,7 +12,8 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
         let id: String
         let kindLabel: String
         let title: String
-        let callerEnded: Bool
+        /// "Ended · Original caller" once the caller ended, else who started it (design `menuRow`).
+        let subtitle: String
     }
 
     static let rowLimit = 3
@@ -23,8 +24,8 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
     /// The engine reports no workflow interactions, so only task approvals can appear.
     let olderEngine: Bool
 
-    var label: String { "Needs you · \(count)\(isLowerBound ? "+" : "")" }
-    var showAllTitle: String { "Show all \(count)\(isLowerBound ? "+" : "")" }
+    var label: String { count > 0 ? "Needs you · \(count)" : "Needs you" }
+    var showAllTitle: String { "Show all \(count)" }
     var showsShowAll: Bool { count > rows.count }
 
     /// Nil while loading, so the section stays out of the popover until the first complete pass.
@@ -34,7 +35,8 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
         self.isLowerBound = snapshot.isLowerBound
         self.olderEngine = snapshot.workflowInputsUnsupported
         self.rows = snapshot.items.prefix(Self.rowLimit).map {
-            Row(id: $0.id, kindLabel: Self.kindLabel($0.kind), title: $0.runTitle, callerEnded: $0.ownership.callerEnded)
+            Row(id: $0.id, kindLabel: Self.kindLabel($0.kind), title: $0.runTitle,
+                subtitle: $0.ownership.callerEnded ? "Ended · \($0.startedBy)" : $0.startedBy)
         }
     }
 
@@ -84,11 +86,11 @@ struct MenuBarNeedsYouSectionView: View {
                             .padding(.horizontal, HfRadius.Metrics.spacing6)
                             .background(Color.warningBG, in: Capsule())
                             .foregroundStyle(Color.warningFG)
-                        Text(row.title).font(.hf(.body)).lineLimit(1)
-                        Spacer(minLength: 0)
-                        if row.callerEnded {
-                            Text("Caller ended").font(.hf(.caption)).foregroundStyle(Color.primaryText)
+                        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
+                            Text(row.title).font(.hf(.body)).lineLimit(1)
+                            Text(row.subtitle).font(.hf(.caption)).lineLimit(1)
                         }
+                        Spacer(minLength: 0)
                     }
                     .foregroundStyle(Color.primaryText)
                     .contentShape(Rectangle())

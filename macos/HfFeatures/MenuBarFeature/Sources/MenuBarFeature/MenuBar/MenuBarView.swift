@@ -487,9 +487,9 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
 
 private func needsYouRows(_ count: Int) -> [MenuBarNeedsYouSection.Row] {
     [
-        .init(id: "a", kindLabel: "Question", title: "Release checklist", callerEnded: true),
-        .init(id: "b", kindLabel: "Approval", title: "Migrate billing exports", callerEnded: true),
-        .init(id: "c", kindLabel: "Recovery", title: "Audit lockfile", callerEnded: false)
+        .init(id: "a", kindLabel: "Question", title: "Release checklist", subtitle: "Ended · Original caller"),
+        .init(id: "b", kindLabel: "Approval", title: "Migrate billing exports", subtitle: "Ended · Original caller"),
+        .init(id: "c", kindLabel: "Recovery", title: "Audit lockfile", subtitle: "Mac app")
     ]
 .prefix(count)
 .map(\.self)

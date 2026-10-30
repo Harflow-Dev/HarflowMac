@@ -8,7 +8,8 @@ extension NeedsYouVM {
     /// rendered one (a new approval revision or action, another question or decision), nothing is sent: the
     /// refreshed item is shown with the review note instead.
     private var currentItem: NeedsYouItem? {
-        guard let id = selectedID, submittingID == nil, settled == nil, let shown = displayedItem, shown.id == id else { return nil }
+        guard let id = selectedID, !submittingIDs.contains(id), settled[id] == nil, let shown = displayedItem, shown.id == id,
+              presentation.detail?.phase != .withdrawn else { return nil }
         let live = overrides[id] ?? snapshot.items.first { $0.id == id }
         guard let live else { return nil }
         guard live == shown else {
@@ -33,42 +34,57 @@ extension NeedsYouVM {
 
     func didDecide(approve: Bool) {
         guard let item = currentItem, item.kind == .approval else { return }
-        submittingID = item.id
+        submittingIDs.insert(item.id)
         sendError = nil
         rebuild()
         let decision = approve ? "approve" : "reject"
+        let started = lifecycle
         Task { [weak self] in
             guard let self else { return }
             let outcome = await useCase.respond(item, decision: decision)
-            finish(outcome, item: item, answer: "", rejected: !approve)
+            finish(outcome, item: item, answer: "", rejected: !approve, lifecycle: started)
         }
     }
 
     private func send(_ item: NeedsYouItem, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        submittingID = item.id
+        submittingIDs.insert(item.id)
         sendError = nil
         rebuild()
         let attempts = item.kind == .recovery && item.canAddAttempts ? max(0, additionalAttempts) : nil
+        let started = lifecycle
         Task { [weak self] in
             guard let self else { return }
             let outcome = await useCase.answer(item, text: text, additionalAttempts: attempts)
-            finish(outcome, item: item, answer: trimmed, rejected: false)
+            finish(outcome, item: item, answer: trimmed, rejected: false, lifecycle: started)
         }
     }
 
-    private func finish(_ outcome: NeedsYouAnswerOutcome, item: NeedsYouItem, answer: String, rejected: Bool) {
-        submittingID = nil
-        switch outcome {
-        case .accepted:
+    /// Applies a completion. The engine result already updated the repository; what is shown changes only if the
+    /// request is still the one selected and the screen has not been torn down since the send started.
+    private func finish(_ outcome: NeedsYouAnswerOutcome, item: NeedsYouItem, answer: String, rejected: Bool, lifecycle started: Int) {
+        submittingIDs.remove(item.id)
+        let current = selectedID == item.id && lifecycle == started
+        if case .accepted = outcome {
+            // A settled card is kept for the request itself, wherever the reviewer has navigated since.
             var detail = NeedsYouPresentationMapper.detail(item)
             detail.phase = .settled(decision: NeedsYouPresentationMapper.settledDecision(item, rejected: rejected), answer: answer,
                                     note: NeedsYouPresentationMapper.settledNote(item))
-            settled = detail
-            answerText = ""
-            sendError = nil
+            settled[item.id] = detail
+            if current {
+                answerText = ""
+                sendError = nil
+            }
             fadeOut(item)
+            rebuild()
+            return
+        }
+        guard current else {
+            rebuild()
+            return
+        }
+        switch outcome {
         case .callerReturned(let message):
             notice = message
             answerText = ""
@@ -84,6 +100,8 @@ extension NeedsYouVM {
             reviewNotes[item.id] = NeedsYouAnswerOutcome.changedMessage
             sendError = nil
             useCase.refresh()
+        case .accepted:
+            break
         }
         rebuild()
     }

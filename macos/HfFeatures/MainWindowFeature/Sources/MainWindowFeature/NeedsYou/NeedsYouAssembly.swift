@@ -9,10 +9,10 @@ struct NeedsYouAssemblyInput: Sendable {
     let selectedID: String?
     let overrides: [String: NeedsYouItem]
     let reviewNotes: [String: String]
-    let settled: NeedsYouDetail?
+    let settled: [String: NeedsYouDetail]
     let lastDetails: [String: NeedsYouDetail]
     let leavingRows: [String: NeedsYouRow]
-    let submittingID: String?
+    let submittingIDs: Set<String>
     let sendError: String?
     let notice: String?
 }
@@ -44,17 +44,23 @@ enum NeedsYouAssembly {
         presentation.detail = detail
         presentation.detailIsLoading = detail == nil
         presentation.showsDetail = true
-        let answerable = input.settled?.id != id && detail?.phase != .expired
+        let answerable = input.settled[id] == nil && detail?.phase != .expired && detail?.phase != .withdrawn
         return NeedsYouAssemblyResult(presentation: presentation, detail: detail, item: answerable ? item : nil)
     }
 
     private nonisolated static func detail(id: String, input: NeedsYouAssemblyInput, loading: Bool) -> NeedsYouDetail? {
-        if let settled = input.settled, settled.id == id { return settled }
+        if let settled = input.settled[id] { return settled }
         if let item = input.overrides[id] ?? input.snapshot.items.first(where: { $0.id == id }) {
             var detail = NeedsYouPresentationMapper.detail(item)
-            if input.submittingID == id { detail.phase = .submitting }
+            if input.submittingIDs.contains(id) { detail.phase = .submitting }
             detail.error = input.sendError
             detail.reviewNote = input.reviewNotes[id]
+            return detail
+        }
+        // The source could not be read right now: the request is not resolved, so keep what was last shown.
+        if let withdrawn = input.snapshot.withdrawn.first(where: { $0.id == id }) {
+            var detail = NeedsYouPresentationMapper.detail(withdrawn)
+            detail.phase = .withdrawn
             return detail
         }
         if loading { return nil }

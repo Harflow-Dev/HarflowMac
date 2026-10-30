@@ -29,6 +29,8 @@ struct NeedsYouRow: Equatable, Sendable, Identifiable {
 struct NeedsYouDetail: Equatable, Sendable, Identifiable {
     enum Phase: Equatable, Sendable {
         case answerable, submitting
+        /// The source is unreadable at the moment: last known request, controls disabled, Retry offered.
+        case withdrawn
         case settled(decision: String, answer: String, note: String)
         case expired
     }

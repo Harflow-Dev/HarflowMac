@@ -48,12 +48,15 @@ final class NeedsYouVM: NeedsYouViewModel {
     @ObservationIgnored var selectedID: String?
     @ObservationIgnored var overrides: [String: NeedsYouItem] = [:]
     @ObservationIgnored var reviewNotes: [String: String] = [:]
-    @ObservationIgnored var settled: NeedsYouDetail?
+    @ObservationIgnored var settled: [String: NeedsYouDetail] = [:]
+    /// Advanced when the screen disappears, so a completion started before cannot touch what is shown after.
+    @ObservationIgnored var lifecycle = 0
+    @ObservationIgnored var rebuildCompletions = 0
     /// The exact item behind the rendered detail. Answers are sent for it, never for a fresh snapshot lookup.
     @ObservationIgnored var displayedItem: NeedsYouItem?
     @ObservationIgnored var lastDetails: [String: NeedsYouDetail] = [:]
     @ObservationIgnored var leavingRows: [String: NeedsYouRow] = [:]
-    @ObservationIgnored var submittingID: String?
+    @ObservationIgnored var submittingIDs: Set<String> = []
     @ObservationIgnored var sendError: String?
     @ObservationIgnored var notice: String?
     @ObservationIgnored var reduceMotion = false
@@ -86,6 +89,7 @@ final class NeedsYouVM: NeedsYouViewModel {
     }
 
     func didDisappear() {
+        lifecycle += 1
         cancellables.removeAll()
         rebuildTask?.cancel()
         rebuildTask = nil
@@ -104,7 +108,6 @@ final class NeedsYouVM: NeedsYouViewModel {
         additionalAttempts = 1
         sendError = nil
         if itemID != nil { notice = nil }
-        if settled?.id != itemID { settled = nil }
         reviewNotes = [:]
         displayedItem = nil
         rebuild()
@@ -139,7 +142,7 @@ final class NeedsYouVM: NeedsYouViewModel {
         generation = token
         let input = NeedsYouAssemblyInput(
             snapshot: snapshot, selectedID: selectedID, overrides: overrides, reviewNotes: reviewNotes, settled: settled,
-            lastDetails: lastDetails, leavingRows: leavingRows, submittingID: submittingID, sendError: sendError, notice: notice
+            lastDetails: lastDetails, leavingRows: leavingRows, submittingIDs: submittingIDs, sendError: sendError, notice: notice
         )
         rebuildTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) { NeedsYouAssembly.assemble(input) }.value
@@ -159,5 +162,6 @@ final class NeedsYouVM: NeedsYouViewModel {
             if sameApproval || current == item { overrides[id] = nil }
         }
         if presentation != result.presentation { presentation = result.presentation }
+        rebuildCompletions += 1
     }
 }
