@@ -46,6 +46,7 @@ import Testing
         sut.orderOutWindow = { orderedOutWindows.value.append($0) }
         sut.setNotificationDelegate = { _ in }
         sut.startTaskListing = {}
+        sut.startNeedsYou = {}
         sut.startBackendsCatalog = {}
         sut.notifyBackendsAppActive = {}
         sut.openWindowOnStart = { true }
@@ -228,6 +229,20 @@ import Testing
         #expect(startCalls.value == 1)
     }
 
+    @Test func givenAppLaunch_whenStarting_thenNeedsYouStartsOnceAfterTaskListing() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let order = LockedBox<[String]>([])
+        sut.startTaskListing = { order.value.append("list") }
+        sut.startNeedsYou = { order.value.append("needsYou") }
+
+        // when
+        sut.applicationDidFinishLaunching(Notification(name: .init("launch")))
+
+        // then
+        #expect(order.value == ["list", "needsYou"])
+    }
+
     // MARK: - Monitor piece 6: the backends catalog's own startup fetch and activation refresh
 
     @Test func givenAppLaunch_whenStarting_thenTheBackendsCatalogStartsOnce() {
@@ -312,6 +327,55 @@ import Testing
         verify(coordinator).handle(path: .any).called(0)
     }
     
+    @Test func givenANeedsYouItemNotification_whenClicked_thenItOpensThatRequestAndTheWindow() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let coordinator = MockCoordinator()
+        let handledPaths = LockedBox<[String]>([])
+        given(coordinator).handle(path: .any).willProduce { path in
+            if let destination = path as? MonitorDestination { handledPaths.value.append(destination.pathId) }
+        }
+        sut.coordinator = coordinator
+
+        // when
+        sut.handleNotificationClick(userInfo: ["needs_you_item": "input:w1:d1"])
+
+        // then
+        #expect(handledPaths.value == [MonitorDestination.needsYou(itemID: "input:w1:d1").pathId, MonitorDestination.openWindow.pathId])
+    }
+
+    @Test func givenANeedsYouSummaryNotification_whenClicked_thenItOpensTheList() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let coordinator = MockCoordinator()
+        let handledPaths = LockedBox<[String]>([])
+        given(coordinator).handle(path: .any).willProduce { path in
+            if let destination = path as? MonitorDestination { handledPaths.value.append(destination.pathId) }
+        }
+        sut.coordinator = coordinator
+
+        // when
+        sut.handleNotificationClick(userInfo: ["needs_you_list": "1"])
+
+        // then
+        #expect(handledPaths.value == [MonitorDestination.needsYou(itemID: nil).pathId, MonitorDestination.openWindow.pathId])
+    }
+
+    @Test(arguments: ["", "task:abc", "input:", String(repeating: "input:x", count: 60), "other:w1:d1"])
+    func givenAMalformedNeedsYouID_whenClicked_thenNothingIsOpened(id: String) {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let coordinator = MockCoordinator()
+        given(coordinator).handle(path: .any).willReturn()
+        sut.coordinator = coordinator
+
+        // when
+        sut.handleNotificationClick(userInfo: ["needs_you_item": id])
+
+        // then
+        verify(coordinator).handle(path: .any).called(0)
+    }
+
     // MARK: - Foreground notifications show banner + sound
 
     @Test func givenAForegroundNotification_whenPresented_thenItShowsBannerAndSound() {

@@ -152,4 +152,15 @@ import Testing
         withExtendedLifetime(subscriptions) {}
     }
 
+    @Test func givenNoStoredValue_whenReadingNeedsYouNotification_thenDefaultsOnAndPersists() {
+        // given
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let sut = SettingsRepositoryImpl(defaults: defaults)
+        // when / then
+        #expect(sut.notifyOnNeedsYou)
+        sut.setNotifyOnNeedsYou(false)
+        #expect(!sut.notifyOnNeedsYou)
+        #expect(!SettingsRepositoryImpl(defaults: defaults).notifyOnNeedsYou)
+        #expect(defaults.object(forKey: "notifyOnNeedsYou") as? Bool == false)
+    }
 }

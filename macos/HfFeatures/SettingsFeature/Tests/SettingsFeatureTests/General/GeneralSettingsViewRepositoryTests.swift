@@ -76,12 +76,14 @@ import Testing
         given(settings).toolDirectory.willReturn("/custom/bin")
         given(settings).openWindowOnStart.willReturn(false)
         given(settings).notifyOnFinish.willReturn(false)
+        given(settings).notifyOnNeedsYou.willReturn(false)
         let sut = makeSUT(settings: settings)
         
         // then
         #expect(sut.toolDirectory == "/custom/bin")
         #expect(sut.openWindowOnStart == false)
         #expect(sut.notifyOnFinish == false)
+        #expect(sut.notifyOnNeedsYou == false)
     }
 
     @Test func givenRuntimeRetry_whenRequested_thenItForwardsToTheInstallRepository() async {

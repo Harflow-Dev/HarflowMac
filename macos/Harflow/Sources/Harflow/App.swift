@@ -62,6 +62,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     
     var startTaskListing: () -> Void = { GlobalValues.taskListRepository.start() }
+    /// Starts Needs you acquisition and its notifications. Both wait for the managed runtime through
+    /// the shared tool environment, exactly like task listing, so this only has to run once at launch.
+    var startNeedsYou: () -> Void = {
+        GlobalValues.needsYouRepository.start()
+        GlobalValues.needsYouNotifier.start()
+    }
+
     var startBackendsCatalog: () -> Void = { GlobalValues.backendsRepository.start() }
     var notifyBackendsAppActive: () -> Void = { GlobalValues.backendsRepository.appDidBecomeActive() }
     var openWindowOnStart: () -> Bool = { GlobalValues.settingsRepository.openWindowOnStart }
@@ -213,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // tested by `HfRepository.TaskListRepositoryImpl.start()`. The app shell's own job is only to
         // call it once at launch, proven by `AppDelegateTests`.
         startTaskListing()
+        startNeedsYou()
         // Monitor piece 6: the backends catalog's own startup fetch, exactly once — implemented and
         // tested by `HfRepository.BackendsRepositoryImpl.start()`.
         startBackendsCatalog()
@@ -318,14 +326,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// no public initializer, so constructing a real one is not an option here.
     @MainActor
     func handleNotificationClick(userInfo: [AnyHashable: Any]) {
-        guard let id = userInfo["task_id"] as? String, MonitorURL.isValidTaskID(id) else { return }
         // Always shows the window, regardless of `openWindowOnStart` (F4-32) — unlike `handle(url:)`,
         // which is conditional. `.openWindow` reaches `AppCoordinator.handle(path:)`'s own
         // `case .openWindow:` unconditionally.
-        coordinator?.handle(path: MonitorDestination.task(id))
-        coordinator?.handle(path: MonitorDestination.openWindow)
+        if let id = userInfo["task_id"] as? String, MonitorURL.isValidTaskID(id) {
+            coordinator?.handle(path: MonitorDestination.task(id))
+            coordinator?.handle(path: MonitorDestination.openWindow)
+        } else if let item = userInfo["needs_you_item"] as? String, Self.isValidNeedsYouItemID(item) {
+            coordinator?.handle(path: MonitorDestination.needsYou(itemID: item))
+            coordinator?.handle(path: MonitorDestination.openWindow)
+        } else if userInfo["needs_you_list"] as? String == "1" {
+            coordinator?.handle(path: MonitorDestination.needsYou(itemID: nil))
+            coordinator?.handle(path: MonitorDestination.openWindow)
+        }
     }
-    
+
+    /// Needs you item ids are `input:`, `attention:` or `approval:` followed by engine identifiers.
+    static func isValidNeedsYouItemID(_ id: String) -> Bool {
+        guard !id.isEmpty, id.count <= 256 else { return false }
+        return ["input:", "attention:", "approval:"].contains { id.hasPrefix($0) && id.count > $0.count }
+    }
+
     /// Pulled out of `userNotificationCenter(_:willPresent:withCompletionHandler:)` for the same
     /// reason as `handleNotificationClick(userInfo:)` above.
     func foregroundPresentationOptions() -> UNNotificationPresentationOptions { [.banner, .sound] }

@@ -18,6 +18,8 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
     case group(String)
     /// Open retained finished-work Statistics.
     case statistics
+    /// Open Needs you, optionally revealing one request by its stable item id.
+    case needsYou(itemID: String?)
     /// Open a saved workflow in the canvas editor.
     case workflow(String)
     /// Create a fresh editor for every add action.
@@ -34,6 +36,7 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
         case .task(let id): "task:\(id)"
         case .group(let name): "group:\(name)"
         case .statistics: "statistics"
+        case .needsYou(let itemID): "needsYou:\(itemID ?? "")"
         case .workflow(let name): "workflow:\(name)"
         case .newWorkflow(let id): "newWorkflow:\(id)"
         case .workflowRun(let id): "workflowRun:\(id)"

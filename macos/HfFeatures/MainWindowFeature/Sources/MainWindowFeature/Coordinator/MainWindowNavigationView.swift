@@ -48,6 +48,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             switch coordinator.selection {
             case .statistics:
                 coordinator.buildStatisticsView()
+            case .needsYou(let itemID):
+                coordinator.buildNeedsYouView(itemID: itemID)
             case .task(let id):
                 coordinator.buildTaskDetailView(id: id)
             case .group(let name):

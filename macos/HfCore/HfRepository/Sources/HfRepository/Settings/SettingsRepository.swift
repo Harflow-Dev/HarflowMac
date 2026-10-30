@@ -16,11 +16,13 @@ public protocol SettingsRepository: Sendable {
     var toolDirectory: String { get }
     var openWindowOnStart: Bool { get }
     var notifyOnFinish: Bool { get }
+    var notifyOnNeedsYou: Bool { get }
     var appAppearance: AppAppearance { get }
 
     func toolDirectoryPublisher() -> AnyPublisher<String, Never>
     func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never>
     func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never>
+    func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never>
     func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never>
 
     func setToolDirectory(_ value: String)
@@ -30,6 +32,9 @@ public protocol SettingsRepository: Sendable {
 }
 
 public extension SettingsRepository {
+    var notifyOnNeedsYou: Bool { true }
+    func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { Just(true).eraseToAnyPublisher() }
+    func setNotifyOnNeedsYou(_: Bool) {}
     var appAppearance: AppAppearance { .system }
     func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { Just(.system).eraseToAnyPublisher() }
     func setAppAppearance(_: AppAppearance) {}
@@ -42,14 +47,17 @@ public struct NullSettingsRepository: SettingsRepository {
     public var toolDirectory: String { "" }
     public var openWindowOnStart: Bool { true }
     public var notifyOnFinish: Bool { true }
+    public var notifyOnNeedsYou: Bool { true }
     public var appAppearance: AppAppearance { .system }
     public func toolDirectoryPublisher() -> AnyPublisher<String, Never> { Just("").eraseToAnyPublisher() }
     public func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { Just(true).eraseToAnyPublisher() }
     public func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { Just(true).eraseToAnyPublisher() }
+    public func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { Just(true).eraseToAnyPublisher() }
     public func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { Just(.system).eraseToAnyPublisher() }
     public func setToolDirectory(_: String) {}
     public func setOpenWindowOnStart(_: Bool) {}
     public func setNotifyOnFinish(_: Bool) {}
+    public func setNotifyOnNeedsYou(_: Bool) {}
     public func setAppAppearance(_: AppAppearance) {}
 }
 

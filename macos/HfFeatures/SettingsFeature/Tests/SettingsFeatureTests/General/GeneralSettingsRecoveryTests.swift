@@ -23,6 +23,7 @@ import Testing
         var toolDirectory = ""
         var openWindowOnStart = true
         var notifyOnFinish = true
+        var notifyOnNeedsYou = true
         var searchDirectories: [String] = []
 
         func installStatePublisher() -> AnyPublisher<InstallState, Never> { Just(.installed).eraseToAnyPublisher() }
@@ -31,12 +32,14 @@ import Testing
         func toolDirectoryPublisher() -> AnyPublisher<String, Never> { Just(toolDirectory).eraseToAnyPublisher() }
         func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { Just(openWindowOnStart).eraseToAnyPublisher() }
         func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { Just(notifyOnFinish).eraseToAnyPublisher() }
+        func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { Just(notifyOnNeedsYou).eraseToAnyPublisher() }
         func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { Just([]).eraseToAnyPublisher() }
         func hasListedPublisher() -> AnyPublisher<Bool, Never> { Just(false).eraseToAnyPublisher() }
         func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { Just(nil).eraseToAnyPublisher() }
         func setToolDirectory(_: String) {}
         func setOpenWindowOnStart(_: Bool) {}
         func setNotifyOnFinish(_: Bool) {}
+        func setNotifyOnNeedsYou(_: Bool) {}
 
         func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never> { setupSubject.eraseToAnyPublisher() }
         func installRuntime() async {}

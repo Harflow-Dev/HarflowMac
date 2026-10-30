@@ -49,6 +49,7 @@ public final class Module: HfModule {
         let takeover = TakeoverServiceImpl(actions: taskAction, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshot)
         let backends = BackendsRepositoryImpl(toolEnvironment: toolEnvironment, installRepository: install, scheduler: scheduler)
         let modelCatalog = ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment)
+        let workflows = WorkflowRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery)
 
         GlobalValues
             .environment(\.scheduling, scheduler)
@@ -71,7 +72,19 @@ public final class Module: HfModule {
             .environment(\.takeoverService, takeover)
             .environment(\.backendsRepository, backends)
             .environment(\.modelCatalogRepository, modelCatalog)
-            .environment(\.workflowRepository, WorkflowRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
+            .environment(\.workflowRepository, workflows)
+
+        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, scheduler: scheduler, visibility: visibility, settings: settings)
+    }
+
+    private func registerNeedsYou(
+        toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository, scheduler: any Scheduling,
+        visibility: any MonitorVisibility, settings: any SettingsRepository
+    ) {
+        let needsYou = NeedsYouRepositoryImpl(toolEnvironment: toolEnvironment, workflows: workflows, scheduler: scheduler, visibility: visibility)
+        GlobalValues
+            .environment(\.needsYouRepository, needsYou)
+            .environment(\.needsYouNotifier, NeedsYouNotifierImpl(repository: needsYou, settings: settings, scheduler: scheduler))
     }
 }
 

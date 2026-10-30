@@ -23,6 +23,7 @@ final class GeneralSettingsViewModelMock: GeneralSettingsViewModel {
     var setupResolution: ToolResolution
     var openWindowOnStart: Bool
     var notifyOnFinish: Bool
+    var notifyOnNeedsYou: Bool
     
     init(
         directoryField: String = "",
@@ -30,7 +31,8 @@ final class GeneralSettingsViewModelMock: GeneralSettingsViewModel {
         ctlResolution: ToolResolution = .found(path: "/opt/homebrew/bin/harflow-ctl"),
         setupResolution: ToolResolution = .notFound,
         openWindowOnStart: Bool = true,
-        notifyOnFinish: Bool = true
+        notifyOnFinish: Bool = true,
+        notifyOnNeedsYou: Bool = true
     ) {
         self.directoryField = directoryField
         self.searchedDirectoriesText = searchedDirectoriesText
@@ -38,6 +40,7 @@ final class GeneralSettingsViewModelMock: GeneralSettingsViewModel {
         self.setupResolution = setupResolution
         self.openWindowOnStart = openWindowOnStart
         self.notifyOnFinish = notifyOnFinish
+        self.notifyOnNeedsYou = notifyOnNeedsYou
     }
     
     func didAppear() {}
@@ -47,6 +50,7 @@ final class GeneralSettingsViewModelMock: GeneralSettingsViewModel {
     func didTapSearchAgain() { directoryField = "" }
     func didToggleOpenWindowOnStart(_ isOn: Bool) { openWindowOnStart = isOn }
     func didToggleNotifyOnFinish(_ isOn: Bool) { notifyOnFinish = isOn }
+    func didToggleNotifyOnNeedsYou(_ isOn: Bool) { notifyOnNeedsYou = isOn }
 }
 
 #endif

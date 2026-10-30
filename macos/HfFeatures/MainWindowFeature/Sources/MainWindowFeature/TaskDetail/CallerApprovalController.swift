@@ -223,47 +223,15 @@ final class CallerApprovalController {
         details = details.filter { key, _ in listed.contains { $0.id == key } }
     }
 
-    static func awaiting(_ request: CallerApprovalRequest) -> Bool {
-        request.text("disposition") == "pending" && request.text("delivery") == "pending"
-            && request.text("decision").isEmpty && request.text("effective_decision").isEmpty
-            && request.text("system_rejection").isEmpty && request.text("decided_by").isEmpty
-    }
+    static func awaiting(_ request: CallerApprovalRequest) -> Bool { request.isAwaitingDecision }
 
-    static func visuallyPending(_ request: CallerApprovalRequest) -> Bool {
-        !["decided", "expired", "system_rejected", "invalidated", "cancelled", "unsupported"].contains(request.text("disposition"))
-            && request.text("decision").isEmpty && request.text("effective_decision").isEmpty
-            && request.text("decided_by").isEmpty && request.text("system_rejection").isEmpty
-    }
+    static func visuallyPending(_ request: CallerApprovalRequest) -> Bool { request.isVisuallyPending }
 
-    static func knownState(_ request: CallerApprovalRequest) -> Bool {
-        ["pending", "decided", "expired", "system_rejected", "invalidated", "cancelled", "unsupported"].contains(request.text("disposition"))
-            && ["pending", "reserved", "sending", "sent", "delivery_unknown", "failed"].contains(request.text("delivery"))
-            && ["unknown", "succeeded", "failed", "not_observed"].contains(request.text("execution_outcome"))
-            && optionalEnum(request, key: "decided_by", values: ["", "caller", "harflow"])
-            && optionalEnum(request, key: "responder", values: ["", "caller", "monitor"])
-            && ["decision", "effective_decision", "delivered_decision"].allSatisfy {
-                optionalEnum(request, key: $0, values: ["", "approve", "reject"])
-            }
-            && (request.raw["system_rejection"] == nil || request.raw["system_rejection"] == .null
-                || request.raw["system_rejection"]?.stringValue != nil)
-    }
+    static func knownState(_ request: CallerApprovalRequest) -> Bool { request.hasKnownState }
 
-    private static func optionalEnum(_ request: CallerApprovalRequest, key: String, values: Set<String>) -> Bool {
-        guard let value = request.raw[key], value != .null else { return true }
-        guard let text = value.stringValue else { return false }
-        return values.contains(text)
-    }
+    static func validIdentity(_ request: CallerApprovalRequest) -> Bool { request.hasValidIdentity }
 
-    static func validIdentity(_ request: CallerApprovalRequest) -> Bool {
-        !request.id.isEmpty && !request.taskID.isEmpty && !request.digest.isEmpty
-            && (request.raw["owner_revision"]?.intValue ?? 0) > 0 && !request.text("generation").isEmpty
-    }
-
-    static func sameCurrent(_ first: CallerApprovalRequest, _ second: CallerApprovalRequest) -> Bool {
-        first.id == second.id && first.taskID == second.taskID && first.digest == second.digest
-            && first.revision == second.revision && first.raw["generation"] == second.raw["generation"]
-            && first.raw["interaction_owner"] == second.raw["interaction_owner"]
-    }
+    static func sameCurrent(_ first: CallerApprovalRequest, _ second: CallerApprovalRequest) -> Bool { first.isSameCurrent(as: second) }
 
     func inspect(_ request: CallerApprovalRequest) async {
         selectedID = request.id
@@ -349,15 +317,7 @@ final class CallerApprovalController {
     }
 
     static func confirmsResponse(_ response: CallerApprovalRequest, for request: CallerApprovalRequest, decision: String) -> Bool {
-        let responder = response.raw["responder"]
-        let responderOmitted = responder == nil || responder == .null
-        return response.id == request.id && response.taskID == request.taskID && response.digest == request.digest
-            && response.raw["generation"] == request.raw["generation"]
-            && response.raw["interaction_owner"] == request.raw["interaction_owner"]
-            && (response.revision ?? 0) > (request.revision ?? 0) && validIdentity(response)
-            && response.complete && knownState(response) && response.raw["action"] == request.raw["action"]
-            && response.text("decision") == decision && response.text("decided_by") == "caller"
-            && response.text("delivery") != "pending" && (responder?.stringValue == "monitor" || responderOmitted)
+        request.isConfirmedBy(response, decision: decision)
     }
 
     private func recordResponseFailure(_ error: Error, request: CallerApprovalRequest) {

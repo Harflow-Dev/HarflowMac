@@ -47,6 +47,7 @@ protocol GeneralSettingsViewModel: ViewModel {
     var setupResolution: ToolResolution { get }
     var openWindowOnStart: Bool { get }
     var notifyOnFinish: Bool { get }
+    var notifyOnNeedsYou: Bool { get }
 
     func didAppear()
     func didDisappear()
@@ -55,6 +56,7 @@ protocol GeneralSettingsViewModel: ViewModel {
     func didTapSearchAgain()
     func didToggleOpenWindowOnStart(_ isOn: Bool)
     func didToggleNotifyOnFinish(_ isOn: Bool)
+    func didToggleNotifyOnNeedsYou(_ isOn: Bool)
 }
 
 extension GeneralSettingsViewModel {
@@ -113,6 +115,10 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
                 Toggle(
                     "Notify when a task finishes",
                     isOn: Binding(get: { viewModel.notifyOnFinish }, set: { viewModel.didToggleNotifyOnFinish($0) })
+                )
+                Toggle(
+                    "Notify when a request needs you",
+                    isOn: Binding(get: { viewModel.notifyOnNeedsYou }, set: { viewModel.didToggleNotifyOnNeedsYou($0) })
                 )
             }
         }

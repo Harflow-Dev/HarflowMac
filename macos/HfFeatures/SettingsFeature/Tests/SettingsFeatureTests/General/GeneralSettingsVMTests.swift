@@ -57,6 +57,9 @@ private final class Box<Value> {
         given(useCase).toolDirectory.willReturn(toolDirectory)
         given(useCase).openWindowOnStart.willReturn(openWindowOnStart)
         given(useCase).notifyOnFinish.willReturn(notifyOnFinish)
+        given(useCase).notifyOnNeedsYou.willReturn(true)
+        given(useCase).notifyOnNeedsYouPublisher().willReturn(Just(true).eraseToAnyPublisher())
+        given(useCase).setNotifyOnNeedsYou(.any).willReturn()
         given(useCase).searchDirectories.willReturn(searchDirectories)
         given(useCase).resolve(.value("harflow-ctl")).willProduce { _ in ctlResolutionBox.value }
         given(useCase).resolve(.value("harflow-setup")).willReturn(setupResolution)
@@ -224,10 +227,12 @@ private final class Box<Value> {
         // when
         sut.didToggleOpenWindowOnStart(false)
         sut.didToggleNotifyOnFinish(false)
+        sut.didToggleNotifyOnNeedsYou(false)
         
         // then
         verify(useCase).setOpenWindowOnStart(.value(false)).called(1)
         verify(useCase).setNotifyOnFinish(.value(false)).called(1)
+        verify(useCase).setNotifyOnNeedsYou(.value(false)).called(1)
     }
     
     @Test func givenLiveSettingsPublishers_whenTheyEmit_thenTheTogglesUpdate() async {

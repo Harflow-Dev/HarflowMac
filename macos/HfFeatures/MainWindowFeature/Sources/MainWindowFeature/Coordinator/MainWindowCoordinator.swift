@@ -63,6 +63,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
 
     /// Builds retained finished-work Statistics.
     func buildStatisticsView() -> AnyView
+    /// Builds Needs you; `itemID` opens that request's detail.
+    func buildNeedsYouView(itemID: String?) -> AnyView
     /// Builds the ready runtime start screen.
     func buildStartScreenView() -> AnyView
     /// Builds the sidebar (task list, search/filter, parallel runs).
@@ -87,6 +89,7 @@ public extension MainWindowNavigationCoordinator {
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
 
     func buildStatisticsView() -> AnyView { AnyView(EmptyView()) }
+    func buildNeedsYouView(itemID: String?) -> AnyView { AnyView(EmptyView()) }
 
     /// Derives modal state for lightweight preview and test coordinators.
     var presentedSheet: MainWindowSheet? {
@@ -243,7 +246,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).
             requestReveal(taskID: id)
-        case .group, .workflow, .newWorkflow, .workflowRun, .statistics: selection = destination
+        case .group, .workflow, .newWorkflow, .workflowRun, .statistics, .needsYou: selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)
         }

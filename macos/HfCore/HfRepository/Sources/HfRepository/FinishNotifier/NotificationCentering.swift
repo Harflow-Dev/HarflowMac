@@ -10,6 +10,7 @@ import Mockable
 public protocol NotificationCentering: Sendable {
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
     func add(_ request: UNNotificationRequest) async throws
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String])
 }
 
 // MARK: - SystemNotificationCenter
@@ -23,5 +24,9 @@ public struct SystemNotificationCenter: NotificationCentering {
 
     public func add(_ request: UNNotificationRequest) async throws {
         try await UNUserNotificationCenter.current().add(request)
+    }
+
+    public func removeDeliveredNotifications(withIdentifiers identifiers: [String]) {
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 }

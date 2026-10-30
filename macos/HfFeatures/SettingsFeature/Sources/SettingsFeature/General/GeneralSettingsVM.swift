@@ -22,6 +22,7 @@ protocol GeneralSettingsUseCase: Sendable {
     var toolDirectory: String { get }
     var openWindowOnStart: Bool { get }
     var notifyOnFinish: Bool { get }
+    var notifyOnNeedsYou: Bool { get }
     var searchDirectories: [String] { get }
     
     func installStatePublisher() -> AnyPublisher<InstallState, Never>
@@ -32,6 +33,7 @@ protocol GeneralSettingsUseCase: Sendable {
     func toolDirectoryPublisher() -> AnyPublisher<String, Never>
     func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never>
     func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never>
+    func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never>
     
     /// The original re-evaluated the locator's search directories and resolved paths on every
     /// `AppModel` publish, so Settings updated once discovery (finding the `uv` tool directory)
@@ -46,6 +48,7 @@ protocol GeneralSettingsUseCase: Sendable {
     func setToolDirectory(_ value: String)
     func setOpenWindowOnStart(_ value: Bool)
     func setNotifyOnFinish(_ value: Bool)
+    func setNotifyOnNeedsYou(_ value: Bool)
 }
 
 // MARK: - GeneralSettingsVM
@@ -70,6 +73,7 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     private(set) var setupResolution: ToolResolution = .notFound
     private(set) var openWindowOnStart: Bool
     private(set) var notifyOnFinish: Bool
+    private(set) var notifyOnNeedsYou: Bool
     
     // MARK: - Private Properties
     
@@ -87,6 +91,7 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         self.lastCompletedReceipt = (useCase as? any StoreRecoveryUseCase)?.lastCompletedReceipt
         self.openWindowOnStart = useCase.openWindowOnStart
         self.notifyOnFinish = useCase.notifyOnFinish
+        self.notifyOnNeedsYou = useCase.notifyOnNeedsYou
         refreshResolutions()
     }
     
@@ -126,6 +131,10 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     
     func didToggleNotifyOnFinish(_ isOn: Bool) {
         useCase.setNotifyOnFinish(isOn)
+    }
+    
+    func didToggleNotifyOnNeedsYou(_ isOn: Bool) {
+        useCase.setNotifyOnNeedsYou(isOn)
     }
     
     // MARK: - Private Methods
@@ -171,6 +180,11 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         useCase.notifyOnFinishPublisher()
             .receive(on: DispatchQueue.main)
             .weakAssign(to: \.notifyOnFinish, on: self)
+            .store(in: &cancellables)
+        
+        useCase.notifyOnNeedsYouPublisher()
+            .receive(on: DispatchQueue.main)
+            .weakAssign(to: \.notifyOnNeedsYou, on: self)
             .store(in: &cancellables)
     }
     

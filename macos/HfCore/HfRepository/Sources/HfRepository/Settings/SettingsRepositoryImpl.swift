@@ -13,6 +13,7 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
     public static let toolDirectoryKey = "toolDirectory"
     public static let openWindowOnStartKey = "openWindowOnStart"
     public static let notifyOnFinishKey = "notifyOnFinish"
+    public static let notifyOnNeedsYouKey = "notifyOnNeedsYou"
     public static let appAppearanceKey = "harflow.appAppearance"
 
     private let defaults: UserDefaults
@@ -20,6 +21,7 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
     @Subjected private var toolDirectoryValue: String
     @Subjected private var openWindowOnStartValue: Bool
     @Subjected private var notifyOnFinishValue: Bool
+    @Subjected private var notifyOnNeedsYouValue: Bool
     @Subjected private var appAppearanceValue: AppAppearance
 
     /// Registers the defaults (`register(defaults:)`, never `set`) so a key that was never written
@@ -30,22 +32,26 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
         defaults.register(defaults: [
             Self.toolDirectoryKey: "",
             Self.openWindowOnStartKey: true,
-            Self.notifyOnFinishKey: true
+            Self.notifyOnFinishKey: true,
+            Self.notifyOnNeedsYouKey: true
         ])
         _toolDirectoryValue = Subjected(wrappedValue: defaults.string(forKey: Self.toolDirectoryKey) ?? "")
         _openWindowOnStartValue = Subjected(wrappedValue: defaults.object(forKey: Self.openWindowOnStartKey) as? Bool ?? true)
         _notifyOnFinishValue = Subjected(wrappedValue: defaults.object(forKey: Self.notifyOnFinishKey) as? Bool ?? true)
+        _notifyOnNeedsYouValue = Subjected(wrappedValue: defaults.object(forKey: Self.notifyOnNeedsYouKey) as? Bool ?? true)
         _appAppearanceValue = Subjected(wrappedValue: defaults.string(forKey: Self.appAppearanceKey).flatMap(AppAppearance.init(rawValue:)) ?? .system)
     }
 
     public var toolDirectory: String { toolDirectoryValue }
     public var openWindowOnStart: Bool { openWindowOnStartValue }
     public var notifyOnFinish: Bool { notifyOnFinishValue }
+    public var notifyOnNeedsYou: Bool { notifyOnNeedsYouValue }
     public var appAppearance: AppAppearance { appAppearanceValue }
 
     public func toolDirectoryPublisher() -> AnyPublisher<String, Never> { $toolDirectoryValue.removeDuplicates().eraseToAnyPublisher() }
     public func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { $openWindowOnStartValue.removeDuplicates().eraseToAnyPublisher() }
     public func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { $notifyOnFinishValue.removeDuplicates().eraseToAnyPublisher() }
+    public func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { $notifyOnNeedsYouValue.removeDuplicates().eraseToAnyPublisher() }
     public func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { $appAppearanceValue.removeDuplicates().eraseToAnyPublisher() }
 
     public func setToolDirectory(_ value: String) {
@@ -61,6 +67,11 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
     public func setNotifyOnFinish(_ value: Bool) {
         defaults.set(value, forKey: Self.notifyOnFinishKey)
         notifyOnFinishValue = value
+    }
+
+    public func setNotifyOnNeedsYou(_ value: Bool) {
+        defaults.set(value, forKey: Self.notifyOnNeedsYouKey)
+        notifyOnNeedsYouValue = value
     }
 
     public func setAppAppearance(_ value: AppAppearance) {

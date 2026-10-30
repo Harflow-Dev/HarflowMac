@@ -47,6 +47,7 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
     var toolDirectory: String { settingsRepository.toolDirectory }
     var openWindowOnStart: Bool { settingsRepository.openWindowOnStart }
     var notifyOnFinish: Bool { settingsRepository.notifyOnFinish }
+    var notifyOnNeedsYou: Bool { settingsRepository.notifyOnNeedsYou }
     var searchDirectories: [String] { toolEnvironmentRepository.locator.searchDirectories }
     
     // MARK: - GeneralSettingsUseCase Methods
@@ -82,6 +83,7 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
     func toolDirectoryPublisher() -> AnyPublisher<String, Never> { settingsRepository.toolDirectoryPublisher() }
     func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { settingsRepository.openWindowOnStartPublisher() }
     func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { settingsRepository.notifyOnFinishPublisher() }
+    func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { settingsRepository.notifyOnNeedsYouPublisher() }
     
     func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }
     func hasListedPublisher() -> AnyPublisher<Bool, Never> { taskListRepository.hasListedPublisher() }
@@ -98,4 +100,5 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
     
     func setOpenWindowOnStart(_ value: Bool) { settingsRepository.setOpenWindowOnStart(value) }
     func setNotifyOnFinish(_ value: Bool) { settingsRepository.setNotifyOnFinish(value) }
+    func setNotifyOnNeedsYou(_ value: Bool) { settingsRepository.setNotifyOnNeedsYou(value) }
 }
