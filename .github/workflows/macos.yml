@@ -12,14 +12,42 @@ jobs:
       - run: python3 scripts/check-legacy-names.py
       - run: scripts/check-private-refs.sh
       - run: python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
-      - run: brew install swiftformat swiftlint
+      - name: Install pinned swiftformat 0.60.1 and swiftlint 0.63.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/lint-tools"
+          mkdir -p "$tools/swiftformat" "$tools/swiftlint"
+          curl -fsSL -o "$tools/swiftformat.zip" https://github.com/nicklockwood/SwiftFormat/releases/download/0.60.1/swiftformat.zip
+          curl -fsSL -o "$tools/portable_swiftlint.zip" https://github.com/realm/SwiftLint/releases/download/0.63.2/portable_swiftlint.zip
+          echo "23b50c75f4223c477e822833c4cf819a1c9abbb6d00e892900bda1c3a8231afd  $tools/swiftformat.zip" | shasum -a 256 -c -
+          echo "c59a405c85f95b92ced677a500804e081596a4cae4a6a485af76065557d6ed29  $tools/portable_swiftlint.zip" | shasum -a 256 -c -
+          unzip -q "$tools/swiftformat.zip" -d "$tools/swiftformat"
+          unzip -q "$tools/portable_swiftlint.zip" -d "$tools/swiftlint"
+          chmod +x "$tools/swiftformat/swiftformat" "$tools/swiftlint/swiftlint"
+          echo "$tools/swiftformat" >> "$GITHUB_PATH"
+          echo "$tools/swiftlint" >> "$GITHUB_PATH"
+      - name: Check pinned tool versions
+        run: |
+          test "$(swiftformat --version)" = "0.60.1"
+          test "$(swiftlint --version)" = "0.63.2"
       - run: swiftformat macos scripts/support --lint && swiftlint lint --strict
       - run: macos/build-app.sh
       - run: /usr/bin/python3 -I scripts/ci/release.py bundle
       - name: Guarded Swift package tests
         shell: bash
         run: |
-          HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfFeatures/MainWindowFeature --mode suites
+          out="$RUNNER_TEMP/swift-tests"
+          HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfFeatures/MainWindowFeature --mode suites \
+            --output-dir "$out/MainWindowFeature"
           for package in macos/HfFoundation/* macos/HfCore/* macos/HfFeatures/MenuBarFeature macos/HfFeatures/SettingsFeature macos/Harflow; do
-            HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package "$package" --mode aggregate || exit 1
+            HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package "$package" --mode aggregate \
+              --output-dir "$out/$(basename "$package")" || exit 1
           done
+      - name: Upload Swift test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-tests
+          path: ${{ runner.temp }}/swift-tests
+          retention-days: 7

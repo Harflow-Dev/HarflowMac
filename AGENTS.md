@@ -31,7 +31,7 @@ README and the relevant guide in the same change.
 ## Commands
 
 ```bash
-swiftformat macos && swiftlint lint --strict   # format, then lint (CI runs `swiftformat --lint macos`)
+swiftformat macos && swiftlint lint --strict   # format, then lint; CI pins swiftformat 0.60.1 and swiftlint 0.63.2 (SHA-256-verified release downloads, no brew) and runs `swiftformat macos scripts/support --lint`
 python3 scripts/check-legacy-names.py          # legacy product-name guard
 scripts/check-private-refs.sh                  # private-reference guard
 python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
