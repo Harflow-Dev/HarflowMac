@@ -567,7 +567,7 @@ private extension String {
 
 private let expectedAXSignatures: [[String]] = [
     ["AXHeading|Overview||"],
-    ["AXUnknown|Needs you, 3 pending||"],
+    ["AXStaticText||Needs you, 3 pending|"],
     ["AXStaticText||Statistics|"],
     // The native header keeps both existing actions reachable while exposing its semantic heading.
     ["AXButton|Collapse workflows||", "AXButton|New workflow||", "AXHeading|Collapse workflows||"],

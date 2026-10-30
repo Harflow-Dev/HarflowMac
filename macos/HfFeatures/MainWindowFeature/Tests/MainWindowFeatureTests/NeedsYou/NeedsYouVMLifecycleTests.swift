@@ -276,4 +276,29 @@ private final class Routed: @unchecked Sendable {
         await waitUntil { if case .settled? = sut.presentation.detail?.phase { true } else { false } }
         if case .settled? = sut.presentation.detail?.phase {} else { Issue.record("expected the settled card after reappearing") }
     }
+
+    @Test func givenChangedCopyOfTheSameRequestPublishedMidSend_whenAccepted_thenTheSettledCardIsKept() async {
+        // given
+        let original = item("input:w:a")
+        let (sut, useCase, _) = rig(NeedsYouSnapshot(phase: .ready, items: [original]))
+        sut.didAppear()
+        sut.show(itemID: original.id)
+        await waitUntil { sut.displayedItem == original }
+        sut.answerText = "yes"
+        sut.didSubmitAnswer()
+        await waitUntil { useCase.started == [original.id] }
+        // when — a refreshed copy (new engine note and text, same identity) arrives before the send completes.
+        var refreshed = original
+        refreshed.text = "Q refreshed"
+        refreshed.ownership.engineNote = "new note"
+        useCase.subject.send(NeedsYouSnapshot(phase: .ready, items: [refreshed]))
+        await waitUntil { sut.snapshot.items.first?.text == "Q refreshed" }
+        useCase.complete(original.id, .accepted)
+        await waitUntil { sut.settled[original.id] != nil }
+        sut.rebuild()
+        await waitUntil { if case .settled? = sut.presentation.detail?.phase { true } else { false } }
+        // then
+        #expect(sut.settled[original.id] != nil)
+        if case .settled? = sut.presentation.detail?.phase {} else { Issue.record("the card must survive a refreshed copy") }
+    }
 }

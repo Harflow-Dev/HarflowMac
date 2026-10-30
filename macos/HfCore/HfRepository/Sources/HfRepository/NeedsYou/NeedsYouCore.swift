@@ -92,6 +92,8 @@ actor NeedsYouCore {
     /// Successful child reads kept per root until the root has been read completely, so an oversized root advances.
     private var childReads: [String: [String: WorkflowMonitorStatus]] = [:]
     private var visitFailures: Set<String> = []
+    /// Where each root's next visit starts among its entries, advancing past every attempted child (failed ones included).
+    private var childCursor: [String: Int] = [:]
     private var approvalProgress: [String: ApprovalProgress] = [:]
     private var unreadable: Set<String> = []
     private var unsupportedRoots: Set<String> = []
@@ -277,6 +279,7 @@ actor NeedsYouCore {
         unreadable.subtract(childFailures.removeValue(forKey: key) ?? [])
         approvalProgress[key] = nil
         childReads[key] = nil
+        childCursor[key] = nil
     }
 
     // MARK: - Workflow roots
@@ -311,16 +314,20 @@ actor NeedsYouCore {
         var items: [NeedsYouItem] = []
         var withheld = Set<String>()
         var failures = Set<String>()
-        var incomplete = false
+        var firstDeferred: Int?
         visitFailures = []
-        for candidate in plan.questions {
-            switch await offeredAnswers(for: candidate, root: status, rootKey: "workflow:\(id)", &budget) {
+        let rootKey = "workflow:\(id)"
+        let count = plan.questions.count
+        let start = count == 0 ? 0 : (childCursor[rootKey] ?? 0) % count
+        let ordered = Array(plan.questions[start...] + plan.questions[..<start])
+        for (position, candidate) in ordered.enumerated() {
+            switch await offeredAnswers(for: candidate, root: status, rootKey: rootKey, &budget) {
             case .failure(let failure):
                 // Only this child's entries are held back; the rest of the root is still read.
                 withheld.insert("input:\(id):\(candidate.entry.decisionID)")
                 if failure.deferred {
                     deferred += 1
-                    incomplete = true
+                    firstDeferred = firstDeferred ?? position
                 } else {
                     failures.insert("child:\(candidate.entry.workflowRunID)")
                 }
@@ -329,7 +336,12 @@ actor NeedsYouCore {
             }
         }
         if let recovery = plan.recovery { items.append(recovery) }
-        if !incomplete { childReads["workflow:\(id)"] = nil }
+        if let firstDeferred {
+            childCursor[rootKey] = (start + firstDeferred) % max(count, 1)
+        } else {
+            childReads[rootKey] = nil
+            childCursor[rootKey] = nil
+        }
         return .ready(items, withheld: withheld, childFailures: failures)
     }
 
@@ -343,7 +355,7 @@ actor NeedsYouCore {
         var recovery = root.usageLimitRecovery
         if candidate.needsSourceRead {
             guard candidate.entry.isUsageLimit else { return .success(nil) }
-            switch await childStatus(candidate.entry.workflowRunID, rootKey: rootKey, &budget) {
+            switch await childStatus(candidate.entry.workflowRunID, decision: candidate.entry.decisionID, rootKey: rootKey, &budget) {
             case .failure(let failure): return .failure(EntryFailure(deferred: failure == .deferred))
             case .success(let child): recovery = child.usageLimitRecovery
             }
@@ -352,15 +364,19 @@ actor NeedsYouCore {
         return .success(recovery.choices)
     }
 
-    private func childStatus(_ id: String, rootKey: String, _ budget: inout Budget) async -> Result<WorkflowMonitorStatus, ChildFailure> {
-        if let read = childReads[rootKey]?[id] { return .success(read) }
-        if visitFailures.contains(id) { return .failure(.unreadable) }
+    /// Persisted reads are keyed by child and decision, so a child that moved on to another decision is read again.
+    private func childStatus(
+        _ id: String, decision: String, rootKey: String, _ budget: inout Budget
+    ) async -> Result<WorkflowMonitorStatus, ChildFailure> {
+        let key = "\(id)#\(decision)"
+        if let read = childReads[rootKey]?[key] { return .success(read) }
+        if visitFailures.contains(key) { return .failure(.unreadable) }
         guard budget.take() else { return .failure(.deferred) }
         if let status = try? await engine.workflowStatus(id), status.isQualified {
-            childReads[rootKey, default: [:]][id] = status
+            childReads[rootKey, default: [:]][key] = status
             return .success(status)
         }
-        visitFailures.insert(id)
+        visitFailures.insert(key)
         return .failure(.unreadable)
     }
 

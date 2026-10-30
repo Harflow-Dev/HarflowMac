@@ -210,10 +210,20 @@ extension NeedsYouVM {
         for (id, meta) in settledMeta {
             let live = snapshot.items.first { $0.id == id } ?? snapshot.withdrawn.first { $0.id == id }
             if let live {
-                if meta.absentSeen || live != meta.item { dropSettled(id) }
+                if meta.absentSeen || !live.isSameRequest(as: meta.item) { dropSettled(id) }
             } else {
                 settledMeta[id]?.absentSeen = true
             }
         }
+    }
+}
+
+extension NeedsYouItem {
+    /// Whether two copies are the same request: identity fields only, so a copy whose text, notes or ownership
+    /// were refreshed while an answer was in flight is still the request that was answered.
+    func isSameRequest(as other: NeedsYouItem) -> Bool {
+        id == other.id && kind == other.kind && decisionID == other.decisionID && rootRunID == other.rootRunID
+            && sourceRunID == other.sourceRunID && taskID == other.taskID && waitingSince == other.waitingSince
+            && approval?.id == other.approval?.id && approval?.revision == other.approval?.revision
     }
 }
