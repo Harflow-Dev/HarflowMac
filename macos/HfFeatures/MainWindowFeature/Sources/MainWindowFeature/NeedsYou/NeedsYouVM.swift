@@ -49,6 +49,9 @@ final class NeedsYouVM: NeedsYouViewModel {
     @ObservationIgnored var overrides: [String: NeedsYouItem] = [:]
     @ObservationIgnored var reviewNotes: [String: String] = [:]
     @ObservationIgnored var settled: [String: NeedsYouDetail] = [:]
+    /// What each settled card was settled for, so it can never shadow a newer request that reuses the id.
+    @ObservationIgnored var settledMeta: [String: SettledMeta] = [:]
+    @ObservationIgnored var settledOrder: [String] = []
     /// Advanced when the screen disappears, so a completion started before cannot touch what is shown after.
     @ObservationIgnored var lifecycle = 0
     @ObservationIgnored var rebuildCompletions = 0
@@ -90,6 +93,9 @@ final class NeedsYouVM: NeedsYouViewModel {
 
     func didDisappear() {
         lifecycle += 1
+        for task in fadeTasks.values { task.cancel() }
+        fadeTasks = [:]
+        leavingRows = [:]
         cancellables.removeAll()
         rebuildTask?.cancel()
         rebuildTask = nil
@@ -137,6 +143,12 @@ final class NeedsYouVM: NeedsYouViewModel {
 
     /// Maps the latest inputs to presentation off the main actor and applies only a changed result.
     func rebuild() {
+        reconcileSettled()
+        // Resolution and withdrawal are authoritative over a local review override.
+        for id in overrides.keys where !snapshot.items.contains(where: { $0.id == id }) {
+            overrides[id] = nil
+            reviewNotes[id] = nil
+        }
         rebuildTask?.cancel()
         let token = UUID()
         generation = token
@@ -163,5 +175,45 @@ final class NeedsYouVM: NeedsYouViewModel {
         }
         if presentation != result.presentation { presentation = result.presentation }
         rebuildCompletions += 1
+    }
+}
+
+// MARK: - SettledMeta
+
+/// The request a settled card belongs to. `absentSeen` flips once a snapshot has shown the request gone, after
+/// which any request with that id is a new one and replaces the card.
+struct SettledMeta {
+    let item: NeedsYouItem
+    var absentSeen: Bool
+}
+
+extension NeedsYouVM {
+    static let settledLimit = 32
+
+    func recordSettled(_ detail: NeedsYouDetail, for item: NeedsYouItem) {
+        settled[item.id] = detail
+        settledMeta[item.id] = SettledMeta(item: item, absentSeen: false)
+        settledOrder.removeAll { $0 == item.id }
+        settledOrder.append(item.id)
+        while settledOrder.count > Self.settledLimit { dropSettled(settledOrder[0]) }
+        reconcileSettled()
+    }
+
+    private func dropSettled(_ id: String) {
+        settled[id] = nil
+        settledMeta[id] = nil
+        settledOrder.removeAll { $0 == id }
+    }
+
+    /// Keeps a settled card only while it describes the request that was answered.
+    func reconcileSettled() {
+        for (id, meta) in settledMeta {
+            let live = snapshot.items.first { $0.id == id } ?? snapshot.withdrawn.first { $0.id == id }
+            if let live {
+                if meta.absentSeen || live != meta.item { dropSettled(id) }
+            } else {
+                settledMeta[id]?.absentSeen = true
+            }
+        }
     }
 }

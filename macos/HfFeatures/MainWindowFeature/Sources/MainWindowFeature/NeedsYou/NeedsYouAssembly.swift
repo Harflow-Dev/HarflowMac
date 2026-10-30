@@ -39,7 +39,7 @@ enum NeedsYouAssembly {
         }
         presentation.notice = input.notice
         guard let id = input.selectedID else { return NeedsYouAssemblyResult(presentation: presentation, detail: nil, item: nil) }
-        let item = input.overrides[id] ?? input.snapshot.items.first { $0.id == id }
+        let item = liveItem(id, input)
         let detail = detail(id: id, input: input, loading: presentation.isLoading)
         presentation.detail = detail
         presentation.detailIsLoading = detail == nil
@@ -48,19 +48,27 @@ enum NeedsYouAssembly {
         return NeedsYouAssemblyResult(presentation: presentation, detail: detail, item: answerable ? item : nil)
     }
 
+    /// The request as it may be answered now. Source availability and resolution are authoritative: a withdrawn or
+    /// resolved request has no live item, whatever a local review override says.
+    private nonisolated static func liveItem(_ id: String, _ input: NeedsYouAssemblyInput) -> NeedsYouItem? {
+        guard !input.snapshot.withdrawn.contains(where: { $0.id == id }),
+              let current = input.snapshot.items.first(where: { $0.id == id }) else { return nil }
+        return input.overrides[id] ?? current
+    }
+
     private nonisolated static func detail(id: String, input: NeedsYouAssemblyInput, loading: Bool) -> NeedsYouDetail? {
         if let settled = input.settled[id] { return settled }
-        if let item = input.overrides[id] ?? input.snapshot.items.first(where: { $0.id == id }) {
-            var detail = NeedsYouPresentationMapper.detail(item)
-            if input.submittingIDs.contains(id) { detail.phase = .submitting }
-            detail.error = input.sendError
-            detail.reviewNote = input.reviewNotes[id]
-            return detail
-        }
         // The source could not be read right now: the request is not resolved, so keep what was last shown.
         if let withdrawn = input.snapshot.withdrawn.first(where: { $0.id == id }) {
             var detail = NeedsYouPresentationMapper.detail(withdrawn)
             detail.phase = .withdrawn
+            return detail
+        }
+        if let item = liveItem(id, input) {
+            var detail = NeedsYouPresentationMapper.detail(item)
+            if input.submittingIDs.contains(id) { detail.phase = .submitting }
+            detail.error = input.sendError
+            detail.reviewNote = input.reviewNotes[id]
             return detail
         }
         if loading { return nil }

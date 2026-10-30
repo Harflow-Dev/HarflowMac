@@ -192,4 +192,88 @@ private final class Routed: @unchecked Sendable {
         await waitUntil { sut.presentation.detail?.phase == .expired }
         #expect(sut.presentation.detail?.phase == .expired)
     }
+
+    @Test func givenAnsweredRequestWhoseIDReappears_whenSelected_thenTheNewRequestIsAnswerableNotTheOldSettledCard() async {
+        // given
+        let original = item("input:w:a")
+        let (sut, useCase, _) = rig(NeedsYouSnapshot(phase: .ready, items: [original]))
+        sut.didAppear()
+        sut.show(itemID: original.id)
+        await waitUntil { sut.displayedItem == original }
+        sut.answerText = "done"
+        sut.didSubmitAnswer()
+        await waitUntil { useCase.started == [original.id] }
+        useCase.subject.send(NeedsYouSnapshot(phase: .ready, items: []))
+        useCase.complete(original.id, .accepted)
+        await waitUntil { if case .settled? = sut.presentation.detail?.phase { true } else { false } }
+        await waitUntil { sut.settledMeta[original.id]?.absentSeen == true }
+        // when — the same id comes back (an identical checkpoint can reuse its recovery id).
+        useCase.subject.send(NeedsYouSnapshot(phase: .ready, items: [original]))
+        await waitUntil { sut.presentation.detail?.phase == .answerable }
+        // then
+        #expect(sut.presentation.detail?.phase == .answerable && sut.settled[original.id] == nil)
+        #expect(sut.displayedItem == original)
+    }
+
+    @Test func givenManyAnsweredRequests_whenSettled_thenTheStoredCardsAreBounded() async {
+        // given
+        let (sut, _, _) = rig(NeedsYouSnapshot(phase: .ready))
+        // when
+        for index in 0 ..< 50 {
+            let value = item("input:w:\(index)")
+            sut.recordSettled(NeedsYouPresentationMapper.detail(value), for: value)
+        }
+        // then
+        #expect(sut.settled.count == NeedsYouVM.settledLimit && sut.settledMeta.count == NeedsYouVM.settledLimit)
+    }
+
+    @Test func givenChangedApprovalThenUnreadableThenResolved_whenShown_thenWithdrawnAndLaterExpiredIgnoreTheOverride() async {
+        // given
+        var shown = item("approval:t:r")
+        shown.kind = .approval
+        let (sut, useCase, _) = rig(NeedsYouSnapshot(phase: .ready, items: [shown]))
+        sut.didAppear()
+        sut.show(itemID: shown.id)
+        await waitUntil { sut.displayedItem == shown }
+        var refreshed = shown
+        refreshed.text = "refreshed action"
+        sut.overrides[shown.id] = refreshed
+        sut.rebuild()
+        await waitUntil { sut.presentation.detail?.text == "refreshed action" }
+        // when — the source becomes unreadable
+        useCase.subject.send(NeedsYouSnapshot(phase: .ready, items: [], unreadableSourceCount: 1, withdrawn: [shown]))
+        await waitUntil { sut.presentation.detail?.phase == .withdrawn }
+        // then
+        #expect(sut.presentation.detail?.text == shown.text)
+        // when — then authoritatively resolved
+        useCase.subject.send(NeedsYouSnapshot(phase: .ready, items: []))
+        await waitUntil { sut.presentation.detail?.phase == .expired }
+        #expect(sut.presentation.detail?.phase == .expired && sut.overrides[shown.id] == nil)
+    }
+
+    @Test func givenCompletionAfterTeardown_whenItArrives_thenNoPresentationInvalidationOrFadeRuns() async {
+        // given
+        let original = item("input:w:a")
+        let (sut, useCase, _) = rig(NeedsYouSnapshot(phase: .ready, items: [original]))
+        sut.didChangeReduceMotion(false)
+        sut.didAppear()
+        sut.show(itemID: original.id)
+        await waitUntil { sut.displayedItem == original }
+        sut.answerText = "x"
+        sut.didSubmitAnswer()
+        await waitUntil { useCase.started == [original.id] }
+        sut.didDisappear()
+        let invalidations = Routed()
+        withObservationTracking { _ = sut.presentation } onChange: { invalidations.add("changed") }
+        // when
+        useCase.complete(original.id, .accepted)
+        await waitUntil { sut.submittingIDs.isEmpty }
+        // then — the outcome is kept, nothing is rebuilt or faded while torn down.
+        #expect(invalidations.all.isEmpty && sut.fadeTasks.isEmpty && sut.leavingRows.isEmpty)
+        #expect(sut.settled[original.id] != nil)
+        // and reappearing rebuilds from the kept outcome
+        sut.didAppear()
+        await waitUntil { if case .settled? = sut.presentation.detail?.phase { true } else { false } }
+        if case .settled? = sut.presentation.detail?.phase {} else { Issue.record("expected the settled card after reappearing") }
+    }
 }

@@ -9,9 +9,9 @@ extension NeedsYouVM {
     /// refreshed item is shown with the review note instead.
     private var currentItem: NeedsYouItem? {
         guard let id = selectedID, !submittingIDs.contains(id), settled[id] == nil, let shown = displayedItem, shown.id == id,
-              presentation.detail?.phase != .withdrawn else { return nil }
-        let live = overrides[id] ?? snapshot.items.first { $0.id == id }
-        guard let live else { return nil }
+              presentation.detail?.phase != .withdrawn, !snapshot.withdrawn.contains(where: { $0.id == id }),
+              let current = snapshot.items.first(where: { $0.id == id }) else { return nil }
+        let live = overrides[id] ?? current
         guard live == shown else {
             overrides[id] = live
             reviewNotes[id] = NeedsYouAnswerOutcome.changedMessage
@@ -71,7 +71,9 @@ extension NeedsYouVM {
             var detail = NeedsYouPresentationMapper.detail(item)
             detail.phase = .settled(decision: NeedsYouPresentationMapper.settledDecision(item, rejected: rejected), answer: answer,
                                     note: NeedsYouPresentationMapper.settledNote(item))
-            settled[item.id] = detail
+            recordSettled(detail, for: item)
+            // After teardown only the outcome is kept; reappearing rebuilds, and no fade or rebuild runs meanwhile.
+            guard lifecycle == started else { return }
             if current {
                 answerText = ""
                 sendError = nil
@@ -81,7 +83,7 @@ extension NeedsYouVM {
             return
         }
         guard current else {
-            rebuild()
+            if lifecycle == started { rebuild() }
             return
         }
         switch outcome {
