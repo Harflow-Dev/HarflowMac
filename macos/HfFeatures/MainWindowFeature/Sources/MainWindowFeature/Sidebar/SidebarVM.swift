@@ -142,6 +142,7 @@ final class SidebarVM: SidebarViewModel {
     }
 
     @ObservationIgnored var renderedAppAppearance: AppAppearance = .system
+    @ObservationIgnored var renderedNeedsYouBadge: NeedsYouBadge = .none
     @ObservationIgnored private var renderedConnectionLine: String
     private(set) var connectionLine: String {
         get { access(keyPath: \.connectionLine); return renderedConnectionLine }

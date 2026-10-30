@@ -49,6 +49,8 @@ protocol SidebarViewModel: ViewModel {
     var catalogUnavailableNote: String? { get }
     var searchQuery: String { get }
     var selection: MonitorDestination? { get }
+    /// The Needs you row's badge.
+    var needsYouBadge: NeedsYouBadge { get }
     /// The install/update banner, or `nil` when nothing needs surfacing — shown in place of the
     /// red error section (settled plan, section 5).
     var installBannerModel: InstallBanner.Model? { get }
@@ -77,6 +79,7 @@ protocol SidebarViewModel: ViewModel {
 }
 
 extension SidebarViewModel {
+    var needsYouBadge: NeedsYouBadge { .none }
     var storeNeedsAttention: Bool { false }
     var runtimeSetupState: RuntimeSetupState { .ready }
     func didTapRuntimeSetup() {}
@@ -298,7 +301,8 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 minimumRowHeight: minimumRowHeight,
                 historyRevision: viewModel.historyPresentationRevision,
                 historyToken: historyLayoutToken,
-                transitionEpoch: transitionEpoch
+                transitionEpoch: transitionEpoch,
+                needsYouBadge: viewModel.needsYouBadge
             ),
             selection: viewModel.selection,
             seenIDs: seenRowIDs,

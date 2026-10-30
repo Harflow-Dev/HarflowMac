@@ -9,6 +9,7 @@ extension SidebarVM {
         guard !didSubscribe else { return }
         didSubscribe = true
         subscribeToAppAppearance()
+        subscribeToNeedsYou()
 
         useCase.tasksPublisher()
             .receive(on: DispatchQueue.main)

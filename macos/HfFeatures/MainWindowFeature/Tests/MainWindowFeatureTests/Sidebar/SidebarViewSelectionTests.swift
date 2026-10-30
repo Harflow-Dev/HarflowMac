@@ -67,7 +67,7 @@ import Testing
         // Monitor piece 4: the tree's guide gutter and disclosure chevron must not make the
         // expanded child row itself unselectable.
         #expect(selected == [
-            .statistics, .task("abc123"), .task("abc123-child"), .group("review-bot"), .task("def456"), .task("ghi789")
+            .needsYou(itemID: nil), .statistics, .task("abc123"), .task("abc123-child"), .group("review-bot"), .task("def456"), .task("ghi789")
         ])
     }
 }

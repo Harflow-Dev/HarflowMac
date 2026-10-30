@@ -175,7 +175,8 @@ public enum NeedsYouAnswerOutcome: Equatable, Sendable {
     case changed(NeedsYouItem?)
     case failed(String)
 
-    static let changedMessage = "This request changed. Review it again."
+    /// The note shown when a request changed under the reviewer.
+    public static let changedMessage = "This request changed. Review it again."
 
     /// Classifies an engine refusal. Workflow refusals carry text only, so the text is matched here and nowhere else.
     static func classify(_ error: ToolError) -> Self {

@@ -76,6 +76,29 @@ struct SidebarNativeRow: View {
 
     @ViewBuilder private var content: some View {
         switch entry.content {
+        case .needsYou(let badge):
+            HStack(spacing: HfRadius.Metrics.spacing8) {
+                Label {
+                    Text("Needs you")
+                } icon: {
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(Color.warningFG)
+                }
+                Spacer(minLength: 0)
+                if let text = badge.capsuleText {
+                    Text(text)
+                        .font(.hf(.caption, weight: .semibold))
+                        .monospacedDigit()
+                        .padding(.horizontal, HfRadius.Metrics.spacing6)
+                        .background(Color.warningBG, in: Capsule())
+                        .foregroundStyle(Color.warningFG)
+                        .accessibilityHidden(true)
+                }
+            }
+            .font(.hf(.body, weight: .medium))
+            .padding(.vertical, HfRadius.Metrics.spacing6)
+            .frame(maxWidth: .infinity, minHeight: entry.minimumHeight, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(badge.accessibilityLabel)
         case .statistics:
             Label("Statistics", systemImage: "chart.bar.xaxis")
                 .font(.hf(.body, weight: .medium))

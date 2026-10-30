@@ -1,0 +1,160 @@
+import Combine
+import Foundation
+import HfCommon
+import HfRepository
+import HfUtilities
+import Mockable
+
+// MARK: - NeedsYouUseCase
+
+/// The screen's data needs over `NeedsYouRepository`.
+@Mockable
+@MainActor
+protocol NeedsYouUseCase: Sendable {
+    var snapshot: NeedsYouSnapshot { get }
+    func snapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never>
+    /// Requests an immediate engine pass.
+    func refresh()
+    func answer(_ item: NeedsYouItem, text: String, additionalAttempts: Int?) async -> NeedsYouAnswerOutcome
+    func respond(_ item: NeedsYouItem, decision: String) async -> NeedsYouAnswerOutcome
+}
+
+// MARK: - NeedsYouRouting
+
+/// Navigation Needs you performs; the coordinator owns the selection.
+@Mockable
+@MainActor
+protocol NeedsYouRouting: Sendable {
+    /// Opens Needs you, showing one request's detail or the list when `itemID` is nil.
+    func showNeedsYou(itemID: String?)
+}
+
+// MARK: - NeedsYouVM
+
+@Observable
+@MainActor
+final class NeedsYouVM: NeedsYouViewModel {
+    static let fadeMilliseconds = 180
+
+    private(set) var presentation = NeedsYouPresentation()
+    var answerText = ""
+    var additionalAttempts = 1
+
+    @ObservationIgnored let useCase: any NeedsYouUseCase
+    @ObservationIgnored let routing: any NeedsYouRouting
+    @ObservationIgnored var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored var didSubscribe = false
+    @ObservationIgnored var snapshot = NeedsYouSnapshot()
+    @ObservationIgnored var selectedID: String?
+    @ObservationIgnored var overrides: [String: NeedsYouItem] = [:]
+    @ObservationIgnored var reviewNotes: [String: String] = [:]
+    @ObservationIgnored var settled: NeedsYouDetail?
+    @ObservationIgnored var lastDetails: [String: NeedsYouDetail] = [:]
+    @ObservationIgnored var leavingRows: [String: NeedsYouRow] = [:]
+    @ObservationIgnored var submittingID: String?
+    @ObservationIgnored var sendError: String?
+    @ObservationIgnored var notice: String?
+    @ObservationIgnored var reduceMotion = false
+    @ObservationIgnored var generation = UUID()
+    @ObservationIgnored var rebuildTask: Task<Void, Never>?
+    @ObservationIgnored var fadeTasks: [String: Task<Void, Never>] = [:]
+
+    init(useCase: any NeedsYouUseCase, routing: any NeedsYouRouting) {
+        self.useCase = useCase
+        self.routing = routing
+    }
+
+    // MARK: - Lifecycle
+
+    func didAppear() {
+        guard !didSubscribe else { return }
+        didSubscribe = true
+        snapshot = useCase.snapshot
+        useCase.snapshotPublisher()
+            .receive(on: DispatchQueue.main)
+            .removeDuplicates()
+            .sink { [weak self] value in
+                guard let self else { return }
+                snapshot = value
+                rebuild()
+            }
+            .store(in: &cancellables)
+        useCase.refresh()
+        rebuild()
+    }
+
+    func didDisappear() {
+        cancellables.removeAll()
+        rebuildTask?.cancel()
+        rebuildTask = nil
+        generation = UUID()
+        didSubscribe = false
+    }
+
+    func didChangeReduceMotion(_ value: Bool) { reduceMotion = value }
+
+    // MARK: - Navigation
+
+    func show(itemID: String?) {
+        guard selectedID != itemID else { return }
+        selectedID = itemID
+        answerText = ""
+        additionalAttempts = 1
+        sendError = nil
+        if itemID != nil { notice = nil }
+        if settled?.id != itemID { settled = nil }
+        rebuild()
+    }
+
+    func didSelect(_ itemID: String) {
+        show(itemID: itemID)
+        routing.showNeedsYou(itemID: itemID)
+    }
+
+    func didTapBack() {
+        show(itemID: nil)
+        routing.showNeedsYou(itemID: nil)
+    }
+
+    func didTapRetry() {
+        useCase.refresh()
+    }
+
+    func didDismissNotice() {
+        guard notice != nil else { return }
+        notice = nil
+        rebuild()
+    }
+
+    // MARK: - Rebuild
+
+    /// Maps the latest inputs to presentation off the main actor and applies only a changed result.
+    func rebuild() {
+        rebuildTask?.cancel()
+        let token = UUID()
+        generation = token
+        let input = NeedsYouAssemblyInput(
+            snapshot: snapshot, selectedID: selectedID, overrides: overrides, reviewNotes: reviewNotes, settled: settled,
+            lastDetails: lastDetails, leavingRows: leavingRows, submittingID: submittingID, sendError: sendError, notice: notice
+        )
+        rebuildTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) { NeedsYouAssembly.assemble(input) }.value
+            guard let self, !Task.isCancelled, generation == token else { return }
+            apply(result)
+        }
+    }
+
+    private func apply(_ result: NeedsYouAssemblyResult) {
+        if let detail = result.detail, detail.phase == .answerable || detail.phase == .submitting {
+            if lastDetails[detail.id]?.id != detail.id || lastDetails[detail.id]?.text != detail.text { lastDetails[detail.id] = detail }
+        }
+        for (id, item) in overrides {
+            if let current = snapshot.items.first(where: { $0.id == id }),
+               let shown = item.approval, let latest = current.approval, latest.isSameCurrent(as: shown) {
+                overrides[id] = nil
+                reviewNotes[id] = nil
+            }
+        }
+        if presentation != result.presentation { presentation = result.presentation }
+    }
+}

@@ -8,7 +8,9 @@ import SwiftUI
 extension SidebarNativeList.Coordinator {
     func synchronizeSelection() {
         guard let outline else { return }
-        let indexes = selection.flatMap { destinationIndexes[$0] } ?? []
+        // Every Needs you selection, with or without a request, highlights the one sidebar row.
+        let key: MonitorDestination? = if case .needsYou? = selection { .needsYou(itemID: nil) } else { selection }
+        let indexes = key.flatMap { destinationIndexes[$0] } ?? []
         let selectedIDs = Set(indexes.compactMap { boxes.indices.contains($0) ? boxes[$0].entry.displayID : nil })
         let changedIDs = lastHostedSelectedIDs.symmetricDifference(selectedIDs)
         // AppKit may already have changed its indexes before notifying the delegate. Keep

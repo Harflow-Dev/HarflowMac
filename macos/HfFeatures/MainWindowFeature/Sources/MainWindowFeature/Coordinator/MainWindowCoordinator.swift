@@ -198,6 +198,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored private var sidebarVM: SidebarVM?
     @ObservationIgnored private var startScreenVM: StartScreenVM?
     @ObservationIgnored private var statisticsVM: StatisticsVM?
+    @ObservationIgnored private var needsYouVM: NeedsYouVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
     /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
     /// "coordinator owns the pending reveal") — set on every navigation request for a task, so it
@@ -271,6 +272,12 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         let vm = statisticsVM ?? StatisticsVM(useCase: StatisticsViewRepository())
         statisticsVM = vm
         return StatisticsView(vm).eraseToAnyView()
+    }
+
+    public func buildNeedsYouView(itemID: String?) -> AnyView {
+        let vm = needsYouVM ?? NeedsYouVM(useCase: NeedsYouViewRepository(), routing: self)
+        needsYouVM = vm
+        return NeedsYouView(vm, itemID: itemID).eraseToAnyView()
     }
 
     public func buildSidebarView() -> AnyView {
@@ -458,3 +465,11 @@ extension MainWindowCoordinator: TaskDetailRouting {
 // MARK: - StartScreenRouting
 
 extension MainWindowCoordinator: StartScreenRouting {}
+
+// MARK: - NeedsYouRouting
+
+extension MainWindowCoordinator: NeedsYouRouting {
+    func showNeedsYou(itemID: String?) {
+        selection = .needsYou(itemID: itemID)
+    }
+}

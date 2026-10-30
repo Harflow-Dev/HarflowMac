@@ -14,8 +14,14 @@ import SwiftEnvironment
 /// Concrete `SidebarUseCase` backed by `TaskListRepository`.
 @MainActor
 final class SidebarViewRepository: SidebarUseCase, SidebarWorkflowUseCase, SidebarHistoryUseCase,
-    RuntimeSetupObserving, SidebarStoreRecoveryObserving, @unchecked Sendable {
+    RuntimeSetupObserving, SidebarStoreRecoveryObserving, SidebarNeedsYouObserving, @unchecked Sendable {
     @GlobalEnvironment(\.workflowRepository) private var workflowRepository
+    @GlobalEnvironment(\.needsYouRepository) private var needsYouRepository
+
+    var needsYouBadge: NeedsYouBadge { NeedsYouBadge(needsYouRepository.snapshot) }
+    func needsYouBadgePublisher() -> AnyPublisher<NeedsYouBadge, Never> {
+        needsYouRepository.snapshotPublisher().map(NeedsYouBadge.init).eraseToAnyPublisher()
+    }
 
     func workflowSnapshot() async throws -> SidebarWorkflowSnapshot {
         let definitions = try await workflowRepository.command("list", options: [], positionals: [])

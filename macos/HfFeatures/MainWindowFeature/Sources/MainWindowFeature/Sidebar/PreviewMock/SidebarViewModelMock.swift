@@ -21,6 +21,7 @@ final class SidebarViewModelMock: SidebarViewModel {
 
     var sections: [SidebarSection]
     var savedWorkflows: [WorkflowRecord] = []
+    var needsYouBadge: NeedsYouBadge = .count(3, atLeast: false)
     var listErrorMessage: String?
     var emptyStateMessage: String?
     var showsLoadingSkeleton: Bool
