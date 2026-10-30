@@ -128,7 +128,11 @@ import Testing
             scheduler: NullScheduling(), compatibilityCheck: { _ in .failure(error) })
         let lease = repository.acquire(fixture.taskID)
         defer { lease.release() }
-        await waitUntil { repository.eventsAvailability(for: fixture.taskID) == .unavailable }
+        // Availability and history are published one after the other; wait for both.
+        await waitUntil {
+            repository.eventsAvailability(for: fixture.taskID) == .unavailable
+                && repository.history(for: fixture.taskID).error == error.message
+        }
         #expect(repository.events(for: fixture.taskID).isEmpty)
         #expect(repository.history(for: fixture.taskID).error == error.message)
     }
@@ -142,7 +146,10 @@ import Testing
             scheduler: NullScheduling(), compatibilityCheck: { _ in .failure(error) })
         let lease = repository.acquireSummary(fixture.taskID)
         defer { lease.release() }
-        await waitUntil { repository.summary(for: fixture.taskID).availability == .unavailable }
+        await waitUntil {
+            repository.summary(for: fixture.taskID).availability == .unavailable
+                && repository.history(for: fixture.taskID).error == error.message
+        }
         #expect(repository.events(for: fixture.taskID).isEmpty)
         #expect(repository.history(for: fixture.taskID).error == error.message)
     }
