@@ -301,4 +301,30 @@ private final class Routed: @unchecked Sendable {
         #expect(sut.settled[original.id] != nil)
         if case .settled? = sut.presentation.detail?.phase {} else { Issue.record("the card must survive a refreshed copy") }
     }
+
+    @Test func givenRecoveryWhoseUpdatedAtMovesDuringTheSend_whenAccepted_thenTheSettledCardIsKept() async {
+        // given — a recovery's waiting time comes from the run's updated_at, which the send itself bumps.
+        var original = item("attention:w:w:abcd1234")
+        original.kind = .recovery
+        original.decisionID = nil
+        let (sut, useCase, _) = rig(NeedsYouSnapshot(phase: .ready, items: [original]))
+        sut.didAppear()
+        sut.show(itemID: original.id)
+        await waitUntil { sut.displayedItem == original }
+        sut.answerText = "keep 1.2"
+        sut.didSubmitAnswer()
+        await waitUntil { useCase.started == [original.id] }
+        // when
+        var refreshed = original
+        refreshed.waitingSince = Date(timeIntervalSince1970: 999)
+        useCase.subject.send(NeedsYouSnapshot(phase: .ready, items: [refreshed]))
+        await waitUntil { sut.snapshot.items.first?.waitingSince == refreshed.waitingSince }
+        useCase.complete(original.id, .accepted)
+        await waitUntil { sut.settled[original.id] != nil }
+        sut.rebuild()
+        await waitUntil { if case .settled? = sut.presentation.detail?.phase { true } else { false } }
+        // then
+        #expect(sut.settled[original.id] != nil)
+        if case .settled? = sut.presentation.detail?.phase {} else { Issue.record("the card must survive an updated_at bump") }
+    }
 }

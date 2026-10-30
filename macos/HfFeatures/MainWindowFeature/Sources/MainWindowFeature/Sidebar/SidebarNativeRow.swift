@@ -86,6 +86,7 @@ struct SidebarNativeRow: View {
             }
             .font(.hf(.body, weight: .medium))
             .padding(.vertical, HfRadius.Metrics.spacing6)
+            .padding(.trailing, badge.capsuleText.map { CGFloat($0.count) * 8 + 22 } ?? 0)
             .frame(maxWidth: .infinity, minHeight: entry.minimumHeight, alignment: .leading)
             .overlay(alignment: .trailing) {
                 if let text = badge.capsuleText {

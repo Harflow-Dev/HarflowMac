@@ -92,8 +92,10 @@ actor NeedsYouCore {
     /// Successful child reads kept per root until the root has been read completely, so an oversized root advances.
     private var childReads: [String: [String: WorkflowMonitorStatus]] = [:]
     private var visitFailures: Set<String> = []
+    /// Reads taken during the current visit by bare child id, so two decisions from one child cost one read.
+    private var visitReads: [String: WorkflowMonitorStatus] = [:]
     /// Where each root's next visit starts among its entries, advancing past every attempted child (failed ones included).
-    private var childCursor: [String: Int] = [:]
+    private var childCursor: [String: String] = [:]
     private var approvalProgress: [String: ApprovalProgress] = [:]
     private var unreadable: Set<String> = []
     private var unsupportedRoots: Set<String> = []
@@ -316,9 +318,13 @@ actor NeedsYouCore {
         var failures = Set<String>()
         var firstDeferred: Int?
         visitFailures = []
+        visitReads = [:]
         let rootKey = "workflow:\(id)"
-        let count = plan.questions.count
-        let start = count == 0 ? 0 : (childCursor[rootKey] ?? 0) % count
+        let keys = plan.questions.map { Self.childKey($0.entry) }
+        // Persisted reads for children or decisions the root no longer reports are stale: drop them.
+        childReads[rootKey] = childReads[rootKey]?.filter { keys.contains($0.key) }
+        // The cursor is the identity of the first child left unread; it is located again each visit.
+        let start = childCursor[rootKey].flatMap { keys.firstIndex(of: $0) } ?? 0
         let ordered = Array(plan.questions[start...] + plan.questions[..<start])
         for (position, candidate) in ordered.enumerated() {
             switch await offeredAnswers(for: candidate, root: status, rootKey: rootKey, &budget) {
@@ -337,7 +343,7 @@ actor NeedsYouCore {
         }
         if let recovery = plan.recovery { items.append(recovery) }
         if let firstDeferred {
-            childCursor[rootKey] = (start + firstDeferred) % max(count, 1)
+            childCursor[rootKey] = keys[(start + firstDeferred) % keys.count]
         } else {
             childReads[rootKey] = nil
             childCursor[rootKey] = nil
@@ -346,6 +352,8 @@ actor NeedsYouCore {
     }
 
     private struct EntryFailure: Error { let deferred: Bool }
+
+    private static func childKey(_ entry: WorkflowPendingInput) -> String { "\(entry.workflowRunID)#\(entry.decisionID)" }
 
     /// Structured usage-limit answers come from the source run's own `usage_limit_recovery`; a worker
     /// usage limit has none and is an ordinary free-text question. Child reads are cached for the pass.
@@ -370,13 +378,15 @@ actor NeedsYouCore {
     ) async -> Result<WorkflowMonitorStatus, ChildFailure> {
         let key = "\(id)#\(decision)"
         if let read = childReads[rootKey]?[key] { return .success(read) }
-        if visitFailures.contains(key) { return .failure(.unreadable) }
+        if let read = visitReads[id] { return .success(read) }
+        if visitFailures.contains(id) { return .failure(.unreadable) }
         guard budget.take() else { return .failure(.deferred) }
         if let status = try? await engine.workflowStatus(id), status.isQualified {
             childReads[rootKey, default: [:]][key] = status
+            visitReads[id] = status
             return .success(status)
         }
-        visitFailures.insert(key)
+        visitFailures.insert(id)
         return .failure(.unreadable)
     }
 

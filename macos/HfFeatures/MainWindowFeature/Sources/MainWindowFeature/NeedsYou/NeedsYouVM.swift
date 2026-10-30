@@ -220,10 +220,12 @@ extension NeedsYouVM {
 
 extension NeedsYouItem {
     /// Whether two copies are the same request: identity fields only, so a copy whose text, notes or ownership
-    /// were refreshed while an answer was in flight is still the request that was answered.
+    /// were refreshed while an answer was in flight is still the request that was answered. `waitingSince` is not
+    /// identity: for workflow requests the engine derives it from the run's `updated_at`, which a send itself bumps.
+    /// A recovery's id carries its source and the fingerprint of its reason, a question's its decision id.
     func isSameRequest(as other: NeedsYouItem) -> Bool {
         id == other.id && kind == other.kind && decisionID == other.decisionID && rootRunID == other.rootRunID
-            && sourceRunID == other.sourceRunID && taskID == other.taskID && waitingSince == other.waitingSince
+            && sourceRunID == other.sourceRunID && taskID == other.taskID
             && approval?.id == other.approval?.id && approval?.revision == other.approval?.revision
     }
 }

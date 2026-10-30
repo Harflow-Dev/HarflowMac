@@ -159,7 +159,7 @@ import Testing
         token.cancel()
     }
 
-    @Test func givenTwoDecisionsFromOneChild_whenPassRuns_thenEachDecisionIsReadOnce() async {
+    @Test func givenTwoDecisionsFromOneChild_whenPassRuns_thenTheChildIsReadOnce() async {
         // given
         let first = inputEntry(run: "c", decision: "d1", path: ["w1", "c"], kind: "usage_limit")
         let second = inputEntry(run: "c", decision: "d2", path: ["w1", "c"], kind: "usage_limit")
@@ -171,7 +171,7 @@ import Testing
         // when
         await sut.runPass()
         // then
-        #expect(fake.calls.filter { $0 == "status:c" }.count == 2)
+        #expect(fake.calls.filter { $0 == "status:c" }.count == 1)
         #expect(sut.snapshot.items.count == 2)
     }
 

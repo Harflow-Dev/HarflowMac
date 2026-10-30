@@ -11,7 +11,7 @@ import Testing
     }
 
     @Test func givenOversizedRootWithFailingEarlyChildren_whenPassesRun_thenTheHealthyTailIsPublishedWithinBoundedPasses() async {
-        // given — 50 failing children come first, 10 healthy ones last; one visit reads about 20.
+        // given — 50 failing children come first, 10 healthy ones last; a visit's launch share covers only part of them, so the root spans passes.
         let children = (0 ..< 60).map { String(format: "c%02d", $0) }
         let entries = children.map { inputEntry(run: $0, decision: "d-\($0)", path: ["w1", $0], kind: "usage_limit") }
         let fake = FakeNeedsYouEngine()
@@ -27,9 +27,9 @@ import Testing
         #expect(children.suffix(10).allSatisfy { published.contains("d-\($0)") })
     }
 
-    @Test func givenChildAdvancingToAnotherDecision_whenPassesRun_thenTheNewDecisionUsesItsOwnRecovery() async throws {
-        // given — an oversized root keeps persisted child reads between visits; child "x" starts at decision A.
-        let others = (1 ..< 30).map { String(format: "c%02d", $0) }
+    @Test func givenChildAdvancingToAnotherDecisionInARootSpanningPasses_whenPassesRun_thenAPublishedItemNeverUsesTheStaleRecovery() async {
+        // given — 60 entries, so the root spans passes and persisted child reads are in play; child "x" is first.
+        let others = (1 ..< 60).map { String(format: "c%02d", $0) }
         func entries(decision: String) -> [JSONValue] {
             [inputEntry(run: "x", decision: decision, path: ["w1", "x"], kind: "usage_limit")]
                 + others.map { inputEntry(run: $0, decision: "d-\($0)", path: ["w1", $0], kind: "usage_limit") }
@@ -42,13 +42,18 @@ import Testing
         let sut = makeSUT(fake)
         await sut.runPass()
         #expect(sut.snapshot.items.first { $0.decisionID == "dA" }?.offeredAnswers == ["answer-a"])
+        #expect(sut.snapshot.items.count < 60, "the root must still be incomplete after one pass")
         // when — the child moves on to decision B while the root is still being read across passes.
         fake.statuses["w1"] = treeRoot("w1", selected: "dB", inputs: entries(decision: "dB"))
         fake.statuses["x"] = ["workflow_run_id": .string("x"), "usage_limit_recovery": recovery("dB", "answer-b")]
-        for _ in 0 ..< 3 { await sut.runPass() }
-        // then
-        let item = try #require(sut.snapshot.items.first { $0.decisionID == "dB" })
-        #expect(item.offeredAnswers == ["answer-b"])
+        var published: [[String]?] = []
+        for _ in 0 ..< 8 {
+            await sut.runPass()
+            if let item = sut.snapshot.items.first(where: { $0.decisionID == "dB" }) { published.append(item.offeredAnswers) }
+        }
+        // then — B appears (the rotating cursor reaches it) and always with B's own recovery, never A's cached status.
+        #expect(!published.isEmpty)
+        #expect(published.allSatisfy { $0 == ["answer-b"] })
         #expect(!sut.snapshot.items.contains { $0.decisionID == "dA" })
     }
 }
