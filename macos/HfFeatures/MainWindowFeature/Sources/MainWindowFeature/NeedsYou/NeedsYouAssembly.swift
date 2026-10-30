@@ -20,6 +20,8 @@ struct NeedsYouAssemblyInput: Sendable {
 struct NeedsYouAssemblyResult: Sendable {
     let presentation: NeedsYouPresentation
     let detail: NeedsYouDetail?
+    /// The exact item the detail was rendered from; answers are sent for this item and no other.
+    let item: NeedsYouItem?
 }
 
 // MARK: - NeedsYouAssembly
@@ -36,12 +38,14 @@ enum NeedsYouAssembly {
             }
         }
         presentation.notice = input.notice
-        guard let id = input.selectedID else { return NeedsYouAssemblyResult(presentation: presentation, detail: nil) }
+        guard let id = input.selectedID else { return NeedsYouAssemblyResult(presentation: presentation, detail: nil, item: nil) }
+        let item = input.overrides[id] ?? input.snapshot.items.first { $0.id == id }
         let detail = detail(id: id, input: input, loading: presentation.isLoading)
         presentation.detail = detail
         presentation.detailIsLoading = detail == nil
         presentation.showsDetail = true
-        return NeedsYouAssemblyResult(presentation: presentation, detail: detail)
+        let answerable = input.settled?.id != id && detail?.phase != .expired
+        return NeedsYouAssemblyResult(presentation: presentation, detail: detail, item: answerable ? item : nil)
     }
 
     private nonisolated static func detail(id: String, input: NeedsYouAssemblyInput, loading: Bool) -> NeedsYouDetail? {

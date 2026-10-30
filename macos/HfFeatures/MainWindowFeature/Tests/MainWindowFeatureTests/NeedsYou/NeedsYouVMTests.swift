@@ -291,4 +291,66 @@ import Testing
         // then
         verify(rig.useCase).answer(.any, text: .value("Keep 1.2"), additionalAttempts: .value(3)).called(1)
     }
+
+    private func approvalItem(revision: Int, command: String) -> NeedsYouItem {
+        var value = item("approval:t1:r1", kind: .approval)
+        value.rootRunID = ""
+        value.approval = CallerApprovalRequest(raw: [
+            "request_id": .string("r1"), "task_id": .string("t1"), "owner_revision": .number(Double(revision)),
+            "action": .object(["tool_name": .string("Bash"), "input": .object(["command": .string(command)])])
+        ])
+        return value
+    }
+
+    @Test func givenSnapshotUpdatedAfterRender_whenDecisionTapped_thenNothingIsSentAndTheChangedNoteShows() async {
+        // given
+        let shown = approvalItem(revision: 1, command: "ls")
+        let rig = rig(items: [shown])
+        rig.sut.didAppear()
+        rig.sut.show(itemID: shown.id)
+        await waitUntil { rig.sut.displayedItem == shown }
+        // when — the live item moves on before the presentation catches up.
+        rig.sut.snapshot = NeedsYouSnapshot(phase: .ready, items: [approvalItem(revision: 2, command: "rm -rf build")])
+        rig.sut.didDecide(approve: true)
+        await waitUntil { rig.sut.presentation.detail?.reviewNote != nil }
+        // then
+        #expect(rig.sut.presentation.detail?.reviewNote == "This request changed. Review it again.")
+        #expect(rig.sut.presentation.detail?.approval?.fields.contains { $0.value == "rm -rf build" } == true)
+        verify(rig.useCase).respond(.any, decision: .any).called(0)
+        await waitUntil { rig.sut.displayedItem?.approval?.revision == 2 }
+    }
+
+    @Test func givenQuestionReplacedAfterRender_whenAnswerSent_thenNothingIsSent() async {
+        // given
+        let shown = item()
+        let rig = rig(items: [shown])
+        rig.sut.didAppear()
+        rig.sut.show(itemID: shown.id)
+        await waitUntil { rig.sut.displayedItem == shown }
+        rig.sut.answerText = "Use staging."
+        var replaced = shown
+        replaced.decisionID = "d2"
+        replaced.text = "A different question?"
+        // when
+        rig.sut.snapshot = NeedsYouSnapshot(phase: .ready, items: [replaced])
+        rig.sut.didSubmitAnswer()
+        await waitUntil { rig.sut.presentation.detail?.reviewNote != nil }
+        // then
+        verify(rig.useCase).answer(.any, text: .any, additionalAttempts: .any).called(0)
+        #expect(rig.sut.answerText == "Use staging." && rig.sut.presentation.detail?.text == "A different question?")
+    }
+
+    @Test func givenUnchangedItem_whenDecisionTapped_thenTheDisplayedItemIsExactlyWhatIsSent() async {
+        // given
+        let shown = approvalItem(revision: 1, command: "ls")
+        let rig = rig(items: [shown])
+        rig.sut.didAppear()
+        rig.sut.show(itemID: shown.id)
+        await waitUntil { rig.sut.displayedItem == shown }
+        // when
+        rig.sut.didDecide(approve: true)
+        await waitUntil { if case .settled? = rig.sut.presentation.detail?.phase { true } else { false } }
+        // then
+        verify(rig.useCase).respond(.value(shown), decision: .value("approve")).called(1)
+    }
 }

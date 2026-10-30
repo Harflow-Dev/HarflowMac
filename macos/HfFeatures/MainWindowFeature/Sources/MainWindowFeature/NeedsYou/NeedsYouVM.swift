@@ -49,6 +49,8 @@ final class NeedsYouVM: NeedsYouViewModel {
     @ObservationIgnored var overrides: [String: NeedsYouItem] = [:]
     @ObservationIgnored var reviewNotes: [String: String] = [:]
     @ObservationIgnored var settled: NeedsYouDetail?
+    /// The exact item behind the rendered detail. Answers are sent for it, never for a fresh snapshot lookup.
+    @ObservationIgnored var displayedItem: NeedsYouItem?
     @ObservationIgnored var lastDetails: [String: NeedsYouDetail] = [:]
     @ObservationIgnored var leavingRows: [String: NeedsYouRow] = [:]
     @ObservationIgnored var submittingID: String?
@@ -103,6 +105,8 @@ final class NeedsYouVM: NeedsYouViewModel {
         sendError = nil
         if itemID != nil { notice = nil }
         if settled?.id != itemID { settled = nil }
+        reviewNotes = [:]
+        displayedItem = nil
         rebuild()
     }
 
@@ -148,12 +152,11 @@ final class NeedsYouVM: NeedsYouViewModel {
         if let detail = result.detail, detail.phase == .answerable || detail.phase == .submitting {
             if lastDetails[detail.id]?.id != detail.id || lastDetails[detail.id]?.text != detail.text { lastDetails[detail.id] = detail }
         }
+        displayedItem = result.item
         for (id, item) in overrides {
-            if let current = snapshot.items.first(where: { $0.id == id }),
-               let shown = item.approval, let latest = current.approval, latest.isSameCurrent(as: shown) {
-                overrides[id] = nil
-                reviewNotes[id] = nil
-            }
+            guard let current = snapshot.items.first(where: { $0.id == id }) else { continue }
+            let sameApproval = item.approval.flatMap { shown in current.approval.map { $0.isSameCurrent(as: shown) } } ?? false
+            if sameApproval || current == item { overrides[id] = nil }
         }
         if presentation != result.presentation { presentation = result.presentation }
     }

@@ -4,9 +4,21 @@ import HfRepository
 // MARK: - Answering
 
 extension NeedsYouVM {
+    /// The item the reviewer is looking at, or nil when nothing may be sent. If the live item differs from the
+    /// rendered one (a new approval revision or action, another question or decision), nothing is sent: the
+    /// refreshed item is shown with the review note instead.
     private var currentItem: NeedsYouItem? {
-        guard let id = selectedID, submittingID == nil, settled == nil else { return nil }
-        return overrides[id] ?? snapshot.items.first { $0.id == id }
+        guard let id = selectedID, submittingID == nil, settled == nil, let shown = displayedItem, shown.id == id else { return nil }
+        let live = overrides[id] ?? snapshot.items.first { $0.id == id }
+        guard let live else { return nil }
+        guard live == shown else {
+            overrides[id] = live
+            reviewNotes[id] = NeedsYouAnswerOutcome.changedMessage
+            sendError = nil
+            rebuild()
+            return nil
+        }
+        return shown
     }
 
     func didSubmitAnswer() {
