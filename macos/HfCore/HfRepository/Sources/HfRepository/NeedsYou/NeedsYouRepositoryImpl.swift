@@ -16,6 +16,7 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     private let toolEnvironment: any ToolEnvironmentRepository
     private let scheduler: any Scheduling
     private let visibility: any MonitorVisibility
+    private let install: any InstallRepository
     private let gate = NeedsYouWakeGate()
     private let lock = NSLock()
     private var loop: Task<Void, Never>?
@@ -28,13 +29,17 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     /// Creates the production repository over the shared workflow and tool seams.
     public convenience init(
         toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository,
-        scheduler: any Scheduling, visibility: any MonitorVisibility
+        scheduler: any Scheduling, visibility: any MonitorVisibility, install: any InstallRepository
     ) {
         self.init(engine: CtlNeedsYouEngine(toolEnvironment: toolEnvironment, workflows: workflows),
-                  toolEnvironment: toolEnvironment, scheduler: scheduler, visibility: visibility)
+                  toolEnvironment: toolEnvironment, scheduler: scheduler, visibility: visibility, install: install)
     }
 
-    init(engine: any NeedsYouEngine, toolEnvironment: any ToolEnvironmentRepository, scheduler: any Scheduling, visibility: any MonitorVisibility) {
+    init(
+        engine: any NeedsYouEngine, toolEnvironment: any ToolEnvironmentRepository, scheduler: any Scheduling,
+        visibility: any MonitorVisibility, install: any InstallRepository
+    ) {
+        self.install = install
         self.engine = engine
         self.toolEnvironment = toolEnvironment
         self.scheduler = scheduler
@@ -55,13 +60,15 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         guard loop == nil else { return }
         subscriptions = [
             visibility.mainWindowVisiblePublisher().dropFirst().sink { [gate] _ in gate.wake() },
-            visibility.menuBarPopoverOpenPublisher().dropFirst().sink { [gate] _ in gate.wake() }
+            visibility.menuBarPopoverOpenPublisher().dropFirst().sink { [gate] _ in gate.wake() },
+            // Passes run only while the managed runtime is qualified; becoming ready starts one at once.
+            install.setupStatePublisher().removeDuplicates().sink { [gate] _ in gate.wake() }
         ]
         loop = Task { [weak self] in
             _ = await self?.toolEnvironment.discoverEnvironment()
             while !Task.isCancelled {
                 guard let self else { return }
-                await runPass()
+                if install.setupState.isReady { await runPass() }
                 await gate.wait(interval: currentInterval, scheduler: scheduler)
             }
         }
@@ -106,8 +113,9 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
             // attention source. The engine offers no checkpoint id for attention resumes (HarflowMCP#97), so the
             // checkpoint is re-read immediately before sending. A switch between that read and the command remains possible,
             // exactly as in the run view's recovery control.
-            guard await core.currentRecoveryID(root: item.rootRunID) == item.id else {
-                return .stale(NeedsYouAnswerOutcome.changedMessage)
+            switch await core.currentRecoveryID(root: item.rootRunID) {
+            case .unreadable: return .failed("Harflow could not re-check this request. Try again.")
+            case .current(let id): if id != item.id { return .stale(NeedsYouAnswerOutcome.changedMessage) }
             }
             let attempts = item.canAddAttempts ? additionalAttempts.map { max(0, $0) } : nil
             return await send(item, root: item.rootRunID, decision: nil, text: trimmed, attempts: attempts)

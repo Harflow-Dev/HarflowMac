@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 @testable import HfRepository
+import Mockable
 import MonitorCore
 
 // MARK: - FakeNeedsYouEngine
@@ -22,6 +23,8 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
     var respondResult: Result<CallerApprovalRequest, ToolError>?
     var resumes: [(root: String, decision: String?, text: String, attempts: Int?)] = []
     var workflowPageFails = false
+    var approvalPageSize = 1000
+    var capabilityFails = false
 
     var calls: [String] { lock.withLock { log } }
     func resetCalls() { lock.withLock { log = [] } }
@@ -63,7 +66,10 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
     func approvalPage(taskID: String, cursor: String?) async throws -> CallerApprovalPage {
         record("approvalList:\(taskID)")
         let rows = approvalRows[taskID] ?? []
-        return CallerApprovalPage(requests: rows, nextCursor: nil, total: rows.count)
+        let start = cursor.flatMap(Int.init) ?? 0
+        let slice = Array(rows.dropFirst(start).prefix(approvalPageSize))
+        let more = start + slice.count < rows.count
+        return CallerApprovalPage(requests: slice, nextCursor: more ? "\(start + slice.count)" : nil, total: rows.count)
     }
 
     func approvalDetail(taskID: String, requestID: String) async throws -> CallerApprovalRequest {
@@ -74,6 +80,7 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
 
     func supportsMonitorApprovalResponses() async throws -> Bool {
         record("capability")
+        if capabilityFails { throw ToolError.timedOut(tool: "harflow-ctl", seconds: 1) }
         return capability
     }
 
@@ -152,8 +159,16 @@ func awaitingTask(_ id: String, awaiting: Int = 1, extra: [String: JSONValue] = 
                              "approval_summary": .object(summary)]))!
 }
 
+func readyInstall(_ state: CurrentValueSubject<RuntimeSetupState, Never> = CurrentValueSubject(.ready)) -> MockInstallRepository {
+    let install = MockInstallRepository()
+    given(install).setupState.willProduce { state.value }
+    given(install).setupStatePublisher().willReturn(state.eraseToAnyPublisher())
+    return install
+}
+
 func makeSUT(
-    _ engine: FakeNeedsYouEngine, scheduler: CapturingScheduler = CapturingScheduler(), visibility: FakeMonitorVisibility = FakeMonitorVisibility()
+    _ engine: FakeNeedsYouEngine, scheduler: CapturingScheduler = CapturingScheduler(), visibility: FakeMonitorVisibility = FakeMonitorVisibility(),
+    install: MockInstallRepository = readyInstall()
 ) -> NeedsYouRepositoryImpl {
-    NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: scheduler, visibility: visibility)
+    NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: scheduler, visibility: visibility, install: install)
 }

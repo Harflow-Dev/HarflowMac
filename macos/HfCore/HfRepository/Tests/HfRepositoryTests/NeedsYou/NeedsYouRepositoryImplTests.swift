@@ -194,7 +194,7 @@ import Testing
         await sut.runPass()
         await sut.runPass()
         // then
-        #expect(firstPass <= NeedsYouCore.invocationBudget)
+        #expect(firstPass * NeedsYouCore.launchesPerCommand <= NeedsYouCore.invocationBudget)
         #expect(Set(fake.calls.filter { $0.hasPrefix("status:") }).count == 30)
         #expect(sut.snapshot.items.count == 30 && sut.snapshot.phase == .ready)
     }
@@ -209,7 +209,7 @@ import Testing
         // when
         await sut.runPass()
         // then
-        #expect(fake.calls.count <= NeedsYouCore.invocationBudget)
+        #expect(fake.calls.count * NeedsYouCore.launchesPerCommand <= NeedsYouCore.invocationBudget)
         #expect(sut.snapshot.deferredSourceCount > 0 && sut.snapshot.phase == .loading)
     }
 

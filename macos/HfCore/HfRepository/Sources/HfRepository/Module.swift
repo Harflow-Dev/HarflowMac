@@ -48,7 +48,6 @@ public final class Module: HfModule {
         let install = ManagedInstallRepository(coordinator: runtime, taskListRepository: taskList)
         let takeover = TakeoverServiceImpl(actions: taskAction, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshot)
         let backends = BackendsRepositoryImpl(toolEnvironment: toolEnvironment, installRepository: install, scheduler: scheduler)
-        let modelCatalog = ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment)
         let workflows = WorkflowRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery)
 
         GlobalValues
@@ -71,20 +70,31 @@ public final class Module: HfModule {
             .environment(\.installRepository, install)
             .environment(\.takeoverService, takeover)
             .environment(\.backendsRepository, backends)
-            .environment(\.modelCatalogRepository, modelCatalog)
+            .environment(\.modelCatalogRepository, ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.workflowRepository, workflows)
 
-        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, scheduler: scheduler, visibility: visibility, settings: settings)
+        let shared = NeedsYouDependencies(scheduler: scheduler, visibility: visibility, settings: settings, install: install)
+        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared)
+    }
+
+    /// The seams Needs you shares with the other repositories.
+    private struct NeedsYouDependencies {
+        let scheduler: any Scheduling
+        let visibility: any MonitorVisibility
+        let settings: any SettingsRepository
+        let install: any InstallRepository
     }
 
     private func registerNeedsYou(
-        toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository, scheduler: any Scheduling,
-        visibility: any MonitorVisibility, settings: any SettingsRepository
+        toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository, shared: NeedsYouDependencies
     ) {
-        let needsYou = NeedsYouRepositoryImpl(toolEnvironment: toolEnvironment, workflows: workflows, scheduler: scheduler, visibility: visibility)
+        let needsYou = NeedsYouRepositoryImpl(
+            toolEnvironment: toolEnvironment, workflows: workflows, scheduler: shared.scheduler, visibility: shared.visibility,
+            install: shared.install
+        )
         GlobalValues
             .environment(\.needsYouRepository, needsYou)
-            .environment(\.needsYouNotifier, NeedsYouNotifierImpl(repository: needsYou, settings: settings, scheduler: scheduler))
+            .environment(\.needsYouNotifier, NeedsYouNotifierImpl(repository: needsYou, settings: shared.settings, scheduler: shared.scheduler))
     }
 }
 

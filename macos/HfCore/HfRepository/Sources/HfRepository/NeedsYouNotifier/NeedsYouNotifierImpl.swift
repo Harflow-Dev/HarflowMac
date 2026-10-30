@@ -22,7 +22,10 @@ public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
     private var subscription: AnyCancellable?
     private var batch: [NeedsYouItem] = []
     private var flushToken: AnyCancellable?
+    /// Requests that appeared and are not resolved. Delivery re-checks it immediately before posting.
+    private var live: Set<String> = []
     private var summaryMembers: Set<String> = []
+    private var tail: Task<Void, Never>?
 
     /// `bundleIdentifier`/`isAppBundle` mirror `FinishNotifierImpl`: injectable so tests can exercise the real-app branch.
     public init(
@@ -56,6 +59,7 @@ public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
             guard !sourceBaseline else { return }
             lock.lock()
             batch.append(item)
+            live.insert(item.id)
             let needsFlush = flushToken == nil
             lock.unlock()
             if needsFlush { scheduleFlush() }
@@ -71,13 +75,29 @@ public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Delivery and removal run on one serial chain, so a removal can never overtake the post it belongs to.
+    private func enqueue(_ operation: @escaping @Sendable () async -> Void) {
+        lock.lock()
+        let previous = tail
+        tail = Task {
+            await previous?.value
+            await operation()
+        }
+        lock.unlock()
+    }
+
     private func resolve(_ id: String) {
         lock.lock()
+        live.remove(id)
         batch.removeAll { $0.id == id }
-        var identifiers = [Self.identifier(id)]
-        if summaryMembers.remove(id) != nil, summaryMembers.isEmpty { identifiers.append(Self.summaryIdentifier) }
+        let wasMember = summaryMembers.remove(id) != nil
         lock.unlock()
-        center.removeDeliveredNotifications(withIdentifiers: identifiers)
+        enqueue { [self] in
+            var identifiers = [Self.identifier(id)]
+            let clearSummary = lock.withLock { wasMember && summaryMembers.isEmpty }
+            if clearSummary { identifiers.append(Self.summaryIdentifier) }
+            center.removeDeliveredNotifications(withIdentifiers: identifiers)
+        }
     }
 
     /// Delivers everything that appeared since the last flush. Exposed to tests through the scheduler.
@@ -88,7 +108,11 @@ public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
         flushToken = nil
         lock.unlock()
         guard !items.isEmpty, settings.notifyOnNeedsYou, canNotify else { return }
-        Task { await deliver(items) }
+        enqueue { [self] in await deliver(items) }
+    }
+
+    private func unresolved(_ items: [NeedsYouItem]) -> [NeedsYouItem] {
+        lock.withLock { items.filter { live.contains($0.id) } }
     }
 
     private func deliver(_ items: [NeedsYouItem]) async {
@@ -97,18 +121,33 @@ public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
             identifier: Self.categoryIdentifier, actions: [], intentIdentifiers: [],
             hiddenPreviewsBodyPlaceholder: "A request needs you", options: []
         ))
-        if items.count > Self.summaryThreshold {
+        // Resolution may have arrived during either suspension above: post only what is still unresolved.
+        let remaining = unresolved(items)
+        guard !remaining.isEmpty else { return }
+        if remaining.count > Self.summaryThreshold {
             let content = UNMutableNotificationContent()
-            content.title = "\(items.count) requests need you"
-            content.body = items.prefix(3).map(\.runTitle).joined(separator: ", ")
+            content.title = "\(remaining.count) requests need you"
+            content.body = remaining.prefix(3).map(\.runTitle).joined(separator: ", ")
             content.threadIdentifier = "needs-you"
             content.categoryIdentifier = Self.categoryIdentifier
             content.userInfo = ["needs_you_list": "1"]
-            lock.withLock { summaryMembers.formUnion(items.map(\.id)) }
+            // Membership is taken together with the live check, so a request resolved a moment ago never joins.
+            let members = lock.withLock { () -> Set<String> in
+                let stillLive = Set(remaining.map(\.id)).intersection(live)
+                summaryMembers.formUnion(stillLive)
+                return stillLive
+            }
+            guard !members.isEmpty else { return }
             try? await center.add(UNNotificationRequest(identifier: Self.summaryIdentifier, content: content, trigger: nil))
+            // Members resolved while the post was in flight: their removals were queued behind this operation
+            // but may have seen a non-empty set, so reconcile once the post has landed.
+            if lock.withLock({ summaryMembers.isEmpty }) {
+                center.removeDeliveredNotifications(withIdentifiers: [Self.summaryIdentifier])
+            }
             return
         }
-        for item in items {
+        for item in remaining {
+            guard unresolved([item]).count == 1 else { continue }
             let content = UNMutableNotificationContent()
             content.title = "\(Self.label(item.kind)): \(item.runTitle)"
             if item.ownership.callerEnded { content.subtitle = "The caller ended. You can answer now." }

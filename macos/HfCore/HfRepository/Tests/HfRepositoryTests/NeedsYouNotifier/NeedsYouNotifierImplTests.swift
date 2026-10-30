@@ -83,8 +83,10 @@ import Testing
         rig.scheduler.fireFirstOneShot()
         await waitUntil { rig.added.value.count == 1 }
         for id in ids.dropLast() { rig.events.send(.resolved(id)) }
+        await waitUntil { rig.removed.value.contains("needs-you-input:a:3") }
         let beforeLast = rig.removed.value.contains("needs-you-summary")
         rig.events.send(.resolved(ids[3]))
+        await waitUntil { rig.removed.value.contains("needs-you-summary") }
         // then
         #expect(rig.added.value.first?.identifier == "needs-you-summary")
         #expect(rig.added.value.first?.content.title == "4 requests need you")
@@ -92,11 +94,12 @@ import Testing
         #expect(!beforeLast && rig.removed.value.contains("needs-you-summary"))
     }
 
-    @Test func givenResolvedItem_whenEventArrives_thenDeliveredNotificationIsRemoved() {
+    @Test func givenResolvedItem_whenEventArrives_thenDeliveredNotificationIsRemoved() async {
         // given
         let rig = rig()
         // when
         rig.events.send(.resolved("input:a:1"))
+        await waitUntil { !rig.removed.value.isEmpty }
         // then
         #expect(rig.removed.value == ["needs-you-input:a:1"])
     }

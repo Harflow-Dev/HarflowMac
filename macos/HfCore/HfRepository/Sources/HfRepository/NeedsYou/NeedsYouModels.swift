@@ -135,17 +135,20 @@ public struct NeedsYouSnapshot: Equatable, Sendable {
     public var deferredSourceCount: Int
     /// A qualified status of a ready engine lacked `interaction_state`.
     public var workflowInputsUnsupported: Bool
+    /// Last known requests whose source could not be read right now: hidden from the list, but not resolved.
+    public var withdrawn: [NeedsYouItem]
 
     /// Creates a snapshot.
     public init(
         phase: Phase = .loading, items: [NeedsYouItem] = [], unreadableSourceCount: Int = 0,
-        deferredSourceCount: Int = 0, workflowInputsUnsupported: Bool = false
+        deferredSourceCount: Int = 0, workflowInputsUnsupported: Bool = false, withdrawn: [NeedsYouItem] = []
     ) {
         self.phase = phase
         self.items = items
         self.unreadableSourceCount = unreadableSourceCount
         self.deferredSourceCount = deferredSourceCount
         self.workflowInputsUnsupported = workflowInputsUnsupported
+        self.withdrawn = withdrawn
     }
 
     /// The count is a lower bound when any source was unread or deferred.

@@ -12,11 +12,14 @@ actor NeedsYouCore {
         let events: [NeedsYouEvent]
     }
 
-    static let invocationBudget = 24
+    /// Process launches per pass. `CtlClient` launches a `version-info` handshake before every command, so a
+    /// command costs `launchesPerCommand`; the budget is therefore about 24 commands.
+    static let invocationBudget = 48
+    static let launchesPerCommand = 2
+    static let inventoryLaunchBudget = 20
     static let maxStatusReads = 12
-    static let maxWorkflowPages = 10
+    static let maxWorkflowPages = 6
     static let maxTaskPages = 4
-    static let maxApprovalPages = 4
     static let suppressionSeconds: TimeInterval = 60
 
     private struct Header {
@@ -29,14 +32,16 @@ actor NeedsYouCore {
 
     private struct Source {
         var items: [NeedsYouItem]
+        /// Previous items whose entries could not be re-read this pass: hidden, not resolved.
+        var withheld: [NeedsYouItem] = []
         var visible: Bool
     }
 
     private struct Budget {
         var remaining: Int
-        mutating func take() -> Bool {
-            guard remaining > 0 else { return false }
-            remaining -= 1
+        mutating func take(_ cost: Int = NeedsYouCore.launchesPerCommand) -> Bool {
+            guard remaining >= cost else { return false }
+            remaining -= cost
             return true
         }
     }
@@ -44,10 +49,32 @@ actor NeedsYouCore {
     private struct ObservationFailure: Error { let observation: Observation }
 
     private enum Observation {
-        case ready([NeedsYouItem])
+        case ready([NeedsYouItem], withheld: Set<String>, childFailures: Set<String>)
         case unreadable
         case unsupported
         case deferred
+
+        static func ready(_ items: [NeedsYouItem]) -> Observation { .ready(items, withheld: [], childFailures: []) }
+    }
+
+    private enum Acquired {
+        case eligible(CallerApprovalRequest)
+        case skipped
+    }
+
+    /// Per-task approval acquisition that survives passes, so a long listing or many details make progress.
+    private struct ApprovalProgress {
+        var cursor: String?
+        var listComplete = false
+        var seenCursors: Set<String> = []
+        var rows: [CallerApprovalRequest] = []
+        var details: [String: Acquired] = [:]
+    }
+
+    /// The root's checkpoint as re-read before a recovery is sent.
+    enum RecoveryCheck: Equatable {
+        case current(String?)
+        case unreadable
     }
 
     private let engine: any NeedsYouEngine
@@ -59,10 +86,17 @@ actor NeedsYouCore {
     private var sources: [String: Source] = [:]
     private var lastVisit: [String: Int] = [:]
     private var visitedEver: Set<String> = []
+    /// Sources with any terminal observation (ready, unreadable or unsupported) since launch.
+    private var attempted: Set<String> = []
+    private var childFailures: [String: Set<String>] = [:]
+    private var childCache: [String: Result<WorkflowMonitorStatus, ChildFailure>] = [:]
+    private var approvalProgress: [String: ApprovalProgress] = [:]
     private var unreadable: Set<String> = []
     private var unsupportedRoots: Set<String> = []
     private var deferred = 0
     private var suppressed: [String: Date] = [:]
+
+    private enum ChildFailure: Error { case unreadable, deferred }
 
     private var workflowCursor: String?
     private var workflowAccum: [String: Header] = [:]
@@ -84,14 +118,28 @@ actor NeedsYouCore {
 
     func runPass() async -> Output {
         pass += 1
+        childCache = [:]
         var budget = Budget(remaining: Self.invocationBudget)
         var events: [NeedsYouEvent] = []
         deferred = 0
         let baseline = phase == .loading
-        await inventoryWorkflows(&budget, events: &events)
-        await inventoryTasks(&budget, events: &events)
-        await readRoots(&budget, events: &events, baseline: baseline)
-        await readTasks(&budget, events: &events, baseline: baseline)
+        var inventory = Budget(remaining: min(Self.inventoryLaunchBudget, budget.remaining))
+        let granted = inventory.remaining
+        await inventoryWorkflows(&inventory, events: &events)
+        await inventoryTasks(&inventory, events: &events)
+        budget.remaining -= granted - inventory.remaining
+        // Alternate which queue goes first and give it at most half of what is left, so neither starves the other.
+        let rootsFirst = pass % 2 == 0
+        for readRootsNow in [rootsFirst, !rootsFirst] {
+            var share = Budget(remaining: readRootsNow == rootsFirst ? (budget.remaining + 1) / 2 : budget.remaining)
+            let allotted = share.remaining
+            if readRootsNow {
+                await readRoots(&share, events: &events, baseline: baseline)
+            } else {
+                await readTasks(&share, events: &events, baseline: baseline)
+            }
+            budget.remaining -= allotted - share.remaining
+        }
         expireSuppression()
         updatePhase()
         return output(events)
@@ -110,10 +158,12 @@ actor NeedsYouCore {
     }
 
     /// The root's current attention fingerprint, re-read before a recovery is submitted.
-    func currentRecoveryID(root: String) async -> String? {
-        guard let status = try? await engine.workflowStatus(root), status.isQualified, let state = status.interactionState else { return nil }
+    func currentRecoveryID(root: String) async -> RecoveryCheck {
+        guard let status = try? await engine.workflowStatus(root), status.isQualified, let state = status.interactionState else {
+            return .unreadable
+        }
         let plan = NeedsYouMapper.plan(root: status, state: state, names: names)
-        return plan.recovery?.id
+        return .current(plan.recovery?.id)
     }
 
     // MARK: - Workflow inventory
@@ -220,9 +270,11 @@ actor NeedsYouCore {
 
     private func retire(_ key: String, events: inout [NeedsYouEvent]) {
         guard let source = sources.removeValue(forKey: key) else { return }
-        for item in source.items { events.append(.resolved(item.id)) }
+        for item in source.items + source.withheld { events.append(.resolved(item.id)) }
         unreadable.remove(key)
         unsupportedRoots.remove(key)
+        unreadable.subtract(childFailures.removeValue(forKey: key) ?? [])
+        approvalProgress[key] = nil
     }
 
     // MARK: - Workflow roots
@@ -234,11 +286,16 @@ actor NeedsYouCore {
         }
         var visited = 0
         for header in candidates {
-            guard visited < Self.maxStatusReads, budget.remaining > 0 else { break }
+            guard visited < Self.maxStatusReads, budget.remaining >= Self.launchesPerCommand else { break }
             visited += 1
             let key = "workflow:\(header.id)"
-            lastVisit[key] = pass
             let observation = await observeRoot(header.id, &budget)
+            // Only a complete read counts as a visit; a partial one is retried first next pass.
+            switch observation {
+            case .deferred: break
+            case .ready(_, let withheld, _) where !withheld.isEmpty: break
+            default: lastVisit[key] = pass
+            }
             apply(observation, key: key, events: &events, baseline: baseline)
         }
         deferred += max(0, candidates.count - visited)
@@ -253,39 +310,55 @@ actor NeedsYouCore {
         guard status.runID == id else { return .unreadable }
         let plan = NeedsYouMapper.plan(root: status, state: state, names: names)
         var items: [NeedsYouItem] = []
+        var withheld = Set<String>()
+        var failures = Set<String>()
         for candidate in plan.questions {
             switch await offeredAnswers(for: candidate, root: status, &budget) {
-            case .failure(let failure): return failure.observation
+            case .failure(let failure):
+                // Only this child's entries are held back; the rest of the root is still read.
+                withheld.insert("input:\(id):\(candidate.entry.decisionID)")
+                if failure.deferred { deferred += 1 } else { failures.insert("child:\(candidate.entry.workflowRunID)") }
             case .success(let offered):
                 items.append(NeedsYouMapper.question(candidate: candidate, root: status, state: state, names: names, offered: offered))
             }
         }
         if let recovery = plan.recovery { items.append(recovery) }
-        return .ready(items)
+        return .ready(items, withheld: withheld, childFailures: failures)
     }
 
+    private struct EntryFailure: Error { let deferred: Bool }
+
     /// Structured usage-limit answers come from the source run's own `usage_limit_recovery`; a worker
-    /// usage limit has none and is an ordinary free-text question.
+    /// usage limit has none and is an ordinary free-text question. Child reads are cached for the pass.
     private func offeredAnswers(
         for candidate: NeedsYouMapper.Candidate, root: WorkflowMonitorStatus, _ budget: inout Budget
-    ) async -> Result<[String]?, ObservationFailure> {
+    ) async -> Result<[String]?, EntryFailure> {
         var recovery = root.usageLimitRecovery
         if candidate.needsSourceRead {
             guard candidate.entry.isUsageLimit else { return .success(nil) }
-            guard budget.take() else { return .failure(ObservationFailure(observation: .deferred)) }
-            guard let child = try? await engine.workflowStatus(candidate.entry.workflowRunID), child.isQualified else {
-                return .failure(ObservationFailure(observation: .unreadable))
+            switch await childStatus(candidate.entry.workflowRunID, &budget) {
+            case .failure(let failure): return .failure(EntryFailure(deferred: failure == .deferred))
+            case .success(let child): recovery = child.usageLimitRecovery
             }
-            recovery = child.usageLimitRecovery
         }
         guard let recovery, recovery.decisionID == candidate.entry.decisionID, !recovery.choices.isEmpty else { return .success(nil) }
         return .success(recovery.choices)
+    }
+
+    private func childStatus(_ id: String, _ budget: inout Budget) async -> Result<WorkflowMonitorStatus, ChildFailure> {
+        if let cached = childCache[id] { return cached }
+        guard budget.take() else { return .failure(.deferred) }
+        let status = try? await engine.workflowStatus(id)
+        let result: Result<WorkflowMonitorStatus, ChildFailure> = if let status, status.isQualified { .success(status) } else { .failure(.unreadable) }
+        childCache[id] = result
+        return result
     }
 
     // MARK: - Tasks and approvals
 
     private func readTasks(_ budget: inout Budget, events: inout [NeedsYouEvent], baseline: Bool) async {
         let all = taskKnown.merging(taskAccum) { _, new in new }
+        // Tasks whose acquisition has not completed sort first, so unfinished work always rotates in.
         let ordered = all.keys.sorted {
             let first = lastVisit["task:\($0)"] ?? -1, second = lastVisit["task:\($1)"] ?? -1
             return first == second ? $0 < $1 : first < second
@@ -304,12 +377,13 @@ actor NeedsYouCore {
             unreadable.remove("batch:task")
             for id in chunk {
                 let key = "task:\(id)"
-                lastVisit[key] = pass
                 guard case .success(let info)? = outcomes[id] else {
+                    lastVisit[key] = pass
                     apply(.unreadable, key: key, events: &events, baseline: baseline)
                     continue
                 }
                 let observation = await observeTask(info, &budget, capability: &capability)
+                if case .deferred = observation {} else { lastVisit[key] = pass }
                 apply(observation, key: key, events: &events, baseline: baseline)
             }
         }
@@ -317,47 +391,95 @@ actor NeedsYouCore {
     }
 
     private func observeTask(_ info: TaskInfo, _ budget: inout Budget, capability: inout Bool?) async -> Observation {
-        let summary = info.raw["approval_summary"]?.objectValue
-        guard let awaiting = info.awaitingDecisionCount, awaiting > 0 else { return .ready([]) }
-        if summary?["error"] != nil || summary?["interaction_state"]?.stringValue == "approval_state_uncertain" { return .unreadable }
-        var rows: [CallerApprovalRequest] = []
-        var cursor: String?
-        var pages = 0
-        repeat {
-            guard budget.take() else { return .deferred }
-            guard let page = try? await engine.approvalPage(taskID: info.taskID, cursor: cursor) else { return .unreadable }
-            rows += page.requests.filter(\.mayBeAnsweredFromMonitor)
-            cursor = page.nextCursor
-            pages += 1
-        } while cursor != nil && pages < Self.maxApprovalPages
-        if cursor != nil { return .deferred }
-        let held = Dictionary(sources["task:\(info.taskID)"]?.items.compactMap { item in item.approval.map { (item.id, $0) } } ?? [],
-                              uniquingKeysWith: { first, _ in first })
-        var items: [NeedsYouItem] = []
-        for row in rows {
-            if let existing = held["approval:\(row.taskID):\(row.id)"], existing.revision == row.revision, existing.isSameCurrent(as: row) {
-                items.append(NeedsYouMapper.approval(request: existing, task: info))
-                continue
-            }
-            switch await acquireDetail(row, &budget, capability: &capability) {
-            case .failure(let failure): return failure.observation
-            case .success(let detail): if let detail { items.append(NeedsYouMapper.approval(request: detail, task: info)) }
-            }
+        let key = "task:\(info.taskID)"
+        if let early = summaryOutcome(info) {
+            if case .ready = early { approvalProgress[key] = nil }
+            return early
         }
+        var progress = approvalProgress[key] ?? ApprovalProgress()
+        defer { approvalProgress[key] = progress }
+        if let stop = await listRows(info, &progress, &budget) { return stop }
+        if let stop = await acquireDetails(info, &progress, &budget, capability: &capability) { return stop }
+        let items: [NeedsYouItem] = progress.rows.compactMap { row in
+            if case .eligible(let request)? = progress.details[row.id] { return NeedsYouMapper.approval(request: request, task: info) }
+            return nil
+        }
+        progress = ApprovalProgress()
         return .ready(items)
     }
 
-    /// The complete current request, or nil when it is not answerable from the Monitor.
-    private func acquireDetail(
-        _ row: CallerApprovalRequest, _ budget: inout Budget, capability: inout Bool?
-    ) async -> Result<CallerApprovalRequest?, ObservationFailure> {
-        guard budget.take() else { return .failure(ObservationFailure(observation: .deferred)) }
-        guard let detail = try? await engine.approvalDetail(taskID: row.taskID, requestID: row.id) else {
-            return .failure(ObservationFailure(observation: .unreadable))
+    /// Decides from the approval summary alone, or nil when approvals must be listed. Uncertainty and
+    /// incompleteness come first: an uncertain ledger can report zero awaiting.
+    private func summaryOutcome(_ info: TaskInfo) -> Observation? {
+        // No summary at all: this engine reports no approvals for the task.
+        guard let summary = info.raw["approval_summary"]?.objectValue else { return .ready([]) }
+        if summary["error"] != nil || summary["interaction_state"]?.stringValue == "approval_state_uncertain" { return .unreadable }
+        guard let awaiting = info.awaitingDecisionCount else { return .unreadable }
+        return awaiting > 0 ? nil : .ready([])
+    }
+
+    /// Pages the task's approvals; the cursor and rows persist across passes, so a long listing always advances.
+    private func listRows(_ info: TaskInfo, _ progress: inout ApprovalProgress, _ budget: inout Budget) async -> Observation? {
+        while !progress.listComplete {
+            guard budget.take() else { return .deferred }
+            guard let page = try? await engine.approvalPage(taskID: info.taskID, cursor: progress.cursor) else {
+                progress = ApprovalProgress()
+                return .unreadable
+            }
+            progress.rows += page.requests.filter(\.mayBeAnsweredFromMonitor)
+            guard let next = page.nextCursor else {
+                progress.cursor = nil
+                progress.listComplete = true
+                break
+            }
+            guard progress.seenCursors.insert(next).inserted else {
+                progress = ApprovalProgress()
+                return .unreadable
+            }
+            progress.cursor = next
         }
-        if detail.interactionOwner == .caller, capability == nil { capability = try? await engine.supportsMonitorApprovalResponses() }
-        guard detail.isEligibleForMonitorResponse(supportsCallerResponses: capability == true, now: now()) else { return .success(nil) }
-        return .success(detail)
+        return nil
+    }
+
+    private func acquireDetails(
+        _ info: TaskInfo, _ progress: inout ApprovalProgress, _ budget: inout Budget, capability: inout Bool?
+    ) async -> Observation? {
+        let held = Dictionary(
+            sources["task:\(info.taskID)"]?.items.compactMap { item in item.approval.map { (item.id, $0) } } ?? [],
+            uniquingKeysWith: { first, _ in first }
+        )
+        for row in progress.rows where progress.details[row.id] == nil {
+            let candidate: CallerApprovalRequest
+            if let existing = held["approval:\(row.taskID):\(row.id)"], existing.revision == row.revision, existing.isSameCurrent(as: row) {
+                candidate = existing
+            } else {
+                guard budget.take() else { return .deferred }
+                guard let detail = try? await engine.approvalDetail(taskID: row.taskID, requestID: row.id) else {
+                    progress = ApprovalProgress()
+                    return .unreadable
+                }
+                candidate = detail
+            }
+            switch await eligible(candidate, &budget, capability: &capability) {
+            case .failure(let failure): return failure.observation
+            case .success(let ok): progress.details[row.id] = ok ? .eligible(candidate) : .skipped
+            }
+        }
+        return nil
+    }
+
+    /// The shared eligibility predicate, at the time of use; reused details are re-checked for their deadline too.
+    private func eligible(
+        _ request: CallerApprovalRequest, _ budget: inout Budget, capability: inout Bool?
+    ) async -> Result<Bool, ObservationFailure> {
+        if request.interactionOwner == .caller, capability == nil {
+            guard budget.take(1) else { return .failure(ObservationFailure(observation: .deferred)) }
+            guard let value = try? await engine.supportsMonitorApprovalResponses() else {
+                return .failure(ObservationFailure(observation: .unreadable))
+            }
+            capability = value
+        }
+        return .success(request.isEligibleForMonitorResponse(supportsCallerResponses: capability == true, now: now()))
     }
 
     // MARK: - Applying observations
@@ -367,25 +489,33 @@ actor NeedsYouCore {
         case .deferred:
             deferred += 1
         case .unreadable:
+            attempted.insert(key)
             if countUnreadable { unreadable.insert(key) }
             sources[key, default: Source(items: [], visible: false)].visible = false
         case .unsupported:
+            attempted.insert(key)
             unreadable.remove(key)
             unsupportedRoots.insert(key)
             sources[key, default: Source(items: [], visible: false)].visible = false
-        case .ready(let items):
+        case .ready(let items, let withheld, let failures):
+            attempted.insert(key)
             unreadable.remove(key)
             unsupportedRoots.remove(key)
+            unreadable.subtract(childFailures[key] ?? [])
+            childFailures[key] = failures.isEmpty ? nil : failures
+            unreadable.formUnion(failures)
             let firstReady = visitedEver.insert(key).inserted
             let previous = sources[key]
-            let oldIDs = Set((previous?.items ?? []).map(\.id))
+            let known = (previous?.items ?? []) + (previous?.withheld ?? [])
+            let oldIDs = Set(known.map(\.id))
             let newIDs = Set(items.map(\.id))
             for id in suppressed.keys where !newIDs.contains(id) && oldIDs.contains(id) { suppressed[id] = nil }
-            for item in previous?.items ?? [] where !newIDs.contains(item.id) { events.append(.resolved(item.id)) }
+            for item in known where !newIDs.contains(item.id) && !withheld.contains(item.id) { events.append(.resolved(item.id)) }
+            // Baseline items are those first read while the launch cycle is still in progress.
             for item in items where !oldIDs.contains(item.id) && suppressed[item.id] == nil {
                 events.append(.appeared(item, sourceBaseline: firstReady && baseline))
             }
-            sources[key] = Source(items: items, visible: true)
+            sources[key] = Source(items: items, withheld: known.filter { withheld.contains($0.id) && !newIDs.contains($0.id) }, visible: true)
         }
     }
 
@@ -394,11 +524,13 @@ actor NeedsYouCore {
         suppressed = suppressed.filter { $0.value > cutoff }
     }
 
+    /// Ready after one full inventory cycle in which every known source was attempted; a source that stays
+    /// unreadable still counts once attempted, so it cannot hold the launch cycle open forever.
     private func updatePhase() {
         guard phase == .loading, workflowComplete, taskComplete else { return }
         let roots = candidateRoots().map { "workflow:\($0.id)" }
         let tasks = taskKnown.keys.map { "task:\($0)" }
-        if (roots + tasks).allSatisfy(visitedEver.contains) { phase = .ready }
+        if (roots + tasks).allSatisfy(attempted.contains) { phase = .ready }
     }
 
     // MARK: - Output
@@ -406,9 +538,11 @@ actor NeedsYouCore {
     private func output(_ events: [NeedsYouEvent]) -> Output {
         revision += 1
         let visible = sources.values.filter(\.visible).flatMap(\.items).filter { suppressed[$0.id] == nil }
+        let hidden = sources.values.flatMap { $0.visible ? $0.withheld : $0.items + $0.withheld }.filter { suppressed[$0.id] == nil }
         let snapshot = NeedsYouSnapshot(
             phase: phase, items: visible.sorted(by: NeedsYouItem.ordered), unreadableSourceCount: unreadable.count,
-            deferredSourceCount: deferred, workflowInputsUnsupported: !unsupportedRoots.isEmpty
+            deferredSourceCount: deferred, workflowInputsUnsupported: !unsupportedRoots.isEmpty,
+            withdrawn: hidden.sorted(by: NeedsYouItem.ordered)
         )
         return Output(revision: revision, snapshot: snapshot, events: events)
     }
