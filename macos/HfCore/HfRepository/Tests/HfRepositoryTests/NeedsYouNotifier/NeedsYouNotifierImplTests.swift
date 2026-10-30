@@ -28,6 +28,7 @@ import Testing
         given(center).requestAuthorization(options: .any).willReturn(true)
         let added = LockedBox<[UNNotificationRequest]>([])
         let removed = LockedBox<[String]>([])
+        given(center).registerCategory(.any).willReturn()
         given(center).add(.any).willProduce { request in added.mutate { $0.append(request) } }
         given(center).removeDeliveredNotifications(withIdentifiers: .any).willProduce { ids in removed.mutate { $0 += ids } }
         let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
@@ -129,5 +130,24 @@ import Testing
         rig.scheduler.fireFirstOneShot()
         // then
         #expect(rig.added.value.isEmpty)
+    }
+
+    @Test func givenApprovalWithCommand_whenFlushed_thenBodyNamesOnlyTheToolAndHidesPreviews() async {
+        // given
+        let rig = rig()
+        var approvalItem = item("approval:t1:r1", kind: .approval)
+        approvalItem.text = "Bash: rm -rf /secret/path"
+        approvalItem.approval = approval(command: "rm -rf /secret/path")
+        // when
+        rig.events.send(.appeared(approvalItem, sourceBaseline: false))
+        rig.scheduler.fireFirstOneShot()
+        await waitUntil { rig.added.value.count == 1 }
+        // then
+        let content = rig.added.value.first?.content
+        #expect(content?.body == "Bash approval requested")
+        #expect(content?.categoryIdentifier == "needs-you")
+        verify(rig.center).registerCategory(.matching { $0.hiddenPreviewsBodyPlaceholder == "A request needs you" }).called(1)
+        let everything = [content?.title, content?.subtitle, content?.body].compactMap(\.self).joined(separator: " ")
+        #expect(!everything.contains("secret") && !everything.contains("rm -rf"))
     }
 }

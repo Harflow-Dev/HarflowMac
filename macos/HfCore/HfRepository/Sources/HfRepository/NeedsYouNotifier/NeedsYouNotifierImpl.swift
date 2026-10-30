@@ -7,6 +7,7 @@ import MonitorCore
 
 public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
     static let summaryThreshold = 3
+    static let categoryIdentifier = "needs-you"
     static let summaryIdentifier = "needs-you-summary"
     static let coalesceSeconds: TimeInterval = 0.5
 
@@ -92,11 +93,16 @@ public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
 
     private func deliver(_ items: [NeedsYouItem]) async {
         guard let granted = try? await center.requestAuthorization(options: [.alert, .sound]), granted else { return }
+        await center.registerCategory(UNNotificationCategory(
+            identifier: Self.categoryIdentifier, actions: [], intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "A request needs you", options: []
+        ))
         if items.count > Self.summaryThreshold {
             let content = UNMutableNotificationContent()
             content.title = "\(items.count) requests need you"
             content.body = items.prefix(3).map(\.runTitle).joined(separator: ", ")
             content.threadIdentifier = "needs-you"
+            content.categoryIdentifier = Self.categoryIdentifier
             content.userInfo = ["needs_you_list": "1"]
             lock.withLock { summaryMembers.formUnion(items.map(\.id)) }
             try? await center.add(UNNotificationRequest(identifier: Self.summaryIdentifier, content: content, trigger: nil))
@@ -106,11 +112,20 @@ public final class NeedsYouNotifierImpl: NeedsYouNotifier, @unchecked Sendable {
             let content = UNMutableNotificationContent()
             content.title = "\(Self.label(item.kind)): \(item.runTitle)"
             if item.ownership.callerEnded { content.subtitle = "The caller ended. You can answer now." }
-            content.body = item.firstLine
+            // An approval's action input (a command, a path) is never shown in a notification, which can be
+            // visible on a locked screen; only the tool is named. Questions and recoveries show their first line.
+            content.body = item.kind == .approval ? Self.approvalBody(item) : item.firstLine
+            content.categoryIdentifier = Self.categoryIdentifier
             content.threadIdentifier = "needs-you"
             content.userInfo = ["needs_you_item": item.id]
             try? await center.add(UNNotificationRequest(identifier: Self.identifier(item.id), content: content, trigger: nil))
         }
+    }
+
+    static func approvalBody(_ item: NeedsYouItem) -> String {
+        let action = item.approval?.raw["action"]?.objectValue
+        let tool = action?["tool_name"]?.stringValue ?? item.approval?.text("tool_name") ?? ""
+        return tool.isEmpty ? "Approval requested" : "\(tool) approval requested"
     }
 
     static func identifier(_ id: String) -> String { "needs-you-\(id)" }

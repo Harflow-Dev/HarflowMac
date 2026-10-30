@@ -161,12 +161,12 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         guard current.isSameCurrent(as: shown), current.raw["action"] == shown.raw["action"] else {
             return .failure(Refusal(value: .changed(NeedsYouMapper.approval(request: current, task: nil))))
         }
-        guard current.isAwaitingDecision, current.hasKnownState, current.hasValidIdentity,
-              (current.deadline ?? .distantPast) > scheduler.now() else {
-            return .failure(Refusal(value: .stale("This request is no longer pending.")))
-        }
-        if !current.isMonitorOwned, (try? await engine.supportsMonitorApprovalResponses()) != true {
+        let supports = current.interactionOwner == .caller ? (try? await engine.supportsMonitorApprovalResponses()) == true : false
+        if current.interactionOwner == .caller, !supports {
             return .failure(Refusal(value: .failed("This engine cannot accept a Harflow response for a caller-owned approval.")))
+        }
+        guard current.isEligibleForMonitorResponse(supportsCallerResponses: supports, now: scheduler.now()) else {
+            return .failure(Refusal(value: .failed("This request cannot be answered from Harflow.")))
         }
         return .success(current)
     }

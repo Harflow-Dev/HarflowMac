@@ -59,4 +59,29 @@ public extension CallerApprovalRequest {
             && response.text("decision") == decision && response.text("decided_by") == "caller"
             && response.text("delivery") != "pending" && (responder?.stringValue == "monitor" || responderOmitted)
     }
+
+    /// The requested action carries an `input` object, so every leaf can be shown before approving.
+    var hasCoveredAction: Bool { raw["action"]?.objectValue?["input"]?.objectValue != nil }
+
+    /// Enumerated action fields are understood. A missing action is never understood; Codex file
+    /// changes must use only the `add`, `update` and `delete` kinds.
+    var hasKnownActionEnums: Bool {
+        guard let action = raw["action"]?.objectValue, let input = action["input"]?.objectValue else { return false }
+        let tool = action["tool_name"]?.stringValue ?? text("tool_name")
+        guard tool.lowercased() == "filechange" else { return true }
+        guard let changes = input["changes"]?.arrayValue else { return false }
+        return changes.allSatisfy { change in
+            guard let kind = change["kind"]?.objectValue, let type = kind["type"]?.stringValue else { return false }
+            return ["add", "update", "delete"].contains(type)
+        }
+    }
+
+    /// The one eligibility rule for answering from the Monitor, shared by the task view and Needs you:
+    /// a complete, covered, understood, still-awaiting request whose owner the Monitor may answer for,
+    /// before its deadline. Callers add only their own freshness checks (current list, no in-flight send).
+    func isEligibleForMonitorResponse(supportsCallerResponses: Bool, now: Date) -> Bool {
+        let ownerSupported = isMonitorOwned || (interactionOwner == .caller && supportsCallerResponses)
+        return isVisuallyPending && isAwaitingDecision && hasKnownState && hasKnownActionEnums && hasCoveredAction
+            && complete && hasValidIdentity && ownerSupported && (deadline ?? .distantPast) > now
+    }
 }

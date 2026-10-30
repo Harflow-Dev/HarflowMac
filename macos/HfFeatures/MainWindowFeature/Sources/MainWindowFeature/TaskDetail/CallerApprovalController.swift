@@ -365,8 +365,8 @@ final class CallerApprovalController {
             let ownerSupported = request.isMonitorOwned || (request.interactionOwner == .caller && supportsCallerResponses)
             let known = Self.knownState(request) && action.knownEnums
             let full = details[request.id] != nil && request.complete && action.covered && action.knownEnums && Self.validIdentity(request)
-            let canRespond = pending && Self.awaiting(request) && known && ownerSupported && full && listCurrent
-                && blocked[request.id] == nil && !isSubmitting && (request.deadline ?? .distantPast) > now
+            let canRespond = details[request.id] != nil && listCurrent && blocked[request.id] == nil && !isSubmitting
+                && request.isEligibleForMonitorResponse(supportsCallerResponses: supportsCallerResponses, now: now)
             let notice = notice(for: request, ownerSupported: ownerSupported, full: full, now: now, knownEnums: action.knownEnums)
             return CallerApprovalCardModel(request: request, action: action, pending: pending, expanded: pending || expanded.contains(request.id),
                 canRespond: canRespond, showsDecisionControls: pending && Self.knownState(request) && ownerSupported,

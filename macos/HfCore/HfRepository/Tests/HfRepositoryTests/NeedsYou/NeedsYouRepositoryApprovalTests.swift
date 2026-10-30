@@ -121,4 +121,53 @@ import Testing
         if case .failed = outcome {} else { Issue.record("an echo of the pending request does not confirm a decision") }
         #expect(sut.snapshot.items.count == 1)
     }
+
+    private func unknownEnumApproval() -> CallerApprovalRequest {
+        var raw = approval().raw
+        raw["action"] = .object(["tool_name": .string("fileChange"), "input": .object([
+            "changes": .array([.object(["kind": .object(["type": .string("teleport")])])])])])
+        return CallerApprovalRequest(raw: raw)
+    }
+
+    @Test func givenUnknownActionEnum_whenPassRuns_thenTheApprovalIsExcluded() async {
+        // given
+        let fake = engine()
+        fake.approvalRows["t1"] = [unknownEnumApproval()]
+        fake.approvalDetails["r1"] = unknownEnumApproval()
+        let sut = makeSUT(fake)
+        // when
+        await sut.runPass()
+        // then
+        #expect(sut.snapshot.items.isEmpty && sut.snapshot.unreadableSourceCount == 0)
+    }
+
+    @Test func givenActionWithoutInput_whenPassRuns_thenTheApprovalIsExcluded() async {
+        // given
+        var raw = approval().raw
+        raw["action"] = .object(["tool_name": .string("Bash")])
+        let fake = engine()
+        fake.approvalRows["t1"] = [CallerApprovalRequest(raw: raw)]
+        fake.approvalDetails["r1"] = CallerApprovalRequest(raw: raw)
+        let sut = makeSUT(fake)
+        // when
+        await sut.runPass()
+        // then
+        #expect(sut.snapshot.items.isEmpty)
+    }
+
+    @Test func givenApprovalBecomesUnknownEnumBeforeSend_whenResponding_thenItIsRefusedAndNothingSent() async throws {
+        // given
+        let fake = engine()
+        let sut = makeSUT(fake)
+        await sut.runPass()
+        var item = try #require(sut.snapshot.items.first)
+        let shown = unknownEnumApproval()
+        item.approval = shown
+        fake.approvalDetails["r1"] = shown
+        // when
+        let outcome = await sut.respond(item, decision: "approve")
+        // then
+        if case .failed = outcome {} else { Issue.record("expected a refusal, got \(outcome)") }
+        #expect(!fake.calls.contains("respond:r1"))
+    }
 }

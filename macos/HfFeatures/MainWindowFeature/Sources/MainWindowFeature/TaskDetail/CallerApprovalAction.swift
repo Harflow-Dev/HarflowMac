@@ -67,17 +67,8 @@ struct CallerApprovalAction: Equatable, Sendable {
         if input.isEmpty { append(.object([:]), path: "input", label: "Input") }
         let title = ["bash": "Run command", "commandexecution": "Run command", "write": "Write file",
                      "edit": "Edit file", "filechange": "Change files"][tool.lowercased()] ?? tool
-        return Self(title: title.isEmpty ? "Requested action" : title, fields: fields, covered: true,
-                    knownEnums: knownActionEnums(tool: tool, input: input))
-    }
-
-    private nonisolated static func knownActionEnums(tool: String, input: [String: JSONValue]) -> Bool {
-        guard tool.lowercased() == "filechange" else { return true }
-        guard let changes = input["changes"]?.arrayValue else { return false }
-        return changes.allSatisfy { change in
-            guard let kind = change["kind"]?.objectValue, let type = kind["type"]?.stringValue else { return false }
-            return ["add", "update", "delete"].contains(type)
-        }
+        return Self(title: title.isEmpty ? "Requested action" : title, fields: fields, covered: request.hasCoveredAction,
+                    knownEnums: request.hasKnownActionEnums)
     }
 }
 

@@ -355,13 +355,8 @@ actor NeedsYouCore {
         guard let detail = try? await engine.approvalDetail(taskID: row.taskID, requestID: row.id) else {
             return .failure(ObservationFailure(observation: .unreadable))
         }
-        guard detail.isPending, detail.complete, detail.mayBeAnsweredFromMonitor, detail.hasKnownState, detail.hasValidIdentity else {
-            return .success(nil)
-        }
-        if !detail.isMonitorOwned {
-            if capability == nil { capability = try? await engine.supportsMonitorApprovalResponses() }
-            guard capability == true else { return .success(nil) }
-        }
+        if detail.interactionOwner == .caller, capability == nil { capability = try? await engine.supportsMonitorApprovalResponses() }
+        guard detail.isEligibleForMonitorResponse(supportsCallerResponses: capability == true, now: now()) else { return .success(nil) }
         return .success(detail)
     }
 

@@ -166,3 +166,46 @@ struct CallerApprovalClientTests {
         #expect(undecidable.callerApprovalResponseReason == .callerUndecidable)
     }
 }
+
+// MARK: - CallerApprovalRequest eligibility
+
+struct CallerApprovalEligibilityTests {
+    private func request(
+        action: JSONValue? = .object(["tool_name": .string("Bash"), "input": .object(["command": .string("ls")])]),
+        owner: String = "monitor", deadline: Double = 4_000_000_000
+    ) -> CallerApprovalRequest {
+        var raw: [String: JSONValue] = [
+            "request_id": .string("r"), "task_id": .string("t"), "action_digest": .string("d"), "interaction_owner": .string(owner),
+            "owner_revision": .number(1), "generation": .string("g"), "disposition": .string("pending"), "delivery": .string("pending"),
+            "execution_outcome": .string("unknown"), "complete": .bool(true), "deadline": .number(deadline)
+        ]
+        raw["action"] = action
+        return CallerApprovalRequest(raw: raw)
+    }
+
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    @Test func givenCompleteMonitorOwnedRequest_whenChecked_thenEligible() {
+        #expect(request().isEligibleForMonitorResponse(supportsCallerResponses: false, now: now))
+    }
+
+    @Test func givenCallerOwnedRequest_whenCapabilityIsMissing_thenIneligible() {
+        #expect(!request(owner: "caller").isEligibleForMonitorResponse(supportsCallerResponses: false, now: now))
+        #expect(request(owner: "caller").isEligibleForMonitorResponse(supportsCallerResponses: true, now: now))
+    }
+
+    @Test func givenUncoveredAction_whenChecked_thenIneligible() {
+        let value = request(action: .object(["tool_name": .string("Bash")]))
+        #expect(!value.hasCoveredAction && !value.isEligibleForMonitorResponse(supportsCallerResponses: true, now: now))
+    }
+
+    @Test func givenUnknownFileChangeKind_whenChecked_thenIneligible() {
+        let changes = JSONValue.array([.object(["kind": .object(["type": .string("teleport")])])])
+        let value = request(action: .object(["tool_name": .string("fileChange"), "input": .object(["changes": changes])]))
+        #expect(!value.hasKnownActionEnums && !value.isEligibleForMonitorResponse(supportsCallerResponses: true, now: now))
+    }
+
+    @Test func givenPastDeadline_whenChecked_thenIneligible() {
+        #expect(!request(deadline: 10).isEligibleForMonitorResponse(supportsCallerResponses: true, now: now))
+    }
+}
