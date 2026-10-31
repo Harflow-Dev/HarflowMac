@@ -55,6 +55,17 @@ public struct CtlClient: Sendable {
     /// share the transport, timeout and metrics without going through `CtlDocument`.
     public func raw(_ command: String, options: [String] = [], positionals: [String] = [],
                     timeout: Double = 30, requiringCapability: String? = nil) async -> Result<ProcessOutput, ToolError> {
+        await raw(commandPath: [command], label: command, options: options, positionals: positionals,
+                  timeout: timeout, requiringCapability: requiringCapability)
+    }
+
+    /// Runs a bounded command path as separate argv tokens; the label is used only for diagnostics.
+    public func raw(commandPath: [String], label command: String, options: [String] = [], positionals: [String] = [],
+                    timeout: Double = 30, requiringCapability: String? = nil) async -> Result<ProcessOutput, ToolError> {
+        guard !commandPath.isEmpty, commandPath.count <= 4,
+              commandPath.allSatisfy(Self.validCommandToken) else {
+            return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Invalid command path"))
+        }
         guard operationIsCurrent(), !Task.isCancelled else {
             return .failure(WireEnvelope.incompatibility("operation superseded before compatibility probe"))
         }
@@ -67,28 +78,37 @@ public struct CtlClient: Sendable {
             }
         }
         guard operationIsCurrent(), !Task.isCancelled else { return .failure(WireEnvelope.incompatibility("operation cancelled before command launch")) }
-        let argv = Self.argv(command, options: options, positionals: positionals)
+        let argv = commandPath + options + ["--json"] + (positionals.isEmpty ? [] : ["--"] + positionals)
         let transportStart = MonitorMetrics.begin()
         let output = await runner.run(executable: executable, arguments: argv, environment: environment, currentDirectory: nil, timeout: timeout)
         if let transportStart {
             let bytes = (try? output.get().stdout.count) ?? 0
             MonitorMetrics.end(transportStart, stage: .transport, bytes: bytes, stderrBytes: (try? output.get().stderr.utf8.count) ?? 0)
         }
-        return output.flatMap { output in
-            if output.timedOut { return .failure(.timedOut(tool: "harflow-ctl \(command)", seconds: timeout)) }
-            guard let document = CtlDocument.firstJSONObject(in: output.stdout) else {
-                if output.exitCode == 2, output.stderr.contains("invalid choice") {
-                    return .failure(.unsupportedCommand(tool: "harflow-ctl", command: command, detail: output.stderr))
-                }
-                return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: output.stderr))
+        return output.flatMap { validateTransportOutput($0, command: command, options: options, timeout: timeout) }
+    }
+
+    private static func validCommandToken(_ value: String) -> Bool {
+        !value.isEmpty && value.count <= 64
+            && value.range(of: "^[a-z][a-z0-9-]*$", options: .regularExpression) == (value.startIndex ..< value.endIndex)
+    }
+
+    private func validateTransportOutput(
+        _ output: ProcessOutput, command: String, options: [String], timeout: Double
+    ) -> Result<ProcessOutput, ToolError> {
+        if output.timedOut { return .failure(.timedOut(tool: "harflow-ctl \(command)", seconds: timeout)) }
+        guard let document = CtlDocument.firstJSONObject(in: output.stdout) else {
+            if output.exitCode == 2, output.stderr.contains("invalid choice") {
+                return .failure(.unsupportedCommand(tool: "harflow-ctl", command: command, detail: output.stderr))
             }
-            if let error = WireEnvelope.validate(document, contract: .ctl, productVersion: compatibilityContext.productVersion) {
-                return .failure(error)
-            }
-            if CtlDocument.isEventPageCommand(command) || (command == "workflow-inspect" && options.contains("--view=activity")),
-               let error = WireEnvelope.validateEventPage(document) { return .failure(error) }
-            return .success(output)
+            return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: output.stderr))
         }
+        if let error = WireEnvelope.validate(document, contract: .ctl, productVersion: compatibilityContext.productVersion) {
+            return .failure(error)
+        }
+        if CtlDocument.isEventPageCommand(command) || (command == "workflow-inspect" && options.contains("--view=activity")),
+           let error = WireEnvelope.validateEventPage(document) { return .failure(error) }
+        return .success(output)
     }
 
     /// Each operation probes the same selected executable and effective child environment.

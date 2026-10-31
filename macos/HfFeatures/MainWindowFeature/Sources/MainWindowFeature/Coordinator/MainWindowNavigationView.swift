@@ -48,6 +48,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             switch coordinator.selection {
             case .statistics:
                 coordinator.buildStatisticsView()
+            case .resourceSlots:
+                coordinator.buildResourceSlotsView()
             case .needsYou(let itemID):
                 coordinator.buildNeedsYouView(itemID: itemID)
             case .task(let id):
@@ -66,6 +68,11 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             }
         }
         .toolbar {
+            if coordinator.canReturnToResourceSlots {
+                ToolbarItem(placement: .navigation) {
+                    Button("Back to resource slots", systemImage: "chevron.left", action: coordinator.returnToResourceSlots)
+                }
+            }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: HfRadius.Metrics.spacing6) {
                     if let emblem = MainWindowEmblem.image {

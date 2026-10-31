@@ -175,6 +175,7 @@ enum SidebarListReconciler {
             .init(id: "header:overview", content: .heading("Overview")),
             .init(id: "overview:needs-you", content: .needsYou(input.needsYouBadge), minimumHeight: input.minimumRowHeight),
             .init(id: "overview:statistics", content: .statistics, minimumHeight: input.minimumRowHeight),
+            .init(id: "overview:resource-slots", content: .resourceSlots, minimumHeight: input.minimumRowHeight),
             .init(id: "header:workflows", content: .workflowsHeader(expanded: input.workflowsExpanded))
         ]
         if input.workflowsExpanded {

@@ -56,6 +56,7 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
     enum Content: Equatable, Sendable {
         case needsYou(NeedsYouBadge)
         case statistics
+        case resourceSlots
         case workflowsHeader(expanded: Bool)
         case workflowDefinition(String)
         case heading(String)
@@ -92,6 +93,7 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
         switch content {
         case .needsYou: return .needsYou(itemID: nil)
         case .statistics: return .statistics
+        case .resourceSlots: return .resourceSlots
         case .item(let item): return item.destination
         case .workflowDefinition(let title): return .workflow(title)
         default: return nil

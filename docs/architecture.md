@@ -83,6 +83,16 @@ Each recovery session serializes refresh, result application and cancellation on
 
 Inspector notices use the latest engine snapshot for independent capture/input evidence, approximate raw-log cutoff and background idle-bound diagnostics. Engine-reported agent success remains distinct from unfinished background work.
 
+## Resource slots
+
+Resource slots follows approved HarflowDesign `416db920cba0205995c32890becc4d362c566a07`, `features/resource-slots.html` and `docs/resource-slots-proposal.md`, across populated, loading, empty, unsupported, unavailable, cleanup, service and retained-refresh states. It uses the production sidebar and native disclosures. The Overview entry follows Statistics and has no badge or resource search.
+
+MonitorCore reads the public resource inventory and phase status through the selected managed runtime with fresh capability/version checks. Nested command tokens remain distinct argv entries. Inventory determines holders, borrowed accounting and FIFO order; phase details join only by qualified reservation identity and never create occupancy from history. The two reads are independent. Unknown or mismatched evidence remains unavailable, cleanup retains capacity, and supervisor evidence is separate from freshness. The additive `phase_slots_not_enabled` refusal identifies a disabled layout; an older generic refusal remains an unavailable diagnostic.
+
+A visibility-leased repository serializes refreshes, cancels work when its final observer leaves, rejects obsolete runtime generations and publishes only changed complete snapshots. Same-runtime failures retain successful data, including empty results. Runtime-bound metadata batches qualify owner titles and navigation; unresolved owners keep IDs without actions. Presentation is prepared off the main actor. The coordinator retains disclosure, scroll and focus state while an owner is open; bounded frame-driven restoration yields to user scrolling. Task context consumes the current conversation member's public phase projection through existing task observation, without another resource poll. Missing or empty projections hide the context; explicit unavailable evidence remains visible.
+
+Loading uses the once-only opacity handoff and feature-scoped shimmer with static Reduce Motion placeholders. Enabling, release, configuration, repair and cleanup resolution remain outside this screen. Capacity coordinates participating work in the selected state root; it does not add permissions or alter the app's paired runtime.
+
 ## Loading handoff motion
 
 Loading handoffs follow the owner-approved [HarflowDesign rule at `d975810`](https://github.com/Harflow-Dev/HarflowDesign/blob/d975810/docs/loading-handoff.md), states `foundations/skeleton-crossfade/light` and `dark`. Shared HfUI presentation uses `HfMotion.arrival` (180 ms ease-out) for simultaneous skeleton-out/content-in opacity, with an immediate swap when `hfReduceMotionOverride ?? accessibilityReduceMotion` is true. The selection identity owns the reveal; streaming, pagination and retained viewport reentry do not replay it.

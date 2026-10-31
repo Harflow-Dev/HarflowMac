@@ -19,6 +19,7 @@ names.
 | Execution mode | Launch mechanism, such as Headless or Orchestrator subagent. Keep separate from the Harness selector. |
 | Runtime | Packaged Python engine and dependencies, distinct from external harnesses. |
 | Access level | Requested read, write, or publish scope. Describe enforced permissions separately. |
+| Resource slot | Cooperative named capacity for participating engine work in the selected state root. A holder occupies capacity; a waiter remains in admission order. Borrowed reservations consume no additional capacity, and cleanup can retain a holder after its work ends. |
 | Activity | Event stream shown to users. Event counts are activity items, not workflow nodes. |
 | Harflow | Application and product name. Historical source paths may retain older names where needed for accurate provenance. |
 

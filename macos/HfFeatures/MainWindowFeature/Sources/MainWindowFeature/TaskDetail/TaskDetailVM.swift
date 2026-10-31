@@ -134,11 +134,16 @@ extension TaskDetailUseCase {
 @Mockable
 @MainActor
 protocol TaskDetailRouting: Sendable {
+    func showResourceSlots()
     func selectTask(_ taskID: String)
     /// Writes `text` to the system pasteboard (Monitor piece 3/3's "Copy resume command"),
     /// returning whether the write succeeded. AppKit lives in the coordinator, never the VM — see
     /// `MainWindowCoordinator.chooseDirectory()` for the same pattern.
     func copyToPasteboard(_ text: String) -> Bool
+}
+
+extension TaskDetailRouting {
+    func showResourceSlots() {}
 }
 
 // MARK: - TaskDetailVM
@@ -156,6 +161,12 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     let taskID: String
     private(set) var task: TaskInfo?
+    var resourceContext: TaskResourceContext?
+    var resourceBlockersExpanded = false
+    @ObservationIgnored var resourceContextTaskID: String?
+    @ObservationIgnored var resourceContextInput: JSONValue?
+    @ObservationIgnored var resourceContextGeneration = UUID()
+    @ObservationIgnored var resourceContextWork: Task<Void, Never>?
     var hasListed = false
 
     private(set) var title = ""
@@ -311,6 +322,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// re-acquires leases fresh.
     func didDisappear() {
         isMounted = false
+        resetResourceContext()
         callerApprovalController?.stop()
         artifactGeneration = UUID()
         for request in artifactRequests.values { request.cancel() }
@@ -458,6 +470,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         }
         task = detail
         currentTaskID = detail.taskID
+        prepareResourceContext(task: detail)
         if isMounted {
             updateCallerApprovals(task: detail)
         }
@@ -541,6 +554,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     }
 
     private func resetForMissingTask() {
+        resetResourceContext()
         timelineRevision &+= 1
         timelineWorker?.cancel()
         pendingTimelineInput = nil

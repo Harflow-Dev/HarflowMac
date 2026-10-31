@@ -40,6 +40,10 @@ protocol TaskDetailViewModel: ViewModel {
     
     var taskID: String { get }
     var task: TaskInfo? { get }
+    var resourceContext: TaskResourceContext? { get }
+    var resourceBlockersExpanded: Bool { get }
+    func didToggleResourceBlockers()
+    func didOpenResourceSlots()
     var hasListed: Bool { get }
     
     var title: String { get }
@@ -97,6 +101,10 @@ protocol TaskDetailViewModel: ViewModel {
 }
 
 extension TaskDetailViewModel {
+    var resourceContext: TaskResourceContext? { nil }
+    var resourceBlockersExpanded: Bool { false }
+    func didToggleResourceBlockers() {}
+    func didOpenResourceSlots() {}
     var callerApprovalController: CallerApprovalController? { nil }
 }
 
@@ -173,6 +181,13 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 .padding(.vertical, HfRadius.Metrics.spacing8)
                         }
                         header(task)
+                        if let context = viewModel.resourceContext {
+                            TaskResourceContextView(context: context, blockersExpanded: viewModel.resourceBlockersExpanded,
+                                                    onToggleBlockers: viewModel.didToggleResourceBlockers,
+                                                    onOpenResourceSlots: viewModel.didOpenResourceSlots)
+                                .padding(.horizontal, HfRadius.Metrics.spacing16)
+                                .padding(.bottom, HfRadius.Metrics.spacing8)
+                        }
                         tabPicker
                         column
                     }

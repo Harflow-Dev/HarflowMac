@@ -63,6 +63,11 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
 
     /// Builds retained finished-work Statistics.
     func buildStatisticsView() -> AnyView
+    /// Builds read-only resource slots, retaining its reading and disclosure state.
+    func buildResourceSlotsView() -> AnyView
+    /// A narrow return action for the owner destination opened by Resource slots.
+    var canReturnToResourceSlots: Bool { get }
+    func returnToResourceSlots()
     /// Builds Needs you; `itemID` opens that request's detail.
     func buildNeedsYouView(itemID: String?) -> AnyView
     /// Builds the ready runtime start screen.
@@ -89,6 +94,9 @@ public extension MainWindowNavigationCoordinator {
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
 
     func buildStatisticsView() -> AnyView { AnyView(EmptyView()) }
+    func buildResourceSlotsView() -> AnyView { AnyView(EmptyView()) }
+    var canReturnToResourceSlots: Bool { false }
+    func returnToResourceSlots() {}
     func buildNeedsYouView(itemID: String?) -> AnyView { AnyView(EmptyView()) }
 
     /// Derives modal state for lightweight preview and test coordinators.
@@ -136,6 +144,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public var selection: MonitorDestination? {
         didSet {
             guard selection != oldValue else { return }
+            if selection != resourceSlotsReturnDestination { resourceSlotsReturnDestination = nil }
             selectionSubject.send(selection)
         }
     }
@@ -198,6 +207,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored private var sidebarVM: SidebarVM?
     @ObservationIgnored private var startScreenVM: StartScreenVM?
     @ObservationIgnored private var statisticsVM: StatisticsVM?
+    @ObservationIgnored private var resourceSlotsVM: ResourceSlotsVM?
+    private var resourceSlotsReturnDestination: MonitorDestination?
     @ObservationIgnored private var needsYouVM: NeedsYouVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
     /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
@@ -224,6 +235,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             guard let self else { return }
             if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
             if !state.isReady { self.presentedSheet = nil }
+            resourceSlotsVM?.runtimeChanged()
         }
     }
 
@@ -247,7 +259,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).
             requestReveal(taskID: id)
-        case .group, .workflow, .newWorkflow, .workflowRun, .statistics, .needsYou: selection = destination
+        case .group, .workflow, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .needsYou: selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)
         }
@@ -272,6 +284,21 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         let vm = statisticsVM ?? StatisticsVM(useCase: StatisticsViewRepository())
         statisticsVM = vm
         return StatisticsView(vm).eraseToAnyView()
+    }
+
+    public func buildResourceSlotsView() -> AnyView {
+        let vm = resourceSlotsVM ?? ResourceSlotsVM(useCase: ResourceSlotsViewRepository(), routing: self)
+        resourceSlotsVM = vm
+        return ResourceSlotsView(vm).eraseToAnyView()
+    }
+
+    public var canReturnToResourceSlots: Bool {
+        resourceSlotsReturnDestination != nil && selection == resourceSlotsReturnDestination
+    }
+
+    public func returnToResourceSlots() {
+        resourceSlotsReturnDestination = nil
+        selection = .resourceSlots
     }
 
     public func buildNeedsYouView(itemID: String?) -> AnyView {
@@ -472,4 +499,18 @@ extension MainWindowCoordinator: NeedsYouRouting {
     func showNeedsYou(itemID: String?) {
         selection = .needsYou(itemID: itemID)
     }
+}
+
+// MARK: - ResourceSlotsRouting
+
+extension MainWindowCoordinator: ResourceSlotsRouting {
+    func openResourceSlotOwner(_ destination: ResourceSlotOwnerMetadata.Destination) {
+        switch destination {
+        case .task(let id): selectTask(id)
+        case .workflowRun(let id, _): selection = .workflowRun(id)
+        }
+        resourceSlotsReturnDestination = selection
+    }
+
+    func showResourceSlots() { selection = .resourceSlots }
 }

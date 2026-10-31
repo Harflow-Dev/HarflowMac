@@ -106,6 +106,12 @@ struct SidebarNativeRow: View {
                 .padding(.vertical, HfRadius.Metrics.spacing6)
                 .frame(maxWidth: .infinity, minHeight: entry.minimumHeight, alignment: .leading)
                 .accessibilityLabel("Statistics")
+        case .resourceSlots:
+            Label("Resource slots", systemImage: "lock")
+                .font(.hf(.body, weight: .medium))
+                .padding(.vertical, HfRadius.Metrics.spacing6)
+                .frame(maxWidth: .infinity, minHeight: entry.minimumHeight, alignment: .leading)
+                .accessibilityLabel("Resource slots")
         case .workflowsHeader(let expanded):
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 Button(action: { actions.toggleWorkflows() }) { heading("Workflows") }
