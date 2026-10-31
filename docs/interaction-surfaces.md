@@ -28,3 +28,5 @@ Eligibility is advisory and refreshed with status. The engine revalidates owners
 approval, settling, checkpoint identity and supported operation when the user acts. A stale
 allowed flag cannot grant authority. Immediate delivery never bypasses those checks; refusal
 keeps queued text intact. The app neither reads nor mutates engine records to implement actions.
+
+Non-question workflow recovery requires `workflow-attention-checkpoints.v1` and an identifier from the displayed status. The engine refuses a changed checkpoint; Harflow refreshes the status and preserves the entered instructions without replaying them. Engines without this capability cannot perform these actions. Questions continue to use their decision identifier.

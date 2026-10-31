@@ -11,7 +11,7 @@ struct WorkflowInteractionEligibilityTests {
     @Test func givenCallerOwnedRoot_whenEngineGrantsRecovery_thenEligibilityUsesEngineEvidence() {
         // given
         let run = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "status": .string("needs_attention"),
-            "interaction_owner": .string("caller"), "monitor_controls": .object([
+            "attention_checkpoint_id": .string("attention:run:current"), "interaction_owner": .string("caller"), "monitor_controls": .object([
                 "resume": .object(["allowed": .bool(true), "reason": .string("")])])])
         // when / then
         #expect(!run.allowsMonitorControl)
@@ -22,7 +22,7 @@ struct WorkflowInteractionEligibilityTests {
     @Test func givenRefreshedEngineRefusal_whenOwnerLooksEligible_thenEngineRefusalWins() {
         // given
         let run = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "status": .string("paused"),
-            "interaction_owner": .string("monitor"), "monitor_controls": .object([
+            "attention_checkpoint_id": .string("attention:run:current"), "interaction_owner": .string("monitor"), "monitor_controls": .object([
                 "resume": .object(["allowed": .bool(false), "reason": .string("Running branches are settling.")])])])
         // when / then
         #expect(!run.permitsMonitor("resume", fallback: true))
@@ -33,6 +33,7 @@ struct WorkflowInteractionEligibilityTests {
     @Test func givenChildOrLegacyCaller_whenNoCapabilityExists_thenControlsStayConservativeAndDetailsVisible() {
         // given
         let child = WorkflowRunModel(raw: ["workflow_run_id": .string("child"), "status": .string("needs_input"),
+            "input_decision_id": .string("child-question"),
             "parent_workflow_run_id": .string("root"), "root_workflow_run_id": .string("root")])
         // when / then
         #expect(WorkflowRecoveryPresentation.showsRecovery(child))
@@ -50,7 +51,7 @@ struct WorkflowRecoveryControlEligibilityTests {
         defer { harness.sut.didDisappear() }
         given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         let run = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "status": .string(status),
-            "interaction_owner": .string("caller"), "monitor_controls": .object([
+            "attention_checkpoint_id": .string("scheduler:run:owner-1"), "interaction_owner": .string("caller"), "monitor_controls": .object([
                 "recover": .object(["allowed": .bool(true)]),
                 "additional_attempts": .object(["allowed": .bool(false)])])])
         harness.sut.selectedRun = run
@@ -63,7 +64,8 @@ struct WorkflowRecoveryControlEligibilityTests {
         #expect(WorkflowRecoveryPresentation.showsRecovery(run))
         #expect(run.recoveryCommand == "recover")
         await verify(harness.useCase)
-            .command(.value("recover"), options: .value(["--monitor", "--reason=Restore the interrupted scheduler."]),
+            .command(.value("recover"), options: .value(["--monitor", "--reason=Restore the interrupted scheduler.",
+                "--attention-checkpoint-id=scheduler:run:owner-1"]),
                      positionals: .value(["run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
     }

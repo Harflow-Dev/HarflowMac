@@ -142,6 +142,7 @@ public struct WorkflowPendingAttention: Equatable, Sendable {
     public let status: String
     public let reason: String
     public let waitingSince: Double?
+    public let attentionCheckpointID: String?
 
     public init?(_ value: JSONValue) {
         guard let object = value.objectValue, let run = object["workflow_run_id"]?.stringValue, !run.isEmpty else { return nil }
@@ -152,6 +153,7 @@ public struct WorkflowPendingAttention: Equatable, Sendable {
         path = object["path"]?.arrayValue?.compactMap(\.stringValue) ?? []
         status = object["status"]?.stringValue ?? ""
         reason = object["reason"]?.stringValue ?? ""
+        attentionCheckpointID = object["attention_checkpoint_id"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
         waitingSince = object["waiting_since"]?.doubleValue
     }
 }
@@ -218,6 +220,7 @@ public struct WorkflowMonitorStatus: Equatable, Sendable {
     public var inputSourceName: String? { raw["input_source"]?.objectValue?["workflow_name"]?.stringValue }
     public var inputSourcePath: [String] { raw["input_source"]?.objectValue?["path"]?.arrayValue?.compactMap(\.stringValue) ?? [] }
     public var attentionReason: String? { text("attention_reason") }
+    public var attentionCheckpointID: String? { text("attention_checkpoint_id").flatMap { $0.isEmpty ? nil : $0 } }
     public var optionalReviewSkipAvailable: Bool { raw["optional_review_skip_available"]?.boolValue == true }
     public var usageLimitRecovery: WorkflowUsageLimitRecovery? { WorkflowUsageLimitRecovery(raw["usage_limit_recovery"]) }
 

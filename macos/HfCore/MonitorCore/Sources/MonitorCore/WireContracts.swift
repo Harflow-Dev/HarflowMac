@@ -20,6 +20,9 @@ public enum WireContract: String, Sendable, CaseIterable {
 
 /// Capabilities that qualify individual ctl operations beyond the base wire contract.
 public enum CtlCapability {
+    /// Binds workflow recovery to the checkpoint displayed to the user.
+    public static let workflowAttentionCheckpoints = "workflow-attention-checkpoints.v1"
+
     /// Permits the Monitor response channel to answer caller-owned approval requests.
     public static let callerApprovalMonitorRespond = "caller-approvals.monitor-respond.v1"
 }

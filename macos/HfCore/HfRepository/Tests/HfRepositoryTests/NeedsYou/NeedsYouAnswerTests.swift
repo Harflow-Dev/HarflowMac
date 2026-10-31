@@ -28,6 +28,7 @@ import Testing
         // then
         #expect(outcome == .accepted)
         #expect(fake.resumes.first?.root == "w1" && fake.resumes.first?.decision == "d1" && fake.resumes.first?.text == "staging")
+        #expect(fake.resumes.first?.checkpoint == nil)
         #expect(sut.snapshot.items.isEmpty)
         #expect(events.value.contains(.resolved("input:w1:d1")))
         token.cancel()
@@ -82,11 +83,13 @@ import Testing
         if case .stale = NeedsYouAnswerOutcome.classify(error) {} else { Issue.record("expected .stale") }
     }
 
-    private func recovery(_ fake: FakeNeedsYouEngine, reason: String) {
+    private func recovery(_ fake: FakeNeedsYouEngine, reason: String, checkpoint: String = "attention:w1:checkpoint-1") {
         let attention = JSONValue.object(["workflow_run_id": .string("w1"), "status": .string("needs_attention"), "reason": .string(reason),
-                                          "path": .array([.string("w1")]), "waiting_since": .number(5)])
+                                          "path": .array([.string("w1")]), "waiting_since": .number(5),
+                                          "attention_checkpoint_id": .string(checkpoint)])
         fake.headers = [rootHeader("w1", status: "needs_attention")]
-        fake.statuses["w1"] = treeRoot("w1", status: "needs_attention", attention: [attention], extra: ["attention_reason": .string(reason)])
+        fake.statuses["w1"] = treeRoot("w1", status: "needs_attention", attention: [attention], extra: ["attention_reason": .string(reason),
+                                                                                                      "attention_checkpoint_id": .string(checkpoint)])
     }
 
     @Test func givenRecoveryUnchanged_whenAnswered_thenResumeSendsAttemptsWithoutDecision() async throws {
@@ -101,6 +104,7 @@ import Testing
         // then
         #expect(outcome == .accepted)
         #expect(fake.resumes.first?.decision == nil && fake.resumes.first?.attempts == 2)
+        #expect(fake.resumes.first?.checkpoint == "attention:w1:checkpoint-1")
     }
 
     @Test func givenRecoveryCheckpointChanged_whenAnswered_thenStaleAndNothingSent() async throws {
@@ -110,13 +114,46 @@ import Testing
         let sut = makeSUT(fake)
         await sut.runPass()
         let item = try #require(sut.snapshot.items.first)
-        recovery(fake, reason: "a different failure")
+        recovery(fake, reason: "a different failure", checkpoint: "attention:w1:checkpoint-2")
+        fake.resumeError = .refused(code: "attention_checkpoint_stale", message: "The checkpoint changed")
         // when
         let outcome = await sut.answer(item, text: "go on", additionalAttempts: 1)
         await sut.runPass()
         // then
         #expect(outcome == .stale(NeedsYouAnswerOutcome.changedMessage))
-        #expect(fake.resumes.isEmpty)
+        #expect(fake.resumes.first?.checkpoint == item.attentionCheckpointID)
         #expect(sut.snapshot.items.first?.id != item.id)
+    }
+
+    @Test func givenLegacyRecoveryWithoutCheckpoint_whenAnswered_thenRefusesWithoutSending() async throws {
+        // given
+        let fake = FakeNeedsYouEngine()
+        recovery(fake, reason: "limit")
+        let sut = makeSUT(fake)
+        await sut.runPass()
+        var legacyItem = try #require(sut.snapshot.items.first)
+        legacyItem.attentionCheckpointID = nil
+        // when
+        let outcome = await sut.answer(legacyItem, text: "go on", additionalAttempts: 1)
+        // then
+        if case .failed = outcome {} else { Issue.record("expected unavailable checkpoint refusal") }
+        #expect(fake.resumes.isEmpty)
+    }
+
+    @Test func givenStaleCheckpointRefusal_whenAnswered_thenRefreshesAndRetainsRequest() async throws {
+        // given
+        let fake = FakeNeedsYouEngine()
+        recovery(fake, reason: "limit")
+        let sut = makeSUT(fake)
+        await sut.runPass()
+        let item = try #require(sut.snapshot.items.first)
+        fake.resumeError = .refused(code: "attention_checkpoint_stale", message: "The checkpoint changed")
+        // when
+        let outcome = await sut.answer(item, text: "go on", additionalAttempts: 1)
+        // then
+        if case .stale = outcome {} else { Issue.record("expected stale checkpoint classification") }
+        #expect(sut.snapshot.items.first?.attentionCheckpointID == item.attentionCheckpointID)
+        #expect(fake.calls.contains("workflowPage"))
+        #expect(fake.resumes.count == 1)
     }
 }

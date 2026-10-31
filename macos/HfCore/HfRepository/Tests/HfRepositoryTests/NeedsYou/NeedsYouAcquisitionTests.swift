@@ -175,13 +175,17 @@ import Testing
         #expect(sut.snapshot.items.count == 2)
     }
 
-    @Test func givenRecoveryPreSendReadFails_whenAnswered_thenItIsAFailureNotAChangedCheckpoint() async throws {
+    @Test func givenDisplayedRecoveryCheckpoint_whenLaterStatusReadFails_thenOriginalCheckpointIsSubmitted() async throws {
         // given
         let fake = FakeNeedsYouEngine()
         let attention = JSONValue.object(["workflow_run_id": .string("w1"), "status": .string("needs_attention"), "reason": .string("limit"),
-                                          "path": .array([.string("w1")]), "waiting_since": .number(5)])
+                                          "path": .array([.string("w1")]), "waiting_since": .number(5),
+                                          "attention_checkpoint_id": .string("attention:w1:checkpoint-1")])
         fake.headers = [rootHeader("w1", status: "needs_attention")]
-        fake.statuses["w1"] = treeRoot("w1", status: "needs_attention", attention: [attention], extra: ["attention_reason": .string("limit")])
+        fake.statuses["w1"] = treeRoot("w1", status: "needs_attention", attention: [attention], extra: [
+            "attention_reason": .string("limit"),
+            "attention_checkpoint_id": .string("attention:w1:checkpoint-1")
+        ])
         let sut = makeSUT(fake)
         await sut.runPass()
         let item = try #require(sut.snapshot.items.first)
@@ -189,7 +193,7 @@ import Testing
         // when
         let outcome = await sut.answer(item, text: "go", additionalAttempts: 1)
         // then
-        #expect(outcome == .failed("Harflow could not re-check this request. Try again."))
-        #expect(fake.resumes.isEmpty)
+        #expect(outcome == .accepted)
+        #expect(fake.resumes.first?.checkpoint == "attention:w1:checkpoint-1")
     }
 }

@@ -9,6 +9,51 @@ import Testing
 // MARK: - WorkflowRecoveryFormTests
 
 @MainActor @Suite(.serialized) struct WorkflowRecoveryFormTests {
+    @Test(arguments: [ColorScheme.light, .dark], [true, false])
+    func givenRecoveryRefusalState_whenHostedForCapture_thenShowsProductionFormInLightAndDark(appearance: ColorScheme, checkpointAvailable: Bool) async throws {
+        // given
+        guard let path = ProcessInfo.processInfo.environment["HARFLOW_RECOVERY_CAPTURE_DIR"], !path.isEmpty else { return }
+        let harness = WorkflowTests().makeVM()
+        let vm = harness.sut
+        defer { vm.didDisappear() }
+        given(harness.useCase)
+            .command(.value("status"), options: .value(["--monitor-view", "--snapshot"]),
+                     positionals: .value(["recovery-form-run"]), runtime: .any)
+            .willReturn(recoveryFormRun(status: "needs_attention", question: "A newer request.",
+                                        checkpoint: "attention:recovery-form-run:checkpoint-2").raw)
+        if checkpointAvailable {
+            vm.selectedRun = recoveryFormRun(status: "needs_attention", question: "The workflow changed while you were reviewing it.")
+            vm.instructions = "Preserve the work already completed."
+            given(harness.useCase)
+.command(.value("resume"), options: .any, positionals: .any, runtime: .any)
+                .willThrow(ToolError.refused(code: "attention_checkpoint_stale", message: "stale"))
+        } else {
+            vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("recovery-form-run"), "status": .string("needs_attention"),
+                                                    "input_question": .string("This older engine cannot identify the displayed checkpoint.")])
+            vm.instructions = "Preserve the work already completed."
+        }
+        let fixture = RedesignHost(WorkflowRecoveryForm(viewModel: vm, onClose: {}),
+                                   size: CGSize(width: 1440, height: 900), appearance: appearance)
+        defer { fixture.close() }
+        await fixture.settle { fixture.element("Resume") != nil }
+
+        // when
+        if checkpointAvailable {
+            let resume = try #require(fixture.element("Resume"))
+            #expect(fixture.press(resume))
+            await fixture.settle { !vm.isBusy && vm.errorText?.contains("checkpoint changed") == true }
+        }
+
+        // then
+        await fixture.settle { fixture.hasRenderedInk }
+        #expect(vm.instructions == "Preserve the work already completed.")
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let mode = appearance == .light ? "light" : "dark"
+        let state = checkpointAvailable ? "stale" : "unsupported"
+        try fixture.capturePNG(to: directory.appendingPathComponent("recovery-\(state)-\(mode).png"))
+    }
+
     @Test func givenRecoveryForm_whenClosed_thenRetainsInputAndAttemptsWithoutCommand() async throws {
         // given
         let harness = WorkflowTests().makeVM()
@@ -152,7 +197,9 @@ private func run(status: String, question: String, delegation: Bool = false) -> 
 
         // then
         await verify(harness.useCase)
-.command(.value("resume"), options: .any, positionals: .value(["recovery-form-run"]), runtime: .any)
+.command(.value("resume"), options: .value(["--monitor", "--instructions=Continue with the current approach.", "--additional-attempts=0",
+                                             "--attention-checkpoint-id=attention:recovery-form-run:checkpoint-1"]),
+    positionals: .value(["recovery-form-run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         await fixture.settle { !vm.isBusy }
     }
@@ -169,6 +216,7 @@ private func run(status: String, question: String, delegation: Bool = false) -> 
         defer { vm.didDisappear() }
         vm.selectedRun = recoveryFormRun(status: "failed", question: "The worker stopped.", delegation: true)
         vm.instructions = "Recover the existing work."
+        vm.additionalAttempts = 42
         let fixture = RedesignHost(WorkflowRecoveryForm(viewModel: vm, onClose: {}), size: CGSize(width: 520, height: 360))
         defer { fixture.close() }
         given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
@@ -180,17 +228,124 @@ private func run(status: String, question: String, delegation: Bool = false) -> 
 
         // then
         await verify(harness.useCase)
-.command(.value("recover"), options: .any, positionals: .value(["recovery-form-run"]), runtime: .any)
+.command(.value("recover"), options: .value(["--monitor", "--reason=Recover the existing work.", "--additional-attempts=42",
+                                             "--attention-checkpoint-id=attention:recovery-form-run:checkpoint-1"]),
+    positionals: .value(["recovery-form-run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         await fixture.settle { !vm.isBusy }
     }
+
+    @Test func givenLegacyRecoveryWithoutCheckpoint_whenHosted_thenControlIsUnavailable() async throws {
+        // given
+        let harness = WorkflowTests().makeVM()
+        let vm = harness.sut
+        defer { vm.didDisappear() }
+        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("recovery-form-run"), "status": .string("needs_attention"),
+                                                "input_question": .string("The worker stopped.")])
+        vm.instructions = "Keep my draft."
+        let fixture = RedesignHost(WorkflowRecoveryForm(viewModel: vm, onClose: {}), size: CGSize(width: 520, height: 360))
+        defer { fixture.close() }
+        await fixture.settle { fixture.element("Resume") != nil }
+
+        // when / then
+        let resume = try #require(fixture.element("Resume"))
+        #expect(fixture.press(resume) == false)
+        #expect(vm.instructions == "Keep my draft.")
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
+    }
+
+    @Test func givenCheckpointChangesDuringSubmission_whenHosted_thenDraftRemainsAndStaleRefusalIsShown() async throws {
+        // given
+        let harness = WorkflowTests().makeVM()
+        let vm = harness.sut
+        defer { vm.didDisappear() }
+        vm.selectedRun = recoveryFormRun(status: "needs_attention", question: "Choose the next approach.")
+        vm.instructions = "Preserve this exact draft."
+        given(harness.useCase)
+.command(.value("resume"), options: .any, positionals: .any, runtime: .any)
+            .willThrow(ToolError.refused(code: "attention_checkpoint_stale", message: "stale"))
+        given(harness.useCase)
+            .command(.value("status"), options: .value(["--monitor-view", "--snapshot"]),
+                     positionals: .value(["recovery-form-run"]), runtime: .any)
+            .willReturn(recoveryFormRun(status: "needs_attention", question: "A newer request.",
+                                        checkpoint: "attention:recovery-form-run:checkpoint-2").raw)
+        let fixture = RedesignHost(WorkflowRecoveryForm(viewModel: vm, onClose: {}), size: CGSize(width: 520, height: 360))
+        defer { fixture.close() }
+        await fixture.settle { fixture.element("Resume") != nil }
+
+        // when
+        let resume = try #require(fixture.element("Resume"))
+        #expect(fixture.press(resume))
+
+        // then
+        await fixture.settle { !vm.isBusy }
+        #expect(vm.instructions == "Preserve this exact draft.")
+        #expect(vm.errorText?.contains("checkpoint changed") == true)
+        await verify(harness.useCase)
+            .command(.value("resume"), options: .value(["--monitor", "--instructions=Preserve this exact draft.", "--additional-attempts=0",
+                                                         "--attention-checkpoint-id=attention:recovery-form-run:checkpoint-1"]),
+                positionals: .value(["recovery-form-run"]), runtime: .any)
+            .calledEventually(1, before: .seconds(5))
+
+        vm.selectedRun = recoveryFormRun(
+            status: "needs_attention", question: "A newer request.", checkpoint: "attention:recovery-form-run:checkpoint-2"
+        )
+        vm.control("resume")
+        #expect(vm.instructions == "Preserve this exact draft.")
+        #expect(vm.errorText == WorkflowContinuationDraftContext.changedMessage)
+        await verify(harness.useCase)
+            .command(.value("resume"), options: .any, positionals: .any, runtime: .any)
+            .calledEventually(1, before: .seconds(5))
+    }
+
+    @Test func givenDraftBoundToOlderCheckpoint_whenSelectedCheckpointChanges_thenOnlyExplicitlyClearedDraftCanSubmit() async throws {
+        // given
+        let harness = WorkflowTests().makeVM()
+        let vm = harness.sut
+        defer { vm.didDisappear() }
+        vm.selectedRun = recoveryFormRun(
+            status: "needs_attention", question: "First request.", checkpoint: "attention:recovery-form-run:checkpoint-1"
+        )
+        vm.instructions = "Answer for the first request."
+        vm.additionalAttempts = 3
+
+        // when
+        vm.selectedRun = recoveryFormRun(
+            status: "needs_attention", question: "Second request.", checkpoint: "attention:recovery-form-run:checkpoint-2"
+        )
+        vm.control("resume")
+
+        // then
+        #expect(vm.instructions == "Answer for the first request.")
+        #expect(vm.additionalAttempts == 3)
+        #expect(vm.errorText == WorkflowContinuationDraftContext.changedMessage)
+        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
+
+        // Clearing both fields releases the old authorization; the new answer binds to checkpoint 2.
+        vm.instructions = ""
+        vm.additionalAttempts = 0
+        vm.instructions = "Answer for the second request."
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
+        vm.control("resume")
+
+        await verify(harness.useCase)
+            .command(.value("resume"), options: .value(["--monitor", "--instructions=Answer for the second request.",
+                                                         "--additional-attempts=0", "--attention-checkpoint-id=attention:recovery-form-run:checkpoint-2"]),
+                positionals: .value(["recovery-form-run"]), runtime: .any)
+            .calledEventually(1, before: .seconds(5))
+        #expect(vm.instructions == "Answer for the second request.")
+    }
 }
 
-private func recoveryFormRun(status: String, question: String, delegation: Bool = false) -> WorkflowRunModel {
+private func recoveryFormRun(status: String, question: String, delegation: Bool = false,
+                             checkpoint: String = "attention:recovery-form-run:checkpoint-1") -> WorkflowRunModel {
     var raw: [String: JSONValue] = [
         "workflow_run_id": .string("recovery-form-run"), "status": .string(status),
         "interaction_owner": .string("monitor"), "input_question": .string(question)
     ]
+    if status == "needs_attention" || status == "failed" {
+        raw["attention_checkpoint_id"] = .string(checkpoint)
+    }
     if delegation { raw["execution_contract"] = .string("delegation") }
     return WorkflowRunModel(raw: raw)
 }

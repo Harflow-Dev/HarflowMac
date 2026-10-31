@@ -132,8 +132,9 @@ final class WorkflowVM: WorkflowViewModel {
     var prompt = ""
     var goal = ""
     var freedom = "write_in_repo"
-    var instructions = ""
-    var additionalAttempts = 0
+    var instructions = "" { didSet { updateContinuationDraftContext() } }
+    var additionalAttempts = 0 { didSet { updateContinuationDraftContext() } }
+    @ObservationIgnored var continuationDraftContext: WorkflowContinuationDraftContext?
     var launchAgent: [String: JSONValue] = [:] { didSet { if launchAgent != oldValue { scheduleLaunchPreview() } } }
     var overrideOrchestrator = false { didSet { if overrideOrchestrator != oldValue { scheduleLaunchPreview() } } }
     var generationAgent: [String: JSONValue] = ["backend": .string("codex")]

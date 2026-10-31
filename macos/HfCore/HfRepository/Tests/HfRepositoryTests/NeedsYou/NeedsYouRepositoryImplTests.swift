@@ -139,11 +139,15 @@ import Testing
         #expect(item.offeredAnswers == nil && item.resumeHint == "pick" && sut.snapshot.unreadableSourceCount == 0)
     }
 
-    @Test func givenAttentionRoot_whenPassRuns_thenOneRecoveryWithReasonFingerprint() async throws {
+    @Test func givenAttentionRoot_whenPassRuns_thenOneRecoveryCarriesAuthoritativeCheckpoint() async throws {
         // given
         let attention = JSONValue.object(["workflow_run_id": .string("w1"), "status": .string("needs_attention"), "reason": .string("limit"),
-                                          "path": .array([.string("w1")]), "waiting_since": .number(5)])
-        let status = treeRoot("w1", status: "needs_attention", attention: [attention], extra: ["attention_reason": .string("limit")])
+                                          "path": .array([.string("w1")]), "waiting_since": .number(5),
+                                          "attention_checkpoint_id": .string("attention:w1:authoritative")])
+        let status = treeRoot("w1", status: "needs_attention", attention: [attention], extra: [
+            "attention_reason": .string("limit"),
+            "attention_checkpoint_id": .string("attention:w1:authoritative")
+        ])
         let fake = engine([("w1", status)])
         fake.headers = [rootHeader("w1", status: "needs_attention")]
         let sut = makeSUT(fake)
@@ -152,7 +156,8 @@ import Testing
         // then
         let item = try #require(sut.snapshot.items.first)
         #expect(item.kind == .recovery && item.canAddAttempts && item.text == "limit")
-        #expect(item.id == "attention:w1:w1:\(NeedsYouMapper.fingerprint("limit"))")
+        #expect(item.id == "attention:w1:attention:w1:authoritative")
+        #expect(item.attentionCheckpointID == "attention:w1:authoritative")
     }
 
     @Test func givenBuilderAndChildHeaders_whenPassRuns_thenTheyAreNotRead() async {

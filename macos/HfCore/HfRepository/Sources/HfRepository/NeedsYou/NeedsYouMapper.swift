@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import MonitorCore
 
@@ -73,24 +72,19 @@ enum NeedsYouMapper {
         let sourceID = status.raw["attention_source"]?.objectValue?["workflow_run_id"]?.stringValue ?? rootID
         let attention = status.pendingAttention.first { $0.status == "needs_attention" && $0.workflowRunID == sourceID }
         let reason = (attention?.reason).flatMap { $0.isEmpty ? nil : $0 } ?? status.attentionReason ?? ""
-        guard !reason.isEmpty else { return nil }
+        guard !reason.isEmpty, let checkpoint = status.attentionCheckpointID else { return nil }
         let own = ownership(state)
         let sourceName = attention.map { $0.workflowName.isEmpty ? names[$0.workflowRunID] ?? shortID($0.workflowRunID) : $0.workflowName }
             ?? status.name
         var path = pathTitles(entryPath: attention?.path ?? [], rootID: rootID, rootName: status.name, names: names, lastName: sourceName)
         if let node = attention?.nodeTitle, !node.isEmpty, node != path.last { path.append(node) }
         return NeedsYouItem(
-            id: "attention:\(rootID):\(sourceID):\(fingerprint(reason))", kind: .recovery, rootRunID: rootID, sourceRunID: sourceID,
+            id: "attention:\(rootID):\(checkpoint)", kind: .recovery, rootRunID: rootID, sourceRunID: sourceID,
             runTitle: status.name.isEmpty ? shortID(rootID) : status.name, pathTitles: path, text: reason,
             ownership: own, startedBy: startedBy(own),
             waitingSince: (attention?.waitingSince ?? status.raw["updated_at"]?.doubleValue).map(Date.init(timeIntervalSince1970:)),
-            canAddAttempts: status.additionalAttemptsControl?.allowed == true
+            canAddAttempts: status.additionalAttemptsControl?.allowed == true, attentionCheckpointID: checkpoint
         )
-    }
-
-    /// First 8 hex characters of the SHA-1 of the attention reason: a changed reason is a new checkpoint.
-    static func fingerprint(_ reason: String) -> String {
-        Insecure.SHA1.hash(data: Data(reason.utf8)).prefix(4).map { String(format: "%02x", $0) }.joined()
     }
 
     static func question(

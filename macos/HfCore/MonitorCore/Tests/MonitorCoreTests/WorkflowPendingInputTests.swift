@@ -72,7 +72,11 @@ struct WorkflowPendingInputTests {
            "decision_id":"d2","question":"Q","question_items":[],"waiting_since":10.5,"optional_review_skip_available":true},
           {"workflow_run_id":"root","decision_id":"d3","question":"Limit","kind":"usage_limit","backend":"claude","model":"m","resume_hint":"pick"},
           {"decision_id":"missing-run"}],
-         "pending_attention":[{"workflow_run_id":"x","status":"needs_attention","reason":"stuck","path":["root","x"]},{"status":"paused"}]}
+           "attention_checkpoint_id":"attention:root:root-checkpoint",
+         "pending_attention":[
+           {"workflow_run_id":"x","status":"needs_attention","reason":"stuck","path":["root","x"],
+            "attention_checkpoint_id":"attention:root:source-checkpoint"},
+           {"status":"paused"}]}
         """#)
         // then
         let inputs = value.pendingInputs
@@ -81,6 +85,8 @@ struct WorkflowPendingInputTests {
         #expect(inputs[1].isUsageLimit && inputs[1].backend == "claude" && inputs[1].resumeHint == "pick")
         #expect(value.pendingAttention.map(\.workflowRunID) == ["x"])
         #expect(value.pendingAttention.first?.reason == "stuck")
+        #expect(value.pendingAttention.first?.attentionCheckpointID == "attention:root:source-checkpoint")
+        #expect(value.attentionCheckpointID == "attention:root:root-checkpoint")
     }
 
     @Test func givenBootstrapCatalog_whenRead_thenUnqualified() throws {

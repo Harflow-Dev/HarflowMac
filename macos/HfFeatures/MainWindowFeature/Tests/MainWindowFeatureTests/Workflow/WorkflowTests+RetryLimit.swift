@@ -66,7 +66,8 @@ extension WorkflowTests {
         let vm = harness.sut
         given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "status": .string("needs_attention"),
-                                               "exhausted_retry_edges": .array([.string("retry")])])
+                                               "exhausted_retry_edges": .array([.string("retry")]),
+                                               "attention_checkpoint_id": .string("attention:run:retry-1")])
         vm.instructions = "Try the alternate fix"
         vm.additionalAttempts = 9
         // when
@@ -74,7 +75,8 @@ extension WorkflowTests {
         // then
         await verify(harness.useCase)
 .command(.value("resume"),
-                                             options: .value(["--monitor", "--instructions=Try the alternate fix", "--additional-attempts=1"]),
+                                             options: .value(["--monitor", "--instructions=Try the alternate fix", "--additional-attempts=1",
+                                                              "--attention-checkpoint-id=attention:run:retry-1"]),
                                              positionals: .value(["run"]), runtime: .any)
             .calledEventually(1, before: .seconds(5))
         #expect(vm.additionalAttempts == 1)

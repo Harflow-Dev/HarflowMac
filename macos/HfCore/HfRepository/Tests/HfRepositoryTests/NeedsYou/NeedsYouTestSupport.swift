@@ -21,7 +21,7 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
     var pageSize = 100
     var resumeError: ToolError?
     var respondResult: Result<CallerApprovalRequest, ToolError>?
-    var resumes: [(root: String, decision: String?, text: String, attempts: Int?)] = []
+    var resumes: [(root: String, decision: String?, checkpoint: String?, text: String, attempts: Int?)] = []
     var workflowPageFails = false
     var approvalPageSize = 1000
     var approvalPageOverride: (@Sendable (String?) -> CallerApprovalPage)?
@@ -86,9 +86,9 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
         return capability
     }
 
-    func resume(root: String, decisionID: String?, text: String, additionalAttempts: Int?) async throws {
+    func resume(root: String, decisionID: String?, attentionCheckpointID: String?, text: String, additionalAttempts: Int?) async throws {
         record("resume:\(root)")
-        lock.withLock { resumes.append((root, decisionID, text, additionalAttempts)) }
+        lock.withLock { resumes.append((root, decisionID, attentionCheckpointID, text, additionalAttempts)) }
         if let resumeError { throw resumeError }
     }
 

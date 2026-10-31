@@ -116,7 +116,12 @@ struct WorkflowRunModel: Identifiable, Equatable {
 
     var recoveryCommand: String { status == "failed" || isSchedulerRecovery ? "recover" : "resume" }
 
+    var attentionCheckpointID: String? { raw["attention_checkpoint_id"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
+    var continuationDecisionID: String? { raw["input_decision_id"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
+
     func canSubmitContinuation(_ command: String, instructions: String) -> Bool {
+        if command == "recover", attentionCheckpointID == nil { return false }
+        if command == "resume", continuationDecisionID == nil, attentionCheckpointID == nil { return false }
         let requiresInput = command == "recover" || status == "needs_input"
             || raw["orchestrator_usage_recovery"]?.objectValue != nil || raw["worker_usage_recovery"]?.objectValue != nil
         if requiresInput, instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
@@ -127,6 +132,9 @@ struct WorkflowRunModel: Identifiable, Equatable {
     }
 
     func monitorReason(_ action: String) -> String? {
+        if ["resume", "recover"].contains(action), continuationDecisionID == nil, attentionCheckpointID == nil {
+            return "This engine cannot identify the displayed checkpoint. Refresh the workflow before continuing."
+        }
         if hasMonitorEligibility(action), permitsMonitor(action) { return nil }
         if let reason = raw["monitor_controls"]?[action]?["reason"]?.stringValue, !reason.isEmpty { return reason }
         if parentRunID != nil { return "Open the root workflow to control this child run." }

@@ -109,13 +109,8 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
             return await send(item, root: item.rootRunID, decision: decision, text: offered(item) ? text : trimmed, attempts: nil)
         case .recovery:
             guard !item.rootRunID.isEmpty, !trimmed.isEmpty else { return .failed("Write an answer first.") }
-            // Recovery cannot bind a checkpoint: `workflow-resume <root>` without a decision id follows the root's CURRENT
-            // attention source. The engine offers no checkpoint id for attention resumes (HarflowMCP#97), so the
-            // checkpoint is re-read immediately before sending. A switch between that read and the command remains possible,
-            // exactly as in the run view's recovery control.
-            switch await core.currentRecoveryID(root: item.rootRunID) {
-            case .unreadable: return .failed("Harflow could not re-check this request. Try again.")
-            case .current(let id): if id != item.id { return .stale(NeedsYouAnswerOutcome.changedMessage) }
+            guard item.attentionCheckpointID != nil else {
+                return .failed("This engine cannot identify the displayed checkpoint. Refresh the workflow before continuing.")
             }
             let attempts = item.canAddAttempts ? additionalAttempts.map { max(0, $0) } : nil
             return await send(item, root: item.rootRunID, decision: nil, text: trimmed, attempts: attempts)
@@ -126,8 +121,11 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
 
     private func send(_ item: NeedsYouItem, root: String, decision: String?, text: String, attempts: Int?) async -> NeedsYouAnswerOutcome {
         do {
-            try await engine.resume(root: root, decisionID: decision, text: text, additionalAttempts: attempts)
+            try await engine.resume(root: root, decisionID: decision,
+                                    attentionCheckpointID: decision == nil ? item.attentionCheckpointID : nil,
+                                    text: text, additionalAttempts: attempts)
         } catch let error as ToolError {
+            if error.refusalCode == "attention_checkpoint_stale" { refresh() }
             return NeedsYouAnswerOutcome.classify(error)
         } catch {
             return .failed(error.localizedDescription)

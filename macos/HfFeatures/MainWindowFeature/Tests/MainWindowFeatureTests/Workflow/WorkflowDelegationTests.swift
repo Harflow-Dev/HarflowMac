@@ -93,14 +93,15 @@ struct WorkflowDelegationTests {
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "execution_contract": .string("delegation"),
-                                                       "status": .string("failed")])
+                                                       "status": .string("failed"), "attention_checkpoint_id": .string("attention:run:failure-1")])
         harness.sut.instructions = "Investigated and approved"
         harness.sut.additionalAttempts = 2
         // when
         harness.sut.control("recover")
         // then
         await verify(harness.useCase)
-.command(.value("recover"), options: .value(["--monitor", "--reason=Investigated and approved", "--additional-attempts=2"]),
+.command(.value("recover"), options: .value(["--monitor", "--reason=Investigated and approved", "--additional-attempts=2",
+                                              "--attention-checkpoint-id=attention:run:failure-1"]),
                                             positionals: .value(["run"]), runtime: .any)
 .calledEventually(1, before: .seconds(5))
     }
@@ -181,7 +182,8 @@ struct WorkflowDelegationTests {
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
         harness.sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("run"), "execution_contract": .string("delegation"),
-                                                       "status": .string("failed"), "exhausted_retry_edges": .array([.string("retry")])])
+                                                       "status": .string("failed"), "exhausted_retry_edges": .array([.string("retry")]),
+                                                       "attention_checkpoint_id": .string("attention:run:failure-1")])
         harness.sut.additionalAttempts = 8
         // when — no reason does not consume or change the grant.
         harness.sut.continueWithOneMoreRetry()
@@ -190,7 +192,8 @@ struct WorkflowDelegationTests {
         harness.sut.instructions = "Reviewed failure"
         harness.sut.continueWithOneMoreRetry()
         await verify(harness.useCase)
-.command(.value("recover"), options: .value(["--monitor", "--reason=Reviewed failure", "--additional-attempts=1"]),
+.command(.value("recover"), options: .value(["--monitor", "--reason=Reviewed failure", "--additional-attempts=1",
+                                              "--attention-checkpoint-id=attention:run:failure-1"]),
                                             positionals: .value(["run"]), runtime: .any)
 .calledEventually(1, before: .seconds(5))
     }

@@ -71,6 +71,8 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
     public var canAddAttempts: Bool
     /// The decision a question answers; nil otherwise.
     public var decisionID: String?
+    /// The checkpoint displayed for a non-question recovery.
+    public var attentionCheckpointID: String?
     /// The complete approval, for approval items.
     public var approval: CallerApprovalRequest?
     /// The task an approval belongs to.
@@ -81,7 +83,7 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
         id: String, kind: Kind, rootRunID: String = "", sourceRunID: String = "", runTitle: String, pathTitles: [String] = [],
         text: String, questionItems: [String] = [], offeredAnswers: [String]? = nil, resumeHint: String? = nil,
         ownership: Ownership, startedBy: String, waitingSince: Date? = nil, canAddAttempts: Bool = false,
-        decisionID: String? = nil, approval: CallerApprovalRequest? = nil, taskID: String? = nil
+        decisionID: String? = nil, attentionCheckpointID: String? = nil, approval: CallerApprovalRequest? = nil, taskID: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -98,6 +100,7 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
         self.waitingSince = waitingSince
         self.canAddAttempts = canAddAttempts
         self.decisionID = decisionID
+        self.attentionCheckpointID = attentionCheckpointID
         self.approval = approval
         self.taskID = taskID
     }
@@ -191,6 +194,7 @@ public enum NeedsYouAnswerOutcome: Equatable, Sendable {
                 return .failed(error.message)
             }
         }
+        if error.refusalCode == "attention_checkpoint_stale" { return .stale(NeedsYouAnswerOutcome.changedMessage) }
         guard let code = error.refusalCode, code == "workflow_error" else { return .failed(error.message) }
         let message = rawMessage(error)
         if message.hasSuffix("; caller is alive") {

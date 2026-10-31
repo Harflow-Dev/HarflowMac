@@ -20,7 +20,7 @@ protocol NeedsYouEngine: Sendable {
     /// Whether the selected runtime accepts Monitor responses for caller-owned approvals; cached per runtime.
     func supportsMonitorApprovalResponses() async throws -> Bool
     /// Answers a question (`decisionID` set) or a recovery checkpoint (`decisionID` nil) on a workflow root.
-    func resume(root: String, decisionID: String?, text: String, additionalAttempts: Int?) async throws
+    func resume(root: String, decisionID: String?, attentionCheckpointID: String?, text: String, additionalAttempts: Int?) async throws
     func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest
 }
 
@@ -71,9 +71,10 @@ final class CtlNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
         return supported
     }
 
-    func resume(root: String, decisionID: String?, text: String, additionalAttempts: Int?) async throws {
+    func resume(root: String, decisionID: String?, attentionCheckpointID: String?, text: String, additionalAttempts: Int?) async throws {
         var options = ["--monitor", "--instructions=\(text)"]
         if let decisionID { options.append("--decision-id=\(decisionID)") }
+        if let attentionCheckpointID { options.append("--attention-checkpoint-id=\(attentionCheckpointID)") }
         if let additionalAttempts { options.append("--additional-attempts=\(additionalAttempts)") }
         _ = try await workflows.command("resume", options: options, positionals: [root])
     }

@@ -5,9 +5,25 @@ import Foundation
 public extension CtlClient {
     /// Calls the versioned workflow CLI boundary. State is owned exclusively by Harflow.
     func workflow(_ command: String, options: [String] = [], positionals: [String] = []) async -> Result<[String: JSONValue], ToolError> {
-        await result("workflow-\(command)", options: options, positionals: positionals, timeout: Self.startTimeout,
-                     requiringCapability: ["send", "cancel-message"].contains(command)
-                         || command == "build" && options.contains("--monitor") ? "messaging.v1" : nil)
+        let hasDecision = options.contains { $0 == "--decision-id" || $0.hasPrefix("--decision-id=") }
+        if command == "recover", hasDecision {
+            return .failure(.refused(code: "attention_checkpoint_invalid",
+                                     message: "Recovery does not accept a question decision ID. Use resume to answer a question."))
+        }
+        let guarded = ["resume", "recover"].contains(command) && options.contains("--monitor")
+            && !(command == "resume" && hasDecision)
+        let checkpoint = options.first { $0.hasPrefix("--attention-checkpoint-id=") }
+        if checkpoint != nil, hasDecision {
+            return .failure(.refused(code: "attention_checkpoint_invalid", message: "A decision and an attention checkpoint cannot be submitted together."))
+        }
+        if guarded && (checkpoint == nil || checkpoint == "--attention-checkpoint-id=") {
+            return .failure(.refused(code: "attention_checkpoint_unavailable",
+                                     message: "This engine cannot identify the displayed checkpoint. Refresh the workflow before continuing."))
+        }
+        let capability: String? = checkpoint != nil || guarded ? CtlCapability.workflowAttentionCheckpoints
+            : (["send", "cancel-message"].contains(command) || command == "build" && options.contains("--monitor") ? "messaging.v1" : nil)
+        return await result("workflow-\(command)", options: options, positionals: positionals, timeout: Self.startTimeout,
+                            requiringCapability: capability)
     }
 
     /// Validates through Harflow without creating a saved definition or run.

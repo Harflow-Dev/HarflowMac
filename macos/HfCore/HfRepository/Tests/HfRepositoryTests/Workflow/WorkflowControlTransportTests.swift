@@ -51,7 +51,8 @@ struct WorkflowControlTransportTests {
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: runner)))
         let sut = WorkflowRepositoryImpl(toolEnvironment: environment)
-        let options = [flag + "=" + text, "--monitor", "--additional-attempts=2"] + (command == "resume" ? ["--decision-id=decision"] : [])
+        let options = [flag + "=" + text, "--monitor", "--additional-attempts=2"]
+            + (command == "resume" ? ["--decision-id=decision"] : ["--attention-checkpoint-id=scheduler:run:opaque"])
         let result = try? await sut.command(command, options: options, positionals: ["run"])
         #expect((result != nil) == !failure)
         #expect(paths.value.count == 1)
