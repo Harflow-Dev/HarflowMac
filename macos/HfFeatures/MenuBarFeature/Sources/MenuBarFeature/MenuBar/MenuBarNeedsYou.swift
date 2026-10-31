@@ -126,9 +126,9 @@ extension MenuBarVM {
         guard needsYouSubscription == nil, let source = needsYouSource else { return }
         needsYou = MenuBarNeedsYouSection(source.needsYouSnapshot)
         needsYouSubscription = source.needsYouSnapshotPublisher()
+            .receive(on: DispatchQueue.main)
             .map { MenuBarNeedsYouSection($0) }
             .removeDuplicates()
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] section in
                 guard let self, needsYou != section else { return }
                 needsYou = section

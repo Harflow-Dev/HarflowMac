@@ -13,9 +13,14 @@ import Testing
 @Suite struct MenuBarVMNeedsYouTests {
     private final class FakeNeedsYou: MenuBarNeedsYouUseCase {
         let subject: CurrentValueSubject<NeedsYouSnapshot, Never>
+        var publishesOnBackgroundQueue = false
         init(_ snapshot: NeedsYouSnapshot) { self.subject = CurrentValueSubject(snapshot) }
         var needsYouSnapshot: NeedsYouSnapshot { subject.value }
-        func needsYouSnapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never> { subject.eraseToAnyPublisher() }
+        func needsYouSnapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never> {
+            let publisher = subject.eraseToAnyPublisher()
+            return publishesOnBackgroundQueue ? publisher.receive(on: DispatchQueue.global(qos: .userInitiated)).eraseToAnyPublisher()
+                : publisher
+        }
     }
 
     private func item(_ id: String, ended: Bool = true) -> NeedsYouItem {
@@ -115,5 +120,21 @@ import Testing
         await waitUntil { sut.needsYou?.count == 2 }
         // then
         #expect(sut.needsYou?.count == 2)
+    }
+
+    @Test func givenBackgroundSnapshotPublisher_whenNeedsYouChanges_thenSectionUpdatesOnMainActor() async {
+        // given
+        let (sut, feed, _) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [item("input:a:1")]))
+        feed.publishesOnBackgroundQueue = true
+        sut.didAppear()
+
+        // when
+        feed.subject.send(NeedsYouSnapshot(phase: .ready, items: [item("input:a:2")]))
+        await waitUntil { sut.needsYou?.rows.first?.id == "input:a:2" }
+
+        // then
+        #expect(sut.needsYou?.count == 1)
+        #expect(sut.needsYou?.rows.first?.title == "Run input:a:2")
+        sut.didDisappear()
     }
 }
