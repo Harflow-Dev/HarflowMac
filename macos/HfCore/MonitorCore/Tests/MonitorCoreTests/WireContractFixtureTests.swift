@@ -135,7 +135,8 @@ struct WireContractFixtureTests {
             Issue.record("expected ctl batch fixture")
             return
         }
-        #expect(batch.tasks.map(\.id) == ["task-fixture"])
+        #expect(batch.tasks.map(\.id) == ["task-fixture", "task-fixture"])
+        #expect(batch.tasks[1].raw["resolved_from"]?.objectValue?["input"]?.stringValue == "task-fix")
         #expect(batch.errors["missing"]?.code == "not_found")
 
         let error = CtlDocument.decode(stdout: try fixture("ctl-error.json"), stderr: "", exitCode: 1, command: "status")
