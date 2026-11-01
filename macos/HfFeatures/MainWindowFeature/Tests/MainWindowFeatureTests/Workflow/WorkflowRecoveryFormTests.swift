@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -9,49 +10,113 @@ import Testing
 // MARK: - WorkflowRecoveryFormTests
 
 @MainActor @Suite(.serialized) struct WorkflowRecoveryFormTests {
+    private final class RecoveryCaptureStatus: @unchecked Sendable {
+        private let lock = NSLock()
+        private let initial: [String: JSONValue]
+        private let refreshed: [String: JSONValue]
+        private var continuationWasAttempted = false
+
+        init(initial: WorkflowRunModel, refreshed: WorkflowRunModel) {
+            var initialRaw = initial.raw
+            initialRaw["updated_at"] = .string("capture-initial")
+            self.initial = initialRaw
+            var refreshedRaw = refreshed.raw
+            refreshedRaw["updated_at"] = .string("capture-refreshed")
+            self.refreshed = refreshedRaw
+        }
+
+        func current() -> [String: JSONValue] {
+            lock.lock(); defer { lock.unlock() }
+            return continuationWasAttempted ? refreshed : initial
+        }
+
+        func markContinuationAttempted() {
+            lock.lock(); defer { lock.unlock() }
+            continuationWasAttempted = true
+        }
+    }
+
     @Test(arguments: [ColorScheme.light, .dark], [true, false])
     func givenRecoveryRefusalState_whenHostedForCapture_thenShowsProductionFormInLightAndDark(appearance: ColorScheme, checkpointAvailable: Bool) async throws {
         // given
         guard let path = ProcessInfo.processInfo.environment["HARFLOW_RECOVERY_CAPTURE_DIR"], !path.isEmpty else { return }
-        let harness = WorkflowTests().makeVM()
+        let capture = makeCaptureState(checkpointAvailable: checkpointAvailable)
+        let harness = capture.harness
         let vm = harness.sut
         defer { vm.didDisappear() }
-        given(harness.useCase)
-            .command(.value("status"), options: .value(["--monitor-view", "--snapshot"]),
-                     positionals: .value(["recovery-form-run"]), runtime: .any)
-            .willReturn(recoveryFormRun(status: "needs_attention", question: "A newer request.",
-                                        checkpoint: "attention:recovery-form-run:checkpoint-2").raw)
-        if checkpointAvailable {
-            vm.selectedRun = recoveryFormRun(status: "needs_attention", question: "The workflow changed while you were reviewing it.")
-            vm.instructions = "Preserve the work already completed."
-            given(harness.useCase)
-.command(.value("resume"), options: .any, positionals: .any, runtime: .any)
-                .willThrow(ToolError.refused(code: "attention_checkpoint_stale", message: "stale"))
-        } else {
-            vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("recovery-form-run"), "status": .string("needs_attention"),
-                                                    "input_question": .string("This older engine cannot identify the displayed checkpoint.")])
-            vm.instructions = "Preserve the work already completed."
-        }
-        let fixture = RedesignHost(WorkflowRecoveryForm(viewModel: vm, onClose: {}),
+        let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance).frame(width: 1440, height: 900),
                                    size: CGSize(width: 1440, height: 900), appearance: appearance)
         defer { fixture.close() }
-        await fixture.settle { fixture.element("Resume") != nil }
+        await fixture.settle {
+            fixture.element("Resume") != nil
+                && fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView }
+                && vm.selectedRun?.attentionCheckpointID == capture.initialRun.attentionCheckpointID
+                && vm.selectedRun?.raw["updated_at"] == .string("capture-initial")
+        }
+        #expect(vm.selectedRun?.question == capture.initialRun.question)
 
         // when
         if checkpointAvailable {
+            let refusal = WorkflowContinuationDraftContext.changedMessage + " (attention_checkpoint_stale)"
             let resume = try #require(fixture.element("Resume"))
             #expect(fixture.press(resume))
-            await fixture.settle { !vm.isBusy && vm.errorText?.contains("checkpoint changed") == true }
+            await fixture.settle {
+                !vm.isBusy && vm.errorText == refusal
+                    && vm.selectedRun?.question == "A newer request."
+                    && vm.selectedRun?.raw["updated_at"] == .string("capture-refreshed")
+            }
+            #expect(vm.errorText == refusal)
+            #expect(fixture.element(refusal) != nil)
+            #expect(fixture.element("A newer request.") != nil)
+        } else {
+            let resume = try #require(fixture.element("Resume"))
+            #expect(fixture.press(resume) == false)
+            let reason = try #require(vm.selectedRun?.monitorReason("resume"))
+            #expect(fixture.element(reason) != nil)
         }
 
         // then
         await fixture.settle { fixture.hasRenderedInk }
         #expect(vm.instructions == "Preserve the work already completed.")
+        #expect(fixture.recoveryTextView?.string == vm.instructions)
+        #expect(fixture.host.bounds.size == CGSize(width: 1440, height: 900))
+        #expect(fixture.element("Recovery options") != nil)
         let directory = URL(fileURLWithPath: path, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let mode = appearance == .light ? "light" : "dark"
         let state = checkpointAvailable ? "stale" : "unsupported"
         try fixture.capturePNG(to: directory.appendingPathComponent("recovery-\(state)-\(mode).png"))
+    }
+
+    private func makeCaptureState(checkpointAvailable: Bool) -> (
+        harness: (sut: WorkflowVM, useCase: MockWorkflowUseCase), initialRun: WorkflowRunModel
+    ) {
+        let harness = WorkflowTests().makeVM()
+        given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
+        let initialRun = checkpointAvailable
+            ? recoveryFormRun(status: "needs_attention", question: "The workflow changed while you were reviewing it.")
+            : WorkflowRunModel(raw: ["workflow_run_id": .string("recovery-form-run"), "status": .string("needs_attention"),
+                                     "input_question": .string("This older engine cannot identify the displayed checkpoint.")])
+        let refreshedRun = checkpointAvailable
+            ? recoveryFormRun(status: "needs_attention", question: "A newer request.",
+                              checkpoint: "attention:recovery-form-run:checkpoint-2")
+            : initialRun
+        let status = RecoveryCaptureStatus(initial: initialRun, refreshed: refreshedRun)
+        given(harness.useCase)
+            .command(.value("status"), options: .value(["--monitor-view", "--snapshot"]),
+                     positionals: .value(["recovery-form-run"]), runtime: .any)
+            .willProduce { _, _, _, _ in status.current() }
+        harness.sut.selectedRun = initialRun
+        harness.sut.instructions = "Preserve the work already completed."
+        if checkpointAvailable {
+            given(harness.useCase)
+                .command(.value("resume"), options: .any, positionals: .any, runtime: .any)
+                .willProduce { _, _, _, _ in
+                    status.markContinuationAttempted()
+                    throw ToolError.refused(code: "attention_checkpoint_stale", message: "stale")
+                }
+        }
+        return (harness, initialRun)
     }
 
     @Test func givenRecoveryForm_whenClosed_thenRetainsInputAndAttemptsWithoutCommand() async throws {
