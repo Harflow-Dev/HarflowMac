@@ -5,7 +5,7 @@ import SwiftUI
 // MARK: - WorkMessageQueue
 
 /// Durable engine message state, shared by task and workflow composers.
-struct WorkMessageQueue: View {
+enum WorkMessageQueue {
     struct Item: Identifiable, Equatable {
         let id: String
         let text: String
@@ -14,10 +14,6 @@ struct WorkMessageQueue: View {
         var canCancel: Bool { status == "queued" }
     }
 
-    let items: [Item]
-    let isBusy: Bool
-    let onCancel: ((String) -> Void)?
-
     static func items(raw: [String: JSONValue]) -> [Item] {
         let values = raw["messages"]?.arrayValue ?? raw["queued_followups"]?["items"]?.arrayValue ?? []
         return values.compactMap { value in
@@ -25,10 +21,6 @@ struct WorkMessageQueue: View {
             return Item(id: id, text: value["text"]?.stringValue ?? "", status: status,
                         reason: value["reason"]?.stringValue)
         }
-    }
-
-    var body: some View {
-        WorkMessageBubblesView(bubbles: WorkMessageBubble.project(items: items), onCancel: onCancel, isCancelDisabled: isBusy)
     }
 }
 

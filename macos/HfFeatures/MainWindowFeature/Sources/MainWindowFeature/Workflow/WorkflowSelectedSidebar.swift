@@ -38,6 +38,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
                 WorkflowNativeActivityView(model: native, messages: viewModel.activityMessageBubbles,
                                             onCancel: viewModel.cancelActivityMessage,
                                             isCancelDisabled: viewModel.isBusy)
+                    .id(native.executionID)
             } else if let child = state.childRunID {
                 Button("Open workflow") { viewModel.openRun(child) }.padding(12)
                 Spacer()

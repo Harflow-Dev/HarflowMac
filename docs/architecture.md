@@ -73,6 +73,10 @@ Task, Parallel, and native workflow activity prepare immutable Markdown blocks o
 
 The native feed measures the prepared blocks it displays. Completing an unchanged reply retains those blocks and removes the caret from reserved space without changing row height. Static reading surfaces prepare their Markdown asynchronously. Tables use equal-width columns so appended rows do not resize earlier columns.
 
+Task and Parallel activity retain a 16-point bottom spacer inside the native document, so scroll limits and reading anchors include the composer clearance. Native workflow subagent activity retains follow intent across content and viewport changes. Its non-observable scroll bookkeeping separates layout clamping from upward navigation, defers near-bottom resumption through user gestures, and resets when the selected execution changes.
+
+Ordinary and queued user bubbles share a deterministic trailing layout. The complete tinted bubble sizes to its content within 75% of the available row width and a 420-point cap. Height measurement and placement use the same final width without feeding geometry back into view state.
+
 ## Lost-capture activity
 
 `RecoveryEventStreamRepository` wraps captured event streams without changing their tailer, folding or renderer. Activity leases poll the engine's bounded `recovery-activity` command only when supervision reports `lost_with_owner`; summary leases do no recovery I/O. Selected-runtime compatibility, cancellation and generation checks gate each operation and application. Unsupported commands retain captured history.

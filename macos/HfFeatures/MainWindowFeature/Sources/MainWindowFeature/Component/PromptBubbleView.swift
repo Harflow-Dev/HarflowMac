@@ -64,8 +64,7 @@ struct PromptBubbleView: View {
 
     var body: some View {
         let isLong = Self.isLong(text)
-        HStack(spacing: HfRadius.Metrics.zero) {
-            Spacer(minLength: HfRadius.Metrics.promptBubbleLeadingSpace)
+        PromptBubbleTrailingLayout {
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
                 if let caption {
                     Text(caption).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
@@ -109,6 +108,37 @@ struct PromptBubbleView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+// MARK: - PromptBubbleTrailingLayout
+
+struct PromptBubbleTrailingLayout: Layout {
+    typealias Cache = Void
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        guard let bubble = subviews.first else { return .zero }
+        let width = bubbleWidth(for: bubble, proposedWidth: proposal.width)
+        let height = bubble.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let containerWidth = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil } ?? width
+        return CGSize(width: containerWidth, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        guard let bubble = subviews.first else { return }
+        let width = bubbleWidth(for: bubble, proposedWidth: proposal.width)
+        bubble.place(
+            at: CGPoint(x: bounds.maxX, y: bounds.minY),
+            anchor: .topTrailing,
+            proposal: ProposedViewSize(width: width, height: nil)
+        )
+    }
+
+    private func bubbleWidth(for bubble: LayoutSubview, proposedWidth: CGFloat?) -> CGFloat {
+        let naturalWidth = bubble.sizeThatFits(.unspecified).width
+        let preferredWidth = naturalWidth.isFinite ? max(0, ceil(naturalWidth)) : 420
+        let limit = proposedWidth.flatMap { $0.isFinite ? max(0, $0) * 0.75 : nil } ?? 420
+        return min(preferredWidth, limit, 420)
     }
 }
 

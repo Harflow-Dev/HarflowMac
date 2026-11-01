@@ -92,10 +92,9 @@ import Testing
         try #require(activityNativeVisibleTailHasRenderedContent(host))
         let realized = try #require(activityNativeVisibleTail(host))
         #expect(abs(try #require(realized.host).fittingSize.height - tail.height) < 4)
-        // The sentinel has no accessible content. Its native 33 pt row is 20 pt top spacing,
-        // a 1 pt clear marker, and 12 pt bottom spacing.
+        // Tail placement is already included in the preceding row; the sentinel contributes 16 pt.
         #expect(abs(tail.height - 27) < 4)
-        #expect(abs(sentinel.height - 33) < 4)
+        #expect(abs(sentinel.height - 16) < 4)
     }
 
     @Test func givenTailUpdatesUnderBothScrollbarPreferences_whenMounted_thenLatestCommittedPresentationHasVisibleNativeRendering() async throws {

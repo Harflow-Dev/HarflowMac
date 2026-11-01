@@ -99,7 +99,7 @@ enum ActivityFeedNativeEntries {
             entries.append(.tail(tail,
                                   topSpacing: hasContent ? HfRadius.Metrics.spacing20 : HfRadius.Metrics.spacing12))
         }
-        entries.append(.bottom(topSpacing: (hasContent || hasTail) ? HfRadius.Metrics.spacing20 : HfRadius.Metrics.spacing12))
+        entries.append(.bottom(topSpacing: 0))
         return entries
     }
 

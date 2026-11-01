@@ -29,7 +29,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     /// The live tail below the rows (pending messages, live step, child-task strip).
     case tail(ActivityFeedTailPresentation, topSpacing: CGFloat)
     case approval(CallerApprovalCardModel, topSpacing: CGFloat)
-    /// The bottom sentinel: a hairline plus the feed's closing spacing.
+    /// The bottom sentinel and the feed's closing spacing.
     case bottom(topSpacing: CGFloat)
 
     enum Header: Equatable {
@@ -223,9 +223,8 @@ struct ActivityFeedNativeRowRoot: View {
                                       isFocusReady: approvalFocusReady)
         case .bottom:
             Color.clear
-                .frame(height: HfRadius.Metrics.hairlineStroke)
+                .frame(height: HfRadius.Metrics.spacing16)
                 .accessibilityHidden(true)
-                .padding(.bottom, HfRadius.Metrics.spacing12)
         }
     }
 

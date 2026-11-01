@@ -276,8 +276,9 @@ import Testing
                                             previousDocumentHeight: narrowDocumentHeight,
                                             expectedAnchor: anchor, widthMatches: { $0 > 600 }))
         let restoredOffset = scroll.documentVisibleRect.minY
-        expectRestoredReadingPosition(scroll: scroll, state: state, expectedAnchor: anchor,
-                                      previousDocumentHeight: narrowDocumentHeight, widthMatches: { $0 > 600 })
+        let restoredRelativeOffset = try expectRestoredReadingPosition(
+            scroll: scroll, state: state, expectedAnchor: anchor,
+            previousDocumentHeight: narrowDocumentHeight, widthMatches: { $0 > 600 })
         let mountedAnchorFrame = try measuredAnchorRowFrame(
             in: scroll, anchor: anchor, offset: restoredOffset)
         // A real native move obtains a fresh measured anchor after restoration, rather than
@@ -289,39 +290,18 @@ import Testing
             scroll: scroll, start: restoredOffset, delta: nativeMoveDelta, rowFrame: mountedAnchorFrame)
         try requireNativeMoveFitsRow(mountedAnchorFrame, targetOffset: movedOffset)
         try #require(abs(restoredOffset - movedOffset) > 5)
-        let expectedMovedRelativeOffset = anchor.relativeOffset - (movedOffset - restoredOffset)
+        let expectedMovedRelativeOffset = restoredRelativeOffset - (movedOffset - restoredOffset)
         try await performNativeAnchorMove(host: host, scroll: scroll, state: state,
                                           expectation: NativeMoveExpectation(
                                             fromOffset: restoredOffset, requestedOffset: movedOffset,
                                             anchor: anchor, expectedRelativeOffset: expectedMovedRelativeOffset))
-        // Returning to the narrower column must also finish restoration with fresh geometry.
-        let wideAnchor = try #require(state.anchor)
-        let wideDocumentHeight = try #require(scroll.documentView?.bounds.height)
-        host.rootView = ParallelColumnView(model: model, state: state).frame(width: 420, height: 500)
-        window.setContentSize(CGSize(width: 420, height: 500))
-        await awaitResizedReadingPosition(host: host, scroll: scroll, state: state,
-                                          expectation: ResizeExpectation(
-                                            previousDocumentHeight: wideDocumentHeight,
-                                            expectedAnchor: wideAnchor, widthMatches: { $0 < 400 }))
-        expectRestoredReadingPosition(scroll: scroll, state: state, expectedAnchor: wideAnchor,
-                                      previousDocumentHeight: wideDocumentHeight, widthMatches: { $0 < 400 })
-        #expect(!state.followLive.isFollowing)
-
-        // A reverse native move must also produce fresh measured geometry before the
-        // restored anchor is accepted. Move in the opposite direction while staying
-        // inside the current document bounds so this cannot become a row transition.
-        let reverseStartOffset = scroll.documentVisibleRect.minY
-        let reverseAnchorFrame = try measuredAnchorRowFrame(
-            in: scroll, anchor: wideAnchor, offset: reverseStartOffset)
-        let reverseMovedOffset = try boundedNativeMoveOffset(
-            scroll: scroll, start: reverseStartOffset, delta: -nativeMoveDelta, rowFrame: reverseAnchorFrame)
-        try #require(abs(reverseMovedOffset - reverseStartOffset) > 5)
-        try requireNativeMoveFitsRow(reverseAnchorFrame, targetOffset: reverseMovedOffset)
-        let expectedReverseRelativeOffset = wideAnchor.relativeOffset - (reverseMovedOffset - reverseStartOffset)
-        try await performNativeAnchorMove(host: host, scroll: scroll, state: state,
-                                          expectation: NativeMoveExpectation(
-                                            fromOffset: reverseStartOffset, requestedOffset: reverseMovedOffset,
-                                            anchor: wideAnchor, expectedRelativeOffset: expectedReverseRelativeOffset))
+        let resizeToNarrowColumn = {
+            host.rootView = ParallelColumnView(model: model, state: state).frame(width: 420, height: 500)
+            window.setContentSize(CGSize(width: 420, height: 500))
+        }
+        try await returnToNarrowColumnAndMoveAnchor(
+            fixture: (host: host, resize: resizeToNarrowColumn),
+            scroll: scroll, state: state, nativeMoveDelta: nativeMoveDelta)
     }
 
     @Test func givenColumnCell_whenOnlyCallbacksDiffer_thenEqualityRemainsQuietButStateAndGeometryChangesInvalidate() throws {
@@ -419,12 +399,16 @@ import Testing
     private func expectRestoredReadingPosition(
         scroll: NSScrollView, state: ParallelColumnUIState, expectedAnchor: ParallelVerticalAnchor,
         previousDocumentHeight: CGFloat, widthMatches: (CGFloat) -> Bool
-    ) {
+    ) throws -> CGFloat {
+        let frame = try measuredAnchorRowFrame(
+            in: scroll, anchor: expectedAnchor, offset: scroll.documentVisibleRect.minY)
+        let clampedRelativeOffset = max(expectedAnchor.relativeOffset, -max(0, frame.height - 1))
         #expect(widthMatches(scroll.contentView.bounds.width))
         #expect(abs((scroll.documentView?.bounds.height ?? previousDocumentHeight) - previousDocumentHeight) > 1)
         #expect(state.viewportPositioned)
         #expect(state.anchor?.id == expectedAnchor.id)
-        #expect(abs((state.anchor?.relativeOffset ?? .infinity) - expectedAnchor.relativeOffset) < 3)
+        #expect(abs((state.anchor?.relativeOffset ?? .infinity) - clampedRelativeOffset) < 3)
+        return clampedRelativeOffset
     }
 
     private func measuredAnchorRowFrame(
@@ -561,5 +545,37 @@ import Testing
 
     private func descendants(_ view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants($0) }
+    }
+}
+
+private extension ParallelViewportTests {
+    func returnToNarrowColumnAndMoveAnchor(
+        fixture: (host: NSView, resize: () -> Void), scroll: NSScrollView,
+        state: ParallelColumnUIState, nativeMoveDelta: CGFloat
+    ) async throws {
+        // Returning to the narrower column must also finish restoration with fresh geometry.
+        let wideAnchor = try #require(state.anchor)
+        let wideDocumentHeight = try #require(scroll.documentView?.bounds.height)
+        fixture.resize()
+        await awaitResizedReadingPosition(host: fixture.host, scroll: scroll, state: state,
+                                          expectation: ResizeExpectation(
+                                            previousDocumentHeight: wideDocumentHeight,
+                                            expectedAnchor: wideAnchor, widthMatches: { $0 < 400 }))
+        let restoredRelativeOffset = try expectRestoredReadingPosition(
+            scroll: scroll, state: state, expectedAnchor: wideAnchor,
+            previousDocumentHeight: wideDocumentHeight, widthMatches: { $0 < 400 })
+        #expect(!state.followLive.isFollowing)
+
+        let startOffset = scroll.documentVisibleRect.minY
+        let frame = try measuredAnchorRowFrame(in: scroll, anchor: wideAnchor, offset: startOffset)
+        let movedOffset = try boundedNativeMoveOffset(
+            scroll: scroll, start: startOffset, delta: -nativeMoveDelta, rowFrame: frame)
+        try #require(abs(movedOffset - startOffset) > 5)
+        try requireNativeMoveFitsRow(frame, targetOffset: movedOffset)
+        let expectedRelativeOffset = restoredRelativeOffset - (movedOffset - startOffset)
+        try await performNativeAnchorMove(host: fixture.host, scroll: scroll, state: state,
+                                          expectation: NativeMoveExpectation(
+                                            fromOffset: startOffset, requestedOffset: movedOffset,
+                                            anchor: wideAnchor, expectedRelativeOffset: expectedRelativeOffset))
     }
 }
