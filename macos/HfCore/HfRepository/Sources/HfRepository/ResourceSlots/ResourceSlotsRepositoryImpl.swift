@@ -41,6 +41,7 @@ private actor ResourceSlotsObserver {
     private var leases: Set<UUID> = []
     private var generation: UInt64 = 0
     private var runtime: QualificationRuntimeToken?
+    private var runtimeIdentity: UUID?
     private var state = ResourceSlotsSnapshot()
     private var polling: Task<Void, Never>?
     private var work: Task<Void, Never>?
@@ -101,6 +102,7 @@ private actor ResourceSlotsObserver {
         let token = current.map { QualificationRuntimeToken(client: $0) }
         if token != runtime {
             runtime = token
+            runtimeIdentity = UUID()
             generation &+= 1
             gate?.revoke()
             workflowMetadata = [:]
@@ -276,7 +278,10 @@ private actor ResourceSlotsObserver {
         return ResourceSlotOwnerMetadata(owner: owner, title: title, destination: destination)
     }
 
-    private func emit() { publish(state) }
+    private func emit() {
+        state.runtimeIdentity = runtimeIdentity
+        publish(state)
+    }
 }
 
 // MARK: - ResourceSlotsReadGate

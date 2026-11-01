@@ -294,6 +294,44 @@ struct ResourceSlotsRepositoryImplTests {
         #expect(sut.snapshot.data?.owners.values.allSatisfy { $0.title == nil && $0.destination == nil } == true)
         await sut.releaseObservation(lease)
     }
+
+    @Test func givenSelectedRuntime_whenRevalidatedReleasedAndReacquired_thenIdentityChangesOnlyForADifferentRuntimeToken() async {
+        // given
+        let runnerA = slotRunner(inventory: emptyInventory(), phase: emptyPhase())
+        let runnerB = slotRunner(inventory: emptyInventory(), phase: emptyPhase())
+        let clientA = CtlClient(executable: "/runtime/a/ctl", environment: [:], runner: runnerA)
+        let clientB = CtlClient(executable: "/runtime/b/ctl", environment: [:], runner: runnerB)
+        let selected = LockedBox<Result<CtlClient, ToolError>>(.success(clientA))
+        let tooling = MockToolEnvironmentRepository()
+        given(tooling).ctl().willProduce { selected.value }
+        let sut = ResourceSlotsRepositoryImpl(tooling: tooling, scheduler: NullScheduling())
+        let firstLease = await sut.acquireObservation()
+        #expect(await resourceSlotsWaitUntil { sut.snapshot.phase == .ready })
+        let originalIdentity = sut.snapshot.runtimeIdentity
+        #expect(originalIdentity != nil)
+
+        // when: setup/readiness notifications revalidate the same actual selected client.
+        await sut.runtimeChanged()
+        #expect(sut.snapshot.runtimeIdentity == originalIdentity)
+        await sut.releaseObservation(firstLease)
+        #expect(sut.snapshot.runtimeIdentity == originalIdentity)
+        let secondLease = await sut.acquireObservation()
+        #expect(sut.snapshot.runtimeIdentity == originalIdentity)
+
+        // then: changing the token creates a distinct identity, including during the loading reset.
+        selected.mutate { $0 = .success(clientB) }
+        await sut.runtimeChanged()
+        let replacementIdentity = sut.snapshot.runtimeIdentity
+        #expect(replacementIdentity != nil && replacementIdentity != originalIdentity)
+        #expect(await resourceSlotsWaitUntil {
+            sut.snapshot.phase == .ready && sut.snapshot.runtimeIdentity == replacementIdentity
+                && runnerB.calls.contains { $0.arguments.first == "slot" }
+        })
+        #expect(sut.snapshot.runtimeIdentity == replacementIdentity)
+        await sut.releaseObservation(secondLease)
+        #expect(sut.snapshot.runtimeIdentity == replacementIdentity)
+    }
+
 }
 
 private final class ResourceSlotsRunnerControl: @unchecked Sendable {

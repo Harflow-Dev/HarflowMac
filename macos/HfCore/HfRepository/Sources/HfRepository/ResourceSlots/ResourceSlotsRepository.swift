@@ -22,6 +22,8 @@ public protocol ResourceSlotsRepository: Sendable {
 /// Complete rendering state. Poll timestamps are excluded because they do not change displayed evidence.
 public struct ResourceSlotsSnapshot: Equatable, Sendable {
     public enum Phase: Equatable, Sendable { case loading, ready, notEnabled, unsupported, unavailable }
+    /// Opaque identity changes only when the selected qualified runtime changes.
+    public var runtimeIdentity: UUID?
     public var phase: Phase
     public var data: ResourceSlotsData?
     public var error: ToolError?
@@ -29,7 +31,8 @@ public struct ResourceSlotsSnapshot: Equatable, Sendable {
     public var isStale: Bool
 
     public init(phase: Phase = .loading, data: ResourceSlotsData? = nil, error: ToolError? = nil,
-                isRefreshing: Bool = false, isStale: Bool = false) {
+                isRefreshing: Bool = false, isStale: Bool = false, runtimeIdentity: UUID? = nil) {
+        self.runtimeIdentity = runtimeIdentity
         self.phase = phase
         self.data = data
         self.error = error

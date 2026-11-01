@@ -13,7 +13,8 @@ extension ActivityFeedApprovalHostedTests {
             ("standard", CGSize(width: 1200, height: 820)),
             ("wide", CGSize(width: 1440, height: 900))
         ]
-        let states = ["populated", "loading", "empty", "error", "cleanup", "long-titles", "borrowed"]
+        let states = ["populated", "loading", "empty", "error", "cleanup", "long-titles", "borrowed", "not-enabled", "unsupported",
+                      "initial-unavailable", "service-unavailable", "retained-refresh", "cleanup-pending", "cleanup-running", "cleanup-failed", "collapsed"]
         for appearance in [ColorScheme.light, .dark] {
             for (state, size) in states.flatMap({ state in sizes.map { (state, $0) } }) {
                 let model = CaptureModel(state: state)
@@ -30,14 +31,30 @@ extension ActivityFeedApprovalHostedTests {
                 try await resourceSlotsForeground(fixture)
                 await fixture.settle { fixture.element("Resource slots") != nil }
                 try #require(fixture.element("Resource slots") != nil)
-                try #require(fixture.element("Search loaded history") != nil)
+                await fixture.settle { resourceSlotsSidebarSearch(fixture) != nil }
+                let sidebarSearch = try #require(resourceSlotsSidebarSearch(fixture),
+                                                 "Production sidebar must expose its native search field and AXPlaceholderValue")
+                #expect(resourceSlotsNativeValue(sidebarSearch) as? String == "retained history search")
+                let searchFrame = try #require(fixture.frame(sidebarSearch))
+                let fields = resourceSlotsTextFields(fixture)
+                #expect(fields.count == 1, "Only the sidebar search field belongs on the Resource slots screen")
+                #expect(!fields.contains { field in fixture.frame(field).map { $0.minX > searchFrame.maxX } == true },
+                        "The detail pane must not add a resource search field")
                 #expect(fixture.element("Search resource slots") == nil)
-                if state == "populated" || state == "cleanup" || state == "long-titles" || state == "borrowed" {
-                    let groupTitle = state == "long-titles"
-                        ? "A deliberately long configured resource name that needs to wrap cleanly at compact window widths"
-                        : "sim"
-                    await fixture.settle { fixture.element(groupTitle) != nil }
-                    try #require(fixture.element(groupTitle) != nil)
+                if case let .ready(_, groups) = model.presentation.state {
+                    for group in groups {
+                        await fixture.settle { resourceSlotsCaptureHeaders(fixture, groupID: group.id).count == 1 }
+                        let headers = resourceSlotsCaptureHeaders(fixture, groupID: group.id)
+                        try #require(headers.count == 1, "Capture requires the actual single identified native resource header")
+                        let header = try #require(headers.first)
+                        let label = fixture.string(header, "accessibilityLabel") ?? fixture.string(header, "accessibilityTitle")
+                        #expect(label == group.title + ", " + group.capacitySummary)
+                        try resourceSlotsRequireNativeHeader(header, fixture: fixture, expanded: model.expandedResourceIDs.contains(group.id))
+                    }
+                }
+                if state == "loading" {
+                    await fixture.settle { fixture.element("Loading resource slots") != nil }
+                    try #require(fixture.element("Loading resource slots") != nil)
                 }
                 await fixture.settle { fixture.hasStableRenderedFrame }
                 try #require(fixture.hasRenderedInk, "Capture must contain actual rendered production content")
@@ -45,6 +62,24 @@ extension ActivityFeedApprovalHostedTests {
                 let filename = "resource-slots-\(state)-\(size.name)-\(scheme).png"
                 try resourceSlotsScreenCapture(fixture.window, to: directory.appendingPathComponent(filename))
             }
+        }
+    }
+
+    private func resourceSlotsCaptureHeaders(_ fixture: RedesignHost, groupID: String) -> [NSObject] {
+        resourceSlotsNativeHeaders(fixture, groupID: groupID)
+    }
+
+    private func resourceSlotsTextFields(_ fixture: RedesignHost) -> [NSObject] {
+        var seen = Set<ObjectIdentifier>()
+        return fixture.descendants.flatMap { fixture.elements(in: $0) }.filter {
+            seen.insert(ObjectIdentifier($0)).inserted
+                && fixture.string($0, "accessibilityRole") == NSAccessibility.Role.textField.rawValue
+        }
+    }
+
+    private func resourceSlotsSidebarSearch(_ fixture: RedesignHost) -> NSObject? {
+        resourceSlotsTextFields(fixture).first {
+            resourceSlotsLegacyAttributeValue($0, NSAccessibility.Attribute(rawValue: "AXPlaceholderValue")) as? String == "Search loaded history"
         }
     }
 
@@ -97,13 +132,20 @@ extension ActivityFeedApprovalHostedTests {
                     status: "Held", detail: "Workflow run run-1 / attempt-2"
                 )
             ]
+            let cleanupState = state == "cleanup" || state == "service-unavailable" || state.hasPrefix("cleanup-")
+            let cleanupTitle = switch state {
+            case "cleanup-pending": "Cleanup pending"
+            case "cleanup-running": "Cleanup running"
+            case "cleanup-failed": "Cleanup failed"
+            default: "Cleanup uncertain"
+            }
             let group = ResourceSlotsGroup(
                 id: "sim", title: groupTitle,
-                capacitySummary: state == "cleanup" ? "2 of 1 capacity · observed holdings exceed capacity" : "2 of 3 capacity in use",
+                capacitySummary: cleanupState ? "1 of 1 in use" : "2 of 3 in use",
                 holderHeading: "Current holders",
-                holders: state == "cleanup"
+                holders: cleanupState
                     ? [Self.owner(
-                        "sim/cleanup", title: "Cleanup uncertain", status: "Capacity retained",
+                        "sim/cleanup", title: cleanupTitle, status: cleanupTitle + " · capacity retained",
                         detail: "Cleanup policy unavailable; capacity remains occupied"
                     )]
                     : holders,
@@ -115,25 +157,14 @@ extension ActivityFeedApprovalHostedTests {
                 )]
                     : []
             )
-            let qualifiers: [ResourceSlotsQualifier] = state == "error"
-                ? [.init(id: "stale", text: "Showing the last successful observations. The latest read failed.", isWarning: true)] : []
-            switch state {
-            case "loading":
-                self.presentation = .init(state: .loading, qualifiers: [])
-            case "empty":
-                self.presentation = .init(
-                    state: .empty(title: "No resource slots", message: "No configured names or active reservations were reported."),
-                    qualifiers: []
-                )
-            case "error":
-                self.presentation = .init(
-                    state: .ready(summary: "Observed holdings and queued resource entries", groups: [group]),
-                    qualifiers: qualifiers
-                )
-            default:
-                self.presentation = .init(state: .ready(summary: "Observed holdings and queued resource entries", groups: [group]), qualifiers: qualifiers)
+            let qualifiers: [ResourceSlotsQualifier] = switch state {
+            case "error": [.init(id: "stale", text: "Showing the last successful observations. The latest read failed.", isWarning: true)]
+            case "service-unavailable": [.init(id: "service", text: "Cleanup service is not running. Cleanup capacity remains held.", isWarning: true)]
+            case "retained-refresh": [.init(id: "refreshing", text: "Refreshing resource observations…", isWarning: false)]
+            default: []
             }
-            self.expandedResourceIDs = ["sim"]
+            self.presentation = Self.preparedPresentation(state: state, group: group, qualifiers: qualifiers)
+            self.expandedResourceIDs = state == "collapsed" ? [] : ["sim"]
         }
 
         func didAppear() {}
@@ -143,6 +174,35 @@ extension ActivityFeedApprovalHostedTests {
         func didToggleBlockers(_: String) {}
         func didOpenOwner(_ id: String) {
             readingState.focusedRowID = id
+        }
+
+        private static func preparedPresentation(state: String, group: ResourceSlotsGroup,
+                                                 qualifiers: [ResourceSlotsQualifier]) -> ResourceSlotsPresentation {
+            switch state {
+            case "loading":
+                .init(state: .loading, qualifiers: [])
+            case "not-enabled":
+                .init(state: .notEnabled(title: "Resource slots are not enabled",
+                                         message: "The selected runtime has not enabled phase slots."), qualifiers: [])
+            case "unsupported":
+                .init(state: .unsupported(title: "Resource slots are unsupported",
+                                          message: "The selected runtime does not support phase-slots.v1."), qualifiers: [])
+            case "initial-unavailable":
+                .init(state: .unavailable(title: "Resource slots are unavailable",
+                                          message: "The engine did not provide qualified resource observations."), qualifiers: [])
+            case "empty":
+                .init(
+                    state: .empty(title: "No resource slots", message: "No configured names or active reservations were reported."),
+                    qualifiers: []
+                )
+            case "error":
+                .init(
+                    state: .ready(summary: "Observed holdings and queued resource entries", groups: [group]),
+                    qualifiers: qualifiers
+                )
+            default:
+                .init(state: .ready(summary: "Observed holdings and queued resource entries", groups: [group]), qualifiers: qualifiers)
+            }
         }
 
         private static func owner(

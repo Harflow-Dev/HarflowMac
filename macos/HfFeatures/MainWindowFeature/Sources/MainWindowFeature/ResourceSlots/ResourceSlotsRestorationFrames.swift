@@ -7,12 +7,16 @@ import SwiftUI
 /// Presented-frame seam. Hidden/detached views do not receive their NSView display-link callbacks.
 struct ResourceSlotsRestorationFrames: NSViewRepresentable {
     let active: Bool
+    /// Reports the hosting window whenever the seam view's window changes, so the reading
+    /// state can capture Back-time responders and retry focus only in its own window.
+    var onWindow: (@MainActor (NSWindow?) -> Void)?
     let onFrame: @MainActor () -> Void
 
     func makeNSView(context _: Context) -> FrameView { FrameView(frame: .zero) }
 
     func updateNSView(_ view: FrameView, context _: Context) {
         view.onFrame = onFrame
+        view.onWindow = onWindow
         view.setActive(active)
     }
 
@@ -21,6 +25,7 @@ struct ResourceSlotsRestorationFrames: NSViewRepresentable {
     @MainActor
     final class FrameView: NSView {
         var onFrame: (@MainActor () -> Void)?
+        var onWindow: (@MainActor (NSWindow?) -> Void)?
         private var requested = false
         private var link: CADisplayLink?
 
@@ -31,6 +36,7 @@ struct ResourceSlotsRestorationFrames: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            onWindow?(window)
             reconcile()
         }
 

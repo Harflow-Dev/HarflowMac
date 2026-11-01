@@ -144,7 +144,13 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public var selection: MonitorDestination? {
         didSet {
             guard selection != oldValue else { return }
-            if selection != resourceSlotsReturnDestination { resourceSlotsReturnDestination = nil }
+            resourceSlotsVM?.readingState.setSelected(selection == .resourceSlots)
+            if selection != resourceSlotsReturnDestination {
+                resourceSlotsReturnDestination = nil
+                if selection != .resourceSlots || resourceSlotsVM?.readingState.hasAuthorizedFocusReturn != true {
+                    resourceSlotsVM?.readingState.clearFocusReturn()
+                }
+            }
             selectionSubject.send(selection)
         }
     }
@@ -297,7 +303,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     }
 
     public func returnToResourceSlots() {
-        resourceSlotsReturnDestination = nil
+        guard canReturnToResourceSlots else { return }
+        resourceSlotsVM?.readingState.authorizeFocusReturn()
         selection = .resourceSlots
     }
 
@@ -506,11 +513,17 @@ extension MainWindowCoordinator: NeedsYouRouting {
 extension MainWindowCoordinator: ResourceSlotsRouting {
     func openResourceSlotOwner(_ destination: ResourceSlotOwnerMetadata.Destination) {
         switch destination {
-        case .task(let id): selectTask(id)
-        case .workflowRun(let id, _): selection = .workflowRun(id)
+        case .task(let id):
+            let logicalID = WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID ?? id
+            resourceSlotsReturnDestination = .task(logicalID)
+            selectTask(id)
+        case .workflowRun(let id, _):
+            resourceSlotsReturnDestination = .workflowRun(id)
+            selection = .workflowRun(id)
         }
-        resourceSlotsReturnDestination = selection
     }
+
+    func invalidateResourceSlotsReturn() { resourceSlotsReturnDestination = nil }
 
     func showResourceSlots() { selection = .resourceSlots }
 }

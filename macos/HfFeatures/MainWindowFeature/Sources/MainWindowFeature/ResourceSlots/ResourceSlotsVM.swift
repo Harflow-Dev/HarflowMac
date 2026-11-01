@@ -24,6 +24,11 @@ protocol ResourceSlotsUseCase: Sendable {
 @MainActor
 protocol ResourceSlotsRouting: Sendable {
     func openResourceSlotOwner(_ destination: ResourceSlotOwnerMetadata.Destination)
+    func invalidateResourceSlotsReturn()
+}
+
+extension ResourceSlotsRouting {
+    func invalidateResourceSlotsReturn() {}
 }
 
 // MARK: - ResourceSlotsVM
@@ -48,10 +53,20 @@ final class ResourceSlotsVM: ResourceSlotsViewModel {
     @ObservationIgnored private var lease: UUID?
     @ObservationIgnored private var actions: [String: ResourceSlotOwnerMetadata.Destination] = [:]
     @ObservationIgnored private var expandedInitialResource = false
+    @ObservationIgnored private var runtimeIdentity: UUID?
     @ObservationIgnored private var observed = ResourceSlotsSnapshot() {
         didSet {
             guard observed != oldValue else { return }
-            if observed.data == nil { actions = [:]; readingState.focusedRowID = nil }
+            if observed.runtimeIdentity != runtimeIdentity {
+                runtimeIdentity = observed.runtimeIdentity
+                routing.invalidateResourceSlotsReturn()
+                readingState.resetForRuntime()
+                expandedResourceIDs.removeAll()
+                expandedBlockerIDs.removeAll()
+                expandedInitialResource = false
+                actions = [:]
+            }
+            if observed.data == nil { actions = [:]; readingState.clearFocusReturn() }
             rebuild()
         }
     }
@@ -119,6 +134,7 @@ final class ResourceSlotsVM: ResourceSlotsViewModel {
     }
 
     func didToggleResource(_ id: String) {
+        readingState.cancelRestorationForUser()
         if !expandedResourceIDs.insert(id).inserted { expandedResourceIDs.remove(id) }
     }
 
@@ -128,7 +144,7 @@ final class ResourceSlotsVM: ResourceSlotsViewModel {
 
     func didOpenOwner(_ rowID: String) {
         guard let destination = actions[rowID] else { return }
-        readingState.focusedRowID = rowID
+        readingState.prepareDeparture(ownerRowID: rowID)
         routing.openResourceSlotOwner(destination)
     }
 

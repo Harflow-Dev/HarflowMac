@@ -8,8 +8,6 @@ import SwiftUI
 struct ResourceSlotsContent: View {
     let presentation: ResourceSlotsPresentation
     @Bindable var readingState: ResourceSlotsReadingState
-    @FocusState private var focusedRowID: String?
-    @State private var ownerFrames = ResourceSlotsOwnerFrames()
     let expandedResourceIDs: Set<String>
     let expandedBlockerIDs: Set<String>
     let onToggleResource: (String) -> Void
@@ -27,6 +25,16 @@ struct ResourceSlotsContent: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            scrollSurface
+                .onChange(of: readingState.idScrollRequest) { _, request in
+                    guard let request, readingState.consumeIDScrollRequest(request) else { return }
+                    proxy.scrollTo(request.target, anchor: .top)
+                }
+        }
+    }
+
+    private var scrollSurface: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 Text("Resource slots")
@@ -41,6 +49,7 @@ struct ResourceSlotsContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
+            .coordinateSpace(name: "resourceSlotsDiagnosticContent")
         }
         .scrollPosition($readingState.position)
         .coordinateSpace(name: "resourceSlotsViewport")
@@ -55,13 +64,13 @@ struct ResourceSlotsContent: View {
             switch phase {
             case .tracking, .interacting, .decelerating:
                 readingState.cancelRestorationForUser()
-                ownerFrames.values.removeAll()
             case .idle, .animating: break
             @unknown default: break
             }
         }
         .background {
-            ResourceSlotsRestorationFrames(active: !isLoading && (readingState.isRestoring || readingState.focusRestorationPending)) {
+            ResourceSlotsRestorationFrames(active: !isLoading && (readingState.isRestoring || readingState.focusRestorationPending),
+                                           onWindow: { readingState.recordHostingWindow($0) }) {
                 readingState.presentedFrame()
                 restoreFocusIfReady()
             }
@@ -70,32 +79,36 @@ struct ResourceSlotsContent: View {
         }
         .background(Color.windowBG)
         .onAppear {
+            reconcileReadingTargets()
             readingState.beginAppearance(ready: !isLoading)
             announceLoadingIfNeeded()
         }
         .onDisappear {
             readingState.endAppearance()
-            ownerFrames.values.removeAll()
         }
         .onChange(of: isLoading) { _, _ in
             readingState.setReady(!isLoading)
             announceLoadingIfNeeded()
         }
+        .onChange(of: presentation) { _, _ in reconcileReadingTargets() }
+        .onChange(of: expandedResourceIDs) { _, _ in reconcileReadingTargets() }
         .onChange(of: readingState.isRestoring) { _, _ in restoreFocusIfReady() }
-        .onChange(of: focusedRowID) { _, id in
-            if let id {
-                readingState.focusedRowID = id
-                readingState.didRestoreFocus()
-            }
-        }
         .accessibilityLabel(isLoading ? "Loading resource slots" : "Resource slots")
     }
 
+    private func reconcileReadingTargets() {
+        guard case let .ready(_, groups) = presentation.state else { return }
+        readingState.reconcile(groups: groups, expandedResourceIDs: expandedResourceIDs)
+    }
+
+    /// A pending focus-return token is retried across every realized owner control of the
+    /// window hosting this content, like `CallerApprovalNativeFocus.retry(in:)`; readiness,
+    /// geometry and presented-frame paths all funnel here. The control itself owns the
+    /// attempt and its verification.
     private func restoreFocusIfReady() {
-        guard !isLoading, let id = readingState.focusedRowID, let entry = ownerFrames.values[id],
-              readingState.canRestoreFocus(rowID: id, frame: entry.frame, geometryOffset: entry.offset) else { return }
-        focusedRowID = id
-        readingState.didRestoreFocus()
+        guard readingState.focusReturnRequest != nil,
+              let content = readingState.focusReturnHostWindow?.contentView else { return }
+        ResourceSlotsOwnerFocus.retry(in: content)
     }
 
     private func announceLoadingIfNeeded() {
@@ -122,21 +135,30 @@ struct ResourceSlotsContent: View {
 .font(.hf(.secondary))
 .foregroundStyle(Color.secondaryText)
                     .padding(.bottom, 4)
-                ForEach(groups) { group in
+                ForEach(groups, id: \.scrollTarget) { group in
                     ResourceSlotsCard(group: group, expanded: expandedResourceIDs.contains(group.id),
                                       expandedBlockerIDs: expandedBlockerIDs,
-                                      onToggle: { onToggleResource(group.id) },
-                                      onToggleBlockers: onToggleBlockers, focusedRowID: $focusedRowID,
-                                      trackedOwnerID: readingState.focusRestorationPending ? readingState.focusedRowID : nil,
-                                      onOwnerGeometry: { id, frame in
-                                          guard readingState.focusRestorationPending, readingState.focusedRowID == id else { return }
-                                          ownerFrames.values[id] = .init(frame: frame, offset: readingState.measuredOffset)
+                                      onToggle: {
+                                          readingState.cancelRestorationForUser()
+                                          onToggleResource(group.id)
+                                      },
+                                      onToggleBlockers: { id in
+                                          readingState.cancelRestorationForUser()
+                                          onToggleBlockers(id)
+                                      }, readingState: readingState,
+                                      onOwnerGeometry: { id, frames in
+                                          readingState.updateOwner(rowID: id, groupID: group.id, frames: frames)
                                           restoreFocusIfReady()
                                       },
-                                      onOpenOwner: { id in
-                                          readingState.focusedRowID = id
-                                          onOpenOwner(id)
-                                      })
+                                      onOwnerDisappear: { readingState.removeOwner(rowID: $0) },
+                                      onOpenOwner: onOpenOwner)
+                        .onGeometryChange(for: ResourceSlotsDiagnosticFrames.self) { geometry in
+                            .init(viewport: geometry.frame(in: .named("resourceSlotsViewport")),
+                                  content: geometry.frame(in: .named("resourceSlotsDiagnosticContent")))
+                        } action: { frames in
+                            readingState.updateGroup(groupID: group.id, frames: frames)
+                        }
+                        .onDisappear { readingState.removeGroup(groupID: group.id) }
                 }
             case let .empty(title, message), let .notEnabled(title, message),
                  let .unsupported(title, message), let .unavailable(title, message):
@@ -159,23 +181,25 @@ private struct ResourceSlotsCard: View {
     let expandedBlockerIDs: Set<String>
     let onToggle: () -> Void
     let onToggleBlockers: (String) -> Void
-    let focusedRowID: FocusState<String?>.Binding
-    let trackedOwnerID: String?
-    let onOwnerGeometry: (String, CGRect) -> Void
+    let readingState: ResourceSlotsReadingState
+    let onOwnerGeometry: (String, ResourceSlotsDiagnosticFrames) -> Void
+    let onOwnerDisappear: (String) -> Void
     let onOpenOwner: (String) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             DisclosureGroup(isExpanded: Binding(get: { expanded }, set: { _ in onToggle() })) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    Divider()
+                    // The header keeps its 14pt inset below the summary when expanded, as it
+                    // does collapsed (design: the toggle's 14px padding above the body hairline).
+                    Divider().padding(.top, 14)
                     sectionHeading(group.holderHeading)
                     if let message = group.emptyHolderMessage {
                         Text(message).font(.hf(.secondary)).foregroundStyle(Color.secondaryText).padding(.vertical, 10)
                     }
-                    ForEach(group.holders) { row in owner(row) }
+                    ForEach(group.holders, id: \.scrollTarget) { row in owner(row) }
                     if let heading = group.waiterHeading { sectionHeading(heading) }
-                    ForEach(group.waiters) { row in owner(row) }
+                    ForEach(group.waiters, id: \.scrollTarget) { row in owner(row) }
                 }
             } label: {
                 HStack(spacing: 16) {
@@ -188,7 +212,8 @@ private struct ResourceSlotsCard: View {
                 }
                 .contentShape(Rectangle())
             }
-            .disclosureGroupStyle(ResourceSlotsDisclosureStyle())
+            .disclosureGroupStyle(ResourceSlotsDisclosureStyle(identifier: "resource-slots-group-" + group.id,
+                                                               label: group.title + ", " + group.capacitySummary))
             .tint(Color.secondaryText)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -203,6 +228,32 @@ private struct ResourceSlotsCard: View {
 .foregroundStyle(Color.secondaryText)
             .padding(.top, 14)
 .padding(.bottom, 2)
+    }
+
+    /// The owner action's native control: the reading state's token is the single-use focus
+    /// intent, and every observation and acknowledgement flows back through the same state.
+    private func ownerButton(row: ResourceSlotsOwner, action: ResourceSlotsOwner.Action) -> some View {
+        ResourceSlotsOwnerButton(
+            title: action.label,
+            label: action.label + " " + row.title + (row.title == row.ownerID ? "" : ", " + row.ownerID),
+            identifier: "resource-slots-owner-" + row.id,
+            generation: readingState.focusObservationGeneration,
+            token: readingState.focusReturnRequest?.rowID == row.id ? readingState.focusReturnRequest?.token : nil,
+            isReady: {
+                guard let entry = readingState.visibleOwnerFrame(rowID: row.id) else { return false }
+                return readingState.canRestoreFocus(rowID: row.id, frame: entry.frame, geometryOffset: entry.offset)
+            },
+            authorizedResponder: { readingState.focusReturnAuthorizedResponder },
+            acknowledge: { readingState.acknowledgeFocusReturn(token: $0) },
+            observeFocusGain: { generation, token in
+                readingState.observeFocusGain(rowID: row.id, generation: generation, token: token)
+            },
+            observeFocusLoss: { generation, token in
+                readingState.observeFocusLoss(rowID: row.id, generation: generation, token: token)
+            },
+            userMovedFocus: { readingState.abandonFocusReturnForUserMovement() },
+            action: { onOpenOwner(row.id) }
+        )
     }
 
     private func owner(_ row: ResourceSlotsOwner) -> some View {
@@ -239,22 +290,20 @@ private struct ResourceSlotsCard: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let action = row.action {
-                    Button(action.label) { onOpenOwner(row.id) }
-                        .buttonStyle(MonitorButtonStyle(.tinted))
-                        .focused(focusedRowID, equals: row.id)
-                        .accessibilityLabel(action.label + " " + row.title + (row.title == row.ownerID ? "" : ", " + row.ownerID))
-                        .onGeometryChange(for: CGRect.self) { geometry in
-                            trackedOwnerID == row.id ? geometry.frame(in: .named("resourceSlotsViewport")) : .zero
-                        } action: { frame in
-                            if trackedOwnerID == row.id { onOwnerGeometry(row.id, frame) }
-                        }
+                    ownerButton(row: row, action: action)
                 }
             }
             .padding(.vertical, 10)
             .frame(minHeight: 64)
             Divider()
         }
-        .id(row.id)
+        .onGeometryChange(for: ResourceSlotsDiagnosticFrames.self) { geometry in
+            .init(viewport: geometry.frame(in: .named("resourceSlotsViewport")),
+                  content: geometry.frame(in: .named("resourceSlotsDiagnosticContent")))
+        } action: { frames in
+            onOwnerGeometry(row.id, frames)
+        }
+        .onDisappear { onOwnerDisappear(row.id) }
     }
 }
 
@@ -274,8 +323,10 @@ struct ResourceSlotsBlockerContent: View {
     }
 }
 
-// The native disclosure retains its semantics while the chevron has fixed, undistorted bounds.
+// The native header button exposes expansion state while retaining the approved trailing chevron.
 struct ResourceSlotsDisclosureStyle: DisclosureGroupStyle {
+    let identifier: String
+    let label: String
     func makeBody(configuration: Configuration) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -287,19 +338,12 @@ struct ResourceSlotsDisclosureStyle: DisclosureGroupStyle {
                         .frame(width: 12, height: 12)
                         .accessibilityHidden(true)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityRepresentation {
-                DisclosureGroup(isExpanded: Binding(
-                    get: { configuration.isExpanded },
-                    set: { configuration.isExpanded = $0 }
-                )) {
-                    EmptyView()
-                } label: {
-                    configuration.label
-                }
-                .disclosureGroupStyle(.automatic)
-            }
+            .accessibilityLabel(label)
+            .accessibilityValue(configuration.isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityIdentifier(identifier)
             if configuration.isExpanded { configuration.content.disclosureGroupStyle(.automatic) }
         }
     }

@@ -46,7 +46,7 @@ import Testing
         #expect(baseline.keyboard.count == KeyboardProbe.allCases.count)
         #expect(baseline.searchFocus.requestedFirstResponder)
         #expect(baseline.searchFocus.arrowsKeptFocus)
-        #expect(baseline.aliasSelection == [11, 12])
+        #expect(baseline.aliasSelection == [12, 13])
 
         // Reviewed native List baseline (captured on the current macOS SDK).  These are public
         // control settings and semantic row geometry, not object addresses or SwiftUI internals.
@@ -79,12 +79,12 @@ import Testing
         #expect(zip(baseline.rows, baseline.rows.dropFirst()).allSatisfy { current, next in
             next.rect.minY >= current.rect.maxY
         })
-        let contentRows = baseline.rows.enumerated().filter { ![0, 1, 2, 3, 5, 9, 13, 15].contains($0.offset) }
+        let contentRows = baseline.rows.enumerated().filter { ![0, 1, 2, 3, 4, 6, 10, 14, 16].contains($0.offset) }
         #expect(contentRows.allSatisfy { $0.element.rect.height >= $0.element.fittingHeight - 1 })
         #expect(baseline.rows.map(\.stableAXSignature) == expectedAXSignatures)
         for probe in KeyboardProbe.allCases {
             let result = try #require(baseline.keyboard[probe.rawValue])
-            #expect(result.selectedRowsBefore == [6])
+            #expect(result.selectedRowsBefore == [7])
             #expect(result.firstResponder)
             #expect(result.selectedRowsAfter == expectedKeyboardSelection[probe])
         }
@@ -271,7 +271,7 @@ import Testing
 
     private func send(_ probe: KeyboardProbe) -> KeyboardObservation {
         outline.window?.makeFirstResponder(outline)
-        outline.selectRowIndexes(IndexSet(integer: 6), byExtendingSelection: false)
+        outline.selectRowIndexes(IndexSet(integer: 7), byExtendingSelection: false)
         let before = Array(outline.selectedRowIndexes)
         let event = NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: probe.modifiers,
@@ -312,7 +312,7 @@ import Testing
 
     private func aliasSelection() -> [Int] {
         outline.window?.makeFirstResponder(outline)
-        outline.selectRowIndexes(IndexSet([11, 12]), byExtendingSelection: false)
+        outline.selectRowIndexes(IndexSet([12, 13]), byExtendingSelection: false)
         return Array(outline.selectedRowIndexes)
     }
 }
@@ -569,6 +569,7 @@ private let expectedAXSignatures: [[String]] = [
     ["AXHeading|Overview||"],
     ["AXStaticText||Needs you, 3 pending|"],
     ["AXStaticText||Statistics|"],
+    ["AXStaticText||Resource slots|"],
     // The native header keeps both existing actions reachable while exposing its semantic heading.
     ["AXButton|Collapse workflows||", "AXButton|New workflow||", "AXHeading|Collapse workflows||"],
     ["AXStaticText||baseline-definition|"],
@@ -589,6 +590,6 @@ private let expectedAXSignatures: [[String]] = [
 ]
 
 private let expectedKeyboardSelection: [KeyboardProbe: [Int]] = [
-    .up: [4], .down: [7], .home: [6], .end: [6], .pageUp: [6], .pageDown: [6],
-    .commandA: [6], .return: [6], .space: [6], .letter: [6]
+    .up: [5], .down: [8], .home: [7], .end: [7], .pageUp: [7], .pageDown: [7],
+    .commandA: [7], .return: [7], .space: [7], .letter: [7]
 ]
