@@ -64,19 +64,57 @@ import Testing
         binding.wrappedValue = .none
     }
 
+    @Test func givenWrappedPresentationContext_whenRepeatedlyMountedAndDetachedWithIdleAndCurrentIncidents_thenTeardownCompletes() async throws {
+        // given
+        _ = NSApplication.shared
+        var detachedFixtures: [PresentationFixture] = []
+        // when: retain each host through content removal and window close so SwiftUI observes a real detach.
+        for index in 0 ..< 8 {
+            let wake = ControlledPresentationWake()
+            var instant = Date(timeIntervalSince1970: TimeInterval(index * 10))
+            var clockReads = 0
+            let incidents = IncidentPresentation()
+            if index.isMultiple(of: 2) {
+                incidents.report(source: "lifecycle", message: "Current incident \(index)")
+            }
+            let clock = IncidentPresentationClock(wake: { try await wake.wait() }, now: {
+                clockReads += 1
+                return instant
+            })
+            let fixture = PresentationFixture(incidents: incidents, clock: clock)
+            await waitUntil { fixture.host.layoutSubtreeIfNeeded(); return fixture.vm.binding != nil }
+            await waitUntil { wake.pendingCount == 1 }
+            fixture.close()
+            detachedFixtures.append(fixture)
+            await waitUntil { !clock.isMounted }
+            #expect(!clock.isMounted)
+            await waitUntil { wake.cancelledCount == 1 }
+            #expect(wake.cancelledCount == 1)
+            instant.addTimeInterval(2)
+            wake.release(0)
+            await waitUntil { wake.returnedCount == 1 }
+            #expect(clockReads == 1)
+            #expect(wake.issuedCount == 1)
+            #expect(wake.pendingCount == 0)
+            if index.isMultiple(of: 2) { #expect(incidents.remaining == 8) }
+        }
+        // then: detached host and root fixtures remain retained through the full teardown sequence.
+    }
+
 }
 
 // MARK: - PresentationFixture
 
 @MainActor private final class PresentationFixture {
-    let incidents = IncidentPresentation()
+    let incidents: IncidentPresentation
     let vm = PresentationFixtureVM()
     let host: NSHostingView<ModifiedContent<PresentationFixtureView, ViewPresentationContextModifier>>
     let window: NSWindow
 
-    init() {
+    init(incidents: IncidentPresentation = IncidentPresentation(), clock: IncidentPresentationClock? = nil) {
         _ = NSApplication.shared
-        self.host = NSHostingView(rootView: PresentationFixtureView(vm: vm).modifier(ViewPresentationContextModifier(incidents: incidents)))
+        self.incidents = incidents
+        self.host = NSHostingView(rootView: PresentationFixtureView(vm: vm).modifier(ViewPresentationContextModifier(incidents: incidents, clock: clock)))
         self.window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host

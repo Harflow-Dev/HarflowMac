@@ -13,16 +13,18 @@ import SwiftUI
 
 // MARK: - ViewPresentationContextModifier
 
+@MainActor
 struct ViewPresentationContextModifier: ViewModifier {
     
     @State private var viewEvent: ViewEvent = .none
     @State private var incidents = IncidentPresentation()
     @State private var interacting = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let clock = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
+    @State private var clock: IncidentPresentationClock
     
-    init(incidents: IncidentPresentation = IncidentPresentation()) {
+    init(incidents: IncidentPresentation = IncidentPresentation(), clock: IncidentPresentationClock? = nil) {
         _incidents = State(initialValue: incidents)
+        _clock = State(initialValue: clock ?? IncidentPresentationClock())
     }
 
     private var presentationBinding: Binding<ViewEvent> {
@@ -40,7 +42,10 @@ struct ViewPresentationContextModifier: ViewModifier {
             .environment(\.incidentPresentation, incidents)
             .overlay(alignment: .top) { snackbar }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: incidents.current?.id)
-            .onReceive(clock) { now in incidents.tick(now: now, paused: interacting || !NSApp.isActive) }
+            .onAppear {
+                clock.mount { now, seed in incidents.tick(now: now, paused: seed || interacting || !NSApp.isActive) }
+            }
+            .onDisappear { clock.unmount() }
             .alert(
                 viewEvent.alert?.title ?? "",
                 isPresented: Binding(
