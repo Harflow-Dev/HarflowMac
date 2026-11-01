@@ -555,6 +555,9 @@ def _fake_host_setup_environment(
     selected_swift_mismatch: bool = False,
     activation_receipt: str = "APPKIT_ACTIVATION active=true key=true",
     activation_returncode: int = 0,
+    exception_receipt: str = "APPKIT_EXCEPTION name=NSInvalidArgumentException reason=AppKitTestHost exception self-test",
+    exception_returncode: int = -6,
+    exception_timed_out: bool = False,
 ) -> tuple[str, Path, dict]:
     package = tmp_path / runner.HOSTED_PACKAGE
     package.mkdir(parents=True)
@@ -601,6 +604,10 @@ def _fake_host_setup_environment(
             text = "Swift version 6.3.4" if version_mismatch else outputs["version"]
         elif "--activation-self-test" in argv:
             text = activation_receipt
+        elif "--exception-self-test" in argv:
+            Path(stdout_path).write_text("", encoding="utf-8")
+            Path(stderr_path).write_text(exception_receipt + "\n", encoding="utf-8")
+            return exception_returncode, exception_timed_out, 0.01
         Path(stdout_path).write_text(text + ("\n" if text else ""), encoding="utf-8")
         Path(stderr_path).write_text("", encoding="utf-8")
         return (activation_returncode if "--activation-self-test" in argv else 0), False, 0.01
@@ -678,3 +685,59 @@ def test_prepare_appkit_host_rejects_expired_setup_budget(
     (root / "logs").mkdir()
     with pytest.raises(runner.RunnerError, match="setup exhausted the build budget"):
         runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() - 1, {})
+
+
+def test_prepare_appkit_host_runs_the_exception_self_test(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "exception"
+    swift, package, _ = _fake_host_setup_environment(root, monkeypatch)
+    (root / "logs").mkdir()
+    evidence: dict = {}
+    host = runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, evidence)
+    assert host.executable and host.bundle
+    assert "--exception-self-test" in evidence["host-exception"]["argv"]
+    assert evidence["host-exception"]["returncode"] != 0
+    assert not evidence["host-exception"]["timed_out"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"exception_returncode": 0}, "exception self-test exited zero"),
+        (
+            {"exception_receipt": "unrelated stderr", "exception_returncode": 1},
+            "without abnormal termination and the expected identity",
+        ),
+        ({"exception_timed_out": True}, "exception self-test timed out"),
+        (
+            {"exception_receipt": "APPKIT_EXCEPTION_RAISING", "exception_returncode": 3},
+            "watchdog: the exception was swallowed",
+        ),
+        (
+            {"exception_receipt": "APPKIT_EXCEPTION_RAISING", "exception_returncode": 1},
+            "without abnormal termination and the expected identity",
+        ),
+        # An unrelated segfault signal with unrelated stderr is not the self-test's identity.
+        (
+            {"exception_receipt": "unrelated stderr", "exception_returncode": -11},
+            "without abnormal termination and the expected identity",
+        ),
+        # A signal exit is not enough either: the identity must follow the raise.
+        (
+            {"exception_receipt": "APPKIT_EXCEPTION_RAISING", "exception_returncode": -6},
+            "without abnormal termination and the expected identity",
+        ),
+        # The identity text alone cannot redeem a plain nonzero exit: only abnormal
+        # termination together with the identity qualifies.
+        ({"exception_returncode": 1}, "without abnormal termination and the expected identity"),
+    ],
+)
+def test_prepare_appkit_host_rejects_a_silent_or_successful_exception_self_test(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kwargs: dict, expected: str,
+) -> None:
+    root = tmp_path / "exception-failure"
+    swift, package, _ = _fake_host_setup_environment(root, monkeypatch, **kwargs)
+    (root / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match=expected):
+        runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, {})

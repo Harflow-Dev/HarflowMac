@@ -827,6 +827,36 @@ def prepare_appkit_host(swift: str, package: str, output_dir: str,
     receipt = stage("host-activation", [executable, "--activation-self-test"], environment)
     if receipt != "APPKIT_ACTIVATION active=true key=true":
         raise RunnerError("AppKit host activation self-test did not produce the required receipt")
+    exception_stdout = os.path.join(output_dir, "host-exception.stdout.log")
+    exception_stderr = os.path.join(output_dir, "host-exception.stderr.log")
+    exception_argv = [executable, "--exception-self-test"]
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RunnerError("AppKit host setup exhausted the build budget")
+    code, timed_out, elapsed = run_process(exception_argv, package, remaining, exception_stdout, exception_stderr,
+                                           env=environment)
+    evidence["host-exception"] = {"argv": exception_argv, "stdout_log": exception_stdout,
+                                  "stderr_log": exception_stderr, "returncode": code,
+                                  "timed_out": timed_out, "duration_seconds": elapsed}
+    if timed_out:
+        raise RunnerError("AppKit host exception self-test timed out")
+    if code == 3:
+        raise RunnerError("AppKit host exception self-test hit its watchdog: the exception was swallowed")
+    if code == 0:
+        raise RunnerError("AppKit host exception self-test exited zero")
+    # Abnormal termination is necessary but not sufficient: it must carry the expected
+    # post-raise identity — the uncaught handler's or signal handler's `APPKIT_EXCEPTION`
+    # line, or AppKit's terminating text — naming NSInvalidArgumentException with the
+    # self-test reason. The pre-raise breadcrumb carries no reason on purpose, so a signal
+    # exit without the identity (an unrelated crash) and a plain nonzero exit are both
+    # rejected however their stderr reads.
+    exception_stderr_text = _read_text(exception_stderr, strict=True)
+    identity_line = "APPKIT_EXCEPTION name=NSInvalidArgumentException reason=AppKitTestHost exception self-test"
+    has_identity = identity_line in exception_stderr_text \
+        or ("uncaught exception 'NSInvalidArgumentException'" in exception_stderr_text
+            and "AppKitTestHost exception self-test" in exception_stderr_text)
+    if code >= 0 or not has_identity:
+        raise RunnerError("AppKit host exception self-test terminated without abnormal termination and the expected identity")
     evidence["executable"] = executable
     evidence["bundle"] = bundle
     return AppKitHost(executable, bundle, testing, environment)
