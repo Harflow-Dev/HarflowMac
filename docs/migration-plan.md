@@ -1,5 +1,7 @@
 # Native product continuity migration checklist
 
+Dispatchable work packages: [migration sessions](migration-sessions.md).
+
 Status: planned, 2026-11-02. All work items remain unverified.
 
 Own current daily-use native app maintenance and its contract consumption.
