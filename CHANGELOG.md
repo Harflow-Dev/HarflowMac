@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.0.9
+
+- Keep the workflow editor's standalone strip and Add tray on one horizontally scrolling row with the app's thin overlay scrollbar, a fixed scrollbar gutter that never changes the row's height, and a trailing fade for clipped content.
+- Reveal that scrollbar while the pointer is over either row and keep it for 1.5 seconds after the pointer leaves, so it can be dragged without a horizontal scroll device.
+
 ## 0.0.8
 
 - Pair the app with HarflowMCP 0.0.7 using regenerated frozen dependency inputs and refreshed vendored v1 contract fixtures.
