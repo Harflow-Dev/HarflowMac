@@ -22,6 +22,8 @@ Packages live in `macos/HfFoundation`, `macos/HfCore`, `macos/HfFeatures`, and `
 
 Never launch development builds against real user state. Use an isolated generated fixture and temporary HOME. Pre-seed that HOME through the production ManagedRuntimeInstaller with constructor-injected local acquisitions, then launch the ordinary app against the qualified managed generation. A bare fake harflow-ctl cannot satisfy completion receipt, native import, pip, and version-info qualification. See [managed runtime](managed-runtime.md) for pinned input maintenance. No environment variable or preference overrides production acquisition endpoints.
 
+Temporary HOME does not by itself establish application-preference isolation. On the S02 macOS 26.6.2 host, Foundation resolved the scratch home but did not read the preseeded scratch preferences, including notification flags. Before launching a development app, verify the effective preference domain and notification settings as well as the managed engine root. Use a separate test bundle identity without URL schemes, and do not write owner preferences without explicit authorization. See the [S02 fixture evidence](migration-receipts/S02-fixture.md).
+
 ## Swift Testing runner
 
 `scripts/test-swift-package.py` builds once, discovers target-qualified function IDs with
