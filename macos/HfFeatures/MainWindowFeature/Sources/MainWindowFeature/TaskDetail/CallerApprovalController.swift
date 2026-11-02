@@ -31,6 +31,7 @@ final class CallerApprovalController {
         let request: CallerApprovalRequest
         let message: String
         var capabilityLoss = false
+        var winner: CallerApprovalWinner?
     }
 
     @ObservationIgnored private var blocked: [String: BlockedResult] = [:]
@@ -323,7 +324,10 @@ final class CallerApprovalController {
     private func recordResponseFailure(_ error: Error, request: CallerApprovalRequest) {
         let toolError = error as? ToolError
         let reason = toolError?.callerApprovalResponseReason
-        if let toolError, case .unsupportedCommand = toolError {
+        if let winner = toolError?.callerApprovalWinner, winner.requestID == request.id, winner.taskID == request.taskID {
+            let label = winner.answeredBy == .caller ? "Already answered by the caller" : "Answered in Harflow"
+            blocked[request.id] = BlockedResult(request: request, message: label + " · " + winner.decision, winner: winner)
+        } else if let toolError, case .unsupportedCommand = toolError {
             supportsCallerResponses = false
             blocked[request.id] = BlockedResult(request: request,
                 message: "Harflow responses are unavailable with this engine. Respond through the owning caller's MCP or CLI.", capabilityLoss: true)
@@ -338,6 +342,7 @@ final class CallerApprovalController {
     }
 
     private func notice(for request: CallerApprovalRequest, ownerSupported: Bool, full: Bool, now: Date, knownEnums: Bool) -> String? {
+        if let refusal = blocked[request.id], refusal.winner != nil, Self.sameCurrent(refusal.request, request) { return refusal.message }
         let pending = Self.visuallyPending(request)
         let known = Self.knownState(request) && knownEnums
         if !pending {
@@ -353,7 +358,15 @@ final class CallerApprovalController {
     }
 
     private func publishCards(token: UUID, finishingRefresh: Bool = false) async {
-        let values = requests.map { details[$0.id] ?? $0 }
+        let values = requests.map { listed -> CallerApprovalRequest in
+            let request = details[listed.id] ?? listed
+            guard let winner = blocked[request.id]?.winner else { return request }
+            var raw = request.raw
+            raw["decision"] = .string(winner.decision)
+            raw["responder"] = .string(winner.answeredBy.rawValue)
+            raw["decided_at"] = .number(winner.answeredAt)
+            return CallerApprovalRequest(raw: raw)
+        }
         let actions = await Task.detached(priority: .userInitiated) {
             values.map { CallerApprovalAction.build($0) }
         }.value

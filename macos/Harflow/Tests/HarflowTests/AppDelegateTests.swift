@@ -299,6 +299,21 @@ import Testing
         #expect(handledPaths.value == [MonitorDestination.task("abc123").pathId, MonitorDestination.openWindow.pathId])
     }
     
+    @Test func givenAWorkflowAnswerNotification_whenClicked_thenItOpensTheRunAndWindow() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let coordinator = MockCoordinator()
+        let paths = LockedBox<[String]>([])
+        given(coordinator).handle(path: .any).willProduce { path in
+            if let destination = path as? MonitorDestination { paths.value.append(destination.pathId) }
+        }
+        sut.coordinator = coordinator
+        // when
+        sut.handleNotificationClick(userInfo: ["workflow_run_id": "abc123"])
+        // then
+        #expect(paths.value == [MonitorDestination.workflowRun("abc123").pathId, MonitorDestination.openWindow.pathId])
+    }
+
     @Test func givenAnInvalidNotificationID_whenClicked_thenNothingIsSelected() {
         // given
         let (sut, _, _, _) = makeSUT()

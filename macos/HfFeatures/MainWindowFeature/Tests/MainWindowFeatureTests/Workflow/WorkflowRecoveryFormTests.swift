@@ -88,6 +88,49 @@ import Testing
         try fixture.capturePNG(to: directory.appendingPathComponent("recovery-\(state)-\(mode).png"))
     }
 
+    @Test(arguments: [ColorScheme.light, .dark], [true, false])
+    func givenSharedAnswerState_whenHostedForCapture_thenProductionNoteOrCallerWinnerIsVisible(appearance: ColorScheme, callerWon: Bool) async throws {
+        // given
+        guard let path = ProcessInfo.processInfo.environment["HARFLOW_RECOVERY_CAPTURE_DIR"], !path.isEmpty else { return }
+        let harness = WorkflowTests().makeVM()
+        let vm = harness.sut
+        defer { vm.didDisappear() }
+        var raw = recoveryFormRun(status: "needs_attention", question: "Choose the next approach.").raw
+        raw["interaction_owner"] = .string("caller")
+        raw["interaction_state"] = .object(["owner": .string("caller"), "caller_state": .string("alive"),
+            "monitor_available": .bool(true), "responders": .array([.string("caller"), .string("monitor")])])
+        raw["monitor_controls"] = .object(["resume": .object(["allowed": .bool(true)]),
+            "additional_attempts": .object(["allowed": .bool(true)])])
+        given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
+        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(raw)
+        vm.selectedRun = WorkflowRunModel(raw: raw)
+        vm.instructions = "Try the alternate fix."
+        if callerWon {
+            let receipt = try #require(WorkflowInteractionReceipt(.object([
+                "interaction_id": raw["attention_checkpoint_id"]!, "workflow_run_id": .string("recovery-form-run"),
+                "action": .string("resume"), "answer": .string("Keep the current approach."),
+                "answered_by": .string("caller"), "answered_at": .number(1793059200)
+            ])))
+            vm.retainInteractionOutcome(receipt, draft: vm.instructions)
+        }
+        let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance).frame(width: 1440, height: 900),
+                                   size: CGSize(width: 1440, height: 900), appearance: appearance)
+        defer { fixture.close() }
+        // when
+        let label = callerWon ? "Already answered by the caller" : "The original caller can also answer. Whichever answers first is used."
+        await fixture.settle { fixture.element(label) != nil && fixture.hasRenderedInk }
+        // then
+        #expect(fixture.element(label) != nil)
+        if callerWon {
+            #expect(fixture.element("Your saved draft") != nil)
+            #expect(!fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView })
+        }
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let mode = appearance == .light ? "light" : "dark"
+        try fixture.capturePNG(to: directory.appendingPathComponent("shared-\(callerWon ? "caller-won" : "answerable")-\(mode).png"))
+    }
+
     private func makeCaptureState(checkpointAvailable: Bool) -> (
         harness: (sut: WorkflowVM, useCase: MockWorkflowUseCase), initialRun: WorkflowRunModel
     ) {

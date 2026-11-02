@@ -154,7 +154,7 @@ final class NeedsYouVM: NeedsYouViewModel {
         generation = token
         let input = NeedsYouAssemblyInput(
             snapshot: snapshot, selectedID: selectedID, overrides: overrides, reviewNotes: reviewNotes, settled: settled,
-            lastDetails: lastDetails, leavingRows: leavingRows, submittingIDs: submittingIDs, sendError: sendError, notice: notice
+            lastDetails: lastDetails, leavingRows: leavingRows, submittingIDs: submittingIDs, sendError: sendError, notice: notice, savedDraft: answerText
         )
         rebuildTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) { NeedsYouAssembly.assemble(input) }.value

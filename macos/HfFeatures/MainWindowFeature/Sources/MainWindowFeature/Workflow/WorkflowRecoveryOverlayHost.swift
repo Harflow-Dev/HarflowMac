@@ -24,7 +24,8 @@ struct WorkflowRecoveryOverlayHost<VM: WorkflowViewModel>: View {
         WorkflowRecoveryOverlayPresentation.eligibleRunID(
             run: viewModel.selectedRun,
             initialLoadingKind: viewModel.initialLoadingKind,
-            initialLoadFailed: viewModel.initialLoadFailed
+            initialLoadFailed: viewModel.initialLoadFailed,
+            answeredInteractionID: viewModel.interactionOutcome?.interactionID
         )
     }
 

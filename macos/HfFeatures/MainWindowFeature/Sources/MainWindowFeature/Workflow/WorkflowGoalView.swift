@@ -50,6 +50,11 @@ struct WorkflowGoalView<VM: WorkflowViewModel>: View {
 .scrollChromeScope()
                         .frame(minHeight: HfRadius.Metrics.sidebarSearchMinimumWidth)
                         .accessibilityLabel("Revised workflow goal")
+                    if run.sharedAnswering {
+                        Text("The original caller can also answer. Whichever answers first is used.")
+                            .font(.hf(.secondary))
+.foregroundStyle(Color.secondaryText)
+                    }
                     HStack {
                         Button("Cancel") { editing = false }.buttonStyle(QuietButtonStyle())
                         Button("Save goal") {
@@ -73,6 +78,9 @@ struct WorkflowGoalView<VM: WorkflowViewModel>: View {
             }
         }
         .font(.hf(.secondary))
+        .onChange(of: viewModel.interactionOutcome) {
+            if viewModel.interactionOutcome?.action == "revise_goal" { editing = false }
+        }
         .onChange(of: run.id) { editing = false }
         .onChange(of: run.goalRevision) {
             if run.goal == revisionText { editing = false }

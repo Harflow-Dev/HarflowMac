@@ -73,6 +73,11 @@ struct WorkflowRecoveryForm<VM: WorkflowViewModel>: View {
                     }
                 }
                 .font(.hf(.body))
+                if run.sharedAnswering {
+                    Text("The original caller can also answer. Whichever answers first is used.")
+                        .font(.hf(.secondary))
+.foregroundStyle(Color.secondaryText)
+                }
             }
             .padding(HfRadius.Metrics.recoveryBannerPadding)
             .frame(maxWidth: .infinity, alignment: .leading)

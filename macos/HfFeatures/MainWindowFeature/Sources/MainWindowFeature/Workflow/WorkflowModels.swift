@@ -55,6 +55,13 @@ struct WorkflowEdgeModel: Identifiable, Equatable {
 // MARK: - WorkflowRunModel
 
 struct WorkflowRunModel: Identifiable, Equatable {
+    var interactionState: WorkflowInteractionState? { WorkflowInteractionState(raw["interaction_state"]) }
+    var sharedAnswering: Bool {
+        interactionState?.responders?.contains("caller") == true && interactionState?.responders?.contains("monitor") == true
+    }
+
+    var interactionHistory: [WorkflowInteractionReceipt] { WorkflowMonitorStatus(raw).interactionHistory }
+
     var raw: [String: JSONValue]
     var id: String { raw["workflow_run_id"]?.stringValue ?? raw["run_id"]?.stringValue ?? "" }
     var name: String { raw["workflow_name"]?.stringValue ?? raw["name"]?.stringValue ?? "Workflow" }

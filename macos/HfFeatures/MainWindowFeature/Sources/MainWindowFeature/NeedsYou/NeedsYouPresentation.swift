@@ -63,6 +63,8 @@ struct NeedsYouDetail: Equatable, Sendable, Identifiable {
     var error: String?
     /// Shown when the approval was refreshed after it changed under the reviewer.
     var reviewNote: String?
+    /// Local text retained after another responder wins.
+    var savedDraft: String?
 
     static let longTextThreshold = 900
     var isLong: Bool { kind != .approval && text.count > Self.longTextThreshold }
@@ -135,6 +137,7 @@ enum NeedsYouPresentationMapper {
     }
 
     static func ownershipNote(_ item: NeedsYouItem) -> String {
+        if item.ownership.sharedAnswering { return "The original caller can also answer. Whichever answers first is used." }
         let caller = "The original caller"
         if item.kind == .approval, item.rootRunID.isEmpty {
             return item.approval?.isMonitorOwned == true
@@ -156,6 +159,8 @@ enum NeedsYouPresentationMapper {
         if item.ownership.callerEnded { fields.append(.init(label: "Caller", value: "Ended")) }
         let owner = if item.kind == .approval, item.rootRunID.isEmpty, item.approval?.isMonitorOwned != true {
             "Harflow responds for the caller"
+        } else if item.ownership.sharedAnswering {
+            "The original caller; Harflow can also answer"
         } else if item.ownership.owner == "monitor" {
             "Harflow"
         } else {
@@ -193,6 +198,7 @@ enum NeedsYouPresentationMapper {
         if item.kind == .approval, item.rootRunID.isEmpty {
             return "Harflow sent your decision to the engine, and \(item.runTitle) no longer needs you."
         }
+        if item.ownership.sharedAnswering { return "The engine used the first answer. Ownership is unchanged." }
         if item.ownership.callerEnded || item.ownership.handover != nil {
             return "Harflow now owns this run. The original caller can no longer answer it, and \(item.runTitle) no longer needs you."
         }

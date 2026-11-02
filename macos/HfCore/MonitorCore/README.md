@@ -14,6 +14,10 @@ Tests vendor exact engine-owned fixtures under `Tests/MonitorCoreTests/Resources
 
 Approval responses preserve the engine's structured refusal data and decode known owner and refusal values without authorizing unknown values. Caller-owned responses require `caller-approvals.monitor-respond.v1` on their fresh operation handshake. A separate capability read informs presentation only; it never authorizes submission. Monitor-owned responses retain compatibility with older engines. `TaskInfo.awaitingDecisionCount` is optional and distinguishes missing legacy data from an authoritative zero.
 
+## Shared workflow interactions
+
+`WorkflowInteractionState.responders` preserves explicit response channels while keeping ownership separate. Missing responders use legacy eligibility. `WorkflowInteractionReceipt` decodes durable engine history and `ToolError.workflowInteractionWinner` retains a structured losing-response receipt. Approval winners preserve their request/task identity, decision, responder and timestamp independently. Unknown or incomplete attribution never becomes a caller or Monitor answer.
+
 ## State recovery
 
 `CtlClient.inspectState()` and `recoverState(inspection:)` require the pure handshake’s `state-recovery.v1` capability before launching public ctl commands. Inspection and completion receipts validate the selected root and operation identity. `ToolError.structuredRefusal` retains additive engine `error.data`, including partial-backup evidence, while legacy errors preserve their existing shape. Store refusal never changes executable qualification.

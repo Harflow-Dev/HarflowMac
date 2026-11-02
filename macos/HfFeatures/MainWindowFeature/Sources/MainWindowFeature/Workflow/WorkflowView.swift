@@ -76,6 +76,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 header.disabled(viewModel.initialLoadFailed)
             }
             Divider()
+            answerHistoryHeader
             if let error = viewModel.errorText, error != viewModel.readFailureText {
                 Text(error)
 .font(.hf(.secondary))

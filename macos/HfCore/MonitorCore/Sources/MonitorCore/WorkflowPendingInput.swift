@@ -39,13 +39,16 @@ public struct WorkflowInteractionState: Equatable, Sendable {
     public let monitorAvailable: Bool
     public let reason: String
     public let handover: Handover?
+    /// Explicit response channels, absent on older engines. Unknown channels grant no authority.
+    public let responders: [String]?
 
-    public init(owner: Owner, callerState: CallerState, monitorAvailable: Bool, reason: String, handover: Handover?) {
+    public init(owner: Owner, callerState: CallerState, monitorAvailable: Bool, reason: String, handover: Handover?, responders: [String]? = nil) {
         self.owner = owner
         self.callerState = callerState
         self.monitorAvailable = monitorAvailable
         self.reason = reason
         self.handover = handover
+        self.responders = responders
     }
 
     /// Decodes the projection; nil when absent or not an object, which callers treat as unqualified.
@@ -62,6 +65,11 @@ public struct WorkflowInteractionState: Equatable, Sendable {
         case "unknown": callerState = .unknown
         case let other: callerState = .unrecognized(other ?? "")
         }
+        if let values = object["responders"]?.arrayValue, values.allSatisfy({ $0.stringValue != nil }) {
+            responders = values.compactMap(\.stringValue)
+        } else {
+            responders = object["responders"] == nil ? nil : []
+        }
         monitorAvailable = object["monitor_available"]?.boolValue == true
         reason = object["reason"]?.stringValue ?? ""
         if let record = object["handover"]?.objectValue {
@@ -77,10 +85,13 @@ public struct WorkflowInteractionState: Equatable, Sendable {
         }
     }
 
-    /// True only for recognized values the engine itself marks as available to the Monitor: the
-    /// Monitor owns the interaction, or the original caller is proven dead.
+    /// Explicit Monitor responders take precedence. Absent channels preserve legacy eligibility.
     public var isAnswerableFromMonitor: Bool {
         guard monitorAvailable else { return false }
+        if let responders {
+            guard owner == .caller || owner == .monitor else { return false }
+            return responders.contains("monitor")
+        }
         if owner == .monitor { return true }
         return owner == .caller && callerState == .dead
     }
@@ -201,6 +212,11 @@ public struct WorkflowMonitorStatus: Equatable, Sendable {
 
     /// Present on engines that report caller loss; nil during bootstrap, a blocked catalog, or on an engine without it.
     public var interactionState: WorkflowInteractionState? { WorkflowInteractionState(raw["interaction_state"]) }
+
+    /// Durable engine receipts; unknown or malformed outcomes remain unavailable.
+    public var interactionHistory: [WorkflowInteractionReceipt] {
+        (raw["interaction_history"]?.arrayValue ?? []).compactMap(WorkflowInteractionReceipt.init)
+    }
 
     /// False while the catalog is preparing or blocked, when projections may be absent or incomplete.
     public var isQualified: Bool { CatalogState(raw: raw).isReady }

@@ -26,6 +26,10 @@ public struct CallerApprovalRequest: Equatable, Identifiable, Sendable {
     /// A fresh capability check is still required at mutation time for caller-owned requests.
     public var mayBeAnsweredFromMonitor: Bool { isPending && (interactionOwner == .monitor || interactionOwner == .caller) }
     public var deadline: Date? { raw["deadline"]?.doubleValue.map(Date.init(timeIntervalSince1970:)) }
+    /// The actual response channel, independent from the interaction owner.
+    public var answeredBy: CallerApprovalOwner? { raw["responder"]?.stringValue.flatMap(CallerApprovalOwner.init(rawValue:)) }
+    /// Engine-persisted decision time; absent on older requests.
+    public var answeredAt: Double? { raw["decided_at"]?.doubleValue.flatMap { $0.isFinite ? $0 : nil } }
     public var complete: Bool {
         raw["complete"]?.boolValue == true && raw["action"]?.objectValue?["input"]?.objectValue != nil
             && !id.isEmpty && !taskID.isEmpty && !digest.isEmpty && revision != nil
@@ -83,11 +87,42 @@ public extension CtlClient {
 }
 
 public extension ToolError {
+    /// A persisted approval winner included with a stale or duplicate response refusal.
+    var callerApprovalWinner: CallerApprovalWinner? {
+        guard refusalCode == "approval_error", let receipt = refusalData?["interaction"] else { return nil }
+        return CallerApprovalWinner(receipt)
+    }
     /// Typed approval-specific reason retained in ctl's additive refusal data. Unknown values
     /// intentionally return nil so callers can refresh read-only instead of guessing.
     var callerApprovalResponseReason: CallerApprovalResponseReason? {
         if refusalCode == "caller_undecidable" { return .callerUndecidable }
         guard refusalCode == "approval_error" else { return nil }
         return refusalData?["reason"]?.stringValue.flatMap(CallerApprovalResponseReason.init(rawValue:))
+    }
+}
+
+// MARK: - CallerApprovalWinner
+
+/// Engine-confirmed approval outcome, retaining attribution when a response loses a race.
+public struct CallerApprovalWinner: Equatable, Sendable {
+    public let requestID: String
+    public let taskID: String
+    public let decision: String
+    public let answeredBy: CallerApprovalOwner
+    public let answeredAt: Double
+
+    public init?(_ value: JSONValue) {
+        guard let object = value.objectValue,
+              let request = object["interaction_id"]?.stringValue, !request.isEmpty,
+              let task = object["task_id"]?.stringValue, !task.isEmpty,
+              object["action"]?.stringValue == "approval",
+              let decision = object["answer"]?.stringValue, ["approve", "reject"].contains(decision),
+              let responder = object["answered_by"]?.stringValue.flatMap(CallerApprovalOwner.init(rawValue:)),
+              let timestamp = object["answered_at"]?.doubleValue, timestamp.isFinite else { return nil }
+        requestID = request
+        taskID = task
+        self.decision = decision
+        answeredBy = responder
+        answeredAt = timestamp
     }
 }

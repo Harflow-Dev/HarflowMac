@@ -3,6 +3,12 @@ import Foundation
 // MARK: - WorkflowClient
 
 public extension CtlClient {
+    /// Advisory shared-channel availability. The engine rechecks the exact checkpoint at submission.
+    func supportsSharedWorkflowInteractions() async -> Result<Bool, ToolError> {
+        await VersionInfoClient(executable: executable, environment: environment, context: compatibilityContext, runner: runner)
+            .check().map { $0.capabilities.contains(CtlCapability.workflowSharedInteractions) }
+    }
+
     /// Calls the versioned workflow CLI boundary. State is owned exclusively by Harflow.
     func workflow(_ command: String, options: [String] = [], positionals: [String] = []) async -> Result<[String: JSONValue], ToolError> {
         let hasDecision = options.contains { $0 == "--decision-id" || $0.hasPrefix("--decision-id=") }

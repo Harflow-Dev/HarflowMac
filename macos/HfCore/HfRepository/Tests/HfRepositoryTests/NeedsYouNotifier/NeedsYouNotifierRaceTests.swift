@@ -126,7 +126,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
         #expect(rig.center.delivered.isEmpty)
     }
 
-    @Test func givenEverySummaryMemberResolvedDuringAuthorization_whenDelivering_thenNoSummaryRemains() async {
+    @Test func givenEveryRequestResolvedDuringAuthorization_whenDelivering_thenNoNotificationRemains() async {
         // given
         let rig = rig()
         let ids = (1 ... 4).map { "input:a:\($0)" }
@@ -142,7 +142,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
         #expect(rig.center.delivered.isEmpty)
     }
 
-    @Test func givenAMemberResolvedDuringTheSummaryPost_whenAllResolve_thenTheSummaryIsCleared() async {
+    @Test func givenRequestsResolvedDuringIndividualPost_whenAllResolve_thenEveryNotificationIsCleared() async {
         // given
         let rig = rig()
         let ids = (1 ... 4).map { "input:a:\($0)" }
@@ -153,8 +153,8 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
         // when
         for id in ids { rig.events.send(.resolved(id)) }
         rig.center.release(.add)
-        await waitUntil { rig.center.removed.contains("needs-you-summary") }
+        await waitUntil { rig.center.removed.contains("needs-you-input:a:4") }
         // then
-        #expect(!rig.center.delivered.contains("needs-you-summary"))
+        #expect(rig.center.delivered.isEmpty)
     }
 }

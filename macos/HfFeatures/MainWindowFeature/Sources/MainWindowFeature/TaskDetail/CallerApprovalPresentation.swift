@@ -46,6 +46,11 @@ enum CallerApprovalPresentation {
         let effective = request.text("effective_decision")
         let delivered = request.text("delivered_decision")
         var values: [String] = []
+        if let responder = request.answeredBy, !original.isEmpty {
+            let label = responder == .monitor ? "Answered in Harflow" : "Answered by the caller"
+            let timestamp = request.answeredAt.map { Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .shortened) }
+            values.append(label + (timestamp.map { " · " + $0 } ?? ""))
+        }
         if !original.isEmpty { values.append("Recorded decision: \(original)") }
         if !effective.isEmpty, effective != original { values.append("Effective decision: \(effective)") }
         if !delivered.isEmpty, delivered != original { values.append("Delivered decision: \(delivered)") }

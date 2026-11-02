@@ -132,6 +132,13 @@ final class WorkflowVM: WorkflowViewModel {
     var prompt = ""
     var goal = ""
     var freedom = "write_in_repo"
+    var retainedInteractionOutcome: WorkflowInteractionReceipt?
+    var interactionOutcomeRootID: String?
+    var interactionOutcome: WorkflowInteractionReceipt? {
+        interactionOutcomeRootID == selectedRun?.id ? retainedInteractionOutcome : nil
+    }
+
+    var interactionSavedDraft: String?
     var instructions = "" { didSet { updateContinuationDraftContext() } }
     var additionalAttempts = 0 { didSet { updateContinuationDraftContext() } }
     @ObservationIgnored var continuationDraftContext: WorkflowContinuationDraftContext?

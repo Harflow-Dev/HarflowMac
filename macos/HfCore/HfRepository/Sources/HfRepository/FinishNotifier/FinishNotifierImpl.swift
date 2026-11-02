@@ -7,6 +7,7 @@ import MonitorCore
 public final class FinishNotifierImpl: FinishNotifier, @unchecked Sendable {
 
     private let settings: any SettingsRepository
+    private let isEnabled: @Sendable () -> Bool
     private let center: any NotificationCentering
     private let bundleIdentifier: @Sendable () -> String?
     private let isAppBundle: @Sendable () -> Bool
@@ -18,8 +19,10 @@ public final class FinishNotifierImpl: FinishNotifier, @unchecked Sendable {
         settings: any SettingsRepository,
         center: any NotificationCentering = SystemNotificationCenter(),
         bundleIdentifier: @escaping @Sendable () -> String? = { Bundle.main.bundleIdentifier },
-        isAppBundle: @escaping @Sendable () -> Bool = { Bundle.main.bundleURL.pathExtension == "app" }
+        isAppBundle: @escaping @Sendable () -> Bool = { Bundle.main.bundleURL.pathExtension == "app" },
+        isEnabled: @escaping @Sendable () -> Bool = { true }
     ) {
+        self.isEnabled = isEnabled
         self.settings = settings
         self.center = center
         self.bundleIdentifier = bundleIdentifier
@@ -29,10 +32,11 @@ public final class FinishNotifierImpl: FinishNotifier, @unchecked Sendable {
     private var canNotify: Bool { bundleIdentifier() != nil && isAppBundle() }
 
     public func notify(_ finished: [TaskInfo], titleFor: @escaping @Sendable (String) -> String) {
-        guard settings.notifyOnFinish, canNotify, !finished.isEmpty else { return }
+        guard isEnabled(), settings.notifyOnFinish, canNotify, !finished.isEmpty else { return }
         Task {
-            guard let granted = try? await center.requestAuthorization(options: [.alert, .sound]), granted else { return }
+            guard let granted = try? await center.requestAuthorization(options: [.alert, .sound]), granted, isEnabled() else { return }
             for task in finished {
+                guard isEnabled() else { return }
                 let content = UNMutableNotificationContent()
                 content.title = "\(task.status.label): \(titleFor(task.taskID))"
                 content.body = "\(task.backend) · \(RepoPathFormat.repo(task.repoPath))"

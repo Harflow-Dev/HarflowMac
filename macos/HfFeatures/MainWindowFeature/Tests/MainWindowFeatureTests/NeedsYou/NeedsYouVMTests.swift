@@ -147,6 +147,29 @@ import Testing
         verify(rig.useCase).answer(.any, text: .value("Use staging."), additionalAttempts: .value(nil)).called(1)
     }
 
+    @Test(arguments: [CallerApprovalOwner.caller, .monitor])
+    func givenAnotherResponderWins_whenAnswerCompletes_thenFormClosesAndDraftAndWinnerRemain(_ responder: CallerApprovalOwner) async {
+        // given
+        let rig = rig(items: [item()], outcome: .alreadyAnswered(answer: "Use production", answeredBy: responder, answeredAt: 1793059200))
+        rig.sut.didAppear()
+        rig.sut.show(itemID: "input:w1:d1")
+        await waitUntil { rig.sut.presentation.detail != nil }
+        rig.sut.answerText = "Use staging"
+        // when
+        rig.sut.didSubmitAnswer()
+        await waitUntil { if case .settled? = rig.sut.presentation.detail?.phase { true } else { false } }
+        // then
+        guard case .settled(let title, let answer, _)? = rig.sut.presentation.detail?.phase else {
+            Issue.record("expected durable winner"); return
+        }
+        #expect(title == (responder == .caller ? "Already answered by the caller" : "Answered in Harflow"))
+        #expect(answer == "Use production")
+        #expect(rig.sut.presentation.detail?.savedDraft == "Use staging")
+        #expect(rig.sut.answerText == "Use staging")
+        rig.sut.didSubmitAnswer()
+        verify(rig.useCase).answer(.any, text: .any, additionalAttempts: .any).called(1)
+    }
+
     @Test func givenAcceptedAnswerWithMotion_whenSent_thenRowLeavesAfterTheFade() async {
         // given
         let rig = rig(items: [item()], reduceMotion: false)
@@ -240,10 +263,12 @@ import Testing
         rig.sut.didAppear()
         rig.sut.show(itemID: "input:w1:d1")
         await waitUntil { rig.sut.presentation.detail?.phase == .answerable }
+        rig.sut.answerText = "Preserve this draft"
         // when
         rig.subject.send(NeedsYouSnapshot(phase: .ready, items: []))
         await waitUntil { rig.sut.presentation.detail?.phase == .expired }
         // then
+        #expect(rig.sut.presentation.detail?.savedDraft == "Preserve this draft")
         #expect(rig.sut.presentation.detail?.title == "Release")
         verify(rig.useCase).answer(.any, text: .any, additionalAttempts: .any).called(0)
     }

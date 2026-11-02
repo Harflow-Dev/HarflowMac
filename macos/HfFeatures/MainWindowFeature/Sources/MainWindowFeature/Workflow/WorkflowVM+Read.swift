@@ -103,6 +103,11 @@ extension WorkflowVM {
         }
         // An unchanged 2 s poll (same run document) re-renders nothing.
         let next = WorkflowRunModel(raw: raw)
+        if let checkpoint = continuationDraftContext?.interactionID,
+           let receipt = next.interactionHistory.last(where: { $0.interactionID == checkpoint }),
+           interactionOutcome != receipt {
+            retainInteractionOutcome(receipt, draft: receipt.answeredBy == .caller && !instructions.isEmpty ? instructions : nil)
+        }
         let runChanged = selectedRun != next
         if runChanged { selectedRun = next }
         let failed = selectedRun?.raw["status"]?.stringValue == nil

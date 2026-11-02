@@ -45,11 +45,15 @@ struct NeedsYouDetailView<VM: NeedsYouViewModel>: View {
             settledCard(detail, decision: decision, answer: answer, note: note)
         case .expired:
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
-                Text("\(detail.sourceLine) · Expired").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+                Text("\(detail.sourceLine) · No longer pending").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
                 Text("This request is no longer pending").font(.hf(.headline))
-                Text("It expired before it was answered, or another responder answered it. Nothing was sent.")
+                Text("This request is no longer available here. Nothing was sent.")
                     .font(.hf(.secondary))
 .foregroundStyle(Color.secondaryText)
+                if let draft = detail.savedDraft {
+                    Text("Your saved draft").font(.hf(.secondary, weight: .semibold))
+                    Text(draft).font(.hf(.body)).textSelection(.enabled)
+                }
             }
             .padding(HfRadius.Metrics.spacing12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -63,9 +67,13 @@ struct NeedsYouDetailView<VM: NeedsYouViewModel>: View {
     private func settledCard(_ detail: NeedsYouDetail, decision: String, answer: String, note: String) -> some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
             Text(detail.sourceLine).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-            Text("\(decision) by Harflow").font(.hf(.headline))
+            Text(decision.hasPrefix("Already answered") || decision == "Answered in Harflow" ? decision : "\(decision) by Harflow").font(.hf(.headline))
             if !answer.isEmpty { Text(answer).font(.hf(.body)).textSelection(.enabled) }
             Text(note).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+            if let draft = detail.savedDraft {
+                Text("Your saved draft").font(.hf(.secondary, weight: .semibold))
+                Text(draft).font(.hf(.body)).textSelection(.enabled)
+            }
         }
         .padding(HfRadius.Metrics.spacing12)
         .frame(maxWidth: .infinity, alignment: .leading)

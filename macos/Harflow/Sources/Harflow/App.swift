@@ -332,6 +332,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if let id = userInfo["task_id"] as? String, MonitorURL.isValidTaskID(id) {
             coordinator?.handle(path: MonitorDestination.task(id))
             coordinator?.handle(path: MonitorDestination.openWindow)
+        } else if let run = userInfo["workflow_run_id"] as? String, MonitorURL.isValidTaskID(run) {
+            coordinator?.handle(path: MonitorDestination.workflowRun(run))
+            coordinator?.handle(path: MonitorDestination.openWindow)
         } else if let item = userInfo["needs_you_item"] as? String, Self.isValidNeedsYouItemID(item) {
             coordinator?.handle(path: MonitorDestination.needsYou(itemID: item))
             coordinator?.handle(path: MonitorDestination.openWindow)

@@ -21,13 +21,16 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
         public var engineNote: String
         /// The handover record, present only after the Monitor took over.
         public var handover: Handover?
+        /// Both channels can answer the same pending interaction.
+        public var sharedAnswering: Bool
 
         /// Creates an ownership record.
-        public init(owner: String, callerEnded: Bool, engineNote: String, handover: Handover?) {
+        public init(owner: String, callerEnded: Bool, engineNote: String, handover: Handover?, sharedAnswering: Bool = false) {
             self.owner = owner
             self.callerEnded = callerEnded
             self.engineNote = engineNote
             self.handover = handover
+            self.sharedAnswering = sharedAnswering
         }
     }
 
@@ -173,6 +176,8 @@ public enum NeedsYouEvent: Equatable, Sendable {
 /// The result of sending an answer.
 public enum NeedsYouAnswerOutcome: Equatable, Sendable {
     case accepted
+    /// Another response won the exact interaction. The unsent local draft remains available.
+    case alreadyAnswered(answer: String, answeredBy: CallerApprovalOwner, answeredAt: Double, answerTruncated: Bool = false)
     /// The original caller is alive again and owns the interaction.
     case callerReturned(String)
     /// The checkpoint moved on or the request is no longer available.
@@ -186,6 +191,13 @@ public enum NeedsYouAnswerOutcome: Equatable, Sendable {
 
     /// Classifies an engine refusal. Workflow refusals carry text only, so the text is matched here and nowhere else.
     static func classify(_ error: ToolError) -> Self {
+        if let winner = error.workflowInteractionWinner {
+            return .alreadyAnswered(answer: winner.answer, answeredBy: winner.answeredBy,
+                                    answeredAt: winner.answeredAt, answerTruncated: winner.answerTruncated)
+        }
+        if let winner = error.callerApprovalWinner {
+            return .alreadyAnswered(answer: winner.decision, answeredBy: winner.answeredBy, answeredAt: winner.answeredAt)
+        }
         if let reason = error.callerApprovalResponseReason {
             switch reason {
             case .notCurrent, .alreadyAnswered, .settled, .expired, .ownershipLost:

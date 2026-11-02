@@ -21,6 +21,8 @@ struct WorkflowContinuationDraftContext: Equatable {
         self.attentionCheckpointID = decisionID == nil ? run?.attentionCheckpointID : nil
     }
 
+    var interactionID: String? { decisionID ?? attentionCheckpointID }
+
     var isQualified: Bool {
         runID?.isEmpty == false && (decisionID != nil || attentionCheckpointID != nil)
     }
@@ -54,24 +56,24 @@ extension WorkflowVM {
     func control(_ command: String, allowOptionalReviewSkip: Bool) {
         guard !isBusy, let run = selectedRun else { return }
         let continuation = continuationDraftContext ?? WorkflowContinuationDraftContext(run: run)
-        if ["resume", "recover"].contains(command),
-           !continuation.isQualified || continuation != WorkflowContinuationDraftContext(run: run) || continuation.command != command {
-            errorText = WorkflowContinuationDraftContext.changedMessage
-            return
-        }
-        guard run.permitsMonitor(command, fallback: command == "cancel" ? run.canCancelFromMonitor : run.allowsMonitorControl) else { return }
-        guard !allowOptionalReviewSkip || (command == "resume" && run.canSkipOptionalReview) else { return }
-        if ["resume", "recover"].contains(command) {
-            guard run.canSubmitContinuation(command, instructions: instructions) else { return }
-        }
+        guard permitsControl(command, run: run, continuation: continuation, allowOptionalReviewSkip: allowOptionalReviewSkip) else { return }
         // Draft identity survives polling; capture the matching request before async work.
         let runID = ["resume", "recover"].contains(command) ? continuation.runID ?? run.id : run.id
+        let submittedDraft = instructions
         let capturedOptions = controlOptions(command, context: continuation, allowOptionalReviewSkip: allowOptionalReviewSkip)
         perform { [weak self] in
             guard let self else { return }
             do {
-                _ = try await useCase.command(command, options: capturedOptions, positionals: [runID])
+                let result = try await useCase.command(command, options: capturedOptions, positionals: [runID])
+                if let receipt = WorkflowMonitorStatus(result).interactionHistory.last(where: { $0.interactionID == continuation.interactionID }) {
+                    retainInteractionOutcome(receipt, draft: nil, rootID: runID)
+                }
             } catch {
+                if let winner = (error as? ToolError)?.workflowInteractionWinner {
+                    retainInteractionOutcome(winner, draft: submittedDraft, rootID: runID)
+                    await refresh()
+                    return
+                }
                 await refresh()
                 if (error as? ToolError)?.refusalCode == "attention_checkpoint_stale" {
                     throw ToolError.refused(
@@ -83,6 +85,30 @@ extension WorkflowVM {
             }
             await refresh()
         }
+    }
+
+    private func permitsControl(_ command: String, run: WorkflowRunModel, continuation: WorkflowContinuationDraftContext,
+                                allowOptionalReviewSkip: Bool) -> Bool {
+        if ["resume", "recover"].contains(command),
+           interactionOutcome != nil, interactionOutcome?.interactionID == continuation.interactionID { return false }
+        if ["resume", "recover"].contains(command),
+           !continuation.isQualified || continuation != WorkflowContinuationDraftContext(run: run) || continuation.command != command {
+            errorText = WorkflowContinuationDraftContext.changedMessage
+            return false
+        }
+        guard run.permitsMonitor(command, fallback: command == "cancel" ? run.canCancelFromMonitor : run.allowsMonitorControl) else { return false }
+        guard !allowOptionalReviewSkip || (command == "resume" && run.canSkipOptionalReview) else { return false }
+        if ["resume", "recover"].contains(command) {
+            guard run.canSubmitContinuation(command, instructions: instructions) else { return false }
+        }
+        return true
+    }
+
+    func retainInteractionOutcome(_ receipt: WorkflowInteractionReceipt, draft: String?, rootID: String? = nil) {
+        let root = rootID ?? selectedRun?.id
+        if interactionOutcomeRootID != root { interactionOutcomeRootID = root }
+        if retainedInteractionOutcome != receipt { retainedInteractionOutcome = receipt }
+        if interactionSavedDraft != draft { interactionSavedDraft = draft }
     }
 
     private func controlOptions(_ command: String, context: WorkflowContinuationDraftContext, allowOptionalReviewSkip: Bool) -> [String] {

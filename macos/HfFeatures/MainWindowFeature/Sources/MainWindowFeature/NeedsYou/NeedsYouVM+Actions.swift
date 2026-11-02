@@ -82,6 +82,22 @@ extension NeedsYouVM {
             rebuild()
             return
         }
+        if case .alreadyAnswered(let winningAnswer, let responder, let timestamp, let truncated) = outcome {
+            var detail = NeedsYouPresentationMapper.detail(item)
+            let label = responder == .caller ? "Already answered by the caller" : "Answered in Harflow"
+            let time = Date(timeIntervalSince1970: timestamp).formatted(date: .abbreviated, time: .shortened)
+            detail.phase = .settled(decision: label, answer: winningAnswer, note: (truncated ? "Answer excerpt · " : "") + time)
+            detail.savedDraft = answer.isEmpty ? nil : answer
+            recordSettled(detail, for: item)
+            sendError = nil
+            if lifecycle == started {
+                fadeOut(item)
+                rebuild()
+            }
+            useCase.refresh()
+            return
+        }
+
         guard current else {
             if lifecycle == started { rebuild() }
             return
@@ -102,7 +118,7 @@ extension NeedsYouVM {
             reviewNotes[item.id] = NeedsYouAnswerOutcome.changedMessage
             sendError = nil
             useCase.refresh()
-        case .accepted:
+        case .accepted, .alreadyAnswered:
             break
         }
         rebuild()

@@ -33,10 +33,11 @@ struct WorkflowRecoveryOverlayPresentation: Equatable {
     /// non-builder run with a nonempty ID, and the existing
     /// `WorkflowRecoveryPresentation.showsRecovery(run)` must hold. Child, caller-owned and
     /// builder runs are ineligible exactly as before — no status is rewritten.
-    static func eligibleRunID(run: WorkflowRunModel?, initialLoadingKind: String?, initialLoadFailed: Bool) -> String? {
+    static func eligibleRunID(run: WorkflowRunModel?, initialLoadingKind: String?, initialLoadFailed: Bool, answeredInteractionID: String? = nil) -> String? {
         guard initialLoadingKind == nil, !initialLoadFailed,
               let run, !run.isBuilder, !run.id.isEmpty,
               WorkflowRecoveryPresentation.showsRecovery(run) else { return nil }
+        if let answeredInteractionID, answeredInteractionID == (run.continuationDecisionID ?? run.attentionCheckpointID) { return nil }
         return run.id
     }
 

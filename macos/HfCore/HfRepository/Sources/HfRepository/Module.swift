@@ -33,7 +33,7 @@ public final class Module: HfModule {
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
         let capturedEvents = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler)
         let eventStream = RecoveryEventStreamRepository(base: capturedEvents, environment: toolEnvironment, snapshots: snapshot, scheduler: scheduler)
-        let finishNotifier = FinishNotifierImpl(settings: settings)
+        let (notificationMode, finishNotifier) = notificationRouting(settings: settings)
         let taskList = TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment,
             snapshotRepository: snapshot,
@@ -75,7 +75,12 @@ public final class Module: HfModule {
             .environment(\.workflowRepository, workflows)
 
         let shared = NeedsYouDependencies(scheduler: scheduler, visibility: visibility, settings: settings, install: install)
-        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared)
+        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode)
+    }
+
+    private func notificationRouting(settings: any SettingsRepository) -> (NotificationDeliveryMode, FinishNotifierImpl) {
+        let mode = NotificationDeliveryMode()
+        return (mode, FinishNotifierImpl(settings: settings, isEnabled: { mode.allowsLegacy }))
     }
 
     /// The seams Needs you shares with the other repositories.
@@ -87,15 +92,20 @@ public final class Module: HfModule {
     }
 
     private func registerNeedsYou(
-        toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository, shared: NeedsYouDependencies
+        toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository, shared: NeedsYouDependencies,
+        notificationMode: NotificationDeliveryMode
     ) {
         let needsYou = NeedsYouRepositoryImpl(
             toolEnvironment: toolEnvironment, workflows: workflows, scheduler: shared.scheduler, visibility: shared.visibility,
             install: shared.install
         )
+        let legacy = NeedsYouNotifierImpl(repository: needsYou, settings: shared.settings, scheduler: shared.scheduler,
+                                          isEnabled: { notificationMode.allowsLegacy })
+        let notifier = InteractionEventNotifier(tooling: toolEnvironment, install: shared.install, settings: shared.settings,
+                                               scheduler: shared.scheduler, center: SystemNotificationCenter(), legacy: legacy, mode: notificationMode)
         GlobalValues
             .environment(\.needsYouRepository, needsYou)
-            .environment(\.needsYouNotifier, NeedsYouNotifierImpl(repository: needsYou, settings: shared.settings, scheduler: shared.scheduler))
+            .environment(\.needsYouNotifier, notifier)
     }
 }
 

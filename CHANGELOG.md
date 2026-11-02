@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Enable shared workflow answers on compatible engines, preserve drafts after a caller wins, and display answer provenance in run history (#46).
+- Post individual macOS notifications for pending questions, approvals, recovery and their answers, plus completed and failed tasks, with persistent delivery deduplication and click-through navigation.
+
 ## 0.0.7
 
 - Pair the app with HarflowMCP 0.0.6 using regenerated frozen dependency inputs and refreshed vendored v1 contract fixtures.

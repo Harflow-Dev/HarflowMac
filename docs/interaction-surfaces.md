@@ -31,3 +31,38 @@ allowed flag cannot grant authority. Immediate delivery never bypasses those che
 keeps queued text intact. The app neither reads nor mutates engine records to implement actions.
 
 Non-question workflow recovery requires `workflow-attention-checkpoints.v1` and an identifier from the displayed status. The engine refuses a changed checkpoint; Harflow refreshes the status and preserves the entered instructions without replaying them. Engines without this capability cannot perform these actions. Questions continue to use their decision identifier.
+
+## macOS notifications
+
+On engines advertising `interaction-events.v1`, Harflow reads a bounded durable event
+feed and posts an individual Notification Center banner for each pending question,
+approval, recovery request and accepted answer, plus each observed completed or failed
+task. Answer banners name the responder and include a bounded winning-answer excerpt.
+Clicking a workflow banner opens its root run; a standalone-task banner opens the task.
+Native notification permission and the existing Needs you / task-finish preferences
+still apply. Foreground delivery uses banners and sound.
+
+App-owned delivery IDs are persisted per selected engine state root, independently of
+engine storage. Initial historical episodes are baselined, retained newer episodes
+survive app restart, and completed scan cycles safely replay stable IDs without duplicate
+banners. Deduplication retains a rolling 30-day window. The feed explicitly reports
+source/retention gaps; removed episodes cannot be recovered. A failed notification post
+is retried on a later scan. Engines lacking the capability retain the existing Needs you
+and root-task listing notifications; those older paths cannot discover between-poll
+requests or task transitions. No provider-message subscription is created.
+
+Shared answering follows owner-approved HarflowDesign commit `690ec495b148293172ac93272b81e3d68c2f8e7d` (2026-11-02),
+`docs/shared-answering.md`, `features/work-interaction.html` and `features/needs-you.html`,
+Shared answer, Caller answered first and Harflow answered first states in Light and Dark.
+The additive engine capability is
+`workflow-shared-interactions.v1`; `interaction_state.responders` grants explicit response
+channels while `interaction_owner` retains ownership. A live caller no longer disables an
+explicit Monitor responder. Existing checkpoint, settling, input and command checks still apply.
+Absent responders preserve legacy behavior.
+
+The recovery and Needs you forms explain that the original caller can also answer. A structured
+`interaction_already_answered` receipt closes the stale form and shows **Already answered by the
+caller**, the winning answer, timestamp and **Your saved draft**. An accepted Monitor response
+shows **Answered in Harflow**. Workflow answer history uses engine-persisted `interaction_history`;
+missing historical attribution is never invented. Approval refusals retain their engine-provided
+winner, and settled approval details show their actual responder separately from delivery.

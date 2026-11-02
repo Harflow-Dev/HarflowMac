@@ -30,7 +30,8 @@ enum NeedsYouMapper {
         let handover = state.handover.map {
             NeedsYouItem.Handover(timestamp: $0.timestamp.map(Date.init(timeIntervalSince1970:)), reason: $0.reason, previousOwner: $0.previousOwner)
         }
-        return .init(owner: owner, callerEnded: state.callerState == .dead, engineNote: state.reason, handover: handover)
+        return .init(owner: owner, callerEnded: state.callerState == .dead, engineNote: state.reason, handover: handover,
+                     sharedAnswering: state.responders?.contains("caller") == true && state.responders?.contains("monitor") == true)
     }
 
     static func startedBy(_ ownership: NeedsYouItem.Ownership) -> String {

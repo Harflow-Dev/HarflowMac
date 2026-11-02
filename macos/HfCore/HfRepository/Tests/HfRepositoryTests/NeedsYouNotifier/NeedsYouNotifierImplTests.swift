@@ -74,24 +74,16 @@ import Testing
         #expect(request?.content.userInfo["needs_you_item"] as? String == "input:a:1")
     }
 
-    @Test func givenMoreThanThreeItems_whenFlushed_thenOneSummaryIsPostedAndRemovedWhenAllResolve() async {
+    @Test func givenMoreThanThreeItems_whenFlushed_thenEveryRequestIsPostedIndividually() async {
         // given
         let rig = rig()
         let ids = (1 ... 4).map { "input:a:\($0)" }
         // when
         for id in ids { rig.events.send(.appeared(item(id), sourceBaseline: false)) }
         rig.scheduler.fireFirstOneShot()
-        await waitUntil { rig.added.value.count == 1 }
-        for id in ids.dropLast() { rig.events.send(.resolved(id)) }
-        await waitUntil { rig.removed.value.contains("needs-you-input:a:3") }
-        let beforeLast = rig.removed.value.contains("needs-you-summary")
-        rig.events.send(.resolved(ids[3]))
-        await waitUntil { rig.removed.value.contains("needs-you-summary") }
+        await waitUntil { rig.added.value.count == 4 }
         // then
-        #expect(rig.added.value.first?.identifier == "needs-you-summary")
-        #expect(rig.added.value.first?.content.title == "4 requests need you")
-        #expect(rig.added.value.first?.content.userInfo["needs_you_list"] as? String == "1")
-        #expect(!beforeLast && rig.removed.value.contains("needs-you-summary"))
+        #expect(Set(rig.added.value.map(\.identifier)) == Set(ids.map { "needs-you-" + $0 }))
     }
 
     @Test func givenResolvedItem_whenEventArrives_thenDeliveredNotificationIsRemoved() async {

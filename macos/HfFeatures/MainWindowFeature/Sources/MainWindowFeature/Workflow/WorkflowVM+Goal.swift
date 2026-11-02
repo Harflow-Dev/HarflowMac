@@ -12,8 +12,17 @@ extension WorkflowVM {
         }
         perform { [weak self] in
             guard let self else { return }
-            _ = try await useCase.command("revise-goal",
+            do {
+                _ = try await useCase.command("revise-goal",
                                           options: ["--monitor", "--goal=\(goal)", "--expected-revision=\(expectedRevision)"], positionals: [runID])
+            } catch {
+                if let winner = (error as? ToolError)?.workflowInteractionWinner {
+                    retainInteractionOutcome(winner, draft: goal, rootID: runID)
+                    await refresh()
+                    return
+                }
+                throw error
+            }
             await refresh()
         }
     }

@@ -4,8 +4,8 @@ import SwiftEnvironment
 
 // MARK: - NeedsYouNotifier
 
-/// Turns Needs you events into user notifications. Only requests the Monitor can answer ever
-/// reach it, and requests present when a source was first read never notify.
+/// Turns pending requests and persisted winning answers into individual user notifications.
+/// Historical outcomes present in the first qualified observation never notify.
 @Mockable
 public protocol NeedsYouNotifier: Sendable {
     /// Starts consuming repository events; later calls do nothing.

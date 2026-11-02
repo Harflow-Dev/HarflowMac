@@ -53,6 +53,8 @@ protocol WorkflowViewModel: ViewModel {
     var goal: String { get set }
     func reviseGoal(_ goal: String, runID: String, expectedRevision: Int)
     var freedom: String { get set }
+    var interactionOutcome: WorkflowInteractionReceipt? { get }
+    var interactionSavedDraft: String? { get }
     var instructions: String { get set }
     var additionalAttempts: Int { get set }
     var launchAgent: [String: JSONValue] { get set }
@@ -169,4 +171,11 @@ extension WorkflowViewModel { var callerApprovalBackends: Set<String> { [] } }
 extension WorkflowViewModel {
     var qualificationCards: [QualificationCard] { [] }
     func didTapQualification() {}
+}
+
+// MARK: - Shared interaction defaults
+
+extension WorkflowViewModel {
+    var interactionOutcome: WorkflowInteractionReceipt? { nil }
+    var interactionSavedDraft: String? { nil }
 }

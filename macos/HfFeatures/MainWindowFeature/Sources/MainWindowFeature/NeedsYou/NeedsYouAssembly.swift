@@ -15,6 +15,7 @@ struct NeedsYouAssemblyInput: Sendable {
     let submittingIDs: Set<String>
     let sendError: String?
     let notice: String?
+    var savedDraft: String = ""
 }
 
 struct NeedsYouAssemblyResult: Sendable {
@@ -75,6 +76,7 @@ enum NeedsYouAssembly {
         // Resolved without a local answer: expired, or another responder answered it. Nothing was sent.
         if var last = input.lastDetails[id] {
             last.phase = .expired
+            last.savedDraft = input.savedDraft.isEmpty ? nil : input.savedDraft
             last.error = nil
             last.reviewNote = nil
             return last

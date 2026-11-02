@@ -387,6 +387,30 @@ struct CallerApprovalControllerTests {
         #expect(controller.requests.map(\.id) == ["active", "uncertain", "history"])
     }
 
+    @Test func givenCallerWinsApproval_whenResponseLosesRace_thenWinnerIsVisibleAndDecisionControlsClose() async {
+        // given
+        let request = controllerRequest(owner: "caller")
+        let fake = CallerApprovalFake(request: request)
+        fake.supportsResponses = true
+        fake.responseError = ToolError.structuredRefusal(code: "approval_error", message: "Already answered", data: [
+            "reason": .string("already_answered"), "interaction": .object([
+                "interaction_id": .string("req-1"), "task_id": .string("task-1"), "action": .string("approval"),
+                "answer": .string("reject"), "answered_by": .string("caller"), "answered_at": .number(1793059200)
+            ])
+        ])
+        let controller = CallerApprovalController(useCase: fake)
+        await controller.selectTarget(taskID: "task-1", workflowRunID: nil)
+        await controller.inspect(request)
+        // when
+        await controller.respond("approve")
+        // then
+        #expect(controller.cards.first?.canRespond == false)
+        #expect(controller.cards.first?.showsDecisionControls == false)
+        #expect(controller.cards.first?.notice == "Already answered by the caller · reject")
+        await controller.respond("approve")
+        #expect(fake.responseCount == 1)
+    }
+
     @Test
     func givenCompletedResponse_whenResponding_thenDetailsRemainVisibleButActionsDisable() async throws {
         let request = controllerRequest()

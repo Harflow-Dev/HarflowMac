@@ -20,6 +20,9 @@ public enum WireContract: String, Sendable, CaseIterable {
 
 /// Capabilities that qualify individual ctl operations beyond the base wire contract.
 public enum CtlCapability {
+    /// Allows caller and Monitor response channels to compete for the same exact checkpoint.
+    public static let workflowSharedInteractions = "workflow-shared-interactions.v1"
+
     /// Binds workflow recovery to the checkpoint displayed to the user.
     public static let workflowAttentionCheckpoints = "workflow-attention-checkpoints.v1"
 

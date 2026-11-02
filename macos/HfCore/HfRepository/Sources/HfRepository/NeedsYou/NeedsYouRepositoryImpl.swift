@@ -125,6 +125,7 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
                                     attentionCheckpointID: decision == nil ? item.attentionCheckpointID : nil,
                                     text: text, additionalAttempts: attempts)
         } catch let error as ToolError {
+            if error.workflowInteractionWinner != nil { await settle(item.id) }
             if error.refusalCode == "attention_checkpoint_stale" { refresh() }
             return NeedsYouAnswerOutcome.classify(error)
         } catch {
@@ -163,6 +164,10 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         do { current = try await engine.approvalDetail(taskID: shown.taskID, requestID: shown.id) } catch let error as ToolError {
             return .failure(Refusal(value: NeedsYouAnswerOutcome.classify(error)))
         } catch { return .failure(Refusal(value: .failed(error.localizedDescription))) }
+        if !current.isPending, let responder = current.answeredBy, let timestamp = current.answeredAt,
+           ["approve", "reject"].contains(current.text("decision")) {
+            return .failure(Refusal(value: .alreadyAnswered(answer: current.text("decision"), answeredBy: responder, answeredAt: timestamp)))
+        }
         guard current.isPending, current.complete else { return .failure(Refusal(value: .stale("This request is no longer pending."))) }
         guard current.isSameCurrent(as: shown), current.raw["action"] == shown.raw["action"] else {
             return .failure(Refusal(value: .changed(NeedsYouMapper.approval(request: current, task: nil))))
