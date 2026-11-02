@@ -233,8 +233,8 @@
       "version": "0.54.0"
     }
   ],
-  "engineVersion": "0.0.6",
-  "provenance": "HarflowMCP 0.0.6 frozen source inputs; uv export --frozen --no-dev --no-emit-project --format requirements-txt; lock sha256:4a928bbbed351ebd8a964e44f274b84c31d6004f716bdadb42577950f9580054; production export sha256:edce2db86b1daea4079247b74bdd32dbb7f90fb435a1752ec5a92dde3729d4b9",
+  "engineVersion": "0.0.7",
+  "provenance": "HarflowMCP 0.0.7 frozen source inputs; uv export --frozen --no-dev --no-emit-project --format requirements-txt; lock sha256:820fd9c5bd229aa0765400edc31bddaf5a9fd0408c7b22de7a8cb1903c4d2c2f; production export sha256:a3bf9b31e3d0b363936ba2e5a003f45ec348dc33b9bdb04a5534b60c1e3e397c",
   "python": {
     "filename": "cpython-3.13.16+20261020-aarch64-apple-darwin-install_only.tar.gz",
     "name": "cpython",
