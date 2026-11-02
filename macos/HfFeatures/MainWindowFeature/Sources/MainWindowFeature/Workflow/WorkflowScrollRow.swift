@@ -6,16 +6,17 @@ import SwiftUI
 
 /// Layout metrics shared by `WorkflowScrollRow` and the layouts that size around it.
 enum WorkflowScrollRowMetrics {
-    /// Thickness of the small overlay scroller, reserved below the row's content.
-    static var gutter: CGFloat { NSScroller.scrollerWidth(for: .small, scrollerStyle: .overlay) }
+    /// Space reserved below the row's content for the resting overlay knob. The scroller's track
+    /// widens over the content's bottom edge while the pointer is on it, as overlay scrollers do.
+    static var gutter: CGFloat { HfRadius.Metrics.spacing8 }
 }
 
 // MARK: - WorkflowScrollRow
 
 /// The workflow editor's horizontal scroll row, shared by the standalone strip and the step tray.
-/// It uses the monitor's overlay scroll chrome and always reserves a fixed bottom gutter, as tall
-/// as the small overlay scroller, so the scroller sits below the content instead of covering it
-/// and the row's height never changes when the scroller appears. The row's height is measured
+/// It uses the monitor's overlay scroll chrome and always reserves a fixed bottom gutter for the
+/// resting knob, so the scroller sits below the content instead of covering it and the row's
+/// height never changes when the scroller appears. The row's height is measured
 /// from its content and pinned, so scroller style changes cannot resize it. While the pointer is
 /// over the row, `ScrollHoverReveal` keeps the scroller revealed (and for a moment after it leaves),
 /// so it can be dragged without a horizontal scroll device. The trailing fade covers the content

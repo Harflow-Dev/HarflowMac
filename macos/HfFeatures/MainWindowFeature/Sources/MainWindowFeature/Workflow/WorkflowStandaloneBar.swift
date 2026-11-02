@@ -6,7 +6,7 @@ import SwiftUI
 
 enum WorkflowStandaloneLayout {
     static var height: CGFloat {
-        HfRadius.Metrics.workflowNodeSize.height + 2 * HfRadius.Metrics.spacing8 + 2 * HfRadius.Metrics.spacing12
+        HfRadius.Metrics.workflowNodeSize.height + HfRadius.Metrics.spacing8 + 2 * HfRadius.Metrics.spacing12
             + WorkflowScrollRowMetrics.gutter
     }
 }
@@ -43,7 +43,8 @@ struct WorkflowStandaloneBar<VM: WorkflowViewModel>: View {
                         .accessibilityLabel("Add on-demand node")
                     }
                 }
-                .padding(HfRadius.Metrics.spacing8)
+                // The row's gutter provides the bottom spacing.
+                .padding([.top, .horizontal], HfRadius.Metrics.spacing8)
             }
         }
         .padding(HfRadius.Metrics.spacing12)

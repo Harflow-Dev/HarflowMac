@@ -58,7 +58,7 @@ import Testing
 
     @Test func givenStandaloneLayout_whenHeightRead_thenItIncludesScrollRowGutter() {
         // given
-        let expected = HfRadius.Metrics.workflowNodeSize.height + 2 * HfRadius.Metrics.spacing8
+        let expected = HfRadius.Metrics.workflowNodeSize.height + HfRadius.Metrics.spacing8
             + 2 * HfRadius.Metrics.spacing12 + WorkflowScrollRowMetrics.gutter
 
         // when
