@@ -73,6 +73,46 @@ struct WorkInteractionCaptureTests {
         }
     }
 
+    @Test func givenEmptyNodeActivity_whenCaptured_thenFallbacksRenderInBothAppearances() async throws {
+        guard let path = ProcessInfo.processInfo.environment["HARFLOW_WORK_CAPTURE_DIR"], !path.isEmpty else { return }
+        let output = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        // given
+        let fixtures = [("not-started", 0), ("no-task-activity", 1), ("no-task-activity-picker", 2)]
+        for (name, attemptCount) in fixtures {
+            let vm = WorkflowPreview.make(run: true)
+            await vm.sidebarTask?.value
+            vm.nativeActivityTask?.cancel()
+            vm.nativeActivity = nil
+            vm.selectedActivity = nil
+            let attempts = (0 ..< attemptCount).map { index in
+                WorkflowRunSidebarPresentation.Attempt(
+                    id: "attempt-\(index + 1)", title: "Attempt \(index + 1) · completed",
+                    raw: ["id": .string("attempt-\(index + 1)"), "status": .string("completed")])
+            }
+            vm.runSidebar = WorkflowRunSidebarPresentation(
+                node: ["id": .string("review"), "title": .string("Plan Review Panel")],
+                attempts: attempts, activationID: attempts.last?.id)
+            defer { vm.didDisappear() }
+
+            // when
+            for dark in [false, true] {
+                let data = try await capture(AnyView(WorkflowSelectedSidebar(viewModel: vm)),
+                                             size: CGSize(width: 320, height: 700), dark: dark)
+                try data.write(to: output.appendingPathComponent("node-\(name)-\(dark ? "dark" : "light").png"))
+
+                // then — ensure the captured view stayed on the intended fallback branch.
+                #expect(vm.runSidebar.attempts.count == attemptCount)
+                #expect(vm.runSidebar.activationID == attempts.last?.id)
+                #expect(vm.runSidebar.childRunID == nil)
+                #expect(vm.nativeActivity == nil)
+                #expect(vm.selectedActivity == nil)
+                #expect(data.count > 10_000)
+            }
+        }
+    }
+
     private func makeOrchestratorActivity() async -> WorkflowVM {
         let vm = WorkflowOnDemandPreview.make(run: true, orchestrator: true)
         vm.selectedNodeID = nil

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep the selected workflow node's header at the top and composer at the bottom when activity has not started or is unavailable (#48).
 - Enable shared workflow answers on compatible engines, preserve drafts after a caller wins, and display answer provenance in run history (#46).
 - Post individual macOS notifications for pending questions, approvals, recovery and their answers, plus completed and failed tasks, with persistent delivery deduplication and click-through navigation.
 

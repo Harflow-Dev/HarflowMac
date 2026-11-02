@@ -48,6 +48,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
                 .publishViewEvent(from: activity, to: viewEvent)
             } else {
                 ContentUnavailableView(state.attempts.isEmpty ? "Not started" : "No task activity", systemImage: "text.alignleft")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if viewModel.nativeActivity != nil || state.childRunID != nil
                 || viewModel.selectedActivity == nil || viewModel.selectedActivity?.columns.isEmpty == true {
@@ -62,4 +63,8 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
 
 #if DEBUG
 #Preview { WorkflowSelectedSidebar(viewModel: WorkflowPreview.make(run: true)) }
+
+#Preview("Workflow selected sidebar - not started") {
+    WorkflowSelectedSidebar(viewModel: WorkflowPreview.makeNotStartedNodeRun())
+}
 #endif

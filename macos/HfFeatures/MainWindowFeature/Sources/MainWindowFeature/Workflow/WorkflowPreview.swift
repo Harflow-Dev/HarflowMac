@@ -66,6 +66,17 @@ enum WorkflowPreview {
         return vm
     }
 
+    /// A selected agent node with no activation, for the run sidebar's not-started state.
+    static func makeNotStartedNodeRun() -> WorkflowVM {
+        let vm = make(run: true)
+        guard let node = vm.nodes.first(where: { $0.type == "agent" }) else { return vm }
+        vm.selectedNodeID = node.id
+        vm.runSidebar = WorkflowRunSidebarPresentation.build(
+            run: vm.selectedRun?.raw ?? [:], nodeID: node.id, attemptID: nil
+        )
+        return vm
+    }
+
     /// A populated child run for the side panel: parent/root/owner links, a child-workflow
     /// invocation with its assigned request, a technical plan, and a selected node — the
     /// side panel's every disclosure has real dummy content. Preview data only.
