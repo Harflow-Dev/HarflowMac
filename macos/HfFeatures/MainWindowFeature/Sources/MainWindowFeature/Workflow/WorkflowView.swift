@@ -305,11 +305,10 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     .font(.hf(.caption, weight: .semibold))
                     .foregroundStyle(Color.tertiaryText)
                     .padding(.leading, HfRadius.Metrics.spacing8)
-                ScrollView(.horizontal) {
+                WorkflowScrollRow {
                     HStack(spacing: HfRadius.Metrics.spacing8) {
                         ForEach(WorkflowStepPalette.items()) { stepItem($0) }
                     }
-                    .background(ScrollChrome())
                 }
             }
             .padding(HfRadius.Metrics.workflowTrayPadding)

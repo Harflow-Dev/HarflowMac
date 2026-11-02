@@ -7,6 +7,7 @@ import SwiftUI
 enum WorkflowStandaloneLayout {
     static var height: CGFloat {
         HfRadius.Metrics.workflowNodeSize.height + 2 * HfRadius.Metrics.spacing8 + 2 * HfRadius.Metrics.spacing12
+            + WorkflowScrollRowMetrics.gutter
     }
 }
 
@@ -21,7 +22,7 @@ struct WorkflowStandaloneBar<VM: WorkflowViewModel>: View {
                 Text("Standalone").font(.hf(.secondary, weight: .semibold))
                 Text("Outside the workflow path").font(.hf(.caption)).foregroundStyle(Color.tertiaryText)
             }
-            ScrollView(.horizontal) {
+            WorkflowScrollRow {
                 HStack(spacing: HfRadius.Metrics.spacing16) {
                     card(orchestrator, subtitle: orchestratorSubtitle)
                     ForEach(viewModel.standaloneNodes) { node in
@@ -43,12 +44,6 @@ struct WorkflowStandaloneBar<VM: WorkflowViewModel>: View {
                     }
                 }
                 .padding(HfRadius.Metrics.spacing8)
-                .background(ScrollChrome())
-            }
-            .overlay(alignment: .trailing) {
-                LinearGradient(colors: [.clear, Color.inspectorFill], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: HfRadius.Metrics.spacing16)
-.allowsHitTesting(false)
             }
         }
         .padding(HfRadius.Metrics.spacing12)
