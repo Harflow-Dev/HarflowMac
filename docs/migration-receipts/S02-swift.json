@@ -1,0 +1,36 @@
+{
+  "package": "macos/HfCore/MonitorCore",
+  "mode": "aggregate",
+  "passed": true,
+  "discovered_tests": 389,
+  "discovered_suites": 60,
+  "failures": [],
+  "host_setup": {},
+  "partitions": [
+    {
+      "name": "aggregate",
+      "filter": null,
+      "expected_tests": 389,
+      "returncode": 0,
+      "timed_out": false,
+      "duration_seconds": 25.723,
+      "passed": true,
+      "suites": 60,
+      "skipped": [],
+      "failures": [],
+      "stdout_log": "01-aggregate.stdout.log",
+      "stderr_log": "01-aggregate.stderr.log",
+      "events_log": "01-aggregate.events.jsonl",
+      "backend": "swift-test",
+      "legacy_probe_stdout": null,
+      "legacy_probe_stderr": null,
+      "legacy_probe_returncode": null,
+      "legacy_probe_timed_out": false,
+      "stdout_log_sha256": "404110e69e60d9f85765742d72cf27a94d1bcce06f0477bcf883bc1cc7a33e8f",
+      "stderr_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "events_log_sha256": "34fb4315748b15b4d71ceb09dcc8db4b8123a8991372233217cb1667c823fffe"
+    }
+  ],
+  "raw_manifest_sha256": "8c815d6a22733022de0c42abe71d31af08f683aba82fc30c73802cd9709e5186",
+  "scope": "Guarded dependency-free MonitorCore source suite; no app or pixel acceptance."
+}

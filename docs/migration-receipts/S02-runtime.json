@@ -1,0 +1,76 @@
+{
+  "generation": "0.0.7-17f21d5762f818b18e3a22a50a796aee3e01ca2e1b82d6e393d09d28dd5adad9-536A5E49-FE68-40DA-A3C8-DBB97F4B08E5",
+  "completion": {
+    "schema": 1,
+    "engineSHA256": "badd323d07b184674bc269b37c8fbd8c2274db31bb01e1b644bb59c940a8407e",
+    "engineVersion": "0.0.7",
+    "generation": "0.0.7-17f21d5762f818b18e3a22a50a796aee3e01ca2e1b82d6e393d09d28dd5adad9-536A5E49-FE68-40DA-A3C8-DBB97F4B08E5",
+    "engineYanked": false,
+    "specification": "17f21d5762f818b18e3a22a50a796aee3e01ca2e1b82d6e393d09d28dd5adad9"
+  },
+  "source": {
+    "count": 172,
+    "sha256": "a167507bbca4f05a735d404544d345d513ae05361ae589408c5a790201097063"
+  },
+  "installed": {
+    "count": 172,
+    "sha256": "a167507bbca4f05a735d404544d345d513ae05361ae589408c5a790201097063"
+  },
+  "version_info_exit": 0,
+  "version_info": {
+    "component": "engine",
+    "contracts": {
+      "ctl": {
+        "format": "harflow.ctl",
+        "v": 1
+      },
+      "setup": {
+        "format": "harflow.setup",
+        "v": 1
+      },
+      "events": {
+        "format": "harflow.event",
+        "v": 1
+      }
+    },
+    "capabilities": [
+      "workflow-shared-interactions.v1",
+      "interaction-events.v1",
+      "workflow-attention-checkpoints.v1",
+      "phase-slots.v1",
+      "ctl.v1",
+      "setup.v1",
+      "events.v1",
+      "version-info.v1",
+      "state-recovery.v1",
+      "caller-approvals.monitor-respond.v1",
+      "statistics-page.v1",
+      "backend-qualification.v1",
+      "messaging.v1",
+      "limit-hits.v1",
+      "workflow-limit-hits.v1"
+    ],
+    "os": "darwin",
+    "architecture": "arm64",
+    "state_root": "<isolated-root>/state",
+    "product": "harflow",
+    "format": "harflow.version-info",
+    "v": 1,
+    "product_version": "0.0.7"
+  },
+  "mcp_negotiation": {
+    "protocol": "2025-11-25",
+    "server": {
+      "name": "harflow",
+      "title": null,
+      "version": "",
+      "description": null,
+      "website_url": null,
+      "icons": null
+    },
+    "tool_count": 55
+  },
+  "source_commit": "cfeb03be5a04164ae58744742d2cfc5b03a3232f",
+  "manifest_sha256": "cd022c5fd549a057a49558eb3536bd0f9788bf96800d66b19f763fb6d9da7115",
+  "fixture_files_verified": 131
+}

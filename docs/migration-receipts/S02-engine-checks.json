@@ -1,0 +1,22 @@
+{
+  "source_commit": "cfeb03be5a04164ae58744742d2cfc5b03a3232f",
+  "profile": "Existing development Python 3.11; host permissions; no dependency sync; integration opt-ins unset",
+  "full_suite": {
+    "command": ".venv/bin/python -m pytest -q",
+    "exit": 1,
+    "passed": 12736,
+    "skipped": 558,
+    "failed": 1,
+    "duration_seconds": 1916.4,
+    "failure": "tests/test_claude_settings_observation.py::test_inventory_combines_scopes_and_keeps_rules_as_candidates",
+    "observed": "version None, expected 2.1.310",
+    "log_sha256": "c8b44d216cab5bb81baadf436a4450f1b99c1e52d4f5155182d76b2b2a1e3334"
+  },
+  "focused": {
+    "command": ".venv/bin/python -m pytest -q tests/test_claude_settings_observation.py::test_inventory_combines_scopes_and_keeps_rules_as_candidates",
+    "exit": 0,
+    "passed": 1,
+    "duration_seconds": 0.58,
+    "log_sha256": "8afe2471606046b386cbefd7224d475f9d94ddb804d914ca3a5b3472c14d8f5c"
+  }
+}
