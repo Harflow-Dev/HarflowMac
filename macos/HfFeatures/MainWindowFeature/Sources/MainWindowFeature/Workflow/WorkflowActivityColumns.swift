@@ -35,53 +35,6 @@ enum WorkflowStepPalette {
     }
 }
 
-// MARK: - WorkflowStepFlowLayout
-
-/// A wrapping row layout for the glass step tray: chips keep their intrinsic sizes and wrap to
-/// new rows at the band's actual width, so every role stays reachable at any width with no
-/// horizontal scrollbar and a measured (not guessed) band height.
-struct WorkflowStepFlowLayout: Layout {
-    var spacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        var widestRow: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > maxWidth {
-                widestRow = max(widestRow, x - spacing)
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        widestRow = max(widestRow, max(0, x - spacing))
-        return CGSize(width: proposal.width ?? widestRow, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified)
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-    }
-}
-
 // MARK: - WorkflowActivityColumns
 
 /// Reuses the actual Parallel renderer and models; workflow task associations only choose members.

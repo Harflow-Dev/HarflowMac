@@ -278,9 +278,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             // row and the Cancel connection action sit in a measured chrome band below the
             // canvas — outside its scroll and hit-test region — over one continuous canvas
             // background, so the glass controls read as floating while covering no node, port
-            // or drop target. The band reserves its own intrinsic height (it grows when the
-            // chips wrap), so the canvas keeps exactly the viewport it is given; no fixed
-            // overlap clearance is ever guessed.
+            // or drop target. The band reserves its own intrinsic height (the chips stay on one
+            // row and scroll horizontally), so the canvas keeps exactly the viewport it is given;
+            // no fixed overlap clearance is ever guessed.
             VStack(spacing: HfRadius.Metrics.zero) {
                 // The flush-pane amendment (user override of SPEC §6.3) drops the canvas's outer
                 // workflowCanvasInset: it sits edge-to-edge as before the redesign. The token
@@ -305,10 +305,11 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     .font(.hf(.caption, weight: .semibold))
                     .foregroundStyle(Color.tertiaryText)
                     .padding(.leading, HfRadius.Metrics.spacing8)
-                WorkflowStepFlowLayout(spacing: HfRadius.Metrics.spacing8) {
-                    ForEach(WorkflowStepPalette.items()) { item in
-                        stepItem(item)
+                ScrollView(.horizontal) {
+                    HStack(spacing: HfRadius.Metrics.spacing8) {
+                        ForEach(WorkflowStepPalette.items()) { stepItem($0) }
                     }
+                    .background(ScrollChrome())
                 }
             }
             .padding(HfRadius.Metrics.workflowTrayPadding)

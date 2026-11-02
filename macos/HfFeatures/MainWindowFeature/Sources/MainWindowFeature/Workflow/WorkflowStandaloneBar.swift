@@ -41,7 +41,9 @@ struct WorkflowStandaloneBar<VM: WorkflowViewModel>: View {
                         .help("Add on-demand node")
                         .accessibilityLabel("Add on-demand node")
                     }
-                }.padding(HfRadius.Metrics.spacing8)
+                }
+                .padding(HfRadius.Metrics.spacing8)
+                .background(ScrollChrome())
             }
             .overlay(alignment: .trailing) {
                 LinearGradient(colors: [.clear, Color.inspectorFill], startPoint: .leading, endPoint: .trailing)
