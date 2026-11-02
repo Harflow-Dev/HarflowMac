@@ -221,7 +221,7 @@ import Testing
     }
 
     @Test(arguments: [700.0, 1200.0], [ColorScheme.light, .dark])
-    func givenEditor_whenTrayWraps_thenEveryDragRoleStaysOutsideCanvas(width: Double, appearance: ColorScheme) async throws {
+    func givenEditor_whenTrayRendersAtEditorWidths_thenRolesStayOnOneScrollableRowOutsideCanvas(width: Double, appearance: ColorScheme) async throws {
         // given
         let vm = WorkflowPreview.make()
         vm.connectionSourceID = "start"
@@ -230,7 +230,7 @@ import Testing
         await fixture.settle { fixture.element("Workflow nodes") != nil && fixture.canvasScroll != nil }
         vm.didDisappear()
         vm.connectionSourceID = "start"
-        await fixture.settle { fixture.element("Cancel connection") != nil }
+        await fixture.settle { fixture.element("Cancel connection") != nil && !fixture.trayRowScrolls().isEmpty }
 
         // when
         let scroll = try #require(fixture.canvasScroll)
@@ -249,17 +249,33 @@ import Testing
         let minimumViewport = WorkflowInspectorWidth.canvasMinimumWidth - nativeScrollInsets
         #expect(viewport.width >= minimumViewport,
                 "The canvas retains its 400-point pane minus its tokenized padding and measured native scroll border")
-        #expect(trayFrame.maxY <= viewport.minY + 1, "Wrapped chrome must reserve real height below the native scroll region")
+        #expect(trayFrame.maxY <= viewport.minY + 1, "Tray chrome must reserve real height below the native scroll region")
+        let candidates = fixture.trayRowScrolls()
+        try #require(candidates.count == 1, "Exactly one scroll view hosts the tray row")
+        let rowScroll = candidates[0]
+        let documentView = try #require(rowScroll.documentView)
+        let documentFrame = documentView.convert(documentView.bounds, to: nil)
         for (chip, frame) in zip(chips, frames) {
             #expect(frame.width > 0 && frame.height > 0)
-            #expect(trayFrame.insetBy(dx: -1, dy: -1).contains(frame))
+            #expect(frame.minY >= trayFrame.minY - 1 && frame.maxY <= trayFrame.maxY + 1)
+            #expect(documentFrame.insetBy(dx: -1, dy: -1).contains(frame), "Every role is reachable by scrolling the row")
             #expect(!viewport.intersects(frame))
             #expect(fixture.string(chip, "accessibilityRole") != NSAccessibility.Role.button.rawValue,
                     "A drag-only role must not acquire an insertion button")
         }
+        #expect((frames.map(\.midY).max() ?? 0) - (frames.map(\.midY).min() ?? 0) < 1, "All eight roles share one row")
         if width == 700 {
-            #expect((frames.map(\.midY).max() ?? 0) - (frames.map(\.midY).min() ?? 0) > 20,
-                    "All eight roles must wrap at the minimum canvas width")
+            #expect(frames.contains { $0.maxX > trayFrame.maxX + 1 }, "At the narrow width the row overflows and scrolls")
+            #expect(rowScroll.hasHorizontalScroller)
+            #expect(documentView.frame.width > rowScroll.contentView.bounds.width)
+            let clip = rowScroll.contentView
+            let trailing = try #require(frames.indices.max { frames[$0].maxX < frames[$1].maxX })
+            clip.scroll(to: NSPoint(x: documentView.frame.maxX - clip.bounds.width, y: 0))
+            rowScroll.reflectScrolledClipView(clip)
+            await fixture.settle { fixture.frame(chips[trailing]).map { $0.maxX <= trayFrame.maxX + 1 } ?? false }
+            let lastFrame = try #require(fixture.frame(chips[trailing]))
+            let visible = clip.convert(clip.bounds, to: nil)
+            #expect(visible.insetBy(dx: -1, dy: -1).contains(lastFrame), "The last role is reachable by scrolling to the trailing end")
         }
         for label in ["Zoom out", "Reset zoom, currently 100 percent", "Zoom in"] {
             let control = try #require(fixture.element(label))
@@ -367,6 +383,14 @@ private struct RecoveryOverlayTestHarness<VM: WorkflowViewModel>: View {
     var descendants: [NSView] { views(host) }
     var recoveryTextView: NSTextView? { descendants.compactMap { $0 as? NSTextView }.first { $0.isEditable } }
     var canvasScroll: NSScrollView? { descendants.compactMap { $0 as? WorkflowCanvasScrollProbe }.first?.enclosingScrollView }
+    func trayRowScrolls() -> [NSScrollView] {
+        guard let tray = element("Workflow nodes"), let trayFrame = frame(tray) else { return [] }
+        return descendants.compactMap { $0 as? NSScrollView }.filter {
+            $0 !== canvasScroll && ($0.documentView?.frame.width ?? 0) > 0
+                && $0.convert($0.bounds, to: nil).intersects(trayFrame)
+        }
+    }
+
     private func views(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
 
     func settle(_ predicate: () -> Bool) async {
