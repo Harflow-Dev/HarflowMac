@@ -1,0 +1,81 @@
+{
+  "scope": "References recorded by maintained Mac docs; object/path verification, not new approval or deployment evidence",
+  "references": [
+    {
+      "area": "settings",
+      "documented_ref": "191d4df",
+      "commit": "191d4dfe53083be334ea13d54c3289c1edd11ab3",
+      "path": "features/preferences.html",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "qualification",
+      "documented_ref": "5d48a18",
+      "commit": "5d48a18c8669057a302bcf3ec70d0e5d8a7d4e64",
+      "path": "features/qualification.html",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "workflow",
+      "documented_ref": "cd7f497",
+      "commit": "cd7f497901cb12b5121124be61b0ae3913d41aa4",
+      "path": "scripts/workflow-run.js",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "workflow-selected-node",
+      "documented_ref": "1fa3da2",
+      "commit": "1fa3da2f5385d037e164e3f205d72fc2b7e2eec1",
+      "path": "scripts/workflow-run.js",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "approvals",
+      "documented_ref": "7cf777b",
+      "commit": "7cf777b7bee94c6c1e6f581d3fd922367c7d0f43",
+      "path": "scripts/task-approvals.js",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "resource-slots",
+      "documented_ref": "416db920cba0205995c32890becc4d362c566a07",
+      "commit": "416db920cba0205995c32890becc4d362c566a07",
+      "path": "features/resource-slots.html",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "needs-you",
+      "documented_ref": "3925e65",
+      "commit": "3925e659ca895f7802493e18073b589d1c25830c",
+      "path": "features/needs-you.html",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "shared-answers",
+      "documented_ref": "690ec495b148293172ac93272b81e3d68c2f8e7d",
+      "commit": null,
+      "path": "docs/shared-answering.md",
+      "path_exists_at_commit": false,
+      "github_contents_ref_lookup": {
+        "repository": "Harflow-Dev/HarflowDesign",
+        "status": 404,
+        "message": "No commit found for the documented ref",
+        "read_only": true
+      }
+    },
+    {
+      "area": "continuity",
+      "documented_ref": "fcc51ab",
+      "commit": "fcc51abbae4f3242d3a19a06f3c7ec2c3c5bec31",
+      "path": "features/task-continuity.html",
+      "path_exists_at_commit": true
+    },
+    {
+      "area": "work-interaction",
+      "documented_ref": "7150aa7",
+      "commit": "7150aa7cbe7cddf7e247e6e4ec74b29cbb301753",
+      "path": "features/work-interaction.html",
+      "path_exists_at_commit": true
+    }
+  ]
+}

@@ -1,0 +1,425 @@
+{
+  "scope": "Synthetic hosted production views, not ordinary app smoke",
+  "source_commit": "b761112f11a5464ba3ac4c547c86c12a95806fef",
+  "source_file_sha256": "81e784ae27c643f2c3ed72dfd7b3c8eb6332eec54a4ac5ab0d45bb91c1f12110",
+  "historical_pending_diagnostic": {
+    "scope": "Synthetic hosted WorkflowView diagnostic, not ordinary app smoke",
+    "source_file_sha256": "d98db77add375c57f9e1c1ab89973636ed97b2b86265cd576f64b7ba0951fb85",
+    "guarded_result": {
+      "passed": false,
+      "discovered_tests": 1779,
+      "discovered_suites": 241,
+      "failures": [
+        "StatisticsPreparedSurfaceCaptureTests legacy scroller width assertion; current WorkflowScreenLayoutTests passes"
+      ]
+    },
+    "raw_manifest_sha256": "a7e2f39357a0d94cfabc6ae70f858b50a0b2ab0526279edf5fac937c88ffe893",
+    "captures": [
+      {
+        "file": "case-order.json",
+        "sha256": "f60bf58a638232e2ca11032dd264416dc5ca01863e1c18a579fc2f16f6bf9a56"
+      },
+      {
+        "file": "cold-dark-1000x620-first.png",
+        "sha256": "ac5f806b240932c2dd64c51ca002224ac2c3d59c95104c9b38ef34c4122fea18"
+      },
+      {
+        "file": "cold-dark-1000x620-stable.png",
+        "sha256": "ac5f806b240932c2dd64c51ca002224ac2c3d59c95104c9b38ef34c4122fea18"
+      },
+      {
+        "file": "cold-dark-1000x620.json",
+        "sha256": "55f977c41736ed57751300374c8cda2e7227e718061102943bdc19255437c976"
+      },
+      {
+        "file": "cold-dark-1440x900-first.png",
+        "sha256": "c23fd157f5a8b7a270dc0dcbb0a2bec697f4b7abd1a8630734aeff8110ceebb4"
+      },
+      {
+        "file": "cold-dark-1440x900-stable.png",
+        "sha256": "c23fd157f5a8b7a270dc0dcbb0a2bec697f4b7abd1a8630734aeff8110ceebb4"
+      },
+      {
+        "file": "cold-dark-1440x900.json",
+        "sha256": "1220ecf4ed3227b3c2a528a2ca1da1342bf64cbe115f6ee4177f8e26e1a859f1"
+      },
+      {
+        "file": "cold-light-1000x620-first.png",
+        "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+      },
+      {
+        "file": "cold-light-1000x620-stable.png",
+        "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+      },
+      {
+        "file": "cold-light-1000x620.json",
+        "sha256": "ef404ac62fbb7b652afb60f12ba121a1f9dabf4203d04ded045f8bfefb4b8c0a"
+      },
+      {
+        "file": "cold-light-1440x900-first.png",
+        "sha256": "8f1a9c739de215d6025bf2935b0425b212591f705c9269bcf937b62c66a30c08"
+      },
+      {
+        "file": "cold-light-1440x900-stable.png",
+        "sha256": "8f1a9c739de215d6025bf2935b0425b212591f705c9269bcf937b62c66a30c08"
+      },
+      {
+        "file": "cold-light-1440x900.json",
+        "sha256": "46f34844eb1164fc0e56276569f4524d2a3305ec928dbee4e6aab8fbef59e0b9"
+      },
+      {
+        "file": "warm-light-1000x620-first.png",
+        "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+      },
+      {
+        "file": "warm-light-1000x620-stable.png",
+        "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+      },
+      {
+        "file": "warm-light-1000x620.json",
+        "sha256": "8f8f6779e56922354ed70ced6eef7bac6ca509615f4164a09c05ebb34b941e81"
+      }
+    ],
+    "bounded_verdict": {
+      "visible_vertical_canvas_tray_overlap": false,
+      "canvas_min_y": 91,
+      "tray_max_y": 87,
+      "first_stable_geometry_identical": true,
+      "first_stable_png_identical": true,
+      "original_editor_four_cases_passed": true,
+      "original_earlier_failure_cause": "Unproven; prior AX tray max95.5 not captured",
+      "limitations": [
+        "NSView.cacheDisplay composition may differ from application",
+        "Dark palette contrast concern observed",
+        "Static pixels do not verify scrolling",
+        "Ordinary app and keyboard/accessibility scenario completion not established"
+      ]
+    }
+  },
+  "final_result": {
+    "MainWindowFeature": {
+      "passed": true,
+      "tests": 1779,
+      "partitions": 241,
+      "png_count": 53,
+      "manifest_sha256": "a2a0bf93141f908ae2ae3e02c20d4816d56be094df529596101e5af017d77806"
+    },
+    "SettingsFeature": {
+      "passed": true,
+      "tests": 87,
+      "png_count": 3,
+      "manifest_sha256": "ba5bb387b24cdbb59e9f7dafbdfe59002e34049dea0f468fa7ffba6cde6db204"
+    }
+  },
+  "validated_cases": 5,
+  "observations": {
+    "successful_definition_and_rendered_hint": true,
+    "checking_absent": true,
+    "editor_conflict": false,
+    "canvas_tray_gap_points": 4,
+    "requested_actual_sizes_points": [
+      [
+        1000,
+        620,
+        1000,
+        652
+      ],
+      [
+        1440,
+        900,
+        1440,
+        932
+      ]
+    ],
+    "history_scan_error_overlay_in_all_validated_images": true
+  },
+  "limitations": [
+    "Fixed requested heights not qualified: actual host grows 32 points",
+    "Original AX tray maximum 95.5 failure cause unproven",
+    "Dark palette and transparent composition concerns",
+    "Static pixels do not establish scrolling, keyboard or VoiceOver",
+    "No ordinary app smoke, General Settings or live runtime binding"
+  ],
+  "captures": [
+    {
+      "scope": "MainWindowFeature",
+      "file": "approval-captures/blocked-approval.png",
+      "sha256": "37977f090e46fcc8dce34e742f1f46acab625449a8c03f9520ca7d638948b139"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-dark-1000x620-first.png",
+      "sha256": "ac5f806b240932c2dd64c51ca002224ac2c3d59c95104c9b38ef34c4122fea18"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-dark-1000x620-stable.png",
+      "sha256": "ac5f806b240932c2dd64c51ca002224ac2c3d59c95104c9b38ef34c4122fea18"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-dark-1000x620-validated.png",
+      "sha256": "b0acbdab3f58ce5b6a0c6973b505158908cb624ecc23a9481c02a95eebf68674"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-dark-1440x900-first.png",
+      "sha256": "c23fd157f5a8b7a270dc0dcbb0a2bec697f4b7abd1a8630734aeff8110ceebb4"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-dark-1440x900-stable.png",
+      "sha256": "c23fd157f5a8b7a270dc0dcbb0a2bec697f4b7abd1a8630734aeff8110ceebb4"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-dark-1440x900-validated.png",
+      "sha256": "9ce1ac559c8c816497a1880ee56512beb04e8081d94a7233908851e56512d77e"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-light-1000x620-first.png",
+      "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-light-1000x620-stable.png",
+      "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-light-1000x620-validated.png",
+      "sha256": "94b14f5c9b6ab6c82381ab385687f52244e7cf9a5a27990cdac7470699e63fc2"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-light-1440x900-first.png",
+      "sha256": "8f1a9c739de215d6025bf2935b0425b212591f705c9269bcf937b62c66a30c08"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-light-1440x900-stable.png",
+      "sha256": "8f1a9c739de215d6025bf2935b0425b212591f705c9269bcf937b62c66a30c08"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/cold-light-1440x900-validated.png",
+      "sha256": "da97bc7ca4ffd96b8d61f59dd56a3654691d8fceda19127846316cf0ed5da21a"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/warm-light-1000x620-first.png",
+      "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/warm-light-1000x620-stable.png",
+      "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "layout-captures/warm-light-1000x620-validated.png",
+      "sha256": "94b14f5c9b6ab6c82381ab385687f52244e7cf9a5a27990cdac7470699e63fc2"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/appearance-dark.png",
+      "sha256": "dba32b32eb86bafe64f3f6d302d452d648ad9eb47ec235458a6e0480652dee42"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/appearance-light.png",
+      "sha256": "04217e0a36ba5dd25adc68242a2826e16a2d685113fb272bc157c1a82656d251"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/appearance-system.png",
+      "sha256": "622a38f4f9e574823b8ad7a37317fab44d5f7837d07a89f1427f43edf254f39d"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/new-session-dark.png",
+      "sha256": "09b126e67d498cd4116adc81c4a65ccc65737deda8a3f301381e1fccdddca877"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/new-session-light.png",
+      "sha256": "1b80d64f430a9839e3794b23e8f6951029e1a53966f3426e83db0c61f56ba01f"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/sidebar-dark.png",
+      "sha256": "4e4a518c34510deda561da78c4f90d0e2e3c58ed88884629791353b5788781ab"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/sidebar-light.png",
+      "sha256": "fd7378bcb39a98325992c433240520bca056569818e122c372a179741204fc6a"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/workflow-dark.png",
+      "sha256": "6be7a6f9fdc5e481b1b68461fa688e4099316af52842d402eb93dc506f3f53bc"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "preference-captures/workflow-light.png",
+      "sha256": "cfee18df9bf3556f18a5a3301c1b06feb108ef01c443b9044022faa0fcf34922"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-combined-dark.png",
+      "sha256": "8247b0d953821e1cea3108562dfd8200f3de098a4d8d6a5c5fc23e030c75c356"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-combined-embedded-dark.png",
+      "sha256": "431a4ab3f4fdf1ce3eea5e6dfd6ef1fc62e8b767cba35d779580c9bd27ac939b"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-combined-embedded-light.png",
+      "sha256": "131a110a36bcf58a47a0cc461b55b8127b7dbc18e42f0f1dc5e4b9eaaf9e5e32"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-combined-light.png",
+      "sha256": "604f3f94f0dcb63a2031c78c763d33bc2fab7ba0fdea7e488201d977dda1e4b2"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-combined-narrow-dark.png",
+      "sha256": "6871fa16454ba660f4979fcc39644f7a0a40d43283b3064277f8659c087c63c4"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-combined-narrow-light.png",
+      "sha256": "ac6a7c494cc78ece4cd073a30899d463197dd7e7b8a938a85b64b3bafcb64398"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-continuity-dark.png",
+      "sha256": "a2fae5d48b394a17cc6acad69fadeaa6e6e2c10ab1129ede8eae1cce6bc59782"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-continuity-light.png",
+      "sha256": "e7040502d0270d3e9ac5d776b61ccc1a478c54ae286273c7965529dfa0bc2eb5"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-no-supplement-dark.png",
+      "sha256": "f7288715b701873a53213dee43e1d77919a0a4621fab50c881fb1bd4d736056c"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-no-supplement-light.png",
+      "sha256": "e84b1a03b5198f3f9935059fb8f7e3955bde94d3fb1d86e2d102e01fe95198b3"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-notices-dark.png",
+      "sha256": "fbdec4ffaa44d9eb2826b98eb3dcac1068da4a8ef6abb7d37d92bb4ebba640d2"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/header-notices-light.png",
+      "sha256": "6366c141163bf6c5c1cc9e1e5746c07922c441c0b69145c55fa9e246fe59a86d"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/native-activity-composer-dark.png",
+      "sha256": "c3eaa37bf5719b2e241769aed1438ea1550f70d02eb8950af96e60523b6f5040"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/native-activity-composer-light.png",
+      "sha256": "1ead0f68bdb7979368ac1861f026b5c3cb96fb681c4ada79238e01d10ad1661d"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/node-no-task-activity-dark.png",
+      "sha256": "154fde0775f3f38c909e1d704755c90e4cb558d4ad23cdb11c0e0bbdc8597068"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/node-no-task-activity-light.png",
+      "sha256": "1303c2351cdb9a76c30295a8c128c825baf82716a07e1355be970df154cabb29"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/node-no-task-activity-picker-dark.png",
+      "sha256": "309c9658132fb5acd12291b693aafa6c03ef4bec3e3bf371a9d11b772c82fb8c"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/node-no-task-activity-picker-light.png",
+      "sha256": "fc22430584ab1322d3c3997fe14ff7d6ea399bce11544d50faf002cf380b47da"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/node-not-started-dark.png",
+      "sha256": "44a0d00e8269cd91baeb2ea17c3948d6376543dea963599a23b5c79b052c8775"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/node-not-started-light.png",
+      "sha256": "70233aae26c28623d2a17768c6b6c1af8582529c2af0fd1d40098036f14deb79"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/orchestrator-activity-composer-dark.png",
+      "sha256": "3a556e50d377797be44b33f1a6eb3707f5a0659374a5048573e4f0247eef22aa"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/orchestrator-activity-composer-light.png",
+      "sha256": "ef526926a4a92dc6a0787a878fc32e0c50d5f23e95cdac43e500e8c9f0bb3771"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/parallel-composers-dark.png",
+      "sha256": "72317a24603f72796eaf165303f7681808bb96e7f90f2438b1c13268a69e2e55"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/parallel-composers-light.png",
+      "sha256": "2635770ec5bfff261c71e8c7aa079a42f7adcad32f6286c3090fd8443e24bcc8"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/workflow-editor-dark.png",
+      "sha256": "9fdfec98c6d3d96976e3af2b5cb9ec695531ae62060b1a7aaf8e7c15ee14ed90"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/workflow-editor-light.png",
+      "sha256": "5cd203853dd9b8adb871e61b1edb7371ee93e2e639d26a27e5086a5510a9cd77"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/workflow-run-dark.png",
+      "sha256": "2bf3122a3a29c11256c3ed859765750e561f6c7bd9da8b6ca51071b226d43b38"
+    },
+    {
+      "scope": "MainWindowFeature",
+      "file": "work-captures/workflow-run-light.png",
+      "sha256": "14a260dc2ab4f9c61e256c9045a6b0982a3cce873cb2a4530215447f812c503e"
+    },
+    {
+      "scope": "SettingsFeature",
+      "file": "captures/settings-failed.png",
+      "sha256": "36f366faa138e7c899d6166422efa48e79decd29a441d35cccf07ec3d0e26a7e"
+    },
+    {
+      "scope": "SettingsFeature",
+      "file": "captures/settings-ready.png",
+      "sha256": "e0de3f56b5e0bb20a0e4b3143eb3b929f68618607b8b6f2d16fccc715d8fd5f8"
+    },
+    {
+      "scope": "SettingsFeature",
+      "file": "captures/settings-unsupported.png",
+      "sha256": "8c4082eca7232970ba598c78a819c43d8bfa6581d9cf6220f09faa1e50ab2fd6"
+    }
+  ]
+}

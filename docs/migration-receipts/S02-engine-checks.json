@@ -18,5 +18,171 @@
     "passed": 1,
     "duration_seconds": 0.58,
     "log_sha256": "8afe2471606046b386cbefd7224d475f9d94ddb804d914ca3a5b3472c14d8f5c"
+  },
+  "continued_validation": {
+    "source_commit": "72e06a49336cda0d9f46d70c7e842679fc3e8a5e",
+    "production_python_changed": false,
+    "input_patch_sha256": "d5d18ac7eaf42abaadc550b08b4340dda8eaafcea2070def56e90d537020423f",
+    "command": ".venv/bin/python -m pytest -q",
+    "profile": "Host permissions; existing development environment; integration opt-ins unset; one complete run after reviewed deterministic test-fixture change",
+    "exit": 0,
+    "passed": 12743,
+    "skipped": 558,
+    "failed": 0,
+    "duration_seconds": 1850.53,
+    "log_sha256": "c7a40b93071d1b401849301c70166db5b95fa2943e51f4b95512fd37669eb00a",
+    "original_failure_retained": true,
+    "targeted_tests_passed": 34,
+    "environment_metadata": {
+      "python": "3.11.15",
+      "packages": [
+        {
+          "name": "annotated-types",
+          "version": "0.8.0"
+        },
+        {
+          "name": "anyio",
+          "version": "4.15.1"
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0"
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1"
+        },
+        {
+          "name": "click",
+          "version": "8.5.0"
+        },
+        {
+          "name": "cryptography",
+          "version": "50.0.2"
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0"
+        },
+        {
+          "name": "harflow-mcp",
+          "version": "0.0.7"
+        },
+        {
+          "name": "httpcore2",
+          "version": "2.13.1"
+        },
+        {
+          "name": "httpx2",
+          "version": "2.13.1"
+        },
+        {
+          "name": "idna",
+          "version": "3.20"
+        },
+        {
+          "name": "iniconfig",
+          "version": "2.3.1"
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0"
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1"
+        },
+        {
+          "name": "mcp",
+          "version": "2.3.0"
+        },
+        {
+          "name": "mcp-types",
+          "version": "2.3.0"
+        },
+        {
+          "name": "opentelemetry-api",
+          "version": "1.45.1"
+        },
+        {
+          "name": "packaging",
+          "version": "26.3"
+        },
+        {
+          "name": "pluggy",
+          "version": "1.7.0"
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11"
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.1"
+        },
+        {
+          "name": "pydantic_core",
+          "version": "2.50.1"
+        },
+        {
+          "name": "Pygments",
+          "version": "2.21.0"
+        },
+        {
+          "name": "PyJWT",
+          "version": "2.15.1"
+        },
+        {
+          "name": "pytest",
+          "version": "9.1.1"
+        },
+        {
+          "name": "pytest-asyncio",
+          "version": "1.4.0"
+        },
+        {
+          "name": "python-multipart",
+          "version": "0.0.32"
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0"
+        },
+        {
+          "name": "rpds-py",
+          "version": "2026.9.1"
+        },
+        {
+          "name": "sse-starlette",
+          "version": "3.5.0"
+        },
+        {
+          "name": "starlette",
+          "version": "1.8.0"
+        },
+        {
+          "name": "tomlkit",
+          "version": "0.15.2"
+        },
+        {
+          "name": "truststore",
+          "version": "0.10.5"
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.4"
+        },
+        {
+          "name": "typing_extensions",
+          "version": "4.16.0"
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0"
+        }
+      ],
+      "uv_lock_sha256": "820fd9c5bd229aa0765400edc31bddaf5a9fd0408c7b22de7a8cb1903c4d2c2f",
+      "scope": "Read-only existing source-test environment metadata; no dependency sync or install"
+    }
   }
 }

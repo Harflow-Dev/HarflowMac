@@ -72,5 +72,34 @@
   },
   "source_commit": "cfeb03be5a04164ae58744742d2cfc5b03a3232f",
   "manifest_sha256": "cd022c5fd549a057a49558eb3536bd0f9788bf96800d66b19f763fb6d9da7115",
-  "fixture_files_verified": 131
+  "fixture_files_verified": 131,
+  "installed_mcp_schema_comparison": {
+    "source_inventory_canonical_sha256": "26ad72c6c054b8ce24e51deb61dc12f1bcc2ee095501904f6782adaeb57acdc3",
+    "negotiated_tool_count": 55,
+    "same_names": true,
+    "input_output_schema_documents_identical": true,
+    "description_indentation_differences": 45,
+    "semantic_differences_after_documented_normalization": [],
+    "normalization": "SDK field names mapped to wire aliases; descriptions compared using inspect.cleandoc. Raw descriptions differ by transport docstring indentation."
+  },
+  "installed_mac_bundle_read_only": {
+    "installed_bundle_present": true,
+    "scope": "Read-only installed bundle metadata, no launch or owner task-state inspection",
+    "CFBundleIdentifier": "dev.harflow.mac",
+    "CFBundleShortVersionString": "0.0.8",
+    "CFBundleVersion": "1",
+    "info_sha256": "ba96e6c715be47bcddd80ab77674f9a723d52613c0a35981b75f2670b27c2fac",
+    "executable_sha256": "57125530bac20f868ebc60cb10eaabc23a77ff83ee32feff9c593246538ab350",
+    "specification_file_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+    "codesign_strict_sandbox_exit": 1,
+    "codesign_strict_host_exit": 0,
+    "signature_limit": "Static existing signature verification, not notarization, publisher trust or release qualification"
+  },
+  "selected_source_mac_pair": {
+    "app_version": "0.0.9",
+    "engine_version": "0.0.7",
+    "build_executable_sha256": "9f574e6fed88d2abefe0488b9b4999a0e9f363a0454a22b97eccfbff33894221",
+    "installed_app_was_not_replaced": true,
+    "owner_running_app_binding": "Not inspected or inferred"
+  }
 }

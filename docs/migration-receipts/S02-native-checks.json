@@ -1,0 +1,145 @@
+{
+  "scope": "Serialized guarded source package checks, not ordinary app smoke",
+  "platform": "macOS arm64",
+  "packages": [
+    {
+      "package": "MonitorCore",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 389,
+      "discovered_suites": 60,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "8c815d6a22733022de0c42abe71d31af08f683aba82fc30c73802cd9709e5186"
+    },
+    {
+      "package": "HfCommon",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 17,
+      "discovered_suites": 3,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "c17c3e2be72c64513b981a61bf94fc05a276c48dc96f5a47ef9bf35ba224d09f"
+    },
+    {
+      "package": "HfUI",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 239,
+      "discovered_suites": 37,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "ff83799c69f962bec775c11d870dde5fc4a51d7b6878fd5ea647ecc462430fdd"
+    },
+    {
+      "package": "HfUtilities",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 19,
+      "discovered_suites": 4,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "86e503a39f8a1a374f5c99821f6c018403b7032b9caa57d565fe2c05f9d1bb7c"
+    },
+    {
+      "package": "HfRepository",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 448,
+      "discovered_suites": 54,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "9850acd386893e3191abd19cbed97174ddb2b0d6cff49d31d537232fa9e6d231"
+    },
+    {
+      "package": "MenuBarFeature",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 88,
+      "discovered_suites": 8,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "f2a808c3eb76ebb5b73e9f5afda883565e4ed6924af8b4b3070a8174eae4b27f"
+    },
+    {
+      "package": "SettingsFeature",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 87,
+      "discovered_suites": 14,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "070d68588d1246f3c68097ba0fa9742b0e2932caaffc5f66c3260459afdd5bc7"
+    },
+    {
+      "package": "Harflow",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 119,
+      "discovered_suites": 13,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "038f06a824aff501caaf1aa002d982f5da1338bc7eff26e85f3971cb31e1c9f2"
+    },
+    {
+      "package": "MainWindowFeature",
+      "mode": "suites",
+      "passed": true,
+      "discovered_tests": 1779,
+      "discovered_suites": 241,
+      "partitions": 241,
+      "passed_partitions": 241,
+      "manifest_sha256": "0c9595457acc9ce333343af865118eacc2481a914149f39885265214553f70ec"
+    }
+  ],
+  "MainWindowFeature_input_patch_sha256": "3966a88c83350efd642ec20a0b581a429b0f1bd139eefbf3442618cfbb9e8e69",
+  "MainWindowFeature_capture_gates": "Unset in this passing input; later validated-phase/capture input recorded separately",
+  "MonitorCore_reuse": "Owning source and guarded runner unchanged since its 389-test pass",
+  "qualification_limits": [
+    "No hosted CI inference",
+    "No signing/notarization release claim",
+    "No owner application launch or live runtime binding proof"
+  ],
+  "final_capture_input": {
+    "source_hashes": {
+      "WorkflowScreenLayoutTests.swift": "81e784ae27c643f2c3ed72dfd7b3c8eb6332eec54a4ac5ab0d45bb91c1f12110",
+      "StatisticsPreparedSurfaceCaptureTests.swift": "1c375f62cf77fee964430e0f8126d41028a5f9702e0046c2d1df396da79b02f5",
+      "NativePreferenceCaptureTests.swift": "23bf73df519a95fe05b24cb1f5c05a715246cacb007c4f82eddc69b1c919f2d9"
+    },
+    "MainWindowFeature": {
+      "passed": true,
+      "tests": 1779,
+      "partitions": 241,
+      "passed_partitions": 241,
+      "manifest_sha256": "a2a0bf93141f908ae2ae3e02c20d4816d56be094df529596101e5af017d77806",
+      "png_count": 53
+    },
+    "SettingsFeature": {
+      "passed": true,
+      "tests": 87,
+      "manifest_sha256": "ba5bb387b24cdbb59e9f7dafbdfe59002e34049dea0f468fa7ffba6cde6db204",
+      "png_count": 3
+    },
+    "source_commit": "b761112f11a5464ba3ac4c547c86c12a95806fef",
+    "source_change_scope": "Tests only; production Swift unchanged",
+    "ordinary_app_smoke": false
+  },
+  "accessibility_keyboard_native_partitions": [
+    {
+      "suite": "MainWindowFeatureTests.ActivityFeedNativeCellAccessibilityTests",
+      "passed": true,
+      "tests": 3
+    },
+    {
+      "suite": "MainWindowFeatureTests.SidebarNativeHeaderAccessibilityTests",
+      "passed": true,
+      "tests": 3
+    },
+    {
+      "suite": "MainWindowFeatureTests.WorkflowRecoveryPanelKeyboardTests",
+      "passed": true,
+      "tests": 7
+    }
+  ]
+}

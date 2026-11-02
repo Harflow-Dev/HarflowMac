@@ -1,0 +1,65 @@
+{
+  "scope": "Unmodified hosted synthetic-view PNGs, not ordinary application qualification",
+  "images": [
+    {
+      "file": "task-header-light.png",
+      "sha256": "604f3f94f0dcb63a2031c78c763d33bc2fab7ba0fdea7e488201d977dda1e4b2",
+      "bytes": 127816,
+      "scope": "Synthetic continuity/notices Task header; no ordinary app binding"
+    },
+    {
+      "file": "activity-composer-light.png",
+      "sha256": "1ead0f68bdb7979368ac1861f026b5c3cb96fb681c4ada79238e01d10ad1661d",
+      "bytes": 55100,
+      "scope": "Synthetic native activity/composer; static pixels do not verify keyboard operation"
+    },
+    {
+      "file": "workflow-checking-light.png",
+      "sha256": "79d2a6cdb987dac013a677568e5648c36662995e2d1436612de7846a91b55bd0",
+      "bytes": 270676,
+      "scope": "Prior bounded pending-validation capture, actual1000x620; source d98; no ordinary app claim"
+    },
+    {
+      "file": "workflow-validated-light.png",
+      "sha256": "94b14f5c9b6ab6c82381ab385687f52244e7cf9a5a27990cdac7470699e63fc2",
+      "bytes": 317236,
+      "scope": "Actual1000x652, successful rendered hint; history-error overlay; not healthy fixed620 view"
+    },
+    {
+      "file": "workflow-validated-dark.png",
+      "sha256": "b0acbdab3f58ce5b6a0c6973b505158908cb624ecc23a9481c02a95eebf68674",
+      "bytes": 275044,
+      "scope": "Actual1000x652; error overlay and dark palette contrast concern in cacheDisplay capture"
+    },
+    {
+      "file": "approval-blocked.png",
+      "sha256": "37977f090e46fcc8dce34e742f1f46acab625449a8c03f9520ca7d638948b139",
+      "bytes": 201231,
+      "scope": "Synthetic unsupported caller-owned approval; bounded scrolled command, no delivery/execution claim"
+    },
+    {
+      "file": "new-session-light.png",
+      "sha256": "1b80d64f430a9839e3794b23e8f6951029e1a53966f3426e83db0c61f56ba01f",
+      "bytes": 183436,
+      "scope": "Synthetic New session; footer/content reachability not established"
+    },
+    {
+      "file": "settings-ready.png",
+      "sha256": "e0de3f56b5e0bb20a0e4b3143eb3b929f68618607b8b6f2d16fccc715d8fd5f8",
+      "bytes": 71576,
+      "scope": "Synthetic Harnesses Ready; transparent composition/blank top element caveat"
+    },
+    {
+      "file": "settings-failed.png",
+      "sha256": "36f366faa138e7c899d6166422efa48e79decd29a441d35cccf07ec3d0e26a7e",
+      "bytes": 71675,
+      "scope": "Synthetic Harnesses Failed; transparent composition/blank top element caveat"
+    },
+    {
+      "file": "settings-unsupported.png",
+      "sha256": "8c4082eca7232970ba598c78a819c43d8bfa6581d9cf6220f09faa1e50ab2fd6",
+      "bytes": 70791,
+      "scope": "Synthetic Harnesses Unsupported; transparent composition/blank top element caveat"
+    }
+  ]
+}
