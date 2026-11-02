@@ -63,6 +63,314 @@ import Testing
         #expect(frame.minY >= trayFrame.maxY - 1, "The canvas must end above the step tray")
     }
 
+    @Test
+    func givenOptInCaptureDirectory_whenWorkflowEditorIsHosted_thenRecordsLayoutAndStablePixels() async throws {
+        guard let directory = try layoutCaptureDirectory() else { return }
+        let cases: [(String, CGSize, ColorScheme)] = [
+            ("cold-light-1000x620", CGSize(width: 1000, height: 620), .light),
+            ("cold-dark-1000x620", CGSize(width: 1000, height: 620), .dark),
+            ("cold-light-1440x900", CGSize(width: 1440, height: 900), .light),
+            ("cold-dark-1440x900", CGSize(width: 1440, height: 900), .dark),
+            ("warm-light-1000x620", CGSize(width: 1000, height: 620), .light)
+        ]
+        var order: [String] = []
+        for (name, size, appearance) in cases {
+            try await captureLayoutCase(name: name, size: size, appearance: appearance, directory: directory)
+            order.append(name)
+            try writeLayoutJSON(["caseOrder": order], to: directory.appendingPathComponent("case-order.json"))
+        }
+    }
+
+    private func layoutCaptureDirectory() throws -> URL? {
+        guard let raw = ProcessInfo.processInfo.environment["HARFLOW_S02_LAYOUT_CAPTURE_DIR"] else { return nil }
+        guard raw.hasPrefix("/"), !raw.split(separator: "/").contains("..") else {
+            throw NSError(domain: "WorkflowScreenLayoutDiagnostic", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Capture directory must be an absolute canonical path"])
+        }
+        let url = URL(fileURLWithPath: raw, isDirectory: true)
+        let path = url.standardizedFileURL.path
+        let attributes = try FileManager.default.attributesOfItem(atPath: path)
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        let scratchRoot = URL(fileURLWithPath: "/private/tmp/harflow-s02-resume", isDirectory: true).standardizedFileURL.path
+        let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
+        let repository = (0 ..< 7).reduce(URL(fileURLWithPath: #filePath)) { url, _ in url.deletingLastPathComponent() }.path
+        guard values.isDirectory == true, values.isSymbolicLink != true,
+              url.resolvingSymlinksInPath().standardizedFileURL.path == path,
+              raw.hasPrefix("/private/tmp/harflow-s02-resume/"), path.hasPrefix(scratchRoot + "/"), path != scratchRoot,
+              !path.hasPrefix(home + "/"), !path.hasPrefix(repository + "/"),
+              (attributes[.ownerAccountID] as? NSNumber)?.intValue == Int(getuid()),
+              (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700
+        else {
+            throw NSError(domain: "WorkflowScreenLayoutDiagnostic", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "Capture directory must be an owned mode-0700 directory under the dedicated S02 scratch root"])
+        }
+        return url
+    }
+
+    private func captureLayoutCase(name: String, size: CGSize, appearance: ColorScheme, directory: URL) async throws {
+        let createdAt = ProcessInfo.processInfo.systemUptime, vm = WorkflowPreview.make()
+        var checkpoints: [[String: Any]] = [validationCheckpoint(vm, label: "vmCreated", createdAt: createdAt)]
+        defer { vm.didDisappear() }
+        let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: size, appearance: appearance)
+        defer { fixture.close() }
+
+        // Match the original guarded test's first settle point exactly.
+        await fixture.settle { fixture.canvasScroll != nil }
+        _ = fixture.hasElement(containing: Self.composerLabel)
+        let canvas = try #require(fixture.canvasScroll)
+        let frame = canvas.convert(canvas.bounds, to: nil)
+        let content = fixture.window.contentLayoutRect
+        let tray = try #require(fixture.element("Workflow nodes"))
+        let trayFrame = try #require(fixture.frame(tray))
+        let originalOperands: [String: Any] = [
+            "nativeCanvasMinY": frame.minY, "trayMinY": trayFrame.minY, "trayMaxY": trayFrame.maxY,
+            "expectedBottomPadding": HfRadius.Metrics.spacing12 + HfRadius.Metrics.spacing6,
+            "contentMinY": content.minY, "trayAsAsserted": rectString(trayFrame)
+        ]
+        let firstGeometry = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+        checkpoints.append(validationCheckpoint(vm, label: "firstSettle", createdAt: createdAt))
+        try #require(!fixture.trayRowScrolls().isEmpty, "The workflow node tray row did not render")
+        let firstImage = try cacheLayoutBitmap(fixture.host, to: directory.appendingPathComponent(name + "-first.png"))
+        let afterCaptureGeometry = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+        checkpoints.append(validationCheckpoint(vm, label: "afterFirstCapture", createdAt: createdAt))
+
+        let stability = try observeStableLayout(fixture: fixture, canvas: canvas, tray: tray, initial: afterCaptureGeometry)
+        #expect(stability.reached, "Workflow layout did not remain unchanged for three runloop turns within 3 seconds: \(name)")
+
+        let stablePreCaptureGeometry = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+        checkpoints.append(validationCheckpoint(vm, label: "beforeStableCapture", createdAt: createdAt))
+        let captureBounds = fixture.host.bounds
+        let stableImage = try cacheLayoutBitmap(fixture.host, to: directory.appendingPathComponent(name + "-stable.png"))
+        let afterStableCapture = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+        checkpoints.append(validationCheckpoint(vm, label: "afterStableCapture", createdAt: createdAt))
+        var report: [String: Any] = [
+            "case": name, "requestedSizePoints": ["width": size.width, "height": size.height], "appearance": appearance == .dark ? "dark" : "light",
+            "originalFirstSettleOperands": originalOperands, "firstSettleGeometry": firstGeometry, "geometryBeforeStableCapture": stablePreCaptureGeometry,
+            "geometryAfterFirstCapture": afterCaptureGeometry, "geometryAfterStableCapture": afterStableCapture, "stable": stability.reached,
+            "stabilityIterations": stability.iterations, "stabilityElapsedSeconds": stability.elapsed,
+            "bitmapCoordinateMapping": bitmapMapping(fixture: fixture, bounds: captureBounds, bitmap: stableImage),
+            "firstBitmap": ["pixelsWide": firstImage.width, "pixelsHigh": firstImage.height], "stableBitmap": ["pixelsWide": stableImage.width,
+            "pixelsHigh": stableImage.height]
+        ]
+        report["validationCheckpoints"] = checkpoints
+        report["validationIDChanges"] = validationIDChanges(checkpoints)
+        try writeLayoutJSON(report, to: directory.appendingPathComponent(name + ".json"))
+        try await captureValidatedLayout(vm: vm, surface: (fixture, canvas, tray), output: (createdAt, name, directory),
+                                         report: &report, checkpoints: &checkpoints)
+    }
+
+    private func bitmapMapping(fixture: RedesignHost, bounds: CGRect, bitmap: (width: Int, height: Int)) -> [String: Any] {
+        ["pixelsWide": bitmap.width, "pixelsHigh": bitmap.height,
+         "pixelsPerPointX": Double(bitmap.width) / bounds.width, "pixelsPerPointY": Double(bitmap.height) / bounds.height,
+         "hostIsFlipped": fixture.host.isFlipped, "capturedHostBounds": rectString(bounds),
+         "hostBoundsInWindow": rectString(fixture.host.convert(bounds, to: nil)),
+         "rowConvention": "Convert window points to host coordinates first. PNG row zero is the top row.",
+         "rowFormula": "flipped: (hostY - bounds.minY) * pixelsPerPointY; unflipped: (bounds.maxY - hostY) * pixelsPerPointY",
+         "renderingLimitations": "NSView cacheDisplay captures the hosted view; window material composition may differ from the app."]
+    }
+
+    private func validationSucceeded(_ vm: WorkflowVM) -> Bool {
+        vm.selectedRun == nil && vm.validationMessage == nil && vm.validatedDefinition == vm.effectiveDefinition
+    }
+
+    private func validationCheckpoint(_ vm: WorkflowVM, label: String, createdAt: TimeInterval) -> [String: Any] {
+        ["checkpoint": label, "elapsedSinceVMCreationSeconds": ProcessInfo.processInfo.systemUptime - createdAt,
+         "selectedRunIsNil": vm.selectedRun == nil, "message": vm.validationMessage.map { $0 as Any } ?? NSNull(),
+         "validatedDefinitionPresent": vm.validatedDefinition != nil, "validatedDefinitionMatchesEffective": vm.validatedDefinition == vm.effectiveDefinition,
+         "validationID": vm.validationID.uuidString, "validationTaskReferencePresent": vm.validationTask != nil,
+         "validationSuspended": vm.validationSuspended, "validationSucceeded": validationSucceeded(vm), "showsRunSheet": vm.showsRunSheet,
+         "launchPreviewPresent": vm.launchPreview != nil,
+         "launchPreviewMessage": vm.launchPreviewMessage.map { $0 as Any } ?? NSNull(), "launchPreviewID": vm.launchPreviewID.uuidString,
+         "launchPreviewTaskReferencePresent": vm.launchPreviewTask != nil,
+         "launchPreviewRendering": "Launch preview readiness/loading/error is rendered only in the run sheet; editor cases keep that sheet closed.",
+         "taskReferenceInterpretation": "Task reference presence does not establish pending work or completion."]
+    }
+
+    private static let validatedHint = "Drag nodes onto the canvas; connect their dots."
+
+    private func validatedHintIsRendered(_ vm: WorkflowVM, fixture: RedesignHost) -> Bool {
+        validationSucceeded(vm) && vm.editorConflict == nil && fixture.element(Self.validatedHint) != nil
+    }
+
+    private func renderedStatusEvidence(_ vm: WorkflowVM, fixture: RedesignHost) throws -> [String: Any] {
+        let checking = fixture.descendants.flatMap { fixture.elements(in: $0) }.first { object in
+            ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
+                fixture.string(object, $0)?.contains("Checking workflow…") == true
+            }
+        }
+        let hint = fixture.element(Self.validatedHint)
+        return ["checking": try statusElementEvidence(checking, fixture: fixture), "hint": try statusElementEvidence(hint, fixture: fixture),
+                "editorConflictPresent": vm.editorConflict != nil, "hintFenceSatisfied": validatedHintIsRendered(vm, fixture: fixture)]
+    }
+
+    private func statusElementEvidence(_ element: NSObject?, fixture: RedesignHost) throws -> [String: Any] {
+        guard let element else { return ["present": false, "frameInWindow": NSNull()] }
+        return ["present": true, "frameInWindow": rectString(try #require(fixture.frame(element)))]
+    }
+
+    private func validationIDChanges(_ checkpoints: [[String: Any]]) -> [[String: Any]] {
+        checkpoints.enumerated()
+.filter { index, checkpoint in
+            index == 0 || checkpoint["validationID"] as? String != checkpoints[index - 1]["validationID"] as? String
+        }
+.map(\.element)
+    }
+
+    private func waitForSuccessfulValidation(_ vm: WorkflowVM, fixture: RedesignHost, createdAt: TimeInterval,
+                                             checkpoints: inout [[String: Any]]) async throws -> String {
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        var previous = Data()
+        while true {
+            let checkpoint = validationCheckpoint(vm, label: "validationWait", createdAt: createdAt)
+            var comparable = checkpoint
+            comparable.removeValue(forKey: "elapsedSinceVMCreationSeconds")
+            let signature = try geometrySignature(comparable)
+            if signature != previous { checkpoints.append(checkpoint); previous = signature }
+            if validatedHintIsRendered(vm, fixture: fixture) { return "success" }
+            // scheduleValidation uses this message only while its current validation is pending.
+            if let message = vm.validationMessage, message != "Checking workflow…" { return "validationFailed" }
+            if ProcessInfo.processInfo.systemUptime >= deadline { return "deadlineExpired" }
+            await Task.yield()
+            turnLayoutRunLoop(fixture)
+        }
+    }
+
+    private func captureValidatedLayout(vm: WorkflowVM, surface: (fixture: RedesignHost, canvas: NSScrollView, tray: NSObject),
+                                        output: (createdAt: TimeInterval, name: String, directory: URL), report: inout [String: Any],
+                                        checkpoints: inout [[String: Any]]) async throws {
+        let fixture = surface.fixture
+        let (createdAt, name, directory) = output
+        let outcome = try await waitForSuccessfulValidation(vm, fixture: fixture, createdAt: createdAt, checkpoints: &checkpoints)
+        report["validationWaitOutcome"] = outcome
+        report["renderedStatusAtValidationWaitEnd"] = try renderedStatusEvidence(vm, fixture: fixture)
+        report["validated"] = validationSucceeded(vm)
+        report["validationCheckpoints"] = checkpoints
+        report["validationIDChanges"] = validationIDChanges(checkpoints)
+        let reportURL = directory.appendingPathComponent(name + ".json")
+        try writeLayoutJSON(report, to: reportURL)
+        guard outcome == "success" else {
+            #expect(outcome == "success", "Successful workflow validation was not observed: \(name), \(outcome)")
+            return
+        }
+        let canvas = try #require(fixture.canvasScroll), tray = try #require(fixture.element("Workflow nodes"))
+        let geometry = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+        checkpoints.append(validationCheckpoint(vm, label: "validationSucceeded", createdAt: createdAt))
+        report["geometryAtValidationSuccess"] = geometry
+        let stability = try observeStableLayout(fixture: fixture, canvas: canvas, tray: tray, initial: geometry)
+        report["validatedStable"] = stability.reached
+        report["validatedStabilityIterations"] = stability.iterations
+        report["validatedStabilityElapsedSeconds"] = stability.elapsed
+        report["geometryBeforeValidatedCapture"] = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+        report["renderedStatusBeforeValidatedCapture"] = try renderedStatusEvidence(vm, fixture: fixture)
+        checkpoints.append(validationCheckpoint(vm, label: "beforeValidatedCapture", createdAt: createdAt))
+        report["validated"] = validationSucceeded(vm)
+        report["validationCheckpoints"] = checkpoints
+        report["validationIDChanges"] = validationIDChanges(checkpoints)
+        try writeLayoutJSON(report, to: reportURL)
+        guard stability.reached, validatedHintIsRendered(vm, fixture: fixture) else {
+            #expect(stability.reached && validatedHintIsRendered(vm, fixture: fixture), "Validated workflow geometry or rendered hint changed: \(name)")
+            return
+        }
+        let bounds = fixture.host.bounds
+        let bitmap = try cacheLayoutBitmap(fixture.host, to: directory.appendingPathComponent(name + "-validated.png"))
+        report["geometryAfterValidatedCapture"] = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+        report["renderedStatusAfterValidatedCapture"] = try renderedStatusEvidence(vm, fixture: fixture)
+        checkpoints.append(validationCheckpoint(vm, label: "afterValidatedCapture", createdAt: createdAt))
+        report["validatedBitmapCoordinateMapping"] = bitmapMapping(fixture: fixture, bounds: bounds, bitmap: bitmap)
+        report["validationCheckpoints"] = checkpoints
+        report["validationIDChanges"] = validationIDChanges(checkpoints)
+        try writeLayoutJSON(report, to: reportURL)
+    }
+
+    private func observeStableLayout(fixture: RedesignHost, canvas: NSScrollView, tray: NSObject,
+                                     initial: [String: Any]) throws -> (reached: Bool, iterations: Int, elapsed: TimeInterval) {
+        let start = ProcessInfo.processInfo.systemUptime, deadline = start + 3
+        var previous = try geometrySignature(initial)
+        var consecutiveTurns = 0
+        var iterations = 0
+        while ProcessInfo.processInfo.systemUptime < deadline, consecutiveTurns < 3 {
+            turnLayoutRunLoop(fixture)
+            iterations += 1
+            let current = try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray)
+            let signature = try geometrySignature(current)
+            if signature == previous { consecutiveTurns += 1 } else { consecutiveTurns = 0 }
+            previous = signature
+        }
+        return (consecutiveTurns >= 3, iterations, ProcessInfo.processInfo.systemUptime - start)
+    }
+
+    private func turnLayoutRunLoop(_ fixture: RedesignHost) {
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
+        fixture.host.layoutSubtreeIfNeeded()
+        fixture.host.displayIfNeeded()
+    }
+
+    private func layoutGeometry(fixture: RedesignHost, canvas: NSScrollView, tray: NSObject) throws -> [String: Any] {
+        let clip = canvas.contentView
+        let window = fixture.window
+        let trayAsAsserted = try #require(fixture.frame(tray))
+        let accessibilityScreenFrame: CGRect
+        if let accessible = tray as? any NSAccessibilityProtocol {
+            accessibilityScreenFrame = accessible.accessibilityFrame()
+        } else {
+            try #require(tray.responds(to: NSSelectorFromString("accessibilityFrame")))
+            accessibilityScreenFrame = try #require(tray.value(forKey: "accessibilityFrame") as? NSValue).rectValue
+        }
+        let rows = fixture.trayRowScrolls().enumerated().map { index, scroll in
+            ["index": index, "frameInWindow": rectString(scroll.convert(scroll.bounds, to: nil)),
+             "clipFrameInWindow": rectString(scroll.contentView.convert(scroll.contentView.bounds, to: nil)),
+             "documentFrame": rectString(scroll.documentView?.frame ?? .zero),
+             "contentInsets": String(describing: scroll.contentInsets), "borderType": String(describing: scroll.borderType),
+             "horizontalScrollerFrame": rectString(scroll.horizontalScroller?.frame ?? .zero),
+             "verticalScrollerFrame": rectString(scroll.verticalScroller?.frame ?? .zero)] as [String: Any]
+        }
+        return [
+            "windowFrame": rectString(window.frame), "windowScreenFrame": rectString(window.screen?.frame ?? .zero),
+            "windowScreenVisibleFrame": rectString(window.screen?.visibleFrame ?? .zero), "backingScaleFactor": window.backingScaleFactor,
+            "contentLayoutRect": rectString(window.contentLayoutRect), "contentViewFrame": rectString(try #require(window.contentView).frame),
+            "contentViewBounds": rectString(try #require(window.contentView).bounds), "hostBounds": rectString(fixture.host.bounds),
+            "hostIsFlipped": fixture.host.isFlipped,
+            "canvasFrameInWindow": rectString(canvas.convert(canvas.bounds, to: nil)), "canvasBounds": rectString(canvas.bounds),
+            "canvasClipFrameInWindow": rectString(clip.convert(clip.bounds, to: nil)), "canvasClipBounds": rectString(clip.bounds),
+            "canvasContentInsets": String(describing: canvas.contentInsets), "canvasBorderType": String(describing: canvas.borderType),
+            "canvasHorizontalScrollerFrame": rectString(canvas.horizontalScroller?.frame ?? .zero),
+            "canvasVerticalScrollerFrame": rectString(canvas.verticalScroller?.frame ?? .zero),
+            "trayAsAsserted": rectString(trayAsAsserted), "originalAssertionOperands": [
+                "nativeCanvasMinY": canvas.convert(canvas.bounds, to: nil).minY, "trayMinY": trayAsAsserted.minY, "trayMaxY": trayAsAsserted.maxY,
+                "expectedBottomPadding": HfRadius.Metrics.spacing12 + HfRadius.Metrics.spacing6, "contentMinY": window.contentLayoutRect.minY
+            ],
+            "trayAXRawScreenFrame": rectString(accessibilityScreenFrame),
+            "trayAXFrameInWindow": rectString(window.convertFromScreen(accessibilityScreenFrame)), "trayRowScrolls": rows
+        ]
+    }
+
+    private func rectString(_ rect: CGRect) -> String { NSStringFromRect(rect) }
+
+    private func geometrySignature(_ geometry: [String: Any]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: geometry, options: [.sortedKeys])
+    }
+
+    private func cacheLayoutBitmap(_ view: NSView, to url: URL) throws -> (width: Int, height: Int) {
+        view.layoutSubtreeIfNeeded()
+        view.displayIfNeeded()
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            throw NSError(domain: "WorkflowScreenLayoutDiagnostic", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "Could not allocate size-aware hosted-view bitmap"])
+        }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+            throw NSError(domain: "WorkflowScreenLayoutDiagnostic", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey: "Could not encode hosted-view bitmap as PNG"])
+        }
+        try data.write(to: url, options: .atomic)
+        return (bitmap.pixelsWide, bitmap.pixelsHigh)
+    }
+
+    private func writeLayoutJSON(_ value: [String: Any], to url: URL) throws {
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: url, options: .atomic)
+    }
+
     @Test(arguments: windowSizes, [ColorScheme.light, .dark])
     func givenBuilderRunAwaitingItsTask_whenHosted_thenNoComposerAndStartingLabelIsShown(size: CGSize, appearance: ColorScheme) async throws {
         // given

@@ -58,6 +58,7 @@ struct NativePreferenceCaptureTests {
             BackendCatalogEntry(backend: "claude", installed: true),
             BackendCatalogEntry(backend: "codex", installed: true)
         ], state: .available)
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn([])
         given(useCase).backendCatalogPublisher().willReturn(Just(catalog).eraseToAnyPublisher())

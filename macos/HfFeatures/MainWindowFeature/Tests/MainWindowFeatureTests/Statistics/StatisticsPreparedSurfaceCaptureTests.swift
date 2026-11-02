@@ -35,7 +35,9 @@ import Testing
             scroll.scrollerStyle = style
             scroll.hasVerticalScroller = true
             scroll.tile()
+            guard let document = scroll.documentView else { return false }
             return abs(host.bounds.width - width) < 2 && scroll.contentView.bounds.width > 0
+                && document.bounds.width <= scroll.contentView.bounds.width + 1
         }
         let scroll = try #require(Self.descendants(of: host).compactMap { $0 as? NSScrollView }.first)
         let document = try #require(scroll.documentView)
