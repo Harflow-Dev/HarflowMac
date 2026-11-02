@@ -105,3 +105,5 @@ hash verification, qualification and immutable generations; see `docs/managed-ru
 `docs/releasing.md`. CI is described in `docs/development.md`, `docs/releasing.md` and
 `docs/ci-signing.md`. Signed runs upload the app to Apple and, like pushes and releases, need
 explicit owner authorization in the active task.
+
+Migration work: see [docs/migration-plan.md](docs/migration-plan.md).
