@@ -24,6 +24,7 @@ final class ConnectionStatusVM: ConnectionStatusViewModel {
 
     @ObservationIgnored private let useCase: any SidebarUseCase
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var appearanceCount = 0
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored private var latestHasListed: Bool
     @ObservationIgnored private var latestErrorMessage: String?
@@ -37,7 +38,8 @@ final class ConnectionStatusVM: ConnectionStatusViewModel {
     }
 
     func didAppear() {
-        guard !didSubscribe else { return }
+        appearanceCount += 1
+        guard appearanceCount == 1, !didSubscribe else { return }
         didSubscribe = true
 
         useCase.listErrorPublisher()
@@ -69,7 +71,9 @@ final class ConnectionStatusVM: ConnectionStatusViewModel {
     }
 
     func didDisappear() {
-        guard didSubscribe else { return }
+        guard appearanceCount > 0 else { return }
+        appearanceCount -= 1
+        guard appearanceCount == 0, didSubscribe else { return }
         didSubscribe = false
         cancellables.removeAll()
     }

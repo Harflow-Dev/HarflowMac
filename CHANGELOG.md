@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix the connection indicator remaining Disconnected at startup until a task or workflow was selected.
+
 ## 0.0.9
 
 - Keep the workflow editor's standalone strip and Add tray on one horizontally scrolling row with the app's thin overlay scrollbar, a fixed scrollbar gutter that never changes the row's height, and a trailing fade for clipped content.
