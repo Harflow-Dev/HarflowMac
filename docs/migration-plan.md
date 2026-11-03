@@ -9,6 +9,10 @@ Preserve existing dirty source work. No new product features are implied by this
 migration. Inputs are the reproducible current app and Python contract; outputs
 are baseline captures, compatibility evidence and retirement handoff.
 
+## Redesign target and intent
+
+The approved baseline is [HarflowDesign v2 at commit `3643d083700be4032c93237813b573d04bab6ab1`](https://github.com/Harflow-Dev/HarflowDesign/tree/3643d083700be4032c93237813b573d04bab6ab1/v2), including the owner-approved Mac connector amendment. Consult the optional workspace [coverage and intent ledger](../../HarflowDesign/v2/docs/migration-coverage.md); it is not a build dependency. Use the native app as behavioral and source inventory, not as the redesigned pixel template. Missing required states need a v2 design and explicit owner approval with exact commit, path and state before dependent implementation. Approval of visuals does not authorize new authority, public contract changes, backends or deferred features. Core execution safety and observability remain required.
+
 ## Dispatch and boundaries
 
 Work only on the assigned item. Read the workspace AGENTS.md, this repository's AGENTS.md if present, and
@@ -22,10 +26,9 @@ completion. Repository builds and tests must not depend on sibling checkouts.
 The optional [workspace coordination index](../../HARFLOW_MIGRATION_CHECKLIST.md)
 uses B0 (baseline), C0 (contracts and design), E0 (client and Electron on
 Python), R0 (Rust parity), I0 (integrated stack), and O0 (owner cutover and
-publication). It is not a build dependency. Freeze and qualify the reproducible
-existing baseline without waiting for open feature tickets. Review v1 scope in a
-parity ledger, including proposed sidebar additions, instead of assuming tickets
-or UI polish are migration requirements without an accepted ledger decision. All boxes below are deliberately unchecked;
+publication). It is not a build dependency. Freeze and qualify the reproducible existing baseline without waiting for open
+feature tickets. Use the v2 intent ledger to decide retained and simplified scope;
+legacy UI parity and open tickets do not independently mandate inclusion. All boxes below are deliberately unchecked;
 scaffolds alone do not establish completion. Early-use gates and defaults remain
 subject to evidence and explicit authorization for root registration. Use fresh
 Rust state; archive historical task, run and event records rather than importing
@@ -52,8 +55,8 @@ continues as needed throughout, within the freeze policy.
       fixture bundle and compare manifest digests byte-for-byte.
 - [ ] C0-MA-02 Verify decoders, independent version gates and fallback behavior;
       make only necessary compatibility changes.
-- [ ] E0-MA-01 Supply verified behavioral and pixel reference evidence to the
-      client parity review; distinguish observations from design approvals.
+- [ ] E0-MA-01 Supply verified behavioral and source inventory evidence to the
+      v2 scope review; native pixels are not the redesign template.
 
 ## O0 — owner handoff
 

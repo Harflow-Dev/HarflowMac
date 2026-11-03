@@ -24,6 +24,8 @@ Return the session receipt at the specified lead-repository path, including all 
 
 For optional work replace `Sxx` with `X01`, `X02` or `X03`.
 
+The [v2 coverage ledger](../../HarflowDesign/v2/docs/migration-coverage.md) is an optional workspace coordination reference, not a build dependency. S10-Gxx bounded gap sub-sessions follow scope approval and obtain exact design approval before dependent work; unresolved required states block only their dependent feature. Independent work continues. The approved mock does not establish runtime capability or authority. Existing S01 evidence and S02 status remain as recorded in their receipts.
+
 ## Sessions
 
 ### S02 — Native pair qualification and references
@@ -39,7 +41,7 @@ For optional work replace `Sxx` with `X01`, `X02` or `X03`.
 - Status: planned. Lead: HarflowMCP. Co-owned: HarflowMac, HarflowDesign, HarflowEngine, HarflowWeb.
 - Prerequisite receipts: S02.
 - Checklist coverage: B0-MC-02 (final contribution), B0-MA-04 (final contribution), B0-DS-01 (final contribution), C0-DS-04 (partial), B0-EN-01 (final contribution), B0-WE-01 (partial).
-- Scope and acceptance: Obtain owner decisions on freeze, parity, scope, representative datasets and performance budgets; inventory design approvals, engine scaffold and deferred Web; record accepted baselines and unknowns.
+- Scope and acceptance: Record Keep, Simplify, Deliberately remove and Undecided decisions in the v2 coverage ledger; obtain decisions on freeze, representative datasets and performance budgets, preserving unresolved scope and approved removals.
 - Output: lead receipt `docs/migration-receipts/S03.md`, with the evidence and identities required by the dispatch protocol.
 
 ### S06 — Mac fixture compatibility
@@ -50,12 +52,12 @@ For optional work replace `Sxx` with `X01`, `X02` or `X03`.
 - Scope and acceptance: Vendor the complete canonical bundle and prove matching digests, independent version gates, decoder compatibility and fallback.
 - Output: lead receipt `docs/migration-receipts/S06.md`, with the evidence and identities required by the dispatch protocol.
 
-### S10 — Approved macOS design references
+### S10 — Approved v2 design and gap reconciliation
 
 - Status: planned. Lead: HarflowDesign. Co-owned: HarflowMac.
 - Prerequisite receipts: S09.
 - Checklist coverage: C0-DS-01 (final contribution), C0-DS-02 (final contribution), C0-DS-03 (final contribution), C0-DS-04 (final contribution), E0-DS-01 (final contribution).
-- Scope and acceptance: Prepare macOS adaptations and token/state references, including accessibility, interactions and appearances; obtain explicit owner approval and record commit/path/state or stop on missing decisions.
+- Scope and acceptance: Reconcile the pinned approved v2 baseline, intent ledger and contract/design gaps. For each retained or approved simplified feature, commission missing states in v2 and obtain explicit owner approval with exact commit/path/state before dependent implementation. Use bounded S10-Gxx sub-sessions as needed; independent work continues.
 - Output: lead receipt `docs/migration-receipts/S10.md`, with the evidence and identities required by the dispatch protocol.
 
 ### S24 — Electron on Python acceptance
@@ -63,7 +65,7 @@ For optional work replace `Sxx` with `X01`, `X02` or `X03`.
 - Status: planned. Lead: HarflowDesktop. Co-owned: HarflowMCP, HarflowMac, HarflowDesign, HarflowClient.
 - Prerequisite receipts: S23.
 - Checklist coverage: E0-MC-01 (final contribution), E0-MA-01 (final contribution), E0-DS-02 (final contribution), E0-CL-05 (final contribution), E0-CL-06 (final contribution), E0-CL-07 (final contribution), E0-CL-14 (final contribution), E0-DE-02 (final contribution), E0-DE-06 (final contribution), E0-DE-12 (final contribution).
-- Scope and acceptance: Run full E0 scenarios including reconnect, disposal, accessibility, production pixels, performance, clean pinned install and sandbox smoke; accept exact app/client/Python/contract identities and limitations.
+- Scope and acceptance: Accept Electron on Python against approved v2 production pixels and the retained/simplified feature ledger, including reconnect, disposal, accessibility, performance, clean pinned install and sandbox smoke. Do not restore removed UI for parity; record exact identities and limitations.
 - Output: lead receipt `docs/migration-receipts/S24.md`, with the evidence and identities required by the dispatch protocol.
 
 ### S46 — Cutover rehearsal
