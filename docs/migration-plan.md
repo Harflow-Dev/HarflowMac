@@ -50,7 +50,9 @@ continues as needed throughout, within the freeze policy.
       accepted defect or behavior change in the parity ledger.
 
 S02 evidence: [qualified baseline receipt](migration-receipts/S02.md), including
-recorded limitations. B0-MA-04 remains for S03.
+recorded limitations. The freeze is in force from 2026-11-03; the
+[S03 receipt](../../HarflowMCP/docs/migration-receipts/S03.md) records its permitted
+maintenance for B0-MA-04, pending acceptance.
 
 ## C0 / E0 — compatibility and reference
 
