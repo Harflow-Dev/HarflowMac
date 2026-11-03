@@ -71,5 +71,7 @@
   ],
   "exact_content_rectangle_measured": false,
   "spoken_VoiceOver_tested": false,
-  "automation_isolation_adjustment": "Second scratch bundle has distinct CFBundleName/CFBundleDisplayName; binding became responsive while owner app remained running"
+  "automation_isolation_adjustment": "Second scratch bundle has distinct CFBundleName/CFBundleDisplayName; binding became responsive while owner app remained running",
+  "historical_before_startup_fix": true,
+  "superseded_startup_assessment": "S02-startup-fix.json"
 }

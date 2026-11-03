@@ -1,0 +1,111 @@
+{
+  "scope": "Fresh serialized guarded native checks after startup VM fix",
+  "packages": [
+    {
+      "package": "macos/HfFeatures/MainWindowFeature",
+      "mode": "suites",
+      "passed": true,
+      "tests": 1781,
+      "suites": 241,
+      "partitions": 241,
+      "passed_partitions": 241,
+      "manifest_sha256": "be3554ea56c2f95417639e3c5ccfe307710ebf751394bd3d196bb31cd44ce5be",
+      "duration_seconds": 592.5830815420013
+    },
+    {
+      "package": "macos/HfCore/MonitorCore",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 389,
+      "suites": 60,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "f8584090bb3a69e269a1e05c0ff3450dd53ebb2fb3ba0e98852b952d3b22ad11",
+      "duration_seconds": 24.852939415999572
+    },
+    {
+      "package": "macos/HfFoundation/HfCommon",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 17,
+      "suites": 3,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "d751b5574257bb733d1747483347f6a1484fca4751e4ea94374525568efa15c0",
+      "duration_seconds": 2.6733700420008972
+    },
+    {
+      "package": "macos/HfFoundation/HfUI",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 239,
+      "suites": 37,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "52dbdd53106828f72c80325ef395e068d8921e0e6e2d29d1427c463283f59aea",
+      "duration_seconds": 18.87062345799859
+    },
+    {
+      "package": "macos/HfFoundation/HfUtilities",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 19,
+      "suites": 4,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "8933f3c378e287eee7210c3ff79fb012a6255673c85424b7b14020ec34d6ec9c",
+      "duration_seconds": 2.3645488749989454
+    },
+    {
+      "package": "macos/HfCore/HfRepository",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 448,
+      "suites": 54,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "c1a2c6b002d0164f68536ac4c4812db7ea821b642e3809d799901a1d17415cd3",
+      "duration_seconds": 24.106106875000478
+    },
+    {
+      "package": "macos/HfFeatures/MenuBarFeature",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 88,
+      "suites": 8,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "1b245dba7735b8ebc52033aafcbd477229193ce41a1d0844585910cff2aef090",
+      "duration_seconds": 9.478865084000063
+    },
+    {
+      "package": "macos/HfFeatures/SettingsFeature",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 87,
+      "suites": 14,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "82d06b8c2e6cb03eb0b89778f9cd1ab4bc901499aa615b60f4223c05352e883a",
+      "duration_seconds": 42.31402433400035
+    },
+    {
+      "package": "macos/Harflow",
+      "mode": "aggregate",
+      "passed": true,
+      "tests": 119,
+      "suites": 13,
+      "partitions": 1,
+      "passed_partitions": 1,
+      "manifest_sha256": "ebcdd830326a98735b1984250eb8419302fb42c2d5218d0eebf45020b5e79ec3",
+      "duration_seconds": 17.281703417000244
+    }
+  ],
+  "total_tests": 3187,
+  "passed": true,
+  "native_benchmark_enabled": true,
+  "native_sidebar_benchmark_enabled": true,
+  "capture_opt_ins_enabled": false,
+  "does_not_qualify_new_pixels": true,
+  "source_commit": "3175a104ec669ffd3c5c0db46cb48f19f1478529"
+}

@@ -40,14 +40,17 @@ continues as needed throughout, within the freeze policy.
 
 ## B0 — daily-use baseline
 
-- [ ] B0-MA-01 Record current commit, dirty work and qualified build behavior;
+- [x] B0-MA-01 Record current commit, dirty work and qualified build behavior;
       preserve uncommitted changes and report any unverified native behavior.
-- [ ] B0-MA-02 Capture representative task, workflow, approval, settings and
+- [x] B0-MA-02 Capture representative task, workflow, approval, settings and
       accessibility states for the parity ledger using isolated fixtures.
-- [ ] B0-MA-03 Map public contract use and direct file-read coupling, including
+- [x] B0-MA-03 Map public contract use and direct file-read coupling, including
       event observation, and record relevant preferences for later import.
 - [ ] B0-MA-04 Apply the current freeze policy to maintenance and capture any
       accepted defect or behavior change in the parity ledger.
+
+S02 evidence: [qualified baseline receipt](migration-receipts/S02.md), including
+recorded limitations. B0-MA-04 remains for S03.
 
 ## C0 / E0 — compatibility and reference
 

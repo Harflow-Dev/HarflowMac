@@ -1,0 +1,49 @@
+{
+  "status": "qualified_with_recorded_limits",
+  "app_version": "0.0.9",
+  "engine_version": "0.0.7",
+  "original_binary_sha256": "9f574e6fed88d2abefe0488b9b4999a0e9f363a0454a22b97eccfbff33894221",
+  "fix_binary_sha256": "1e49b1c37c1f9920fe7dad8daa25269e35828fd61a9ce6099ddc1b021b0acf37",
+  "fix_tool_sha256": "1c15df972775b795047e9af71b4c229b58e1a551bcb32984171a6ce229565d62",
+  "vm_sha256": "b95194741c3b0607d845b65b5870da46ad0869b24737ce2d17fc3fb1cb28bad3",
+  "tests_sha256": "158bf6dcf492b67a0f73df7af13f647e67057962b1e393282b5d3fde8ffff906",
+  "focused_partition": {
+    "baseline_passed": 6,
+    "baseline_failed": 1,
+    "baseline_failure_assertions": 6,
+    "postfix_passed": 7,
+    "postfix_skipped": 0,
+    "full_package_qualification": false
+  },
+  "refresh": {
+    "quiet_seconds": 2.233,
+    "append_after_launch_seconds": 5.019,
+    "first_page_after_launch_seconds": 6.396,
+    "first_page_after_append_seconds": 1.377,
+    "earliest_safety_tick_seconds": 10,
+    "sampling_lossless": false,
+    "ui_actions_during_controlled_window": false
+  },
+  "run_id": "3d1b4e633ffa4661b8cd37f06ceccaed",
+  "run_archive_manifest_sha256": "74fade76e366fb39c01a877efb2e6b132796ff1418f21849a7ab71e3e97ee096",
+  "preferences_restored": true,
+  "preference_domain_empty_after_restore": true,
+  "images": {
+    "startup-connected.jpg": "f87f5c3e8ec9b56847dc7449c4976693c420e1f85496659a54dcda8ed3c37703",
+    "task-stable-connected.jpg": "5db6dddf22d9491dc33eed3ef67fb4873ed4afd8040d19eda74d031ed7c7f6cf",
+    "window-reactivated-connected.jpg": "274439e434580ec063c493cd241f3f7e2029dd072c65e5c3f2defda54a87dcc0"
+  },
+  "limits": [
+    "Constrained task capture reports Connected through accessibility but does not visibly paint centered title or status indicator.",
+    "No independent closed-window interval or post-fix lifecycle callback trace established."
+  ],
+  "source_commit": "3175a104ec669ffd3c5c0db46cb48f19f1478529",
+  "native_qualification": {
+    "passed": true,
+    "packages": 9,
+    "tests": 3187,
+    "main_window_partitions": 241,
+    "main_window_tests": 1781,
+    "receipt": "S02-startup-native-checks.json"
+  }
+}

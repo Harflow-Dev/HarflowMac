@@ -30,7 +30,7 @@ The [v2 coverage ledger](../../HarflowDesign/v2/docs/migration-coverage.md) is a
 
 ### S02 — Native pair qualification and references
 
-- Status: planned. Lead: HarflowMac. Co-owned: HarflowMCP.
+- Status: complete with recorded qualification limits; see [S02 receipt](migration-receipts/S02.md). Lead: HarflowMac. Co-owned: HarflowMCP.
 - Prerequisite receipts: S01.
 - Checklist coverage: B0-MA-01 (final contribution), B0-MA-02 (final contribution), B0-MA-03 (final contribution), B0-MC-03 (final contribution).
 - Scope and acceptance: Qualify the current selected Python/Mac pair, preserving dirty work; capture representative isolated states and document package versus source evidence and limitations.

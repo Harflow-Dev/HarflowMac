@@ -1,0 +1,8 @@
+{
+  "algorithm": "sha256",
+  "images": {
+    "startup-connected.jpg": "f87f5c3e8ec9b56847dc7449c4976693c420e1f85496659a54dcda8ed3c37703",
+    "task-stable-connected.jpg": "5db6dddf22d9491dc33eed3ef67fb4873ed4afd8040d19eda74d031ed7c7f6cf",
+    "window-reactivated-connected.jpg": "274439e434580ec063c493cd241f3f7e2029dd072c65e5c3f2defda54a87dcc0"
+  }
+}
