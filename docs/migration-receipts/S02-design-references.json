@@ -61,6 +61,19 @@
         "status": 404,
         "message": "No commit found for the documented ref",
         "read_only": true
+      },
+      "continued_source_resolution": {
+        "commit": "871bc29c25bc265bbc359654526538dc42a4d4f4",
+        "path": "docs/shared-answering.md",
+        "path_exists_at_commit": true,
+        "related_paths": [
+          "features/work-interaction.html",
+          "features/work-interaction.js",
+          "features/needs-you.html",
+          "features/needs-you.js"
+        ],
+        "related_paths_exist_at_commit": true,
+        "scope": "Current source document records owner approval; does not establish equivalence to unavailable old commit or new approval/deployment"
       }
     },
     {

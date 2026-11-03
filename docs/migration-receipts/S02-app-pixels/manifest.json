@@ -1,0 +1,75 @@
+{
+  "scope": "Unmodified CUA window captures of production app against isolated qualified engine and synthetic state",
+  "images": [
+    {
+      "file": "refresh-start-dark.jpg",
+      "sha256": "e2c4d746bb1ca61fb6f99c08617cf3344794bf581a78ed82e618a31f3c2a76a9",
+      "bytes": 197149,
+      "format": "JPEG",
+      "scope": "Appended task visible after controlled refresh; startup status dot remains red"
+    },
+    {
+      "file": "task-activity-dark.jpg",
+      "sha256": "ac58303ddf8825041cc2456df8e0e59f4a94bb36f579b4c3d163ee0af441158b",
+      "bytes": 289259,
+      "format": "JPEG",
+      "scope": "Normalized task activity from first qualified runtime, Connected"
+    },
+    {
+      "file": "task-activity-light.jpg",
+      "sha256": "a2b99e37f3f4e8c483dc58c9c8b2428da02274e1a2fbe1d959c1debf6570bf24",
+      "bytes": 283296,
+      "format": "JPEG",
+      "scope": "Same task in app-selected Light appearance"
+    },
+    {
+      "file": "settings-compatible-light.jpg",
+      "sha256": "57bb93b7d5b22145d3f80b0714a2a4baec55aa8ec60b1f30ea0e425481c93c3d",
+      "bytes": 118664,
+      "format": "JPEG",
+      "scope": "General Settings read-only inspection confirms scratch store compatible"
+    },
+    {
+      "file": "settings-harnesses-final-dark.jpg",
+      "sha256": "683949520aa74838d10546884f9a28f1fa04320c4ee297737782fb3752dd5e47",
+      "bytes": 166956,
+      "format": "JPEG",
+      "scope": "Last Vibe qualification card fully visible after scrolling; isolated PATH has no harnesses"
+    },
+    {
+      "file": "new-session-bottom-dark.jpg",
+      "sha256": "890948036caab3cbc707de77f2f27e7adaa84560b2c2848d216edb23d5d33265",
+      "bytes": 238314,
+      "format": "JPEG",
+      "scope": "Unavailable harnesses, lower authority controls and disabled Start; no dispatch"
+    },
+    {
+      "file": "workflow-run-light.jpg",
+      "sha256": "7447afdba572b6ef2ec026bb534536b880df30f3d12db9f882c60e0f2579f484",
+      "bytes": 298933,
+      "format": "JPEG",
+      "scope": "Synthetic completed Start-to-End workflow, uncertain original caller"
+    },
+    {
+      "file": "workflow-editor-quarter-dark.jpg",
+      "sha256": "6dbf1d7f60504266cf7b238c0871e6d4ac05ad3e6b49729561e985830a3b83a7",
+      "bytes": 284093,
+      "format": "JPEG",
+      "scope": "OS-tiled constrained editor; source minimum content1000x620, exact content rectangle unmeasured"
+    },
+    {
+      "file": "workflow-editor-quarter-scrolled-light.jpg",
+      "sha256": "89a1de68231e431e08f1188e6fd2875bf3e30ee19036705e8190bff04bee6530",
+      "bytes": 294217,
+      "format": "JPEG",
+      "scope": "Constrained editor after inspector and palette scrolls"
+    },
+    {
+      "file": "needs-you-empty-dark.jpg",
+      "sha256": "d9f5a7a615cbcada42bb0c37a164f7fcd23de6844c7a4964bc482df2366b2757",
+      "bytes": 214767,
+      "format": "JPEG",
+      "scope": "Invalidated synthetic request is not offered as actionable"
+    }
+  ]
+}

@@ -184,5 +184,36 @@
       "uv_lock_sha256": "820fd9c5bd229aa0765400edc31bddaf5a9fd0408c7b22de7a8cb1903c4d2c2f",
       "scope": "Read-only existing source-test environment metadata; no dependency sync or install"
     }
+  },
+  "vibe_302_continued_measurement": {
+    "version": "3.0.2",
+    "binary_sha256": "2fa641ff06fd5304cc4b07f7232640083a3e6626ab50a309e5f2d06bd5694380",
+    "profile": "isolated HOME/VIBE_HOME localhost scripted provider; connectors/telemetry disabled; placeholder credentials",
+    "command": "HARFLOW_CLI_INTEGRATION=1 .venv/bin/python -m pytest -q -m cli_integration tests/test_vibe_cli.py",
+    "host_result": {
+      "passed": 11,
+      "seconds": 35.48,
+      "exit": 0,
+      "log_sha256": "10563c2483845dc2a800be2ac8d1cb5d3922f676c5fb909f6f4580327f9a50fe",
+      "junit_sha256": "1093ada980e746ccf604060e1e9a1ee9808b35ab7a9d792ebad87be6cd2b4b53"
+    },
+    "sandbox_result": "11 failures binding localhost before CLI probes",
+    "related_unit_tests_passed": 99,
+    "input_patch_sha256": "e255f33a966c946b620d5796979826dee6693e70b5a898f9b4354e2442c82e5c",
+    "production_gates_changed": false,
+    "unsupported": [
+      "ACP",
+      "caller approvals",
+      "caller write approvals",
+      "command grants",
+      "configured-model selection"
+    ],
+    "network_enforcement": "not established",
+    "identity_evidence": [
+      "binary-before.json",
+      "binary-after.json"
+    ],
+    "identity_limit": "Pre-run discovery captures resolved executable/version/hash; post-run launcher path resolves to same executable and hash; no atomic executable pin",
+    "source_commit": "0ed8c86f8672702ea3397ffae27e20254d78ade4"
   }
 }

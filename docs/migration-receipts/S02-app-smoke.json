@@ -1,0 +1,75 @@
+{
+  "status": "Operational and visual evidence complete; startup-status defect reproduction pending",
+  "selected_app_version": "0.0.9",
+  "engine_version": "0.0.7",
+  "original_app_binary_sha256": "9f574e6fed88d2abefe0488b9b4999a0e9f363a0454a22b97eccfbff33894221",
+  "normalized_app_binary_sha256": "eeae2baaffb5786acdb33d9acbda858dfed588a443eb1b7f24a985573aeb8ef6",
+  "runtime_specification_file_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+  "generation_name": "0.0.7-17f21d5762f818b18e3a22a50a796aee3e01ca2e1b82d6e393d09d28dd5adad9-8AEB0EED-90CD-4C5F-96D0-45307E34A97D",
+  "installer_download_calls": 32,
+  "fresh_process_check_and_reuse_download_calls": [
+    0,
+    0
+  ],
+  "seed_public_validation": true,
+  "unique_preference_domain": "dev.harflow.qualification.s02.01a19d55",
+  "typed_false_notification_flags_verified": true,
+  "preference_storage": "real-account unique domain; no owner domain inspected",
+  "app_startup_observed": true,
+  "paged_cli_descendants_bound_to_generation": true,
+  "app_alive_at_observation_end": true,
+  "fsevents_attribution": {
+    "bounded_timing_evidence": true,
+    "append_seconds_after_launch": 4.7988297089996195,
+    "ordinary_page_seconds_after_append": 1.2191591250002602,
+    "ordinary_page_seconds_after_launch": 6.01798883399988,
+    "earliest_safety_tick_seconds_after_launch": 10,
+    "quiet_seconds_before_append": 2.22325895800077,
+    "no_page_in_flight_at_latest_sample": true,
+    "appended_task_visible_in_UI": true,
+    "app_descendant_and_generation_verified": true,
+    "sampling_is_lossless": false
+  },
+  "known_discrepancy": "Initial start toolbar red/connecting with complete ready public pages; task/workflow route mounts Connected; cause unproven, reproduction pending",
+  "source_archive_manifest_sha256": "6423c37ee95b6acae2ef0c27a64bcf4396ae249a9f8b79ed7699f69d723031a5",
+  "canonical_guard_fix": "Foundation rewrites /private/tmp to /tmp; POSIX realpath now used in exact guards; five canonical/symlink probes passed",
+  "failed_preflight_retained": true,
+  "teardown": {
+    "both_qualification_apps_stopped": true,
+    "unique_domain_originally_empty": true,
+    "unique_domain_restored_and_verified_empty": true,
+    "owner_domain_not_inspected": true
+  },
+  "production_source_changed": false,
+  "controlled_generation_name": "0.0.7-17f21d5762f818b18e3a22a50a796aee3e01ca2e1b82d6e393d09d28dd5adad9-7A297554-BC8C-47E0-AFF0-7B0296423ED2",
+  "keyboard_observations": [
+    "Cmd-N opens New Session",
+    "Control-Tab moves multiline editor focus to Name",
+    "Escape cancels New Session",
+    "Cmd-W closes Settings"
+  ],
+  "scroll_reachability_observed": [
+    "New Session lower controls/footer",
+    "Last Harnesses qualification card",
+    "Workflow inspector bottom",
+    "Workflow End palette item"
+  ],
+  "representative_pixels": "S02-app-pixels/manifest.json",
+  "native_window_capture_sizes_pixels": [
+    [
+      2880,
+      1800
+    ],
+    [
+      2002,
+      1346
+    ]
+  ],
+  "source_minimum_content_frame_points": [
+    1000,
+    620
+  ],
+  "exact_content_rectangle_measured": false,
+  "spoken_VoiceOver_tested": false,
+  "automation_isolation_adjustment": "Second scratch bundle has distinct CFBundleName/CFBundleDisplayName; binding became responsive while owner app remained running"
+}
