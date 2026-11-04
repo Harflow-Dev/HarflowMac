@@ -1,0 +1,68 @@
+{
+  "checked_at_utc": "2026-11-04 10:57:06 UTC",
+  "checked_at_asia_jakarta": "2026-11-04 17:57:06",
+  "scope": "read-only metadata, static archive/source/hash inspection; no engine execution/import/install/runtime selection",
+  "availability": {
+    "github_tag_v0.0.8_status": 404,
+    "github_release_v0.0.8_status": 404,
+    "github_releases_tags": [
+      "v0.0.7",
+      "v0.0.6",
+      "v0.0.5",
+      "v0.0.4",
+      "v0.0.3",
+      "v0.0.2",
+      "v0.0.1"
+    ],
+    "pypi_0.0.8_status": 404,
+    "pypi_latest": "0.0.7",
+    "pypi_releases": [
+      "0.0.1",
+      "0.0.2",
+      "0.0.3",
+      "0.0.4",
+      "0.0.5",
+      "0.0.6",
+      "0.0.7"
+    ]
+  },
+  "mcp_local_and_remote_main": "1a278897e1addc70a844aa10ca0a726e3e397d57",
+  "accepted_source": "b0185be855fd13acc94cb2d2008400d285d15df2",
+  "accepted_and_current_src_tree": "dddc6a0acf732fde474df397e66291f0f01699b4",
+  "fixture_producer": "b69b5754a7b6496aaf5e3106116e302ea7a10675",
+  "fixture_producer_src_tree": "a25c674e6c41f6d946cf2fc3a44ed077f966d55b",
+  "s05_to_s09_source_delta": "4e16f4c qualification-lock race fix",
+  "canonical_and_vendored_manifest_sha256": "383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0",
+  "fixture_files_verified": 199,
+  "bundle_files_compared_byte_identically_to_producer_and_vendor": 201,
+  "mcp_schema_sha256": "8d64130f2fc8ff2827cb5b4c1f8b737a9c917bf218ef5e0af14fb2c5f9bd5478",
+  "mac_spec_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+  "mac_engine_version": "0.0.7",
+  "mac_python_version": "3.13.16",
+  "mac_spec_embeds_engine_wheel_digest": false,
+  "published_0.0.7": {
+    "wheel": "m03-published-harflow_mcp-0.0.7.whl",
+    "size": 1096789,
+    "sha256": "badd323d07b184674bc269b37c8fbd8c2274db31bb01e1b644bb59c940a8407e",
+    "metadata_sha256": "7d82301a99cb7dcb8c57e255662e4f5e22a99b25a37281ea57bcb634eafaa860",
+    "release_tag_commit": "7be98e63dd45f370d76004cb53d254135d101eba",
+    "python_payloads_identical_to_tag": 172,
+    "ctl_task_reads_module_present": false,
+    "missing_canonical_read_capabilities": [
+      "task-event-page.v1",
+      "task-prompt.v1",
+      "task-successors.v1",
+      "workflow-live-activity.v1",
+      "statistics-cost-model.v1",
+      "task-changes.v1"
+    ]
+  },
+  "primary_urls": [
+    "https://api.github.com/repos/Harflow-Dev/HarflowMCP/git/ref/tags/v0.0.8",
+    "https://api.github.com/repos/Harflow-Dev/HarflowMCP/releases/tags/v0.0.8",
+    "https://api.github.com/repos/Harflow-Dev/HarflowMCP/releases?per_page=30",
+    "https://api.github.com/repos/Harflow-Dev/HarflowMCP/git/ref/heads/main",
+    "https://pypi.org/pypi/harflow-mcp/0.0.8/json",
+    "https://pypi.org/pypi/harflow-mcp/json"
+  ]
+}
