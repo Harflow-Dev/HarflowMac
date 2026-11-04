@@ -1,0 +1,266 @@
+{
+  "date": "2026-11-04",
+  "status": "M02 implementation and bounded local validation delivered; owner acceptance pending",
+  "base_head": "9175d46baf8c8507eb7cec81d21b90225103f557",
+  "preserved_owner_inputs": {
+    "docs/migration-plan.md": true,
+    "docs/migration-sessions.md": true,
+    "docs/migration-receipts/M01-checks.json": true,
+    "docs/migration-receipts/M01-contracts.md": true,
+    "docs/migration-receipts/M01-design.md": true,
+    "docs/migration-receipts/M01-native.md": true,
+    "docs/migration-receipts/M01.md": true
+  },
+  "staged_paths": [],
+  "native": [
+    {
+      "package": "Harflow",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 119,
+      "discovered_suites": 13,
+      "failures": []
+    },
+    {
+      "package": "HfUtilities",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 19,
+      "discovered_suites": 4,
+      "failures": []
+    },
+    {
+      "package": "HfCommon",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 17,
+      "discovered_suites": 3,
+      "failures": []
+    },
+    {
+      "package": "HfUI",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 239,
+      "discovered_suites": 37,
+      "failures": []
+    },
+    {
+      "package": "MonitorCore",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 395,
+      "discovered_suites": 61,
+      "failures": []
+    },
+    {
+      "package": "HfRepository",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 448,
+      "discovered_suites": 54,
+      "failures": []
+    },
+    {
+      "package": "MenuBarFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 88,
+      "discovered_suites": 8,
+      "failures": []
+    },
+    {
+      "package": "SettingsFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 87,
+      "discovered_suites": 14,
+      "failures": []
+    },
+    {
+      "package": "MainWindowFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 1781,
+      "discovered_suites": 241,
+      "failures": []
+    }
+  ],
+  "native_logical_tests": 3193,
+  "native_all_passed": true,
+  "native_manifests_sha256": {
+    "Harflow": "78ff99c7e3005476006c9550bbdd7e8c84653f1b3f28fda3cea38a85c895c605",
+    "HfUtilities": "23c0e29dad13dc56859a37655a46f9beb6cb928e0c611096ac6fb2a363d539ac",
+    "HfCommon": "504306bb9d2ab9d9cd6c5db4bb53544ff96b7c63fb3687bd83fd5eb3289c623b",
+    "HfUI": "9c1699a8b0b0176966c8e99e5d9392c8dccd001095b858e15991ec988430b607",
+    "MonitorCore": "645c541e8b55d2fc11f2cc743b0e6f5d87a352c40f4b2d7bda9082dd39112ba8",
+    "HfRepository": "72ce571f2eccc755ac514debfe69db58ad1801c804a0b9fc87a19a9b8a6a03df",
+    "MenuBarFeature": "2952ba290c54ed48558ffe605a5867a2ddc9dd9921b07da690d778732f2f9764",
+    "SettingsFeature": "9f095ebc010de9050c9ef1e2ab9b3faabc833a7ac288ad35a63e71825e0321b7",
+    "MainWindowFeature": "c0458b7547c0950dd456516a44733fdd783b8bb34fb701b6700bffbccd8c8808"
+  },
+  "shell_discovery_identical_to_S06": true,
+  "python_tooling": "139 passed,30 subtests after exact-path guard correction; includes18newguardregressions",
+  "formatter": "0.60.1:0/993 need formatting,31 config skips",
+  "lint": "installed0.57.1:0 violations/1037 files; pinned0.63.2 not verified",
+  "builds": [
+    {
+      "log": "/private/tmp/m02-release-build-final.log",
+      "sha256": "0d5bd2cf5498b58e53da2ce40129b5b706a70593e6aaf13194d2d73201bb4fb6",
+      "xcode_succeeded": true,
+      "registration_tasks": 1,
+      "internal_error_lines": []
+    },
+    {
+      "log": "/private/tmp/m02-release-build-postfix.log",
+      "sha256": "c06f739d77da7c384e14f3d9e907a0536ebc45597bc454f5a0cd927cdf7501f5",
+      "xcode_succeeded": true,
+      "registration_tasks": 1,
+      "internal_error_lines": []
+    },
+    {
+      "log": "/private/tmp/m02-debug-build.log",
+      "sha256": "3c8a7cd1d07ac5af3ebcafe511160085bd8a6d4331e900bd5fd64fe14cdcbcb9",
+      "xcode_succeeded": true,
+      "registration_tasks": 1,
+      "internal_error_lines": [
+        "Internal Error: DecodingError.dataCorrupted: Data was corrupted. Debug description: Corrupted JSON. Underlying error: unexpected end of file"
+      ]
+    },
+    {
+      "log": "/private/tmp/m02-release-build-complete.log",
+      "sha256": "d9017549ddcfbb56f8d88ee4e9fd5ce7b074987ef1aea40425488242dc718d07",
+      "xcode_succeeded": false,
+      "registration_tasks": 0,
+      "internal_error_lines": []
+    }
+  ],
+  "packaged_validation": "Final Debug and Release validators and unsigned archive validation returned explicit exit 0",
+  "final_release_build": "Final Release completed with exit 0; intermediate interruption retained in diagnostics",
+  "runtime_spec_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+  "M03": "unstarted",
+  "preserved_owner_input_sha256": {
+    "docs/migration-plan.md": "5c1a482873fb0636ac1bd63797c42aaf0b8c31f74dd5044a22d31958ece12dfb",
+    "docs/migration-sessions.md": "9b8b3c6a44f05dbda1c6457f301318426fb71bf5a6ac558564f777a379b6d52d",
+    "docs/migration-receipts/M01-checks.json": "e8a46cc0c30f0c01360681437168cf65e88c0e243c92451ef21aa4b430c50bbd",
+    "docs/migration-receipts/M01-contracts.md": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+    "docs/migration-receipts/M01-design.md": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+    "docs/migration-receipts/M01-native.md": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9",
+    "docs/migration-receipts/M01.md": "82a21ab06b2c75fef2b621e4f50b2ea00d04daca069613a4dfb6d8e7bed6b84d"
+  },
+  "continuation_authorized": "2026-11-04: focused registration investigation, corrected Debug/Release validation and one new review cycle; no registration permission inferred",
+  "continuation_guard_review": "Fresh read-only reviewer approved exact counted path/content separation; no findings",
+  "registration_permission": "Owner explicitly allowed generated macos/build/Harflow.app LaunchServices metadata only on2026-11-04; no installation/MCP/provider permission",
+  "final_host": [
+    {
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "label": "debug-build",
+      "command": [
+        "macos/build-app.sh"
+      ],
+      "exit_code": 0,
+      "seconds": 13.385,
+      "log": "/private/tmp/m02-final-debug-build.log",
+      "log_sha256": "2f5b30638b5fd3c4a6408077a33e6179badf25a550aa1b1d5bc4165887d26d8c"
+    },
+    {
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "label": "debug-bundle",
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "scripts/ci/release.py",
+        "bundle"
+      ],
+      "exit_code": 0,
+      "seconds": 1.274,
+      "log": "/private/tmp/m02-final-debug-bundle.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "executable_sha256": "7eeeb915cf8d09b961b43be62dd09e433935ebdb2c2fca243b4a53417fa258f5",
+      "runtime_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+      "registration_task_count": 1,
+      "compiler_internal_errors": []
+    },
+    {
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "label": "release-build",
+      "command": [
+        "macos/build-app.sh"
+      ],
+      "exit_code": 0,
+      "seconds": 362.628,
+      "log": "/private/tmp/m02-final-release-build.log",
+      "log_sha256": "5b06d78e1e3cda7f089e3ce61b832870ca4b1e9628a7525a32d01fa7be50b5e5"
+    },
+    {
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "label": "release-bundle",
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "scripts/ci/release.py",
+        "bundle"
+      ],
+      "exit_code": 0,
+      "seconds": 1.647,
+      "log": "/private/tmp/m02-final-release-bundle.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "executable_sha256": "8f5416481015dec32290274c1744ded29591d524c97928841866d7717b7b01ae",
+      "runtime_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+      "registration_task_count": 1,
+      "compiler_internal_errors": []
+    },
+    {
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "label": "unsigned",
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "scripts/ci/release.py",
+        "unsigned",
+        "--output",
+        "/private/tmp/harflow-m02-final-unsigned"
+      ],
+      "exit_code": 0,
+      "seconds": 1.545,
+      "log": "/private/tmp/m02-final-unsigned.log",
+      "log_sha256": "19d5901cd67c34ff194f2c42c737005a254a7a148cec06a23dfa5132e4703904"
+    }
+  ],
+  "intermediate_wrapper_edit_failure": [
+    {
+      "label": "debug-build",
+      "command": [
+        "macos/build-app.sh"
+      ],
+      "exit_code": 127,
+      "seconds": 98.483,
+      "log": "/private/tmp/m02-debug-build-script-edit.log",
+      "log_sha256": "a1656d65a127958fda1709ab7f926d8371997810b233e644adc1f40d6f6909fd",
+      "diagnostic": "Wrapper comments edited during Bash execution; source contains no stray command; Xcode succeeded, wrapper exit127. Preserve and rerun frozen script."
+    }
+  ],
+  "review": "Original three-round cap observed; owner authorized continuation and scoped LaunchServices metadata; fresh continuation code/guard review approved; stale docs corrected",
+  "python_final_affected": "31 passed after final registration-policy correction",
+  "native_manifests": {
+    "Harflow": "78ff99c7e3005476006c9550bbdd7e8c84653f1b3f28fda3cea38a85c895c605",
+    "HfUtilities": "23c0e29dad13dc56859a37655a46f9beb6cb928e0c611096ac6fb2a363d539ac",
+    "HfCommon": "504306bb9d2ab9d9cd6c5db4bb53544ff96b7c63fb3687bd83fd5eb3289c623b",
+    "HfUI": "9c1699a8b0b0176966c8e99e5d9392c8dccd001095b858e15991ec988430b607",
+    "MonitorCore": "645c541e8b55d2fc11f2cc743b0e6f5d87a352c40f4b2d7bda9082dd39112ba8",
+    "HfRepository": "72ce571f2eccc755ac514debfe69db58ad1801c804a0b9fc87a19a9b8a6a03df",
+    "MenuBarFeature": "2952ba290c54ed48558ffe605a5867a2ddc9dd9921b07da690d778732f2f9764",
+    "SettingsFeature": "9f095ebc010de9050c9ef1e2ab9b3faabc833a7ac288ad35a63e71825e0321b7",
+    "MainWindowFeature": "c0458b7547c0950dd456516a44733fdd783b8bb34fb701b6700bffbccd8c8808"
+  },
+  "archive_sha256": {
+    "Harflow-0.0.9-unsigned-arm64.zip": "bc1c63c246b025ef9ed151249bc202324252b5527e48c9a51ce295440215cab3",
+    "Harflow-0.0.9-unsigned-arm64.zip.sha256": "62401a11d7b73dff97db51cee9ea119728ea0322342dc1717f140e107173c596"
+  },
+  "wrapper_current_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+  "branch": "main",
+  "upstream_tracking_oid": "cc725784155c77e3997382bad75ddfbaa8a0b420",
+  "receipt_identity": "containing Git commit",
+  "implementation_commit": "15df5f7544db8dd3bb0110ca7b1687aa61f4908e",
+  "committed_scope": "24 explicitly selected M02 implementation files; receipt/checks in separate evidence commit"
+}
