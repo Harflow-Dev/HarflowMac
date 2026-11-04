@@ -1,0 +1,162 @@
+{
+  "stage": "M03-D1",
+  "base": "fc7305e01290c1aeae513f83065ac635654a71a3",
+  "status": "foundation validated; production readers remain private pending D2",
+  "source_sha256": {
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/CtlClient.swift": "2d59fe3ad9a3c351f7bc3cdcf93520e28a7f9850b9082396155c223ab5e0cc73",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/CtlModels.swift": "5e05fc3796e2ba4ee7a8046c5813725f1246d4d705e718f719009c6ac28d15b9",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/TaskEventPage.swift": "cb5568bb821e2950a8068f5c7cb754b9e8e9aa23ed99b051f92cc3d4e8b29400",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/TaskEventRecord.swift": "5bfeea8027f083ee4c8d366886c9a3186e4c3559cbfb904c40842ea6a1c475c0",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/WireContracts.swift": "5ff3000a1d84dcf6b929baed1f14acf4fb890c93b54786038a30b76ff9456656",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskEventPageClientTests.swift": "74089d1b1456f0f19c0062540532d4c02e0e202af1a485ec6d067d7d905fcbbf",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskEventPageTestSupport.swift": "92b7c4fbbb5f553165cc2113ce4cb0c1dac034d6aad925901ae6c141bb31f87b",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskEventPageTests.swift": "3392e6bb3ef5bd2d7ed8bb2132fd179bab373da7e85eb0fb620856c3b67ce35b"
+  },
+  "preserved_inputs_sha256": {
+    "docs/migration-plan.md": "5c1a482873fb0636ac1bd63797c42aaf0b8c31f74dd5044a22d31958ece12dfb",
+    "docs/migration-sessions.md": "9b8b3c6a44f05dbda1c6457f301318426fb71bf5a6ac558564f777a379b6d52d",
+    "docs/migration-receipts/M01-checks.json": "e8a46cc0c30f0c01360681437168cf65e88c0e243c92451ef21aa4b430c50bbd",
+    "docs/migration-receipts/M01-contracts.md": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+    "docs/migration-receipts/M01-design.md": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+    "docs/migration-receipts/M01-native.md": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9",
+    "docs/migration-receipts/M01.md": "82a21ab06b2c75fef2b621e4f50b2ea00d04daca069613a4dfb6d8e7bed6b84d"
+  },
+  "native_results": [
+    {
+      "package": "MonitorCore",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 429,
+      "discovered_suites": 64,
+      "failures": []
+    },
+    {
+      "package": "HfRepository",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 461,
+      "discovered_suites": 56,
+      "failures": []
+    }
+  ],
+  "native_manifests": {
+    "MonitorCore": {
+      "diagnostic_path": "/private/tmp/harflow-m03-d1-native/MonitorCore/manifest.json",
+      "sha256": "b0931f00237cd1eaaebcca6bd154bab8620567ff86f8b42d9063af9fd124183f",
+      "manifest": {
+        "package": "/Users/Shared/Code/Harflow/HarflowMac/macos/HfCore/MonitorCore",
+        "mode": "aggregate",
+        "passed": true,
+        "discovered_tests": 429,
+        "discovered_suites": 64,
+        "failures": [],
+        "host_setup": {},
+        "partitions": [
+          {
+            "name": "aggregate",
+            "filter": null,
+            "expected_tests": 429,
+            "returncode": 0,
+            "timed_out": false,
+            "duration_seconds": 19.395,
+            "passed": true,
+            "suites": 64,
+            "skipped": [],
+            "failures": [],
+            "stdout_log": "/private/tmp/harflow-m03-d1-native/MonitorCore/01-aggregate.stdout.log",
+            "stderr_log": "/private/tmp/harflow-m03-d1-native/MonitorCore/01-aggregate.stderr.log",
+            "events_log": "/private/tmp/harflow-m03-d1-native/MonitorCore/01-aggregate.events.jsonl",
+            "backend": "swift-test",
+            "legacy_probe_stdout": null,
+            "legacy_probe_stderr": null,
+            "legacy_probe_returncode": null,
+            "legacy_probe_timed_out": false
+          }
+        ]
+      }
+    },
+    "HfRepository": {
+      "diagnostic_path": "/private/tmp/harflow-m03-d1-native/HfRepository/manifest.json",
+      "sha256": "379f2eef4b0e050fa198169879f86afd180e9cf7646836ea9c8b0f40ac6f4bfa",
+      "manifest": {
+        "package": "/Users/Shared/Code/Harflow/HarflowMac/macos/HfCore/HfRepository",
+        "mode": "aggregate",
+        "passed": true,
+        "discovered_tests": 461,
+        "discovered_suites": 56,
+        "failures": [],
+        "host_setup": {},
+        "partitions": [
+          {
+            "name": "aggregate",
+            "filter": null,
+            "expected_tests": 461,
+            "returncode": 0,
+            "timed_out": false,
+            "duration_seconds": 21.115,
+            "passed": true,
+            "suites": 56,
+            "skipped": [],
+            "failures": [],
+            "stdout_log": "/private/tmp/harflow-m03-d1-native/HfRepository/01-aggregate.stdout.log",
+            "stderr_log": "/private/tmp/harflow-m03-d1-native/HfRepository/01-aggregate.stderr.log",
+            "events_log": "/private/tmp/harflow-m03-d1-native/HfRepository/01-aggregate.events.jsonl",
+            "backend": "swift-test",
+            "legacy_probe_stdout": null,
+            "legacy_probe_stderr": null,
+            "legacy_probe_returncode": null,
+            "legacy_probe_timed_out": false
+          }
+        ]
+      }
+    }
+  },
+  "style": {
+    "format": {
+      "version": "0.60.1",
+      "result": "0/1001 require formatting;31 skipped",
+      "log_sha256": "5c20559fb810f449cceb44fb39bdb7ed90be73241c294efa28512e84f10305aa"
+    },
+    "lint": {
+      "version": "0.57.1",
+      "result": "0 violations/1048 files",
+      "ci_pin_0.63.2": "not verified",
+      "log_sha256": "c1a55920526a834025d0352c0666b1ca36aa00b976ef06c636caf2163a8aea6d"
+    }
+  },
+  "guards": [
+    {
+      "command": [
+        "python3",
+        "scripts/check-legacy-names.py"
+      ],
+      "exit_code": 0,
+      "output": "Legacy identity guard passed\n"
+    },
+    {
+      "command": [
+        "bash",
+        "scripts/check-private-refs.sh"
+      ],
+      "exit_code": 0,
+      "output": "check-private-refs: clean\n"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "deferred_to_D2": [
+    "remaining native integration packages",
+    "Xcode Release and strict bundle validation",
+    "both production reader replacements"
+  ],
+  "runtime_pin": "0.0.7",
+  "fixture_manifest_sha256": "6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1",
+  "review": "Independent final source and record accuracy approved; accounting fix and final post-fix890 tests observed."
+}

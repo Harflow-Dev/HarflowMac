@@ -69,7 +69,11 @@ public struct CtlClient: Sendable {
         guard operationIsCurrent(), !Task.isCancelled else {
             return .failure(WireEnvelope.incompatibility("operation superseded before compatibility probe"))
         }
-        let probe = await VersionInfoClient(executable: executable, environment: environment, context: compatibilityContext, runner: runner).check()
+        let probe = await VersionInfoClient(executable: executable, environment: environment, context: compatibilityContext, runner: runner)
+            .check(requiring: command == "task-events" ? [.ctl, .events] : [.ctl])
+        if command == "task-events", !operationIsCurrent() || Task.isCancelled {
+            return .failure(WireEnvelope.incompatibility("task-events operation superseded after compatibility probe"))
+        }
         switch probe {
         case .failure(let error): return .failure(error)
         case .success(let info):
@@ -85,6 +89,9 @@ public struct CtlClient: Sendable {
             let bytes = (try? output.get().stdout.count) ?? 0
             MonitorMetrics.end(transportStart, stage: .transport, bytes: bytes, stderrBytes: (try? output.get().stderr.utf8.count) ?? 0)
         }
+        if command == "task-events", !operationIsCurrent() || Task.isCancelled {
+            return .failure(WireEnvelope.incompatibility("task-events operation superseded after response"))
+        }
         return output.flatMap { validateTransportOutput($0, command: command, options: options, timeout: timeout) }
     }
 
@@ -96,6 +103,9 @@ public struct CtlClient: Sendable {
     private func validateTransportOutput(
         _ output: ProcessOutput, command: String, options: [String], timeout: Double
     ) -> Result<ProcessOutput, ToolError> {
+        if command == "task-events", output.stdout.count > 262144 {
+            return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: "task-events exceeded document byte limit"))
+        }
         if output.timedOut { return .failure(.timedOut(tool: "harflow-ctl \(command)", seconds: timeout)) }
         guard let document = CtlDocument.firstJSONObject(in: output.stdout) else {
             if output.exitCode == 2, output.stderr.contains("invalid choice") {

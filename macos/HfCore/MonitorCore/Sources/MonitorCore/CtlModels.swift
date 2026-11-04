@@ -479,7 +479,7 @@ public enum CtlDocument: Equatable, Sendable {
     }
 
     static func isEventPageCommand(_ command: String) -> Bool {
-        ["events", "events-page", "get-task-events", "get_task_events"].contains(command)
+        ["events", "events-page", "get-task-events", "get_task_events", "task-events"].contains(command)
     }
 
     /// The shared prelude of every ctl decode: stdout → one JSON object, the contract-version

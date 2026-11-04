@@ -20,6 +20,9 @@ public enum WireContract: String, Sendable, CaseIterable {
 
 /// Capabilities that qualify individual ctl operations beyond the base wire contract.
 public enum CtlCapability {
+    /// Permits bounded task event pages with independent lifecycle evidence.
+    public static let taskEventPage = "task-event-page.v1"
+
     /// Permits bounded, integrity-reported task prompt reads.
     public static let taskPrompt = "task-prompt.v1"
 

@@ -54,3 +54,22 @@ The text ceiling is1...131072bytes (default65536); JSON escaping may make the
 response exceed the separate event-page ceiling. No prompt file is read by this
 adapter. This foundation does not change the managed runtime pin or rendered
 prompt/activity consumers.
+
+## Public task-event pages
+
+`CtlClient.taskEvents` requires a fresh selected-runtime handshake for both ctl
+and event contracts and `task-event-page.v1`. Request enums keep origins/cursors
+and all/default/explicit filters exclusive. Pages retain public normalized raw
+records, historical writer provenance, opaque cursors, accounting spans/gaps,
+skipped windows and lifecycle evidence. Repeated or regressing sequence values
+stay in file-array order; they are not global identities. Normalization loss and
+oversized stubs never acquire legacy parser defaults or an automatic TaskEvent
+projection. A final log is not proof of complete history or a drained page chain.
+
+The task-events document ceiling is checked before JSON parsing; this does not
+cap the baseline process runner's raw stdout capture or total heap use. The
+per-record admissibility meter uses a conservative unescaped serialization lower
+bound, not ASCII-escaped wire size. Native explicit-filter admission is limited
+to200names/16KiB UTF-8; cursors remain opaque and at most2048Unicode scalars.
+This typed foundation does not yet replace the application's private activity
+and cumulative-summary readers; their shared observation migration is M03-D2.

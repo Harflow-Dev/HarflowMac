@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add strict public task-event page models and a freshly gated ctl client, preserving normalized loss, cursor accounting and historical provenance for the upcoming shared transport migration.
+
 - Add a typed public task-prompt client and fenced one-shot repository foundation, with the complete released0.0.8 contract fixtures; rendered prompt and runtime adoption remain separate.
 
 - Replace task-list directory watching with an injected public-refresh observation strategy, using one-second urgent and thirty-second hidden-idle polling without overlapping periodic reads.
