@@ -1,0 +1,482 @@
+{
+  "date": "2026-11-04",
+  "status": "M03-C bounded foundation delivered with explicit owner deferral of the remaining UI gate; full UI run not passing",
+  "base_head": "a72e347d10213a5aaa366e143b0f3c522032752e",
+  "fixture_producer": "f304a65d9de948dfcba4c0c27c3d04f7f90971c8",
+  "fixture_manifest_sha256": "6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1",
+  "old_fixture_manifest_sha256": "383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0",
+  "fixture_count": 199,
+  "bundle_inventory_count": 201,
+  "all_fixture_hashes_valid": true,
+  "complete_bundle_byte_identical": true,
+  "fixture_audit_sha256": "526588bd1e1eb245fcd82bc1ab4865872a8e6827638aec2973fed6233d35c7e4",
+  "fixture_delta": "132 changed files:130fixtureJSON product-version provenance with16cursor integrity values regenerated;2manifests. Independent synthetic-byte reconstructions reproduce allcursorhashes, no scope/paging/unknownsemanticchanges.",
+  "native": [
+    {
+      "package": "MonitorCore",
+      "directory": "MonitorCore",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 409,
+      "discovered_suites": 62,
+      "failures": []
+    },
+    {
+      "package": "HfRepository",
+      "directory": "HfRepository",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 461,
+      "discovered_suites": 56,
+      "failures": []
+    },
+    {
+      "package": "HfUtilities",
+      "directory": "HfUtilities",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 19,
+      "discovered_suites": 4,
+      "failures": []
+    },
+    {
+      "package": "HfCommon",
+      "directory": "HfCommon",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 17,
+      "discovered_suites": 3,
+      "failures": []
+    },
+    {
+      "package": "HfUI",
+      "directory": "HfUI",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 239,
+      "discovered_suites": 37,
+      "failures": []
+    },
+    {
+      "package": "Harflow",
+      "directory": "Harflow",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 119,
+      "discovered_suites": 13,
+      "failures": []
+    },
+    {
+      "package": "MenuBarFeature",
+      "directory": "MenuBarFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 88,
+      "discovered_suites": 8,
+      "failures": []
+    },
+    {
+      "package": "SettingsFeature",
+      "directory": "SettingsFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 87,
+      "discovered_suites": 14,
+      "failures": []
+    },
+    {
+      "package": "MainWindowFeature",
+      "directory": "MainWindowFeature",
+      "exit_code": 1,
+      "passed": false,
+      "discovered_tests": 1781,
+      "discovered_suites": 241,
+      "failures": [
+        "swift-test exited with 1",
+        "line 9: issue recorded for 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()/ActivityFeedLongMarkdownHostedTests.swift:11:6'",
+        "line 10: test 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()' ended with symbol 'fail'",
+        "line 17: suite 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests' ended with symbol 'fail'",
+        "unrecognized completion summary: 'Test run with 4 tests in 1 suite failed after 5.102 seconds with 1 issue.'",
+        "stdout completion summary reports 'failed'"
+      ],
+      "manifest_path": "/private/tmp/harflow-m03-c-mainwindow-space-retest/manifest.json"
+    }
+  ],
+  "native_logical_tests": 3220,
+  "native_all_passed": false,
+  "native_passed_packages": 8,
+  "ui_diagnostics": {
+    "full_run": {
+      "passed": false,
+      "discovered_tests": 1781,
+      "discovered_suites": 241,
+      "passed_partitions": 240,
+      "failed_partition": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+      "failures": [
+        "swift-test exited with 1",
+        "line 7: issue recorded for 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests/givenGroupDisclosure_whenRenderedWithSelectionProminence_thenItsActualGlyphUsesReadableInk(scheme:expanded:)/SidebarGroupDisclosureRenderingTests.swift:10:6'",
+        "line 15: test 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests/givenGroupDisclosure_whenRenderedWithSelectionProminence_thenItsActualGlyphUsesReadableInk(scheme:expanded:)' ended with symbol 'fail'",
+        "line 16: suite 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests' ended with symbol 'fail'",
+        "unrecognized completion summary: 'Test run with 1 test in 1 suite failed after 0.175 seconds with 1 issue.'",
+        "stdout completion summary reports 'failed'"
+      ],
+      "manifest_sha256": "868cbc219df9176ecb68a210d71c4538921ea25ed841602c5937d4a5aa55e49b",
+      "failed_stdout_sha256": "e8f55889ad99e564f446b5f03275624238afc7405dc602bbd85121175068a6ad"
+    },
+    "rerun_qualification": {
+      "passed": false,
+      "partitions_run": 0,
+      "failure": "AppKit activation self-test active=false key=false",
+      "manifest_sha256": "d7f46c607dffec4ee340729d49f010816afdef4878aa1b87ca168f05af9239fc"
+    },
+    "subsequent_console_observation": {
+      "on_console": true,
+      "screen_locked": true,
+      "method": "CGSessionCopyCurrentDictionary, only onConsole/locked flags read"
+    },
+    "interpretation": "No M03-C coupling proven: unchanged glyph/test directly render without Module/prompt/fixture usage. PNG equality failure cause remains unqualified; locked session explains subsequent host qualification failure, not proven cause of earlier PNG difference.",
+    "action": "Keep C uncommitted: owner requested retest, not gate deferral. Focused UI viewport/chrome diagnosis remains a separate bounded follow-up; no assertions or source changed.",
+    "unlocked_attempt": {
+      "status": "aborted by ENOSPC before partition179; no final guarded manifest",
+      "activation_self_test": "active=true key=true",
+      "raw_progress_log_sha256": "2ef06ed1f935aa80fa8299f83a48edc28e191cf9a22144c7024511db78a6cea0",
+      "reported_finished_partitions": 178,
+      "reported_failed_partitions": [
+        {
+          "ordinal": 5,
+          "suite": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+          "reported_result": "FAIL"
+        },
+        {
+          "ordinal": 97,
+          "suite": "MainWindowFeatureTests.SidebarNativeHostedScalingTests",
+          "reported_result": "FAIL"
+        },
+        {
+          "ordinal": 138,
+          "suite": "MainWindowFeatureTests.TaskDetailNavigationChromeTests",
+          "reported_result": "FAIL"
+        },
+        {
+          "ordinal": 142,
+          "suite": "MainWindowFeatureTests.TaskDetailToolbarTests",
+          "reported_result": "FAIL"
+        },
+        {
+          "ordinal": 143,
+          "suite": "MainWindowFeatureTests.TaskDetailVMTests",
+          "reported_result": "FAIL"
+        },
+        {
+          "ordinal": 178,
+          "suite": "MainWindowFeatureTests.WorkflowCompactStepperHostedTests",
+          "reported_result": "FAIL"
+        }
+      ],
+      "identity_coverage_validated": false,
+      "manifest_exists": false,
+      "glyph_partition": "reported PASS; earlier PNG failure not reproduced, cause unqualified",
+      "failure_categories": "Two UI assertion failures,three ps exit-probe timeouts,one error other(28); runner then raised ENOSPC creating partition179 stdout. No full-package pass."
+    },
+    "viewport_diagnostic": {
+      "document_height": 1475,
+      "row_frame": [
+        8,
+        1038,
+        537,
+        421
+      ],
+      "viewport_heights": [
+        169,
+        138
+      ],
+      "bottom_offsets": [
+        1306,
+        1337
+      ],
+      "row_identity_stable": true,
+      "interpretation": "Single31pointviewport resize preserves bottom; comparison with first valid sample flags viewport-relative movement. Fixture lifecycle versus product scene chrome cause unresolved."
+    },
+    "environment_observation": {
+      "load_averages": [
+        90.96,
+        80.53,
+        64.91
+      ],
+      "memory_free_percent": 38,
+      "causality": "No cause inferred for either failure from these observations alone."
+    },
+    "independent_diagnoses": "Two fresh read-only reviewers found no demonstrated prompt/fixture/Module path to the failing direct/mock-backed UI tests. Both recommend scratch-only window/chrome/frame diagnostics before any assertion or UI change.",
+    "cache_cleanup": {
+      "removed": "macos/build/DerivedData",
+      "kind": "current-task generated rebuildable Xcode cache only",
+      "approximate_size_gib": 1.9,
+      "free_space_after_gib": 2.1,
+      "retained": "packaged Harflow.app, all source and validation logs",
+      "packaged_executable_hash_unchanged": true,
+      "post_cleanup_bundle_validation_exit_code": 0,
+      "post_cleanup_bundle_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "space_retest": {
+      "status": "complete; full package failed only one partition",
+      "owner_action": "reclaimed disk space and requested retest; no UI-gate deferral",
+      "free_space_before_gib": 46,
+      "load_averages_before": [
+        38.92,
+        30.2,
+        22.0
+      ],
+      "activation_self_test": "active=true key=true",
+      "manifest_path": "/private/tmp/harflow-m03-c-mainwindow-space-retest/manifest.json",
+      "manifest_sha256": "e61f1bb2632e50afdde678bbae097534fed63257c6e658a445b5fa51727bbb88",
+      "discovered_tests": 1781,
+      "discovered_suites": 241,
+      "passed_partitions": 240,
+      "failed_partition": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+      "failure_details": [
+        "swift-test exited with 1",
+        "line 9: issue recorded for 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()/ActivityFeedLongMarkdownHostedTests.swift:11:6'",
+        "line 10: test 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()' ended with symbol 'fail'",
+        "line 17: suite 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests' ended with symbol 'fail'",
+        "unrecognized completion summary: 'Test run with 4 tests in 1 suite failed after 5.102 seconds with 1 issue.'",
+        "stdout completion summary reports 'failed'"
+      ],
+      "resource_probe_failures_recurred": false,
+      "disk_errors_recurred": false,
+      "interpretation": "Same31pointviewport geometry failure reproduced with reclaimed space; cause not established. Earlier glyph,toolbar and process-probe failures did not reproduce."
+    }
+  },
+  "native_manifest_sha256": {
+    "MonitorCore": "1ada2ae7d0b70e3ddca0f07f92f2f1a0eeb039a6af06dda6a9c38b674d4290a7",
+    "HfRepository": "8309e6e9164c4bab1ad2d38022ccd60cb8266a0b893f49624c40a722c39c298f",
+    "HfUtilities": "b34499c3fed65301a32316c450d0eca9751503ad693be2b47c22e9b3ea3c1285",
+    "HfCommon": "498e63f7c2051f4c39a5f19a36fbc7c48f4690fa25bf34472c8c158151bf9921",
+    "HfUI": "b991f2372f733fd0de4100f444d7f62902db2c8e08eeb1c4591d62464adc0c8c",
+    "Harflow": "1c4682e24d88c590329070250892686e1d76e1cf14cab472f0b0b99ec4855877",
+    "MenuBarFeature": "94cf1e09a5ea4d581144157ded5fed371177afe9723bd5bf728a201d4f90753e",
+    "SettingsFeature": "57d12ad19defe176f45fc7de71a0b76e862384048574e47527a7dbdcdf9bcad9",
+    "MainWindowFeature": "e61f1bb2632e50afdde678bbae097534fed63257c6e658a445b5fa51727bbb88"
+  },
+  "native_execution": "All9packages serialized via guarded scripts/test-swift-package.py; MainWindowFeature suites with native sidebar benchmark; remaining aggregate and required native benchmark environment",
+  "initial_diagnostics": "InitialMonitorCore409tests passed;HfRepositoryrunnerintentionallySIGTERM-stopped before8format-onlytestfixes, cleanupviaownedprocessgroup. Preserved /private/tmp/harflow-m03-c-native-initial and progress-initial log; notfinalcompletionevidence.",
+  "formatter": {
+    "version": "0.60.1",
+    "exit_code": 0,
+    "result": "0/998 files requireformatting,31configuration skips",
+    "log_sha256": "bebc4060fdeac52b3b5edbc3d5660ec1da13abb70d0ff5544fe1a659183614c1"
+  },
+  "lint": {
+    "version": "0.57.1",
+    "exit_code": 0,
+    "result": "0violations/1043files",
+    "ci_pinned_0632": "unavailable and unverified; noinstallation",
+    "log_sha256": "580e233d951d5cba95f18a886ce28dc0fc144e697efe794b8dcae8a7c2fd483d"
+  },
+  "guards": {
+    "legacy_names": "passed",
+    "private_refs": "passed",
+    "diff_check": "passed"
+  },
+  "host": [
+    {
+      "label": "release-build",
+      "command": [
+        "macos/build-app.sh"
+      ],
+      "exit_code": 0,
+      "seconds": 170.999,
+      "log": "/private/tmp/m03-c-release-build.log",
+      "log_sha256": "3e4501dc88fe326356cc799a7da7305b7e629aad013ac9117455b343d74a17ff",
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "xcode_succeeded": true,
+      "registration_tasks": 1,
+      "compiler_internal_errors": []
+    },
+    {
+      "label": "release-bundle",
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "scripts/ci/release.py",
+        "bundle"
+      ],
+      "exit_code": 0,
+      "seconds": 1.21,
+      "log": "/private/tmp/m03-c-release-bundle.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "executable_sha256": "f53bee08be839ba8d56aceff5028dce7a038a06e1e71c18a807f20db8f2864cf",
+      "runtime_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895"
+    }
+  ],
+  "frozen_input_count": 140,
+  "frozen_input_sha256": {
+    "macos/HfCore/HfRepository/Sources/HfRepository/Module.swift": "0c767be152e8053670585a5b8f8cad20223033433fb08b70cf2c36b4b0ddc40b",
+    "macos/HfCore/HfRepository/Sources/HfRepository/TaskPrompt/TaskPromptRepository.swift": "b8cc52c4e5d16f137b309fb376a7bfe9c3dd5b865edb60125db8ae51a8dfb97a",
+    "macos/HfCore/HfRepository/Sources/HfRepository/TaskPrompt/TaskPromptRepositoryImpl.swift": "21174fedd0fdc441954d0476d4559841b14d29006a0037533c07ed1b5ee4bdb6",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/TaskPrompt/TaskPromptRepositoryTests.swift": "146b72e2733da344d044fd14442c57b7194744282e990763e965fddb939079d1",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/TaskPrompt.swift": "b58159c6f03e2e2e335f71cc0af2983e114c62a4f40d4fbe41cd27bec804ac2f",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/WireContracts.swift": "d54542573bd3e07d67778821a42e77102c5988f7788f74dbbbb32c8ed645c058",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-already-answered.json": "43275f7b6438dc54b9a553de63a5add0208d150dc0d2b1fcf81c3cd6002041e3",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-caller-undecidable-approval.json": "6a3aad4b9758f6f73d81598cf1c6e9e37c775190e0106bed9396e1ce11f36c38",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-caller-undecidable-global.json": "b79a298ee120306eea5a91d46ddc263d2cb6e9b2581f7d8d1027f3d3502e44fa",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-expired.json": "dd5b9b0dc19e0976900143cefd940dd7bf110ff131223e4d7a1b54d19e78c801",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-generic-no-reason.json": "e0131dcdcf58fb9abbfc95a7858a74c7d41f2897aae684204f9274cfbe28111b",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-legacy-no-reason-synthetic.json": "04720456eaed09ac145aa49ad9ba0c1f2e518a42b16df107d9a362c66dcfa959",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-not-current.json": "224e1de9474e9fadb4915fc4afcf45d60ae7aad385a304e82410978794d95bc0",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-ownership-lost.json": "458a841df13617990aefa57e60295ea5a8676ed545756b73e9607385c049be11",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-reason-incomplete-synthetic.json": "04016d51aebf31a1e5ab2bfcd2a9c570dfa16bf17a519e005a7593d9779c8194",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-reason-unsupported-synthetic.json": "ab79e6ff6f948bf7821a908d379d561abc2b88d0931677478af1b1294201b1f5",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-settled.json": "01edd98ad6c75bdbc1b55117619c683e7122eb94e2816f2925bb8c40b5ba1ac9",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unauthorized-agent.json": "273f268cbc32270528b186213fc29972d993687490e29d85dd580a00d03ae046",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unauthorized-managed-task.json": "88fdc649cc4c6adb56d42636dd633fe07bc267b99401b2d318865a0880a4416a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unauthorized-owner.json": "ef4ec019dd01c4fc143f36fe23aaa8ebaaca673676dcdf67ddd0c8dec5203207",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unknown-reason-synthetic.json": "8124eb1d131106fe06513cf6e11334c246a22a9028160b50a05f02c8bc44c2ce",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-bash-no-reason.json": "85a2014265a9ae4714feb0a71a169e45db806a9fa4ab1a58f6f389d9fa231482",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-bash.json": "78b3900a737f1098a9e431327290d3de4f01235c6ca3565ab761a23ec816aea6",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-edit.json": "e43f4b9e2f4fe3ca5c5b5442a28c8fb93bbefba585509318fc122ff923b4ab7b",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-write.json": "1d6c2a844f4c92c0454a9c293a02b9e319835530af1079af875b352b5903f9f9",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-codex-command.json": "211c55af773944b04aab056e569aacae9a613becaa69f5d35f5b535bdfe0ca10",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-codex-file-change-move.json": "3da306038db80dc2dd853ac55393e325af4957f8f8b23fa3f9bd606e7b0838cc",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-codex-file-change.json": "feea97a230d1155fbb01af866acd3acab4d2dc1b55d07c03391b870514542288",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-optional-fields-omitted-synthetic.json": "b24a744402a4dd30a3b34cb15fe6eb8fb9bb0c52b5227e53e3bbbb5b37b395e0",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-codex.json": "d7fb87456d8a598823c0ebd2cfe453acc0fe90194937f11755fdfde95ed2b4e2",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-history.json": "e7c9b5507c6724583d46bf13054b645abdfc69823c1d3efcd6734ac4521ee2e2",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-optional-fields-omitted-synthetic.json": "687f68146d0d6c18475eac0865ded446b75ffb002c1b6bb53f4a7d3815f748dd",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-page-1.json": "b5db2151f3f14a21044b433e0126bc219199b50d5adaa9bec06a6c45aeced16f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-page-2.json": "87aee74e375b92be60368856dd97d16ca9690d12636f84f41e26378486ba37be",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-page-3.json": "78cc2ec30240cf471ea2a3b318c5da380904aaec901f9908b5b935c5177a1fda",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-pending.json": "523a3ea651f0b9690ec8e0de63b8b01ddd2649489a0ca129926f8494daa28ec8",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-respond-caller.json": "3a75ff89e44be542ff67efbd7c9949f4363f6cafcfc5a1a864fd9722601e974f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-respond-monitor-owned.json": "4eb632031d402d3154b50ca860dac4f78ecd57778ab973ff122ec6e872e5c41f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-respond-monitor.json": "e8100be8ac7e2ff05b536e337dcc2bb579c45805bd71ba57eb76fd255bdea07a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-cancelled.json": "ff461b9732421e3466c2890ca368345b7d29394aeaa196297fffa1ac14bd022f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-codex-sent.json": "e81cb9da9bdb8df551da5923907fbeb485e8d734bafb3790fce2fec9133cb83e",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-delivery-unknown.json": "8606468cfae80f37654bf30926e7a640804cf4693ea97e4522e18d7e93d5f473",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-expired-override.json": "6518b7dcd59eea0d098282196eb0552fb03b0f2df6651d3d9a5c2e736b0e688c",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-expired-unanswered.json": "7730c9bd89b2a6f9a579702a2e683c064a6bf2843274ff817f7f63920556f819",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-invalidated.json": "7bc80bea76fd69bda037d13a8e9b03e62939c454897a13e5db85e0c5509d1368",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-reserved.json": "e8100be8ac7e2ff05b536e337dcc2bb579c45805bd71ba57eb76fd255bdea07a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-sending.json": "440934ee8d9d14354190ee4d59782a09e8d15b3dde5c2d6f4aa0d51ecda2208a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-sent-approved.json": "f1eb2abf669481fc91acd2b3113548cd11ec1a8a66912a4257112f4dff0b0d21",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-sent-rejected-monitor.json": "f62e9a4c87b82d16222cfe23216e1f0d3d3e3fdce8a940772d0f7fc18a2edf31",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-system-rejected-admission.json": "993299ca2c529f03063382e6fb47f8a4c32aa95d156bb4e5369130231e4d472d",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-system-rejected-delivery.json": "1c49b6a67914982b172f22827c2e9dd7dbe2adf9b302f8783bf5ec1cab8e5af2",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-unsupported.json": "acb58983f254ceb15d392ae175103c0ec6918f71ef828b14782af6507042424c",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-status-awaiting.json": "d538f1019a5f3a3a7840b5677cfd39249c0f9bf40db8878958afca12ddc4d5d4",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-resume-accepted.json": "f42f3ca322d6840fa793364f5c1b963a0daa41a481e1f24dd29836b41d0e936a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-resume-refused.json": "e94ff63da11aaa9be95a16554aeb4d61e4d74b95642a03e3894c3bf43b9a6e0f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-resume-unknown.json": "e3ade5d93d4a8bf53a5005c1b76cfbb6b6b2fa1733e6d969f75db927c8634c72",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-run-accepted.json": "f42f3ca322d6840fa793364f5c1b963a0daa41a481e1f24dd29836b41d0e936a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-run-refused.json": "e94ff63da11aaa9be95a16554aeb4d61e4d74b95642a03e3894c3bf43b9a6e0f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-run-unknown.json": "e3ade5d93d4a8bf53a5005c1b76cfbb6b6b2fa1733e6d969f75db927c8634c72",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-unknown-operation.json": "a45b750deedaf916a8d4e4bdba63bd663a8b9d5817cd03d6b8ea28dc5012abf2",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-limit-hits-empty.json": "518ece13aefabdbafb869b1bd5f99b3e8528982d7877ce69d280cc9921962b43",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-limit-hits-preparing.json": "c2e33a37f72dd8facb7588d8d2bcbb0cb533f8aab6aafe19149e662f6185a45e",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-limit-hits-ready.json": "b264e11e17cc4845291abd2e87fcc6763b637305b09134f0557dd2257f4f0579",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-not-enabled.json": "0f3300f8b6f0ee3ea5ca02bfa2e0fa657c34743cc4cba413f9be75fbdf5184af",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-configured-idle.json": "0e53b13c091a3bf508262841c9be59b90ba96b1cd0b3b2a88c084037b919b781",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-empty.json": "86707187203d13f5fec9c3051918a6b0941bdc49b249658eebd27ab8f14c132c",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-populated.json": "e102f1c55fe8d530a9db2bee3f918f4b28af686129d70ce18b2c52db1f213626",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-service-unavailable.json": "e4044807e6da98b53c451617f390d27128d926b2f8ee3baaea26bc5fac82b387",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-truncated.json": "951482ab8003e89bb6c21d0e2e485683a9056726ac7a8e85b3209a5f8f163f6e",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-resources-mixed.json": "c7103a35a564536354d6ca34873d313ea3501c64a429d75a6f37fae6d05a6f83",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-statistics-page-cost-reported-and-silent.json": "2fd8026e7d2457d99323bdd1983abd70c8f55797c1b1aa0a707ad04073d2f0fe",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-available-listing.json": "b08ae8e5c69615658f4af4a5eb64188ea16fdf29837f1433597c0b1adfa0bb4f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-cursor-expired.json": "a05606232d1f2949e67bf60bd42793b445df0e63775102553bf694fc5a566c1a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-cursor-invalid.json": "fce971a43bf397325f85a1f65fc2f5d9af8fca068c5939946590fb7c84d28a03",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-direct-caller-refused.json": "fdfc66e7035b8bbaf70c43a2aea297645e5be542458abe586045457b5ab5cc6f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-document-invalid.json": "d4c1c8f559a23baedc99b07d9787119171c6620b71d2d0cea3264d5c807b35e1",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-entry-not-found.json": "6bcf6371620b55a8529a2f5b55cea482a3fe1ce4dbb01512ee2dccd29f3c4103",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-incomplete.json": "3fb1ecca6d7a4f0fd737903084c45779b7bb106e1f94db9e487dfdcc893b1631",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-listing-next-page.json": "545af1545680c3f2c1b992cc7a6e858c238808e7b818096a7197ee846839270c",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-no-repository.json": "ad881dbafa00074a9fad720dfc18e5c9294d038b627494959c40e9389dd44a1f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-not-captured-missing.json": "f4c05bbb8279e7f136d46ce832ddb738b719dea27c8eb36dd438b85925aa5613",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-not-captured-unobserved.json": "67bac84513b7aca30e0559d9ad45cd25665c98da2c195f1ecef8c3ae35b02d6c",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-page-too-large.json": "6cf98f4ee5d47cd69bdcedba1988a0ef373578361f3dfb39e28270913740d7d2",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-pending-launch.json": "f7cd76a688a460a8273267a0c35b4abd5221379edc2cc64790dada53f43f38c7",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-pending-running.json": "a1748f6dfc149f874292eac4ee0d4d2d9fde6e12975f10497c4d40d91d50e095",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-pending-settling.json": "d8e06ea82b91d5882b79794490ff82b0b9683cd3e98a4924f23278d77f43fdce",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-text-chunk-next.json": "2bbc52f466cebdb1f47bfdb09f427e35974d0e4ec743bd2715ce6e9418432d1e",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-text-chunk.json": "4a4dba6ea2da423ed2a3a6f0fc492dd2411ee815498b48cb9c47fd9bafd3fbad",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-text-complete.json": "623091ae74b0b78858064ab96ceead74efbd27b1216dcd995c563f2f64309818",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-unavailable.json": "6e7aaafb678a1897b54f54756602372d2284f7d942f2276a67d81149884083f1",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-unknown-task.json": "447bf3402d02c557dda1a95827105cbf95f1308202b17ba80651cd04fe030dba",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-all-kinds.json": "ace6c4993c3d815641ae4a61f5dc82c9d1c29493b5d4b03feaa9f94c0b64fc2b",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-cursor-expired.json": "aeb56654a0776b64eb3fc2af35498a5b61006a4a32a2ad19a7404d10ccafacc9",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-cursor-invalid.json": "589effc4e949fca71f6286497028ea8be8e8cf308af5c5a9a779d2906049e354",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-default-filter-delta-seqs.json": "5d4f19e2e16a29b41c1314362d254852c1f3cc453da42361dbc4e41eff9a45c0",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-direct-caller-refused.json": "fdfc66e7035b8bbaf70c43a2aea297645e5be542458abe586045457b5ab5cc6f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-gaps-skipped.json": "467a0dee7bfed94daa5d1c0f3f4339f868e9bb329130ecafc0248fc0b8a0f6e2",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-incomplete.json": "2887c13c7ca78031f2754eba8950a71b7419a50819bff6181dbc2d3aa3057dda",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-kinds-filtered.json": "2945e1c7ba3dda78c0d69234065c1a97d390228f2bcff7ad72ec16680a58e63c",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-newer-empty-final.json": "e7f717255ce721b78d8d0e75b0fcba135a84ca5973417546a445d482081cd740",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-newer.json": "646ae540a8e5e08dabbb070d2d773ee0ab44d2918c9635fe4479ad5ada539f2f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-newest.json": "04a68f73c22584e9c87ba461170208e991199cc55bcfe617d94e63df917b674f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-older.json": "ba1e64bd0e519844dcba3ccb8b18503a03e376f12868834d23d5ea5f59d5255e",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-oldest-forward.json": "4fd211d91dc7fadde96383b3e613e8cc4037889f02e1f06d14c159778a384bb3",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-open.json": "c82235676e5c9b4ac6012825ae067bd55e9e8a44a3bb47c9117e83d08c80ddc6",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-pending-launch.json": "56d3c8b01e3392aa55c329391e148653372535bc8afc99ddddd00d2989ef26a0",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-settling.json": "b0ee2586da26544994741f5991c0b351b11e6a9d5de4bff28a6bb346e5ab63da",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-unavailable.json": "b39889d4c6bfc6772116a268d430b7aa813db0d8e17ee8ae1a42e6718267aabc",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-unknown-task.json": "df5781eb1a399a041cac37ca058fa608d5d2d219482aab766740dfaff93d65fd",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-direct-caller-refused.json": "b1b89676863ff379a4b709867f21a0dd6d5a6041cf10d4bbd6c1210830833d8b",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-found-first-page.json": "316e1667e683bc488a33f1fce7a90caf1541198eb4cd715e670cd56c9628d895",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-found.json": "ae7378a2d532a9131045d59fe8196cd1523d430b077dd0ed68c7e539188b77a3",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-none-found.json": "4effebadbaa803b4692a15987cdf18087c843b3b8ef0b3e97a3f2798fdde6c44",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-pending-launch-predecessor.json": "b0d8395965b24b0ad7bfa16dcf683e9a3b2578529c57d4dfb07594a240545ce9",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-unknown-predecessor.json": "d6f65693f7bc0d1661d08e5d68a6f472e5c38c973802d580f0c9eb14bf266f6d",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-available.json": "684686806b47be97aefdb6cc3f7e6a2d550b68dba9dcf39308a5baee1b02eb71",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-integrity-failed.json": "8fce146c5813033984b31a641d225060ea14953eaabc14da831a4b0df33fde02",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-preview-only.json": "256fb2c8076d0c2f0cb927be08697cc19c10918bbd2d15e7393ca1ea5e0329e7",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-truncated.json": "1b4241f75c77b1aba2a753145f139d80ef9fe3592f0367658f66fc1fa7bbd8b8",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-agent-caller-settled-only.json": "14f268d0e2124162a17febd10d73e95bfe8fa2b8b81c2d540c397fcac4607244",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-no-attempt.json": "89b2fd45d7a32d4dfcd7a81e9a8760a3ef7e6793cde218d000f31c919ff3f9d3",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-reserved-attempt.json": "88bf134745782fd437d90e3b4cbcd39fa6d0e5c8077ed495e904e165513703ef",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-running-attempt-after.json": "6c5846b58cb9e43efd5c6f59c444103d5619a6e0e80669e12dc9d7107efba8c1",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-running-attempt.json": "c30ce937eb94a38f4e6a543ed725a1370ed5f1dfd8207f645a20b1192ab155fe",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-limit-hits-empty.json": "750160d27a6e2327b359609eb1d438e1fa98f60da297d3d9a0e7bd454e1ab6a4",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-limit-hits-preparing.json": "c6fb5d1632d5762a5d7f9aa8e2933ad0c0430bd7866ae7ab96867f870483388b",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-limit-hits-ready.json": "6d19009fd95fc625b766349de4452634cf752151e4efbba059f219a6ddea9b1f",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-statistics-cost-model.json": "347d4ff9893c749a0f912e73da11fb9a5ca5f5013d40cd680dfb40d9d16a91ba",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-changes.json": "eed2861e457a63cf1f668e6b86154cfb3c109e68f07de2b052a000a413bb54b2",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-event-page.json": "fee2b6d6195e734687ab8ab5b27f47cc3007de1f82a465870db6096b81a00514",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-prompt.json": "990aff56e593218d3af0bae4a8f264030a8d39662d435f67e683749d31889d5a",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-successors.json": "034b0ce40acf2bf38d99f91613d16ad1d86e4a8ebfcb14ea9892b80d3e55feb0",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-workflow-live-activity.json": "f2e13c5491628d60f761fe1825264c4f4e302bd05748160900897583f257f4da",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/manifest.json": "6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/manifest.sha256": "0ea2b764f1ee10851d270df891f9cbce6731d6455793283a1ccc17bed1ee4dce",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/version-info-s05-additive.json": "7ae00dae923fbb9f29cde0990cc8588045cacddf9aa2315899be4d9c8df78598",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/version-info.json": "39bbc0a41065d19038a54d2b93726e51021eeec9df50a7dc647cf14e50d22a59",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/workflow-definition-patch.json": "dec7079d69e46ff4d63da100bb12fc3fbfc1f120057da1d7346dd1f8fad05625",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskPromptClientTests.swift": "fcb97064a65e4d049f405daa282eb1e7175494f413049cd25ec841b998cf6d09",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskPromptTests.swift": "8aea8987343f3c5571996b0e8b0308a5c3df34d7537478c60a8860e0a35d2483"
+  },
+  "preserved_owner_inputs_sha256": {
+    "docs/migration-plan.md": "5c1a482873fb0636ac1bd63797c42aaf0b8c31f74dd5044a22d31958ece12dfb",
+    "docs/migration-sessions.md": "9b8b3c6a44f05dbda1c6457f301318426fb71bf5a6ac558564f777a379b6d52d",
+    "docs/migration-receipts/M01-checks.json": "e8a46cc0c30f0c01360681437168cf65e88c0e243c92451ef21aa4b430c50bbd",
+    "docs/migration-receipts/M01-contracts.md": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+    "docs/migration-receipts/M01-design.md": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+    "docs/migration-receipts/M01-native.md": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9",
+    "docs/migration-receipts/M01.md": "82a21ab06b2c75fef2b621e4f50b2ea00d04daca069613a4dfb6d8e7bed6b84d"
+  },
+  "runtime_spec_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+  "runtime_selection": "engine0.0.7 unchanged; released0.0.8 fixturedata only; no installation,selection,engineexecution or ownerstate qualification",
+  "python_tooling": "No tooling sourcechanges; M02 evidence not relabelled as freshM03-Crun",
+  "implementation_workflow": "Independent plan review, separate Sol low production/test authors, primary integration and verification; no source blocker found. Final record-accuracy review approved; C completion remains blocked by required UI gate.",
+  "pending": [
+    "Deferred by owner for M03-C commit: ActivityFeedLongMarkdownHostedTests first-mount geometry failure; full UI gate remains recorded as failed",
+    "rendered prompt adoption with acceptedv2loss/unavailable states",
+    "M03-D completeeventtransport and otherretainedobservations",
+    "exactmanaged-runtime qualification and authorized selection",
+    "ordinary isolated GUI smoke and runtime/platform/performance acceptance",
+    "wholeM03 acceptance"
+  ],
+  "authority": "Localcohesivecommits authorized; generated-app-onlyLaunchServicesmetadata allowed. No push,publication,productioninstall,registration,provider or app launch.",
+  "receipt_identity": "containing evidence commit",
+  "record_accuracy_review": "Round3 fresh read-only review matched all9 native manifest records/hashes/counts,host logs,UIhistory,140frozen inputs and7protected inputs. Record accuracy approved only; fullUIgate remains failed, no Ccompletion or waiver. Owner subsequently explicitly deferred the remaining UI commit gate; no source change followed.",
+  "owner_gate_decision": "2026-11-04: owner explicitly instructed to ignore the remaining UI failure and commit, citing later redesign. Defers this M03-C commit gate only; test retained, no assertion weakened, no aggregate migration acceptance.",
+  "fixture_commit": "0223b15276d861a8662ab713dca4529dd6074fe7",
+  "implementation_commit": "f7e3b3973c4c683ea28399b69c25285e1448d558"
+}
