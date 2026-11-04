@@ -58,10 +58,6 @@ public final class Module: HfModule {
             .environment(\.toolEnvironmentRepository, toolEnvironment)
             .environment(\.stateRecoveryRepository, stateRecovery)
             .environment(\.taskSnapshotRepository, snapshot)
-            .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
-            .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
-            .environment(\.qualificationRepository, QualificationRepositoryImpl(tooling: toolEnvironment, recovery: stateRecovery))
-            .environment(\.statisticsRepository, StatisticsRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
             .environment(\.resourceSlotsRepository, ResourceSlotsRepositoryImpl(tooling: toolEnvironment, scheduler: scheduler))
             .environment(\.eventStreamRepository, eventStream)
             .environment(\.finishNotifier, finishNotifier)
@@ -74,8 +70,18 @@ public final class Module: HfModule {
             .environment(\.modelCatalogRepository, ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.workflowRepository, workflows)
 
+        registerPublicReaders(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery)
         let shared = NeedsYouDependencies(scheduler: scheduler, visibility: visibility, settings: settings, install: install)
         registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode)
+    }
+
+    private func registerPublicReaders(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: any StateRecoveryRepository) {
+        GlobalValues
+            .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
+            .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
+            .environment(\.qualificationRepository, QualificationRepositoryImpl(tooling: toolEnvironment, recovery: stateRecovery))
+            .environment(\.statisticsRepository, StatisticsRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
+            .environment(\.taskPromptRepository, TaskPromptRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery))
     }
 
     private func notificationRouting(settings: any SettingsRepository) -> (NotificationDeliveryMode, FinishNotifierImpl) {

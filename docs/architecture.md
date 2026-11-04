@@ -216,3 +216,15 @@ checkpoint capability requirements and missing-attribution behavior.
 ## Public task-list observation
 
 TaskList's observation source emits invalidations only; public task-history/status operations remain the source of displayed facts. Module currently injects polling (one-second urgent/visible checks, thirty-second hidden-idle refreshes), with idle-only admission that drops periodic demand during a busy refresh. Action refresh barriers are independent. Runtime generations fence stale callbacks and initial passes, and subscriptions cancel without retaining the repository. The source can later be replaced by a qualified public ctl watcher without rebuilding the task-list data pipeline. This does not yet replace the activity/cumulative-summary event-file transport or qualify the intended0.0.8 runtime.
+
+## Public prompt foundation
+
+A typed, one-shot task-prompt client and repository preserve the public engine's
+availability, completeness, truncation, integrity, byte counts and raw additive
+facts. Required caller generation fencing and captured tooling identity reject
+late results across request/runtime changes; fresh per-read capability probes
+remain authoritative. Module registers this adapter alongside the other bounded
+public readers. It does not feed current rendered prompts or remove event-summary
+private transport. Those consumer changes require the later bounded transport
+slice and approved unavailable/loss designs. Fixture adoption from released0.0.8
+is consumer data only; the managed engine remains pinned to0.0.7.

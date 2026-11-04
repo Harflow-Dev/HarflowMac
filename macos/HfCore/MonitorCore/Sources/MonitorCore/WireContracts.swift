@@ -20,6 +20,9 @@ public enum WireContract: String, Sendable, CaseIterable {
 
 /// Capabilities that qualify individual ctl operations beyond the base wire contract.
 public enum CtlCapability {
+    /// Permits bounded, integrity-reported task prompt reads.
+    public static let taskPrompt = "task-prompt.v1"
+
     /// Allows caller and Monitor response channels to compete for the same exact checkpoint.
     public static let workflowSharedInteractions = "workflow-shared-interactions.v1"
 

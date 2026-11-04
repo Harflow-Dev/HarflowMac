@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a typed public task-prompt client and fenced one-shot repository foundation, with the complete released0.0.8 contract fixtures; rendered prompt and runtime adoption remain separate.
+
 - Replace task-list directory watching with an injected public-refresh observation strategy, using one-second urgent and thirty-second hidden-idle polling without overlapping periodic reads.
 
 - Build the app through a thin Xcode host while retaining the shell and guarded tests in SwiftPM; validate the standard macOS dependency-resource layout without changing the managed engine pin.

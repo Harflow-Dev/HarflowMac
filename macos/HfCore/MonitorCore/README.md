@@ -40,3 +40,17 @@ Complete malformed or incompatible event records make activity and summary reads
 ## Statistics history
 
 `CtlClient.statisticsPage` reads bounded typed `StatisticsPage` / `StatisticsFact` values through the public ctl envelope, requiring `statistics-page.v1` on each operation. Unknown states, unsupported capabilities and malformed pages remain unavailable. Token accounting and duration qualification are independent; legacy absent accounting never becomes zero.
+
+## Task prompt reads
+
+`CtlClient.taskPrompt(taskID:maxBytes:)` requires `task-prompt.v1` on a fresh
+selected-runtime handshake for each read. `TaskPromptResult` preserves the engine's
+available, preview-only, integrity-failed and unavailable states independently of
+UTF-8 byte counts, truncation, completeness and integrity. Text is verbatim; raw
+additive fields and explicit prefix-resolution provenance remain available.
+Malformed known fields, unknown states and mismatched task identity fail decoding;
+transport/capability refusals remain failures rather than successful empty prompts.
+The text ceiling is1...131072bytes (default65536); JSON escaping may make the
+response exceed the separate event-page ceiling. No prompt file is read by this
+adapter. This foundation does not change the managed runtime pin or rendered
+prompt/activity consumers.

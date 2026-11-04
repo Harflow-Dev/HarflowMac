@@ -16,6 +16,7 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 | `ToolEnvironmentRepository` | Selected tooling and launch environment; managed app clients bind the exact qualified generation. |
 | `TaskArtifactRepository` | Explicit bounded pages of registered standalone-task artifact metadata; unavailable reads remain distinct from an empty manifest. |
 | `ResourceSlotsRepository` | Visibility-leased, runtime-bound resource inventory and phase status, with bounded owner metadata, retained failed-refresh evidence and generation-safe teardown. |
+| `TaskPromptRepository` | One-shot typed public prompt reads, bound to selected tooling and a required caller lifetime/generation fence; no cache or rendered consumer adoption. |
 | `TaskSnapshotRepository` | Per-task `harflow-ctl status` snapshots. |
 | `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task; also publishes each task's `EventAvailability` (`loading`/`available`/`unavailable`), so a caller never has to infer "the log couldn't be read" from an empty event list. |
 | `StateRecoveryRepository` | Shared structured store refusals and explicit inspection/confirmation/recovery lifecycle; single-flight operations and stale-result checks remain independent of managed acquisition. |
@@ -55,3 +56,17 @@ TaskList no longer watches the engine's tasks directory. Module injects a small 
 Periodic ticks are disposable while a refresh is busy, so they cannot keep a slow refresh chain alive. Explicit refreshes and refreshAndWait retain their separate coalescing/result semantics. Runtime changes fence late callbacks/results and cancel obsolete observation; cancellation also remains effective when a scheduler retains a callback. Initial readiness failure uses the existing10second retry before observation starts. Manual pre-start preparation uses a separate2second retry through idle-only admission; production observation owns progress after start.
 
 A future public watcher can replace the polling source without changing paging, title/notification ordering, selection or task actions. Its canonical contract, qualified runtime and conformance are separate work. EventStream activity and cumulative summaries still use the existing private transport until their later M03 suffix; this task-list change does not claim all private engine I/O is removed.
+
+## Public prompt foundation
+
+The prompt repository captures the selected ctl client per read, composes its
+existing fence with the caller's required generation/lifetime fence, and checks
+executable, effective environment and compatibility-root identity against current
+local tooling. Both stale successes and stale failures are discarded before
+return or recovery reporting. Each read keeps the client's fresh capability
+handshake. The caller must handle selection ABA in its fence and recheck identity
+before future presentation. No subscription, compatibility cache or private
+prompt fallback is introduced. Missing capability and known unavailable prompt
+results remain distinct. Current EventStream summaries and rendered String?
+prompt paths are unchanged pending the later event-transport and approved design
+work; this adapter alone does not migrate those consumers.
