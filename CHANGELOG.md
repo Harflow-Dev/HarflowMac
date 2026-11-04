@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Re-vendor the complete S05 canonical v1 contract fixture bundle and verify decoder, capability and fallback compatibility without changing the managed engine pin.
+
 - Fix the connection indicator remaining Disconnected at startup until a task or workflow was selected.
 
 ## 0.0.9

@@ -9,6 +9,8 @@ The canonical [wire specification](https://github.com/Harflow-Dev/HarflowMCP/blo
 `RuntimeCompatibilityContext` carries the explicit lexical absolute state root. `VersionInfoClient` runs the selected `harflow-ctl version-info --json` directly through `ProcessRunning`, with a bounded strict document and no cache. Ctl commands and setup actions probe immediately before each operation with the same effective HOME/environment and working-directory policy. Setup probes its paired control executable, never PATH. Darwin/arm64 and the operation's advertised contract/capability are required. Lexical comparison preserves case and does not resolve symlinks; aliases that do not normalize equally safely refuse.
 
 Tests vendor exact engine-owned fixtures under `Tests/MonitorCoreTests/Resources/ContractsV1`, including the engine manifest and its SHA256 digest. The package has no sibling-repository dependency or fixture download step. These envelopes do not establish storage ownership or runtime authenticity.
+The [fixture provenance](../../../docs/contract-fixtures.md) pins the producer commit,
+manifest digest and scope separately from the managed runtime pin.
 
 ## Caller approvals
 
