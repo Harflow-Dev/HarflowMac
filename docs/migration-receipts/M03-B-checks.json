@@ -1,0 +1,174 @@
+{
+  "date": "2026-11-04",
+  "status": "M03-B source and bounded local checks delivered; runtime/GUI/performance and aggregate M03 acceptance pending",
+  "base_head": "179ee39087afa702ed73875f5fdf0cde645a2658",
+  "native": [
+    {
+      "package": "HfRepository",
+      "directory": "HfRepository-final",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 455,
+      "discovered_suites": 55
+    },
+    {
+      "package": "MonitorCore",
+      "directory": "MonitorCore",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 394,
+      "discovered_suites": 60,
+      "failures": []
+    },
+    {
+      "package": "HfUtilities",
+      "directory": "HfUtilities",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 19,
+      "discovered_suites": 4,
+      "failures": []
+    },
+    {
+      "package": "HfCommon",
+      "directory": "HfCommon",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 17,
+      "discovered_suites": 3,
+      "failures": []
+    },
+    {
+      "package": "HfUI",
+      "directory": "HfUI",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 239,
+      "discovered_suites": 37,
+      "failures": []
+    },
+    {
+      "package": "Harflow",
+      "directory": "Harflow",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 119,
+      "discovered_suites": 13,
+      "failures": []
+    },
+    {
+      "package": "MenuBarFeature",
+      "directory": "MenuBarFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 88,
+      "discovered_suites": 8,
+      "failures": []
+    },
+    {
+      "package": "SettingsFeature",
+      "directory": "SettingsFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 87,
+      "discovered_suites": 14,
+      "failures": []
+    },
+    {
+      "package": "MainWindowFeature",
+      "directory": "MainWindowFeature",
+      "exit_code": 0,
+      "passed": true,
+      "discovered_tests": 1781,
+      "discovered_suites": 241,
+      "failures": []
+    }
+  ],
+  "native_logical_tests": 3199,
+  "native_all_passed": true,
+  "native_manifest_sha256": {
+    "HfRepository": "e4d2ea0d9dc464240174f90bbccc56882b26571de4f5520065a9d7ec84b62777",
+    "MonitorCore": "c2493fa3a6f0971ce6e31854b5aa92f30c5eb8b79bcca84997a7b7802f9c1f5c",
+    "HfUtilities": "6b9e5ec0e7a5829b7346e73eaaab18f1af7240fc245c75a1193692915f07d33c",
+    "HfCommon": "027c8eff094d2cf0966f011fc318714d856f7e6e5f8f88d0bc4d9965563a261a",
+    "HfUI": "9725a0a3351d7230776267db6dc3ff86a0e2de57a62933c0cb1d65f6a44eb61b",
+    "Harflow": "608aced906e7efe6cbe940a2486becd9446f834ae9eebbb89d628c1e09826fd7",
+    "MenuBarFeature": "fd6b87814f18232885218c48452e0b472fec6f5242659c4c9c1a662dc51f5a5b",
+    "SettingsFeature": "500756585d9407f49ff1110c8ecbffd5b016c679eca7291ab0f0298ac758a7c6",
+    "MainWindowFeature": "ac80ef1c36e70bb1075e7e85e1953742f32bc6fef837b763eeef0129450ccd05"
+  },
+  "native_commands": "All9packages serialized through scripts/test-swift-package.py; MainWindowFeature suites with native sidebar benchmark, allothers aggregate, native benchmark where required",
+  "initial_failure": "Newtestfixtures lacked toolEnvironment.tasksDirectory mock values; initial HfRepository run abortedsignal5. Mocksetup corrected without assertionweakening, entire455test package rerun passed. Original /private/tmp/m03-b-hfrepository.log retained.",
+  "formatter": {
+    "version": "0.60.1",
+    "result": "0/993 files requireformatting;31configuration skips",
+    "log_sha256": "acdebc01591a7db7f73498fd9aa6fae9257473c44fc5d7c39befa976b03e2883"
+  },
+  "lint": {
+    "version": "0.57.1",
+    "result": "0violations/1037files",
+    "ci_pin_0632": "unavailable and unverified; no toolinstalled",
+    "log_sha256": "971262256c919b396dac47d95359e13c27744c29957c5b2ab980bfd50e156b92"
+  },
+  "guards": {
+    "legacy_names": "passed",
+    "private_refs": "passed",
+    "diff_check": "passed"
+  },
+  "host": [
+    {
+      "label": "release-build",
+      "command": [
+        "macos/build-app.sh"
+      ],
+      "exit_code": 0,
+      "seconds": 165.776,
+      "log": "/private/tmp/m03-b-release-build.log",
+      "log_sha256": "2ac79fe347b096b6c2793b805e17cfca3c7fce65c09b3a66f6146e42f7aae436",
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "xcode_succeeded": true,
+      "registration_tasks": 1,
+      "compiler_internal_errors": []
+    },
+    {
+      "label": "release-bundle",
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "scripts/ci/release.py",
+        "bundle"
+      ],
+      "exit_code": 0,
+      "seconds": 1.063,
+      "log": "/private/tmp/m03-b-release-bundle.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wrapper_sha256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+      "executable_sha256": "f07bac047212c97365906f363e2c9bbffa3c0b52b65ad734c8388a791d1f5990",
+      "runtime_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895"
+    }
+  ],
+  "python_tooling": "Unchanged in M03-B; not rerun or relabelled from M02",
+  "release_static_evidence_sha256": "128f025ab31dc970f8535f08e758471d0900641e5bc0963304910a4b3e4129a5",
+  "managed_runtime_spec_sha256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+  "managed_runtime_selection": "engine0.0.7 unchanged; released0.0.8 downloaded/static-only; no installation/selection/engine execution",
+  "preserved_owner_inputs_sha256": {
+    "docs/migration-plan.md": "5c1a482873fb0636ac1bd63797c42aaf0b8c31f74dd5044a22d31958ece12dfb",
+    "docs/migration-sessions.md": "9b8b3c6a44f05dbda1c6457f301318426fb71bf5a6ac558564f777a379b6d52d",
+    "docs/migration-receipts/M01-checks.json": "e8a46cc0c30f0c01360681437168cf65e88c0e243c92451ef21aa4b430c50bbd",
+    "docs/migration-receipts/M01-contracts.md": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+    "docs/migration-receipts/M01-design.md": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+    "docs/migration-receipts/M01-native.md": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9",
+    "docs/migration-receipts/M01.md": "82a21ab06b2c75fef2b621e4f50b2ea00d04daca069613a4dfb6d8e7bed6b84d"
+  },
+  "review": "Freshread-only review3: source and boundedlocaldelivery approved; all9 manifests/counts/hashes, bothhostlogs/records and7preservedinputhashes independently matched; no blockers.",
+  "pending": [
+    "exactmanaged-runtime qualification and authorized selection",
+    "isolated ordinary-app/public-poll headless smoke",
+    "runtime platform/performance acceptance",
+    "M03-C prompt and M03-D completeeventtransport plus otherretainedobservations",
+    "wholeM03owneracceptance"
+  ],
+  "authority": "Localcohesive M03commits authorized; existing generated-app-onlyLaunchServicesmetadata permission. No push, release, provider, MCP/backendregistration, productioninstall or app launch.",
+  "receipt_identity": "containing Git commit",
+  "implementation_commit": "fe57428caebd36780573517b79a9f67ef642767c"
+}
