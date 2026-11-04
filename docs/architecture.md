@@ -13,7 +13,7 @@ Ctl/setup commands and asynchronous store readers validate the selected runtime 
 
 ## Store recovery
 
-`Module` constructs one `StateRecoveryRepositoryImpl` from the qualified tool environment and injects it into task-list and workflow repositories. Their structured store refusals update a shared, equality-deduplicated readiness snapshot without changing managed-runtime acquisition state. MonitorCore owns only typed public-command models and transport; the repository owns single-flight operations, exact inspection/confirmation binding and generation checks. No consumer writes state files. Settings General consumes the same repository through its use-case adapter and VM, and the sidebar exposes a settings attention entry. Exact inspection values bind inline confirmation and cancellation. Recovery completion rechecks listing and watchers through `runtimeBecameReady()` without invalidating the durable completion receipt; later failures retain the last receipt separately from current recovery state. Finder reveal accepts only that engine-returned completed receipt.
+`Module` constructs one `StateRecoveryRepositoryImpl` from the qualified tool environment and injects it into task-list and workflow repositories. Their structured store refusals update a shared, equality-deduplicated readiness snapshot without changing managed-runtime acquisition state. MonitorCore owns only typed public-command models and transport; the repository owns single-flight operations, exact inspection/confirmation binding and generation checks. No consumer writes state files. Settings General consumes the same repository through its use-case adapter and VM, and the sidebar exposes a settings attention entry. Exact inspection values bind inline confirmation and cancellation. Recovery completion rechecks listing and observation through `runtimeBecameReady()` without invalidating the durable completion receipt; later failures retain the last receipt separately from current recovery state. Finder reveal accepts only that engine-returned completed receipt.
 
 ## Application appearance
 
@@ -212,3 +212,7 @@ recovery binds drafts to their original decision/checkpoint; a persisted winner 
 checkpoint and remains available alongside engine-backed history. Goal revision and task
 approval refusals retain the same provenance. Older engines retain their previous eligibility,
 checkpoint capability requirements and missing-attribution behavior.
+
+## Public task-list observation
+
+TaskList's observation source emits invalidations only; public task-history/status operations remain the source of displayed facts. Module currently injects polling (one-second urgent/visible checks, thirty-second hidden-idle refreshes), with idle-only admission that drops periodic demand during a busy refresh. Action refresh barriers are independent. Runtime generations fence stale callbacks and initial passes, and subscriptions cancel without retaining the repository. The source can later be replaced by a qualified public ctl watcher without rebuilding the task-list data pipeline. This does not yet replace the activity/cumulative-summary event-file transport or qualify the intended0.0.8 runtime.

@@ -154,7 +154,7 @@ import Testing
         #expect(repository.history(for: fixture.taskID).error == error.message)
     }
 
-    @Test func givenCtlListingIsOutstanding_whenSettingsChange_thenStaleListingCannotPublishOrStartWatcher() async {
+    @Test func givenCtlListingIsOutstanding_whenSettingsChange_thenStaleListingCannotPublishOrStartObservation() async {
         let scheduler = CapturingScheduler()
         let firstListing = AsyncGate()
         let secondListing = AsyncGate()
@@ -178,20 +178,17 @@ import Testing
         #expect(sut.tasks.isEmpty)
         #expect(sut.titles.isEmpty)
         #expect(sut.titleLoadPassCount == 0)
-        #expect(!sut.watcherActive)
+        #expect(scheduler.repeatIntervals.isEmpty)
         secondListing.open()
         await waitUntil { sut.tasks.map(\.taskID) == ["current"] }
     }
 
-    @Test func givenInitialCompatibilityFails_whenScheduledRetrySucceeds_thenListingAndWatcherStartOnlyAfterSuccess() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HfCompatibility-\(UUID())")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
+    @Test func givenInitialCompatibilityFails_whenScheduledRetrySucceeds_thenListingAndObservationStartOnlyAfterSuccess() async throws {
         let scheduler = CapturingScheduler()
         let runner = compatibleRunner { _ in .success(historyOutput(taskID: "recovered")) }
         let checker = LockedBox(0)
         let incompatibility = WireEnvelope.incompatibility("old runtime")
-        let environment = taskListEnvironment(runner: runner, tasksDirectory: directory.path)
+        let environment = taskListEnvironment(runner: runner)
         let sut = makeTaskList(environment: environment, scheduler: scheduler) { _ in
             checker.mutate { $0 += 1 }
             return checker.value == 1 ? .failure(incompatibility) : .success(())
@@ -202,11 +199,90 @@ import Testing
         #expect(sut.tasks.isEmpty)
         #expect(sut.listError?.message == incompatibility.message)
         #expect(sut.historyState.error?.message == incompatibility.message)
-        #expect(!sut.watcherActive)
+        #expect(scheduler.repeatIntervals.isEmpty)
         await waitUntil { scheduler.oneShotCount(interval: 10) == 1 }
         scheduler.fireFirstOneShot()
-        await waitUntil { sut.tasks.map(\.taskID) == ["recovered"] && sut.watcherActive }
+        await waitUntil { sut.tasks.map(\.taskID) == ["recovered"] && scheduler.repeatIntervals == [1] }
         #expect(!runner.calls.isEmpty)
+    }
+
+    @Test func givenPollClaimedBeforeRuntimeChange_whenStalePassBegins_thenItFailsBeforeProbeAndReleasesCoordinator() async {
+        // given — step the real poll path immediately after its idle-only coordinator claim.
+        let probes = LockedBox(0)
+        let runner = compatibleRunner { _ in .success(historyOutput(taskID: "fresh")) }
+        let sut = makeTaskList(environment: taskListEnvironment(runner: runner)) { _ in
+            probes.mutate { $0 += 1 }
+            return .success(())
+        }
+        let generation = sut.refreshGeneration()
+        #expect(await sut.refreshCoordinator.tryBeginPollIfIdle())
+        // Isolate the invalidated claim from runtimeBecameReady's separate legitimate refresh.
+        sut.startLock.withLock { sut.compatibilityGeneration += 1 }
+        // when
+        let staleResult = await sut.runRefreshLoop(initialGeneration: generation)
+        // then
+        guard case .failure(let staleError) = staleResult else {
+            Issue.record("stale poll unexpectedly succeeded")
+            return
+        }
+        #expect(staleError == TaskListRepositoryImpl.supersededRefresh)
+        #expect(probes.value == 0)
+        #expect(runner.calls.isEmpty)
+        #expect(await sut.refreshCoordinator.tryBeginPollIfIdle())
+        let owed = await sut.refreshCoordinator.beginPass()
+        #expect(!(await sut.refreshCoordinator.endPass(owed: owed, result: .success(()))))
+        let freshResult = await sut.refreshAndWait()
+        guard case .success = freshResult else {
+            Issue.record("fresh barrier failed after superseded poll claim")
+            return
+        }
+        #expect(probes.value == 1)
+        #expect(sut.tasks.map(\.taskID) == ["fresh"])
+    }
+
+    @Test func givenClaimedPollAndPendingAction_whenRuntimeChangesBeforePass_thenWaiterResolvesSupersededAndFreshBarrierWorks() async {
+        // given — no process or compatibility check has started after this poll claim.
+        let probes = LockedBox(0)
+        let runner = compatibleRunner { _ in .success(historyOutput(taskID: "fresh")) }
+        let sut = makeTaskList(environment: taskListEnvironment(runner: runner)) { _ in
+            probes.mutate { $0 += 1 }
+            return .success(())
+        }
+        let generation = sut.refreshGeneration()
+        #expect(await sut.refreshCoordinator.tryBeginPollIfIdle())
+        let action = Task { await sut.refreshAndWait() }
+        await waitUntil { sut.coalescedCallCount == 1 }
+        // when — the real runtime-change entry adds legitimate current demand behind the claim.
+        sut.runtimeBecameReady()
+        await waitUntil { sut.coalescedCallCount == 2 }
+        let staleResult = await sut.runRefreshLoop(initialGeneration: generation)
+        let actionResult = await action.value
+        // then — the after-registration pass owes a failure and cannot invoke the old runtime.
+        guard case .failure(let staleError) = staleResult else {
+            Issue.record("stale poll unexpectedly succeeded")
+            return
+        }
+        #expect(staleError == TaskListRepositoryImpl.supersededRefresh)
+        guard case .failure(let actionError) = actionResult else {
+            Issue.record("action waiter unexpectedly succeeded on stale pass")
+            return
+        }
+        #expect(actionError == TaskListRepositoryImpl.supersededRefresh)
+        #expect(probes.value == 0)
+        #expect(runner.calls.isEmpty)
+        let freshResult = await sut.refreshAndWait()
+        guard case .success = freshResult else {
+            Issue.record("fresh barrier failed after superseded poll claim")
+            return
+        }
+        #expect(probes.value == 1)
+        #expect(runner.calls.map(\.arguments) == [
+            ["version-info", "--json"],
+            ["task-list-page", "--limit=100", "--json"],
+            ["version-info", "--json"],
+            ["task-list-page", "--limit=100", "--active-only", "--json"]
+        ])
+        #expect(sut.tasks.map(\.taskID) == ["fresh"])
     }
 
     private func taskListEnvironment(

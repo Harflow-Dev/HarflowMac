@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replace task-list directory watching with an injected public-refresh observation strategy, using one-second urgent and thirty-second hidden-idle polling without overlapping periodic reads.
+
 - Build the app through a thin Xcode host while retaining the shell and guarded tests in SwiftPM; validate the standard macOS dependency-resource layout without changing the managed engine pin.
 
 - Re-vendor the complete S05 canonical v1 contract fixture bundle and verify decoder, capability and fallback compatibility without changing the managed engine pin.

@@ -40,7 +40,7 @@ public final class Module: HfModule {
             eventStreamRepository: eventStream,
             finishNotifier: finishNotifier,
             scheduler: scheduler,
-            visibility: visibility,
+            visibility: visibility, invalidationSource: PollingTaskListInvalidationSource(scheduler: scheduler),
             stateRecovery: stateRecovery
         )
         let taskAction = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshot)

@@ -8,19 +8,15 @@ import Testing
 
 extension TaskListRepositoryImplTests {
 
-    // MARK: MS-LIST-3/F4-06 — the 10 s safety poll's four refresh conditions
+    // MARK: Public polling
 
-    /// Builds a scheduler whose `scheduleRepeating(every: 10, …)` work item is captured (so the test
-    /// can fire it directly, with no real timer) and whose `now()` reads a controllable box — the
-    /// same capture-and-invoke pattern as the throttle test, extended to a *stateful* `now()` so the
-    /// reconcile-interval math can be driven without sleeping. Built outside `makeSUT`'s default
-    /// scheduler for the reason documented on `defaultScheduler()`.
+    /// Captures the one-second tick and reads a controllable clock without real timers.
     private func makePollCapturingScheduler(now: LockedBox<Date>) -> (scheduler: MockScheduling, capturedPoll: LockedBox<(@Sendable () -> Void)?>) {
         let scheduler = MockScheduling()
         let capturedPoll = LockedBox<(@Sendable () -> Void)?>(nil)
         given(scheduler).now().willProduce { now.value }
         given(scheduler).schedule(after: .any, execute: .any).willReturn(AnyCancellable {})
-        given(scheduler).scheduleRepeating(every: .value(10), execute: .any).willProduce { _, work in
+        given(scheduler).scheduleRepeating(every: .value(1), execute: .any).willProduce { _, work in
             capturedPoll.mutate { $0 = work }
             return AnyCancellable {}
         }
@@ -36,33 +32,23 @@ extension TaskListRepositoryImplTests {
         return (CtlClient(executable: "/bin/echo", environment: [:], runner: runner), callCount)
     }
 
-    @Test func givenTheSafetyPollFires_whenTheReconcileIntervalHasElapsed_thenItRefreshes() async {
-        // given
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
+    @Test func givenVisibleIdle_whenNextTickArrives_thenItRefreshes() async {
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
         let (client, callCount) = countingCtl { #"{"v":2,"tasks":[]}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
+        given(toolEnvironment).tasksDirectory.willReturn("/unused/tasks")
         given(toolEnvironment).ctl().willReturn(.success(client))
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
         sut.start()
         await waitUntil { sut.hasListed }
-        // `hasListed` becomes true inside `refresh()`, before `startWatching()` has run and called
-        // `scheduleRepeating` — waiting for `capturedPoll` to actually be set avoids firing a `nil`
-        // closure that would silently no-op.
         await waitUntil { capturedPoll.value != nil }
         #expect(capturedPoll.value != nil)
         let callsAfterStart = callCount.value
 
-        // when — no task is running, there is no list error, and the watcher is attached (the
-        // folder exists), so only the elapsed-reconcile-interval condition can explain a refresh.
-        now.mutate { $0 = $0.addingTimeInterval(RefreshTrigger.reconcileInterval + 1) }
+        now.mutate { $0 = $0.addingTimeInterval(1) }
         capturedPoll.value?()
 
-        // then
         await waitUntil(timeout: 3) { callCount.value > callsAfterStart }
         #expect(callCount.value > callsAfterStart)
         withExtendedLifetime(sut) {}
@@ -70,40 +56,28 @@ extension TaskListRepositoryImplTests {
 
     @Test(arguments: ["running", "failed"])
     func givenTheSafetyPollFires_whenTaskIsRunningOrNeedsReconciliation_thenItRefreshes(status: String) async {
-        // given — "now" never advances, so the reconcile interval never elapses; only "any task
-        // running" can explain the refresh below.
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
         let (client, callCount) = countingCtl { #"{"v":2,"tasks":[{"task_id":"a","status":"\#(status)","needs_reconciliation":true,"backend":"claude"}]}"# }
         let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
+        given(toolEnvironment).tasksDirectory.willReturn("/unused/tasks")
         given(toolEnvironment).ctl().willReturn(.success(client))
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
         sut.start()
         await waitUntil { sut.hasListed }
         #expect(sut.tasks.contains { $0.status.isRunning || $0.raw["needs_reconciliation"]?.boolValue == true })
-        // See the note in `whenTheReconcileIntervalHasElapsed_thenItRefreshes` on why the captured
-        // poll closure must be waited for before firing it.
         await waitUntil { capturedPoll.value != nil }
         #expect(capturedPoll.value != nil)
         let callsAfterStart = callCount.value
 
-        // when
         capturedPoll.value?()
 
-        // then
         await waitUntil(timeout: 3) { callCount.value > callsAfterStart }
         #expect(callCount.value > callsAfterStart)
         withExtendedLifetime(sut) {}
     }
 
     @Test func givenColdHistoryBootstrap_whenSafetyPollFires_thenItAdvancesWithoutActiveTasks() async {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: LockedBox(Date()))
         let calls = LockedBox(0)
         let bootstrapResponse = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","#
@@ -114,7 +88,7 @@ extension TaskListRepositoryImplTests {
             return .success(stdout(bootstrapResponse))
         }
         let environment = MockToolEnvironmentRepository()
-        given(environment).tasksDirectory.willReturn(dir.path)
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
         let sut = makeSUT(toolEnvironment: environment, scheduler: scheduler)
         sut.start()
@@ -128,10 +102,6 @@ extension TaskListRepositoryImplTests {
     }
 
     @Test func givenTheSafetyPollFires_whenThereIsAListError_thenItRefreshes() async {
-        // given — the initial listing succeeds so startup attaches the watcher and safety poll.
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
         let failed = LockedBox(false)
@@ -141,7 +111,7 @@ extension TaskListRepositoryImplTests {
                 : #"{"v":2,"tasks":[]}"#
         }
         let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
+        given(toolEnvironment).tasksDirectory.willReturn("/unused/tasks")
         given(toolEnvironment).ctl().willReturn(.success(client))
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
         sut.start()
@@ -153,19 +123,14 @@ extension TaskListRepositoryImplTests {
         await waitUntil { sut.listError != nil }
         let callsAfterError = callCount.value
 
-        // when
         capturedPoll.value?()
 
-        // then
         await waitUntil(timeout: 3) { callCount.value > callsAfterError }
         #expect(callCount.value > callsAfterError)
         withExtendedLifetime(sut) {}
     }
 
-    @Test func givenTheSafetyPollFires_whenTheWatcherIsInactive_thenItRefreshes() async {
-        // given — the tasks folder does not exist at `start()` time, so `DirectoryWatcher.start()`
-        // no-ops and stays inactive; the listing itself still succeeds (empty), "now" never
-        // advances, and there is no running task — only "watcher inactive" can explain the refresh.
+    @Test func givenNoTaskDirectory_whenVisiblePollFires_thenPublicListingStillRefreshes() async {
         let missingDir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-missing-\(UUID().uuidString)").path
         let now = LockedBox(Date())
         let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
@@ -176,89 +141,178 @@ extension TaskListRepositoryImplTests {
         let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
         sut.start()
         await waitUntil { sut.hasListed }
-        // See the note in `whenTheReconcileIntervalHasElapsed_thenItRefreshes` on why the captured
-        // poll closure must be waited for before firing it.
         await waitUntil { capturedPoll.value != nil }
         #expect(capturedPoll.value != nil)
         let callsAfterStart = callCount.value
 
-        // when
         capturedPoll.value?()
 
-        // then
         await waitUntil(timeout: 3) { callCount.value > callsAfterStart }
         #expect(callCount.value > callsAfterStart)
         withExtendedLifetime(sut) {}
     }
 
-    @Test func givenTheSafetyPollFires_whenNoConditionHolds_thenItDoesNotRefresh() async {
-        // given — reconcile not due, no running task, no list error, and the watcher is attached: no
-        // condition holds.
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let now = LockedBox(Date())
-        let (scheduler, capturedPoll) = makePollCapturingScheduler(now: now)
-        let (client, callCount) = countingCtl { #"{"v":2,"tasks":[]}"# }
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
-        given(toolEnvironment).ctl().willReturn(.success(client))
-        let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
+    @Test func givenVisibleIdleCatalog_whenExternalTaskAppears_thenNextTickDiscoversIt() async {
+        // given
+        let listing = LockedBox(#"{"v":2,"tasks":[]}"#)
+        let (scheduler, tick) = makePollCapturingScheduler(now: LockedBox(Date()))
+        let (client, _) = countingCtl { listing.value }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
+        given(environment).ctl().willReturn(.success(client))
+        let sut = makeSUT(toolEnvironment: environment, scheduler: scheduler)
         sut.start()
-        await waitUntil { sut.hasListed }
-        // The poll closure must actually have been captured before firing it below — otherwise
-        // `capturedPoll.value?()` silently no-ops on `nil` and the "then" assertion passes without
-        // ever exercising the guard under test. (Same `startWatching()` race as the other safety-poll
-        // tests: `hasListed` becomes true before `scheduleRepeating` is called.)
-        await waitUntil { capturedPoll.value != nil }
-        #expect(capturedPoll.value != nil)
-        let callsAfterStart = callCount.value
-
-        // when — really invoke the captured closure (not a no-op on `nil`).
-        let evaluationsBefore = sut.safetyPollEvaluationCount
-        capturedPoll.value?()
-        // No condition holds, so nothing should happen. A fixed sleep here would race a slow CI
-        // runner — the poll's condition check and any resulting `refresh()` both run inside the
-        // `Task` the closure spawns, so a sleep short enough to be fast could elapse before that
-        // `Task` is even scheduled, silently passing without the guard ever being exercised. Instead
-        // wait for `safetyPollEvaluationCount` — incremented once the spawned `Task` finishes
-        // evaluating (and refreshing, if it decided to) — so the assertion below only runs once that
-        // work has genuinely completed, however long it took.
-        await waitUntil(timeout: 5) { sut.safetyPollEvaluationCount > evaluationsBefore }
-        #expect(sut.safetyPollEvaluationCount > evaluationsBefore)
-
+        await waitUntil { sut.hasListed && tick.value != nil }
+        #expect(sut.tasks.isEmpty)
+        // when
+        listing.mutate { $0 = #"{"v":2,"tasks":[{"task_id":"external","status":"completed","backend":"claude"}]}"# }
+        tick.value?()
         // then
-        #expect(callCount.value == callsAfterStart)
+        await waitUntil { sut.tasks.map(\.taskID) == ["external"] }
+        #expect(sut.tasks.map(\.taskID) == ["external"])
         withExtendedLifetime(sut) {}
     }
 
-    // MARK: F4-10 — an inactive watcher restarts once its folder appears
+    @Test func givenHeldPollRead_whenManyPollsArrive_thenOnlyOnePassRunsWithoutFollowup() async {
+        // given
+        let gate = AsyncGate()
+        let reads = LockedBox(0)
+        let runner = compatibleRunner { _ in
+            reads.mutate { $0 += 1 }
+            if reads.value == 1 { gate.waitSync() }
+            return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
+        }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let sut = makeSUT(toolEnvironment: environment)
+        let poll = Task { await sut.evaluateSafetyPoll() }
+        await waitUntil { reads.value == 1 }
+        // when
+        for _ in 0 ..< 100 { await sut.evaluateSafetyPoll() }
+        #expect(reads.value == 1)
+        gate.open()
+        await poll.value
+        // then — exactly history and active reconciliation, with no followup pass.
+        #expect(reads.value == 2)
+        #expect(sut.safetyPollEvaluationCount == 101)
+    }
 
-    @Test func givenAnInactiveWatcher_whenARefreshRunsAfterItsFolderAppears_thenTheWatcherRestartsAndForwardsEvents() async {
-        // given — the folder does not exist at `start()` time, so the watcher starts inactive.
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: dir) }
+    @Test func givenDuplicateStart_whenInitialListingCompletes_thenOnlyOneObservationIsInstalled() async {
+        // given
+        let source = CapturedTaskListInvalidationSource()
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
+        given(environment).ctl().willReturn(.success(ctlClient(listing: [])))
+        let sut = makeSUT(toolEnvironment: environment, invalidationSource: source)
+        // when
+        sut.start()
+        sut.start()
+        await waitUntil { source.observations.value == 1 }
+        // then
+        #expect(source.observations.value == 1)
+        verify(environment).discoverEnvironment().called(1)
+        withExtendedLifetime(sut) {}
+    }
+
+    @Test func givenSourceInvalidatesSynchronously_whenObservationStarts_thenStartupDoesNotDeadlockOrDuplicateObserver() async {
+        // given
+        let source = CapturedTaskListInvalidationSource(invalidateOnObserve: true)
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
+        given(environment).ctl().willReturn(.success(ctlClient(listing: [])))
+        let sut = makeSUT(toolEnvironment: environment, invalidationSource: source)
+        // when
+        sut.start()
+        // then
+        await waitUntil { source.observations.value == 1 && sut.safetyPollEvaluationCount >= 1 }
+        #expect(source.observations.value == 1)
+        #expect(sut.safetyPollEvaluationCount >= 1)
+        withExtendedLifetime(sut) {}
+    }
+
+    @Test func givenRuntimeChanges_whenCancelledOldObserverCallsBack_thenItCannotReadOrReinstall() async {
+        // given
+        let source = CapturedTaskListInvalidationSource()
+        let (client, reads) = countingCtl { #"{"v":2,"tasks":[]}"# }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
+        given(environment).ctl().willReturn(.success(client))
+        let sut = makeSUT(toolEnvironment: environment, invalidationSource: source)
+        sut.start()
+        await waitUntil { source.observations.value == 1 }
+        let oldCallback = source.callback.value
+        // when
+        sut.settingsChanged()
+        await waitUntil { source.observations.value == 2 }
+        let before = reads.value
+        oldCallback?()
+        // then — stale generation is rejected synchronously before enqueueing work.
+        #expect(reads.value == before)
+        #expect(source.observations.value == 2)
+        #expect(source.cancellations.value == 1)
+        withExtendedLifetime(sut) {}
+    }
+
+    @Test func givenDisposedRepository_whenOldCallbackFires_thenItCannotReadOrResubscribe() async {
+        // given
+        let source = CapturedTaskListInvalidationSource()
+        let (client, reads) = countingCtl { #"{"v":2,"tasks":[]}"# }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
+        given(environment).ctl().willReturn(.success(client))
+        var sut: TaskListRepositoryImpl? = makeSUT(toolEnvironment: environment, invalidationSource: source)
+        let released = WeakTaskListRepository(sut)
+        sut?.start()
+        await waitUntil { source.observations.value == 1 }
+        let before = reads.value
+        // when
+        sut = nil
+        await waitUntil { released.value == nil && source.cancellations.value == 1 }
+        source.callback.value?()
+        // then — callback owns only a weak repository reference.
+        #expect(released.value == nil)
+        #expect(reads.value == before)
+        #expect(source.observations.value == 1)
+        #expect(source.cancellations.value == 1)
+    }
+
+    @Test func givenPrestartPreparationRetry_whenRuntimeChanges_thenRetainedOldRetryCannotRead() async {
+        // given
         let scheduler = MockScheduling()
+        let retry = LockedBox<(@Sendable () -> Void)?>(nil)
         given(scheduler).now().willReturn(Date())
         given(scheduler).scheduleRepeating(every: .any, execute: .any).willReturn(AnyCancellable {})
-        given(scheduler).schedule(after: .any, execute: .any).willReturn(AnyCancellable {})
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
-        given(toolEnvironment).ctl().willReturn(.success(ctlClient(listing: [])))
-        let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
-        sut.start()
-        await waitUntil { sut.hasListed }
-
-        // when — the folder appears, then a refresh runs. `refresh()`'s own `restartWatcherIfInactive`
-        // is the mechanism under test: it must retry attaching, now that the folder exists.
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        given(scheduler).schedule(after: .any, execute: .any).willProduce { _, callback in
+            retry.mutate { $0 = callback }
+            return AnyCancellable {}
+        }
+        let preparing = LockedBox(true)
+        let reads = LockedBox(0)
+        let runner = compatibleRunner { _ in
+            reads.mutate { $0 += 1 }
+            let pending = preparing.value ? "true" : "false"
+            return .success(stdout(
+                #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","#
+                    + #""result":{"items":[],"next_cursor":null,"has_more":false,"bootstrap_pending":\#(pending)}}"#
+            ))
+        }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).tasksDirectory.willReturn("/unused/tasks")
+        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: runner)))
+        let sut = makeSUT(toolEnvironment: environment, scheduler: scheduler)
         await sut.refresh()
-
-        // then — proven indirectly, since watcher state is private: write a file that should trigger
-        // a real FSEvent only if the watcher is now actually attached, and confirm the throttle fires
-        // because of it.
-        try? "x".write(toFile: dir.path + "/restarted.meta.json", atomically: true, encoding: .utf8)
-        await verify(scheduler).schedule(after: .value(1), execute: .any).calledEventually(.atLeastOnce, before: .seconds(3))
+        let oldRetry = retry.value
+        #expect(oldRetry != nil)
+        // when
+        preparing.mutate { $0 = false }
+        sut.settingsChanged()
+        _ = await sut.refreshAndWait()
+        let before = reads.value
+        oldRetry?()
+        // then — the cancelled timer keeps its original generation.
+        #expect(reads.value == before)
+        withExtendedLifetime(sut) {}
     }
 
     // MARK: MS-LIST-5 — titles
@@ -449,13 +503,9 @@ extension TaskListRepositoryImplTests {
     // MARK: start()
 
     @Test func givenStartCalledTwice_whenObserved_thenDiscoveryOnlyRunsOnce() async {
-        // given — an isolated directory: `start()` attaches a real FSEvents watcher to it, and a
-        // shared temp root would pick up noise from every other test running concurrently.
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
+        // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
+        given(toolEnvironment).tasksDirectory.willReturn("/unused/tasks")
         given(toolEnvironment).ctl().willReturn(.success(ctlClient(listing: [])))
         let sut = makeSUT(toolEnvironment: toolEnvironment)
 
@@ -488,4 +538,26 @@ extension TaskListRepositoryImplTests {
         await waitUntil { sut.hasListed }
         #expect(sut.tasks.map(\.taskID) == ["x"])
     }
+}
+
+private final class CapturedTaskListInvalidationSource: TaskListInvalidationSource, @unchecked Sendable {
+    let observations = LockedBox(0)
+    let cancellations = LockedBox(0)
+    let callback = LockedBox<(@Sendable () -> Void)?>(nil)
+    let invalidateOnObserve: Bool
+
+    init(invalidateOnObserve: Bool = false) { self.invalidateOnObserve = invalidateOnObserve }
+
+    func observe(isUrgent: @escaping @Sendable () -> Bool,
+                 onInvalidated: @escaping @Sendable () -> Void) -> AnyCancellable {
+        observations.mutate { $0 += 1 }
+        callback.mutate { $0 = onInvalidated }
+        if invalidateOnObserve { onInvalidated() }
+        return AnyCancellable { [cancellations] in cancellations.mutate { $0 += 1 } }
+    }
+}
+
+private final class WeakTaskListRepository: @unchecked Sendable {
+    weak var value: TaskListRepositoryImpl?
+    init(_ value: TaskListRepositoryImpl?) { self.value = value }
 }

@@ -101,19 +101,6 @@ struct SystemProcessTable: ProcessTableReading {
     }
 }
 
-/// Which file changes in the tasks folder can change what `harflow-ctl list` says. A record
-/// rewrite is the usual one, but a takeover or cancel writes only phase files
-/// (`<id>.takeover.<n>.ready`, `<id>.cancel.<n>.sig`, …) and never touches the record — and
-/// `taken_over` is derived from them.
-public enum RefreshTrigger {
-    public static func isRelevant(_ name: String) -> Bool {
-        name.hasSuffix(".meta.json") || name.contains(".takeover.") || name.contains(".cancel.")
-    }
-
-    /// Reconcile this often even when nothing is running and no file event arrived.
-    public static let reconcileInterval: TimeInterval = 60
-}
-
 /// The cascade part of `harflow-ctl cancel`'s answer, in words. Cancel is best-effort, so
 /// anything that did not stop is said, never implied away.
 public enum CascadeSummary {

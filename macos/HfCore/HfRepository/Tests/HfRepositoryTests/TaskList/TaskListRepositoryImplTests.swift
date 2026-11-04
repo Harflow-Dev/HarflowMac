@@ -68,7 +68,8 @@ import Testing
         eventStreamRepository: MockEventStreamRepository = MockEventStreamRepository(),
         finishNotifier: MockFinishNotifier = MockFinishNotifier(),
         scheduler: MockScheduling = TaskListRepositoryImplTests.defaultScheduler(),
-        visibility: MockMonitorVisibility = TaskListRepositoryImplTests.defaultVisibility()
+        visibility: MockMonitorVisibility = TaskListRepositoryImplTests.defaultVisibility(),
+        invalidationSource: (any TaskListInvalidationSource)? = nil
     ) -> TaskListRepositoryImpl {
         given(snapshotRepository).evict(keeping: .any).willReturn()
         given(snapshotRepository).refresh(.any).willReturn()
@@ -80,7 +81,8 @@ import Testing
         return TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository,
             eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier, scheduler: scheduler,
-            visibility: visibility, compatibilityCheck: { _ in .success(()) }
+            visibility: visibility, invalidationSource: invalidationSource ?? PollingTaskListInvalidationSource(scheduler: scheduler),
+            compatibilityCheck: { _ in .success(()) }
         )
     }
 
@@ -138,80 +140,6 @@ import Testing
             Issue.record("expected listError to be set to .notFound")
             return
         }
-    }
-
-    // MARK: MS-LIST-2 — throttle, not debounce
-
-    @Test func givenABurstOfPhaseFileEvents_whenThrottled_thenOneRefreshFiresAfterOneSecondNotStarved() async {
-        // given
-        let scheduler = MockScheduling()
-        // A `LockedBox`, not a plain `var`: `Mockable`'s `Mocker.mock(...)` calls `addInvocation`
-        // (making the call visible to `verify(...).calledEventually`) *before* it runs this
-        // `willProduce` closure — so `calledEventually` can observe the invocation and return before
-        // `capturedWork` is actually set. A plain unsynchronized `var` mutated from the FSEvents
-        // callback thread and read from the test's thread would also be a data race independent of
-        // that ordering issue. Waiting on this box directly (below) closes both problems.
-        let capturedWork = LockedBox<(@Sendable () -> Void)?>(nil)
-        given(scheduler).schedule(after: .value(1), execute: .any).willProduce { _, work in
-            capturedWork.mutate { $0 = work }
-            return AnyCancellable {}
-        }
-        // `startWatching()` creates the `DirectoryWatcher` and calls `watcher.start()` *before*
-        // calling `scheduleRepeating` — so capturing this call (even though this test never invokes
-        // the captured closure) is a reliable signal that `startWatching()` has actually run and the
-        // real FSEvents watcher is attached. Without waiting for it, the burst-file writes below can
-        // land before the watcher exists and never trigger a throttled refresh at all — the same
-        // `hasListed`-becomes-true-before-`startWatching()` race documented on `TaskListRepositoryImpl.start()`.
-        let repeatingCaptured = LockedBox(false)
-        given(scheduler).scheduleRepeating(every: .any, execute: .any).willProduce { _, _ in
-            repeatingCaptured.mutate { $0 = true }
-            return AnyCancellable {}
-        }
-        given(scheduler).now().willReturn(Date())
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
-        let listCallCount = LockedBox(0)
-        let runner = StubProcessRunner { _ in
-            listCallCount.mutate { $0 += 1 }
-            return .success(historyStdout(#"{"v":2,"tasks":[]}"#))
-        }
-        given(toolEnvironment).ctl().willReturn(.success(ctlClient(listing: [], runner: runner)))
-        let sut = makeSUT(toolEnvironment: toolEnvironment, scheduler: scheduler)
-        sut.start()
-        await waitUntil { sut.hasListed }
-        await waitUntil { repeatingCaptured.value }
-        #expect(repeatingCaptured.value)
-        let listCallsAfterStart = listCallCount.value
-
-        // when — simulate a burst of FSEvents arriving on the tasks folder by touching a
-        // `.meta.json` file repeatedly, in this test's own isolated directory. Each write should
-        // schedule at most one pending refresh. FSEvents itself coalesces with a 0.3 s latency
-        // (`DirectoryWatcher`'s own `FSEventStreamCreate` parameter), so the wait below polls rather
-        // than sleeping a fixed, possibly-too-short interval.
-        for _ in 0 ..< 5 {
-            try? "x".write(toFile: dir.path + "/burst.meta.json", atomically: true, encoding: .utf8)
-        }
-
-        // then — the scheduler's one-shot `schedule(after: 1, …)` is armed exactly once for the
-        // whole burst (a debounce would keep re-arming and never fire)…
-        await verify(scheduler).schedule(after: .value(1), execute: .any).calledEventually(1, before: .seconds(3))
-        // `calledEventually` only proves the call was *recorded* — `Mocker.mock(...)` records the
-        // invocation before running `willProduce`, so `capturedWork` itself must be waited on
-        // separately before it is safe to fire (see the note on its declaration above).
-        await waitUntil(timeout: 3) { capturedWork.value != nil }
-        #expect(capturedWork.value != nil)
-        // …and firing that one captured work item actually produces a real refresh — the burst was
-        // not starved, it was merely coalesced into a single pending refresh.
-        capturedWork.value?()
-        await waitUntil(timeout: 3) { listCallCount.value > listCallsAfterStart }
-        #expect(listCallCount.value > listCallsAfterStart)
-        // `sut` is only reachable from here on through weak captures inside the scheduler/watcher
-        // closures; without an explicit late use, ARC is free to deallocate it as soon as its last
-        // textual reference above is reached, which would silently no-op every closure that follows.
-        withExtendedLifetime(sut) {}
     }
 
 }

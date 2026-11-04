@@ -128,8 +128,8 @@ declares every product it imports — no `@_exported` re-exports, ever.
    `HfFeatures/MainWindowFeature` with `HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1` and `--mode aggregate` for every other package (repo-root
    Commands section documents the loop; MonitorCore also requires `HARFLOW_NATIVE_BENCHMARK=1`) — the runner fail-closed validates identity coverage,
    event streams, summaries and XCTest silence; a bare `swift test` exit is not evidence.
-4. The headless smoke (pre-seed a temporary `HOME` through the real managed installer with constructor-injected local acquisitions, launch the built binary against its qualified runtime, then check the first `list`, an FSEvents-driven second `list`, and that the app stays alive) is a
-   local gate only: it depends on FSEvents timing and a window server, which shared CI runners do not
+4. The headless smoke (pre-seed a temporary `HOME` through the real managed installer with constructor-injected local acquisitions, launch the built binary against its qualified runtime, then check the first `list`, a public-poll-driven second `list`, and that the app stays alive) is a
+   local gate only: it depends on the isolated runtime fixture and a window server, which shared CI runners do not
    provide reliably.
 
 ## Migration scope

@@ -25,7 +25,7 @@ extension TaskListRepositoryImpl {
         guard isCurrent(generation), !Task.isCancelled else { return }
         switch result {
         case .failure: scheduleCompatibilityRetry(generation: generation)
-        case .success: startWatching(generation: generation)
+        case .success: startObserving(generation: generation)
         }
     }
 
@@ -62,38 +62,33 @@ extension TaskListRepositoryImpl {
 
     static var supersededRefresh: ToolError { WireEnvelope.incompatibility("task listing superseded by selected runtime change") }
 
-    func startWatching(generation: Int) {
+    func startObserving(generation: Int) {
         startLock.lock()
-        defer { startLock.unlock() }
-        guard started, generation == compatibilityGeneration, !Task.isCancelled else { return }
-        compatibilityRetryToken?.cancel()
+        guard started, generation == compatibilityGeneration, !Task.isCancelled,
+              pollToken == nil, observationStartingGeneration == nil else {
+            startLock.unlock()
+            return
+        }
+        observationStartingGeneration = generation
+        let previousRetry = compatibilityRetryToken
         compatibilityRetryToken = nil
-        let watcher = DirectoryWatcher(path: toolEnvironment.tasksDirectory) { [weak self] names in
-            guard names.contains(where: RefreshTrigger.isRelevant) else { return }
-            self?.scheduleThrottledRefresh()
+        startLock.unlock()
+        previousRetry?.cancel()
+
+        // A replacement source may synchronously emit its initial invalidation.
+        let token = invalidationSource.observe(isUrgent: { [weak self] in
+            self?.pollIsUrgent ?? false
+        }, onInvalidated: { [weak self] in
+            self?.enqueuePoll(generation: generation)
+        })
+        let installed = startLock.withLock {
+            guard started, generation == compatibilityGeneration,
+                  observationStartingGeneration == generation, pollToken == nil else { return false }
+            observationStartingGeneration = nil
+            pollToken = token
+            return true
         }
-        watcher.start()
-        // A dead owner writes nothing, and the tasks folder may not exist yet: a 10 s safety poll
-        // while that matters, and an unconditional reconcile every minute regardless (F4-06).
-        // While nothing is visible and nothing needs attention, the cadence stretches to 30 s —
-        // three ticks — since nobody is looking; anything busy (running, unreconciled, erroring,
-        // bootstrap, dead watcher) keeps its 10 s urgency, and a due 60 s reconcile always wins.
-        let token = scheduler.scheduleRepeating(every: 10) { [weak self] in
-            guard let self else { return }
-            Task {
-                await self.evaluateSafetyPoll()
-                self.countSafetyPollEvaluation()
-            }
-        }
-        // `watcher` and `pollToken` are set together, under the same lock that guards every other
-        // read of `watcher` (`watcherActive`, `restartWatcherIfInactive`) — `pollToken` is written
-        // only here, but `startWatching()` runs on whatever thread `start()`'s Task resumes on,
-        // which is not guaranteed to be the same thread across calls, so the write still needs the
-        // lock for correct publication to any later reader.
-        watcherLock.lock()
-        self.watcher = watcher
-        pollToken = token
-        watcherLock.unlock()
+        if !installed { token.cancel() }
     }
 
     public func settingsChanged() {
@@ -108,12 +103,12 @@ extension TaskListRepositoryImpl {
         compatibilityRetryToken = nil
         let generation = compatibilityGeneration
         let shouldStart = started
-        watcherLock.lock()
-        watcher = nil
-        pollToken?.cancel()
+        observationStartingGeneration = nil
+        let previousPoll = pollToken
         pollToken = nil
-        watcherLock.unlock()
         startLock.unlock()
+        previousPoll?.cancel()
+        cancelPreparationRefresh()
         Task {
             if shouldStart { await checkAndStart(generation: generation) } else { await refresh() }
         }

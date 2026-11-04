@@ -6,7 +6,7 @@ import SwiftEnvironment
 
 // MARK: - TaskListRepository
 
-/// `harflow-ctl list`, refresh coalescing, titles, the FSEvents throttle, the safety poll, and
+/// `harflow-ctl list`, refresh coalescing, titles, public invalidation polling, and
 /// `detail()` precedence — everything in `AppModel` from `start()` through `connectionLine`
 /// (`AppModel.swift:55-223,474-483`).
 @Mockable
@@ -36,7 +36,7 @@ public protocol TaskListRepository: Sendable {
     /// task array republishing.
     func countsPublisher() -> AnyPublisher<TaskListCounts, Never>
 
-    /// Discovery → first list → watcher start, exactly once (MS-LIST-1/F4-01). A second call is a
+    /// Discovery → first list → observation start, exactly once (MS-LIST-1/F4-01). A second call is a
     /// no-op.
     func start()
 
@@ -52,7 +52,7 @@ public protocol TaskListRepository: Sendable {
     /// Called by the Settings screen after `SettingsRepository.setToolDirectory` — triggers a
     /// refresh only; the login-PATH/`uv` probes never rerun (F4-05).
     func settingsChanged()
-    /// Rechecks readiness and restarts watchers without discarding recovery receipts.
+    /// Rechecks readiness and restarts observation without discarding recovery receipts.
     func runtimeBecameReady()
 
     func title(_ taskID: String) -> String

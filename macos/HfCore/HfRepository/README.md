@@ -2,15 +2,15 @@
 
 The repository layer exposes constructor-injected, nonisolated Sendable business contracts over MonitorCore. See [architecture rules](../../AGENTS.md).
 
-Production Module constructs one `ManagedRuntimeCoordinator` and injects it into `ManagedToolEnvironmentRepository` and `ManagedInstallRepository`. Concurrent startup consumers join the same reuse-only qualification attempt, including failure. Acquisition starts only from an explicit install/update/retry action. The coordinator retains failure until explicit retry; synchronous ctl/setup access reports distinct preparation/failure refusal codes until a generation is qualified. Only the install adapter restarts the task-list watcher when an explicit acquisition succeeds. Recovery completion uses the same narrow readiness refresh without invalidating the retained receipt. Initial readiness never triggers that restart.
+Production Module constructs one `ManagedRuntimeCoordinator` and injects it into `ManagedToolEnvironmentRepository` and `ManagedInstallRepository`. Concurrent startup consumers join the same reuse-only qualification attempt, including failure. Acquisition starts only from an explicit install/update/retry action. The coordinator retains failure until explicit retry; synchronous ctl/setup access reports distinct preparation/failure refusal codes until a generation is qualified. Only the install adapter restarts task-list observation when an explicit acquisition succeeds. Recovery completion uses the same narrow readiness refresh without invalidating the retained receipt. Initial readiness never triggers that restart.
 
-For an explicitly selected runtime, ctl/setup clients carry the selected absolute state-root context and probe compatibility for every operation. Event activity, summary readers, and task-store watchers await an injected `StoreCompatibilityCheck` before I/O, matching the selected tasks directory's parent. Released leases and obsolete generations cannot start delayed reads or watchers. Compatibility failures are explicit unavailable/error states. The gate checks contracts and release lines; managed completion receipts and qualification independently gate runtime activation.
+For an explicitly selected runtime, ctl/setup clients carry the selected absolute state-root context and probe compatibility for every operation. Event activity and summary readers await an injected `StoreCompatibilityCheck` before I/O, matching the selected tasks directory's parent. Released leases and obsolete generations cannot start delayed reads or observations. Compatibility failures are explicit unavailable/error states. The gate checks contracts and release lines; managed completion receipts and qualification independently gate runtime activation.
 
 ## What is here
 
 | Type | Owns |
 |---|---|
-| `Scheduling` / `SystemScheduler` | The one scheduling seam every production timer in this package uses (1 s throttle, 10 s poll) — injectable so tests never sleep. |
+| `Scheduling` / `SystemScheduler` | The one scheduling seam every production timer in this package uses (including public task-list observation) — injectable so tests never sleep. |
 | `AgentUsageRepository` | Shared lifetime counts for acknowledged app submissions, persisted atomically with processed task/run IDs and published as equality-deduplicated snapshots. |
 | `SettingsRepository` | `UserDefaults`-backed `toolDirectory` / `openWindowOnStart` / `notifyOnFinish` / app-wide appearance, published live. |
 | `ToolEnvironmentRepository` | Selected tooling and launch environment; managed app clients bind the exact qualified generation. |
@@ -19,14 +19,14 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 | `TaskSnapshotRepository` | Per-task `harflow-ctl status` snapshots. |
 | `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task; also publishes each task's `EventAvailability` (`loading`/`available`/`unavailable`), so a caller never has to infer "the log couldn't be read" from an empty event list. |
 | `StateRecoveryRepository` | Shared structured store refusals and explicit inspection/confirmation/recovery lifecycle; single-flight operations and stale-result checks remain independent of managed acquisition. |
-| `TaskListRepository` | `harflow-ctl list`, refresh coalescing, titles, the FSEvents throttle, the safety poll, `detail()` precedence. |
+| `TaskListRepository` | Bounded public task-history/status reads, titles, action refresh barriers, replaceable invalidation observation and `detail()` precedence. |
 | `FinishNotifier` | User notifications for roots that finished since the last listing. |
 | `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |
 | `TakeoverService` | Opens a task's session in Terminal.app — `ctl takeover` grant → hand-off files → `open -a Terminal`; the only take-over destination the Monitor offers. |
 | `QualificationRepository` | Cached engine-owned feature requirements and explicit checks, with per-consumer cancellation, identity validation and runtime-bound launch tokens. |
 | `HarnessRepository` | `harflow-setup` status/install/remove. |
 | `InstallRepository` | Shared managed preparation/status/retry; row setup actions remain explicit MCP registration. |
-| `DirectoryWatcher` | FSEvents on the tasks folder, moved here in Swift 6 mode with a `@Sendable` handler. |
+| `TaskListInvalidationSource` | Timing/change signals only; the polling implementation drives public refreshes and can be replaced by a later ctl watcher at composition. |
 
 Every protocol is `@Mockable`; every `@GlobalEntry` default is a hand-written `Null*` struct (see
 `AGENTS.md` for why, not the `@Dummyable` macro). `Module: HfModule` wires concrete instances once,
@@ -47,3 +47,11 @@ HARFLOW_NATIVE_BENCHMARK=1 python3 ../../../scripts/test-swift-package.py --pack
 `NeedsYouRepository` publishes one deduplicated snapshot of every request the Monitor can answer now, plus disposable `NeedsYouEvent`s for notifications. It is started once by the app shell. `NeedsYouNotifier` posts notifications with user-info keys `needs_you_item` (an item id beginning `input:`, `attention:` or `approval:`) and `needs_you_list` (`"1"` for the grouped summary); the app routes both to the Needs you screen. Approval notifications name only the tool.
 
 `InteractionEventNotifier` consumes the capability-gated public interaction feed for individual macOS pending, answered, completed and failed banners. It persists app-owned event deduplication per selected state root and disables the legacy Needs you and finish sources while the durable feed is supported. Missing capability retains the legacy sources. It never writes engine records.
+
+## Task-list observation
+
+TaskList no longer watches the engine's tasks directory. Module injects a small invalidation source; it requests refreshes while the repository retains all authoritative public reads, bounds, generation checks and action barriers. The polling source checks urgency every second: visible window/popover, running/unreconciled work, errors or preparing/incomplete catalog state request a refresh; hidden idle observations request one after30seconds of elapsed scheduler time. Actual completion depends on public command duration. Every operation retains its own fresh handshake; no compatibility cache or engine-private fallback is used.
+
+Periodic ticks are disposable while a refresh is busy, so they cannot keep a slow refresh chain alive. Explicit refreshes and refreshAndWait retain their separate coalescing/result semantics. Runtime changes fence late callbacks/results and cancel obsolete observation; cancellation also remains effective when a scheduler retains a callback. Initial readiness failure uses the existing10second retry before observation starts. Manual pre-start preparation uses a separate2second retry through idle-only admission; production observation owns progress after start.
+
+A future public watcher can replace the polling source without changing paging, title/notification ordering, selection or task actions. Its canonical contract, qualified runtime and conformance are separate work. EventStream activity and cumulative summaries still use the existing private transport until their later M03 suffix; this task-list change does not claim all private engine I/O is removed.

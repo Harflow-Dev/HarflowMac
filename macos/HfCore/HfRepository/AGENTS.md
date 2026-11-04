@@ -27,6 +27,6 @@ Root AGENTS.md applies (`../../AGENTS.md`). Read this module's `README.md` befor
   (unconditional) on the test target.
 - Tests use Swift Testing (`givenX_whenY_thenZ`, `// given / when / then`), Mockable-generated
   `Mock*` types, and `waitUntil` from `HfTestUtilities` — never a fixed `sleep`. Timing-dependent
-  behaviour (the 1 s throttle, the 10 s poll, the 60 s reconcile) is driven through the injected
+  behaviour (the 1 s/30 s public observation cadence and readiness/preparation retries) is driven through the injected
   `Scheduling` seam by capturing and manually invoking the scheduled closure, never by waiting on a
   real timer.

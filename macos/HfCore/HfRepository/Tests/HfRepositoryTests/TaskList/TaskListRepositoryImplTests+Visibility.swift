@@ -6,8 +6,6 @@ import Mockable
 import MonitorCore
 import Testing
 
-// MARK: - TaskListRepositoryImpl visibility gating, dedup and counts (B1, B2)
-
 extension TaskListRepositoryImplTests {
 
     private func hiddenVisibility(popoverOpen: Bool = false) -> MockMonitorVisibility {
@@ -17,7 +15,6 @@ extension TaskListRepositoryImplTests {
         return visibility
     }
 
-    /// A ctl whose listing is whatever the box currently holds, counting every process it runs.
     private func scriptedCtl(_ body: LockedBox<String>) -> (client: CtlClient, calls: LockedBox<Int>) {
         let calls = LockedBox(0)
         let runner = StubProcessRunner { _ in
@@ -42,20 +39,17 @@ extension TaskListRepositoryImplTests {
         let poll: LockedBox<(@Sendable () -> Void)?>
         let calls: LockedBox<Int>
         let body: LockedBox<String>
-        let dir: URL
+        let now: LockedBox<Date>
     }
 
-    /// Starts a repository against a real (existing) tasks folder with a capturing scheduler, so
-    /// the 10 s poll closure is fired by the test and the watcher counts as active.
     private func startedRig(body initial: String, visibility: MockMonitorVisibility, tasksDirectory: URL? = nil) async -> PollRig {
         let dir = tasksDirectory ?? FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-\(UUID().uuidString)")
-        if tasksDirectory == nil { try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
         let now = LockedBox(Date())
         let poll = LockedBox<(@Sendable () -> Void)?>(nil)
         let scheduler = MockScheduling()
         given(scheduler).now().willProduce { now.value }
         given(scheduler).schedule(after: .any, execute: .any).willReturn(AnyCancellable {})
-        given(scheduler).scheduleRepeating(every: .value(10), execute: .any).willProduce { _, work in
+        given(scheduler).scheduleRepeating(every: .value(1), execute: .any).willProduce { _, work in
             poll.mutate { $0 = work }
             return AnyCancellable {}
         }
@@ -68,62 +62,22 @@ extension TaskListRepositoryImplTests {
         sut.start()
         await waitUntil { sut.hasListed }
         await waitUntil { poll.value != nil }
-        return PollRig(sut: sut, poll: poll, calls: calls, body: body, dir: dir)
+        return PollRig(sut: sut, poll: poll, calls: calls, body: body, now: now)
     }
 
     private func fireTicks(_ rig: PollRig, count: Int) async {
         for _ in 0 ..< count {
             let before = rig.sut.safetyPollEvaluationCount
+            rig.now.mutate { $0 = $0.addingTimeInterval(1) }
             rig.poll.value?()
             await waitUntil(timeout: 5) { rig.sut.safetyPollEvaluationCount > before }
         }
     }
 
-    // MARK: Hidden polling cadence
-
-    @Test func givenHiddenAndIdle_whenNoTriggerHolds_thenNoTickRefreshes() async {
-        // given — hidden, nothing running, watcher attached, reconcile not due.
-        let rig = await startedRig(body: page(items: ""), visibility: hiddenVisibility())
-        defer { try? FileManager.default.removeItem(at: rig.dir) }
-        let started = rig.calls.value
-
-        // when — several full 30 s cycles.
-        await fireTicks(rig, count: 9)
-
-        // then — hidden never refreshes more often than visible: the triggers gate it too.
-        #expect(rig.calls.value == started)
-        withExtendedLifetime(rig.sut) {}
-    }
-
-    @Test func givenHiddenAndIdle_whenATriggerHolds_thenOnlyEveryThirdTickActsOnIt() async {
-        // given — hidden, idle, but the watcher is down (the tasks folder does not exist).
-        let missing = FileManager.default.temporaryDirectory.appendingPathComponent("HfRepoTests-missing-\(UUID().uuidString)")
-        let rig = await startedRig(body: page(items: ""), visibility: hiddenVisibility(), tasksDirectory: missing)
-        let started = rig.calls.value
-
-        // when — two ticks
-        await fireTicks(rig, count: 2)
-
-        // then — nothing yet
-        #expect(rig.calls.value == started)
-
-        // when — the third tick
-        await fireTicks(rig, count: 1)
-
-        // then — the trigger is acted on, and the cycle restarts.
-        let afterThird = rig.calls.value
-        #expect(afterThird > started)
-        await fireTicks(rig, count: 2)
-        #expect(rig.calls.value == afterThird)
-        withExtendedLifetime(rig.sut) {}
-    }
-
     @Test func givenHiddenWithARunningTask_whenTheSafetyPollFires_thenEveryTickRefreshes() async {
         // given
         let rig = await startedRig(body: page(items: runningTask(duration: 1)), visibility: hiddenVisibility())
-        defer { try? FileManager.default.removeItem(at: rig.dir) }
 
-        // when / then — a running task keeps the 10 s urgency while hidden.
         for _ in 0 ..< 2 {
             let before = rig.calls.value
             await fireTicks(rig, count: 1)
@@ -132,34 +86,30 @@ extension TaskListRepositoryImplTests {
         withExtendedLifetime(rig.sut) {}
     }
 
-    @Test func givenVisibleAndIdle_whenTheSafetyPollFires_thenNothingRefreshesBetweenReconciles() async {
+    @Test func givenVisibleAndIdle_whenTheSafetyPollFires_thenEveryTickRefreshes() async {
         // given
         let visibility = MockMonitorVisibility()
         given(visibility).mainWindowVisible.willReturn(true)
         given(visibility).menuBarPopoverOpen.willReturn(false)
         let rig = await startedRig(body: page(items: ""), visibility: visibility)
-        defer { try? FileManager.default.removeItem(at: rig.dir) }
         let started = rig.calls.value
 
         // when
         await fireTicks(rig, count: 6)
 
-        // then — visible and idle keeps the original policy: no refresh until the reconcile is due.
-        #expect(rig.calls.value == started)
+        #expect(rig.calls.value > started)
         withExtendedLifetime(rig.sut) {}
     }
 
     @Test func givenHiddenButPopoverOpen_whenTheSafetyPollFires_thenItKeepsTheVisiblePolicy() async {
         // given
         let rig = await startedRig(body: page(items: ""), visibility: hiddenVisibility(popoverOpen: true))
-        defer { try? FileManager.default.removeItem(at: rig.dir) }
         let started = rig.calls.value
 
-        // when — three ticks would be the hidden-idle catch-up, but an open popover is "visible".
         await fireTicks(rig, count: 3)
 
         // then
-        #expect(rig.calls.value == started)
+        #expect(rig.calls.value > started)
         withExtendedLifetime(rig.sut) {}
     }
 
@@ -168,7 +118,6 @@ extension TaskListRepositoryImplTests {
     @Test func givenARunningTaskWithAStart_whenOnlyItsDurationChanges_thenNothingRepublishes() async {
         // given
         let rig = await startedRig(body: page(items: runningTask(duration: 5)), visibility: hiddenVisibility())
-        defer { try? FileManager.default.removeItem(at: rig.dir) }
         let published = LockedBox(0)
         let token = rig.sut.tasksPublisher().sink { _ in published.mutate { $0 += 1 } }
         let initial = published.value
@@ -186,7 +135,6 @@ extension TaskListRepositoryImplTests {
     @Test func givenARunningTaskWithoutAStart_whenItsDurationChanges_thenItRepublishes() async {
         // given
         let rig = await startedRig(body: page(items: runningTask(duration: 5, started: false)), visibility: hiddenVisibility())
-        defer { try? FileManager.default.removeItem(at: rig.dir) }
         let published = LockedBox(0)
         let token = rig.sut.tasksPublisher().sink { _ in published.mutate { $0 += 1 } }
         let initial = published.value
@@ -204,7 +152,6 @@ extension TaskListRepositoryImplTests {
     @Test func givenIdenticalTasks_whenTheCatalogCountsChange_thenOnlyTheCountsChannelPublishes() async {
         // given
         let rig = await startedRig(body: page(items: runningTask(duration: 5), totalActive: 1), visibility: hiddenVisibility())
-        defer { try? FileManager.default.removeItem(at: rig.dir) }
         let taskPublications = LockedBox(0)
         let counts = LockedBox<[TaskListCounts]>([])
         let taskToken = rig.sut.tasksPublisher().sink { _ in taskPublications.mutate { $0 += 1 } }

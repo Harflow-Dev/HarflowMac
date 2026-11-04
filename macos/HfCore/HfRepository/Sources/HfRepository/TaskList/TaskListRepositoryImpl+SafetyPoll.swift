@@ -1,49 +1,50 @@
 import Foundation
 import MonitorCore
 
-// MARK: - HiddenIdleTickCounter
+// MARK: - TaskListPollGate
 
-/// Counts safety-poll ticks spent hidden *and* idle: the third one (30 s) is the next allowed
-/// refresh. Reset by any visible, busy or due evaluation so a stretch of inactivity is what the
-/// 30 s cadence measures.
-final class HiddenIdleTickCounter: @unchecked Sendable {
+/// Bounds queued tick tasks even if the refresh coordinator's executor is occupied.
+final class TaskListPollGate: @unchecked Sendable {
     private let lock = NSLock()
-    private var count = 0
+    private var pending = false
 
-    /// Counts one hidden-idle tick; true on every third, which resets the count.
-    func advance() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        count += 1
-        guard count >= 3 else { return false }
-        count = 0
-        return true
+    func claim() -> Bool {
+        lock.withLock {
+            guard !pending else { return false }
+            pending = true
+            return true
+        }
     }
 
-    func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-        count = 0
-    }
+    func release() { lock.withLock { pending = false } }
 }
 
-// MARK: - TaskListRepositoryImpl + safety poll
+// MARK: - TaskListRepositoryImpl polling
 
 extension TaskListRepositoryImpl {
+    var pollIsUrgent: Bool {
+        visibility.mainWindowVisible || visibility.menuBarPopoverOpen || listErrorValue != nil
+            || tasksValue.contains { $0.status.isRunning || $0.raw["needs_reconciliation"]?.boolValue == true }
+            || historyLock.withLock {
+                historyStateValue.bootstrapPending || !historyStateValue.catalogState.isReady || historyStateValue.authorityIncomplete
+            }
+    }
 
-    /// One safety-poll evaluation (every 10 s). The refresh triggers are the same everywhere: the
-    /// 60 s reconcile is due, a task is running or needs reconciliation, bootstrap is pending,
-    /// there is a list error, or the watcher is down. Visible, or with a running/unreconciled
-    /// task, they are checked every tick. Hidden *and* idle (nothing running), they are checked
-    /// only on every third tick (30 s), so hidden never refreshes more often than visible.
-    func evaluateSafetyPoll() async {
-        let due = scheduler.now().timeIntervalSince(lastRefresh) >= RefreshTrigger.reconcileInterval
-        let running = tasksValue.contains { $0.status.isRunning || $0.raw["needs_reconciliation"]?.boolValue == true }
-        let visible = visibility.mainWindowVisible || visibility.menuBarPopoverOpen
-        if !visible, !running, !hiddenIdleTicks.advance() { return }
-        if visible || running { hiddenIdleTicks.reset() }
-        if due || running || historyStateValue.bootstrapPending || listErrorValue != nil || !watcherActive {
-            await refresh()
+    func enqueuePoll(generation: Int) {
+        guard refreshIsCurrent(generation), pollGate.claim() else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            defer { pollGate.release() }
+            await evaluateSafetyPoll(generation: generation)
         }
+    }
+
+    /// Tick demand is dropped while busy; explicit refresh/action barriers keep their own semantics.
+    func evaluateSafetyPoll(generation: Int? = nil) async {
+        let captured = generation ?? refreshGeneration()
+        defer { countSafetyPollEvaluation() }
+        guard refreshIsCurrent(captured), await refreshCoordinator.tryBeginPollIfIdle() else { return }
+        // Once claimed, always complete beginPass/endPass, including a superseded initial pass.
+        _ = await runRefreshLoop(initialGeneration: captured)
     }
 }

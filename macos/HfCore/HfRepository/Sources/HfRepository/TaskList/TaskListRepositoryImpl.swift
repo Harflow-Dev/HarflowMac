@@ -27,8 +27,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     @Subjected private(set) var coalescedCallCount = 0
 
     private let safetyPollCountLock = NSLock()
-    /// Counts safety-poll ticks spent hidden and idle (`TaskListRepositoryImpl+SafetyPoll.swift`).
-    let hiddenIdleTicks = HiddenIdleTickCounter()
     private let titlesLock = NSLock()
     private var failedTitleIDs: Set<String> = []
     let startLock = NSLock()
@@ -36,8 +34,9 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     var compatibilityGeneration = 0
     let compatibilityCheck: StoreCompatibilityCheck
 
-    let watcherLock = NSLock()
-    var watcher: DirectoryWatcher?
+    let invalidationSource: any TaskListInvalidationSource
+    let pollGate = TaskListPollGate()
+    var observationStartingGeneration: Int?
     var pollToken: AnyCancellable?
     var compatibilityRetryToken: AnyCancellable?
 
@@ -54,21 +53,12 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private var terminalRefreshOffset = 0
     private var snapshotRefreshOffset = 0
 
-    private let refreshCoordinator = TaskHistoryRefreshCoordinator()
+    let refreshCoordinator = TaskHistoryRefreshCoordinator()
     private let throttleLock = NSLock()
-    private var pendingRefreshToken: AnyCancellable?
     private var preparationRefreshToken: AnyCancellable?
+    private var preparationRefreshID: UUID?
 
-    private let lastRefreshLock = NSLock()
-    private var lastRefreshValue: Date = .distantPast
-
-    /// Refresh tasks and the safety-poll queue share this timestamp under a lock.
-    var lastRefresh: Date {
-        get { lastRefreshLock.lock(); defer { lastRefreshLock.unlock() }; return lastRefreshValue }
-        set { lastRefreshLock.lock(); defer { lastRefreshLock.unlock() }; lastRefreshValue = newValue }
-    }
-
-    public init(
+    public convenience init(
         toolEnvironment: any ToolEnvironmentRepository,
         snapshotRepository: any TaskSnapshotRepository,
         eventStreamRepository: any EventStreamRepository,
@@ -78,6 +68,25 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         compatibilityCheck: StoreCompatibilityCheck? = nil,
         stateRecovery: (any StateRecoveryRepository)? = nil
     ) {
+        self.init(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository,
+                  eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier,
+                  scheduler: scheduler, visibility: visibility,
+                  invalidationSource: PollingTaskListInvalidationSource(scheduler: scheduler),
+                  compatibilityCheck: compatibilityCheck, stateRecovery: stateRecovery)
+    }
+
+    init(
+        toolEnvironment: any ToolEnvironmentRepository,
+        snapshotRepository: any TaskSnapshotRepository,
+        eventStreamRepository: any EventStreamRepository,
+        finishNotifier: any FinishNotifier,
+        scheduler: any Scheduling,
+        visibility: any MonitorVisibility,
+        invalidationSource: any TaskListInvalidationSource,
+        compatibilityCheck: StoreCompatibilityCheck? = nil,
+        stateRecovery: (any StateRecoveryRepository)? = nil
+    ) {
+        self.invalidationSource = invalidationSource
         self.toolEnvironment = toolEnvironment
         self.stateRecovery = stateRecovery ?? NullStateRecoveryRepository()
         self.snapshotRepository = snapshotRepository
@@ -101,44 +110,42 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     public func titlesPublisher() -> AnyPublisher<[String: String], Never> { $titlesValue.removeDuplicates().eraseToAnyPublisher() }
     public func countsPublisher() -> AnyPublisher<TaskListCounts, Never> { $countsValue.removeDuplicates().eraseToAnyPublisher() }
 
-    // MARK: Startup (MS-LIST-1/F4-01)
-
-    var watcherActive: Bool {
-        watcherLock.lock(); defer { watcherLock.unlock() }
-        return watcher?.isActive ?? false
-    }
-
-    // MARK: Throttled refresh (MS-LIST-2/F4-07: leading-arm, fixed-delay — never a debounce)
-
-    func scheduleThrottledRefresh() {
-        throttleLock.lock()
-        guard pendingRefreshToken == nil else { throttleLock.unlock(); return }
-        let token = scheduler.schedule(after: 1) { [weak self] in
-            guard let self else { return }
-            throttleLock.lock()
-            pendingRefreshToken = nil
-            throttleLock.unlock()
-            Task { await self.refresh() }
-        }
-        pendingRefreshToken = token
-        throttleLock.unlock()
-    }
-
-    /// Bounded indexing progresses without waiting for a task or filesystem event.
+    /// Manual pre-start indexing progresses through the same idle-only poll entry.
     private func updatePreparationRefresh() {
         throttleLock.lock()
         defer { throttleLock.unlock() }
-        guard historyStateValue.bootstrapPending || historyStateValue.catalogState.status == .preparing else {
+        guard !startLock.withLock({ started }),
+              historyStateValue.bootstrapPending || historyStateValue.catalogState.status == .preparing else {
             preparationRefreshToken?.cancel()
             preparationRefreshToken = nil
+            preparationRefreshID = nil
             return
         }
         guard preparationRefreshToken == nil else { return }
+        let generation = refreshGeneration()
+        let refreshID = UUID()
+        preparationRefreshID = refreshID
         preparationRefreshToken = scheduler.schedule(after: 2) { [weak self] in
             guard let self else { return }
-            throttleLock.withLock { preparationRefreshToken = nil }
-            Task { await self.refresh() }
+            let isArmed = throttleLock.withLock {
+                guard preparationRefreshID == refreshID else { return false }
+                preparationRefreshToken = nil
+                preparationRefreshID = nil
+                return true
+            }
+            guard isArmed else { return }
+            enqueuePoll(generation: generation)
         }
+    }
+
+    func cancelPreparationRefresh() {
+        let previous = throttleLock.withLock {
+            let token = preparationRefreshToken
+            preparationRefreshToken = nil
+            preparationRefreshID = nil
+            return token
+        }
+        previous?.cancel()
     }
 
     public func refresh() async {
@@ -154,7 +161,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     /// `RefreshCoordinator.registerWaiter(_:)` for the atomic register-and-arm this relies on.
     public func refreshAndWait() async -> Result<Void, ToolError> {
         // Even the caller that starts the loop is only a waiter on its first pass: the loop itself
-        // runs detached, so passes armed by later polls never hold this barrier open.
+        // runs independently, so later explicit refreshes never hold this barrier open.
         await withCheckedContinuation { continuation in
             Task {
                 if await refreshCoordinator.registerWaiter(continuation) {
@@ -170,33 +177,26 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     /// (`begin()` or `registerWaiter(_:)` returning "start it") — every other concurrent caller
     /// either returns immediately (`refresh()`) or is resolved as a waiter by the pass it is owed.
     /// Returns the loop's first pass's result.
-    private func runRefreshLoop() async -> Result<Void, ToolError> {
-        let generation = refreshGeneration()
+    func runRefreshLoop(initialGeneration: Int? = nil) async -> Result<Void, ToolError> {
+        var generation = initialGeneration ?? refreshGeneration()
         var firstResult: Result<Void, ToolError>?
         repeat {
             let owed = await refreshCoordinator.beginPass()
-            let result = await runOneRefresh()
+            let result = await runOneRefresh(generation: generation)
             if firstResult == nil { firstResult = result }
             let continueLoop = await refreshCoordinator.endPass(owed: owed, result: result)
             if !continueLoop { break }
+            generation = refreshGeneration()
         } while true
-        if case .success = firstResult, refreshIsCurrent(generation) { restartWatcherIfInactive() }
+        updatePreparationRefresh()
         return firstResult ?? .success(())
-    }
-
-    /// A synchronous helper so the lock is never taken directly inside an `async` function body
-    /// (Swift 6 forbids that — "use async-safe scoped locking instead").
-    private func restartWatcherIfInactive() {
-        watcherLock.lock()
-        defer { watcherLock.unlock() }
-        if watcher?.isActive != true { watcher?.start() }
     }
 
     /// Returns the outcome of this one pass — used by `refreshAndWait()`'s completion barrier, so a
     /// caller waiting on it sees the same success/failure the listing itself just recorded.
     @discardableResult
-    private func runOneRefresh() async -> Result<Void, ToolError> {
-        let generation = refreshGeneration()
+    private func runOneRefresh(generation: Int) async -> Result<Void, ToolError> {
+        guard refreshIsCurrent(generation) else { return .failure(Self.supersededRefresh) }
         let root = (toolEnvironment.tasksDirectory as NSString).deletingLastPathComponent
         let compatibility = await compatibilityCheck(root)
         guard refreshIsCurrent(generation) else { return .failure(Self.supersededRefresh) }
@@ -247,7 +247,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
                 if historyRefreshFailed { historyStateValue.error = nil }
                 historyRefreshFailed = false
             }
-            lastRefresh = scheduler.now()
             // A task that left the listing (retention) must not live on in the detail cache.
             let listedIDs = Set(listed.map(\.taskID))
             snapshotRepository.evict(keeping: listedIDs.union(eventStreamRepository.leasedTaskIDs).union(historyLock.withLock { Set(relatedTasks.keys) }))

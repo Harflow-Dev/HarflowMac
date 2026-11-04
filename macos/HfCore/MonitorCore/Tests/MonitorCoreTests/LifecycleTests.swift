@@ -3,20 +3,6 @@ import Foundation
 import Testing
 
 @Suite(.serialized)
-struct RefreshTriggerTests {
-    @Test
-    func givenPhaseAndRecordFileNames_whenCheckedForRelevance_thenOnlyPhaseAndRecordFilesTriggerARefresh() {
-        // given / when / then
-        #expect(RefreshTrigger.isRelevant("abc.meta.json"))
-        #expect(RefreshTrigger.isRelevant("abc.takeover.1.ready"))
-        #expect(RefreshTrigger.isRelevant("abc.takeover.2.attach"))
-        #expect(RefreshTrigger.isRelevant("abc.cancel.1.sig"))
-        #expect(!RefreshTrigger.isRelevant("abc.events.jsonl"))
-        #expect(!RefreshTrigger.isRelevant("abc.jsonl"))
-    }
-}
-
-@Suite(.serialized)
 struct CascadeSummaryTests {
     @Test
     func givenACascadeWithSurvivorsAndUnsignalled_whenDescribed_thenItSaysWhatDidNotStop() {

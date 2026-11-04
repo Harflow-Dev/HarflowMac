@@ -18,9 +18,14 @@ actor TaskHistoryRefreshCoordinator {
     private var again = false
     private var pendingWaiters: [CheckedContinuation<Result<Void, ToolError>, Never>] = []
 
-    /// Returns `true` if the caller should run a refresh round now; `false` if one was already in
-    /// flight (in which case another pass is armed instead — MS-LIST-4). Unchanged from before
-    /// `refreshAndWait()` existed: a coalesced `refresh()` caller never waits.
+    /// Periodic demand is disposable: a busy pass never arms another pass for a tick.
+    func tryBeginPollIfIdle() -> Bool {
+        guard !refreshing else { return false }
+        refreshing = true
+        return true
+    }
+
+    /// Explicit refresh coalesces another pass when a run is already in flight.
     func begin() -> Bool {
         if refreshing { again = true; return false }
         refreshing = true
