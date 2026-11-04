@@ -2,7 +2,8 @@
 
 Dispatchable work packages: [migration sessions](migration-sessions.md).
 
-Status: planned, 2026-11-02. All work items remain unverified.
+Status: reconciled 2026-11-04. Delivered evidence and outstanding acceptance are
+distinguished below; aggregate migration gates remain pending.
 
 Own current daily-use native app maintenance and its contract consumption.
 Preserve existing dirty source work. No new product features are implied by this
@@ -28,8 +29,8 @@ uses B0 (baseline), C0 (contracts and design), E0 (client and Electron on
 Python), R0 (Rust parity), I0 (integrated stack), and O0 (owner cutover and
 publication). It is not a build dependency. Freeze and qualify the reproducible existing baseline without waiting for open
 feature tickets. Use the v2 intent ledger to decide retained and simplified scope;
-legacy UI parity and open tickets do not independently mandate inclusion. All boxes below are deliberately unchecked;
-scaffolds alone do not establish completion. Early-use gates and defaults remain
+legacy UI parity and open tickets do not independently mandate inclusion. Unchecked items retain outstanding acceptance or contributions; checked items
+record the bounded evidence stated below, not blanket gate acceptance. Early-use gates and defaults remain
 subject to evidence and explicit authorization for root registration. Use fresh
 Rust state; archive historical task, run and event records rather than importing
 them. Import only definitions, configuration and preferences, with an explicit
@@ -53,6 +54,11 @@ S02 evidence: [qualified baseline receipt](migration-receipts/S02.md), including
 recorded limitations. The freeze is in force from 2026-11-03; the
 [S03 receipt](../../HarflowMCP/docs/migration-receipts/S03.md) records its permitted
 maintenance for B0-MA-04, pending acceptance.
+
+Current fixture reconciliation (2026-11-04): Python manifest is
+`06094a8f210130d0794afe3913d66c853baf8d43c9022fd3140e22ebfe0aacaa`;
+Mac still vendors `cd022c5fd549a057a49558eb3536bd0f9788bf96800d66b19f763fb6d9da7115`.
+S06 remains pending after S05; S04 follow-up delivery does not establish Mac compatibility.
 
 ## C0 / E0 — compatibility and reference
 
