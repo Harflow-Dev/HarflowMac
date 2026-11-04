@@ -136,14 +136,22 @@ def test_packaged_startup_probe_rejects_timeout():
         release.validate_packaged_startup(Path("Harflow.app"), "0.0.2", "0.0.1", process=process)
 
 
-def test_validate_bundle_requires_exact_packaged_runtime_path_and_rejects_duplicates(tmp_path):
+@pytest.mark.parametrize("misplaced_path", [
+    "ManagedRuntime.json",
+    "Contents/Resources/ManagedRuntime.json",
+    "Contents/Resources/MonitorCore_MonitorCore.bundle/ManagedRuntime.json",
+    "Contents/Resources/Other.bundle/Contents/Resources/ManagedRuntime.json",
+])
+@pytest.mark.parametrize("has_authoritative_copy", [False, True])
+def test_validate_bundle_requires_exact_packaged_runtime_path_and_rejects_duplicates(
+        tmp_path, misplaced_path, has_authoritative_copy):
     root = tmp_path / "source"
     runtime = root / release.RUNTIME_PATH
     runtime.parent.mkdir(parents=True)
     runtime.write_bytes((ROOT / release.RUNTIME_PATH).read_bytes())
     app = tmp_path / "Harflow.app"
     resources = app / "Contents/Resources"
-    exact = resources / "MonitorCore_MonitorCore.bundle/ManagedRuntime.json"
+    exact = resources / "MonitorCore_MonitorCore.bundle/Contents/Resources/ManagedRuntime.json"
     exact.parent.mkdir(parents=True)
     exact.write_bytes(runtime.read_bytes())
     for name in ("AppIcon.icns", "menubarTemplate.png", "menubarTemplate@2x.png"):
@@ -157,22 +165,11 @@ def test_validate_bundle_requires_exact_packaged_runtime_path_and_rejects_duplic
             mock.patch.object(release, "code_paths", return_value=[]), \
             mock.patch.object(release, "verify_signature"):
         assert release.validate_bundle(app, root, startup_process=good_process) == ("0.0.4", "0.0.7")
-        duplicate = resources / "Other.bundle/ManagedRuntime.json"
-        duplicate.parent.mkdir()
-        duplicate.write_bytes(runtime.read_bytes())
-        with pytest.raises(release.ReleaseError):
-            release.validate_bundle(app, root, startup_process=good_process)
-
-        duplicate.unlink()
-        exact.unlink()
-        misplaced = resources / "ManagedRuntime.json"
+        if not has_authoritative_copy:
+            exact.unlink()
+        misplaced = app / misplaced_path
+        misplaced.parent.mkdir(parents=True, exist_ok=True)
         misplaced.write_bytes(runtime.read_bytes())
-        with pytest.raises(release.ReleaseError):
-            release.validate_bundle(app, root, startup_process=good_process)
-
-        exact.write_bytes(runtime.read_bytes())
-        root_duplicate = app / "ManagedRuntime.json"
-        root_duplicate.write_bytes(runtime.read_bytes())
         with pytest.raises(release.ReleaseError):
             release.validate_bundle(app, root, startup_process=good_process)
 

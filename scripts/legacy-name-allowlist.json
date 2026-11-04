@@ -52,5 +52,24 @@
     "literal": "PB_",
     "reason": "Generation launchers remove inherited legacy runtime configuration before selecting the managed Harflow state root.",
     "count": 1
+  },
+  {
+    "file": "macos/Harflow.xcodeproj/project.pbxproj",
+    "literal": "project.pbxproj",
+    "reason": "Apple Xcode requires this canonical project format filename.",
+    "count": 1,
+    "scope": "path"
+  },
+  {
+    "file": "tests/ci/test_app_host.py",
+    "literal": "project.pbxproj",
+    "reason": "Native app host regression inspects the canonical Apple Xcode project filename.",
+    "count": 1
+  },
+  {
+    "file": "scripts/legacy-name-allowlist.json",
+    "literal": "project.pbxproj",
+    "reason": "Exact canonical Apple Xcode project filename recorded for path and regression exceptions.",
+    "count": 4
   }
 ]

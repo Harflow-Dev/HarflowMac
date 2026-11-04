@@ -5,10 +5,11 @@ import SwiftUI
 
 // MARK: - HarflowEntryPoint
 
-@main
+/// Dispatches packaged diagnostics before initializing the application shell.
 @MainActor
-enum HarflowEntryPoint {
-    static func main() {
+public enum HarflowEntryPoint {
+    /// Runs the packaged diagnostic or starts the application.
+    public static func main() {
         if let status = run(arguments: Array(CommandLine.arguments.dropFirst()), diagnostic: {
             let result = PackagedStartup.check()
             FileHandle.standardOutput.write(result.output)

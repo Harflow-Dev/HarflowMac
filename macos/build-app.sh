@@ -1,29 +1,26 @@
 #!/bin/bash
-# Build Harflow.app locally. No installation, launch, URL registration, or login-item changes.
+# Build Harflow.app locally; Xcode registers this generated bundle with LaunchServices.
+# No app installation, ordinary launch, MCP registration or login-item changes.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-pkg="$here/Harflow"
 out="$here/build"
 app="$out/Harflow.app"
-config="${CONFIGURATION:-release}"
+case "${CONFIGURATION:-release}" in
+    release|Release) config="Release" ;;
+    debug|Debug) config="Debug" ;;
+    *) echo "CONFIGURATION must be debug or release" >&2; exit 1 ;;
+esac
 
-swift build -c "$config" --package-path "$pkg" --product Harflow
-bin_dir="$(swift build -c "$config" --package-path "$pkg" --show-bin-path)"
-
+# The native target is the only product and packaging authority. SwiftPM owns its
+# importable shell and dependency resources; Xcode embeds those resource bundles.
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp "$bin_dir/Harflow" "$app/Contents/MacOS/Harflow"
-cp "$pkg/Resources/Info.plist" "$app/Contents/Info.plist"
-# Any SwiftPM resource bundles a dependency produces, inside Resources so the bundle stays signable.
-for bundle in "$bin_dir"/*.bundle; do
-    [ -e "$bundle" ] && cp -R "$bundle" "$app/Contents/Resources/"
-done
-# App icon and menu-bar template images. `Resources/Branding/` (source SVG/1024px art) is
-# deliberately not copied — it is not part of the bundle.
-cp "$pkg/Resources/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
-cp "$pkg/Resources/menubarTemplate.png" "$app/Contents/Resources/menubarTemplate.png"
-cp "$pkg/Resources/menubarTemplate@2x.png" "$app/Contents/Resources/menubarTemplate@2x.png"
+xcodebuild -project "$here/Harflow.xcodeproj" -scheme Harflow \
+    -configuration "$config" -destination 'generic/platform=macOS' \
+    -derivedDataPath "$out/DerivedData" \
+    -onlyUsePackageVersionsFromResolvedFile \
+    CONFIGURATION_BUILD_DIR="$out" ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
+
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 test -f "$app/Contents/Resources/AppIcon.icns" || { echo "Missing AppIcon.icns in built bundle" >&2; exit 1; }
 test -f "$app/Contents/Resources/menubarTemplate.png" || { echo "Missing menubarTemplate.png in built bundle" >&2; exit 1; }

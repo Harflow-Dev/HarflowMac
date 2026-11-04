@@ -1,0 +1,59 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 60;
+ objects = {
+  A00000000000000000000001 /* HarflowHost */ = {
+   isa = PBXNativeTarget;
+   buildConfigurationList = A00000000000000000000002;
+   buildPhases = (A00000000000000000000003, A00000000000000000000004, A00000000000000000000005);
+   buildRules = ();
+   dependencies = ();
+   name = HarflowHost;
+   packageProductDependencies = (A00000000000000000000006);
+   productName = Harflow;
+   productReference = A00000000000000000000007;
+   productType = "com.apple.product-type.application";
+  };
+  A00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000008, A00000000000000000000009); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+  A00000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000010); runOnlyForDeploymentPostprocessing = 0;};
+  A00000000000000000000004 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000011); runOnlyForDeploymentPostprocessing = 0;};
+  A00000000000000000000005 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000012, A00000000000000000000013, A00000000000000000000014); runOnlyForDeploymentPostprocessing = 0;};
+  A00000000000000000000006 = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000015; productName = Harflow;};
+  A00000000000000000000007 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Harflow.app; sourceTree = BUILT_PRODUCTS_DIR;};
+  A00000000000000000000010 = {isa = PBXBuildFile; fileRef = A00000000000000000000016;};
+  A00000000000000000000011 = {isa = PBXBuildFile; productRef = A00000000000000000000006;};
+  A00000000000000000000012 = {isa = PBXBuildFile; fileRef = A00000000000000000000017;};
+  A00000000000000000000013 = {isa = PBXBuildFile; fileRef = A00000000000000000000018;};
+  A00000000000000000000014 = {isa = PBXBuildFile; fileRef = A00000000000000000000019;};
+  A00000000000000000000015 = {isa = XCLocalSwiftPackageReference; relativePath = Harflow;};
+  A00000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHost/HarflowHost.swift; sourceTree = "<group>";};
+  A00000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = image.icns; path = Harflow/Resources/AppIcon.icns; sourceTree = "<group>";};
+  A00000000000000000000018 = {isa = PBXFileReference; lastKnownFileType = image.png; path = Harflow/Resources/menubarTemplate.png; sourceTree = "<group>";};
+  A00000000000000000000019 = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Harflow/Resources/menubarTemplate@2x.png"; sourceTree = "<group>";};
+  A00000000000000000000020 = {isa = PBXGroup; children = (A00000000000000000000016, A00000000000000000000017, A00000000000000000000018, A00000000000000000000019, A00000000000000000000021); sourceTree = "<group>";};
+  A00000000000000000000021 = {isa = PBXGroup; children = (A00000000000000000000007); name = Products; sourceTree = "<group>";};
+  A00000000000000000000022 = {
+   isa = PBXProject;
+   attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2600;};
+   buildConfigurationList = A00000000000000000000023;
+   compatibilityVersion = "Xcode 15.0";
+   developmentRegion = en;
+   hasScannedForEncodings = 0;
+   knownRegions = (en, Base);
+   mainGroup = A00000000000000000000020;
+   packageReferences = (A00000000000000000000015);
+   productRefGroup = A00000000000000000000021;
+   projectDirPath = "";
+   projectRoot = "";
+   targets = (A00000000000000000000001);
+  };
+  A00000000000000000000023 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000024, A00000000000000000000025); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+  A00000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGNING_ALLOWED = NO; ENABLE_APP_SANDBOX = NO; ENABLE_DEBUG_DYLIB = NO; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Harflow/Resources/Info.plist; MACOSX_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = dev.harflow.mac; PRODUCT_MODULE_NAME = HarflowHost; PRODUCT_NAME = Harflow; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 6.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; ENABLE_TESTABILITY = YES;}; name = Debug;};
+  A00000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGNING_ALLOWED = NO; ENABLE_APP_SANDBOX = NO; ENABLE_DEBUG_DYLIB = NO; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Harflow/Resources/Info.plist; MACOSX_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = dev.harflow.mac; PRODUCT_MODULE_NAME = HarflowHost; PRODUCT_NAME = Harflow; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 6.0; SWIFT_OPTIMIZATION_LEVEL = "-O";}; name = Release;};
+  A00000000000000000000024 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Debug;};
+  A00000000000000000000025 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Release;};
+ };
+ rootObject = A00000000000000000000022;
+}

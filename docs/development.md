@@ -1,10 +1,10 @@
 # Development
 
-Build on macOS 26 or later. `macos/build-app.sh` produces `macos/build/Harflow.app` without installing, launching, or registering it.
+Build with Xcode 26.6 on macOS 26 or later. Open `macos/Harflow.xcworkspace` and select the shared Harflow scheme. The thin HarflowHost Xcode application target owns the sole entry point, packaging and signing; the Harflow SwiftPM library retains coordination/lifecycle code and its guarded tests. `macos/build-app.sh` produces `macos/build/Harflow.app` without installing or launching it.
 
 Use [the terminology guide](terminology.md) for user-facing copy and compatibility mappings.
 
-Validate formatting and lint with the same commands as CI. CI installs the available Homebrew tools; local tools are not pinned by this repository:
+Validate formatting and lint with the same versions as CI: SwiftFormat 0.60.1 and SwiftLint 0.63.2. CI verifies their release archive hashes; use those versions locally:
 
 ```sh
 swiftformat macos scripts/support --lint
@@ -13,6 +13,8 @@ python3 scripts/check-legacy-names.py
 python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
 macos/build-app.sh
 ```
+
+The build script delegates to the Xcode project in Release by default (`CONFIGURATION=debug` selects Debug), builds arm64 and applies only a local ad-hoc signature. Both configurations disable the separate debug dylib so the bundle retains one known executable. A native Xcode build automatically registers the generated app bundle with LaunchServices; it does not install the app or perform MCP/backend registration. Building does not authorize running the ordinary app against user state. Package resolution uses committed pins with automatic updates disabled; it does not authorize dependency installation or upgrades. SwiftPM package builds are library/test builds, not a second application packaging route.
 
 To apply formatting, run `swiftformat macos scripts/support` separately.
 

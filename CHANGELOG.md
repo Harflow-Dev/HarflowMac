@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Build the app through a thin Xcode host while retaining the shell and guarded tests in SwiftPM; validate the standard macOS dependency-resource layout without changing the managed engine pin.
+
 - Re-vendor the complete S05 canonical v1 contract fixture bundle and verify decoder, capability and fallback compatibility without changing the managed engine pin.
 
 - Fix the connection indicator remaining Disconnected at startup until a task or workflow was selected.

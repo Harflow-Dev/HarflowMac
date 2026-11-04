@@ -5,7 +5,7 @@ let package = Package(
     name: "Harflow",
     platforms: [.macOS(.v26)],
     products: [
-        .executable(name: "Harflow", targets: ["Harflow"])
+        .library(name: "Harflow", targets: ["Harflow"])
     ],
     dependencies: [
         // MARK: Local Dependencies
@@ -27,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/Kolos65/Mockable.git", exact: "0.6.2")
     ],
     targets: [
-        .executableTarget(
+        .target(
             name: "Harflow",
             dependencies: [
                 "MonitorCore", "HfRepository", "HfUtilities", "HfCommon", "SwiftEnvironment",
@@ -35,7 +35,7 @@ let package = Package(
             ]
         ),
         // Phase 5: the app shell's own tests — `AppModulesRegistry`, `AppCoordinator`, `AppDelegate`.
-        // SwiftPM can `@testable import` an executable target from a test target in the same package.
+        // The importable shell keeps its guarded tests in the same SwiftPM package.
         .testTarget(
             name: "HarflowTests",
             dependencies: [

@@ -71,7 +71,7 @@ public struct ManagedRuntimeSpecification: Codable, Equatable, Sendable {
     static func bundled(bundleURL: URL, resourceURL: URL?) throws -> Self {
         let url: URL?
         if bundleURL.pathExtension == "app" {
-            url = resourceURL?.appendingPathComponent("MonitorCore_MonitorCore.bundle/ManagedRuntime.json")
+            url = resourceURL?.appendingPathComponent("MonitorCore_MonitorCore.bundle/Contents/Resources/ManagedRuntime.json")
         } else {
             url = Bundle.module.url(forResource: "ManagedRuntime", withExtension: "json")
         }

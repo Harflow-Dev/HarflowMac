@@ -12,13 +12,15 @@ pattern = re.compile("|".join(parts))
 allow = json.loads((ROOT / "scripts/legacy-name-allowlist.json").read_text())
 seen = set()
 for entry in allow:
-    if (set(entry) != {"file", "literal", "reason", "count"}
+    if (set(entry) not in ({"file", "literal", "reason", "count"},
+                           {"file", "literal", "reason", "count", "scope"})
+            or entry.get("scope", "content") not in ("content", "path")
             or not isinstance(entry["file"], str) or not entry["file"]
             or not isinstance(entry["literal"], str) or not entry["literal"]
             or not isinstance(entry["reason"], str) or not entry["reason"].strip()
             or type(entry["count"]) is not int or entry["count"] <= 0):
         raise SystemExit("Invalid legacy-name exception")
-    key = (entry["file"], entry["literal"])
+    key = (entry["file"], entry["literal"], entry.get("scope", "content"))
     if key in seen or not (ROOT / entry["file"]).is_file():
         raise SystemExit("Duplicate or missing-file legacy-name exception")
     seen.add(key)
@@ -32,13 +34,19 @@ for name in sorted(set(paths)):
         text = path.read_text()
     except UnicodeError:
         continue
+    name_for_scan = name
     for entry in allow:
         if entry["file"] == name:
-            observed = text.count(entry["literal"])
+            scope = entry.get("scope", "content")
+            value = name if scope == "path" else text
+            observed = value.count(entry["literal"])
             if observed != entry["count"]:
                 failures.append(f"{name}: legacy exception occurrence count {observed} != {entry['count']}")
-            text = text.replace(entry["literal"], "")
-    if pattern.search(name) or pattern.search(text):
+            if scope == "path":
+                name_for_scan = name_for_scan.replace(entry["literal"], "")
+            else:
+                text = text.replace(entry["literal"], "")
+    if pattern.search(name_for_scan) or pattern.search(text):
         failures.append(name)
 if failures:
     print("Legacy identities require removal or exact justified exceptions:", file=sys.stderr)

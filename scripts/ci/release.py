@@ -28,7 +28,7 @@ Commands = preflight.Commands
 ReleaseError = preflight.PreflightError
 RUNTIME_PATH = Path('macos/HfCore/MonitorCore/Sources/MonitorCore/Resources/ManagedRuntime.json')
 PLIST_PATH = Path('macos/Harflow/Resources/Info.plist')
-PACKAGED_RUNTIME_PATH = Path('Contents/Resources/MonitorCore_MonitorCore.bundle/ManagedRuntime.json')
+PACKAGED_RUNTIME_PATH = Path('Contents/Resources/MonitorCore_MonitorCore.bundle/Contents/Resources/ManagedRuntime.json')
 
 
 def exact_version(value):

@@ -12,7 +12,7 @@ struct ManagedRuntimeSpecificationTests {
         let root = try makeTempDir("managed-runtime-app")
         let appURL = root.appendingPathComponent("Harflow.app", isDirectory: true)
         let resourceURL = appURL.appendingPathComponent("Contents/Resources", isDirectory: true)
-        let bundleURL = resourceURL.appendingPathComponent("MonitorCore_MonitorCore.bundle", isDirectory: true)
+        let bundleURL = resourceURL.appendingPathComponent("MonitorCore_MonitorCore.bundle/Contents/Resources", isDirectory: true)
         try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
         try packagedSpecificationData().write(to: bundleURL.appendingPathComponent("ManagedRuntime.json"))
         return (appURL, resourceURL)
@@ -56,7 +56,7 @@ struct ManagedRuntimeSpecificationTests {
         #expect(specification.pythonVersion == "3.13.16")
     }
 
-    @Test(arguments: ["missing", "misplaced", "corrupt"])
+    @Test(arguments: ["missing", "misplaced", "flat-bundle", "corrupt"])
     func givenInvalidPackagedResource_whenLoaded_thenItFailsWithoutSwiftPMFallback(_ caseName: String) throws {
         let root = try makeTempDir("managed-runtime-invalid-app")
         let appURL = root.appendingPathComponent("Harflow.app", isDirectory: true)
@@ -65,8 +65,12 @@ struct ManagedRuntimeSpecificationTests {
         switch caseName {
         case "misplaced":
             try packagedSpecificationData().write(to: resourceURL.appendingPathComponent("ManagedRuntime.json"))
+        case "flat-bundle":
+            let flatURL = resourceURL.appendingPathComponent("MonitorCore_MonitorCore.bundle", isDirectory: true)
+            try FileManager.default.createDirectory(at: flatURL, withIntermediateDirectories: true)
+            try packagedSpecificationData().write(to: flatURL.appendingPathComponent("ManagedRuntime.json"))
         case "corrupt":
-            let bundleURL = resourceURL.appendingPathComponent("MonitorCore_MonitorCore.bundle", isDirectory: true)
+            let bundleURL = resourceURL.appendingPathComponent("MonitorCore_MonitorCore.bundle/Contents/Resources", isDirectory: true)
             try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
             try Data("not-json".utf8).write(to: bundleURL.appendingPathComponent("ManagedRuntime.json"))
         default:
