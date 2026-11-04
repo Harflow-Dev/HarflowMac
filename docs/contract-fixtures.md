@@ -2,14 +2,14 @@
 
 The engine owns the public contracts. MonitorCore tests carry a complete,
 self-contained copy of `contracts/v1` from HarflowMCP commit
-`b69b5754a7b6496aaf5e3106116e302ea7a10675` (S05, local producer commit).
+`f304a65d9de948dfcba4c0c27c3d04f7f90971c8` (released0.0.8 immutable tag).
 No build/test downloads fixtures or requires a sibling checkout.
 
 - Resource path: `macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1`.
-- Manifest SHA-256: `383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0`.
+- Manifest SHA-256: `6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1`.
 - Contents: 199 fixture files, `manifest.json` and `manifest.sha256`, byte-identical
   to the committed producer bundle. Hash verification covers every fixture.
-- Source product version: 0.0.7; historical fixture writer versions intentionally
+- Source product version: 0.0.8; historical fixture writer versions intentionally
   vary. Live compatibility is major/minor, not equality with a specimen's patch.
 - The separate `contracts/mcp-v1/tools.json` source schema inventory is agent-facing
   and is not vendored or decoded as a ctl document. Its exact Rust subset remains
@@ -27,16 +27,30 @@ Unknown launch never authorizes automatic replay.
 Keep ctl, setup and normalized event gates independent. Unknown optional payload
 fields/capability names/event kinds remain additive; embedded normalized events
 still need their own provenance/identity validation. Generic payload decoding is
-not typed support for every additive feature. Legacy Mac adapters need not adopt
-S04 reads merely to consume the new fixtures; Electron will use transport-neutral
-ports and ctl/setup, with each operation independently capability-gated.
+not typed support for every additive feature. Mac adapters do not gain typed support merely by consuming the fixtures. The prompt
+client is independently capability-gated; complete activity/event transport remains
+a separate M03 slice.
 
 ## Runtime boundaries
 
 Fixture adoption does not change Mac's selected source runtime: its managed
 specification remains engine 0.0.7 with CPython 3.13.16 and 29 dependencies.
 This records the source pin, not an inspection of an installed runtime or owner
-state. The owner intends engine 0.0.8 for Electron development; S06 does not claim
-that release is published, installed or qualified. Release changes are separately
+state. Engine0.0.8 is published and its wheel was inspected statically; M03-C fixture
+adoption does not claim it is installed, selected or runtime-qualified. Release changes are separately
 owned and excluded from migration commits. See [S06 receipt](migration-receipts/S06.md)
 for observed validation and remaining acceptance.
+
+## M03-C release-bundle audit
+
+M03-C replaced the complete earlier S05 bundle, not selected examples. The exact
+201-file inventories match, and all199 fixture digests validate. Of132 changed
+files,130 contain product-version provenance changes;16 opaque cursor values also
+change because their integrity hashes cover regenerated synthetic bytes. Independent
+old/new byte reconstruction reproduced every event anchor/head and changes-document
+digest. Scope, generation, paging direction, boundary, sequence, filter and position
+are unchanged; no unexpected semantic delta was found. Manifest case metadata
+differs only by the corresponding expected version. The consumer copied bytes
+unchanged from immutable Git objects and never regenerated tokens. See the
+[exact audit](migration-receipts/M03-C-fixture-audit.json). Runtime and producer
+acceptance remain separate from this consumer-data adoption.

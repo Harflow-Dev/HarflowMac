@@ -1,0 +1,597 @@
+{
+  "observed_at_utc": "2026-11-04T11:53:45.588179+00:00",
+  "scope": "read-only static immutable Git data and independently reconstructed synthetic bytes; no producer execution/import",
+  "remote_tag": {
+    "sha": "f304a65d9de948dfcba4c0c27c3d04f7f90971c8",
+    "type": "commit",
+    "url": "https://api.github.com/repos/Harflow-Dev/HarflowMCP/git/commits/f304a65d9de948dfcba4c0c27c3d04f7f90971c8"
+  },
+  "pinned_commit": "f304a65d9de948dfcba4c0c27c3d04f7f90971c8",
+  "fixture_tree": "062dc3ee5fd3a4d92bca89d0597bae8665861e6e",
+  "release_inventory_count": 201,
+  "vendor_inventory_count": 201,
+  "inventory_symmetric_difference": [],
+  "manifests": {
+    "release": {
+      "sha256": "6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1",
+      "declared_count": 199,
+      "bad_hashes": [],
+      "manifest_sha_file_valid": true,
+      "inventory_matches_manifest_plus_two": true
+    },
+    "vendor": {
+      "sha256": "383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0",
+      "declared_count": 199,
+      "bad_hashes": [],
+      "manifest_sha_file_valid": true,
+      "inventory_matches_manifest_plus_two": true
+    },
+    "non_hash_metadata_equal": false,
+    "non_hash_metadata_equal_after_version_normalization": true,
+    "changed_case_count": 128
+  },
+  "changed_files_count": 132,
+  "changed_files": [
+    "ctl-approval-error-already-answered.json",
+    "ctl-approval-error-caller-undecidable-approval.json",
+    "ctl-approval-error-caller-undecidable-global.json",
+    "ctl-approval-error-expired.json",
+    "ctl-approval-error-generic-no-reason.json",
+    "ctl-approval-error-legacy-no-reason-synthetic.json",
+    "ctl-approval-error-not-current.json",
+    "ctl-approval-error-ownership-lost.json",
+    "ctl-approval-error-reason-incomplete-synthetic.json",
+    "ctl-approval-error-reason-unsupported-synthetic.json",
+    "ctl-approval-error-settled.json",
+    "ctl-approval-error-unauthorized-agent.json",
+    "ctl-approval-error-unauthorized-managed-task.json",
+    "ctl-approval-error-unauthorized-owner.json",
+    "ctl-approval-error-unknown-reason-synthetic.json",
+    "ctl-approval-get-claude-bash-no-reason.json",
+    "ctl-approval-get-claude-bash.json",
+    "ctl-approval-get-claude-edit.json",
+    "ctl-approval-get-claude-write.json",
+    "ctl-approval-get-codex-command.json",
+    "ctl-approval-get-codex-file-change-move.json",
+    "ctl-approval-get-codex-file-change.json",
+    "ctl-approval-get-optional-fields-omitted-synthetic.json",
+    "ctl-approval-list-codex.json",
+    "ctl-approval-list-history.json",
+    "ctl-approval-list-optional-fields-omitted-synthetic.json",
+    "ctl-approval-list-page-1.json",
+    "ctl-approval-list-page-2.json",
+    "ctl-approval-list-page-3.json",
+    "ctl-approval-list-pending.json",
+    "ctl-approval-respond-caller.json",
+    "ctl-approval-respond-monitor-owned.json",
+    "ctl-approval-respond-monitor.json",
+    "ctl-approval-state-cancelled.json",
+    "ctl-approval-state-codex-sent.json",
+    "ctl-approval-state-delivery-unknown.json",
+    "ctl-approval-state-expired-override.json",
+    "ctl-approval-state-expired-unanswered.json",
+    "ctl-approval-state-invalidated.json",
+    "ctl-approval-state-reserved.json",
+    "ctl-approval-state-sending.json",
+    "ctl-approval-state-sent-approved.json",
+    "ctl-approval-state-sent-rejected-monitor.json",
+    "ctl-approval-state-system-rejected-admission.json",
+    "ctl-approval-state-system-rejected-delivery.json",
+    "ctl-approval-state-unsupported.json",
+    "ctl-approval-status-awaiting.json",
+    "ctl-launch-resume-accepted.json",
+    "ctl-launch-resume-refused.json",
+    "ctl-launch-resume-unknown.json",
+    "ctl-launch-run-accepted.json",
+    "ctl-launch-run-refused.json",
+    "ctl-launch-run-unknown.json",
+    "ctl-launch-unknown-operation.json",
+    "ctl-limit-hits-empty.json",
+    "ctl-limit-hits-preparing.json",
+    "ctl-limit-hits-ready.json",
+    "ctl-phase-slot-not-enabled.json",
+    "ctl-phase-slot-status-configured-idle.json",
+    "ctl-phase-slot-status-empty.json",
+    "ctl-phase-slot-status-populated.json",
+    "ctl-phase-slot-status-service-unavailable.json",
+    "ctl-phase-slot-status-truncated.json",
+    "ctl-resources-mixed.json",
+    "ctl-statistics-page-cost-reported-and-silent.json",
+    "ctl-task-changes-available-listing.json",
+    "ctl-task-changes-cursor-expired.json",
+    "ctl-task-changes-cursor-invalid.json",
+    "ctl-task-changes-direct-caller-refused.json",
+    "ctl-task-changes-document-invalid.json",
+    "ctl-task-changes-entry-not-found.json",
+    "ctl-task-changes-incomplete.json",
+    "ctl-task-changes-listing-next-page.json",
+    "ctl-task-changes-no-repository.json",
+    "ctl-task-changes-not-captured-missing.json",
+    "ctl-task-changes-not-captured-unobserved.json",
+    "ctl-task-changes-page-too-large.json",
+    "ctl-task-changes-pending-launch.json",
+    "ctl-task-changes-pending-running.json",
+    "ctl-task-changes-pending-settling.json",
+    "ctl-task-changes-text-chunk-next.json",
+    "ctl-task-changes-text-chunk.json",
+    "ctl-task-changes-text-complete.json",
+    "ctl-task-changes-unavailable.json",
+    "ctl-task-changes-unknown-task.json",
+    "ctl-task-events-all-kinds.json",
+    "ctl-task-events-cursor-expired.json",
+    "ctl-task-events-cursor-invalid.json",
+    "ctl-task-events-default-filter-delta-seqs.json",
+    "ctl-task-events-direct-caller-refused.json",
+    "ctl-task-events-gaps-skipped.json",
+    "ctl-task-events-incomplete.json",
+    "ctl-task-events-kinds-filtered.json",
+    "ctl-task-events-newer-empty-final.json",
+    "ctl-task-events-newer.json",
+    "ctl-task-events-newest.json",
+    "ctl-task-events-older.json",
+    "ctl-task-events-oldest-forward.json",
+    "ctl-task-events-open.json",
+    "ctl-task-events-pending-launch.json",
+    "ctl-task-events-settling.json",
+    "ctl-task-events-unavailable.json",
+    "ctl-task-events-unknown-task.json",
+    "ctl-task-page-successors-direct-caller-refused.json",
+    "ctl-task-page-successors-found-first-page.json",
+    "ctl-task-page-successors-found.json",
+    "ctl-task-page-successors-none-found.json",
+    "ctl-task-page-successors-pending-launch-predecessor.json",
+    "ctl-task-page-successors-unknown-predecessor.json",
+    "ctl-task-prompt-available.json",
+    "ctl-task-prompt-integrity-failed.json",
+    "ctl-task-prompt-preview-only.json",
+    "ctl-task-prompt-truncated.json",
+    "ctl-workflow-inspect-live-agent-caller-settled-only.json",
+    "ctl-workflow-inspect-live-no-attempt.json",
+    "ctl-workflow-inspect-live-reserved-attempt.json",
+    "ctl-workflow-inspect-live-running-attempt-after.json",
+    "ctl-workflow-inspect-live-running-attempt.json",
+    "ctl-workflow-limit-hits-empty.json",
+    "ctl-workflow-limit-hits-preparing.json",
+    "ctl-workflow-limit-hits-ready.json",
+    "invalid-s05-missing-statistics-cost-model.json",
+    "invalid-s05-missing-task-changes.json",
+    "invalid-s05-missing-task-event-page.json",
+    "invalid-s05-missing-task-prompt.json",
+    "invalid-s05-missing-task-successors.json",
+    "invalid-s05-missing-workflow-live-activity.json",
+    "manifest.json",
+    "manifest.sha256",
+    "version-info-s05-additive.json",
+    "version-info.json",
+    "workflow-definition-patch.json"
+  ],
+  "changed_json_paths": {
+    ".product_version": 130,
+    ".result.next_cursor": 3,
+    ".result.newer_cursor": 10,
+    ".result.events[].product_version": 40,
+    ".result.older_cursor": 3
+  },
+  "cursor_comparisons": [
+    {
+      "file": "ctl-task-changes-available-listing.json",
+      "field": ".result.next_cursor",
+      "decoded_deltas": {
+        "d": {
+          "old": "cd125f70391a0fb4ae80dd488f46eaca84036971ee96b38043c2ac7165b4209a",
+          "new": "e95eaa13355608c566ad752650f48bb214352e6c567457e89dcd6457e67882ac"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "document_digest_match": true
+        },
+        {
+          "version": "0.0.8",
+          "document_digest_match": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-changes-text-chunk-next.json",
+      "field": ".result.next_cursor",
+      "decoded_deltas": {
+        "d": {
+          "old": "cd125f70391a0fb4ae80dd488f46eaca84036971ee96b38043c2ac7165b4209a",
+          "new": "e95eaa13355608c566ad752650f48bb214352e6c567457e89dcd6457e67882ac"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "document_digest_match": true
+        },
+        {
+          "version": "0.0.8",
+          "document_digest_match": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-changes-text-chunk.json",
+      "field": ".result.next_cursor",
+      "decoded_deltas": {
+        "d": {
+          "old": "cd125f70391a0fb4ae80dd488f46eaca84036971ee96b38043c2ac7165b4209a",
+          "new": "e95eaa13355608c566ad752650f48bb214352e6c567457e89dcd6457e67882ac"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "document_digest_match": true
+        },
+        {
+          "version": "0.0.8",
+          "document_digest_match": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-all-kinds.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "39dbd017ac637ba76647e232b8940d331c330130330abf131fe863bd9a5b501c",
+          "new": "05ab6c1c3e1736e6365b3263cf8fa9b67560b70a0db5bbdb70615d48e494345d"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-default-filter-delta-seqs.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "39dbd017ac637ba76647e232b8940d331c330130330abf131fe863bd9a5b501c",
+          "new": "05ab6c1c3e1736e6365b3263cf8fa9b67560b70a0db5bbdb70615d48e494345d"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-gaps-skipped.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "39dbd017ac637ba76647e232b8940d331c330130330abf131fe863bd9a5b501c",
+          "new": "05ab6c1c3e1736e6365b3263cf8fa9b67560b70a0db5bbdb70615d48e494345d"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-incomplete.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "b36d0b8c5dcc2c76feed39259c123b44c36e7d0a3584933241a28dfb6293298c",
+          "new": "a17e75c81b39e816d3997f67eef00819735db589a0add18ddcab74cd1272cc11"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-kinds-filtered.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "39dbd017ac637ba76647e232b8940d331c330130330abf131fe863bd9a5b501c",
+          "new": "05ab6c1c3e1736e6365b3263cf8fa9b67560b70a0db5bbdb70615d48e494345d"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-newer-empty-final.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "39dbd017ac637ba76647e232b8940d331c330130330abf131fe863bd9a5b501c",
+          "new": "05ab6c1c3e1736e6365b3263cf8fa9b67560b70a0db5bbdb70615d48e494345d"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-newer-empty-final.json",
+      "field": ".result.older_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "39dbd017ac637ba76647e232b8940d331c330130330abf131fe863bd9a5b501c",
+          "new": "05ab6c1c3e1736e6365b3263cf8fa9b67560b70a0db5bbdb70615d48e494345d"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-newer.json",
+      "field": ".result.older_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "58ebd04a45adbda9b956370db215a68b5ad072bc9e0de4ea3c669449e23852ca",
+          "new": "821f8148602bcaa505c1b8a011651e1cf8fb715f8ead771de12b5de62d8f7b7e"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-newest.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "39dbd017ac637ba76647e232b8940d331c330130330abf131fe863bd9a5b501c",
+          "new": "05ab6c1c3e1736e6365b3263cf8fa9b67560b70a0db5bbdb70615d48e494345d"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-older.json",
+      "field": ".result.older_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "03a7de51ca440eed2710130d5abf0f8f6b9da2e4c05f718ae539a0ba31b8d1ac",
+          "new": "fda1ed93846987e540339ef1693507f8b04e1884050bf11ef122a9730e3f2883"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-oldest-forward.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "24117e1f91c5316158f51d5512119483fb147fced86562fc9610c25619b78170",
+          "new": "82975038557c907c7a16445f8691cd30e2b16469cb29ef5886a7edd69b1f1e0c"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-open.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "b36d0b8c5dcc2c76feed39259c123b44c36e7d0a3584933241a28dfb6293298c",
+          "new": "a17e75c81b39e816d3997f67eef00819735db589a0add18ddcab74cd1272cc11"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    },
+    {
+      "file": "ctl-task-events-settling.json",
+      "field": ".result.newer_cursor",
+      "decoded_deltas": {
+        "anchor": {
+          "old": "b36d0b8c5dcc2c76feed39259c123b44c36e7d0a3584933241a28dfb6293298c",
+          "new": "a17e75c81b39e816d3997f67eef00819735db589a0add18ddcab74cd1272cc11"
+        }
+      },
+      "independent_byte_checks": [
+        {
+          "version": "0.0.7",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        },
+        {
+          "version": "0.0.8",
+          "anchor_match": true,
+          "head_match": true,
+          "head_length_match": true,
+          "boundary_in_log": true
+        }
+      ]
+    }
+  ],
+  "independent_cursor_byte_checks_all_pass": true,
+  "unexpected_semantic_differences": [],
+  "temporary_bundle": "/private/tmp/m03-c-immutable-008-contracts",
+  "source_references": {
+    "event_bytes": [
+      "scripts/generate-task-read-fixtures.py:World.log/build",
+      "src/harflow_mcp/events.py:EventLog.write",
+      "src/harflow_mcp/event_pages.py:_anchors/Page._cursor"
+    ],
+    "changes_bytes": [
+      "scripts/generate-task-read-fixtures.py:build_changes",
+      "src/harflow_mcp/task_changes_capture.py:serialize",
+      "src/harflow_mcp/task_changes_read.py:load_document/_encode_cursor"
+    ]
+  },
+  "acceptance": "Byte-identical adoption must copy complete immutable bundle; this audit grants no producer or runtime acceptance.",
+  "independent_reconstruction_script": {
+    "path": "/private/tmp/m03-c-audit.py",
+    "sha256": "706057d015f7e407ebae3778d677495f89a7b72d94cf5bef50e425dc57c7b695",
+    "method": "Manually transcribed pinned synthetic scripts and serialization rules; standard-library data processing only. No imports from, eval/exec of, or execution of engine/generator source."
+  },
+  "classification": "No semantic fixture changes beyond product-version provenance and independently verified byte-integrity cursor regeneration. All cursor scope/generation/direction/boundary/sequence/filter/position fields are unchanged; event anchor/head hashes and changes document digest reproduce old and new synthetic source bytes exactly."
+}
