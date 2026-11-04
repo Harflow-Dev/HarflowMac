@@ -55,17 +55,21 @@ recorded limitations. The freeze is in force from 2026-11-03; the
 [S03 receipt](../../HarflowMCP/docs/migration-receipts/S03.md) records its permitted
 maintenance for B0-MA-04, pending acceptance.
 
-Current fixture reconciliation (2026-11-04): Python manifest is
-`06094a8f210130d0794afe3913d66c853baf8d43c9022fd3140e22ebfe0aacaa`;
-Mac still vendors `cd022c5fd549a057a49558eb3536bd0f9788bf96800d66b19f763fb6d9da7115`.
-S06 remains pending after S05; S04 follow-up delivery does not establish Mac compatibility.
+Current fixture reconciliation (2026-11-04): S06 vendors the complete S05
+producer bundle from `b69b5754a7b6496aaf5e3106116e302ea7a10675`, manifest
+`383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0`
+(199 fixtures). See the [S06 receipt](migration-receipts/S06.md) for checks and
+limits; owner receipt acceptance remains pending. Mac runtime pin is unchanged;
+intended Electron development engine 0.0.8 is a separate target, not qualification.
 
 ## C0 / E0 — compatibility and reference
 
 - [ ] C0-MA-01 When Python contracts change, re-vendor the full canonical
-      fixture bundle and compare manifest digests byte-for-byte.
+      fixture bundle and compare manifest digests byte-for-byte. S06 evidence
+      is recorded in its receipt; owner acceptance pending.
 - [ ] C0-MA-02 Verify decoders, independent version gates and fallback behavior;
-      make only necessary compatibility changes.
+      make only necessary compatibility changes. S06 decoder/fallback evidence
+      is recorded in its receipt; no production decoder change was necessary.
 - [ ] E0-MA-01 Supply verified behavioral and source inventory evidence to the
       v2 scope review; native pixels are not the redesign template.
 
