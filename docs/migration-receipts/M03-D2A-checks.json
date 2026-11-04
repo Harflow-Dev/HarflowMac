@@ -1,0 +1,229 @@
+{
+  "stage": "M03-D2A",
+  "base": "b297ccf",
+  "status": "internal-only validated; D2B production cutover blocked; M03 incomplete",
+  "source_test_sha256": {
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationAdmission.swift": "6f370eabc566d54d4d8a0a63c5c1db3a2cc5ae16be76fc761b8b8a74e0310590",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationManager.swift": "61908fcf53d52235c2f2fbdecf06cdc835ed3ccf7aba6ad20a3a1303823a04d8",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationModels.swift": "e2e035ccf8eb29db0f20bd500c016bbb179629dd96e6a86460b231d64c8832e5",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationReader.swift": "7b2712f30ab46a58eb139b5d8e13f704b4fc105a532cad86912e7e363bf09419",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationSession.swift": "bce735ebf01d371048ab81a514fa03bc4057d6605ce85093a7394160d4d6de3a",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationSummary.swift": "7794990adf91e70d6923bdd9698974bfc53efbd9e17b61ce043557dfb84af0b8",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/BoundPublicEventObservationReaderTests.swift": "499189071177e38beb19d3a087451971b8006b57f40fa6714a3582a3d6abc324",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationBoundsTests.swift": "4938a0188e6ab4ca676062767cbcfa891d7ffef36a451eec320b18a91f5d093a",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationHistoricalLimitTests.swift": "a196b897361d70965183e63c961929fd940857c52bf112d5672eae0e9962fe3c",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationManagerLifetimeTests.swift": "919a86a51fc52a1e3cece14b5208448b24b6eaee75e8c54d585e0bd338cb7ed9",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationManagerTests.swift": "d5acfbf4a457d320b54a7e87058d18674c5c5d17618efc759d9a6848d76f4231",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationRecoveryTests.swift": "05be81106c0bdc19b6ded59b98888fcdd362c2d38de02d45e3f6db00c60ac546",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationReviewRegressionTests.swift": "fb85a4a85df68f3a0dd56172208917088421011a72309b61d2aa82439139d1e4",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationSessionTests.swift": "33a7afd1baa63c4e76b5fe4f0973778a21d9ec4e323c022ac5ce41c1fa8fb5c0",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationSummaryTailTests.swift": "bd24bdd567d49f645f0e6c2f99234997f14678dd52b278614d27ec8fb461776f",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventSummaryCallIdentityTests.swift": "98e7e05f2a1f0473519120bdc857e341971d00e9281bc6d4408a7f0a5ae03ee9",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventSummaryReducerTests.swift": "438fdba06b38cad7d2ecda71814b829143a7f303ad97a12c9eff49c3961f379a",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicObservationTestSupport.swift": "5d26ccb7284f0047a4d48eab045ac3b2b319eba491421bdbcbccf8bc17fcc078"
+  },
+  "preserved_tracker_M01_sha256": {
+    "docs/migration-plan.md": "5c1a482873fb0636ac1bd63797c42aaf0b8c31f74dd5044a22d31958ece12dfb",
+    "docs/migration-sessions.md": "9b8b3c6a44f05dbda1c6457f301318426fb71bf5a6ac558564f777a379b6d52d",
+    "docs/migration-receipts/M01-checks.json": "e8a46cc0c30f0c01360681437168cf65e88c0e243c92451ef21aa4b430c50bbd",
+    "docs/migration-receipts/M01-contracts.md": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+    "docs/migration-receipts/M01-design.md": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+    "docs/migration-receipts/M01-native.md": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9",
+    "docs/migration-receipts/M01.md": "82a21ab06b2c75fef2b621e4f50b2ea00d04daca069613a4dfb6d8e7bed6b84d"
+  },
+  "D1_inputs_unchanged": true,
+  "guarded_native": {
+    "manifest": {
+      "package": "/Users/Shared/Code/Harflow/HarflowMac/macos/HfCore/HfRepository",
+      "mode": "aggregate",
+      "passed": true,
+      "discovered_tests": 494,
+      "discovered_suites": 67,
+      "failures": [],
+      "host_setup": {},
+      "partitions": [
+        {
+          "name": "aggregate",
+          "filter": null,
+          "expected_tests": 494,
+          "returncode": 0,
+          "timed_out": false,
+          "duration_seconds": 26.347,
+          "passed": true,
+          "suites": 67,
+          "skipped": [],
+          "failures": [],
+          "stdout_log": "/private/tmp/harflow-m03-d2a-final/01-aggregate.stdout.log",
+          "stderr_log": "/private/tmp/harflow-m03-d2a-final/01-aggregate.stderr.log",
+          "events_log": "/private/tmp/harflow-m03-d2a-final/01-aggregate.events.jsonl",
+          "backend": "swift-test",
+          "legacy_probe_stdout": null,
+          "legacy_probe_stderr": null,
+          "legacy_probe_returncode": null,
+          "legacy_probe_timed_out": false
+        }
+      ]
+    },
+    "manifest_sha256": "eb3e88a467e2dfaa2e4742c9242046fe34d1776483ece16e15baa572d2c6cdce",
+    "command": "HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfCore/HfRepository --mode aggregate",
+    "passed": true,
+    "tests": 494,
+    "suites": 67
+  },
+  "style": {
+    "format": {
+      "version": "0.60.1",
+      "result": "0/1019 files require formatting;31 skipped",
+      "log_sha256": "6af546766926e7a4a32aff1427573ce73f6660a838118ce74375bac2dc52629b"
+    },
+    "lint": {
+      "installed_version": "0.57.1",
+      "result": "0 violations/1066 files",
+      "CI_pin_0.63.2": "unverified; not installed",
+      "log_sha256": "f06be1f913334d4fdeac057e28eb8cda1f27321174bba006607803aa4eaef8da"
+    }
+  },
+  "guards": [
+    {
+      "command": [
+        "python3",
+        "scripts/check-legacy-names.py"
+      ],
+      "exit_code": 0,
+      "output": "Legacy identity guard passed\n"
+    },
+    {
+      "command": [
+        "bash",
+        "scripts/check-private-refs.sh"
+      ],
+      "exit_code": 0,
+      "output": "check-private-refs: clean\n"
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "review": {
+    "rounds": 3,
+    "source": "approved no remaining blockers",
+    "evidence_confirmation": "Approved: final manifest, all18 frozen inputs, unchanged8D1 and7protected inputs, style hashes and honest incomplete boundaries verified."
+  },
+  "prior_diagnostics": [
+    {
+      "path": "/private/tmp/harflow-m03-d2a-initial",
+      "result": "sandbox denied ps process probe; no tests ran"
+    },
+    {
+      "path": "/private/tmp/harflow-m03-d2a-compile",
+      "result": "new timer AnyCancellable Swift6 isolation compile error, corrected; no tests ran"
+    },
+    {
+      "path": "/private/tmp/harflow-m03-d2a-first-run",
+      "result": "483 tests/61 suites passed before final review fixes"
+    },
+    {
+      "path": "/private/tmp/harflow-m03-d2a-post-review",
+      "result": "492 tests/65 suites passed before summary tail cap and manager destruction changes"
+    }
+  ],
+  "production_private_inventory_before_after": {
+    "activity": "unchanged EventStreamRepositoryImpl path -> EventFileTailer -> EventPages.read/LineTail",
+    "summary": "unchanged independent LineTail cumulative scan and retries",
+    "raw_pane": "unchanged matching private path label",
+    "production_readers_removed": 0,
+    "module_composition_changed": false
+  },
+  "not_qualified": [
+    "production consumer migration",
+    "rendered unavailable/loss/prompt states",
+    "production runtime callback and lease-role reacquisition",
+    "whole-app native integration/Release/bundle gates",
+    "runtime performance acceptance"
+  ],
+  "runtime_pin_unchanged": "0.0.7",
+  "fixture_manifest_unchanged": "6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1",
+  "watcher_009_read_only_audit": {
+    "audit_date": "2026-11-05 Asia/Jakarta",
+    "tag": "v0.0.9",
+    "source_commit": "a8c9cf1dfcc6003301a4e009641e08c7f790cb03",
+    "release": {
+      "published_at": "2026-11-04T19:56:27Z",
+      "draft": false,
+      "prerelease": true,
+      "assets": [],
+      "url": "https://github.com/Harflow-Dev/HarflowMCP/releases/tag/v0.0.9"
+    },
+    "artifacts": [
+      {
+        "filename": "harflow_mcp-0.0.9-py3-none-any.whl",
+        "size": 1144524,
+        "sha256": "137f97d5620e81dbd91283b127ca73bc2852cdf5b9856c6cc753430f23b218aa",
+        "upload": "2026-11-04T22:35:42.014204Z",
+        "url": "https://files.pythonhosted.org/packages/8f/99/75bf6f42061052d5ce3452f76467abe225561cd2f537f9ce0b4e08342391/harflow_mcp-0.0.9-py3-none-any.whl",
+        "download_digest_verified": true
+      },
+      {
+        "filename": "harflow_mcp-0.0.9.tar.gz",
+        "size": 2929832,
+        "sha256": "6e83d1333c658359f8fed17ec6b9ed8dea29b54e65093431e53099c7dd2e5314",
+        "upload": "2026-11-04T22:35:43.649635Z",
+        "url": "https://files.pythonhosted.org/packages/39/ab/ae12a8607eef66771ff75a342368059ad826caecc8b212df2ba0ec2c651c/harflow_mcp-0.0.9.tar.gz",
+        "download_digest_verified": true
+      }
+    ],
+    "fixture_manifest_sha256": "46f59d2ebebaf9561c097c76e11bec894a44004f9c026d07dfff4a769cb27277",
+    "static_identity": {
+      "wheel_source_count": 180,
+      "wheel_all_match_tag": true,
+      "sdist_source_count": 180,
+      "sdist_all_match_tag": true,
+      "fixture_count": 207,
+      "previous_fixture_count": 199,
+      "added": [
+        "ctl-task-list-watch-baseline.json",
+        "ctl-task-list-watch-changed.json",
+        "ctl-task-list-watch-cursor-invalid.json",
+        "ctl-task-list-watch-direct-caller-refused.json",
+        "ctl-task-list-watch-reset.json",
+        "ctl-task-list-watch-timeout.json",
+        "ctl-task-list-watch-unavailable.json",
+        "invalid-s05-missing-task-list-watch.json"
+      ],
+      "removed": [],
+      "changed": 129
+    },
+    "sdist_fixture_files_match_tag": 209,
+    "ci": {
+      "release": "41901781439 success",
+      "latest_checks": "41901780645 failure: macOS3.11 cancelled, other3 matrix jobs success",
+      "prior_same_head_checks": "41869986334 success all4 matrix jobs"
+    },
+    "executed_artifacts": false,
+    "installed_selected_runtime": false,
+    "adoption_ready": false,
+    "blocking_static_findings": [
+      "mixed older writers can change public metadata without changing revision; watcher has no detector and can timeout contrary to final spec",
+      "unpaired Catalog.record/remove calls end_locked and can pop another live process fence; postpublication close can then no-op, permitting a lost wake"
+    ],
+    "additional_findings": [
+      "revision JSON scalar/array accesses .get before object-type guard; may raise AttributeError instead of typed unavailable",
+      "Primary and Rust confirmed catalog thread/flock acquisition is blocking without watcher deadline; source evidence only in Mac audit."
+    ],
+    "test_limit": "14 watcher tests inspected only, no execution. Missing deterministic mixed-writer/unpaired-fence/root/cancel/resource acceptance evidence.",
+    "followup": "Separate producer session owns correction/release0.0.10; original defects reproduced producer-reported; mixed-writer guarantee owner decision pending. No corrected release claimed."
+  },
+  "external_actions": {
+    "runtime_or_artifact_execution": false,
+    "runtime_selection": false,
+    "app_build_or_launch": false,
+    "push_or_release": false,
+    "scoped_watcher_coordination_authorized": true
+  }
+}

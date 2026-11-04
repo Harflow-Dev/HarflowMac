@@ -70,3 +70,35 @@ prompt fallback is introduced. Missing capability and known unavailable prompt
 results remain distinct. Current EventStream summaries and rendered String?
 prompt paths are unchanged pending the later event-transport and approved design
 work; this adapter alone does not migrate those consumers.
+
+## Internal public-event observation
+
+The internal `PublicEventObservationManager` shares a public-page session by exact
+task identifier. It is not registered in `Module` or used by the production
+`EventStreamRepository`. Existing activity and summary readers remain in place
+pending the approved consumer cutover described in
+`docs/migration-receipts/M03-D2B-requirements.md` at repository root.
+
+One newest bootstrap supplies the opaque cursor lineage for activity and a
+bounded oldest-seek/chronological-summary replay. Unknown, missing, truncated or
+ambiguous payloads retain raw facts and qualify totals as unavailable; optional
+observed totals never certify complete capture. Event display prompts are not
+stored assignment authority. Prompt state remains not requested in this layer;
+the separate typed task-prompt reader supplies future assignment integration.
+
+Admission is single-flight per session and globally two operations per manager.
+Each external one-second tick allows at most two forward activity pages and two
+forward summary-tail pages. Historical seek/replay/recovery has a cumulative
+4096-operation ceiling independent of ordinary live polling. Activity holds at
+most 2,000 normalized records/4MiB serialized bytes, with whole-page refusal at
+capacity and no cursor advance or silent eviction. Summary keys and unresolved
+call identities have separate count/byte caps; published files are bounded to 100.
+These are engineering limits, not measured heap or performance acceptance.
+
+Publication uses a latest-value mailbox; source epochs fence admission and queued
+callbacks. Exact session/lease identities isolate delayed releases. Runtime
+invalidation ends old sessions and clears their snapshots; existing holders must
+explicitly reacquire. Production adaptation must preserve activity/summary
+interest and coordinate that reacquisition with the runtime owner callback.
+Binding equality cannot detect unnotified selection ABA. No private persistence,
+MCP fallback or automatic runtime selection exists in this internal reader.

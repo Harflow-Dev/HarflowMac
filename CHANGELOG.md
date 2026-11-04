@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an independently tested internal public-event observation layer with bounded cursor replay, qualified totals and fenced leases; production cutover remains blocked on approved consumer states.
+
 - Add strict public task-event page models and a freshly gated ctl client, preserving normalized loss, cursor accounting and historical provenance for the upcoming shared transport migration.
 
 - Add a typed public task-prompt client and fenced one-shot repository foundation, with the complete released0.0.8 contract fixtures; rendered prompt and runtime adoption remain separate.
