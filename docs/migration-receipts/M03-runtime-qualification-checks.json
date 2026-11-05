@@ -1,0 +1,350 @@
+{
+  "schema": 1,
+  "status": "Final source validation passed; bounded runtime qualification reviewed; no aggregate M03 acceptance or production pin adoption.",
+  "mac_base": "dadef6e465a0856d2262d5694c6a76c9fb231f15",
+  "approved_design": "5b37a3d4d4d06b3d96c517cd384892e1ac6883cf",
+  "engine_commit": "f304a65d9de948dfcba4c0c27c3d04f7f90971c8",
+  "production_pin": "0.0.7 unchanged",
+  "candidate_engine": "0.0.8 scratch only",
+  "inputs": {
+    "production-requirements.txt": {
+      "size": 41825,
+      "sha256": "e07daef0eb66055c5698098511b13aceccf9b64411a6074830983f3a9766dd55"
+    },
+    "pypi-0.0.8.json": {
+      "size": 24656,
+      "sha256": "ce1ebcdbbf30ca553987eaa50009b63d2fd7ba2a50bf89b97f740338242131b8"
+    },
+    "harflow_mcp-0.0.8-py3-none-any.whl": {
+      "size": 1139196,
+      "sha256": "f7aadeb9e4d1e131b3da05efa5f3f000eb4945e1c72dd4b0a002d27bb5f8472e"
+    },
+    "uv.lock": {
+      "size": 161178,
+      "sha256": "cd7ffbfec29c846068eb0ef90a6ff429f335cb5e93416f3339fc3ba8e593466a"
+    },
+    "cpython-3.13.16+20261020-aarch64-apple-darwin-install_only.tar.gz": {
+      "size": 25400715,
+      "sha256": "235f3d5b182a171f6564ee98ef2812cfb2da8a73c4a37fca1937b25702f94880"
+    },
+    "pyproject.toml": {
+      "size": 1434,
+      "sha256": "8792816e6b470acdedc3be102eb067631f15e6ad13af487021386051418f4a11"
+    },
+    "contracts-v1-manifest.json": {
+      "size": 67814,
+      "sha256": "6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1"
+    },
+    "github-release-0.0.8.json": {
+      "size": 9059,
+      "sha256": "811d9d1be9f46acaa6060d5d54ca6b6511f91f614d0d6be409b9add227043c4d"
+    },
+    "ManagedRuntime-0.0.8.json": {
+      "size": 12084,
+      "sha256": "03a3c350455c337e562cc74637269acdbe9a9fc8a0f3b0051eaa46d3d6cda4ad"
+    }
+  },
+  "candidate_specification_identity": "0785b7ec49d724765771290f27700718d7159ce6cc68e87679118325cbda0089",
+  "generation": "0.0.8-0785b7ec49d724765771290f27700718d7159ce6cc68e87679118325cbda0089-F914C02E-1675-4D8E-ADCB-C57E1989537D",
+  "native_results": [
+    {
+      "package": "MonitorCore",
+      "tests": 440,
+      "suites": 65,
+      "passed": true,
+      "artifact": "evidence/monitorcore-final-repair/manifest.json",
+      "sha256": "2d23c5a8697c502febd30b9df6b6f72be46f9bf44009c709c3d368bb2f7d3c54"
+    },
+    {
+      "package": "Harflow",
+      "tests": 119,
+      "suites": 13,
+      "passed": true,
+      "artifact": "evidence/postfix-Harflow/manifest.json",
+      "sha256": "16a20a25e1e6782acd235b9a890baaf623b8c1c02b6689a94d1c706123f50510"
+    },
+    {
+      "package": "HfCommon",
+      "tests": 17,
+      "suites": 3,
+      "passed": true,
+      "artifact": "evidence/postfix-HfCommon/manifest.json",
+      "sha256": "2d2f5c263191b3c1510e971f21a5c4326ac6a69cf04fc6ac17b38a591ca492d7"
+    },
+    {
+      "package": "HfRepository",
+      "tests": 518,
+      "suites": 72,
+      "passed": true,
+      "artifact": "evidence/postfix-HfRepository/manifest.json",
+      "sha256": "d24f769b7f3200f3a91abe2dcedd6f0d946ac2c11d258e778c17bc554f2c48ad"
+    },
+    {
+      "package": "HfUI",
+      "tests": 239,
+      "suites": 37,
+      "passed": true,
+      "artifact": "evidence/postfix-HfUI/manifest.json",
+      "sha256": "34747649facf3ecf7663f386c0354fa60998cb312fe49e094decc1920eb003c2"
+    },
+    {
+      "package": "HfUtilities",
+      "tests": 19,
+      "suites": 4,
+      "passed": true,
+      "artifact": "evidence/postfix-HfUtilities/manifest.json",
+      "sha256": "27ff81a491b6ac4cd40ca15aabef457f8d4fa4a1381dddc4b5d09603e6c84a01"
+    },
+    {
+      "package": "MenuBarFeature",
+      "tests": 88,
+      "suites": 8,
+      "passed": true,
+      "artifact": "evidence/postfix-MenuBarFeature/manifest.json",
+      "sha256": "570931cc2e304a265a8d856cadf2d3ed6d73596bb574756639ee59690b0359d7"
+    },
+    {
+      "package": "SettingsFeature",
+      "tests": 87,
+      "suites": 14,
+      "passed": true,
+      "artifact": "evidence/postfix-SettingsFeature/manifest.json",
+      "sha256": "f6da3957edb6b2b350ce46c8837f2a087a9d6d7bc0e691e40818dabd2aa8a73a"
+    }
+  ],
+  "mainwindow": {
+    "status": "final-source guarded run passed on 2026-11-06",
+    "pre_final_repair_run": {
+      "passed": true,
+      "partitions": 246,
+      "tests": 1814,
+      "artifact": "evidence/mainwindow-final/manifest.json",
+      "sha256": "856763d7b104346b62bbfc063bcf7238ddf1a695088be25562b8a4ff7d0c1128"
+    },
+    "final_source_gate_pending": false,
+    "assertions_unchanged": true,
+    "locked_preflight_artifact": "evidence/postfix-foreground-preflight.json",
+    "final_source_run": {
+      "passed": true,
+      "partitions": 246,
+      "tests": 1814,
+      "artifact": "evidence/mainwindow-postfix-waking/manifest.json",
+      "sha256": "28e2e3bf736531a9df8ceed184bcf43efa13d61fdb688360a6d262e9964e4cc1"
+    }
+  },
+  "functional_app_proof": {
+    "pid": 74030,
+    "start": "2026-11-05 22:31:15 Asia/Jakarta",
+    "initial_tasks": 2,
+    "refreshed_tasks": 3,
+    "connected_both": true,
+    "firstAXProof": true,
+    "refreshedAXProof": true,
+    "post_append_public_reads": 21,
+    "public_validation_passed": true
+  },
+  "controller": {
+    "status": "failed",
+    "exit_code": 1,
+    "failure": "cleanup observer: PS-live/kernel-gone race",
+    "relabeled_pass": false
+  },
+  "primary_teardown": {
+    "app_absent": true,
+    "group_absent": true,
+    "unique_preferences_restored_and_verified_empty": true,
+    "all_56_observed_identities_absent_or_reused": true,
+    "exhaustive_descendant_census": false,
+    "qualification_executable_census_matches": 0,
+    "independent_final_review": "combined bounded functional and final teardown evidence accepted; controller exit 1 retained"
+  },
+  "m03_accepted": false,
+  "m04_implementation_started": false,
+  "raw_artifacts": [
+    {
+      "artifact": "evidence/input-manifest.json",
+      "sha256": "ff6b817013de93a950bfa46a6a2bab8af56d17bbc31d79d7ea580562dc177e64"
+    },
+    {
+      "artifact": "evidence/installed-wheel-payloads.json",
+      "sha256": "6a21d08b2cf9ef5dd0bf65331b8e6164c498cb5efde8af8d5ee14eb0fcb2a67a"
+    },
+    {
+      "artifact": "evidence/launcher-upgrade.stdout.json",
+      "sha256": "93c57505ef0f2064a3b1d83ab9f1f58908db17b392eb767a48f380863d15a3de"
+    },
+    {
+      "artifact": "evidence/corrected-check-before.stdout.json",
+      "sha256": "797d680d6d36c50430434516fab109f050ceb3590a549bd673b69c471e43ee3d"
+    },
+    {
+      "artifact": "evidence/corrected-check-after.stdout.json",
+      "sha256": "40e6e45809163fe21dd0e14aa68279494894a633818e0d99a71466d947bf0a42"
+    },
+    {
+      "artifact": "evidence/corrected-reuse-before.stdout.json",
+      "sha256": "b528042372225280b5536b757d7b016db72c5a2527c671464945a6da0c6dd01e"
+    },
+    {
+      "artifact": "evidence/corrected-reuse-after.stdout.json",
+      "sha256": "dbc92dbbf3a826ab9e4850a776cce83dde1e2a1f97fec6f67137e52014090131"
+    },
+    {
+      "artifact": "evidence/corrected-corrupt-replacement.stdout.json",
+      "sha256": "592c5cf2f90f051119b58ce853a0e34d2c016349501b24748b805fa8c188809c"
+    },
+    {
+      "artifact": "evidence/release-build-launcher-fix.log",
+      "sha256": "6d465c19ff0f56c2522714438197f2680481259353a9b7685c0068b42c49dd23"
+    },
+    {
+      "artifact": "evidence/python-tooling-authorized.log",
+      "sha256": "b4c87870c2559f36679a44534206551a71eca8a3bb9572fb78384bbe3a1e3ad3"
+    },
+    {
+      "artifact": "evidence/swiftformat-final.log",
+      "sha256": "cb580ab3f4cc1b0277c5990ec1781f8e6fd6a1fbadee83e2e90d1e9a09bd0662"
+    },
+    {
+      "artifact": "evidence/swiftlint-0632-final.log",
+      "sha256": "78b2f47ea0ff7576d986cb99f577ff5d865f40efe840d5c81c96cb4a3d97f136"
+    },
+    {
+      "artifact": "evidence/remaining-consumers.md",
+      "sha256": "04b19d7db6ed61257cc34e8d1d23ab83ebe1d1b5dab004824e893807e0b19f67"
+    },
+    {
+      "artifact": "evidence/ui-tool-incident.md",
+      "sha256": "a94dbc6cda0a79d8b791f1adbefbbf182b1fed9eef304f598b6cd02928b3af8c"
+    },
+    {
+      "artifact": "app-smoke/verified-run/result.json",
+      "sha256": "5eb37ef21d3bbd50f96b8d5994e177552c6b43c65ad194e8c98e0ad5519f46a2"
+    },
+    {
+      "artifact": "app-smoke/verified-run/primary-teardown-verification.json",
+      "sha256": "282566437237cb73ca01cb20b52211dee14d8f8bceaa090bfd3478dfd999d252"
+    },
+    {
+      "artifact": "app-smoke/verified-run/all-observed-processes-teardown.json",
+      "sha256": "f3c5ff5593d0fc27248fceb24558b249ad2b69306a4db9477aa86a2b0ca04c33"
+    },
+    {
+      "artifact": "app-smoke/verified-run/initial-ax-0.stdout",
+      "sha256": "048691c8e6ae3ccaee8cd77cc76eebc45c9a17fa73457c7c05a0c30ada3967cc"
+    },
+    {
+      "artifact": "app-smoke/verified-run/refreshed-ax-0.stdout",
+      "sha256": "53c5d44851d3c1ebb45c9850a29ae0fedda4478400574f844e06608455c2ce60"
+    },
+    {
+      "artifact": "app-smoke/verified-run/qualification-executable-census.json",
+      "sha256": "b6b769067d9e74fefe37639c541de8d0731db6f8f099bdb44f37ae4936efceb8"
+    },
+    {
+      "artifact": "app-smoke/controller-status.json",
+      "sha256": "bf6f2e7bf07e6b43f89dba1356f567d3b8e3c36952d79ea57bc56832098ca3b0"
+    },
+    {
+      "artifact": "app-smoke/verified-run/validate-after-append.stdout",
+      "sha256": "6b7bc45624e5815ac66f2bdf36f852afee4e8c89492c24f8bff01d586eb0d6cb"
+    },
+    {
+      "artifact": "evidence/qualification-pre-read-repair-source/provenance.json",
+      "sha256": "73d541e47bef79c3aa77daf75c47db3a514c1b3588bf77bf32d3ce875083060b"
+    },
+    {
+      "artifact": "evidence/postfix-foreground-preflight.json",
+      "sha256": "f5affa7f6c252595aa06ca05f5b02fa5ea6abdf11678aadc9b3e4017919807c4"
+    },
+    {
+      "artifact": "evidence/release-final-repair.log",
+      "sha256": "3a1f519d0b54c065603c2978c656e69cd316506652bf4509941dce8df441c3a2"
+    },
+    {
+      "artifact": "evidence/bundle-final-repair.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "artifact": "evidence/swiftformat-postfix.log",
+      "sha256": "c8e2911b20bead757e561b79def0321f546665f4282cfb8dc22a001ed936e06a"
+    },
+    {
+      "artifact": "evidence/swiftlint-postfix.log",
+      "sha256": "111f3e48a5b91dd69b0011138b465caa5a4ccbfec017dd212970a7d8f10e95ed"
+    },
+    {
+      "artifact": "evidence/legacy-postfix.log",
+      "sha256": "9401a4783f0ba4b9ad87ea5de7d9875db9f9a67475d8e1145cc039731f26ec30"
+    },
+    {
+      "artifact": "evidence/private-postfix.log",
+      "sha256": "e10e6522b4f9ef77cca297385877a2471e9a0ca01f9f277f87a7637d7a45e598"
+    },
+    {
+      "artifact": "evidence/M04-next-stage-plan.md",
+      "sha256": "5024be675e093ad4e0cbfb3d3fee314b188b56a54b3e3383961763e41da1dcbd"
+    },
+    {
+      "artifact": "evidence/bundle-final-result.json",
+      "sha256": "606663aa0d872c20ce644160223096b5e22b38fe48ab701a1da17e75ef50fa1f"
+    },
+    {
+      "artifact": "evidence/qualification-pre-read-repair-source/ManagedRuntimeInstaller.swift",
+      "sha256": "dce9bd8abdd58c90c97ac314d28c8fb474d315508711e769d056e1fe906a2985"
+    },
+    {
+      "artifact": "evidence/protected-inputs-final.json",
+      "sha256": "076e5484f83f9c2c949e78b6704cc9de0aefb027bf6e316c694f12f861401003"
+    },
+    {
+      "artifact": "evidence/workflow-activity-fence-plan.md",
+      "sha256": "069dd4da587b5b4655ed11a3fa72fa233fbbb141890e000484f0db248d6c5bfd"
+    },
+    {
+      "artifact": "evidence/mainwindow-postfix-waking/manifest.json",
+      "sha256": "28e2e3bf736531a9df8ceed184bcf43efa13d61fdb688360a6d262e9964e4cc1"
+    }
+  ],
+  "source_snapshot": [
+    {
+      "path": "macos/HfCore/MonitorCore/Sources/MonitorCore/ManagedRuntime/ManagedRuntimeInstaller.swift",
+      "sha256": "3e9951a3fb807fd4892a95df93edf4988f1c224de99a487f943ea122fa1ad90a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Sources/MonitorCore/ManagedRuntime/ManagedRuntimeSpecification.swift",
+      "sha256": "df2273f031231b96f02a55650f3e835d923d7eb68bbaa4bbb5560da0ede8675f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ManagedRuntimeInstallerReuseTests.swift",
+      "sha256": "55de1c396ab18c1ac3e2b7158096ebfd63a6ac5fe23171c643eb934235bf1617"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ManagedRuntimeInstallerTests.swift",
+      "sha256": "85f70236a0eb31ee131cdf443e2a7fd0bf1f825f88797dc40ee2e5c45ac7d3df"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ManagedRuntimeSpecificationTests.swift",
+      "sha256": "cd340effee72d07974953825b43709e2ab52a96b23524c4a08fe0f82f68c2f19"
+    }
+  ],
+  "qualification_native_source_snapshot": [
+    {
+      "path": "macos/HfCore/MonitorCore/Sources/MonitorCore/ManagedRuntime/ManagedRuntimeInstaller.swift",
+      "sha256": "dce9bd8abdd58c90c97ac314d28c8fb474d315508711e769d056e1fe906a2985"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Sources/MonitorCore/ManagedRuntime/ManagedRuntimeSpecification.swift",
+      "sha256": "df2273f031231b96f02a55650f3e835d923d7eb68bbaa4bbb5560da0ede8675f"
+    }
+  ],
+  "final_read_error_repair": {
+    "description": "Move launcher-byte read check into existing cancellation-preserving reuse qualification catch; unreadable launchers become non-reusable and explicit prepare can replace them",
+    "postfix_monitorcore_tests": 440,
+    "runtime_smoke_after_this_repair": false,
+    "scope_limit": "Runtime/functional app evidence predates this narrow read-error handling move; engine/specification/launcher bytes unchanged. No new engine execution was performed for it."
+  },
+  "implementation_committed": true,
+  "final_format_files": 1049,
+  "final_lint_files": 1096
+}

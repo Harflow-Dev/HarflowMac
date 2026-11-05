@@ -256,6 +256,7 @@ private extension ManagedRuntimeInstaller {
               }) else { return nil }
         let ready: ManagedRuntimeReady
         do {
+            guard try generationLaunchersMatch(directory) else { return nil }
             try await validatePython(directory + "/python/bin/python3.13", environment: try installerEnvironmentForReuse(), directory: directory)
             ready = ManagedRuntimeReady(generationDirectory: directory, environment: try await runtimeEnvironment())
             try await qualify(ready)
@@ -277,19 +278,36 @@ private extension ManagedRuntimeInstaller {
          "PIP_CONFIG_FILE": "/dev/null", "LANG": "en_US.UTF-8"]
     }
 
+    private var generationTools: [(tool: String, module: String)] {
+        [("harflow-server", "harflow_mcp.server"), ("harflow-ctl", "harflow_mcp.cli"),
+         ("harflow-setup", "harflow_mcp.setup_client")]
+    }
+
+    private func generationLauncherText(module: String) -> String {
+        let code = "import os; "
+            + "[os.environ.pop(k) for k in list(os.environ) if k.startswith(('HARFLOW_', 'PB_'))]; "
+            + "os.environ['HARFLOW_STATE_ROOT']=\(pythonLiteral(layout.stateRoot)); "
+            + "os.environ['HARFLOW_OPEN_MONITOR']='0'; "
+            + "os.environ['PATH']=\(pythonLiteral(layout.binDirectory))+':'+os.environ.get('PATH','/usr/bin:/bin'); "
+            + "from \(module) import main; raise SystemExit(main())"
+        return "#!/bin/sh\nset -eu\nROOT=$(CDPATH= cd -P -- \"$(/usr/bin/dirname -- \"$0\")/..\" && pwd)\n"
+            + "exec \"$ROOT/python/bin/python3.13\" -I -B -c " + ManagedRuntimeFiles.quote(code) + " \"$@\"\n"
+    }
+
+    private func generationLaunchersMatch(_ directory: String) throws -> Bool {
+        for (tool, module) in generationTools {
+            let expected = Data(generationLauncherText(module: module).utf8)
+            let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: directory + "/bin/" + tool))
+            defer { try? handle.close() }
+            guard try handle.read(upToCount: expected.count + 1) == expected else { return false }
+        }
+        return true
+    }
+
     func createGenerationLaunchers(_ directory: String) throws {
         try ManagedRuntimeFiles.privateDirectory(directory + "/bin")
-        for (tool, module) in [("harflow-server", "harflow_mcp.server"), ("harflow-ctl", "harflow_mcp.cli"),
-                               ("harflow-setup", "harflow_mcp.setup_client")] {
-            let code = "import os; "
-                + "[os.environ.pop(k) for k in list(os.environ) if k.startswith(('HARFLOW_', 'PB_'))]; "
-                + "os.environ['HARFLOW_STATE_ROOT']=\(pythonLiteral(layout.stateRoot)); "
-                + "os.environ['HARFLOW_OPEN_MONITOR']='0'; "
-                + "os.environ['PATH']=\(pythonLiteral(layout.binDirectory))+':'+os.environ.get('PATH','/usr/bin:/bin'); "
-                + "from \(module) import main; main()"
-            let text = "#!/bin/sh\nset -eu\nROOT=$(CDPATH= cd -P -- \"$(/usr/bin/dirname -- \"$0\")/..\" && pwd)\n"
-                + "exec \"$ROOT/python/bin/python3.13\" -I -B -c " + ManagedRuntimeFiles.quote(code) + " \"$@\"\n"
-            try ManagedRuntimeFiles.executable(text, at: directory + "/bin/" + tool)
+        for (tool, module) in generationTools {
+            try ManagedRuntimeFiles.executable(generationLauncherText(module: module), at: directory + "/bin/" + tool)
         }
     }
 

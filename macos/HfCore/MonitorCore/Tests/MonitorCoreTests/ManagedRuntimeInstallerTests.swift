@@ -164,6 +164,38 @@ struct ManagedRuntimeInstallerTests {
         return (installer, selectedDownloader, selectedRunner)
     }
 
+    @Test(arguments: ["", "unknown", "0.0.9", "1.0.0"])
+    func givenUnsupportedEngineVersion_whenPreparingOrChecking_thenItFailsBeforeAcquisitionOrExecution(_ version: String) async throws {
+        // given
+        let home = try makeTempDir("managed-runtime-unsupported-version")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let fixture = Fixture()
+        let layout = ManagedRuntimeLayout(home: home.path)
+        let downloader = Downloader(fixture: fixture)
+        let runner = Runner(layout: layout, fixture: fixture)
+        let specification = ManagedRuntimeSpecification(
+            engineVersion: version, pythonVersion: fixture.specification.pythonVersion,
+            python: fixture.specification.python, dependencies: fixture.specification.dependencies,
+            provenance: fixture.specification.provenance
+        )
+        let installer = ManagedRuntimeInstaller(
+            layout: layout, specification: specification, baseEnvironment: ["PATH": "/usr/bin:/bin"],
+            runner: runner, downloader: downloader
+        )
+
+        // when / then
+        await #expect(throws: ManagedRuntimeFailure.self) {
+            try await installer.prepare()
+        }
+        await #expect(throws: ManagedRuntimeFailure.self) {
+            try await installer.checkExisting()
+        }
+        #expect(downloader.requestCount == 0)
+        #expect(runner.calls.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: layout.runtimeRoot))
+        #expect(!FileManager.default.fileExists(atPath: layout.stateRoot))
+    }
+
     @Test func givenQualifiedFixture_whenPreparingTwice_thenSecondPreparationReusesActiveGenerationWithoutNetwork() async throws {
         // given
         let home = try makeTempDir("managed-runtime-reuse")

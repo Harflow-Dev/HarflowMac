@@ -3,6 +3,101 @@ import Foundation
 import Testing
 
 extension ManagedRuntimeInstallerTests {
+    @Test(arguments: ["harflow-ctl", "harflow-setup", "harflow-server"])
+    func givenLegacyLauncher_whenCheckingAndPreparing_thenItRequiresANewGenerationWithoutMutatingTheOld(_ tool: String) async throws {
+        // given
+        let home = try makeTempDir("managed-runtime-legacy-launcher")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let (installer, downloader, runner) = makeInstaller(home: home)
+        let original = try await installer.prepare()
+        let path = original.generationDirectory + "/bin/" + tool
+        let current = try String(contentsOfFile: path, encoding: .utf8)
+        let legacy = current.replacingOccurrences(of: "raise SystemExit(main())", with: "main()")
+        try Data(legacy.utf8).write(to: URL(fileURLWithPath: path))
+        let requestCount = downloader.requestCount
+        let callCount = runner.calls.count
+
+        // when / then
+        let availability = try await installer.checkExisting()
+        #expect(availability == .requiresInstallation(installedVersion: "0.0.7", requiredVersion: "0.0.7"))
+        #expect(downloader.requestCount == requestCount)
+        #expect(runner.calls.count == callCount)
+        #expect(try String(contentsOfFile: path, encoding: .utf8) == legacy)
+
+        let replacement = try await installer.prepare()
+        #expect(replacement.generationDirectory != original.generationDirectory)
+        #expect(downloader.requestCount > requestCount)
+        #expect(try String(contentsOfFile: path, encoding: .utf8) == legacy)
+        #expect(try String(contentsOfFile: replacement.generationDirectory + "/bin/" + tool, encoding: .utf8) == current)
+    }
+
+    @Test(arguments: ["harflow-ctl", "harflow-setup", "harflow-server"])
+    func givenUnreadableLauncher_whenCheckingAndPreparing_thenItRequiresANewGenerationWithoutMutatingTheOld(_ tool: String) async throws {
+        // given
+        let home = try makeTempDir("managed-runtime-unreadable-launcher")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let (installer, downloader, runner) = makeInstaller(home: home)
+        let original = try await installer.prepare()
+        let layout = ManagedRuntimeLayout(home: home.path)
+        let active = try FileManager.default.destinationOfSymbolicLink(atPath: layout.activePath)
+        let path = original.generationDirectory + "/bin/" + tool
+        let current = try Data(contentsOf: URL(fileURLWithPath: path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o111], ofItemAtPath: path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: path) }
+        let requestCount = downloader.requestCount
+        let callCount = runner.calls.count
+
+        // when / then
+        let availability = try await installer.checkExisting()
+        #expect(availability == .requiresInstallation(installedVersion: "0.0.7", requiredVersion: "0.0.7"))
+        #expect(downloader.requestCount == requestCount)
+        #expect(runner.calls.count == callCount)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: layout.activePath) == active)
+        #expect(try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int == 0o111)
+
+        let replacement = try await installer.prepare()
+        #expect(replacement.generationDirectory != original.generationDirectory)
+        #expect(downloader.requestCount > requestCount)
+        #expect(try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int == 0o111)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: replacement.generationDirectory + "/bin/" + tool)) == current)
+    }
+
+    @Test(arguments: ["None", "0", "7"])
+    func givenGeneratedLaunchers_whenModuleMainReturns_thenTheirProcessExitPreservesTheResult(_ result: String) async throws {
+        // given
+        let home = try makeTempDir("managed runtime launcher")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let (installer, _, _) = makeInstaller(home: home)
+        let ready = try await installer.prepare()
+        let directory = ready.generationDirectory
+        // Run the launcher's actual Python command with only synthetic modules, never an installed engine.
+        let bootstrap = "import sys, types; "
+            + "modules = ['harflow_mcp.server', 'harflow_mcp.cli', 'harflow_mcp.setup_client']; "
+            + "sys.modules['harflow_mcp'] = types.ModuleType('harflow_mcp'); "
+            + "[sys.modules.__setitem__(name, types.ModuleType(name)) for name in modules]; "
+            + "[setattr(sys.modules[name], 'main', lambda: \(result)) for name in modules]; "
+            + "code = sys.argv.pop(1); exec(code)"
+        let adapter = "#!/bin/sh\nset -eu\nshift 3\n"
+            + "exec /usr/bin/python3 -I -B -c " + ManagedRuntimeFiles.quote(bootstrap) + " \"$@\"\n"
+        try ManagedRuntimeFiles.executable(adapter, at: directory + "/python/bin/python3.13")
+        let runner = ManagedRuntimeProcessRunner()
+
+        // when / then
+        for tool in ["harflow-ctl", "harflow-setup", "harflow-server"] {
+            let output = await runner.run(
+                executable: directory + "/bin/" + tool, arguments: [],
+                environment: ["HOME": home.path, "PATH": "/usr/bin:/bin"], currentDirectory: directory, timeout: 10
+            )
+            switch output {
+            case .success(let output):
+                #expect(output.exitCode == (result == "7" ? 7 : 0))
+                #expect(output.stderr.isEmpty)
+            case .failure(let error):
+                Issue.record("launcher execution failed: \(error)")
+            }
+        }
+    }
+
     @Test func givenQualifiedGeneration_whenCheckingExisting_thenItReusesWithoutDownloading() async throws {
         let home = try makeTempDir("managed-runtime-reuse-only")
         defer { try? FileManager.default.removeItem(at: home) }

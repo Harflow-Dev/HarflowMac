@@ -46,6 +46,34 @@ struct ManagedRuntimeSpecificationTests {
         try specification.validate()
     }
 
+    @Test(arguments: ["0.0.7", "0.0.8"])
+    func givenExplicitlySupportedEngineVersion_whenValidated_thenItIsAccepted(_ version: String) throws {
+        // given
+        let bundled = try ManagedRuntimeSpecification.bundled()
+        let specification = ManagedRuntimeSpecification(
+            engineVersion: version, pythonVersion: bundled.pythonVersion, python: bundled.python,
+            dependencies: bundled.dependencies, provenance: bundled.provenance
+        )
+
+        // when / then
+        try specification.validate()
+    }
+
+    @Test(arguments: ["", " ", "unknown", "0.0.6", "0.0.9", "1.0.0", "0.0.8-dev", "v0.0.8", "0.0.8 "])
+    func givenUnsupportedEngineVersion_whenValidated_thenItIsRejected(_ version: String) throws {
+        // given
+        let bundled = try ManagedRuntimeSpecification.bundled()
+        let specification = ManagedRuntimeSpecification(
+            engineVersion: version, pythonVersion: bundled.pythonVersion, python: bundled.python,
+            dependencies: bundled.dependencies, provenance: bundled.provenance
+        )
+
+        // when / then
+        #expect(throws: ManagedRuntimeFailure.self) {
+            try specification.validate()
+        }
+    }
+
     @Test func givenPackagedAppResources_whenLoaded_thenItUsesTheAuthoritativeResourceBundle() throws {
         let fixture = try packagedFixture()
         let specification = try ManagedRuntimeSpecification.bundled(

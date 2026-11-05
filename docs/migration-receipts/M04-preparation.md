@@ -79,3 +79,34 @@ blocked until their own required states are approved.
 No production code, fixture/runtime pin, steering consumer, tracker, sibling
 repository, installation, acquisition, live runtime/provider or release state was
 changed by this preparation. Owner, runtime and performance acceptance remain open.
+
+## Subsequent approved design and runtime evidence — 2026-11-05
+
+This update supersedes the earlier design-unapproved and runtime-unperformed
+snapshots only within the scope below. It does not start M04 production work.
+
+The owner approved HarflowDesign `5b37a3d4d4d06b3d96c517cd384892e1ac6883cf`,
+`v2/docs/approval.md` and `v2/docs/m04-proposal.md`; implementation references are
+`v2/scripts/screens-m04-proposal.js`, `v2/scripts/m04-proposal.js` and
+`v2/styles/m04-proposal.css`. Approval covers all 24 `m04-proposal` states in
+Light/Dark: shell, shell-collapsed, shell-narrow; composer-loading, composer-ready,
+composer-unqualified, composer-invalid, composer-starting, composer-refused,
+composer-unknown; advanced, advanced-closed; history-empty, history-loading,
+history-older, history-error, history-reconnecting, history-retained;
+runtime-checking, runtime-install-required, runtime-update-required,
+runtime-installing, runtime-failed, runtime-listing. The final approved direction
+includes the bottom-left + task-options popover and slim scrollbar using the
+existing tertiary token at 72%. This approves visual direction and local interaction,
+not native pixel fidelity or production capability/persistence acceptance.
+
+The [runtime receipt](M03-runtime-qualification.md) records exact 0.0.8 scratch
+qualification and same-PID rendered initial/refresh proof, together with the failed
+controller cleanup observation and separate completed teardown evidence. Production
+selection remains 0.0.7. Final source review resolved the launcher-read finding; all eight headless
+packages (1,527 tests), Release/bundle checks, and the final MainWindow run
+(246 suites, 1,814 tests) passed. The remaining-consumer inventory still requires an
+explicit disposition of successor completeness and unsettled/live workflow capability fencing, preserving older settled reads;
+statistics/stored-changes dependencies are not implicitly owner-deferred.
+
+No M04 production implementation, aggregate M03 acceptance, production pin change
+or owner performance acceptance is established by these updates.
