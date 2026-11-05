@@ -147,8 +147,8 @@ struct TaskContinuityTests {
                 #expect(accessibilityFocused(section) == true)
             }
             if details == nil {
-                let toggle = try #require(host.element("Show inspector"))
-                #expect(host.press(toggle))
+                let facts = try #require(host.element("Task snapshot facts and actions"))
+                #expect(host.press(facts))
                 await host.settle { host.element("Technical info") != nil }
                 let disclosure = try #require(host.element("Technical info"))
                 #expect(host.press(disclosure))

@@ -19,16 +19,12 @@ enum ActivityRowsBuilder {
     /// undelivered notes, finished markers, separators, edits/writes and a task change all close the
     /// open card and stay individual rows.
     ///
-    /// The initial prompt is rendered once, from `task_started.prompt` (`TimelineRow` shows the started row's prompt as a bubble): only
-    /// the matching `user_message(source: "initial")` of the first member is dropped here, so a
-    /// mid-run message that happens to repeat the prompt still shows.
+    /// Captured historical messages retain their own identity and are never deduplicated by text.
     static func build(from rows: [ConversationTimelineRow], cancellationAware: Bool = false,
                       markdown: [String: StreamingMarkdownState] = [:]) -> [ActivityRow] {
         var result: [ActivityRow] = []
         result.reserveCapacity(rows.count)
         var open: OpenGroup?
-        let initial = InitialPrompt(rows)
-        var initialSuppressed = false
 
         for row in rows {
             if cancellationAware, Task.isCancelled { return [] }
@@ -51,13 +47,6 @@ enum ActivityRowsBuilder {
                     closeGroup(&open, into: &result)
                     open = OpenGroup(id: row.id, taskID: row.taskID, bucket: bucket, members: [member])
                 }
-            case .message(let text, let source):
-                closeGroup(&open, into: &result)
-                if !initialSuppressed, initial.matches(row, text: text, source: source) {
-                    initialSuppressed = true
-                    continue
-                }
-                result.append(.single(row, markdown: prepared(row, previous: markdown[row.id])))
             default:
                 closeGroup(&open, into: &result)
                 result.append(.single(row, markdown: prepared(row, previous: markdown[row.id])))
@@ -95,35 +84,4 @@ enum ActivityRowsBuilder {
         open = nil
     }
 
-    // MARK: - Initial prompt
-
-    /// The first member's `task_started.prompt`, found among that member's own leading rows. Absent
-    /// when the conversation does not open with its first member's rows, or that member has no
-    /// `started` row: then nothing is suppressed, so the initial message is the one bubble.
-    private struct InitialPrompt {
-        let taskID: String?
-        let prompt: String?
-
-        init(_ rows: [ConversationTimelineRow]) {
-            guard let first = rows.first, case .item = first.kind else {
-                self.taskID = nil
-                self.prompt = nil
-                return
-            }
-            self.taskID = first.taskID
-            var found: String?
-            for row in rows {
-                guard row.taskID == first.taskID else { break }
-                if case .item(let item) = row.kind, case .started(let started) = item.body {
-                    found = started.prompt
-                    break
-                }
-            }
-            self.prompt = found
-        }
-
-        func matches(_ row: ConversationTimelineRow, text: String, source: String?) -> Bool {
-            source == "initial" && row.taskID == taskID && text == prompt
-        }
-    }
 }

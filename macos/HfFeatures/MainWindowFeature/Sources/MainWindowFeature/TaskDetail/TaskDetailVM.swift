@@ -78,6 +78,14 @@ protocol TaskDetailUseCase: Sendable {
     func allowHarflowTools(backend: String) async throws -> [String: JSONValue]
     func setOutcome(_ id: String, _ text: String?)
 
+    func observation(for id: String) -> EventObservationFrame
+    func observationPublisher(for id: String) -> AnyPublisher<EventObservationFrame, Never>
+    @discardableResult func requestObservation(_ action: EventObservationAction, for id: String, scope: EventObservationScope) -> Bool
+    func requestState(for id: String) -> TaskRequestReadState
+    func requestPublisher(for id: String) -> AnyPublisher<TaskRequestReadState, Never>
+    func readRequest(for id: String, maxBytes: Int)
+    func recoveredTranscript(for id: String) -> RecoveredTranscriptFrame
+    func recoveredTranscriptPublisher(for id: String) -> AnyPublisher<RecoveredTranscriptFrame, Never>
     // Events (decision 6)
     func resolveTask(_ id: String) async -> TaskInfo?
     func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage?
@@ -100,7 +108,6 @@ protocol TaskDetailUseCase: Sendable {
     func activity(for id: String) -> ActivityCounts
     func current(for id: String) -> TimelineItem?
     func prompt(for id: String) -> String?
-    func eventsPath(for id: String) -> String
 }
 
 extension TaskDetailUseCase {
@@ -205,8 +212,15 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored var artifactGeneration = UUID()
     var summaryModel = SummaryPaneModel.empty
     var promptText = "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
+    var requestReadState: TaskRequestReadState = .notRequested
+    var recoveredTranscript = RecoveredTranscriptFrame()
+    var copyFeedback: String?
+    @ObservationIgnored var recoveryTaskID: String?
+    @ObservationIgnored var recoverySubscriptions: [AnyCancellable] = []
+    @ObservationIgnored var requestTaskID: String?
+    @ObservationIgnored var requestSubscriptions: [AnyCancellable] = []
+    var observationFrames: [String: EventObservationFrame] = [:]
     var rawEvents: [TaskEvent] = []
-    var rawEventsPath = "/dev/null"
     @ObservationIgnored let continuityHistory: any TaskContinuityHistory
     var inspectorModel: InspectorModel?
     var messageBoxModel = MessageBoxModel.disabled
@@ -351,6 +365,13 @@ final class TaskDetailVM: TaskDetailViewModel {
         summaryLeases.removeAll()
         summaryCancellables.removeAll()
         loadedActivityMembers.removeAll()
+        recoverySubscriptions.removeAll()
+        recoveryTaskID = nil
+        requestSubscriptions.removeAll()
+        requestTaskID = nil
+        requestReadState = .notRequested
+        recoveredTranscript = .init()
+        observationFrames.removeAll()
         eventsByMember.removeAll()
         itemsByMember.removeAll()
         eventsAvailabilityByMember.removeAll()
@@ -358,10 +379,6 @@ final class TaskDetailVM: TaskDetailViewModel {
         didSubscribe = false
     }
 
-    /// Switching TO Summary recomputes it immediately (Monitor piece 8, Codex review round 2,
-    /// finding 2) — `recompute()` itself only rebuilds Summary while that tab is already the shown
-    /// one (see its own doc comment), so the model would otherwise still be showing whatever it last
-    /// was the previous time this tab was visible.
     func didSelectTab(_ tab: TaskTab) {
         self.tab = tab
         if tab == .summary, let task { recomputeSummary(task: task) }
@@ -470,6 +487,8 @@ final class TaskDetailVM: TaskDetailViewModel {
         }
         task = detail
         currentTaskID = detail.taskID
+        observeRequest(conversationMembers.first?.taskID ?? currentTaskID)
+        observeRecovery(currentTaskID)
         prepareResourceContext(task: detail)
         if isMounted {
             updateCallerApprovals(task: detail)
@@ -538,7 +557,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         recomputeTimeline(task: detail, allChildren: allChildren)
         recomputeInspector(task: detail, ancestors: currentTaskAncestors, allChildren: allChildren)
         recomputeMessageBox(task: detail)
-        if tab == .summary { recomputeSummary(task: detail) }
+        recomputeSummary(task: detail)
     }
 
     /// Every child any conversation member has started via `spawned_by` (Design point 3) — shared by

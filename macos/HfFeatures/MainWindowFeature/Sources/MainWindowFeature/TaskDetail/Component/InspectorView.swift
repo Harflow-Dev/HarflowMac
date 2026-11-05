@@ -73,9 +73,11 @@ struct InspectorModel {
     }
 }
 
-// MARK: - InspectorView
+typealias InspectorView = TaskSnapshotFactsView
 
-struct InspectorView: View {
+// MARK: - TaskSnapshotFactsView
+
+struct TaskSnapshotFactsView: View {
     let model: InspectorModel?
     var supervisionRequest = 0
     @State private var technicalExpanded = false
@@ -87,20 +89,12 @@ struct InspectorView: View {
         ScrollView {
             if let model {
                 VStack(alignment: .leading, spacing: 24) {
-                    if model.task.status.isRunning { now(model) }
-                    // The design's order: Details, a hairline, then the copy buttons.
                     VStack(alignment: .leading, spacing: 16) {
-                        section("Details") { basics(model) }
+                        section("Task snapshot") { basics(model) }
                         Divider()
                         actions(model)
                     }
                     if !model.notices.isEmpty { notices(model) }
-                    section("Activity") {
-                        if let note = model.activityNote { Text(note).font(.hf(.secondary)).foregroundStyle(Color.secondaryText) }
-                        Text("\(model.activity.toolCalls) tool calls · \(model.activity.edits) edits · "
-                             + "\(model.activity.commands) commands · \(model.subtaskCount) sub-tasks")
-                        .font(.hf(.secondary))
-                    }
                     DisclosureGroup(isExpanded: $technicalExpanded) {
                         // macOS centres a DisclosureGroup's content unless it is given the full width.
                         technicalInfo(model).padding(.top, 8).frame(maxWidth: .infinity, alignment: .leading)

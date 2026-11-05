@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import HfUI
 import MonitorCore
 
@@ -31,6 +32,7 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     /// member inputs — never from the filtered display rows alone, which compact folding may
     /// intentionally hide calls from.
     var noToolCallsText: String?
+    var cachedHistoryNotice: String?
     let start: Date?
     let memberTaskIDs: Set<String>
 }
@@ -40,6 +42,8 @@ struct ParallelMemberInput: Equatable, Sendable {
     let items: [TimelineItem]
     let prompt: String?
     let availability: EventAvailability
+    var observation: EventObservationFrame?
+    var recoveredTranscript = RecoveredTranscriptFrame()
 }
 
 struct ParallelColumnInput: Equatable, Sendable {
@@ -76,9 +80,11 @@ enum ParallelPresentationBuilder {
         var members: [ConversationItemMember] = []
         for member in input.members {
             try Task.checkCancellation()
-            members.append(ConversationItemMember(task: member.task, items: member.items, prompt: member.prompt))
+            members.append(ConversationItemMember(task: member.task, items: member.items, prompt: member.prompt,
+                identityScope: member.observation?.scope.identity))
         }
-        let rawRows = try rows(members)
+        let recovered = Dictionary(input.members.map { ($0.task.taskID, $0.recoveredTranscript) }, uniquingKeysWith: { _, last in last })
+        let rawRows = try rows(members, recoveredByMember: recovered)
         try Task.checkCancellation()
         let tasks = Dictionary(uniqueKeysWithValues: members.map { ($0.task.taskID, $0.task) })
         let rows = WorkflowNodePresentation.visibleRows(rawRows, tasks: tasks, compact: true)
@@ -95,17 +101,22 @@ enum ParallelPresentationBuilder {
         result.liveStep = LiveStep(rows: rows, isRunning: result.task.status.isRunning)
         result.pendingMessages = PendingMessage.visible(snapshot: input.snapshot, events: input.events)
         result.workMessages = WorkMessageBubble.project(raw: input.snapshot?.raw ?? result.task.raw)
-        let hasItems = input.members.contains { !$0.items.isEmpty }
+        let hasItems = input.members.contains { !$0.items.isEmpty || !$0.recoveredTranscript.items.isEmpty }
         // Activity-item counts (§4): a loaded count of one reads "1 activity item", a still-loading
         // or empty feed omits the count rather than claiming "0 activity items".
-        let itemCount = rows.filter { if case .item = $0.kind { return true }; return false }.count
+        let itemCount = rows.filter {
+            guard !$0.id.contains("#recovered:") else { return false }
+            if case .item = $0.kind { return true }
+            return false
+        }
+.count
         result.stepCountText = itemCount > 0 ? "\(itemCount) \(itemCount == 1 ? "activity item" : "activity items")" : nil
         // "No tool calls recorded" (§4) is proven only for a terminal current task from the
         // unfiltered member inputs and a settled history window — the same proof TaskDetail's
         // timeline uses, never the compact-folded display rows.
         let provesNoToolCalls = result.task.status.isTerminal
             && TaskDetailTimelinePresentation.noToolCallsRecorded(members: input.members, history: result.history)
-        result.noToolCallsText = provesNoToolCalls ? "No tool calls recorded" : nil
+        result.noToolCallsText = provesNoToolCalls ? "No tool calls observed in the available captured history" : nil
         result.isLoading = !hasItems && (input.members.contains { $0.availability == .loading }
             || (input.members.isEmpty && input.base.history.isLoading))
         result.emptyText = nil
@@ -117,7 +128,8 @@ enum ParallelPresentationBuilder {
     }
 
     /// Same canonical concatenation as ConversationTimeline, with checkpoints for long feeds.
-    nonisolated static func rows(_ members: [ConversationItemMember]) throws -> [ConversationTimelineRow] {
+    nonisolated static func rows(_ members: [ConversationItemMember],
+                                 recoveredByMember: [String: RecoveredTranscriptFrame] = [:]) throws -> [ConversationTimelineRow] {
         var rows: [ConversationTimelineRow] = []
         for (index, member) in members.enumerated() {
             try Task.checkCancellation()
@@ -129,9 +141,22 @@ enum ParallelPresentationBuilder {
             for item in member.items {
                 try Task.checkCancellation()
                 if index > 0, case .message(let text, let source) = item.body, source == "initial", text == member.prompt { continue }
-                if index > 0, case .started = item.body { continue }
-                rows.append(ConversationTimelineRow(id: "\(member.task.taskID)#\(item.id)", taskID: member.task.taskID,
+                if case .started = item.body { continue }
+                let rowID = member.identityScope.map { "\(member.task.taskID)#scope:\($0.utf8.count):\($0)#\(item.id)" }
+                    ?? "\(member.task.taskID)#\(item.id)"
+                rows.append(ConversationTimelineRow(id: rowID, taskID: member.task.taskID,
                     timestamp: item.at, kind: .item(item), live: live))
+            }
+            if let recovered = recoveredByMember[member.task.taskID], let generation = recovered.generation, !recovered.items.isEmpty {
+                let prefix = "\(member.task.taskID)#recovered:\(generation.uuidString)"
+                rows.append(ConversationTimelineRow(id: prefix + ":boundary", taskID: member.task.taskID,
+                    timestamp: nil, kind: .separator(text: "Recovered transcript · display-only; excluded from captured activity facts"), live: false))
+                for item in recovered.items {
+                    try Task.checkCancellation()
+                    if case .started = item.body { continue }
+                    rows.append(ConversationTimelineRow(id: prefix + "#\(item.id)", taskID: member.task.taskID,
+                        timestamp: item.at, kind: .item(item), live: false))
+                }
             }
         }
         return rows
@@ -226,7 +251,7 @@ struct ParallelColumnRenderValue: Equatable {
             && left.isLoading == right.isLoading && left.emptyText == right.emptyText
             && left.history == right.history && left.paginationRevision == right.paginationRevision
             && left.summary == right.summary && left.stepCountText == right.stepCountText
-            && left.noToolCallsText == right.noToolCallsText && left.start == right.start
+            && left.noToolCallsText == right.noToolCallsText && left.cachedHistoryNotice == right.cachedHistoryNotice && left.start == right.start
             && left.memberTaskIDs == right.memberTaskIDs && lhs.animatesArrival == rhs.animatesArrival
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
             && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
@@ -250,6 +275,7 @@ extension ParallelColumnModel {
         value.paginationRevision = paginationRevision
         value.stepCountText = stepCountText
         value.noToolCallsText = noToolCallsText
+        value.cachedHistoryNotice = cachedHistoryNotice
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
                                         hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil)
     }

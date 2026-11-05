@@ -102,7 +102,7 @@ struct TaskDetailToolbar: View, Equatable {
     }
 
     private var inspectorToggle: some View {
-        let label = snapshot.showsInspector ? "Hide inspector" : "Show inspector"
+        let label = snapshot.showsInspector ? "Hide event details" : "Show event details"
         return Button(action: actions.toggleInspector) { Image(systemName: "sidebar.right") }
             .buttonStyle(QuietButtonStyle(isSelected: snapshot.showsInspector))
             .help(label)
@@ -114,7 +114,7 @@ struct TaskDetailToolbar: View, Equatable {
         if snapshot.resumeCommand != nil { Button("Copy resume command", action: actions.copyResumeCommand) }
         if let parentID = snapshot.parentID { Button("Open parent") { actions.openTask(parentID) } }
         Divider()
-        Button("Raw events", action: actions.showRawEvents)
+        Button("Events", action: actions.showRawEvents)
     }
 }
 

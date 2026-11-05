@@ -21,9 +21,12 @@ import Testing
         harness.detailBox.value = helper.task(status: "completed")
         harness.itemsOverride.value = items
         harness.eventsAvailabilityBox.value = .available
-        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext())
+        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext().frame(width: 744, height: 620))
         controller.sceneBridgingOptions = .all
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+        // The app minimum is 1000×620; its 256-point sidebar leaves 744 points for
+        // TaskDetail. The 320-point Events pane keeps this transcript about 420 points
+        // wide. Dedicated feed-only suites also exercise narrower viewports.
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 744, height: 620),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentViewController = controller
@@ -102,9 +105,12 @@ import Testing
         harness.eventsBox.value = events
         harness.itemsOverride.value = Timeline.items(from: events)
         harness.eventsAvailabilityBox.value = .available
-        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext())
+        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext().frame(width: 744, height: 620))
         controller.sceneBridgingOptions = .all
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+        // The app minimum is 1000×620; its 256-point sidebar leaves 744 points for
+        // TaskDetail. The 320-point Events pane keeps this transcript about 420 points
+        // wide. Dedicated feed-only suites also exercise narrower viewports.
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 744, height: 620),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentViewController = controller
@@ -151,9 +157,12 @@ import Testing
             PreviewFixtures.finishedItem(seq: 2)
         ]
         harness.eventsAvailabilityBox.value = .available
-        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext())
+        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext().frame(width: 744, height: 620))
         controller.sceneBridgingOptions = .all
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+        // The app minimum is 1000×620; its 256-point sidebar leaves 744 points for
+        // TaskDetail. The 320-point Events pane keeps this transcript about 420 points
+        // wide. Dedicated feed-only suites also exercise narrower viewports.
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 744, height: 620),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentViewController = controller
@@ -183,12 +192,15 @@ import Testing
 .filter(\.isCoherentNativeMeasurement)
             .map { $0.convert($0.bounds, to: document) }
             .filter { $0.intersects(scroll.documentVisibleRect) }
+        #expect(scroll.contentView.bounds.width <= 424, "The actual transcript remains narrow beside Events")
         let allMeasured = descendants(document)
 .compactMap { $0 as? ActivityFeedNativeCell }
 .filter(\.isCoherentNativeMeasurement)
             .map { $0.convert($0.bounds, to: document) }
         print("FDC synthetic long-then-finished: document=\(document.bounds), "
             + "visible=\(scroll.documentVisibleRect), measured=\(allMeasured)")
+        #expect(controller.view.bounds.width == 744 && controller.view.bounds.height == 620,
+                "The fixture must host the actual minimum-sized task-detail content rather than its ideal size")
         #expect(visible.count >= 2, "Both the tall assistant row and following finished row must be measured in the initial viewport")
         #expect(allMeasured.contains { $0.height >= scroll.documentVisibleRect.height * 3 },
                 "The complete known long markdown must occupy at least three viewports; a one-point native slot is not text evidence")
@@ -209,9 +221,12 @@ import Testing
         harness.detailBox.value = helper.task(status: "completed")
         harness.itemsOverride.value = latest
         harness.eventsAvailabilityBox.value = .available
-        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext())
+        let controller = NSHostingController(rootView: NavigationStack { TaskDetailView(harness.sut) }.withPresentationContext().frame(width: 744, height: 620))
         controller.sceneBridgingOptions = .all
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+        // The app minimum is 1000×620; its 256-point sidebar leaves 744 points for
+        // TaskDetail. The 320-point Events pane keeps this transcript about 420 points
+        // wide. Dedicated feed-only suites also exercise narrower viewports.
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 744, height: 620),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentViewController = controller
@@ -275,6 +290,19 @@ import Testing
             PreviewFixtures.finishedItem(seq: 7),
             PreviewFixtures.textItem(longText, seq: 8)
         ]
+    }
+
+    @Test func givenFixedRowsAndDocument_whenViewportShrinks31Points_thenOriginalMetricRejectsRelativeShift() {
+        let row = NSObject()
+        let identity = ObjectIdentifier(row)
+        func sample(offset: CGFloat, viewport: CGFloat) -> FirstMountSample {
+            FirstMountSample(timestamp: 0, offset: offset, documentHeight: 1889, viewportHeight: viewport, insets: .init(),
+                rowIDs: [identity], rowFrames: [CGRect(x: 0, y: 1700, width: 100, height: 100)],
+                comparisonRowIDs: [identity], comparisonFrames: [CGRect(x: 0, y: 1700, width: 100, height: 100)])
+        }
+        let metrics = firstMountMetrics(samples: [sample(offset: 1548, viewport: 341), sample(offset: 1579, viewport: 310)])
+        #expect(metrics.stableIDs && metrics.heightTransitions == 0 && metrics.reversals == 0)
+        #expect(!metrics.stableGeometry, "Unchanged rows and document do not excuse a31-point viewport-relative displacement")
     }
 
     private func firstMountMetrics(samples: [FirstMountSample]) -> (

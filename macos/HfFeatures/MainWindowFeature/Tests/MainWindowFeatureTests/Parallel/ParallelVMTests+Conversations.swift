@@ -29,7 +29,10 @@ extension ParallelVMTests {
         let agentBTurn2 = task(id: "b2", status: "completed", startedAt: start.addingTimeInterval(100), parentTaskID: "b1")
         let agentBTurn3 = task(id: "b3", status: "completed", startedAt: start.addingTimeInterval(200), parentTaskID: "b2")
         let members = [agentATurn1, agentATurn2, agentATurn3, agentBTurn1, agentBTurn2, agentBTurn3]
-        for member in members { tasksBox.value[member.taskID] = member }
+        for member in members {
+            tasksBox.value[member.taskID] = member
+            harness.availabilityBox.value[member.taskID] = .available
+        }
         sut.didAppear()
 
         // when

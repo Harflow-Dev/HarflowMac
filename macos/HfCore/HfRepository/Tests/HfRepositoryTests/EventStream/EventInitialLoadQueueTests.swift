@@ -41,33 +41,14 @@ import Testing
         #expect(!reader.started.contains(ids[4]))
     }
 
-    @Test func givenSharedQueuedLeases_whenAnotherTaskIsReleased_thenSharedStreamLoadsAndReleasedStreamStaysUnread() async throws {
+    @Test func givenSharedQueuedPublicLeases_whenAnotherTaskIsReleased_thenOneSharedReadStartsAndReleasedTaskNeverReads() async {
         // given
-        let queue = EventInitialLoadQueue()
-        let reader = DelayedReader()
-        let blockers = (0 ..< 4).map { _ in UUID() }
-        for id in blockers { queue.submit(id: id) { reader.begin(id, completion: $0) } }
-        await waitUntil { reader.started.count == 4 }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HfInitialLoads-\(UUID())")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let line = #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"0.0.1","seq":1,"kind":"assistant_text","text":"loaded"}"# + "\n"
-        for id in ["shared", "released"] {
-            try line.write(to: directory.appendingPathComponent("\(id).events.jsonl"), atomically: true, encoding: .utf8)
-        }
-        let environment = MockToolEnvironmentRepository()
-        given(environment).tasksDirectory.willReturn(directory.path)
-        let snapshots = MockTaskSnapshotRepository()
-        given(snapshots).refresh(.any).willReturn()
-        given(environment).ctl().willReturn(.success(makeCtlClient()))
-        let scheduler = MockScheduling()
-        given(scheduler).now().willReturn(Date())
-        given(scheduler).schedule(after: .any, execute: .any).willReturn(AnyCancellable {})
-        given(scheduler).scheduleRepeating(every: .any, execute: .any).willReturn(AnyCancellable {})
-        let repository = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots,
-            scheduler: scheduler, initialLoads: queue, compatibilityCheck: { _ in .success(()) })
-
-        // when
+        let harness = PublicEventFacadeHarness()
+        let repository = harness.repository
+        let firstBlocker = repository.acquire("blocker-one")
+        let secondBlocker = repository.acquire("blocker-two")
+        defer { firstBlocker.release(); secondBlocker.release() }
+        await waitUntil { harness.reader.requests.count == 2 }
         let first = repository.acquire("shared")
         let second = repository.acquire("shared")
         defer { second.release() }
@@ -76,43 +57,19 @@ import Testing
         released.release()
         #expect(repository.events(for: "shared").isEmpty)
         #expect(repository.history(for: "shared").isLoading)
-        reader.finishAll()
-        await waitUntil { !repository.history(for: "shared").isLoading && repository.summary(for: "shared").availability == .available }
-
+        // when — only an actually completed public read releases its global permit.
+        harness.reader.finish(0, .success(ObservationFixtures.page(capture: "future_capture")))
+        await waitUntil { harness.reader.requests.count == 3 }
+        #expect(harness.reader.requests[2].taskID == "shared")
+        harness.reader.finish(2, .success(ObservationFixtures.page([ObservationFixtures.record(1)], capture: "future_capture")))
+        await waitUntil { repository.events(for: "shared").count == 1 }
+        harness.reader.finish(1, .success(ObservationFixtures.page(capture: "future_capture")))
         // then
-        #expect(repository.events(for: "shared").count == 1)
-        #expect(repository.leasedTaskIDs == ["shared"])
+        #expect(repository.leasedTaskIDs == ["blocker-one", "blocker-two", "shared"])
         #expect(repository.events(for: "released").isEmpty)
-        // Exercise release/reacquire races with pending or already-running seed callbacks.
-        second.release()
-        for _ in 0 ..< 40 {
-            let transient = repository.acquire("shared")
-            transient.release()
-            await Task.yield()
-        }
-        let final = repository.acquire("shared")
-        defer { final.release() }
-        await waitUntil { !repository.history(for: "shared").isLoading && repository.summary(for: "shared").availability == .available }
-        #expect(repository.events(for: "shared").count == 1)
-        #expect(!repository.history(for: "shared").isLoading)
-        #expect(repository.summary(for: "shared").availability == .available)
-    }
-
-    private func makeCtlClient() -> CtlClient {
-        let ctlOutput = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","tasks":[]}"#
-        let runner = StubProcessRunner { call in
-            guard call.arguments == ["version-info", "--json"] else {
-                return .success(stdout(ctlOutput))
-            }
-            let root = NSHomeDirectory() + "/.harflow"
-            let handshake = "{" +
-                "\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1," +
-                "\"product_version\":\"0.0.1\",\"component\":\"engine\",\"state_root\":\"\(root)\",\"contracts\":{" +
-                "\"ctl\":{\"format\":\"harflow.ctl\",\"v\":1},\"events\":{\"format\":\"harflow.event\",\"v\":1}}," +
-                "\"capabilities\":[\"ctl.v1\",\"events.v1\"],\"os\":\"darwin\",\"architecture\":\"arm64\"}"
-            return .success(stdout(handshake))
-        }
-        return CtlClient(executable: "/bin/echo", environment: [:], runner: runner)
+        #expect(!harness.reader.requests.contains { $0.taskID == "released" })
+        #expect(harness.reader.requests.filter { $0.taskID == "shared" }.count == 1)
+        #expect(repository.observation(for: "shared").summary.counts == nil)
     }
 
     private final class DelayedReader: Sendable {

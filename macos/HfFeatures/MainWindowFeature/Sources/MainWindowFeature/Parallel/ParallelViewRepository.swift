@@ -63,6 +63,17 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
     func task(_ id: String) -> TaskInfo? { taskListRepository.task(id) }
     func title(_ taskID: String) -> String { taskListRepository.title(taskID) }
 
+    func recoveredTranscript(for id: String) -> RecoveredTranscriptFrame { eventStreamRepository.recoveredTranscript(for: id) }
+    func recoveredTranscriptPublisher(for id: String) -> AnyPublisher<RecoveredTranscriptFrame, Never> {
+        eventStreamRepository.recoveredTranscriptPublisher(for: id)
+    }
+
+    func observation(for id: String) -> EventObservationFrame { eventStreamRepository.observation(for: id) }
+    func observationPublisher(for id: String) -> AnyPublisher<EventObservationFrame, Never> { eventStreamRepository.observationPublisher(for: id) }
+    @discardableResult func requestObservation(_ action: EventObservationAction, for id: String, scope: EventObservationScope) -> Bool {
+        eventStreamRepository.requestObservation(action: action, for: id, scope: scope)
+    }
+
     func acquireEventLease(_ taskID: String) -> any EventStreamLease { eventStreamRepository.acquire(taskID) }
     func events(for taskID: String) -> [TaskEvent] { eventStreamRepository.events(for: taskID) }
     func items(for taskID: String) -> [TimelineItem] { eventStreamRepository.items(for: taskID) }

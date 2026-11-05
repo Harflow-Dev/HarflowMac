@@ -27,7 +27,7 @@ final class ParallelColumnUIState {
     @ObservationIgnored var scrollOffset: CGFloat = 0
     @ObservationIgnored var viewportPositioned = false
     @ObservationIgnored var activityMembers: Set<String> = []
-    @ObservationIgnored var oldestSequences: [String: Int] = [:]
+    @ObservationIgnored var oldestSequences: [String: String] = [:]
     @ObservationIgnored var paginationRevision = 0
     @ObservationIgnored var inventoryMembers: [String: TaskInfo] = [:]
     @ObservationIgnored var inventorySession: String?

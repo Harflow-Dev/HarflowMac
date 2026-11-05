@@ -41,11 +41,11 @@ extension TaskDetailVMTests {
         // then
         await waitUntil { !harness.sut.timelineModel.rows.isEmpty }
         let model = harness.sut.timelineModel
-        #expect(model.rows.count == 5, "raw rows are kept for the inspector's step count")
+        #expect(model.rows.count == 4, "transcript retains historical messages but does not synthesize an assignment bubble")
         #expect(model.activityRows.map { $0.group?.summary ?? "row" } == ["row", "Read 2 files", "Ran 1 command"])
         #expect(model.activityRows.first?.group == nil)
         #expect(model.liveStep?.text == "Running swift test…")
-        #expect(model.stepCountText == "5 activity items")
+        #expect(model.stepCountText == "4 activity items")
     }
 
     @Test

@@ -1,4 +1,5 @@
 import AppKit
+import HfRepository
 import HfTestUtilities
 import HfUI
 @testable import MainWindowFeature
@@ -39,6 +40,7 @@ import Testing
         let controller = NSHostingController(rootView: NavigationStack {
             TaskDetailView(fixture.sut)
         }
+.frame(width: 1440, height: 900)
 .withPresentationContext()
 .defaultAppStorage(defaults))
         controller.sceneBridgingOptions = .all
@@ -58,10 +60,11 @@ import Testing
             Date().timeIntervalSince(started) >= 10 && pulse.count >= 160 && fixture.requests == expectedRequests
                 && fixture.sut.rawEvents.count == 187 && !fixture.sut.timelineModel.history.isLoading
         }
-        // then — require the expected publication path and sustained actor progress.
+        // then — require the intended root viewport and sustained actor progress.
+        #expect(abs(controller.view.bounds.width - 1440) <= 1 && abs(controller.view.bounds.height - 900) <= 1)
         #expect(fixture.requests == expectedRequests)
         #expect(fixture.sut.rawEvents.count == 187)
-        #expect(fixture.sut.timelineModel.rows.count == fixture.fullItems.count)
+        #expect(transcriptItems(fixture.sut.timelineModel.rows) == fixture.fullItems.filter { if case .started = $0.body { return false }; return true })
         #expect(!fixture.sut.timelineModel.history.hasMore)
         #expect(!fixture.sut.timelineModel.history.isLoading)
         #expect(pulse.count >= 160, "Timer handler firings: \(delivery.count)")
@@ -90,10 +93,11 @@ import Testing
         let controller = NSHostingController(rootView: NavigationStack {
             TaskDetailView(harness.sut)
         }
+.frame(width: 744, height: 620)
 .withPresentationContext()
 .defaultAppStorage(defaults))
         controller.sceneBridgingOptions = .all
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 420, height: 450),
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 744, height: 620),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentViewController = controller
@@ -109,8 +113,9 @@ import Testing
         await waitUntil(timeout: 12) { @MainActor in
             Date().timeIntervalSince(started) >= 10 && pulse.count >= 160
         }
-        // then — require actual activity publication as well as independent heartbeat progress.
-        #expect(harness.sut.timelineModel.rows.count == items.count)
+        // then — 1000×620 app minimum minus the 256-point sidebar preserves a narrow transcript.
+        #expect(abs(controller.view.bounds.width - 744) <= 1 && abs(controller.view.bounds.height - 620) <= 1)
+        #expect(transcriptItems(harness.sut.timelineModel.rows) == items.filter { if case .started = $0.body { return false }; return true })
         #expect(!harness.sut.timelineModel.isLoading)
         #expect(pulse.count >= 160, "Timer handler firings: \(delivery.count)")
         try pulse.record(phase: "completed")
@@ -159,6 +164,10 @@ import Testing
         try pulse.record(phase: "completed")
     }
 
+    private func transcriptItems(_ rows: [ConversationTimelineRow]) -> [TimelineItem] {
+        rows.compactMap { row in if case .item(let item) = row.kind { return item }; return nil }
+    }
+
     private func syntheticRows() -> [ActivityRow] {
         (0 ..< 100).map { index in
             let paragraphs = [1, 3, 20, 1, 80, 2, 6, 40][index % 8]
@@ -202,20 +211,21 @@ import Testing
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
         self.sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore())
-        useCase.configurePagingDefaults(eventHistory: { [weak self] _ in self?.history ?? EventHistoryState() })
         TaskDetailVMTests().configureStubs(useCase: useCase, routing: routing, taskID: "abc12345", fixtures: fixtures)
+        useCase.configurePagingDefaults(eventHistory: { [weak self] _ in self?.history ?? EventHistoryState() }, includeObservationDefaults: false)
         fixtures.detailBox.value = TaskDetailVMTests().task(status: "completed")
         fixtures.eventsAvailabilityBox.value = .loading
+        fixtures.observationBox.value = FeatureObservationFixture.frame(id: "abc12345", history: history)
         given(useCase).loadMoreEvents(.value("abc12345")).willProduce { [weak self] _ in
             guard let self else { return false }
             requests += 1
             self.history = EventHistoryState(hasMore: true, isLoading: true, generation: 1)
+            publish(events: fixtures.eventsBox.value)
             Task { @MainActor [weak self] in
                 await Task.yield()
                 guard let self else { return }
                 self.history = EventHistoryState(generation: 2)
-                fixtures.eventsBox.value = fullEvents
-                fixtures.itemsSubject.send(fullItems)
+                publish(events: fullEvents)
             }
             return true
         }
@@ -224,10 +234,18 @@ import Testing
     func publishInitial(shortFill: Bool) {
         let initial = shortFill ? Array(fullEvents.suffix(100)) : fullEvents
         if !shortFill { history = EventHistoryState(generation: 2) }
-        fixtures.eventsBox.value = initial
+        publish(events: initial)
+    }
+
+    private func publish(events: [TaskEvent]) {
+        fixtures.eventsBox.value = events
+        let items = Timeline.items(from: events)
+        fixtures.itemsOverride.value = items
         fixtures.eventsAvailabilityBox.value = .available
-        fixtures.itemsSubject.send(Timeline.items(from: initial))
-        fixtures.eventsAvailabilitySubject.send(.available)
+        let frame = FeatureObservationFixture.frame(id: "abc12345", events: events, items: items,
+            availability: .available, history: history)
+        fixtures.observationBox.value = frame
+        fixtures.observationSubject.send(frame)
     }
 
     private static func events(shortFill: Bool) throws -> [TaskEvent] {

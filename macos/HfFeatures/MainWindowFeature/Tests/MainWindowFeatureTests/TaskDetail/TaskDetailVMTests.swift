@@ -61,6 +61,12 @@ import Testing
         let childrenBox: Box<[TaskInfo]>
         let itemsOverride: Box<[TimelineItem]?>
         let recomputeCountEffect: Box<(() -> Void)?>
+        let observationBox: Box<EventObservationFrame?>
+        let observationSubject: PassthroughSubject<EventObservationFrame, Never>
+        let recoveryBox: Box<RecoveredTranscriptFrame>
+        let recoverySubject: PassthroughSubject<RecoveredTranscriptFrame, Never>
+        let requestBox: Box<TaskRequestReadState>
+        let requestSubject: PassthroughSubject<TaskRequestReadState, Never>
         let callerApprovalBox: Box<(any CallerApprovalUseCase)?>
     }
 
@@ -101,11 +107,40 @@ import Testing
         /// Same FIFO reason as `refreshSnapshotEffect` above for why this is a hook installed here
         /// rather than a re-stubbed `given(...)` call in the test itself.
         let recomputeCountEffect = Box<(() -> Void)?>(nil)
+        let observationBox = Box<EventObservationFrame?>(nil)
+        let observationSubject = PassthroughSubject<EventObservationFrame, Never>()
+        let recoveryBox = Box(RecoveredTranscriptFrame())
+        let recoverySubject = PassthroughSubject<RecoveredTranscriptFrame, Never>()
+        let requestBox = Box<TaskRequestReadState>(.notRequested)
+        let requestSubject = PassthroughSubject<TaskRequestReadState, Never>()
         let callerApprovalBox = Box<(any CallerApprovalUseCase)?>(nil)
+    }
+
+    private func configureObservationStubs(useCase: MockTaskDetailUseCase, taskID: String, fixtures: Fixtures) {
+        given(useCase).observation(for: .value(taskID)).willProduce { _ in
+            fixtures.observationBox.value ?? FeatureObservationFixture.frame(id: taskID,
+                events: fixtures.eventsBox.value,
+                items: fixtures.itemsOverride.value ?? Timeline.items(from: fixtures.eventsBox.value),
+                availability: fixtures.eventsAvailabilityBox.value)
+        }
+        given(useCase).observationPublisher(for: .value(taskID)).willProduce { [callOrder] _ in
+            callOrder.value.append("itemsPublisher")
+            return Publishers.Merge(fixtures.observationSubject.eraseToAnyPublisher(),
+                Publishers.Merge(fixtures.itemsSubject.map { items in fixtures.itemsOverride.value = items },
+                    fixtures.eventsAvailabilitySubject.map { availability in fixtures.eventsAvailabilityBox.value = availability })
+                    .map { _ in useCase.observation(for: taskID) }
+.eraseToAnyPublisher())
+.eraseToAnyPublisher()
+        }
+        given(useCase).recoveredTranscript(for: .value(taskID)).willProduce { _ in fixtures.recoveryBox.value }
+        given(useCase).recoveredTranscriptPublisher(for: .value(taskID)).willReturn(fixtures.recoverySubject.eraseToAnyPublisher())
+        given(useCase).requestState(for: .value(taskID)).willProduce { _ in fixtures.requestBox.value }
+        given(useCase).requestPublisher(for: .value(taskID)).willReturn(fixtures.requestSubject.eraseToAnyPublisher())
     }
 
     @discardableResult
     func configureStubs(useCase: MockTaskDetailUseCase, routing: MockTaskDetailRouting, taskID: String, fixtures: Fixtures) -> MockEventStreamLease {
+        configureObservationStubs(useCase: useCase, taskID: taskID, fixtures: fixtures)
         given(useCase).tasksPublisher().willReturn(fixtures.tasksSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(fixtures.hasListedSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(fixtures.titlesSubject.eraseToAnyPublisher())
@@ -161,7 +196,6 @@ import Testing
         }
         given(useCase).events(for: .value(taskID)).willProduce { _ in fixtures.eventsBox.value }
         given(useCase).eventsAvailability(for: .value(taskID)).willProduce { _ in fixtures.eventsAvailabilityBox.value }
-        given(useCase).eventsPath(for: .value(taskID)).willReturn("/tmp/\(taskID).events.jsonl")
         given(useCase).activity(for: .value(taskID)).willReturn(ActivityCounts())
         given(useCase).current(for: .value(taskID)).willReturn(nil)
         given(useCase).prompt(for: .value(taskID)).willReturn(nil)
@@ -187,10 +221,10 @@ import Testing
     @discardableResult
     func makeSUT(taskID: String = "abc12345", isWorkflowBuilder: Bool = false) -> SUT {
         let useCase = MockTaskDetailUseCase()
-        useCase.configurePagingDefaults()
         let routing = MockTaskDetailRouting()
         let fixtures = Fixtures()
         let lease = configureStubs(useCase: useCase, routing: routing, taskID: taskID, fixtures: fixtures)
+        useCase.configurePagingDefaults(includeObservationDefaults: false)
 
         let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing,
                                continuityHistory: TaskContinuityHistoryStore(), isWorkflowBuilder: isWorkflowBuilder)
@@ -207,6 +241,9 @@ import Testing
             childrenBox: fixtures.childrenBox,
             itemsOverride: fixtures.itemsOverride,
             recomputeCountEffect: fixtures.recomputeCountEffect,
+            observationBox: fixtures.observationBox, observationSubject: fixtures.observationSubject,
+            recoveryBox: fixtures.recoveryBox, recoverySubject: fixtures.recoverySubject,
+            requestBox: fixtures.requestBox, requestSubject: fixtures.requestSubject,
             callerApprovalBox: fixtures.callerApprovalBox
         )
     }

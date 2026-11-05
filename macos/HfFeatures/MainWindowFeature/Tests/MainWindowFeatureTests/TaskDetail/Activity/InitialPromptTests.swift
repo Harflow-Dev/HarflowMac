@@ -13,14 +13,14 @@ import Testing
         }
     }
 
-    @Test func givenTaskStartedAndItsInitialMessage_whenBuilt_thenOnlyTheStartedRowRemains() {
-        // given — a live-input run logs the prompt twice.
+    @Test func givenTaskStartedAndItsInitialMessage_whenBuilt_thenHistoricalMessageRemainsDistinct() {
+        // given — equal display text does not establish duplicate assignment provenance.
         let rows = [Fixture.started(0, prompt: "Fix it"), Fixture.message(1, "Fix it", source: "initial"), Fixture.text(2)]
         // when
         let result = ActivityRowsBuilder.build(from: rows)
         // then
-        #expect(result.map(\.id) == ["t1#0", "t1#2"])
-        #expect(messageTexts(result).isEmpty)
+        #expect(result.map(\.id) == ["t1#0", "t1#1", "t1#2"])
+        #expect(messageTexts(result) == ["Fix it"])
     }
 
     @Test func givenOnlyTaskStarted_whenBuilt_thenItIsKept() {
@@ -47,26 +47,26 @@ import Testing
     }
 
     @Test func givenAnInjectedMessageEqualToThePrompt_whenBuilt_thenItIsKept() {
-        // given — the suppression is for source "initial" only.
+        // given — different source-qualified occurrences retain equal text.
         let rows = [Fixture.started(0, prompt: "Fix it"), Fixture.message(1, "Fix it", source: "initial"), Fixture.message(2, "Fix it", source: "injected")]
         // when
         let result = ActivityRowsBuilder.build(from: rows)
         // then
-        #expect(result.map(\.id) == ["t1#0", "t1#2"])
-        #expect(messageTexts(result) == ["Fix it"])
+        #expect(result.map(\.id) == ["t1#0", "t1#1", "t1#2"])
+        #expect(messageTexts(result) == ["Fix it", "Fix it"])
     }
 
-    @Test func givenAnInitialMessageDuplicatedLaterInTheRun_whenBuilt_thenOnlyTheFirstIsSuppressed() {
+    @Test func givenAnInitialMessageDuplicatedLaterInTheRun_whenBuilt_thenBothOccurrencesRemain() {
         // given
         let rows = [
             Fixture.started(0, prompt: "Fix it"), Fixture.message(1, "Fix it", source: "initial"), Fixture.text(2),
             Fixture.message(3, "Fix it", source: "initial")
         ]
         // when / then
-        #expect(ActivityRowsBuilder.build(from: rows).map(\.id) == ["t1#0", "t1#2", "t1#3"])
+        #expect(ActivityRowsBuilder.build(from: rows).map(\.id) == ["t1#0", "t1#1", "t1#2", "t1#3"])
     }
 
-    @Test func givenAFollowUpSeparatorAndItsInitialMessage_whenBuilt_thenTheSeparatorIsTheOnlyBubble() {
+    @Test func givenAFollowUpSeparatorAndItsInitialMessage_whenBuilt_thenHistoricalMessagesRemainAlongsideSeparator() {
         // given — MonitorCore already drops a follow-up's own initial message and started row; the first
         // member's still-present initial message is what this builder drops.
         let rows = [
@@ -76,7 +76,7 @@ import Testing
         // when
         let result = ActivityRowsBuilder.build(from: rows)
         // then
-        #expect(result.map(\.id) == ["t1#0", "t1#2", "sep:t2", "t2#1"])
+        #expect(result.map(\.id) == ["t1#0", "t1#1", "t1#2", "sep:t2", "t2#1"])
     }
 
     @Test func givenAFollowUpsInitialMessageWithNoFirstMemberRows_whenBuilt_thenNothingIsSuppressed() {

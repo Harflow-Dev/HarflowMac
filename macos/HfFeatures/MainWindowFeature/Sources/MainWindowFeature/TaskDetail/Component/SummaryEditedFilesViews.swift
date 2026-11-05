@@ -96,6 +96,14 @@ struct SummaryEditedFilesCard: View {
                         Button("Show loaded \(loadedCount)", action: onShowLoaded).monospacedDigit()
                     }
                 }
+                if additionalFileCount > 0, onLoadMore == nil {
+                    if !rows.isEmpty || hiddenCount > 0 { ActivityCardDivider() }
+                    ActivityCardRow {
+                        Text("Bounded file view · \(additionalFileCount) additional qualified task file entries are not shown.")
+                            .font(.hf(.secondary))
+.foregroundStyle(Color.secondaryText)
+                    }
+                }
                 if additionalFileCount > 0, let onLoadMore {
                     if !rows.isEmpty || (hiddenCount > 0 && onShowLoaded != nil) { ActivityCardDivider() }
                     ActivityCardRow {

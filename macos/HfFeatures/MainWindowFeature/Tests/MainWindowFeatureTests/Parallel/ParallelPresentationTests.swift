@@ -61,7 +61,8 @@ extension ParallelVMTests {
         let memberTask = task(id: "prose", status: "completed")
         let member = ParallelMemberInput(task: memberTask,
                                          items: [PreviewFixtures.textItem("A prose result.", seq: 1)],
-                                         prompt: nil, availability: .available)
+                                         prompt: nil, availability: .available,
+                                         observation: FeatureObservationFixture.frame(id: memberTask.taskID, availability: .available))
         let input = ParallelColumnInput(base: basePresentation(for: memberTask), members: [member], events: [], snapshot: nil)
 
         // when
@@ -69,7 +70,7 @@ extension ParallelVMTests {
 
         // then
         #expect(presentation.stepCountText == "1 activity item")
-        #expect(presentation.noToolCallsText == "No tool calls recorded")
+        #expect(presentation.noToolCallsText == "No tool calls observed in the available captured history")
         #expect(presentation.emptyText == nil)
     }
 
@@ -77,7 +78,8 @@ extension ParallelVMTests {
         // given
         let memberTask = task(id: "prose", status: "running")
         let member = ParallelMemberInput(task: memberTask,
-            items: [PreviewFixtures.textItem("A streaming result.", seq: 1)], prompt: nil, availability: .available)
+            items: [PreviewFixtures.textItem("A streaming result.", seq: 1)], prompt: nil, availability: .available,
+                                         observation: FeatureObservationFixture.frame(id: memberTask.taskID, availability: .available))
         let base = basePresentation(for: memberTask)
         let first = try ParallelPresentationBuilder.build(
             ParallelColumnInput(base: base, members: [member], events: [], snapshot: nil)
@@ -103,7 +105,8 @@ extension ParallelVMTests {
         let memberTask = task(id: "prose", status: "completed")
         let member = ParallelMemberInput(task: memberTask,
                                          items: [PreviewFixtures.textItem("A prose result.", seq: 1)],
-                                         prompt: nil, availability: .available)
+                                         prompt: nil, availability: .available,
+                                         observation: FeatureObservationFixture.frame(id: memberTask.taskID, availability: .available))
 
         // when / then — a settled member is not enough if older history is still loading or failed.
         for history in [EventHistoryState(isLoading: true), EventHistoryState(error: "not read")] {
@@ -118,7 +121,8 @@ extension ParallelVMTests {
     @Test func givenACompleteEmptyMember_whenParallelPresentationBuilds_thenEmptyActivityIsProvenToolFree() throws {
         // given
         let memberTask = task(id: "empty", status: "completed")
-        let member = ParallelMemberInput(task: memberTask, items: [], prompt: nil, availability: .available)
+        let member = ParallelMemberInput(task: memberTask, items: [], prompt: nil, availability: .available,
+                                         observation: FeatureObservationFixture.frame(id: memberTask.taskID, availability: .available))
         let input = ParallelColumnInput(base: basePresentation(for: memberTask), members: [member], events: [], snapshot: nil)
 
         // when
@@ -126,7 +130,7 @@ extension ParallelVMTests {
 
         // then — an empty completed log is only labelled after the complete available log proves
         // that it contains no tool calls.
-        #expect(presentation.noToolCallsText == "No tool calls recorded")
+        #expect(presentation.noToolCallsText == "No tool calls observed in the available captured history")
         #expect(presentation.emptyText == nil)
     }
 
@@ -138,7 +142,8 @@ extension ParallelVMTests {
             #require(TaskEvent(line: eventLine("\"seq\":1,\"kind\":\"tool_call\",\"call_id\":\"c1\",\"tool\":\"workflow\",\"category\":\"workflow\"}"))),
             #require(TaskEvent(line: eventLine("\"seq\":2,\"kind\":\"tool_result\",\"call_id\":\"c1\",\"ok\":true}")))
         ]
-        let member = ParallelMemberInput(task: memberTask, items: Timeline.items(from: events), prompt: nil, availability: .available)
+        let member = ParallelMemberInput(task: memberTask, items: Timeline.items(from: events), prompt: nil, availability: .available,
+                                         observation: FeatureObservationFixture.frame(id: memberTask.taskID, availability: .available))
         let input = ParallelColumnInput(base: basePresentation(for: memberTask), members: [member], events: events, snapshot: nil)
 
         // when
@@ -166,7 +171,9 @@ extension ParallelVMTests {
         let items = Timeline.items(from: events)
         let members = [ConversationItemMember(task: first, items: items, prompt: "assignment"),
                        ConversationItemMember(task: second, items: items, prompt: "assignment")]
-        #expect(try ParallelPresentationBuilder.rows(members) == ConversationTimeline.rows(itemMembers: members))
+        #expect(try ParallelPresentationBuilder.rows(members) == ConversationTimeline.rows(itemMembers: members).filter { row in
+            if case .item(let item) = row.kind, case .started = item.body { return false }; return true
+        })
         let empty = [ConversationItemMember(task: first, items: [], prompt: nil),
                      ConversationItemMember(task: second, items: [], prompt: nil)]
         #expect(try ParallelPresentationBuilder.rows(empty) == ConversationTimeline.rows(itemMembers: empty))

@@ -57,48 +57,47 @@ Periodic ticks are disposable while a refresh is busy, so they cannot keep a slo
 
 A future public watcher can replace the polling source without changing paging, title/notification ordering, selection or task actions. Its canonical contract, qualified runtime and conformance are separate work. EventStream activity and cumulative summaries still use the existing private transport until their later M03 suffix; this task-list change does not claim all private engine I/O is removed.
 
-## Public prompt foundation
+## Captured observations and stored requests
 
-The prompt repository captures the selected ctl client per read, composes its
-existing fence with the caller's required generation/lifetime fence, and checks
-executable, effective environment and compatibility-root identity against current
-local tooling. Both stale successes and stale failures are discarded before
-return or recovery reporting. Each read keeps the client's fresh capability
-handshake. The caller must handle selection ABA in its fence and recheck identity
-before future presentation. No subscription, compatibility cache or private
-prompt fallback is introduced. Missing capability and known unavailable prompt
-results remain distinct. Current EventStream summaries and rendered String?
-prompt paths are unchanged pending the later event-transport and approved design
-work; this adapter alone does not migrate those consumers.
+`EventStreamRepository` consumes `task-events` through a shared per-task public
+session. Activity and cumulative summaries no longer open engine event files.
+The repository publishes one atomic `EventObservationFrame` containing bounded
+normalized records, strictly projected rows, source/window identity, history
+health and independently qualified optional totals. Unknown or unsupported
+payloads remain raw evidence; missing success/text fields never become successful
+empty output. Conservative continuity barriers prevent matching through unknown
+intervals. Producer sequence numbers remain data, while session/source/window and
+file-order admission identify presentation occurrences.
 
-## Internal public-event observation
+One newest bootstrap supplies a shared opaque cursor lineage for activity and
+bounded oldest-seek/chronological-summary replay. Observed totals never certify
+complete execution capture. Summary-only roles continue summary work without
+materializing activity. A bounded activity window can remain cached while a
+summary role survives; rejoining activity resumes its retained cursor and identity.
+The last role releases the session and clears its holder.
 
-The internal `PublicEventObservationManager` shares a public-page session by exact
-task identifier. It is not registered in `Module` or used by the production
-`EventStreamRepository`. Existing activity and summary readers remain in place
-pending the approved consumer cutover described in
-`docs/migration-receipts/M03-D2B-requirements.md` at repository root.
+Admission is single-flight per session and globally two event operations. Each
+one-second tick admits at most two forward activity pages and two summary-tail
+pages. Historical seek/replay/recovery has a cumulative 4096-operation ceiling.
+Activity admits whole pages up to 2000 records/4MiB serialized bytes, retaining the
+last delivery cursor at capacity. Summary keys/call identities have independent
+bounds and expose at most100 files. These are engineering limits, not measured
+heap or runtime performance acceptance.
 
-One newest bootstrap supplies the opaque cursor lineage for activity and a
-bounded oldest-seek/chronological-summary replay. Unknown, missing, truncated or
-ambiguous payloads retain raw facts and qualify totals as unavailable; optional
-observed totals never certify complete capture. Event display prompts are not
-stored assignment authority. Prompt state remains not requested in this layer;
-the separate typed task-prompt reader supplies future assignment integration.
+Read failures/nonprogress require explicit read retry. Invalid cursors retain
+cached source-A rows and require explicit source adoption. Capacity-only rebasing
+changes the consumer-window identity while preserving independent summary facts.
+Known loss remains sticky. Runtime transitions synchronously fence cached facts,
+queued publications and prompt work, then reacquire retained activity/summary role
+interest. Exact role/session identities prevent delayed releases from affecting a
+replacement session; binding comparison alone does not establish ABA safety.
 
-Admission is single-flight per session and globally two operations per manager.
-Each external one-second tick allows at most two forward activity pages and two
-forward summary-tail pages. Historical seek/replay/recovery has a cumulative
-4096-operation ceiling independent of ordinary live polling. Activity holds at
-most 2,000 normalized records/4MiB serialized bytes, with whole-page refusal at
-capacity and no cursor advance or silent eviction. Summary keys and unresolved
-call identities have separate count/byte caps; published files are bounded to 100.
-These are engineering limits, not measured heap or performance acceptance.
+Stored assignment text comes only from the separate typed `task-prompt` reader.
+Initial reads request65536 bytes; Read more requests a replacement prefix bounded
+to131072 bytes. State, integrity and completeness remain independent. Captured
+display prompts and recovered text are never assignment authority. Recovery
+publishes a separate display-only transcript and never contributes captured counts.
 
-Publication uses a latest-value mailbox; source epochs fence admission and queued
-callbacks. Exact session/lease identities isolate delayed releases. Runtime
-invalidation ends old sessions and clears their snapshots; existing holders must
-explicitly reacquire. Production adaptation must preserve activity/summary
-interest and coordinate that reacquisition with the runtime owner callback.
-Binding equality cannot detect unnotified selection ABA. No private persistence,
-MCP fallback or automatic runtime selection exists in this internal reader.
+Every public operation retains a fresh capability handshake. Fixture adoption from
+engine0.0.8 does not select that runtime: the managed engine remains pinned to0.0.7,
+with explicit unsupported states and no private/MCP fallback or automatic acquisition.

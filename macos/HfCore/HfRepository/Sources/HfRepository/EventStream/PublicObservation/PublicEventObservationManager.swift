@@ -56,12 +56,12 @@ final class PublicEventObservationManager: Sendable {
     }
 
     /// The first lease selects the reader for this task/source lifetime; later leases share it.
-    func acquire(taskID: String, reader: any PublicEventObservationReader,
+    func acquire(taskID: String, reader: any PublicEventObservationReader, activityEnabled: Bool = true,
                  publish: @escaping PublicEventObservationSession.Publisher) -> PublicEventObservationLease {
         let leaseID = UUID()
         // Construct outside the manager lock: injected schedulers may execute arbitrary code.
         let candidate = PublicEventObservationSession(taskID: taskID, reader: reader,
-                                                      scheduler: scheduler, budget: budget, delivery: delivery)
+                                                      scheduler: scheduler, budget: budget, delivery: delivery, activityEnabled: activityEnabled)
         let session = entries.withLock { entries in
             if var entry = entries[taskID] {
                 entry.leases.insert(leaseID)

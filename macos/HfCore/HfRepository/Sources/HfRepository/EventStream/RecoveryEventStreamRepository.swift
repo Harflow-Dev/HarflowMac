@@ -14,6 +14,7 @@ public final class RecoveryEventStreamRepository: EventStreamRepository, @unchec
     private let scheduler: any Scheduling
     private let lock = NSRecursiveLock()
     private var sessions: [String: RecoveryActivitySession] = [:]
+    private var runtimeSubscription: AnyCancellable?
     private let presentationQueue = DispatchQueue(label: "dev.harflow.mac.recovery.presentation", qos: .utility)
 
     public init(base: any EventStreamRepository, environment: any ToolEnvironmentRepository,
@@ -22,6 +23,18 @@ public final class RecoveryEventStreamRepository: EventStreamRepository, @unchec
         self.environment = environment
         self.snapshots = snapshots
         self.scheduler = scheduler
+    }
+
+    /// Actual runtime notifications fence recovery even when the selected binding changes A→B→A.
+    public func bindRuntimeChanges<P: Publisher>(_ publisher: P) where P.Failure == Never {
+        runtimeSubscription = publisher.dropFirst().sink { [weak self] _ in self?.invalidateRuntime() }
+    }
+
+    private func invalidateRuntime() {
+        lock.lock()
+        let active = Array(sessions.values)
+        lock.unlock()
+        for session in active { session.invalidateRuntime() }
     }
 
     public func acquire(_ taskID: String) -> any EventStreamLease {
@@ -37,12 +50,15 @@ public final class RecoveryEventStreamRepository: EventStreamRepository, @unchec
         session.references += 1
         lock.unlock()
         session.start()
-        return RecoveryActivityLease(taskID: taskID, base: baseLease) { [weak self] in self?.release(taskID) }
+        return RecoveryActivityLease(taskID: taskID, base: baseLease) { [weak self, weak session] in
+            guard let session else { return }
+            self?.release(taskID, session: session)
+        }
     }
 
-    private func release(_ taskID: String) {
+    private func release(_ taskID: String, session expected: RecoveryActivitySession) {
         lock.lock()
-        guard let session = sessions[taskID] else { lock.unlock(); return }
+        guard let session = sessions[taskID], session === expected else { lock.unlock(); return }
         session.references -= 1
         if session.references == 0 {
             sessions[taskID] = nil
@@ -60,6 +76,37 @@ public final class RecoveryEventStreamRepository: EventStreamRepository, @unchec
     }
 
     public func acquireSummary(_ id: String) -> any EventStreamLease { base.acquireSummary(id) }
+
+    public func observation(for id: String) -> EventObservationFrame { base.observation(for: id) }
+    public func observationPublisher(for id: String) -> AnyPublisher<EventObservationFrame, Never> {
+        base.observationPublisher(for: id)
+    }
+
+    @discardableResult
+    public func requestObservation(action: EventObservationAction, for id: String, scope: EventObservationScope) -> Bool {
+        base.requestObservation(action: action, for: id, scope: scope)
+    }
+
+    public func requestState(for id: String) -> TaskRequestReadState { base.requestState(for: id) }
+    public func requestPublisher(for id: String) -> AnyPublisher<TaskRequestReadState, Never> { base.requestPublisher(for: id) }
+    public func readRequest(for id: String, maxBytes: Int) { base.readRequest(for: id, maxBytes: maxBytes) }
+
+    /// Recovery remains separate from the captured normalized evidence and its aggregate authority.
+    public func recoveredTranscript(for id: String) -> RecoveredTranscriptFrame {
+        guard let value = session(id)?.state else { return RecoveredTranscriptFrame() }
+        return RecoveredTranscriptFrame(generation: value.generation, events: value.events, items: value.items)
+    }
+
+    public func recoveredTranscriptPublisher(for id: String) -> AnyPublisher<RecoveredTranscriptFrame, Never> {
+        guard let session = session(id) else { return Just(RecoveredTranscriptFrame()).eraseToAnyPublisher() }
+        return session.publisher
+            .map { RecoveredTranscriptFrame(generation: $0.generation, events: $0.events, items: $0.items) }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .compactMap { session.accepts($0.generation) ? $0 : nil }
+            .eraseToAnyPublisher()
+    }
+
     public func events(for id: String) -> [TaskEvent] { base.events(for: id) + (session(id)?.state.events ?? []) }
     public func items(for id: String) -> [TimelineItem] { base.items(for: id) + (session(id)?.state.items ?? []) }
     public func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never> {
@@ -142,7 +189,7 @@ private final class RecoveryActivitySession: @unchecked Sendable {
     }
 
     /// A queued merged snapshot is discarded if its recovery generation was invalidated.
-    func accepts(_ generation: UUID?) -> Bool { generation.map(isValid) ?? true }
+    func accepts(_ generation: UUID?) -> Bool { isActive && (generation.map(isValid) ?? true) }
 
     private var isActive: Bool {
         lifetimeLock.lock()
@@ -225,6 +272,24 @@ private final class RecoveryActivitySession: @unchecked Sendable {
             timer = nil
             subscription?.cancel()
             subscription = nil
+        }
+    }
+
+    func invalidateRuntime() {
+        invalidateGeneration()
+        queue.async { [self] in
+            guard isActive else { return }
+            poll?.cancel()
+            poll = nil
+            pollGeneration = nil
+            cursor = nil
+            records = []
+            identities = [:]
+            unsupported = false
+            selectedExecutable = nil
+            selectedContext = nil
+            if publishedState != RecoveryActivityState() { publishedState = RecoveryActivityState() }
+            refresh()
         }
     }
 

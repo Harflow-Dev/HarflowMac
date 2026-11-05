@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import MonitorCore
@@ -86,7 +87,7 @@ extension ParallelVMTests {
         // when
         harness.sut.updateViewport(offset: 2524, width: 631)
         await waitUntil { harness.releasedBox.value.contains(id) && harness.sut.isPresentationSettled }
-        #expect(harness.sut.columnState(for: id).oldestSequences[id] == 50)
+        #expect(harness.sut.columnState(for: id).oldestSequences[id] == FeatureObservationFixture.scope.identity + ":50")
         harness.acquireEffectBox.value = { memberID in
             guard memberID == id else { return }
             self.seedHistory(harness, ids: [id], sequence: 100)
@@ -128,17 +129,38 @@ extension ParallelVMTests {
         #expect(order.count == 12)
     }
 
-    @Test func givenOlderPage_whenFileGenerationChanges_thenRestorationBoundaryIsDiscarded() async throws {
+    @Test func givenPublicScopeChanges_whenCurrentWindowArrives_thenRetainedBoundaryRequiresExplicitReplacement() async throws {
+        // given — a real admitted logical row, independent of producer sequence ordering.
         let harness = historyHarness()
         await waitUntil { harness.sut.columns.count == 8 && harness.sut.isPresentationSettled }
         let id = try #require(harness.sut.columns.first?.id)
-        harness.sut.columnState(for: id).oldestSequences[id] = 10
-        harness.sut.columns.first?.onLoadMore?()
-        sendHistory(harness, id: id, history: EventHistoryState(hasMore: true, isLoading: true))
-        sendHistory(harness, id: id, history: EventHistoryState(hasMore: false, generation: 1))
-        await waitUntil { harness.sut.columns.first?.paginationRevision == 1 && harness.sut.isPresentationSettled }
-        #expect(harness.sut.columnState(for: id).oldestSequences[id] == nil)
-        #expect(harness.sut.columns.first?.history.isLoading == false)
+        let boundary = FeatureObservationFixture.scope.identity + ":100"
+        harness.sut.columnState(for: id).oldestSequences[id] = boundary
+        let retainedRows = try #require(harness.sut.columns.first?.rows)
+        let retainedID = try #require(retainedRows.first?.id)
+        let anchor = ParallelVerticalAnchor(id: retainedID, index: 0, relativeOffset: -12)
+        harness.sut.columnState(for: id).anchor = anchor
+        let scope = EventObservationScope(sessionID: UUID(), sourceID: UUID(), windowID: UUID())
+        let fresh = EventObservationFrame(taskID: id, scope: scope, revision: 1,
+            items: [PreviewFixtures.textItem("New observation window", seq: 6)], history: .init(caughtUp: true))
+        // when
+        harness.observationBox.value[id] = fresh
+        harness.itemSubjectsBox.value[id]?.send(fresh.items)
+        await waitUntil { harness.sut.columns.first?.onAdoptWindow != nil && harness.sut.isPresentationSettled }
+        // then — the old reading position survives until explicit replacement.
+        #expect(harness.sut.columns.first?.rows == retainedRows)
+        #expect(harness.sut.columnState(for: id).oldestSequences[id] == boundary)
+        #expect(harness.sut.columns.first?.cachedHistoryNotice != nil)
+        #expect(harness.sut.columnState(for: id).anchor == anchor)
+        harness.sut.columns.first?.onAdoptWindow?()
+        await waitUntil { harness.sut.columns.first?.cachedHistoryNotice == nil && harness.sut.isPresentationSettled }
+        let rows = try #require(harness.sut.columns.first?.rows)
+        #expect(harness.sut.columnState(for: id).anchor == nil)
+        #expect(harness.sut.columnState(for: id).oldestSequences[id] == scope.identity + ":6")
+        #expect(rows.contains { row in
+            if case .item(let item) = row.kind, case .text(let text, _) = item.body { return text == "New observation window" }
+            return false
+        })
         harness.sut.didDisappear()
     }
 
@@ -235,7 +257,7 @@ extension ParallelVMTests {
         let harness = historyHarness()
         await waitUntil { harness.sut.columns.count == 8 && harness.sut.isPresentationSettled }
         let id = try #require(harness.sut.columns.first?.id)
-        harness.sut.columnState(for: id).oldestSequences[id] = 50
+        harness.sut.columnState(for: id).oldestSequences[id] = FeatureObservationFixture.scope.identity + ":50"
         harness.sut.updateViewport(offset: 2524, width: 631)
         await waitUntil { harness.releasedBox.value.contains(id) && harness.sut.isPresentationSettled }
         harness.loadAdmissionBox.value = false
@@ -244,7 +266,7 @@ extension ParallelVMTests {
         #expect(harness.sut.columns.first?.history.isLoading == false)
         #expect(harness.sut.columns.first?.history.error?.contains("Retry") == true)
         #expect(harness.loadCallsBox.value.isEmpty)
-        #expect(harness.sut.columnState(for: id).oldestSequences[id] == 50)
+        #expect(harness.sut.columnState(for: id).oldestSequences[id] == FeatureObservationFixture.scope.identity + ":50")
         harness.sut.didDisappear()
     }
 
@@ -274,8 +296,10 @@ extension ParallelVMTests {
     }
 
     private func sendHistory(_ harness: SUT, id: String, history: EventHistoryState) {
-        harness.historyBox.value[id] = history
-        harness.historySubjectsBox.value[id]?.send(history)
+        var revision = history
+        revision.generation = max(history.generation, (harness.historyBox.value[id]?.generation ?? 0) + 1)
+        harness.historyBox.value[id] = revision
+        harness.historySubjectsBox.value[id]?.send(revision)
     }
 
     private func finishPage(_ harness: SUT, id: String, sequence: Int, hasMore: Bool) {

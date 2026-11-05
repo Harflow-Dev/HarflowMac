@@ -35,6 +35,7 @@ import Testing
         let leasesBox: Box<[String: MockEventStreamLease]>
         let releasedBox: Box<Set<String>>
         let runningInSubtreesBox: Box<[String]?>
+        let observationBox: Box<[String: EventObservationFrame]>
         let eventsBox: Box<[String: [TaskEvent]]>
         let historyBox: Box<[String: EventHistoryState]>
         let historySubjectsBox: Box<[String: CurrentValueSubject<EventHistoryState, Never>]>
@@ -61,6 +62,7 @@ import Testing
         let leasesBox = Box<[String: MockEventStreamLease]>([:])
         let releasedBox = Box<Set<String>>([])
         let runningInSubtreesBox = Box<[String]?>(nil)
+        let observationBox = Box<[String: EventObservationFrame]>([:])
         let eventsBox = Box<[String: [TaskEvent]]>([:])
         let historyBox = Box<[String: EventHistoryState]>([:])
         let historySubjectsBox = Box<[String: CurrentValueSubject<EventHistoryState, Never>]>([:])
@@ -98,7 +100,7 @@ import Testing
             busySubject: busySubject, outcomesSubject: outcomesSubject, titlesSubject: titlesSubject,
             tasksBox: tasksBox, titlesBox: titlesBox, itemsBox: itemsBox, itemSubjectsBox: itemSubjectsBox, availabilityBox: availabilityBox,
             leasesBox: leasesBox, releasedBox: releasedBox, runningInSubtreesBox: runningInSubtreesBox,
-            eventsBox: eventsBox, historyBox: historyBox, historySubjectsBox: historySubjectsBox,
+            observationBox: observationBox, eventsBox: eventsBox, historyBox: historyBox, historySubjectsBox: historySubjectsBox,
             loadCallsBox: loadCallsBox, loadAdmissionBox: loadAdmissionBox, acquireEffectBox: acquireEffectBox, conversationPagesBox: conversationPagesBox
         )
         configureHistory(harness, leasePool: leasePool)
@@ -562,7 +564,8 @@ import Testing
         // then — an unreadable log keeps its own honest empty message, never a skeleton.
         await waitUntil { sut.columns.count == 1 && sut.isPresentationSettled }
         #expect(sut.columns.first?.isLoading == false)
-        #expect(sut.columns.first?.emptyText == "Activity log unavailable.")
+        #expect(sut.columns.first?.emptyText == nil)
+        #expect(sut.columns.first?.history.error?.contains("unavailable") == true)
     }
 
     @Test func givenItemsAlreadyPresentEvenWhileLoading_whenColumnBuilds_thenIsLoadingIsFalse() async {

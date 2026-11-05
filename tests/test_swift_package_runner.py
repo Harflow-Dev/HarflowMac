@@ -399,41 +399,59 @@ def test_run_process_records_exit_probe_failures_and_cleans_owned_group(
     assert "exit probe" in stderr_path.read_text(encoding="utf-8").lower()
 
 
-HOSTED_NORMAL = runner.HOSTED_SUITE + "/testApproval()"
-HOSTED_SECOND = runner.HOSTED_SUITE + "/testBlockedApproval()"
+APPROVAL_SUITE = "MainWindowFeatureTests.ActivityFeedApprovalHostedTests"
+OBSERVATION_SUITE = "MainWindowFeatureTests.ObservationHostedTests"
+HOSTED_SUITE_NAMES = (APPROVAL_SUITE, OBSERVATION_SUITE)
+HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
+HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"
 
 
-def hosted_partition(*ids: str) -> runner.Partition:
-    return runner.Partition(
-        runner.HOSTED_SUITE,
-        tuple(ids),
-        runner.suite_filter(runner.HOSTED_SUITE),
-    )
+def hosted_partition(*ids: str, suite: str = APPROVAL_SUITE) -> runner.Partition:
+    return runner.Partition(suite, tuple(ids), runner.suite_filter(suite))
 
 
-def test_appkit_host_allowlist_is_exact_and_aggregate_is_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize("suite", HOSTED_SUITE_NAMES)
+def test_appkit_host_allowlist_is_exact_and_aggregate_is_rejected(tmp_path: Path, suite: str) -> None:
+    assert runner.HOSTED_SUITES == frozenset(HOSTED_SUITE_NAMES)
     package = str(tmp_path / runner.HOSTED_PACKAGE)
+    ids = (suite + "/testFirst()", suite + "/testSecond()")
     ordinary = runner.Partition("ordinary", (NORMAL,), runner.suite_filter(runner.suite_identity(NORMAL)))
     assert not runner.requires_appkit_host(package, ordinary)
-    assert runner.requires_appkit_host(package, hosted_partition(HOSTED_NORMAL, HOSTED_SECOND))
+    assert runner.requires_appkit_host(package, hosted_partition(*ids, suite=suite))
 
     with pytest.raises(runner.RunnerError, match="unsupported package"):
-        runner.requires_appkit_host(str(tmp_path / "OtherPackage"), hosted_partition(HOSTED_NORMAL))
-    with pytest.raises(runner.RunnerError, match="aggregate"):
-        runner.requires_appkit_host(
-            package,
-            runner.Partition("aggregate", (HOSTED_NORMAL,), None),
-        )
-    with pytest.raises(runner.RunnerError, match="inconsistent filter"):
-        runner.requires_appkit_host(
-            package,
-            runner.Partition(runner.HOSTED_SUITE, (HOSTED_NORMAL,), "wrong-filter"),
-        )
-    with pytest.raises(runner.RunnerError, match="aggregate"):
-        runner.requires_appkit_host(
-            package,
-            runner.Partition(runner.HOSTED_SUITE, (HOSTED_NORMAL, NORMAL), runner.suite_filter(runner.HOSTED_SUITE)),
-        )
+        runner.requires_appkit_host(str(tmp_path / "OtherPackage"), hosted_partition(*ids, suite=suite))
+    for partition in [
+        runner.Partition("aggregate", ids, None),
+        runner.Partition(suite, (ids[0], NORMAL), runner.suite_filter(suite)),
+        runner.Partition(suite, (NORMAL,), runner.suite_filter(suite)),
+        runner.Partition(suite, (), runner.suite_filter(suite)),
+        runner.Partition(suite, (ids[0], next(other for other in HOSTED_SUITE_NAMES if other != suite) + "/testOther()"),
+                         runner.suite_filter(suite)),
+        runner.Partition(next(other for other in HOSTED_SUITE_NAMES if other != suite), ids, runner.suite_filter(suite)),
+    ]:
+        with pytest.raises(runner.RunnerError, match="aggregate or mixed"):
+            runner.requires_appkit_host(package, partition)
+    for expression in ["wrong-filter", runner.suite_filter(suite)[:-1], runner.suite_filter(APPROVAL_SUITE if suite == OBSERVATION_SUITE else OBSERVATION_SUITE)]:
+        with pytest.raises(runner.RunnerError, match="inconsistent filter"):
+            runner.requires_appkit_host(package, runner.Partition(suite, ids, expression))
+
+
+@pytest.mark.parametrize("suite", HOSTED_SUITE_NAMES)
+def test_appkit_host_allowlist_does_not_match_prefixes_or_nested_suites(tmp_path: Path, suite: str) -> None:
+    for identity in [suite + "Extra", suite + "/Nested"]:
+        partition = runner.Partition(identity, (identity + "/testOrdinary()",), runner.suite_filter(identity))
+        assert not runner.requires_appkit_host(str(tmp_path / runner.HOSTED_PACKAGE), partition)
+
+
+@pytest.mark.parametrize("suite", HOSTED_SUITE_NAMES)
+def test_appkit_partition_requires_prepared_host_without_ordinary_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suite: str) -> None:
+    def unexpected_run(*args, **kwargs):
+        pytest.fail("host admission refusal must not launch any fallback process")
+    monkeypatch.setattr(runner, "run_process", unexpected_run)
+    partition = hosted_partition(suite + "/testFirst()", suite=suite)
+    with pytest.raises(runner.RunnerError, match="no fallback"):
+        runner._execute_partition("swift", str(tmp_path / runner.HOSTED_PACKAGE), partition, 5, str(tmp_path), 1)
 
 
 def test_appkit_probe_and_host_summary_keep_evidence_separate() -> None:
@@ -456,6 +474,7 @@ def _run_fake_host_partition(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     *,
+    suite: str = APPROVAL_SUITE,
     probe_stdout: str = "Executed 0 tests, with 0 failures\n",
     host_stderr: str | None = None,
     event_lines: list[str] | None = None,
@@ -466,10 +485,11 @@ def _run_fake_host_partition(
     package.mkdir()
     output = tmp_path / "logs"
     output.mkdir()
-    partition = hosted_partition(HOSTED_NORMAL, HOSTED_SECOND)
+    ids = (suite + "/testApproval()", suite + "/testBlockedApproval()")
+    partition = hosted_partition(*ids, suite=suite)
     host = runner.AppKitHost("/fake-host", "/fake-tests.xctest", "/fake/Testing", {})
     calls: list[tuple[list[str], float]] = []
-    events = event_lines if event_lines is not None else passing_events([HOSTED_NORMAL, HOSTED_SECOND])
+    events = event_lines if event_lines is not None else passing_events(list(ids))
 
     def fake_run_process(argv, cwd, timeout, stdout_path, stderr_path, env=None):
         del cwd, env
@@ -494,16 +514,19 @@ def _run_fake_host_partition(
     return result, calls
 
 
+@pytest.mark.parametrize("suite", HOSTED_SUITE_NAMES)
 def test_appkit_partition_validates_real_probe_host_stderr_and_events(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suite: str,
 ) -> None:
-    result, calls = _run_fake_host_partition(monkeypatch, tmp_path)
+    result, calls = _run_fake_host_partition(monkeypatch, tmp_path, suite=suite)
     assert result.ok, result.failures
     assert result.backend == "appkit-host"
     assert result.legacy_probe_returncode == 0
     assert len(calls) == 2
     assert "--disable-swift-testing" in calls[0][0]
     assert calls[1][0][0] == "/fake-host"
+    assert calls[1][0][-2] == runner.suite_filter(suite)
+    assert calls[0][0][-1] == runner.suite_filter(suite)
     assert result.stdout_log and "host stdout is intentionally separate" in Path(result.stdout_log).read_text()
     assert result.stderr_log and "Test run with 2 tests" in Path(result.stderr_log).read_text()
 
@@ -741,3 +764,76 @@ def test_prepare_appkit_host_rejects_a_silent_or_successful_exception_self_test(
     (root / "logs").mkdir()
     with pytest.raises(runner.RunnerError, match=expected):
         runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, {})
+
+
+def test_execution_order_is_stable_and_preserves_partition_objects(tmp_path: Path) -> None:
+    ids = [NORMAL, PARAM] + [suite + "/testFirst()" for suite in HOSTED_SUITE_NAMES]
+    partitions = runner.build_partitions(ids, "suites")
+    original = list(partitions)
+    ordered = runner.order_partitions_for_execution(str(tmp_path / runner.HOSTED_PACKAGE), partitions)
+    assert partitions == original
+    expected = [part for part in original if part.name in HOSTED_SUITE_NAMES]
+    expected += [part for part in original if part.name not in HOSTED_SUITE_NAMES]
+    assert len(ordered) == len(expected)
+    assert all(actual is wanted for actual, wanted in zip(ordered, expected))
+    assert sorted(id(part) for part in ordered) == sorted(id(part) for part in original)
+    runner.validate_partitions(ids, ordered)
+    ordinary = runner.build_partitions([NORMAL, PARAM], "aggregate")
+    assert runner.order_partitions_for_execution(str(tmp_path / "OtherPackage"), ordinary) == ordinary
+
+
+@pytest.mark.parametrize("suite", HOSTED_SUITE_NAMES)
+@pytest.mark.parametrize("invalid", ["aggregate", "mixed", "both-hosted", "wrong-package", "filter"])
+def test_execution_order_preserves_host_admission_refusals(tmp_path: Path, suite: str, invalid: str) -> None:
+    package = str(tmp_path / runner.HOSTED_PACKAGE)
+    ids = (suite + "/testFirst()",)
+    name, expression = suite, runner.suite_filter(suite)
+    if invalid == "aggregate":
+        name, expression = "aggregate", None
+    elif invalid == "mixed":
+        ids += (NORMAL,)
+    elif invalid == "both-hosted":
+        other = next(value for value in HOSTED_SUITE_NAMES if value != suite)
+        ids += (other + "/testOther()",)
+    elif invalid == "wrong-package":
+        package = str(tmp_path / "OtherPackage")
+    else:
+        expression = "wrong-filter"
+    with pytest.raises(runner.RunnerError):
+        runner.order_partitions_for_execution(package, [runner.Partition(name, ids, expression)])
+
+
+def test_run_package_executes_hosted_first_after_preflight(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package = tmp_path / runner.HOSTED_PACKAGE
+    package.mkdir()
+    (package / "Package.swift").write_text("// fixture\n")
+    ids = [NORMAL, PARAM] + [suite + "/testFirst()" for suite in HOSTED_SUITE_NAMES]
+    canonical = runner.build_partitions(ids, "suites")
+    calls = []
+    prepared_host = object()
+
+    def fake_process(argv, cwd, timeout, stdout_path, stderr_path, **kwargs):
+        Path(stdout_path).write_text("\n".join(ids) if "list" in argv else "")
+        Path(stderr_path).write_text("")
+        return 0, False, 0.01
+
+    def prepare(*args):
+        calls.append("preflight")
+        return prepared_host
+
+    def execute(swift, package, partition, timeout, output_dir, index, *, host=None):
+        calls.append(partition)
+        assert host is (prepared_host if partition.name in HOSTED_SUITE_NAMES else None)
+        return runner.PartitionResult(partition.name, partition.filter_expression, len(partition.ids), ok=True)
+
+    monkeypatch.setattr(runner, "run_process", fake_process)
+    monkeypatch.setattr(runner, "build_partitions", lambda discovered, mode: canonical)
+    monkeypatch.setattr(runner, "prepare_appkit_host", prepare)
+    monkeypatch.setattr(runner, "_execute_partition", execute)
+    result = runner.run_package(str(package), "suites", output_dir=str(tmp_path / "logs"))
+    assert result.ok, result.failures
+    assert calls[0] == "preflight"
+    expected = runner.order_partitions_for_execution(str(package), canonical)
+    assert len(calls[1:]) == len(expected)
+    assert all(actual is wanted for actual, wanted in zip(calls[1:], expected))
+    assert [part.name for part in result.partitions] == [part.name for part in expected]

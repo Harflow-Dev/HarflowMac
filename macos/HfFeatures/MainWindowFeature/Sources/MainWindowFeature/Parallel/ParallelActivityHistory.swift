@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HfRepository
 import MonitorCore
 
 // MARK: - ParallelActivityHistory
@@ -24,7 +25,7 @@ final class ParallelActivityHistory {
     private var states: [String: ParallelColumnUIState] = [:]
     private var visible: Set<String> = []
     private var requests: [String: Request] = [:]
-    private var restoreTargets: [String: [String: Int]] = [:]
+    private var restoreTargets: [String: [String: String]] = [:]
     private var restoreGenerations: [String: Int] = [:]
     private var errors: [String: String] = [:]
 
@@ -45,7 +46,7 @@ final class ParallelActivityHistory {
         }
         requests = Dictionary(requests.values.compactMap { request in ownerByMember[request.memberID].map { ($0, request) } },
                               uniquingKeysWith: { first, _ in first })
-        var targets: [String: [String: Int]] = [:]
+        var targets: [String: [String: String]] = [:]
         for values in restoreTargets.values {
             for (memberID, sequence) in values {
                 if let id = ownerByMember[memberID] { targets[id, default: [:]][memberID] = sequence }
@@ -76,14 +77,8 @@ final class ParallelActivityHistory {
         owners[memberID] = conversationID
         states[conversationID] = state
         synchronizeFrontier(conversationID, state: state)
-        histories[memberID] = useCase.eventHistory(for: memberID)
-        if let sequence = state.oldestSequences[memberID] { restoreTargets[conversationID, default: [:]][memberID] = sequence }
-        subscriptions[memberID] = useCase.eventHistoryPublisher(for: memberID)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] history in
-                guard let self, leaseIDs[memberID] == token else { return }
-                historyChanged(memberID, history: history)
-            }
+        histories[memberID] = useCase.observation(for: memberID).presentationHistory
+        if let row = state.oldestSequences[memberID] { restoreTargets[conversationID, default: [:]][memberID] = row }
     }
 
     func release(_ memberID: String) {
@@ -112,6 +107,10 @@ final class ParallelActivityHistory {
         restoreTargets.removeAll()
         restoreGenerations.removeAll()
         errors.removeAll()
+    }
+
+    func changedObservation(_ memberID: String, frame: EventObservationFrame) {
+        historyChanged(memberID, history: frame.presentationHistory)
     }
 
     func changedItems(_ memberID: String) {
@@ -152,7 +151,7 @@ final class ParallelActivityHistory {
 
     @discardableResult func loadOlder(_ conversationID: String) -> Bool {
         guard canRequest(conversationID), errors[conversationID] == nil else { return false }
-        guard let member = revealedMembers(conversationID).reversed().first(where: { histories[$0]?.hasMore == true || histories[$0]?.error != nil }) else {
+        guard let member = revealedMembers(conversationID).reversed().first(where: { histories[$0]?.hasMore == true }) else {
             if let previous = members[conversationID]?.last(where: { !isRevealed($0, conversationID: conversationID) }) {
                 states[conversationID]?.activityMembers.insert(previous)
                 states[conversationID]?.paginationRevision &+= 1
@@ -167,6 +166,9 @@ final class ParallelActivityHistory {
     @discardableResult func retryOlder(_ conversationID: String) -> Bool {
         guard visible.contains(conversationID) else { return false }
         errors[conversationID] = nil
+        if let member = revealedMembers(conversationID).first(where: { useCase.observation(for: $0).history.availableActions.contains(.retryRead) }) {
+            return request(member, conversationID: conversationID, action: .retryRead)
+        }
         return loadOlder(conversationID)
     }
 
@@ -177,16 +179,17 @@ final class ParallelActivityHistory {
             && revealedMembers(id).allSatisfy { histories[$0]?.isLoading != true }
     }
 
-    @discardableResult private func request(_ memberID: String, conversationID: String) -> Bool {
-        let history = useCase.eventHistory(for: memberID)
-        guard history.hasMore || history.error != nil, !history.isLoading else {
+    @discardableResult private func request(_ memberID: String, conversationID: String, action: EventObservationAction = .loadEarlier) -> Bool {
+        let frame = useCase.observation(for: memberID)
+        let history = frame.presentationHistory
+        guard frame.history.availableActions.contains(action), !history.isLoading else {
             rejectRequest(memberID, conversationID: conversationID, history: history)
             return false
         }
         requests[conversationID] = Request(memberID: memberID, generation: history.generation)
-        guard useCase.loadMoreEvents(memberID) else {
+        guard useCase.requestObservation(action, for: memberID, scope: frame.scope) else {
             requests[conversationID] = nil
-            rejectRequest(memberID, conversationID: conversationID, history: useCase.eventHistory(for: memberID))
+            rejectRequest(memberID, conversationID: conversationID, history: useCase.observation(for: memberID).presentationHistory)
             return false
         }
         onChange(memberID)
@@ -205,16 +208,11 @@ final class ParallelActivityHistory {
         guard let id = owners[memberID] else { return }
         let previous = histories[memberID]
         histories[memberID] = history
-        if let previous, previous.generation != history.generation {
-            states[id]?.oldestSequences[memberID] = nil
-            restoreTargets[id] = nil
-            restoreGenerations[memberID] = nil
-        }
         if var request = requests[id], request.memberID == memberID {
             if history.isLoading {
                 request.observedLoading = true
                 requests[id] = request
-            } else if request.observedLoading {
+            } else if request.observedLoading || request.generation != history.generation {
                 settle(request, conversationID: id, history: history)
             }
         }
@@ -225,10 +223,7 @@ final class ParallelActivityHistory {
     private func settle(_ request: Request, conversationID: String, history: EventHistoryState) {
         requests[conversationID] = nil
         states[conversationID]?.paginationRevision &+= 1
-        if history.generation != request.generation {
-            states[conversationID]?.oldestSequences[request.memberID] = nil
-            stopRestoration(conversationID, error: nil)
-        } else if let error = history.error {
+        if let error = history.error {
             stopRestoration(conversationID, error: error)
         }
         onChange(request.memberID)
@@ -238,16 +233,18 @@ final class ParallelActivityHistory {
         guard canRequest(id), let targets = restoreTargets[id], !targets.isEmpty else { return }
         for memberID in members[id] ?? [] where targets[memberID] != nil {
             guard let target = targets[memberID], let history = histories[memberID] else { continue }
-            let availability = useCase.eventsAvailability(for: memberID)
+            let availability = useCase.observation(for: memberID).presentationAvailability
             if availability == .loading { return }
             if let error = history.error { stopRestoration(id, error: error); return }
-            if let generation = restoreGenerations[memberID], generation != history.generation {
-                states[id]?.oldestSequences[memberID] = nil
+            restoreGenerations[memberID] = history.generation
+            let frame = useCase.observation(for: memberID)
+            guard target.hasPrefix(frame.scope.identity + ":") else {
+                // A newly acquired local scope cannot satisfy an old logical-row target.
+                // Keep the retained reading boundary until explicit window replacement.
                 stopRestoration(id, error: nil)
                 return
             }
-            restoreGenerations[memberID] = history.generation
-            if let oldest = useCase.events(for: memberID).first?.seq, oldest <= target {
+            if useCase.observation(for: memberID).items.contains(where: { useCase.observation(for: memberID).scope.identity + ":" + String($0.id) == target }) {
                 restoreTargets[id]?[memberID] = nil
             } else if history.hasMore {
                 request(memberID, conversationID: id)
@@ -265,7 +262,22 @@ final class ParallelActivityHistory {
     }
 
     private func rememberBoundary(_ memberID: String, conversationID: String) {
-        guard let oldest = useCase.events(for: memberID).first?.seq, let state = states[conversationID] else { return }
-        state.oldestSequences[memberID] = min(oldest, state.oldestSequences[memberID] ?? oldest)
+        let frame = useCase.observation(for: memberID)
+        guard let first = frame.items.first, let state = states[conversationID] else { return }
+        if let retained = state.oldestSequences[memberID],
+           !frame.items.contains(where: { frame.scope.identity + ":" + String($0.id) == retained }) { return }
+        state.oldestSequences[memberID] = frame.scope.identity + ":" + String(first.id)
+    }
+
+    func adoptCurrentWindow(_ id: String, frames: [String: EventObservationFrame]) {
+        restoreTargets[id] = nil
+        requests[id] = nil
+        errors[id] = nil
+        for memberID in members[id] ?? [] {
+            restoreGenerations[memberID] = nil
+            guard let frame = frames[memberID] else { continue }
+            histories[memberID] = frame.presentationHistory
+            states[id]?.oldestSequences[memberID] = frame.items.first.map { frame.scope.identity + ":" + String($0.id) }
+        }
     }
 }

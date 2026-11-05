@@ -21,6 +21,11 @@ protocol ParallelUseCase: Sendable {
     /// Returns the fresh listing entry.
     func task(_ id: String) -> TaskInfo?
     func title(_ taskID: String) -> String
+    func recoveredTranscript(for id: String) -> RecoveredTranscriptFrame
+    func recoveredTranscriptPublisher(for id: String) -> AnyPublisher<RecoveredTranscriptFrame, Never>
+    func observation(for id: String) -> EventObservationFrame
+    func observationPublisher(for id: String) -> AnyPublisher<EventObservationFrame, Never>
+    @discardableResult func requestObservation(_ action: EventObservationAction, for id: String, scope: EventObservationScope) -> Bool
     func acquireEventLease(_ taskID: String) -> any EventStreamLease
     func events(for taskID: String) -> [TaskEvent]
     func items(for taskID: String) -> [TimelineItem]

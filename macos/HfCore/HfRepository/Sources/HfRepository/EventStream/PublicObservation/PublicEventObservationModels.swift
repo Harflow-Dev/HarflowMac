@@ -5,6 +5,7 @@ import MonitorCore
 
 /// Internal, lifetime-scoped occurrence; never a legacy sequence anchor.
 struct PublicEventOccurrence: Equatable, Sendable {
+    /// Consumer-window identity, independent of producer sequence numbers.
     let epoch: UUID
     let admission: Int
     let record: TaskEventRecord
@@ -25,7 +26,16 @@ enum PublicEventPromptState: Equatable, Sendable {
 
 struct PublicEventObservationSnapshot: Equatable, Sendable {
     let sessionID: UUID
+    /// Source/operation fence; changes on actual source adoption or runtime invalidation.
     var epoch = UUID()
+    /// Fresh occurrence identity scope for every explicitly replaced activity window.
+    var windowID = UUID()
+    /// Retained activity belongs to the previous source until explicit adoption.
+    var sourceChangePending = false
+    /// Explicit older-page request pending; completion is published with its admitted rows.
+    var historyLoading = false
+    /// At least one observation lane awaits an explicit read retry.
+    var pausedReads = false
     var revision = 0
     var activity: [PublicEventOccurrence] = []
     var rawBytes = 0

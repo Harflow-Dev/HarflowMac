@@ -16,25 +16,34 @@ extension TaskDetailVMTests {
         let calls = Box<[String]>([])
         let harness = makeConversationSUT(openedAs: "current", initialMembers: members, eventHistory: { states.value[$0] ?? EventHistoryState() })
         let sut = harness.sut
-        given(harness.useCase).loadMoreEvents(.any).willProduce { id in calls.value.append(id); states.value[id] = EventHistoryState(); return true }
+        given(harness.useCase).loadMoreEvents(.any).willProduce { id in
+            calls.value.append(id)
+            states.value[id] = EventHistoryState(generation: (states.value[id]?.generation ?? 0) + 1)
+            publishObservations(harness)
+            return true
+        }
         sut.didAppear()
         harness.tasksSubject.send(members)
         await waitUntil { sut.task != nil && !sut.conversationLoading }
         sut.loadedActivityMembers = Set(members.map(\.taskID))
         sut.conversationHasMore = true
+        for id in sut.loadedActivityMembers { sut.applyObservation(harness.useCase.observation(for: id), for: id) }
         sut.recomputeTimeline(task: members[2], allChildren: [])
         await waitUntil { sut.timelineWorker == nil }
         #expect(sut.timelineModel.history.hasMore)
-        #expect(sut.timelineModel.history.error == (retry ? "Retry middle" : nil))
-        sut.timelineModel.onLoadMore?()
+        #expect((sut.timelineModel.history.error != nil) == retry)
+        #expect((sut.observationFrames["middle"]?.history.reasons.contains(.unavailable) == true) == retry)
+        if retry { sut.didRequestObservation(.retryRead, taskID: "middle") } else { sut.timelineModel.onLoadMore?() }
         #expect(calls.value == ["middle"])
         #expect(!sut.conversationLoading)
+        for id in sut.loadedActivityMembers { sut.applyObservation(harness.useCase.observation(for: id), for: id) }
         sut.recomputeTimeline(task: members[2], allChildren: [])
         await waitUntil { sut.timelineWorker == nil }
         #expect(sut.timelineModel.history.hasMore)
         sut.timelineModel.onLoadMore?()
         #expect(calls.value == ["middle", "current"])
         #expect(!sut.conversationLoading)
+        for id in sut.loadedActivityMembers { sut.applyObservation(harness.useCase.observation(for: id), for: id) }
         sut.recomputeTimeline(task: members[2], allChildren: [])
         await waitUntil { sut.timelineWorker == nil }
         sut.timelineModel.onLoadMore?()
@@ -47,20 +56,27 @@ extension TaskDetailVMTests {
         let states = Box(["current": EventHistoryState(hasMore: true)])
         let harness = makeConversationSUT(openedAs: "current", initialMembers: members, eventHistory: { states.value[$0] ?? EventHistoryState() })
         let sut = harness.sut
-        given(harness.useCase).loadMoreEvents(.value("current")).willProduce { _ in states.value["current"] = EventHistoryState(); return true }
+        given(harness.useCase).loadMoreEvents(.value("current")).willProduce { _ in
+            states.value["current"] = EventHistoryState(generation: 1)
+            publishObservations(harness)
+            return true
+        }
         sut.didAppear()
         harness.tasksSubject.send(members)
         await waitUntil { sut.task != nil && !sut.conversationLoading }
         #expect(sut.loadedActivityMembers == ["current"])
+        for id in sut.loadedActivityMembers { sut.applyObservation(harness.useCase.observation(for: id), for: id) }
         sut.recomputeTimeline(task: members[1], allChildren: [])
         await waitUntil { sut.timelineWorker == nil }
         sut.timelineModel.onLoadMore?()
         verify(harness.useCase).loadMoreEvents(.value("current")).called(1)
         #expect(sut.loadedActivityMembers == ["current"])
+        for id in sut.loadedActivityMembers { sut.applyObservation(harness.useCase.observation(for: id), for: id) }
         sut.recomputeTimeline(task: members[1], allChildren: [])
         await waitUntil { sut.timelineWorker == nil }
         sut.timelineModel.onLoadMore?()
         #expect(sut.loadedActivityMembers == ["old", "current"])
+        for id in sut.loadedActivityMembers { sut.applyObservation(harness.useCase.observation(for: id), for: id) }
         sut.recomputeTimeline(task: members[1], allChildren: [])
         await waitUntil { sut.timelineWorker == nil }
         #expect(!sut.timelineModel.history.hasMore)
@@ -76,6 +92,7 @@ extension TaskDetailVMTests {
         harness.tasksSubject.send(members)
         await waitUntil { sut.task != nil }
         sut.loadedActivityMembers = Set(members.map(\.taskID))
+        for id in sut.loadedActivityMembers { sut.applyObservation(harness.useCase.observation(for: id), for: id) }
         sut.recomputeTimeline(task: members[1], allChildren: [])
         await waitUntil { sut.timelineWorker == nil }
         #expect(sut.timelineModel.history.isLoading)

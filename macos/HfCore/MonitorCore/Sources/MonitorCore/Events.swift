@@ -68,12 +68,15 @@ public struct TaskEvent: Equatable, Identifiable, Sendable {
         public let exitCode: Int?
     }
 
-    public var id: Int { seq }
+    public var id: Int { displayID ?? seq }
+    /// Adapter-assigned occurrence identity, separate from the wire sequence.
+    public let displayID: Int?
     public let seq: Int
     public let observedAt: Date?
     public let sourceTimestamp: Date?
     public let kind: Kind
-    /// The line exactly as written, for the Raw events tab.
+    /// Adapter-provided evidence text: legacy line bytes or public normalized JSON.
+    /// The observation frame supplies provenance; this field alone does not establish JSONL bytes.
     public let rawLine: String
 
     public var timestamp: Date? { observedAt ?? sourceTimestamp }
@@ -87,7 +90,19 @@ public struct TaskEvent: Equatable, Identifiable, Sendable {
     /// the adapter's reserved namespace and is never an event-log cursor or settlement evidence.
     public init(displayID: Int, sourceTimestamp: Date?, kind: Kind, rawLine: String) {
         seq = displayID
+        self.displayID = displayID
         observedAt = nil
+        self.sourceTimestamp = sourceTimestamp
+        self.kind = kind
+        self.rawLine = rawLine
+    }
+
+    /// Observation initializer for a caller-projected event. The caller owns validation and
+    /// supplies occurrence identity separately from the actual wire sequence.
+    public init(seq: Int, displayID: Int, observedAt: Date?, sourceTimestamp: Date?, kind: Kind, rawLine: String) {
+        self.seq = seq
+        self.displayID = displayID
+        self.observedAt = observedAt
         self.sourceTimestamp = sourceTimestamp
         self.kind = kind
         self.rawLine = rawLine
@@ -99,6 +114,7 @@ public struct TaskEvent: Equatable, Identifiable, Sendable {
               WireEnvelope.validate(object, contract: .events) == nil,
               let kindName = object["kind"]?.stringValue else { return nil }
         rawLine = line
+        displayID = nil
         seq = object["seq"]?.intValue ?? -1
         observedAt = object["observed_at"]?.stringValue.flatMap(ISODate.parse)
         sourceTimestamp = object["source_ts"]?.stringValue.flatMap(ISODate.parse)
@@ -220,9 +236,18 @@ public struct TimelineBuilder: Sendable {
 
     private var entries: [Entry] = []
     private var callIndex: [String: Int] = [:]
+    private var ambiguousCallIDs: Set<String> = []
     private var deltaIndex: [DeltaKey: Int] = [:]
 
     public init() {}
+
+    /// Retains materialized rows while preventing tool and text joins across an observation gap.
+    /// Callers must invoke this whenever their source cannot establish continuous coverage.
+    public mutating func breakContinuity() {
+        callIndex.removeAll(keepingCapacity: true)
+        ambiguousCallIDs.removeAll(keepingCapacity: true)
+        deltaIndex.removeAll(keepingCapacity: true)
+    }
 
     /// Processes `events` in arrival order, extending whatever `entries`/`callIndex`/`deltaIndex`
     /// state earlier `append` calls already built. Never rescans an entry already produced by an
@@ -231,26 +256,33 @@ public struct TimelineBuilder: Sendable {
         for event in events {
             switch event.kind {
             case .taskStarted(let started):
-                entries.append(.item(TimelineItem(id: event.seq, at: event.timestamp, body: .started(started))))
+                entries.append(.item(TimelineItem(id: event.id, at: event.timestamp, body: .started(started))))
             case .assistantDelta(let delta):
-                appendDelta(delta, seq: event.seq, at: event.timestamp)
+                appendDelta(delta, seq: event.id, at: event.timestamp)
             case .assistantText(let text, let messageID, let blockIndex):
-                appendAssistantText(text, messageID: messageID, blockIndex: blockIndex, seq: event.seq, at: event.timestamp)
+                appendAssistantText(text, messageID: messageID, blockIndex: blockIndex, seq: event.id, at: event.timestamp)
             case .toolCall(let call):
-                if !call.callID.isEmpty { callIndex[call.callID] = entries.count }
-                entries.append(.item(TimelineItem(id: event.seq, at: event.timestamp, body: .tool(call, nil))))
+                if !call.callID.isEmpty {
+                    // Reusing an unresolved ID makes every result for that ID ambiguous until
+                    // the next continuity boundary. Never guess which occurrence it settles.
+                    if callIndex[call.callID] != nil { ambiguousCallIDs.insert(call.callID) }
+                    if !ambiguousCallIDs.contains(call.callID) { callIndex[call.callID] = entries.count }
+                }
+                entries.append(.item(TimelineItem(id: event.id, at: event.timestamp, body: .tool(call, nil))))
             case .toolResult(let result):
-                guard let index = callIndex[result.callID], case .item(let item) = entries[index],
+                guard !ambiguousCallIDs.contains(result.callID),
+                      let index = callIndex[result.callID], case .item(let item) = entries[index],
                       case .tool(let call, nil) = item.body else { continue }
                 entries[index] = .item(TimelineItem(id: item.id, at: item.at, body: .tool(call, result)))
+                callIndex[result.callID] = nil
             case .userMessage(let text, let source, _):
-                entries.append(.item(TimelineItem(id: event.seq, at: event.timestamp, body: .message(text: text, source: source))))
+                entries.append(.item(TimelineItem(id: event.id, at: event.timestamp, body: .message(text: text, source: source))))
             case .notice(let text):
-                entries.append(.item(TimelineItem(id: event.seq, at: event.timestamp, body: .notice(text))))
+                entries.append(.item(TimelineItem(id: event.id, at: event.timestamp, body: .notice(text))))
             case .undelivered(_, let text, let reason):
-                entries.append(.item(TimelineItem(id: event.seq, at: event.timestamp, body: .undelivered(text: text, reason: reason))))
+                entries.append(.item(TimelineItem(id: event.id, at: event.timestamp, body: .undelivered(text: text, reason: reason))))
             case .taskFinished(let status, let exitCode, let summary, _):
-                entries.append(.item(TimelineItem(id: event.seq, at: event.timestamp, body: .finished(status: status, exitCode: exitCode, summary: summary))))
+                entries.append(.item(TimelineItem(id: event.id, at: event.timestamp, body: .finished(status: status, exitCode: exitCode, summary: summary))))
             case .usage, .unknown:
                 continue
             }
@@ -406,10 +438,14 @@ public struct ConversationItemMember: Sendable {
     public let items: [TimelineItem]
     public let prompt: String?
 
-    public init(task: TaskInfo, items: [TimelineItem], prompt: String?) {
+    /// Observation namespace for item occurrence IDs; nil preserves legacy row identity.
+    public let identityScope: String?
+
+    public init(task: TaskInfo, items: [TimelineItem], prompt: String?, identityScope: String? = nil) {
         self.task = task
         self.items = items
         self.prompt = prompt
+        self.identityScope = identityScope
     }
 }
 
@@ -483,7 +519,8 @@ public enum ConversationTimeline {
                 // A follow-up's own "started" row would repeat what its separator already says.
                 if index > 0, case .started = item.body { continue }
                 rows.append(ConversationTimelineRow(
-                    id: "\(member.task.taskID)#\(item.id)", taskID: member.task.taskID, timestamp: item.at,
+                    id: member.identityScope.map { "\(member.task.taskID)#scope:\($0.utf8.count):\($0)#\(item.id)" }
+                        ?? "\(member.task.taskID)#\(item.id)", taskID: member.task.taskID, timestamp: item.at,
                     kind: .item(item), live: live
                 ))
             }

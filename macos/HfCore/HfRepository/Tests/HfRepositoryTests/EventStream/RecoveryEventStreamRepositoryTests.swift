@@ -55,6 +55,7 @@ struct RecoveryEventStreamRepositoryTests {
         let poll: LockedBox<(@Sendable () -> Void)?>
         let recoveryCalls: LockedBox<Int>
         let baseEvent: TaskEvent
+        let capturedFrame: EventObservationFrame
     }
 
     func recoveryPage() -> String {
@@ -76,6 +77,11 @@ struct RecoveryEventStreamRepositoryTests {
             #"{"v":1,"seq":7,"kind":"task_finished","status":"completed","summary":"captured summary"}"#
         ))!
         let base = MockEventStreamRepository()
+        let capturedFrame = EventObservationFrame(taskID: taskID,
+            scope: EventObservationScope(sessionID: UUID(), sourceID: UUID(), windowID: UUID()),
+            events: [baseEvent], history: .init(reasons: [.captureUnavailable]))
+        given(base).observation(for: .any).willReturn(capturedFrame)
+        given(base).observationPublisher(for: .any).willReturn(Just(capturedFrame).eraseToAnyPublisher())
         given(base).acquire(.any).willReturn(NullEventStreamLease(taskID: taskID))
         given(base).events(for: .any).willReturn([baseEvent])
         given(base).items(for: .any).willReturn([])
@@ -115,7 +121,7 @@ struct RecoveryEventStreamRepositoryTests {
         )))
         let sut = RecoveryEventStreamRepository(base: base, environment: environment,
                                                  snapshots: snapshots, scheduler: scheduler)
-        return PositiveRig(sut: sut, poll: poll, recoveryCalls: recoveryCalls, baseEvent: baseEvent)
+        return PositiveRig(sut: sut, poll: poll, recoveryCalls: recoveryCalls, baseEvent: baseEvent, capturedFrame: capturedFrame)
     }
 
     @Test
@@ -147,6 +153,12 @@ struct RecoveryEventStreamRepositoryTests {
         #expect(Set(recoveredIDs).count == recoveredIDs.count)
         #expect(rig.sut.summary(for: taskID) == EventSummary())
         #expect(rig.sut.prompt(for: taskID) == "captured prompt")
+        // The production atomic captured frame never incorporates display-only recovery.
+        #expect(rig.sut.observation(for: taskID) == rig.capturedFrame)
+        let separateRecovery = rig.sut.recoveredTranscript(for: taskID)
+        #expect(separateRecovery.events.contains { if case .assistantText(let text, _, _) = $0.kind { return text == "recovered text" }; return false })
+        #expect(!separateRecovery.events.contains(rig.baseEvent))
+        #expect(separateRecovery.generation != nil)
         lease.release()
         await waitUntil { rig.poll.value == nil }
         #expect(rig.poll.value == nil)

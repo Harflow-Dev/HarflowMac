@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import HfRepository
 import MonitorCore
 
 extension TaskDetailVM {
@@ -31,39 +32,37 @@ extension TaskDetailVM {
         let summary = isWorkflowBuilder ? WorkflowBuilderPresentation.summary(rawSummary)
             : projectsWorkflowResult ? WorkflowNodePresentation.summary(rawSummary, task: task) : rawSummary
         let members = conversationMembers
-        let summaries = members.map { useCase.eventSummary(for: $0.taskID) }
-        let base = SummaryPaneModel.build(task: task, summary: summary, memberEventsOldestFirst: [], memberAvailabilities: summaries.map(\.availability))
+        let summaries = members.map { observationFrames[$0.taskID]?.summary ?? ObservedActivitySummary() }
+        let base = SummaryPaneModel.build(task: task, summary: summary, memberEventsOldestFirst: [],
+            memberAvailabilities: summaries.map { $0.state == .observed ? .available : $0.state == .loading ? .loading : .unavailable })
         var order: [String] = []
         var latest: [String: EditedFileStatus] = [:]
         let prefix = task.repoPath.hasSuffix("/") ? task.repoPath : task.repoPath + "/"
         for projection in summaries {
-            var memberVersions: [String: Int] = [:]
             for file in projection.files {
                 let path = !task.repoPath.isEmpty && file.path.hasPrefix(prefix) ? String(file.path.dropFirst(prefix.count)) : file.path
                 if latest[path] == nil { order.append(path) }
-                let version = projection.fileSequences[file.path] ?? 0
-                if version >= memberVersions[path, default: -1] {
-                    latest[path] = file.status
-                    memberVersions[path] = version
-                }
+                latest[path] = file.status
             }
         }
+
         let partialConversation = conversationLoading || conversationHasMore || conversationHistoryIncomplete || conversationError != nil
+        let unavailable = summaries.contains { $0.state == .unavailable || $0.state == .limited }
+        let filesQualified = !partialConversation && !summaries.isEmpty && summaries.allSatisfy { $0.state == .observed }
+        let availability: EventAvailability = unavailable ? .unavailable : filesQualified ? .available : .loading
+        let additional = filesQualified ? summaries.reduce(0) { $0 + max(0, ($1.totalFiles ?? 0) - $1.files.count) } : 0
+        let note = unavailable ? "File accounting is unavailable because some captured history could not be qualified."
+            : !filesQualified ? "Conversation history is incomplete; file accounting is not qualified."
+            : additional > 0 ? "This bounded view shows only the admitted file entries; additional qualified entries are not displayed." : base.editedFilesNote
         summaryModel = SummaryPaneModel(
             hero: base.hero, finalAnswer: base.finalAnswer, finalAnswerPlaceholder: base.finalAnswerPlaceholder,
-            refusalLines: base.refusalLines, editedFilesAvailability: partialConversation ? .loading : base.editedFilesAvailability,
-            editedFiles: order.map { EditedFile(path: $0, status: latest[$0] ?? .unconfirmed) },
-            editedFilesNote: partialConversation ? "Conversation history is still loading; file accounting is incomplete." : base.editedFilesNote,
+            refusalLines: base.refusalLines, editedFilesAvailability: availability,
+            editedFiles: filesQualified ? order.map { EditedFile(path: $0, status: latest[$0] ?? .unconfirmed) } : [],
+            editedFilesNote: note,
             numTurns: base.numTurns,
             inputTokens: base.inputTokens, outputTokens: base.outputTokens, costUSD: base.costUSD,
-            additionalFileCount: summaries.reduce(0) { $0 + max(0, $1.totalFiles - $1.files.count) },
-            onLoadMoreFiles: { [weak self] in
-                guard let self, let member = conversationMembers.first(where: {
-                    let projection = useCase.eventSummary(for: $0.taskID)
-                    return projection.totalFiles > projection.files.count
-                }) else { return }
-                useCase.loadMoreSummaryFiles(member.taskID)
-            }
+            additionalFileCount: additional,
+            onLoadMoreFiles: nil
         )
     }
 }

@@ -144,7 +144,6 @@ extension TaskDetailVMTests {
         given(useCase).events(for: .any).willReturn([])
         given(useCase).eventsAvailability(for: .any).willReturn(.available)
         given(useCase).eventsAvailabilityPublisher(for: .any).willReturn(PassthroughSubject<EventAvailability, Never>().eraseToAnyPublisher())
-        given(useCase).eventsPath(for: .any).willReturn("/dev/null")
         given(useCase).activity(for: .any).willReturn(ActivityCounts())
         given(useCase).current(for: .any).willReturn(nil)
         given(useCase).prompt(for: .any).willReturn(nil)

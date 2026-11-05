@@ -6,6 +6,43 @@ import Mockable
 import MonitorCore
 
 extension ParallelVMTests {
+    private func configureObservation(_ harness: SUT) {
+        let useCase = harness.useCase
+        let eventsBox = harness.eventsBox
+        let historyBox = harness.historyBox
+        let historySubjectsBox = harness.historySubjectsBox
+        given(useCase).recoveredTranscript(for: .any).willReturn(.init())
+        given(useCase).recoveredTranscriptPublisher(for: .any).willReturn(Empty().eraseToAnyPublisher())
+        given(useCase).observation(for: .any).willProduce { id in
+            if let frame = harness.observationBox.value[id] { return frame }
+            return FeatureObservationFixture.frame(id: id, events: eventsBox.value[id] ?? [],
+                items: harness.itemsBox.value[id] ?? [], availability: harness.availabilityBox.value[id] ?? .loading,
+                history: historyBox.value[id] ?? .init())
+        }
+        given(useCase).observationPublisher(for: .any).willProduce { id in
+            let itemSubject = harness.itemSubjectsBox.value[id]
+            let items = itemSubject?.eraseToAnyPublisher()
+                ?? Just(harness.itemsBox.value[id] ?? []).eraseToAnyPublisher()
+            let history = historySubjectsBox.value[id]
+                ?? CurrentValueSubject<EventHistoryState, Never>(historyBox.value[id] ?? .init())
+            historySubjectsBox.value[id] = history
+            let itemFrames = items.map { value in
+                if harness.itemSubjectsBox.value[id] === itemSubject {
+                    harness.itemsBox.value[id] = value
+                    if !value.isEmpty { harness.availabilityBox.value[id] = .available }
+                    return useCase.observation(for: id)
+                }
+                return FeatureObservationFixture.frame(id: id, events: eventsBox.value[id] ?? [], items: value,
+                    availability: .available, history: historyBox.value[id] ?? .init())
+            }
+            let historyFrames = history.map { value in
+                historyBox.value[id] = value
+                return useCase.observation(for: id)
+            }
+            return Publishers.Merge(itemFrames, historyFrames).eraseToAnyPublisher()
+        }
+    }
+
     func configureHistory(_ harness: SUT, leasePool: ParallelTestLeasePool?) {
         let useCase = harness.useCase
         let eventsBox = harness.eventsBox
@@ -17,6 +54,15 @@ extension ParallelVMTests {
         let releasedBox = harness.releasedBox
         let leasesBox = harness.leasesBox
         let conversationPagesBox = harness.conversationPagesBox
+        configureObservation(harness)
+        given(useCase).requestObservation(.any, for: .any, scope: .any).willProduce { action, id, scope in
+            guard scope == useCase.observation(for: id).scope else { return false }
+            if action == .rebaseWindow {
+                return useCase.observation(for: id).history.availableActions.contains(.rebaseWindow) && loadAdmissionBox.value
+            }
+            guard action == .loadEarlier else { return false }
+            return useCase.loadMoreEvents(id)
+        }
         given(useCase).conversationHistory(sessionID: .any, cursor: .any).willProduce { _, _ in
             conversationPagesBox.value.isEmpty ? nil : conversationPagesBox.value.removeFirst()
         }

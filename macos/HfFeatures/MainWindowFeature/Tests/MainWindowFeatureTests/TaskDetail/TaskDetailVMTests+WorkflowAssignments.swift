@@ -84,8 +84,10 @@ extension TaskDetailVMTests {
             if case .item(let item) = row.kind, case .started(let start) = item.body { return start.prompt }
             return nil
         }
-        #expect(displayed == prompts)
-        #expect(harness.sut.promptText == prompts[0])
+        let noAssignments = displayed.allSatisfy(\.isEmpty)
+        #expect(noAssignments, "display event prompts do not establish stored assignment text")
+        #expect(StoredRequestPresentation(state: harness.sut.requestReadState).text == nil)
+        #expect(harness.sut.requestReadState == .notRequested)
         #expect(!displayed.joined().contains("decision_id"))
         harness.sut.didDisappear()
     }
@@ -121,9 +123,10 @@ extension TaskDetailVMTests {
         await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
 
         // then
-        #expect(harness.sut.promptText == "Answer to the worker question")
+        #expect(StoredRequestPresentation(state: harness.sut.requestReadState).text == nil)
+        #expect(harness.sut.requestReadState == .notRequested)
         let messages = harness.sut.timelineModel.rows.compactMap { row -> String? in
-            if case let .separator(text) = row.kind { return text }
+            if case let .separator(text) = row.kind { return text.isEmpty ? nil : text }
             if case let .item(item) = row.kind, case let .message(text, _) = item.body { return text }
             return nil
         }
@@ -166,7 +169,8 @@ extension TaskDetailVMTests {
 
         // then
         #expect(harness.sut.conversationMembers.map(\.taskID) == ["attempt-0", "attempt-1"])
-        #expect(harness.sut.promptText == "Assignment 1")
+        #expect(StoredRequestPresentation(state: harness.sut.requestReadState).text == nil)
+        #expect(harness.sut.requestReadState == .notRequested)
         #expect(Set(harness.sut.timelineModel.rows.map(\.taskID)) == ["attempt-0", "attempt-1"])
         harness.sut.didDisappear()
     }

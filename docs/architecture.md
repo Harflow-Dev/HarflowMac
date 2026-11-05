@@ -215,16 +215,52 @@ checkpoint capability requirements and missing-attribution behavior.
 
 ## Public task-list observation
 
-TaskList's observation source emits invalidations only; public task-history/status operations remain the source of displayed facts. Module currently injects polling (one-second urgent/visible checks, thirty-second hidden-idle refreshes), with idle-only admission that drops periodic demand during a busy refresh. Action refresh barriers are independent. Runtime generations fence stale callbacks and initial passes, and subscriptions cancel without retaining the repository. The source can later be replaced by a qualified public ctl watcher without rebuilding the task-list data pipeline. This does not yet replace the activity/cumulative-summary event-file transport or qualify the intended0.0.8 runtime.
+TaskList's observation source emits invalidations only; public task-history/status operations remain the source of displayed facts. Module currently injects polling (one-second urgent/visible checks, thirty-second hidden-idle refreshes), with idle-only admission that drops periodic demand during a busy refresh. Action refresh barriers are independent. Runtime generations fence stale callbacks and initial passes, and subscriptions cancel without retaining the repository. The source can later be replaced by a qualified public ctl watcher without rebuilding the task-list data pipeline. Captured activity uses the separate public observation pipeline below. Neither polling nor event fixture adoption qualifies or selects another managed runtime.
 
-## Public prompt foundation
+## Public captured activity and stored requests
 
-A typed, one-shot task-prompt client and repository preserve the public engine's
-availability, completeness, truncation, integrity, byte counts and raw additive
-facts. Required caller generation fencing and captured tooling identity reject
-late results across request/runtime changes; fresh per-read capability probes
-remain authoritative. Module registers this adapter alongside the other bounded
-public readers. It does not feed current rendered prompts or remove event-summary
-private transport. Those consumer changes require the later bounded transport
-slice and approved unavailable/loss designs. Fixture adoption from released0.0.8
-is consumer data only; the managed engine remains pinned to0.0.7.
+Presentation reference: owner-approved HarflowDesign `227da87ade53fd30af7a3e28776258c1bd72c72c`,
+`v2/docs/d2b-observation-proposal.md`, `v2/scripts/screens-d2b-proposal.js`,
+`v2/scripts/d2b-proposal.js` and `v2/styles/d2b-proposal.css`, the eight
+`d2b-proposal` states in Light/Dark. This bounded task-detail arrangement uses a
+transcript with Original request disclosure and inline history health, plus the
+Events pane. Earlier task-tab/Inspector descriptions are historical presentation
+context, not the target for this arrangement. Existing independently sourced
+snapshot facts, reported results, artifacts and execution actions remain accessible.
+
+`EventStreamRepositoryImpl` replaces both private activity and cumulative-summary
+readers with a shared public page session. Its atomic frame includes normalized
+records, strict known-payload projection, qualified optional summary and orthogonal
+history facts. Session/source/window plus occurrence admission identifies rows;
+actual public sequences remain record data and never establish global order or
+reading-position comparison. Detail and Parallel restore retained logical membership
+and preserve their explicit follow/reading state. Recovery is a separate labelled
+transcript, excluded from captured records and aggregate authority.
+
+Activity admits whole bounded pages without eviction. Capacity blocks materialization
+and retains its delivery cursor; explicit window rebase preserves independent sound
+summary. Invalid cursors retain cached rows until explicit source adoption. Known
+loss survives retries and consumer-window replacement. Runtime state transitions
+synchronously fence cached facts and queued results, then reconnect retained role
+interest under fresh sessions. The public reader performs fresh capability probes;
+there is no persistence or MCP fallback.
+
+The one-shot `task-prompt` reader retains availability, integrity, completeness,
+truncation and byte facts independently. Assignment text never comes from event
+prompts or recovered messages. Full-copy presentation requires complete untruncated
+verified or integrity-not-applicable text; previews/unverified prefixes have qualified
+copy labels, and integrity failure withholds text. Read more replaces the displayed
+prefix at a131072-byte ceiling rather than appending arbitrary chunks.
+
+Canonical event/prompt input remains the immutable0.0.8 fixture bundle. The managed
+runtime remains pinned to0.0.7, with explicit unsupported reads where capabilities
+are absent. Runtime selection, acquisition, watcher adoption and performance
+acceptance remain separate decisions.
+
+Stored-request text uses a local read-only selectable native text view inside a
+wrapping scroll region capped at 180 points, retaining the shared reading font and
+literal text. Only an explicit Read more result creates a focus intent. The actual
+text view consumes it after confirmed first-responder ownership in its active key
+window; redraws and remounts cannot replay consumed or cancelled intents. Collapse,
+removal and unavailable/integrity-failed states cancel pending target focus. Ordinary
+publications preserve selection and do not manufacture focus requests.

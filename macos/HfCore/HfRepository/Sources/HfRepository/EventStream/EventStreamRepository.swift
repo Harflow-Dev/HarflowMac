@@ -4,6 +4,8 @@ import Mockable
 import MonitorCore
 import SwiftEnvironment
 
+private let unconfiguredObservationScope = EventObservationScope(sessionID: UUID(), sourceID: UUID(), windowID: UUID())
+
 // MARK: - EventStreamLease
 
 /// A token for one caller's interest in a task's live event stream. Releases itself on `deinit`;
@@ -17,14 +19,17 @@ public protocol EventStreamLease: AnyObject, Sendable {
 
 // MARK: - EventStreamRepository
 
-/// Ref-counted, per-task event tailing shared across every screen watching the same task at once
-/// (the menu bar, TaskDetail, a Parallel column) — decision 6. One `EventFileTailer` per task,
-/// however many leases are outstanding. The first lease on a task triggers
-/// `TaskSnapshotRepository.refresh(id)` (F4-13); the last release stops the tailer. A missing events
-/// path falls back to `/dev/null` (F4-13). Tailer callbacks are folded on a serial background queue in arrival order.
-/// Completed history publishes only after its item snapshot; concurrent `loadMore` calls coalesce.
+/// Shared bounded public observations with exact source/window action fencing.
 @Mockable
 public protocol EventStreamRepository: Sendable {
+    func observation(for taskID: String) -> EventObservationFrame
+    func observationPublisher(for taskID: String) -> AnyPublisher<EventObservationFrame, Never>
+    @discardableResult func requestObservation(action: EventObservationAction, for taskID: String, scope: EventObservationScope) -> Bool
+    func requestState(for taskID: String) -> TaskRequestReadState
+    func requestPublisher(for taskID: String) -> AnyPublisher<TaskRequestReadState, Never>
+    func readRequest(for taskID: String, maxBytes: Int)
+    func recoveredTranscript(for taskID: String) -> RecoveredTranscriptFrame
+    func recoveredTranscriptPublisher(for taskID: String) -> AnyPublisher<RecoveredTranscriptFrame, Never>
 
     func acquireSummary(_ taskID: String) -> any EventStreamLease
     func loadMoreSummaryFiles(_ taskID: String)
@@ -59,17 +64,27 @@ public protocol EventStreamRepository: Sendable {
 }
 
 public extension EventStreamRepository {
+    func observation(for taskID: String) -> EventObservationFrame {
+        EventObservationFrame(taskID: taskID, scope: unconfiguredObservationScope)
+    }
+
+    func observationPublisher(for taskID: String) -> AnyPublisher<EventObservationFrame, Never> { Just(observation(for: taskID)).eraseToAnyPublisher() }
+    @discardableResult func requestObservation(action _: EventObservationAction, for _: String, scope _: EventObservationScope) -> Bool { false }
+    func requestState(for _: String) -> TaskRequestReadState { .notRequested }
+    func requestPublisher(for taskID: String) -> AnyPublisher<TaskRequestReadState, Never> { Just(requestState(for: taskID)).eraseToAnyPublisher() }
+    func readRequest(for _: String, maxBytes _: Int) {}
+    func readRequest(for taskID: String) { readRequest(for: taskID, maxBytes: 65536) }
+    func recoveredTranscript(for _: String) -> RecoveredTranscriptFrame { RecoveredTranscriptFrame() }
+    func recoveredTranscriptPublisher(for taskID: String) -> AnyPublisher<RecoveredTranscriptFrame, Never> {
+        Just(recoveredTranscript(for: taskID)).eraseToAnyPublisher()
+    }
+
     func acquireSummary(_ id: String) -> any EventStreamLease { acquire(id) }
     func loadMoreSummaryFiles(_: String) {}
     @discardableResult func loadMore(_: String) -> Bool { false }
     func history(for _: String) -> EventHistoryState { EventHistoryState() }
     func historyPublisher(for id: String) -> AnyPublisher<EventHistoryState, Never> { Just(history(for: id)).eraseToAnyPublisher() }
-    func summary(for id: String) -> EventSummary {
-        var builder = EventSummaryBuilder()
-        builder.append(events(for: id))
-        builder.setAvailability(eventsAvailability(for: id))
-        return builder.summary
-    }
+    func summary(for _: String) -> EventSummary { EventSummary() }
 
     func summaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never> { Just(summary(for: id)).eraseToAnyPublisher() }
 }

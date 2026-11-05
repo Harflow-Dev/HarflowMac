@@ -1,34 +1,30 @@
 import Foundation
 @testable import HfRepository
-import Mockable
+import HfTestUtilities
 import MonitorCore
 import Testing
 
+// MARK: - UnstampedEventSummaryTests
+
 @Suite struct UnstampedEventSummaryTests {
-    @Test func givenUnstampedEventFile_whenSummaryLoads_thenAvailabilityIsUnavailable() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let path = directory.appendingPathComponent("task.events.jsonl")
-        try (#"{"v":1,"seq":1,"kind":"notice"}"# + "\n")
-            .write(to: path, atomically: true, encoding: .utf8)
-
-        let environment = MockToolEnvironmentRepository()
-        given(environment).tasksDirectory.willReturn(directory.path)
-        let repository = EventStreamRepositoryImpl(
-            toolEnvironment: environment,
-            snapshotRepository: NullTaskSnapshotRepository(),
-            scheduler: NullScheduling(),
-            compatibilityCheck: { _ in .success(()) }
-        )
-        let lease = repository.acquireSummary("task")
+    @Test func givenPublicCapabilityRefusal_whenObserved_thenHistoryUnavailableIsDistinctFromEmptyCapturedHistory() async {
+        // given
+        let harness = PublicEventFacadeHarness()
+        let sut = harness.repository
+        #expect(sut.eventsAvailability(for: "task") == .loading)
+        let lease = sut.acquire("task")
         defer { lease.release() }
-
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline, repository.summary(for: "task").availability != .unavailable {
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        let history = repository.history(for: "task")
-        #expect(history.error == "Unsupported Harflow event envelope")
+        await waitUntil { harness.reader.requests.count == 1 }
+        // when
+        harness.reader.finish(0, .failure(.refused(code: "missing_capability", message: "public task events unsupported")))
+        await waitUntil { sut.observation(for: "task").history.currentness == .reconnecting }
+        // then
+        let frame = sut.observation(for: "task")
+        #expect(frame.records.isEmpty)
+        #expect(frame.history.reasons.contains(.unavailable))
+        #expect(frame.history.availableActions == [.retryRead])
+        #expect(frame.summary.counts == nil)
+        #expect(sut.eventsAvailability(for: "task") == .unavailable)
+        #expect(sut.requestState(for: "task") == .notRequested)
     }
 }

@@ -8,6 +8,7 @@
 
 import Combine
 import Foundation
+import HfRepository
 import MonitorCore
 
 extension TaskDetailVM {
@@ -98,10 +99,11 @@ extension TaskDetailVM {
                       conversationMembers.contains(where: { $0.taskID == id }) else { return }
                 if summaryLeases[id] == nil {
                     summaryLeases[id] = useCase.acquireSummaryLease(id)
-                    summaryCancellables[id] = useCase.eventSummaryPublisher(for: id)
+                    summaryCancellables[id] = useCase.observationPublisher(for: id)
                         .receive(on: DispatchQueue.main)
 .sink { [weak self] _ in
                             guard let self, timelineEpoch == epoch, summaryLeases[id] != nil else { return }
+                            observationFrames[id] = useCase.observation(for: id)
                             recompute()
                         }
                 }
@@ -125,41 +127,23 @@ extension TaskDetailVM {
         let token = UUID()
         memberLeaseTokens[id] = token
         leases[id] = useCase.acquireEventLease(id)
-        eventsByMember[id] = useCase.events(for: id)
-        itemsByMember[id] = useCase.items(for: id)
-        eventsAvailabilityByMember[id] = useCase.eventsAvailability(for: id)
-        var subscriptions: [AnyCancellable] = []
-        subscriptions.append(
-            useCase.itemsPublisher(for: id)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] items in
-                    guard let self, timelineEpoch == epoch, memberLeaseTokens[id] == token else { return }
-                    // The Timeline reads `items` directly (Monitor piece 8, Codex review round 2,
-                    // finding 2) — never `Timeline.items(from:)` over the raw events below, which
-                    // stays only for Summary/EditedFiles's own, separately-gated recompute.
-                    itemsByMember[id] = items
-                    eventsByMember[id] = useCase.events(for: id)
-                    recompute()
-                }
-        )
-        subscriptions.append(
-            useCase.eventsAvailabilityPublisher(for: id)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] availability in
-                    guard let self, timelineEpoch == epoch, memberLeaseTokens[id] == token else { return }
-                    eventsAvailabilityByMember[id] = availability
-                    recompute()
-                }
-        )
-        subscriptions.append(useCase.eventHistoryPublisher(for: id).receive(on: DispatchQueue.main).sink { [weak self] _ in
-            guard let self, timelineEpoch == epoch, memberLeaseTokens[id] == token else { return }
-            recompute()
-        })
-        subscriptions.append(useCase.eventSummaryPublisher(for: id).receive(on: DispatchQueue.main).sink { [weak self] _ in
-            guard let self, timelineEpoch == epoch, memberLeaseTokens[id] == token else { return }
-            recompute()
-        })
+        applyObservation(useCase.observation(for: id), for: id)
+        let subscriptions = [useCase.observationPublisher(for: id)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] frame in
+                guard let self, timelineEpoch == epoch, memberLeaseTokens[id] == token,
+                      useCase.observation(for: id) == frame else { return }
+                applyObservation(frame, for: id)
+                recompute()
+            }]
         memberCancellables[id] = subscriptions
+    }
+
+    func applyObservation(_ frame: EventObservationFrame, for id: String) {
+        observationFrames[id] = frame
+        itemsByMember[id] = frame.items
+        eventsByMember[id] = frame.events
+        eventsAvailabilityByMember[id] = frame.presentationAvailability
     }
 
     func releaseMemberLease(_ id: String) {

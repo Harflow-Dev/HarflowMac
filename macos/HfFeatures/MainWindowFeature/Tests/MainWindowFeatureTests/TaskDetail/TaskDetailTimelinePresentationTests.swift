@@ -145,6 +145,7 @@ extension TaskDetailVMTests {
         let harness = makeConversationSUT(openedAs: "current", initialMembers: [member], eventHistory: { _ in state.value })
         given(harness.useCase).loadMoreEvents(.value("current")).willProduce { _ in
             state.value = EventHistoryState(hasMore: true, generation: 2)
+            publishObservations(harness)
             return true
         }
         harness.sut.didAppear()
@@ -207,7 +208,7 @@ extension TaskDetailVMTests {
         // then
         #expect(harness.sut.latestTimelineInput?.task.status == .completed)
         #expect(harness.sut.appliedTimelinePresentation?.emptyText == nil)
-        #expect(harness.sut.appliedTimelinePresentation?.noToolCallsText == "No tool calls recorded")
+        #expect(harness.sut.appliedTimelinePresentation?.noToolCallsText == "No tool calls observed in the available captured history")
         harness.sut.didDisappear()
     }
 }
@@ -243,7 +244,7 @@ private actor DetailBuildGate {
 // MARK: - TaskDetailTimelineCopyTests
 
 /// The Activity header's pure copy mapping (§4/§8): step counts with correct plurals, the
-/// conversation-turn text, and "No tool calls recorded" proven only from the unfiltered member
+/// conversation-turn text, and "No tool calls observed in the available captured history" proven only from the unfiltered member
 /// inputs over a complete, settled history — never from filtered display rows alone.
 @Suite struct TaskDetailTimelineCopyTests {
 
@@ -279,7 +280,8 @@ private actor DetailBuildGate {
     }
 
     private func member(items: [TimelineItem], availability: EventAvailability = .available, status: String = "completed") -> ParallelMemberInput {
-        ParallelMemberInput(task: task(["status": .string(status)]), items: items, prompt: nil, availability: availability)
+        ParallelMemberInput(task: task(["status": .string(status)]), items: items, prompt: nil, availability: availability,
+            observation: FeatureObservationFixture.frame(id: "t1", items: items, availability: availability))
     }
 
     @Test(arguments: [("running", "Waiting for the first event…"), ("pending", "This task's event log is empty or was not found.")])
@@ -356,7 +358,7 @@ private actor DetailBuildGate {
         let presentation = try build(members: members)
         // then — complete prose-only: the count AND the proven no-tool note.
         #expect(presentation.stepCountText == "1 activity item")
-        #expect(presentation.noToolCallsText == "No tool calls recorded")
+        #expect(presentation.noToolCallsText == "No tool calls observed in the available captured history")
     }
 
     @Test func givenACompleteEmptyConversation_whenBuilt_thenOnlyNoToolCallsRecordedShows() throws {
@@ -366,7 +368,7 @@ private actor DetailBuildGate {
         let presentation = try build(members: members)
         // then — the zero count is omitted; only the proven no-tool note remains.
         #expect(presentation.stepCountText == nil)
-        #expect(presentation.noToolCallsText == "No tool calls recorded")
+        #expect(presentation.noToolCallsText == "No tool calls observed in the available captured history")
         #expect(presentation.emptyText == nil)
     }
 

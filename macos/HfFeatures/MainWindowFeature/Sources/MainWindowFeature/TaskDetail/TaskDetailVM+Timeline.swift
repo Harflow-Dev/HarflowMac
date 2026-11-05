@@ -24,7 +24,7 @@ import MonitorCore
 extension TaskDetailVM {
 
     func activityHistory(_ members: [TaskInfo]) -> EventHistoryState {
-        let states = members.map { useCase.eventHistory(for: $0.taskID) }
+        let states = members.map { observationFrames[$0.taskID]?.presentationHistory ?? EventHistoryState(isLoading: true) }
         return EventHistoryState(
             hasMore: states.contains(where: \.hasMore) || conversationHasMore
                 || conversationMembers.contains(where: { !loadedActivityMembers.contains($0.taskID) }),
@@ -37,8 +37,8 @@ extension TaskDetailVM {
     @discardableResult func loadMoreConversationActivity() -> Bool {
         guard !olderActivityRequest, !conversationLoading else { return false }
         let loaded = conversationMembers.filter { loadedActivityMembers.contains($0.taskID) }
-        guard !loaded.contains(where: { useCase.eventHistory(for: $0.taskID).isLoading }) else { return false }
-        let hasCandidate = loaded.contains { let state = useCase.eventHistory(for: $0.taskID); return state.hasMore || state.error != nil }
+        guard !loaded.contains(where: { observationFrames[$0.taskID]?.history.isLoading ?? true }) else { return false }
+        let hasCandidate = loaded.contains { observationFrames[$0.taskID]?.history.availableActions.contains(.loadEarlier) == true }
             || conversationMembers.contains { !loadedActivityMembers.contains($0.taskID) }
             || conversationHasMore || conversationError != nil
         guard hasCandidate else { return false }
@@ -47,12 +47,12 @@ extension TaskDetailVM {
         olderActivityMember = nil
         olderActivityReady = false
         if let member = loaded.first(where: {
-            let state = useCase.eventHistory(for: $0.taskID)
-            return state.hasMore || state.error != nil
+            let state = observationFrames[$0.taskID]?.presentationHistory ?? EventHistoryState(isLoading: true)
+            return state.hasMore
         }) {
             olderActivityMember = member.taskID
-            olderActivityHistory = useCase.eventHistory(for: member.taskID)
-            guard useCase.loadMoreEvents(member.taskID) else {
+            olderActivityHistory = observationFrames[member.taskID]?.presentationHistory ?? EventHistoryState(isLoading: true)
+            guard let frame = observationFrames[member.taskID], useCase.requestObservation(.loadEarlier, for: member.taskID, scope: frame.scope) else {
                 olderActivityRequest = false
                 olderActivityMember = nil
                 olderActivityHistory = nil
@@ -86,7 +86,7 @@ extension TaskDetailVM {
         defer { MonitorMetrics.end(preparation, stage: .detailPreparation) }
         let members = conversationMembers.filter { loadedActivityMembers.contains($0.taskID) }
         if let id = olderActivityMember, let previous = olderActivityHistory {
-            let current = useCase.eventHistory(for: id)
+            let current = observationFrames[id]?.presentationHistory ?? EventHistoryState(isLoading: true)
             if !current.isLoading, current != previous { olderActivityReady = true }
         }
         let history = activityHistory(members)
@@ -94,23 +94,14 @@ extension TaskDetailVM {
         let input = TaskDetailTimelineInput(
             task: task, members: members.map { member in
                 ParallelMemberInput(task: member, items: itemsByMember[member.taskID] ?? [],
-                    prompt: member.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: member.taskID),
-                    availability: eventsAvailabilityByMember[member.taskID] ?? .loading)
+                    prompt: nil,
+                    availability: eventsAvailabilityByMember[member.taskID] ?? .loading, observation: observationFrames[member.taskID])
             }, children: allChildren.map { TaskDetailTimelineChild(task: $0, title: useCase.title($0.taskID)) },
             start: conversationMembers.first?.startedAt, isBuilder: isWorkflowBuilder,
             events: eventsByMember[currentTaskID] ?? [], snapshot: useCase.snapshot(currentTaskID), history: history,
             turnsText: turnsText)
         enqueueTimeline(input)
-        // Design point 6: the Prompt tab shows the FIRST task's own prompt — the conversation's name.
-        let visiblePrompt = WorkflowNodePresentation.isWorker(task)
-        ? task.raw["display_prompt"]?.stringValue ?? useCase.prompt(for: currentTaskID)
-        : conversationMembers.first?.raw["display_prompt"]?.stringValue ?? conversationMembers.first.flatMap { useCase.prompt(for: $0.taskID) }
-        let nextPrompt = visiblePrompt
-        ?? "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
-        if promptText != nextPrompt { promptText = nextPrompt }
-        let nextPath = useCase.eventsPath(for: currentTaskID)
-        if rawEventsPath != nextPath { rawEventsPath = nextPath }
-        let nextEvents = eventsByMember[currentTaskID] ?? []
+        let nextEvents = observationFrames[currentTaskID]?.events ?? []
         if rawEvents != nextEvents { rawEvents = nextEvents }
     }
 }

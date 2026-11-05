@@ -1,0 +1,1469 @@
+{
+  "schemaVersion": 1,
+  "status": "bounded-implementation-reviewed-automated-validation-passed-runtime-and-owner-acceptance-open",
+  "baseCommit": "cd80fd1df1162953f5749bc3dc03ac4345e83668",
+  "designCommit": "227da87ade53fd30af7a3e28776258c1bd72c72c",
+  "canonicalEngineContractVersion": "0.0.8",
+  "selectedManagedRuntimeVersion": "0.0.7",
+  "reviewRoundsCompleted": 7,
+  "review3PatchSHA256": "57ffd504baeab7ca80dd82131572c8e113eb136ffa4a6efd6f6814af64861ad9",
+  "postReviewChanges": [
+    "Prior verification receipt/check updates",
+    "Authorized cycle6 recorder-only temporary geometry diagnostics; no sampling or assertion changes; not yet foreground-validated"
+  ],
+  "packageEvidence": [
+    {
+      "evidenceLabel": "core-final",
+      "manifestSHA256": "0bf2c3ed6ad9f983ef2fb53f3dd34687dc103455c4c803fd84afcd10a097e88f",
+      "passed": true,
+      "discoveredTests": 434,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "repository-freshness-final",
+      "manifestSHA256": "87d6ec2d275eb6a8461cc98fadfdf0a839010c87407645fcc37a8619fdbf5aca",
+      "passed": true,
+      "discoveredTests": 518,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "HfUtilities",
+      "manifestSHA256": "d391714373d269b271b49afbe999f4c21bd2ee713bb4860a04e082632c6ab865",
+      "passed": true,
+      "discoveredTests": 19,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "HfCommon",
+      "manifestSHA256": "506ed8db1cdfe21e7fceb8c4a853be772d3b0a36e736ee428aaf34a5297a71e5",
+      "passed": true,
+      "discoveredTests": 17,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "HfUI",
+      "manifestSHA256": "d0a2b995a9cd394c8eadbbcaad3bfced90260906e320da8183b8858608e8bd7b",
+      "passed": true,
+      "discoveredTests": 239,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "MenuBarFeature",
+      "manifestSHA256": "b567911217f744819ade1fcbf878c01df0eff11bd1f07349f6b4bce8fa032a98",
+      "passed": true,
+      "discoveredTests": 88,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "SettingsFeature",
+      "manifestSHA256": "2accc989e67c015da481ea78e7da86a57c11157fe0c631b892db8cf04c125e3c",
+      "passed": true,
+      "discoveredTests": 87,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "app",
+      "manifestSHA256": "edfd812ed3c16ca935a35ffacb7f758cdd33b08084c279163bf98671436b6af1",
+      "passed": true,
+      "discoveredTests": 119,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "mainwindow-pinned-final",
+      "manifestSHA256": "d5e28ffde6f668589ca32a0f589250166cdc8371eb0f9a62c061279cfb34db62",
+      "passed": false,
+      "discoveredTests": 1809,
+      "partitions": 245,
+      "failedPartitions": [
+        "MainWindowFeatureTests.ActivityFeedApprovalHostedTests",
+        "MainWindowFeatureTests.ObservationHostedTests",
+        "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+        "MainWindowFeatureTests.WorkflowScreenLayoutTests"
+      ]
+    },
+    {
+      "evidenceLabel": "app-final-authorized",
+      "manifestSHA256": "2e2478179eb782ff3f0ec9087b72d14edabd4f3faded43261c023776b768c5b7",
+      "passed": true,
+      "discoveredTests": 119,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "mainwindow-accessibility-final",
+      "manifestSHA256": "5bf14e5642a1cf649e2fd1d46a062bbf01fb33f880b1c03d454583e74d404aac",
+      "passed": false,
+      "discoveredTests": 1809,
+      "partitions": 245,
+      "passingPartitions": 242,
+      "failedPartitions": [
+        "MainWindowFeatureTests.ObservationHostedTests",
+        "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+        "MainWindowFeatureTests.WorkflowRunSidebarHostedTests"
+      ]
+    },
+    {
+      "evidenceLabel": "app-review4-final",
+      "manifestSHA256": "46a33af7c352dad11528b16843b3b517910dd7a4038d49db08edf9027313b96e",
+      "passed": true,
+      "discoveredTests": 119,
+      "partitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "mainwindow-native-text-final",
+      "manifestSHA256": "23a8510f9945cdd046ec0191dd5a28793feeda55e05cb42e549f04cf8c0c13ee",
+      "passed": false,
+      "discoveredTests": 1812,
+      "partitions": 245,
+      "passingPartitions": 244,
+      "failedPartitions": [
+        "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests"
+      ]
+    },
+    {
+      "evidenceLabel": "app-native-text-final",
+      "manifestSHA256": "56cd957601067deb3d9b0201c2c77b066d3d6e08027444bfbffda07ea1f1a9b9",
+      "passed": true,
+      "discoveredTests": 119,
+      "partitions": 1,
+      "passingPartitions": 1,
+      "failedPartitions": []
+    },
+    {
+      "evidenceLabel": "mainwindow-unlocked-final",
+      "manifestSHA256": "d0730c7d79c9c7d14770e66c749d1659bfe3971493dd518cd685ded8d5e2bf3c",
+      "passed": false,
+      "discoveredTests": 1814,
+      "partitions": 246,
+      "passingPartitions": 245,
+      "passingPartitionTestIdentities": 1813,
+      "failedPartitions": [
+        "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests"
+      ]
+    },
+    {
+      "evidenceLabel": "sidebar-fullcontext-diagnostic",
+      "manifestSHA256": "19982f605dbfeaaafd60a274257aab01461bc7ad5425c8ac836dc7f8080dc85a",
+      "passed": false,
+      "discoveredTests": 1814,
+      "partitions": 246,
+      "passingPartitions": 245,
+      "passingPartitionTestIdentities": 1812,
+      "failedPartitions": [
+        "MainWindowFeatureTests.WorkflowRunSidebarHostedTests"
+      ]
+    },
+    {
+      "evidenceLabel": "hosted-first-final-uninstrumented",
+      "manifestSHA256": "0502bdc0dcbfcda897cde9378fd21b66f8419412b313e1d19042b2a155e5c12c",
+      "passed": true,
+      "discoveredTests": 1814,
+      "partitions": 246,
+      "passingPartitions": 246,
+      "passingPartitionTestIdentities": 1814,
+      "failedPartitions": []
+    }
+  ],
+  "protectedInputs": [
+    {
+      "path": "docs/migration-plan.md",
+      "initialSHA256": "5c1a482873fb0636ac1bd63797c42aaf0b8c31f74dd5044a22d31958ece12dfb",
+      "currentSHA256": "5fe035c7d05652380306bc9a6e08b9719f36fbfe22fa3e8efcbdcba9be5afa39",
+      "excludedFromDelivery": true
+    },
+    {
+      "path": "docs/migration-sessions.md",
+      "initialSHA256": "9b8b3c6a44f05dbda1c6457f301318426fb71bf5a6ac558564f777a379b6d52d",
+      "currentSHA256": "027448e7e889e81176df1539ccee8ffcc51e620d45bcd2323f8b1e3f62153c98",
+      "excludedFromDelivery": true
+    },
+    {
+      "path": "docs/migration-receipts/M01-checks.json",
+      "initialSHA256": "e8a46cc0c30f0c01360681437168cf65e88c0e243c92451ef21aa4b430c50bbd",
+      "currentSHA256": "e8a46cc0c30f0c01360681437168cf65e88c0e243c92451ef21aa4b430c50bbd",
+      "excludedFromDelivery": true
+    },
+    {
+      "path": "docs/migration-receipts/M01-contracts.md",
+      "initialSHA256": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+      "currentSHA256": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+      "excludedFromDelivery": true
+    },
+    {
+      "path": "docs/migration-receipts/M01-design.md",
+      "initialSHA256": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+      "currentSHA256": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+      "excludedFromDelivery": true
+    },
+    {
+      "path": "docs/migration-receipts/M01-native.md",
+      "initialSHA256": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9",
+      "currentSHA256": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9",
+      "excludedFromDelivery": true
+    },
+    {
+      "path": "docs/migration-receipts/M01.md",
+      "initialSHA256": "82a21ab06b2c75fef2b621e4f50b2ea00d04daca069613a4dfb6d8e7bed6b84d",
+      "currentSHA256": "82a21ab06b2c75fef2b621e4f50b2ea00d04daca069613a4dfb6d8e7bed6b84d",
+      "excludedFromDelivery": true
+    }
+  ],
+  "remainingGates": [
+    "Required isolated real managed-runtime smoke remains unperformed/outside authorization; qualify intended exact runtime or accept explicit alternative",
+    "Continuous-unlocked UI qualification and whole-app native fidelity remain unestablished; late console lock recorded",
+    "Historical sidebar PNG mismatch cause remains unlocalized; final unchanged strict assertion passed, no cause-fix or waiver claimed",
+    "Owner/runtime/performance and whole-M03 acceptance remain open",
+    "M04 implementation requires actual M03 entry and approved G01/G02/dependent history states; preparation complete"
+  ],
+  "nativeCaptures": {
+    "status": "32 fresh stable contentful native-correction captures; representative Light/Dark minimum/reference images inspected",
+    "count": 32,
+    "appearances": [
+      "light",
+      "dark"
+    ],
+    "referenceSizes": [
+      "1000x620",
+      "1280x800"
+    ],
+    "capturePixelSizes": [
+      "1488x1240 for 744x620 content",
+      "2048x1600 for 1024x800 content"
+    ],
+    "scope": "Synthetic components and actual task-detail content, excluding sidebar, real engine streaming and performance",
+    "files": {
+      "capacity-dark-1000.png": {
+        "sha256": "f216d020770d355f24b06e5e36ac5777bb5bfeec3d137211148e1925826de7d2",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "capacity-dark-1280.png": {
+        "sha256": "91d5952d23d32889e36a888aa2c461a15cc6e9df0569c1f39023c7a1cc827eb9",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "capacity-light-1000.png": {
+        "sha256": "32fc990102a7e858c2f1d121ba2430e1fd01752a1cb76475c4f051a1365aaf50",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "capacity-light-1280.png": {
+        "sha256": "0c25ec35d7580b367bc08c55e4511f04517bae63fb2172b543ce5138d5cc5e7e",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "events-dark-1000.png": {
+        "sha256": "a2fa0c03b1e008bffd7348602e8e27d27c0e6a715b72bf15f358eabf7902736e",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "events-dark-1280.png": {
+        "sha256": "8e88d6d6e6328af6cc18c1a503ae81d94f77a229518995226f15e0e180075beb",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "events-light-1000.png": {
+        "sha256": "280f1f0e3196440b27bb946645a074a995521378bcd5cb46e956c7edfbee9b6e",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "events-light-1280.png": {
+        "sha256": "b2c2c703610142ba799b438a5a340988a7271fddd9ebb9dc912813a2a6a7fa3c",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "integrity-failed-dark-1000.png": {
+        "sha256": "ced828c4bfa48f0dcc64ddfc89ac6168a23dcb479a4e2ea25bbd8d8ebb9244af",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "integrity-failed-dark-1280.png": {
+        "sha256": "df6d92d8b0f1ddd03afdfb661037f9d03da056b518c8ab493e809f7be2530b3b",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "integrity-failed-light-1000.png": {
+        "sha256": "285570f4e1036e6a33ce478a2ceec48e20306799a3ff82238c8126573e102b99",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "integrity-failed-light-1280.png": {
+        "sha256": "1e34d80149b96cc37d48cae8a01fc98d86411d63d38ea06087b5a3f029e479a3",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "loading-dark-1000.png": {
+        "sha256": "f0a62a8319b16b23ca7b4b925c3ab1b7dfd73f0e0e0cdf6e98e058f7640f70b2",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "loading-dark-1280.png": {
+        "sha256": "17d25fea30926c060b4f65c718a12973f397e0f66843c366c4d41a97e6db6ff0",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "loading-light-1000.png": {
+        "sha256": "b4788f8a879700a17a9de1212e732acd2e7c9a8a380aa5240f5c6c20a907fa41",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "loading-light-1280.png": {
+        "sha256": "e42fb5c5dd9784cc729a94f3567c125597d3518a2ee2ff3c28cca086d6cfd077",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "partial-dark-1000.png": {
+        "sha256": "17c62a456389a4926026b8cb0fdeb362e4af1dbfd64482be3dcee9cea1acaf48",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "partial-dark-1280.png": {
+        "sha256": "9fb18a93e3e5c939f88d168df9cd4ddb7801ab574313904e32270dd5266b9a74",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "partial-light-1000.png": {
+        "sha256": "e83f727ce9332fa08cacb0df4a5e1e7da54fd33caca81b2a892dde2caa674717",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "partial-light-1280.png": {
+        "sha256": "73faa7c454dd52a6eaca8da9d2fe58b7744df0a04aab7d692aae920d0473df42",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "reconnecting-dark-1000.png": {
+        "sha256": "5bc59f7abe74cc046b774cb5dd04cf19cbe9a054a29bf418a9095342f495f8ad",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "reconnecting-dark-1280.png": {
+        "sha256": "f8e13bc747534b1c8ada147cddce5756d7451b7ff6d68017248a581f3eefe426",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "reconnecting-light-1000.png": {
+        "sha256": "3d3cb2f6cfa2f29561d078cf2d4c46a2c7f05d2e6340ae19e706a78138a74fc4",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "reconnecting-light-1280.png": {
+        "sha256": "c20ba811b75ecef842e5b34e2e132e9e1e9e877e97d1337d8c0dee8dea66f5bb",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "task-detail-content-1024-within-reference-1280-dark.png": {
+        "sha256": "b537382d1e8828b360f1a570f957cb3f2925baf7be816192ee4759df865ddaa2",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "task-detail-content-1024-within-reference-1280-light.png": {
+        "sha256": "9190b8f313baff0bbae1f7c1eec4f32aa8e2b79f0d8f5133233ffbe2ec713a15",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "task-detail-content-744-within-reference-1000-dark.png": {
+        "sha256": "f47ac36b29db7e0064737a5e8724b8f6af018615f64c20daf9a2830644f75b71",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "task-detail-content-744-within-reference-1000-light.png": {
+        "sha256": "de11c537fc23547dceb6f73fcc56ecae3fc1b19d724eb0e81c2069aa7b7272a5",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "unavailable-dark-1000.png": {
+        "sha256": "a3d53c8f7b315c0c3d2a032a3c7beb1228205e948e5b4c9ae11289e06dce8557",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "unavailable-dark-1280.png": {
+        "sha256": "b40a7a339db6eddeb8d5334933b84b75a277c9911e07b1dcc75a37bcf54cdc72",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      },
+      "unavailable-light-1000.png": {
+        "sha256": "d57959aa84aa20193f95ba7c14d5110d4143042132066c4861b648cfa285c39e",
+        "pixelSize": [
+          1488,
+          1240
+        ]
+      },
+      "unavailable-light-1280.png": {
+        "sha256": "b7127006e03db43b6ddfe93f6be16c8b1a6ed9b5558f08203939a4024920d22e",
+        "pixelSize": [
+          2048,
+          1600
+        ]
+      }
+    }
+  },
+  "guardedRunnerSHA256": "d74c0c1d4a64f823f542cfcdb7b6560a0407e6090ea6e1d0cc1882bf679d0509",
+  "focusedDiagnosticHarnessSHA256": "26576fd924bf1d047a57271f89556f72833da343f3ff8c40e568258a5fd9d2ac",
+  "focusedDiagnostics": [
+    {
+      "evidenceLabel": "host-focused",
+      "manifestSHA256": "9549493a190568fd6262cd85fe058bd667c09c9548f5cf7a8b5c04bd14276391",
+      "scope": "ONLY two named hosted suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 3,
+          "passed": false,
+          "failures": [
+            "swift-test exited with 1",
+            "line 19: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenWrappingObservationActions_whenHosted_thenEightPointGapAndExplicitActionFocusArePreserved(scheme:)/ObservationHostedTests.swift:58:6'",
+            "line 22: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenWrappingObservationActions_whenHosted_thenEightPointGapAndExplicitActionFocusArePreserved(scheme:)/ObservationHostedTests.swift:58:6'",
+            "line 24: test 'MainWindowFeatureTests.ObservationHostedTests/givenWrappingObservationActions_whenHosted_thenEightPointGapAndExplicitActionFocusArePreserved(scheme:)' ended with symbol 'fail'",
+            "line 27: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:84:6'",
+            "line 28: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:84:6'",
+            "line 31: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:84:6'",
+            "line 32: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:84:6'",
+            "line 34: test 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)' ended with symbol 'fail'",
+            "line 35: suite 'MainWindowFeatureTests.ObservationHostedTests' ended with symbol 'fail'",
+            "unrecognized completion summary: 'Test run with 3 tests in 1 suite failed after 37.160 seconds with 6 issues.'",
+            "stdout completion summary reports 'failed'"
+          ]
+        },
+        {
+          "name": "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "evidenceLabel": "host-foreground-final",
+      "manifestSHA256": "b4e870b712be782b6392e39c0e3dc9dc6c602ad676cd3e9fe1547c27a61bf323",
+      "scope": "ONLY two named hosted suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 3,
+          "passed": false,
+          "failures": [
+            "swift-test exited with 1",
+            "line 19: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenWrappingObservationActions_whenHosted_thenEightPointGapAndExplicitActionFocusArePreserved(scheme:)/ObservationHostedTests.swift:59:6'",
+            "line 22: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenWrappingObservationActions_whenHosted_thenEightPointGapAndExplicitActionFocusArePreserved(scheme:)/ObservationHostedTests.swift:59:6'",
+            "line 24: test 'MainWindowFeatureTests.ObservationHostedTests/givenWrappingObservationActions_whenHosted_thenEightPointGapAndExplicitActionFocusArePreserved(scheme:)' ended with symbol 'fail'",
+            "line 27: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 30: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 32: test 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)' ended with symbol 'fail'",
+            "line 33: suite 'MainWindowFeatureTests.ObservationHostedTests' ended with symbol 'fail'",
+            "unrecognized completion summary: 'Test run with 3 tests in 1 suite failed after 106.071 seconds with 4 issues.'",
+            "stdout completion summary reports 'failed'"
+          ]
+        },
+        {
+          "name": "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "evidenceLabel": "host-appkit-correction",
+      "manifestSHA256": "92ed1c968742830f12bb67e5121b993a33d3d0371f72602fe771736be845fd69",
+      "scope": "ONLY two named hosted suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 3,
+          "passed": false,
+          "failures": [
+            "appkit-host exited with 1",
+            "line 25: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 28: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 30: test 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)' ended with symbol 'fail'",
+            "line 31: suite 'MainWindowFeatureTests.ObservationHostedTests' ended with symbol 'fail'",
+            "unrecognized completion summary: 'Test run with 3 tests in 1 suite failed after 100.029 seconds with 2 issues.'",
+            "host stderr completion summary reports 'failed'"
+          ]
+        },
+        {
+          "name": "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "evidenceLabel": "host-dual-focus",
+      "manifestSHA256": "472bfefb9eed8fcbfe41c01e3f185794f63ea6f093c72b1e6bb142bc9fcafca8",
+      "scope": "ONLY two named hosted suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 3,
+          "passed": false,
+          "failures": [
+            "appkit-host exited with 1",
+            "line 25: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 28: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 30: test 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)' ended with symbol 'fail'",
+            "line 31: suite 'MainWindowFeatureTests.ObservationHostedTests' ended with symbol 'fail'",
+            "unrecognized completion summary: 'Test run with 3 tests in 1 suite failed after 93.392 seconds with 2 issues.'",
+            "host stderr completion summary reports 'failed'"
+          ]
+        },
+        {
+          "name": "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "evidenceLabel": "host-focus-diagnostic",
+      "manifestSHA256": "c34b235f799a839ea3632b03441025f2a95c4a87fce6889d01a3244294c3243b",
+      "scope": "ONLY two named hosted suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 3,
+          "passed": false,
+          "failures": [
+            "appkit-host exited with 1",
+            "line 25: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 28: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 30: test 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)' ended with symbol 'fail'",
+            "line 31: suite 'MainWindowFeatureTests.ObservationHostedTests' ended with symbol 'fail'",
+            "unrecognized completion summary: 'Test run with 3 tests in 1 suite failed after 99.368 seconds with 2 issues.'",
+            "host stderr completion summary reports 'failed'"
+          ]
+        },
+        {
+          "name": "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "evidenceLabel": "host-quiet-baseline",
+      "manifestSHA256": "1771acbe46e1a806d1aef762651e16c2c882954a84d12c7bda4fff9b1e7b2425",
+      "scope": "ONLY two named hosted suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 3,
+          "passed": false,
+          "failures": [
+            "appkit-host exited with 1",
+            "line 25: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 28: issue recorded for 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)/ObservationHostedTests.swift:86:6'",
+            "line 30: test 'MainWindowFeatureTests.ObservationHostedTests/givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme:)' ended with symbol 'fail'",
+            "line 31: suite 'MainWindowFeatureTests.ObservationHostedTests' ended with symbol 'fail'",
+            "unrecognized completion summary: 'Test run with 3 tests in 1 suite failed after 92.827 seconds with 2 issues.'",
+            "host stderr completion summary reports 'failed'"
+          ]
+        },
+        {
+          "name": "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "evidenceLabel": "native-text-focused",
+      "manifestSHA256": "69702b409c7c805670a65ec886bac055786c34c875c72a615f2e6a79b25e0c41",
+      "scope": "ONLY two named hosted suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 6,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "MainWindowFeatureTests.TaskDetailObservationHostedTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "evidenceLabel": "viewport-unchanged-recheck",
+      "manifestSHA256": "2e94622c9ec86d65cead71f1135f23005b35ecb85e5a7d9ccf6f0d29d0b85ecb",
+      "scope": "ONLY unchanged long-Markdown suite recheck; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+          "expectedTests": 4,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    }
+  ],
+  "releaseBuild": {
+    "passed": true,
+    "configuration": "Release",
+    "compilerJobs": 2,
+    "buildScriptSHA256": "eb1ea20382c98024eda1e66241b8580b24dec98eb647be17517d3500aa34413c",
+    "logSHA256": "b8be3f9264b02b00f06cdb02651a2875895a5136fd4e6570f952a31c46e8c7e5",
+    "generatedAppExecutableSHA256": "45cf98d65c0f88a61d49d9526dad21c5201f2f14f74ed6bf2f26acec9c2be4da",
+    "ordinaryLaunch": false,
+    "installed": false,
+    "generatedBundleLaunchServicesRegistration": "Authorized native build side effect observed",
+    "postRestorationRerunPassed": true,
+    "nativeCorrectionRerunPending": false,
+    "nativeCorrectionRerunPassed": true
+  },
+  "strictBundleValidation": {
+    "passed": true,
+    "exitCode": 0,
+    "command": "python3 scripts/ci/release.py bundle --app macos/build/Harflow.app --root .",
+    "logSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "startupMode": "--check-packaged-startup before runtime initialization",
+    "engineExecuted": false,
+    "postRestorationRerunPassed": true,
+    "nativeCorrectionRerunPending": false,
+    "nativeCorrectionRerunPassed": true
+  },
+  "staticChecks": {
+    "format": {
+      "passed": true,
+      "filesRequiringFormatting": 0,
+      "inspectedFiles": 1049,
+      "skippedFiles": 31,
+      "version": "0.60.1",
+      "logSHA256": "fa2eda48b782d9c36f20235f31e0c288984765fcbfdefebc08b49ac2535fdb0b"
+    },
+    "strictLint": {
+      "passed": true,
+      "violations": 0,
+      "version": "0.57.1",
+      "cacheDisabled": true,
+      "logSHA256": "461928dfddf5c5df2d0cf061229255c306a90a814352b03eaf193495b78b3298",
+      "inspectedFiles": 1096
+    },
+    "legacyGuard": true,
+    "privateReferenceGuard": true,
+    "diffWhitespace": true
+  },
+  "foregroundDiagnosis": {
+    "independentDiagnoses": 2,
+    "conclusion": "New focus suite runs swift-test; existing synchronous AppKit host admits only approval-focus suite",
+    "proposedCorrection": "Explicitly admit only ObservationHostedTests and extend runner guard regressions",
+    "runnerChanged": true,
+    "productionFocusQualified": false,
+    "quietDesktopVerification": "Pre-correction controlled baseline failed; corrected native focus passed both focused and full observation partitions in owner-reserved quiet desktop",
+    "temporaryDiagnosticsRemoved": true,
+    "nativeReplacementImplemented": true,
+    "strictSyntheticFocusFailureResolved": true,
+    "syntheticValidationScope": "Real native component in isolated AppKit test host, with synthetic public-read models; no real-engine qualification"
+  },
+  "ownedFileSHA256": {
+    "README.md": "00b7eba0f32e29c288454c6c8c7f091c9dc48ee9c635e09ea48d7ce7e31d119a",
+    "docs/architecture.md": "461fb096231ed0d7f1eeb6aefdc0d97565eadaf1320e45d1be4f67793fcd749c",
+    "docs/development.md": "e78780a0382fa9e8e90e02b090a5b6a1d2886919d44f21bbde1020989db908eb",
+    "docs/migration-receipts/M03-D2B-requirements.md": "62a24eaa409b3f833b71df3a860bbba7829cb8ad95ad638bd5c40617e4d41949",
+    "docs/migration-receipts/M03-D2B.md": "e73a501bc8daecd3659f4f10c5eaa790c473ef5a91ceecff5c4ac013df5eeb63",
+    "macos/HfCore/HfRepository/README.md": "2aa7eb72ca33e271abbfdea71e98bd12458de7f319b83655f968e0e3e06482f2",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventObservationFrame.swift": "72e497608097e9e7771dec51be2c1f578e85d180aea38f80d605d2c545541ece",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventObservationFrameProjector.swift": "3751e4135e3b591bcb4bcc8eeb8fdd58bbbc29ee7df320cb8ebbf66241c8322e",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventStreamLegacyProjection.swift": "627ff6e8bfae3ef704e84de1a99d7e8e5d7072021bc41542453999066935632c",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventStreamRepository.swift": "14724518fb10add13af920b38537760098f8aa8161aa4d10d68bfc8291aa8768",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventStreamRepositoryImpl.swift": "3cd50b98f774eae575d57cdf7b58835c2d5eb851d779c5706f6901754cf8fc5f",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicEventHolder.swift": "f1f9f2222e1db5bffb95964394799ac9d36dfadee40bdd4a3d82957d4f70c000",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationManager.swift": "aedd1d5363cb532c0d254ca9ceb5873ccd44db026f07f711011105b6c0b837e3",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationModels.swift": "31be9ac448a785c3c3d3d45d48e227ebf6382742bc4163fc754636961b1a824c",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationSession.swift": "1f915efada7d030e5bd9baf38ce5f8af08ea3f190cb644d567c88c38bd1a241a",
+    "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/RecoveryEventStreamRepository.swift": "da7f7d4bb458c739f93cc31199ba5d34dcb8b8d917e31949c3ee7b2eb3c079d4",
+    "macos/HfCore/HfRepository/Sources/HfRepository/Module.swift": "77c9ead096eb228b9a39f50ab50e2dea31c367763d562a2c7f9c68c78d65e306",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/CompatibilityLifecycleTests.swift": "fe2bbdadf507f07fe8b66d54072af9606ecece3aaa1f51e1858dcbae8c2db970",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/ActivityRepositoryBenchmarkTests.swift": "fc2c5e100f5d7085993b62ab271edf643d385662704c364196d3e8511bb2a751",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventInitialLoadQueueTests.swift": "c5f0a00cde540532ea71481b1653d5aa1bff3416f41b906879f796638bf56714",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventStreamRepositoryImplTests+Publishers.swift": "bdc8febd45bfd603544679336b14bf7d85dae8f7aa183551d6cc55318c3e02bf",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventStreamRepositoryImplTests.swift": "cade011220b3e397584783a6b64473327b65affbd2078107c22756f63c531634",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventSummaryRetryTests.swift": "2ba0bf933f6f09be76387439c446480a1c1a788fdd9937a847922a107ad04062",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicEventFacadeTestSupport.swift": "d8c9c39ecec17d8e9a58aa5450da32c613d4ff4f333f11d91b353c004add1e7f",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/EventObservationFrameProjectorTests.swift": "3ff06d05b84f68e76e2aef316fc5b34973543bef4f3892005332abc6e9355d66",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventFacadeMailboxTests.swift": "9e3ab1b62ae737629bcde1b73354d14c116ccbcb41c846f386e4d5f208b7fb36",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationActivityInterestTests.swift": "1c79671fe35e0ef7ad959445d430401e9f1409ddab1b5e239283489d7012f625",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationFreshnessTests.swift": "33d8427db6f6bfb62e33fe6c02e7ecbc792bbd998d97901bb9cf8b2c7b668632",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationRecoveryTests.swift": "f55725f2c58d81c1e2ea3d45392770575971ba9216b5bb8c9d21ee2a6cfc0938",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationWindowRecoveryTests.swift": "52b8837bc71480ebd56e58913f7003f261a34a09fc6b8158e4bbce142f2c97fa",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/RecoveryEventStreamRepositoryTests+Concurrency.swift": "6cf5c56a5c3e8d5052cb4b7c80bd534026f57cffb4387d0bd4101868805493e9",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/RecoveryEventStreamRepositoryTests.swift": "2582f2a49c567cba04cc4f965e27c834f0cdff5a214df2a8ac5520ccfbb9efae",
+    "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/UnstampedEventSummaryTests.swift": "75111a22924710d3b174ace1ddc59e4996cb588c43df7c43fe9be61a14f36fa8",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/Events.swift": "6b3b7953df4e089029cfc3a9e7e44a8d692d67bcd09867b103a2f5777c6d5324",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/EventOccurrenceContinuityTests.swift": "b100156b2f39ce21a79c8650a5280deb5cfd1810b3fae7d54e741cc2779ffe94",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/Component/ParallelColumnView.swift": "9b844119fffc66ad5f0643a1446eefc27098efdbb91689297d1804020a305d78",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/Component/ParallelViewportAnchors.swift": "3ecc497f65dca26709b0c6bcc38ee6496de823c51fb55d6cb17bb632fcdc6ff2",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelActivityHistory.swift": "91b2f39a5361b024180f42f5ae299a629d1f5180f607556962d6847ba55eba1e",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelContracts.swift": "f60ba51edc2bb07e16ae1ce180db40ee45147a68f4c453feec3d475f663fa363",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelPresentation.swift": "80c9db5289a4d008fc14b4a4f8da773478b39797a3f0d7b788d556576fcd210c",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelUseCase+Defaults.swift": "8a00cc1d8a8bc242fbabe8ec6c46ae7ddff22ed7d59d540dea38e798c31e7ff6",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelVM+Observation.swift": "2ed9bb83ac965d9b73c02500b3d1619ef029ce6cce854d9e5d8f051a2fc4f4db",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelVM+Recovery.swift": "966640a1fdeba556eed29cc64711b94f3a07a0ea93c7edab2eb08fa9dbef0168",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelVM.swift": "1830e35d5f3ce92c256aec98527a28b3fff97c42da913e7eff6a88fd3de20aa9",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelViewRepository.swift": "ddd3d12c6920f2bbd0c95efb5a0f7df9196221752b94d53132a866fd66349d1a",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelWindowAdoption.swift": "243ae0e474d9c53315ef11d21199effdea6c3a6de89a4d85bce6815b6e6e78fb",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Activity/ActivityRowsBuilder.swift": "1fb800344f8c555c47b03ad1d9c7e441ec5a03341b03446a6cb95b7f536a98a1",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/InspectorView.swift": "b91fad32a9a5883a9676fe8953e4c1ca821f1ec4ddd77e8d2165d8aa80a37010",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/ObservationViews.swift": "a963f2edddd41d93f4c59094c69367a84515ed2a869334b22b81c0482d38bd0e",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/StoredRequestText.swift": "1f4b6ec1f19df8cb6cd2768f569bc3e753d7a49a7d6fdeaa8b20e8db0d204d21",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/SummaryEditedFilesViews.swift": "fc9f0a50c159d54c7be0f343407d0c26e888aa499e56e26744972b8dbd6fddcd",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/SummaryPaneView.swift": "59b1ab623c90029ebe703bcb5dac83202a77e106f64c6ea51e81fb98180afbba",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/TaskDetailToolbar.swift": "058a2989ffeaa45f7ccb0ff2c80e9d1d6e1e853bfb5a5efc64ffd699a57256ec",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/TimelinePaneView.swift": "94f36141f245d057c5cb1ae571529a49cc119d8bbd75ecb5adf98aa8323da988",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/ConversationActivitySnapshot.swift": "ff5e83db28b8cd1415f3345ba235c5700b68847bf95981881fa1a16472116021",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/EventObservationPresentation.swift": "fd64a890c3c33b8340aa9203ae0ea004a54737abf62d89db6e4911c8b0242db1",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/PreviewMock/TaskDetailViewModelMock.swift": "908038f220d39d98bb22fb3cba7c9ff57aada93976a7ae376fb298dfcee01f2e",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/StoredRequestPresentation.swift": "2c49fc47c8ac9d101371771ea0011d6d3165f182434374a069f477d5d6245a19",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailTimelinePresentation.swift": "043458473cd6f5c44e91f6334e98253937d648a8b21e5ec37e29a046e6e7a3b0",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailUseCase+Observation.swift": "9f2487bc13c83fd44944a18c6195749c9433ef5444d2825e51740d972cec12bb",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Inspector.swift": "65ac1d9326d4dc9c0d28585a18dd146f4354a77fde2b09efa84918b6be909b24",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Observation.swift": "9418d99ebd39a4fd9248b223214991b4bafa2f9b7abb17db6bc15ef9b4bc96ca",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Subscriptions.swift": "e4004dacdd57f4fa28a5ff3e060f3ee587143cb6d5fa40a5cdbd135ecdaa7ea0",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Summary.swift": "638df0766be2eadf4c918f803b9a3956ccb9b83b3f8642c30e593c9ceb80ea44",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Timeline.swift": "8259d989becb495fceac53eac7d7ea7112e91c81418fb2ee40094f78a13e2279",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM.swift": "d29b4330ac40272b871d244bfb1566087af4d2899bf2bed1c284ebee6bd2bedb",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailView.swift": "dc0beb103597d76fff570b34cd7ca7d4d60a10dab3a51c2289ac2c73bab95082",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailViewRepository.swift": "309264f4125096ca232d9a5c668fbbb8e2d87ba34c4a673a42493946d970bb69",
+    "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Workflow/WorkflowBuilderPresentation.swift": "6b3932153a0a59a1d1da25f3002eac1f346152e29d60157aca05e93f26cd0007",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelPresentationTests.swift": "8715894c08afe0daba655f028bcaf83649d5d4798ee5182c42427c22e3343760",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelRecoveredObservationTests.swift": "0505fdc930bb3ac58ae8c807da0361ca958ba1cae95c9dbec3ff9bc157babe26",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+Conversations.swift": "b8b3c6b637a45a09bb6bd0cae46bbe7425ebd586379a12548d848e781cbcb04e",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+History.swift": "757cd3fe8217eb79195c3715122f3af7299feaca0f024d962c2c4aaeaa63e439",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+HistoryFixture.swift": "537981ec850f0f2847fdb9156ccd60f36c89537a3402b40aaf42e5db37d60517",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+Inventory.swift": "883e0c47d1e73df113994410f0ea978ae47d62aaf05371a31099efcfa0bd2410",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+Workflows.swift": "c31b610dc53e9537e42686f32b5a66e1cdaa71f579cc249424f086dd79750853",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests.swift": "036cc46043732b4b49a5fc5ab2156bf68afe7a43f43789ee78764faad2599dad",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelWindowAdoptionTests.swift": "5f2b2d8a37b3217ea8b4a22760bdb045bf65bfdeaf68110548ddbca3da5ac397",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Activity/ActivityFeedLongMarkdownHostedTests.swift": "3e71b6507547dd8364c0deabb98e2cc070488ffd5591721fc03fcfdb23e71251",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Activity/ActivityFeedStarvationTests.swift": "c9bc49e2caa7ddbeb3b185370c39d229c6b9cbb9d0e7d390d41810154e45e440",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Activity/InitialPromptTests.swift": "f7b7b82f89ebb9dd637576e371ca830f947b9f5dcc9336b845a745f8e1575972",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Component/TimelineHeaderViewportTests.swift": "3f71c2afbfb85c889a76216115b9dab8114022e1d18dd7f1eb3aadb58f118c0e",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationHost.swift": "2b4947eb74be39eb162713ac5f7c7bbc1771be7972a992b040c783b52b5b17ed",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationHostedTests.swift": "f233aea44275f1d1a188e8ab5349dae26365bf12570e6c8f5380c1f9aeceb1f9",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationQueuedDeliveryTests.swift": "6e97181f6f5bd24c28593ea5d0b304a8554f53d384c5bfe1ac7352174ecf04d7",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationSummaryBoundaryTests.swift": "7f6802c28d9bbccf4313ba1d977813eb4c87a342eedc5fa787e6ec504fa111e2",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/PublicObservationPresentationTests.swift": "a83b797f499bc5104ffe6421cbaa4aee981505b3992b5fa821a9af7f965ad57e",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/StoredRequestNativeTests.swift": "a534332064c62645c7218b420e3e3f1be56f0edad263fe9cbb13e9ab40aab156",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskContinuityTests.swift": "ae969740d2ebecb0523bcef814fbe19cb03f7fa52a28a3d2fc610a7703d186e3",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailConversationActivityPagingTests.swift": "1e8591d9869e8ffb58a9e7a719108ae9366a0161cb3676d1159ea828162fa4da",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailObservationHostedTests.swift": "1fe81c740022988fedff887980203d0db473f9c3edb6ef8f3b85475104d307d0",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailPagingFixtures.swift": "6f5a6ed5d3db392b18f6211f8a252edd6dc706f7cdf34295146ab9d483fe9173",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailTimelinePresentationTests.swift": "d6c05e6f42a012b053e525f64d1810716098bd19505a8b5e844618141a3c9c22",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Activity.swift": "fab14c2b72f4c5d6fdd5064938e9a49edf412df9f186259fc9bf5d10800d9b79",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Conversation.swift": "a709f7b7a331bb67305effff122a20a5b71409601014a3c8037d67caaf51fbaa",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Items1.swift": "bb522317852034e4d2ed33aa1921bfad0574c19dd850aaf516f9722b20ac4098",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Timeline.swift": "c670a4278a6ecd0fd0ae18f4e88d5d4906f3b4c6a7bba8f919151e3843f654a1",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+WorkflowAssignments.swift": "a6f11326a08c6f16bf9ee70fcaceae8bc58b7ca488574417543fd8e22b1a7099",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests.swift": "ea1ecb45e8373ee0561cd1919f45427a8e4837bca1d506eb19ef7666bd766d77",
+    "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailViewRepositoryTests.swift": "5a3a2dec45037c9d74463a5c26c8bf872bb1a9ac269429927f43f3b023ed2a8c",
+    "scripts/test-swift-package.py": "d74c0c1d4a64f823f542cfcdb7b6560a0407e6090ea6e1d0cc1882bf679d0509",
+    "tests/test_swift_package_runner.py": "d40edb95c3ae92ef62068d5531190887673069064a60d9113d5893fea202708d"
+  },
+  "additionalReviewCyclesAuthorized": 3,
+  "runnerRegressionTests": {
+    "passed": true,
+    "tests": 63,
+    "elapsedSeconds": 21.83,
+    "logSHA256": "704834f0a0a6616eb875bd4bddfaf5d51dcab7baf9b192c85bd53fed9892ece0",
+    "offlineCachedPython": true,
+    "nativeOrEngineExecution": false
+  },
+  "pythonAdditionalChecks": {
+    "passed": true,
+    "tests": 94,
+    "subtests": 30,
+    "exitCode": 0,
+    "logSHA256": "4b01710fdf724a8d066735824ddb6a2cc182f0c41163ec02953aee468c40d5b6"
+  },
+  "additionalReviewCyclesCompleted": 3,
+  "review4": {
+    "patchSHA256": "f870c96ca7db64ab09f72cd97f2ef023c7b5ff7b26959936dbd88b174e9d76ff",
+    "pinnedFiles": 99,
+    "allInputHashesVerified": true,
+    "actionableFindings": 0,
+    "limit": "Strict request focus remains an unresolved validation gate; no waiver"
+  },
+  "nativeRequestCorrection": {
+    "source": "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/StoredRequestText.swift",
+    "implementer": "gpt-6.1-sol low",
+    "focusedStrictChecksPassed": true,
+    "originalAssertionsRetained": true,
+    "newRegressionIdentities": 3,
+    "review5Pending": false,
+    "fullObservationPartitionPassed": true,
+    "fullTaskDetailPartitionPassed": true,
+    "fullGateCompleted": true,
+    "fullGatePassed": false,
+    "review5ActionableFindings": 0
+  },
+  "review5": {
+    "patchSHA256": "4631dd8280089588005ffc86c9401b8f25e93ebe748f49f8b7f5acd7b7ff2011",
+    "pinnedFiles": 101,
+    "allInputHashesVerified": true,
+    "actionableFindings": 0,
+    "limit": "Complete MainWindow gate remains failed; no waiver or acceptance"
+  },
+  "remainingViewportFailure": {
+    "suite": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+    "test": "givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable",
+    "assertion": "metrics.stableGeometry",
+    "clipHeightPoints": [
+      341,
+      310
+    ],
+    "bottomOffsetPoints": [
+      1548,
+      1579
+    ],
+    "documentHeightPoints": 1889,
+    "comparisonRowFramesUnchanged": true,
+    "unchangedRecheckPassed": true,
+    "unchangedRecheckTests": 4,
+    "fullGateStillFailed": false,
+    "M03CWaiverApplied": false,
+    "rootCauseEstablished": true,
+    "corrected": true,
+    "finalStrictSuitePassed": true,
+    "currentFullGateFailureIsViewport": false
+  },
+  "frozenD1InputSHA256": {
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/CtlClient.swift": "2d59fe3ad9a3c351f7bc3cdcf93520e28a7f9850b9082396155c223ab5e0cc73",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/CtlModels.swift": "5e05fc3796e2ba4ee7a8046c5813725f1246d4d705e718f719009c6ac28d15b9",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/TaskEventPage.swift": "cb5568bb821e2950a8068f5c7cb754b9e8e9aa23ed99b051f92cc3d4e8b29400",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/TaskEventRecord.swift": "5bfeea8027f083ee4c8d366886c9a3186e4c3559cbfb904c40842ea6a1c475c0",
+    "macos/HfCore/MonitorCore/Sources/MonitorCore/WireContracts.swift": "5ff3000a1d84dcf6b929baed1f14acf4fb890c93b54786038a30b76ff9456656",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskEventPageClientTests.swift": "74089d1b1456f0f19c0062540532d4c02e0e202af1a485ec6d067d7d905fcbbf",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskEventPageTestSupport.swift": "92b7c4fbbb5f553165cc2113ce4cb0c1dac034d6aad925901ae6c141bb31f87b",
+    "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/TaskEventPageTests.swift": "3392e6bb3ef5bd2d7ed8bb2132fd179bab373da7e85eb0fb620856c3b67ce35b"
+  },
+  "managedRuntimeSpecificationSHA256": "f3298d324b4015affd255c98e6378dbf305ccac648f601a869546ced612ef895",
+  "cycle6Isolation": {
+    "ownerAuthorized": true,
+    "independentDiagnoses": 2,
+    "phase": "Frozen-source unlocked final: strict focus and viewport pass;245/246 complete MainWindow, sole unchanged sidebar image failure; stopped without commit",
+    "temporaryDiagnosticSource": "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Activity/ActivityFeedLongMarkdownHostedTests.swift",
+    "temporaryDiagnosticSourceSHA256": "825c32f0e4bee69b91e1204b90a05b61eb1fa371ffbe62e1c4752382cb6504d6",
+    "temporaryDiagnosticPatchSHA256": "85ba8feee8b70e096a3dd467bb690b3f355934cec35fc8c301dd02d340508dc8",
+    "buildOnlyResult": {
+      "scope": "build-only; no tests executed",
+      "exitCode": 0,
+      "timedOut": false,
+      "elapsedSeconds": 23.302909291000105
+    },
+    "assertionsSamplingBoundsDeadlinesUnchanged": true,
+    "foregroundRunPerformed": true,
+    "review6Started": true,
+    "runtimeSmokeAuthorized": false,
+    "windowChromeCauseRuledOutByObservedTransition": true,
+    "headerCauseEstablished": true,
+    "initialDiagnosticRuns": [
+      {
+        "run": 1,
+        "manifestSHA256": "2e94622c9ec86d65cead71f1135f23005b35ecb85e5a7d9ccf6f0d29d0b85ecb",
+        "scope": "ONLY unchanged long-Markdown suite recheck; not complete-package coverage",
+        "results": [
+          {
+            "name": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+            "expectedTests": 4,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      {
+        "run": 2,
+        "manifestSHA256": "2e94622c9ec86d65cead71f1135f23005b35ecb85e5a7d9ccf6f0d29d0b85ecb",
+        "scope": "ONLY unchanged long-Markdown suite recheck; not complete-package coverage",
+        "results": [
+          {
+            "name": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+            "expectedTests": 4,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      {
+        "run": 3,
+        "manifestSHA256": "d6d3004c14dbb3688ed9c50513fa1739d70e4a50976e59edff41a96004f98560",
+        "scope": "ONLY unchanged long-Markdown suite recheck; not complete-package coverage",
+        "results": [
+          {
+            "name": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+            "expectedTests": 4,
+            "passed": false,
+            "failures": [
+              "swift-test exited with 1",
+              "line 9: issue recorded for 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()/ActivityFeedLongMarkdownHostedTests.swift:11:6'",
+              "line 10: test 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()' ended with symbol 'fail'",
+              "line 17: suite 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests' ended with symbol 'fail'",
+              "unrecognized completion summary: 'Test run with 4 tests in 1 suite failed after 3.327 seconds with 1 issue.'",
+              "stdout completion summary reports 'failed'"
+            ]
+          }
+        ]
+      }
+    ],
+    "headerDiagnosticBuildOnlyResult": {
+      "scope": "build-only; no tests executed",
+      "exitCode": 0,
+      "timedOut": false,
+      "elapsedSeconds": 148.964474124994
+    },
+    "headerForegroundRunPerformed": true,
+    "headerDiagnosticRuns": [
+      {
+        "scope": "ONLY unchanged long-Markdown suite recheck; not complete-package coverage",
+        "results": [
+          {
+            "name": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+            "expectedTests": 4,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      {
+        "scope": "ONLY unchanged long-Markdown suite recheck; not complete-package coverage",
+        "results": [
+          {
+            "name": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+            "expectedTests": 4,
+            "passed": false,
+            "failures": [
+              "swift-test exited with 1",
+              "line 9: issue recorded for 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()/ActivityFeedLongMarkdownHostedTests.swift:11:6'",
+              "line 10: test 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests/givenEightTallActivityRows_whenTaskDetailMounts_thenBottomAndVisibleGeometryRemainStable()' ended with symbol 'fail'",
+              "line 17: suite 'MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests' ended with symbol 'fail'",
+              "unrecognized completion summary: 'Test run with 4 tests in 1 suite failed after 4.243 seconds with 1 issue.'",
+              "stdout completion summary reports 'failed'"
+            ]
+          }
+        ]
+      }
+    ],
+    "observedCause": "Count header initially absent; native rows positioned at viewport 341; header appeared with height 31; viewport became 310. Window, hosting bounds, document height and row frames stayed unchanged.",
+    "temporaryDiagnosticsRemoved": true,
+    "review6Completed": true,
+    "review6Findings": [],
+    "review6ReviewedPatchSHA256": "50661ea984028088cd6c0edce5fa1aa2f7a9f88a080956f2fbf23b084cefd372",
+    "review6ReviewedInputs": 103,
+    "postReviewFormattingOnly": "Removed redundant self from passive test lookup; no logic or assertions changed",
+    "postFixBuildAttempt": {
+      "scope": "build-only; no tests executed",
+      "exitCode": -15,
+      "timedOut": false,
+      "elapsedSeconds": 41.22547712500091
+    },
+    "postFixBuildFailure": "runner exit probe ps -axo pid=,pgid=,stat= timed out after unchanged 5 seconds; no tests executed",
+    "postFixNativeValidationPassed": true,
+    "finalStaticChecks": {
+      "format": "0/1049 require formatting, 31 skipped",
+      "lint": "0 violations in1096 files",
+      "legacyGuard": "passed",
+      "privateReferenceGuard": "passed"
+    },
+    "postFixBuildRetry": {
+      "scope": "build-only; no tests executed",
+      "exitCode": 0,
+      "timedOut": false,
+      "elapsedSeconds": 264.7499981250003
+    },
+    "focusedViewportResult": {
+      "scope": "ONLY strict long-Markdown and header viewport suites; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ActivityFeedLongMarkdownHostedTests",
+          "expectedTests": 5,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "MainWindowFeatureTests.TimelineHeaderViewportTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "finalMainWindow": {
+      "passed": false,
+      "discoveredTests": 1814,
+      "discoveredSuites": 246,
+      "passedPartitions": 245,
+      "passedPartitionTestIdentities": 1808,
+      "manifestSHA256": "9ba2b0ea2449d8ff9ddd8ac1e6af98dcd09cfdd91e00f9c2e7fa10d80bff6d3c",
+      "failedSuite": "MainWindowFeatureTests.ObservationHostedTests",
+      "failure": "Eight active-key-window precondition issues; console observation ScreenIsLocked=Yes",
+      "viewportSuitesPassed": true
+    },
+    "finalReleaseBuildPassed": true,
+    "finalAppShell": {
+      "passed": true,
+      "testIdentities": 119,
+      "suites": 13
+    },
+    "finalStrictBundleAndPackagedStartupPassed": true
+  },
+  "finalUnlockedValidation": {
+    "evidenceLabel": "mainwindow-unlocked-final",
+    "manifestSHA256": "d0730c7d79c9c7d14770e66c749d1659bfe3971493dd518cd685ded8d5e2bf3c",
+    "passed": false,
+    "discoveredTests": 1814,
+    "partitions": 246,
+    "passingPartitions": 245,
+    "passingPartitionTestIdentities": 1813,
+    "failedPartitions": [
+      "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests"
+    ],
+    "focusedObservation": {
+      "scope": "ONLY unchanged strict ObservationHostedTests recheck; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.ObservationHostedTests",
+          "expectedTests": 6,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "discoverySHA256": "704ec3b088d9b0ea66db5b157571b38ed56c6f1d8eef331826a9bd0e9b1bb3ba",
+    "sourceManifestSHA256": "48eb2317ac4cc728df289cee02097802aa5c2031753f06d9c47843f22a3a6cf7",
+    "sourceChangedDuringRun": false,
+    "preflight": {
+      "consoleUnlocked": true,
+      "consoleOnSession": true,
+      "consoleLoggedIn": true,
+      "competingNativeCompilerOrTestProcessFound": false
+    },
+    "failureEvidence": [
+      {
+        "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+        "failures": [
+          "swift-test exited with 1",
+          "line 7: issue recorded for 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests/givenGroupDisclosure_whenRenderedWithSelectionProminence_thenItsActualGlyphUsesReadableInk(scheme:expanded:)/SidebarGroupDisclosureRenderingTests.swift:10:6'",
+          "line 15: test 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests/givenGroupDisclosure_whenRenderedWithSelectionProminence_thenItsActualGlyphUsesReadableInk(scheme:expanded:)' ended with symbol 'fail'",
+          "line 16: suite 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests' ended with symbol 'fail'",
+          "unrecognized completion summary: 'Test run with 1 test in 1 suite failed after 0.090 seconds with 1 issue.'",
+          "stdout completion summary reports 'failed'"
+        ],
+        "stdoutSHA256": "399ed13dfab530560af765d133cebe1824421ab760e86502bff233406b8f6626",
+        "stderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "eventsSHA256": "2c79127d9860f288e033957896be3467ed5573f26fdfc00f24cc7385ad6e4d52"
+      }
+    ],
+    "nextProposal": "Read-only isolated sidebar actual/repeated/reference image and appearance provenance; no new fix/review cycle started",
+    "committed": false,
+    "runtimeSmokePerformed": false
+  },
+  "sidebarRenderingDiagnosis": {
+    "authority": "Owner-expanded cohesive stage; supported routine correction permitted, none justified by retained evidence",
+    "independentReadOnlyDiagnoses": 2,
+    "historicalPriorOccurrence": "M03-C receipt: same collapsed-Light actual/reference comparison, followed by unchanged passing glyph suite; no waiver",
+    "isolatedAttempts": 13,
+    "isolatedStrictAttemptsPassed": 13,
+    "captureAnalysisSHA256": "522a6b7ac5d3875f8506ed3ff4b3f032a7f20f42973803df16f008fb15a7351c",
+    "captureSummary": {
+      "directories": 14,
+      "tripletCount": 112,
+      "pngCount": 336,
+      "allPixelsEqual": true,
+      "allPNGEqual": true,
+      "allChunksEqual": true
+    },
+    "dimensions": [
+      64,
+      64
+    ],
+    "mode": "RGBA",
+    "alpha": "opaque",
+    "colorMetadata": "sRGB; per-triplet chunks including metadata identical",
+    "appInitialization": "No NSApplication created; metadata used NSApp? only after the original three renders",
+    "originalFailedReferenceRetained": false,
+    "originalMismatchCauseEstablished": false,
+    "correctionApplied": false,
+    "productionSourceSHA256": "61b176d56afdbaa2d4b8a8baa1ca3cb74fa9ba65524608cda4c00cf600948573",
+    "restoredTestSourceSHA256": "6dab9e78b52d667c3ddc1fecb76325f8db464b18999d9b6b338fd34495227736",
+    "temporarySourceRestoredExactly": true,
+    "fullContextGuard": {
+      "passed": false,
+      "manifestSHA256": "19982f605dbfeaaafd60a274257aab01461bc7ad5425c8ac836dc7f8080dc85a",
+      "discoveredTests": 1814,
+      "discoveredSuites": 246,
+      "passingPartitions": 245,
+      "passingPartitionTestIdentities": 1812,
+      "failedPartitions": [
+        {
+          "name": "MainWindowFeatureTests.WorkflowRunSidebarHostedTests",
+          "failures": [
+            "swift-test exited with -15",
+            "no runEnded event",
+            "suite 'MainWindowFeatureTests.WorkflowRunSidebarHostedTests' must start and end exactly once (started=1, ended=0)",
+            "unfinished test 'MainWindowFeatureTests.WorkflowRunSidebarHostedTests/givenPopulatedChildRun_whenSidePanelScrolls_thenDisclosuresHistoryAndRoutesRemainReachable(width:appearance:)': started but never ended or skipped",
+            "unfinished test cases for 'MainWindowFeatureTests.WorkflowRunSidebarHostedTests/givenPopulatedChildRun_whenSidePanelScrolls_thenDisclosuresHistoryAndRoutesRemainReachable(width:appearance:)' (started=1, ended=0)",
+            "stdout has no Swift Testing completion summary",
+            "no legacy XCTest execution report on stdout"
+          ]
+        }
+      ],
+      "sidebarStrictSuitePassed": true,
+      "sourceQualification": "Original strict render order and assertions plus temporary capture-only writes after each three-image render; not an unmodified final-source full run",
+      "environmentFailure": "Unchanged5second ps exit-probe timed out; competing Swift frontends observed; load118.56/54.52/33.69"
+    },
+    "reviewDisposition": "No color, initialization or comparison correction justified without failed-image evidence; do not relabel historical failure as fixed or encoding-only",
+    "nextAction": "Positively qualify unlocked console and pause competing native builds throughout remaining strict final validation; no timeout/skip/assertion changes"
+  },
+  "latestUninstrumentedGuardAttempt": {
+    "exitCode": 130,
+    "completeGuardPassed": false,
+    "interruptedByPrimaryAfterLockedConsole": true,
+    "completedPartitions": 86,
+    "passedPartitions": 85,
+    "failedPartitions": [
+      "MainWindowFeatureTests.ObservationHostedTests"
+    ],
+    "lastStarted": [
+      "87",
+      "246",
+      "MainWindowFeatureTests.SidebarConversationGroupingTests",
+      "1"
+    ],
+    "lastCompleted": [
+      "86",
+      "246",
+      "MainWindowFeatureTests.SidebarBackendFilterLabelTests",
+      "PASS"
+    ],
+    "progressLogSHA256": "3f3509f49c7ee5974e1c75dca32c656ce1b84dc522838b610bf39446b2064f2e"
+  },
+  "restoredSidebarChecks": {
+    "first": {
+      "scope": "ONLY sidebar capture diagnosis with original strict assertions; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": false,
+          "failures": [
+            "swift-test exited with 1",
+            "line 7: issue recorded for 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests/givenGroupDisclosure_whenRenderedWithSelectionProminence_thenItsActualGlyphUsesReadableInk(scheme:expanded:)/SidebarGroupDisclosureRenderingTests.swift:10:6'",
+            "line 8: issue recorded for 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests/givenGroupDisclosure_whenRenderedWithSelectionProminence_thenItsActualGlyphUsesReadableInk(scheme:expanded:)/SidebarGroupDisclosureRenderingTests.swift:10:6'",
+            "line 16: test 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests/givenGroupDisclosure_whenRenderedWithSelectionProminence_thenItsActualGlyphUsesReadableInk(scheme:expanded:)' ended with symbol 'fail'",
+            "line 17: suite 'MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests' ended with symbol 'fail'",
+            "unrecognized completion summary: 'Test run with 1 test in 1 suite failed after 0.144 seconds with 2 issues.'",
+            "stdout completion summary reports 'failed'"
+          ]
+        }
+      ]
+    },
+    "afterFailureOnlyDiagnosticRestoration": {
+      "scope": "ONLY sidebar capture diagnosis with original strict assertions; not complete-package coverage",
+      "results": [
+        {
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "failureOnlyAttempts": {
+      "scope": "ONLY sidebar capture diagnosis with original strict assertions; not complete-package coverage",
+      "results": [
+        {
+          "iteration": 1,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 2,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 3,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 4,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 5,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 6,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 7,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 8,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 9,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "iteration": 10,
+          "name": "MainWindowFeatureTests.SidebarGroupDisclosureRenderingTests",
+          "expectedTests": 1,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "sourceRestoredExactly": true,
+    "historicalCauseStillUnestablished": true
+  },
+  "runnerFocusOrderingPlan": {
+    "independentPlanReviewPassed": true,
+    "scope": [
+      "scripts/test-swift-package.py",
+      "tests/test_swift_package_runner.py",
+      "docs/development.md"
+    ],
+    "invariant": "Same exact validated partition objects/filters/coverage/deadlines/host allowlist and activation/focus checks; two admitted hosted suites first in stable order",
+    "claimLimit": "Reduces delay after activation; does not waive unlocked desktop availability throughout native validation",
+    "implementation": "Sol low; frozen",
+    "independentFinalReviewPassed": true,
+    "pythonRegressionsPassed": 63,
+    "nativeValidation": "Complete uninstrumented guard246/246,1814/1814 passed; both exact admitted AppKit suites first and passed while unlocked; late lock limitation retained"
+  },
+  "review7": {
+    "patchSHA256": "eab4e25fdfc123b879ab925bce5459bb03af3892578412afe95a814cbc246b9b",
+    "inputsVerified": 103,
+    "findings": [],
+    "scope": "Stable prioritization of two existing exact admitted hosted partitions; no product Swift change; primary receipt/check metadata updated afterward",
+    "nativeValidationPassed": true
+  },
+  "finalNativeValidation": {
+    "evidenceLabel": "hosted-first-final-uninstrumented",
+    "manifestSHA256": "0502bdc0dcbfcda897cde9378fd21b66f8419412b313e1d19042b2a155e5c12c",
+    "passed": true,
+    "discoveredTests": 1814,
+    "partitions": 246,
+    "passingPartitions": 246,
+    "passingPartitionTestIdentities": 1814,
+    "failedPartitions": [],
+    "discoveredSuites": 246,
+    "skips": 0,
+    "sourceUninstrumented": true,
+    "validatedCodeSHA256": {
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventObservationFrame.swift": "72e497608097e9e7771dec51be2c1f578e85d180aea38f80d605d2c545541ece",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventObservationFrameProjector.swift": "3751e4135e3b591bcb4bcc8eeb8fdd58bbbc29ee7df320cb8ebbf66241c8322e",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventStreamLegacyProjection.swift": "627ff6e8bfae3ef704e84de1a99d7e8e5d7072021bc41542453999066935632c",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventStreamRepository.swift": "14724518fb10add13af920b38537760098f8aa8161aa4d10d68bfc8291aa8768",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/EventStreamRepositoryImpl.swift": "3cd50b98f774eae575d57cdf7b58835c2d5eb851d779c5706f6901754cf8fc5f",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicEventHolder.swift": "f1f9f2222e1db5bffb95964394799ac9d36dfadee40bdd4a3d82957d4f70c000",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationManager.swift": "aedd1d5363cb532c0d254ca9ceb5873ccd44db026f07f711011105b6c0b837e3",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationModels.swift": "31be9ac448a785c3c3d3d45d48e227ebf6382742bc4163fc754636961b1a824c",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/PublicObservation/PublicEventObservationSession.swift": "1f915efada7d030e5bd9baf38ce5f8af08ea3f190cb644d567c88c38bd1a241a",
+      "macos/HfCore/HfRepository/Sources/HfRepository/EventStream/RecoveryEventStreamRepository.swift": "da7f7d4bb458c739f93cc31199ba5d34dcb8b8d917e31949c3ee7b2eb3c079d4",
+      "macos/HfCore/HfRepository/Sources/HfRepository/Module.swift": "77c9ead096eb228b9a39f50ab50e2dea31c367763d562a2c7f9c68c78d65e306",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/CompatibilityLifecycleTests.swift": "fe2bbdadf507f07fe8b66d54072af9606ecece3aaa1f51e1858dcbae8c2db970",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/ActivityRepositoryBenchmarkTests.swift": "fc2c5e100f5d7085993b62ab271edf643d385662704c364196d3e8511bb2a751",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventInitialLoadQueueTests.swift": "c5f0a00cde540532ea71481b1653d5aa1bff3416f41b906879f796638bf56714",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventStreamRepositoryImplTests+Publishers.swift": "bdc8febd45bfd603544679336b14bf7d85dae8f7aa183551d6cc55318c3e02bf",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventStreamRepositoryImplTests.swift": "cade011220b3e397584783a6b64473327b65affbd2078107c22756f63c531634",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/EventSummaryRetryTests.swift": "2ba0bf933f6f09be76387439c446480a1c1a788fdd9937a847922a107ad04062",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicEventFacadeTestSupport.swift": "d8c9c39ecec17d8e9a58aa5450da32c613d4ff4f333f11d91b353c004add1e7f",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/EventObservationFrameProjectorTests.swift": "3ff06d05b84f68e76e2aef316fc5b34973543bef4f3892005332abc6e9355d66",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventFacadeMailboxTests.swift": "9e3ab1b62ae737629bcde1b73354d14c116ccbcb41c846f386e4d5f208b7fb36",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationActivityInterestTests.swift": "1c79671fe35e0ef7ad959445d430401e9f1409ddab1b5e239283489d7012f625",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationFreshnessTests.swift": "33d8427db6f6bfb62e33fe6c02e7ecbc792bbd998d97901bb9cf8b2c7b668632",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationRecoveryTests.swift": "f55725f2c58d81c1e2ea3d45392770575971ba9216b5bb8c9d21ee2a6cfc0938",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/PublicObservation/PublicEventObservationWindowRecoveryTests.swift": "52b8837bc71480ebd56e58913f7003f261a34a09fc6b8158e4bbce142f2c97fa",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/RecoveryEventStreamRepositoryTests+Concurrency.swift": "6cf5c56a5c3e8d5052cb4b7c80bd534026f57cffb4387d0bd4101868805493e9",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/RecoveryEventStreamRepositoryTests.swift": "2582f2a49c567cba04cc4f965e27c834f0cdff5a214df2a8ac5520ccfbb9efae",
+      "macos/HfCore/HfRepository/Tests/HfRepositoryTests/EventStream/UnstampedEventSummaryTests.swift": "75111a22924710d3b174ace1ddc59e4996cb588c43df7c43fe9be61a14f36fa8",
+      "macos/HfCore/MonitorCore/Sources/MonitorCore/Events.swift": "6b3b7953df4e089029cfc3a9e7e44a8d692d67bcd09867b103a2f5777c6d5324",
+      "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/EventOccurrenceContinuityTests.swift": "b100156b2f39ce21a79c8650a5280deb5cfd1810b3fae7d54e741cc2779ffe94",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/Component/ParallelColumnView.swift": "9b844119fffc66ad5f0643a1446eefc27098efdbb91689297d1804020a305d78",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/Component/ParallelViewportAnchors.swift": "3ecc497f65dca26709b0c6bcc38ee6496de823c51fb55d6cb17bb632fcdc6ff2",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelActivityHistory.swift": "91b2f39a5361b024180f42f5ae299a629d1f5180f607556962d6847ba55eba1e",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelContracts.swift": "f60ba51edc2bb07e16ae1ce180db40ee45147a68f4c453feec3d475f663fa363",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelPresentation.swift": "80c9db5289a4d008fc14b4a4f8da773478b39797a3f0d7b788d556576fcd210c",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelUseCase+Defaults.swift": "8a00cc1d8a8bc242fbabe8ec6c46ae7ddff22ed7d59d540dea38e798c31e7ff6",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelVM+Observation.swift": "2ed9bb83ac965d9b73c02500b3d1619ef029ce6cce854d9e5d8f051a2fc4f4db",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelVM+Recovery.swift": "966640a1fdeba556eed29cc64711b94f3a07a0ea93c7edab2eb08fa9dbef0168",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelVM.swift": "1830e35d5f3ce92c256aec98527a28b3fff97c42da913e7eff6a88fd3de20aa9",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelViewRepository.swift": "ddd3d12c6920f2bbd0c95efb5a0f7df9196221752b94d53132a866fd66349d1a",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Parallel/ParallelWindowAdoption.swift": "243ae0e474d9c53315ef11d21199effdea6c3a6de89a4d85bce6815b6e6e78fb",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Activity/ActivityRowsBuilder.swift": "1fb800344f8c555c47b03ad1d9c7e441ec5a03341b03446a6cb95b7f536a98a1",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/InspectorView.swift": "b91fad32a9a5883a9676fe8953e4c1ca821f1ec4ddd77e8d2165d8aa80a37010",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/ObservationViews.swift": "a963f2edddd41d93f4c59094c69367a84515ed2a869334b22b81c0482d38bd0e",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/StoredRequestText.swift": "1f4b6ec1f19df8cb6cd2768f569bc3e753d7a49a7d6fdeaa8b20e8db0d204d21",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/SummaryEditedFilesViews.swift": "fc9f0a50c159d54c7be0f343407d0c26e888aa499e56e26744972b8dbd6fddcd",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/SummaryPaneView.swift": "59b1ab623c90029ebe703bcb5dac83202a77e106f64c6ea51e81fb98180afbba",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/TaskDetailToolbar.swift": "058a2989ffeaa45f7ccb0ff2c80e9d1d6e1e853bfb5a5efc64ffd699a57256ec",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/Component/TimelinePaneView.swift": "94f36141f245d057c5cb1ae571529a49cc119d8bbd75ecb5adf98aa8323da988",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/ConversationActivitySnapshot.swift": "ff5e83db28b8cd1415f3345ba235c5700b68847bf95981881fa1a16472116021",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/EventObservationPresentation.swift": "fd64a890c3c33b8340aa9203ae0ea004a54737abf62d89db6e4911c8b0242db1",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/PreviewMock/TaskDetailViewModelMock.swift": "908038f220d39d98bb22fb3cba7c9ff57aada93976a7ae376fb298dfcee01f2e",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/StoredRequestPresentation.swift": "2c49fc47c8ac9d101371771ea0011d6d3165f182434374a069f477d5d6245a19",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailTimelinePresentation.swift": "043458473cd6f5c44e91f6334e98253937d648a8b21e5ec37e29a046e6e7a3b0",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailUseCase+Observation.swift": "9f2487bc13c83fd44944a18c6195749c9433ef5444d2825e51740d972cec12bb",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Inspector.swift": "65ac1d9326d4dc9c0d28585a18dd146f4354a77fde2b09efa84918b6be909b24",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Observation.swift": "9418d99ebd39a4fd9248b223214991b4bafa2f9b7abb17db6bc15ef9b4bc96ca",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Subscriptions.swift": "e4004dacdd57f4fa28a5ff3e060f3ee587143cb6d5fa40a5cdbd135ecdaa7ea0",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Summary.swift": "638df0766be2eadf4c918f803b9a3956ccb9b83b3f8642c30e593c9ceb80ea44",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM+Timeline.swift": "8259d989becb495fceac53eac7d7ea7112e91c81418fb2ee40094f78a13e2279",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailVM.swift": "d29b4330ac40272b871d244bfb1566087af4d2899bf2bed1c284ebee6bd2bedb",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailView.swift": "dc0beb103597d76fff570b34cd7ca7d4d60a10dab3a51c2289ac2c73bab95082",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/TaskDetail/TaskDetailViewRepository.swift": "309264f4125096ca232d9a5c668fbbb8e2d87ba34c4a673a42493946d970bb69",
+      "macos/HfFeatures/MainWindowFeature/Sources/MainWindowFeature/Workflow/WorkflowBuilderPresentation.swift": "6b3932153a0a59a1d1da25f3002eac1f346152e29d60157aca05e93f26cd0007",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelPresentationTests.swift": "8715894c08afe0daba655f028bcaf83649d5d4798ee5182c42427c22e3343760",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelRecoveredObservationTests.swift": "0505fdc930bb3ac58ae8c807da0361ca958ba1cae95c9dbec3ff9bc157babe26",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+Conversations.swift": "b8b3c6b637a45a09bb6bd0cae46bbe7425ebd586379a12548d848e781cbcb04e",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+History.swift": "757cd3fe8217eb79195c3715122f3af7299feaca0f024d962c2c4aaeaa63e439",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+HistoryFixture.swift": "537981ec850f0f2847fdb9156ccd60f36c89537a3402b40aaf42e5db37d60517",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+Inventory.swift": "883e0c47d1e73df113994410f0ea978ae47d62aaf05371a31099efcfa0bd2410",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests+Workflows.swift": "c31b610dc53e9537e42686f32b5a66e1cdaa71f579cc249424f086dd79750853",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelVMTests.swift": "036cc46043732b4b49a5fc5ab2156bf68afe7a43f43789ee78764faad2599dad",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/Parallel/ParallelWindowAdoptionTests.swift": "5f2b2d8a37b3217ea8b4a22760bdb045bf65bfdeaf68110548ddbca3da5ac397",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Activity/ActivityFeedLongMarkdownHostedTests.swift": "3e71b6507547dd8364c0deabb98e2cc070488ffd5591721fc03fcfdb23e71251",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Activity/ActivityFeedStarvationTests.swift": "c9bc49e2caa7ddbeb3b185370c39d229c6b9cbb9d0e7d390d41810154e45e440",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Activity/InitialPromptTests.swift": "f7b7b82f89ebb9dd637576e371ca830f947b9f5dcc9336b845a745f8e1575972",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/Component/TimelineHeaderViewportTests.swift": "3f71c2afbfb85c889a76216115b9dab8114022e1d18dd7f1eb3aadb58f118c0e",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationHost.swift": "2b4947eb74be39eb162713ac5f7c7bbc1771be7972a992b040c783b52b5b17ed",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationHostedTests.swift": "f233aea44275f1d1a188e8ab5349dae26365bf12570e6c8f5380c1f9aeceb1f9",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationQueuedDeliveryTests.swift": "6e97181f6f5bd24c28593ea5d0b304a8554f53d384c5bfe1ac7352174ecf04d7",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/ObservationSummaryBoundaryTests.swift": "7f6802c28d9bbccf4313ba1d977813eb4c87a342eedc5fa787e6ec504fa111e2",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/PublicObservationPresentationTests.swift": "a83b797f499bc5104ffe6421cbaa4aee981505b3992b5fa821a9af7f965ad57e",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/StoredRequestNativeTests.swift": "a534332064c62645c7218b420e3e3f1be56f0edad263fe9cbb13e9ab40aab156",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskContinuityTests.swift": "ae969740d2ebecb0523bcef814fbe19cb03f7fa52a28a3d2fc610a7703d186e3",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailConversationActivityPagingTests.swift": "1e8591d9869e8ffb58a9e7a719108ae9366a0161cb3676d1159ea828162fa4da",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailObservationHostedTests.swift": "1fe81c740022988fedff887980203d0db473f9c3edb6ef8f3b85475104d307d0",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailPagingFixtures.swift": "6f5a6ed5d3db392b18f6211f8a252edd6dc706f7cdf34295146ab9d483fe9173",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailTimelinePresentationTests.swift": "d6c05e6f42a012b053e525f64d1810716098bd19505a8b5e844618141a3c9c22",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Activity.swift": "fab14c2b72f4c5d6fdd5064938e9a49edf412df9f186259fc9bf5d10800d9b79",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Conversation.swift": "a709f7b7a331bb67305effff122a20a5b71409601014a3c8037d67caaf51fbaa",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Items1.swift": "bb522317852034e4d2ed33aa1921bfad0574c19dd850aaf516f9722b20ac4098",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+Timeline.swift": "c670a4278a6ecd0fd0ae18f4e88d5d4906f3b4c6a7bba8f919151e3843f654a1",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests+WorkflowAssignments.swift": "a6f11326a08c6f16bf9ee70fcaceae8bc58b7ca488574417543fd8e22b1a7099",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailVMTests.swift": "ea1ecb45e8373ee0561cd1919f45427a8e4837bca1d506eb19ef7666bd766d77",
+      "macos/HfFeatures/MainWindowFeature/Tests/MainWindowFeatureTests/TaskDetail/TaskDetailViewRepositoryTests.swift": "5a3a2dec45037c9d74463a5c26c8bf872bb1a9ac269429927f43f3b023ed2a8c",
+      "scripts/test-swift-package.py": "d74c0c1d4a64f823f542cfcdb7b6560a0407e6090ea6e1d0cc1882bf679d0509",
+      "tests/test_swift_package_runner.py": "d40edb95c3ae92ef62068d5531190887673069064a60d9113d5893fea202708d"
+    },
+    "strictSidebarTestSHA256": "6dab9e78b52d667c3ddc1fecb76325f8db464b18999d9b6b338fd34495227736",
+    "discoverySHA256": "704ec3b088d9b0ea66db5b157571b38ed56c6f1d8eef331826a9bd0e9b1bb3ba",
+    "firstTwoPartitions": [
+      "MainWindowFeatureTests.ActivityFeedApprovalHostedTests",
+      "MainWindowFeatureTests.ObservationHostedTests"
+    ],
+    "preflightUnlockedAndNoCompetingNativeProcesses": true,
+    "hostedFocusChecksPassedWhileUnlocked": true,
+    "consoleLockedLater": true,
+    "continuousUnlockedOperatingConditionMet": false,
+    "historicalSidebarMismatchCauseFixed": false,
+    "runtimeSmokePerformed": false,
+    "wholeM03Accepted": false
+  }
+}

@@ -99,8 +99,8 @@ struct TimelinePaneModel {
     static let empty = TimelinePaneModel(stepCountText: nil, rows: [], start: nil, emptyText: nil, subTaskStrip: nil, isLoading: false)
 
     /// The header's one line: activity items · turns · no-tool note, each part only when present, with
-    /// tabular digits. Hidden entirely while nothing is loaded (a zero count is omitted, never
-    /// printed as "0 activity items").
+    /// tabular digits. A missing value stays out of accessibility; the view reserves its single
+    /// secondary-text line so publishing the first count cannot shrink the native feed viewport.
     var headerText: String? {
         let parts = [stepCountText, turnsText, noToolCallsText].compactMap(\.self)
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -125,15 +125,20 @@ struct TimelinePaneView: View {
 
     var body: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
-            if let headerText = model.headerText {
-                HStack {
-                    Text(headerText).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText)
-                    Spacer()
-                }
-                .padding(.horizontal, HfRadius.Metrics.spacing24)
-                .padding(.vertical, HfRadius.Metrics.spacing8)
-                .readingColumn()
+            HStack {
+                Text(model.headerText ?? " ")
+                    .font(.hf(.secondary))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.secondaryText)
+                    .lineLimit(1, reservesSpace: true)
+                    .accessibilityLabel(model.headerText ?? "")
+                    .help(model.headerText ?? "")
+                Spacer()
             }
+            .padding(.horizontal, HfRadius.Metrics.spacing24)
+            .padding(.vertical, HfRadius.Metrics.spacing8)
+            .readingColumn()
+            .accessibilityHidden(model.headerText == nil)
             SkeletonContent(isLoading: model.isLoading && model.liveStep == nil && approvalController?.cards.isEmpty != false,
                             state: state.activityHandoff) {
                 SkeletonRows(count: 5, showsBadge: false)

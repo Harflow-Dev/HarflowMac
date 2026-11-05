@@ -7,36 +7,81 @@ import Testing
 // MARK: - PublicEventObservationRecoveryTests
 
 @Suite struct PublicEventObservationRecoveryTests {
-    @Test func givenCursorRefusal_whenRecoveryCursorAlsoFails_thenOnlyOneBootstrapResetOccursPerLifetime() async {
+    @Test func givenCursorRefusal_whenCurrentActivityIsExplicitlyAdopted_thenCachedRowsRemainUntilNewWindowStarts() async {
         // given
         let reader = ObservationScriptReader()
         let sut = makeSession(reader)
         defer { sut.stop() }
         sut.subscribe(id: UUID()) { _ in }
         await waitUntil { reader.requests.count == 1 }
-        let originalEpoch = sut.snapshot.epoch
-        reader.finish(0, .success(ObservationFixtures.page(newer: "first", capture: "future_capture")))
+        reader.finish(0, .success(ObservationFixtures.page([ObservationFixtures.record(7)], newer: "first", capture: "future_capture")))
         await waitUntil { sut.snapshot.liveCursor == "first" }
+        let retained = sut.snapshot
         // when
         sut.tick()
         await waitUntil { reader.requests.count == 2 }
         reader.finish(1, .failure(.refused(code: "cursor_expired", message: "expired")))
+        await waitUntil { sut.snapshot.sourceChangePending }
+        // then
+        #expect(sut.snapshot.activity == retained.activity)
+        #expect(sut.snapshot.epoch == retained.epoch)
+        #expect(sut.snapshot.windowID == retained.windowID)
+        #expect(sut.snapshot.liveCursor == "first")
+        #expect(sut.snapshot.summary.counts == nil)
+        #expect(reader.requests.count == 2)
+        sut.adoptCurrentActivity()
         await waitUntil { reader.requests.count == 3 }
         #expect(reader.requests[2].position == .newest)
-        #expect(sut.snapshot.epoch != originalEpoch)
-        #expect(sut.snapshot.historicalOperations == 1)
-        reader.finish(2, .success(ObservationFixtures.page(newer: "second", capture: "future_capture")))
+        #expect(sut.snapshot.epoch != retained.epoch)
+        #expect(sut.snapshot.windowID != retained.windowID)
+        reader.finish(2, .success(ObservationFixtures.page([ObservationFixtures.record(7)], newer: "second")))
         await waitUntil { sut.snapshot.liveCursor == "second" }
+        #expect(sut.snapshot.activity.count == 1)
+        #expect(sut.snapshot.activity.first?.epoch != retained.activity.first?.epoch)
+        #expect(sut.snapshot.summary.counts == nil)
+        #expect(sut.snapshot.coverage == retained.coverage)
+        #expect(sut.snapshot.historicalOperations == retained.historicalOperations + 1)
         sut.tick()
         await waitUntil { reader.requests.count == 4 }
-        reader.finish(3, .failure(.refused(code: "cursor_invalid", message: "invalid")))
+        reader.finish(3, .failure(.refused(code: "cursor_invalid", message: "invalid again")))
+        await waitUntil { sut.snapshot.sourceChangePending }
+        let exhausted = sut.snapshot
+        sut.adoptCurrentActivity()
         await waitUntil { sut.snapshot.issues.contains(.resetExhausted) }
+        #expect(sut.snapshot.activity == exhausted.activity)
+        #expect(sut.snapshot.windowID == exhausted.windowID)
+        #expect(sut.snapshot.historicalOperations == exhausted.historicalOperations)
+        #expect(reader.requests.count == 4)
+    }
+
+    @Test func givenQueuedOldPublication_whenSourceIsAdopted_thenOnlyCurrentWindowCanReachSubscribers() async {
+        // given
+        let reader = ObservationScriptReader()
+        let mailbox = ObservationMailbox()
+        let sut = makeSession(reader, delivery: mailbox.enqueue)
+        defer { sut.stop() }
+        sut.subscribe(id: UUID(), publish: mailbox.publish)
+        await waitUntil { reader.requests.count == 1 && mailbox.pendingCount == 1 }
+        reader.finish(0, .success(ObservationFixtures.page([ObservationFixtures.record(1)], newer: "old", capture: "future_capture")))
+        await waitUntil { sut.snapshot.liveCursor == "old" }
+        let oldWindow = sut.snapshot.windowID
+        sut.tick()
+        await waitUntil { reader.requests.count == 2 }
+        reader.finish(1, .failure(.refused(code: "cursor_invalid", message: "changed")))
+        await waitUntil { sut.snapshot.sourceChangePending }
+        // when
+        sut.adoptCurrentActivity()
+        await waitUntil { reader.requests.count == 3 }
+        #expect(!reader.requests[1].isCurrent())
+        reader.finish(2, .success(ObservationFixtures.page([ObservationFixtures.record(1)], newer: "new")))
+        await waitUntil { sut.snapshot.liveCursor == "new" }
+        mailbox.flush()
+        mailbox.flush()
         // then
-        #expect(reader.requests.filter { $0.position == .newest }.count == 2)
-        #expect(sut.snapshot.summaryPhase == .unavailable)
-        #expect(sut.snapshot.summary.counts == nil)
-        #expect(sut.snapshot.error?.refusalCode == "cursor_invalid")
-        #expect(sut.snapshot.historicalOperations == 1)
+        #expect(!mailbox.values.isEmpty)
+        #expect(mailbox.values.allSatisfy { $0.windowID != oldWindow })
+        #expect(mailbox.values.last?.windowID == sut.snapshot.windowID)
+        #expect(mailbox.values.last?.activity == sut.snapshot.activity)
     }
 
     @Test func givenCaughtUpSummary_whenUnchangedLiveAndSummaryPollComplete_thenPublicationsStayQuietAndHistoricalWorkDoesNotIncrease() async {

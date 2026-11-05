@@ -292,4 +292,50 @@ extension RecoveryEventStreamRepositoryTests {
         #expect(!sut.events(for: "lost-task").contains { $0.rawLine.contains("obsolete text") })
     }
 
+    @Test
+    func givenNotifiedRuntimeABAWithUnchangedBinding_whenOldRecoveryReturns_thenOnlyFreshGenerationCanPublish() async {
+        // given
+        let entered = LockedBox(false)
+        let completed = LockedBox(false)
+        let calls = LockedBox(0)
+        let resume = DispatchSemaphore(value: 0)
+        let oldPage = recoveryPage().replacingOccurrences(of: "recovered text", with: "obsolete ABA text")
+        let runner = compatibleRunner { call in
+            guard call.arguments.first == "recovery-activity" else { return .success(stdout("{}")) }
+            calls.mutate { $0 += 1 }
+            let ordinal = calls.value
+            if ordinal == 1 {
+                entered.mutate { $0 = true }
+                _ = resume.wait(timeout: .now() + 5)
+                completed.mutate { $0 = true }
+                return .success(stdout(oldPage))
+            }
+            return .success(stdout(recoveryPage()))
+        }
+        let environment = MockToolEnvironmentRepository()
+        given(environment).ctl().willReturn(.success(CtlClient(
+            executable: "/same/ctl", environment: ["HOME": NSHomeDirectory()], runner: runner
+        )))
+        let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).snapshotsPublisher().willReturn(Just([:]).eraseToAnyPublisher())
+        given(snapshots).snapshot(.any).willReturn(lostSnapshot())
+        let poll = LockedBox<(@Sendable () -> Void)?>(nil)
+        let sut = RecoveryEventStreamRepository(base: emptyBase(), environment: environment,
+                                                 snapshots: snapshots, scheduler: pollingScheduler(poll))
+        let runtime = CurrentValueSubject<Int, Never>(0)
+        sut.bindRuntimeChanges(runtime)
+        let lease = sut.acquire("lost-task")
+        defer { lease.release(); resume.signal() }
+        await waitUntil { entered.value }
+        // when — notifications change the runtime lifetime even though ctl identity is equal.
+        runtime.send(1)
+        runtime.send(2)
+        resume.signal()
+        await waitUntil { completed.value && sut.recoveredTranscript(for: "lost-task").events.contains { $0.rawLine.contains("recovered text") } }
+        // then
+        #expect(calls.value >= 2)
+        #expect(!sut.recoveredTranscript(for: "lost-task").events.contains { $0.rawLine.contains("obsolete ABA text") })
+        #expect(sut.recoveredTranscript(for: "lost-task").generation != nil)
+    }
+
 }

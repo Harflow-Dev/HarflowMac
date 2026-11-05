@@ -8,9 +8,10 @@ enum WorkflowBuilderPresentation {
 
     static let historicalRequest = "Workflow request from an earlier run."
 
-    static func conversationMember(task: TaskInfo, items: [TimelineItem], prompt: String?, isBuilder: Bool) -> ConversationItemMember {
+    static func conversationMember(task: TaskInfo, items: [TimelineItem], prompt: String?, isBuilder: Bool,
+                                   identityScope: String? = nil) -> ConversationItemMember {
         guard isBuilder, task.raw["workflow_builder"]?.boolValue != true else {
-            return ConversationItemMember(task: task, items: items, prompt: prompt)
+            return ConversationItemMember(task: task, items: items, prompt: prompt, identityScope: identityScope)
         }
         let initialPrompt = items.compactMap { item -> String? in
             if case let .started(started) = item.body { return started.prompt }
@@ -38,7 +39,7 @@ enum WorkflowBuilderPresentation {
             guard let event = TaskEvent(line: JSONValue.object(payload).rendered()) else { return item }
             return Timeline.items(from: [event]).first ?? item
         }
-        return ConversationItemMember(task: task, items: projected, prompt: historicalRequest)
+        return ConversationItemMember(task: task, items: projected, prompt: historicalRequest, identityScope: identityScope)
     }
 
     static func isDefinition(_ text: String) -> Bool {

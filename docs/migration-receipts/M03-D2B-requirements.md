@@ -1,5 +1,7 @@
 # M03-D2B — blocked production cutover requirements
 
+> Historical planning record: the design-decision gate below was superseded by owner approval of HarflowDesign `227da87ade53fd30af7a3e28776258c1bd72c72c` and the subsequent explicit D2B implementation assignment. The original requirements remain evidence; this record does not describe the current implementation status.
+
 Status: proposed bounded follow-up, not design approval or completed migration. Recorded2026-11-05. D2A provides an independent internal public observation layer; it is deliberately absent from production composition. Both existing private production readers remain active.
 
 ## Required design decision

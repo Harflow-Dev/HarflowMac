@@ -36,13 +36,21 @@ MainWindowFeature uses suite isolation as an AppKit fixture policy. The cause of
 exit remains unresolved, and suite isolation does not validate shared-process ordering or state
 leakage. An incomplete isolated suite still fails.
 
-The exact `MainWindowFeatureTests.ActivityFeedApprovalHostedTests` suite runs in a temporary,
-ad-hoc signed AppKit application with a synchronous main function and a retained application
+The exact `MainWindowFeatureTests.ActivityFeedApprovalHostedTests` and
+`MainWindowFeatureTests.ObservationHostedTests` suites each run in a separate temporary,
+ad-hoc signed AppKit application process with a synchronous main function and a retained application
 delegate. Its main thread runs `NSApplication.run()` throughout testing. Before loading the actual
 built test bundle, a separate bare application activation check must become active with a key
 fixture window. The host loads the original test bundle locally and invokes the selected toolchain's
 Testing entrypoint with the original anchored suite filter; it never invokes the bundle entrypoint.
-The runner rejects aggregate selections containing these tests and requires `--mode suites`.
+The runner admits only those two exact suite identities in MainWindowFeature with their own exact
+anchored filters. Aggregate selections, mixed hosted/ordinary tests, and combinations of both hosted
+suites in one partition are rejected; `--mode suites` keeps their processes isolated.
+The runner stably places these two admitted suites first immediately after activation preflight,
+preserving their relative order and the canonical order of ordinary partitions. This reduces the
+activation-to-suite delay; it does not guarantee a shorter unlocked-desktop window. The desktop
+must remain available throughout native execution.
+`TaskDetailObservationHostedTests` remains ordinary geometry coverage.
 
 The host uses the `xcrun` selected compiler and Testing.framework (Library 1902), checks that exactly
 that Testing image remains loaded, and uses an isolated HOME, CFFIXED_USER_HOME and TMPDIR with

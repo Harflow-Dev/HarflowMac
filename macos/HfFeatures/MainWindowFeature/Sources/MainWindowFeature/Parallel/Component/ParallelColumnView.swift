@@ -14,6 +14,7 @@
 //  folded into tool cards by the VM (`ActivityRowsBuilder`), rendered exactly like `TimelinePaneView`.
 //
 
+import AppKit
 import HfUI
 import MonitorCore
 import SwiftUI
@@ -39,14 +40,14 @@ struct ParallelColumnModel: Identifiable {
     var activitySnapshot: ActivityFeedSnapshot?
     let activityRows: [ActivityRow]
     /// The "what is it doing now" line under the feed; `nil` unless a call is pending in a running turn.
-    let liveStep: LiveStep?
+    var liveStep: LiveStep?
     var pendingMessages: [PendingMessage] = []
     var workMessages: [WorkMessageBubble] = []
     /// True while NO member of this conversation has any timeline item yet AND at least one
     /// member's own event stream is still `.loading` (Monitor piece 12, Design point 4, extended
     /// across every member for piece 13) — the column shows `SkeletonRows` instead of the empty
     /// timeline while this holds.
-    let isLoading: Bool
+    var isLoading: Bool
     var emptyText: String?
     /// From the current member's snapshot only — no fallback to `task.summary` (F4-40, a deliberate
     /// difference from `ChangesPane`). A settled lane shows it first, as its result callout.
@@ -72,6 +73,8 @@ struct ParallelColumnModel: Identifiable {
     var history = EventHistoryState()
     var paginationRevision = 0
     var onLoadMore: (() -> Bool)?
+    var cachedHistoryNotice: String?
+    var onAdoptWindow: (() -> Void)?
     var onSubmitMessage: ((String, Bool) -> Bool)?
     var onCancelMessage: ((String) -> Void)?
 
@@ -93,6 +96,7 @@ struct ParallelColumnModel: Identifiable {
 
 struct ParallelColumnView: View {
     let model: ParallelColumnModel
+    @FocusState private var historyBoundaryFocused: Bool
     @State private var state: ParallelColumnUIState
     @State private var resultContentSize = CGSize(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.parallelResultMaximumHeight)
 
@@ -108,6 +112,22 @@ struct ParallelColumnView: View {
                 Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }
             if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(model.cachedHistoryNotice ?? "Available captured history")
+.font(.hf(.caption))
+.fixedSize(horizontal: false, vertical: true)
+                    .focusable()
+.focused($historyBoundaryFocused)
+                if let adopt = model.onAdoptWindow {
+                    Button("Load current activity") {
+                        adopt()
+                        historyBoundaryFocused = true
+                        NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                            userInfo: [.announcement: "Loading current activity; the cached reading window will be replaced.",
+                                       .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+                    }
+                }
+            }
             Divider()
             resultCallout
             SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {

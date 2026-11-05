@@ -373,7 +373,7 @@ struct SummaryPaneView: View {
                 EmptyView()
             case .unavailable:
                 section("Files edited") {
-                    Text("Edit history isn't available for this task.").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+                    Text(model.editedFilesNote ?? "Edit history isn't available for this task.").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
                 }
             case .available:
                 if !model.editedFiles.isEmpty {

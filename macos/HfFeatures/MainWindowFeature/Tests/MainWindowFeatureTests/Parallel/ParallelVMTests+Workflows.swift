@@ -71,7 +71,7 @@ extension ParallelVMTests {
         await waitUntil { harness.sut.columns.first?.summary != nil }
         // then
         let column = try #require(harness.sut.columns.first)
-        #expect(column.prompt == "Focused assignment")
+        #expect(column.prompt == nil, "snapshot display text is not a stored assignment read")
         #expect(column.summary == (delegation ? "Succeeded\n\nSummary: Implemented feature" : contract))
         let texts = column.rows.compactMap { row -> String? in
             guard case let .item(item) = row.kind, case let .text(text, _) = item.body else { return nil }
@@ -98,7 +98,7 @@ extension ParallelVMTests {
         harness.tasksSubject.send([first, current])
         await waitUntil { harness.sut.columns.count == 1 && harness.sut.isPresentationSettled }
         // then
-        #expect(harness.sut.columns.first?.prompt == "Current answer")
+        #expect(harness.sut.columns.first?.prompt == nil, "snapshot display text is not a stored assignment read")
         harness.sut.didDisappear()
     }
 

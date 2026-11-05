@@ -27,7 +27,7 @@ extension TaskDetailVM {
         let snapshot = useCase.snapshot(currentTaskID)
         let detail = snapshot ?? task
         let activity = conversationMembers.reduce(ActivityCounts()) { acc, member in
-            let memberActivity = useCase.activity(for: member.taskID)
+            let memberActivity = observationFrames[member.taskID]?.summary.counts ?? ActivityCounts()
             var result = acc
             result.toolCalls += memberActivity.toolCalls
             result.edits += memberActivity.edits
@@ -42,7 +42,7 @@ extension TaskDetailVM {
             stepCount: timelineModel.rows.filter { if case .item = $0.kind { return true }; return false }.count,
             activity: activity,
             activityNote: conversationLoading || conversationHasMore || conversationHistoryIncomplete || conversationError != nil
-                || conversationMembers.contains(where: { useCase.eventSummary(for: $0.taskID).availability != .available })
+                || conversationMembers.contains(where: { observationFrames[$0.taskID]?.summary.state != .observed })
                 ? "Partial activity totals while history or summaries are loading or unavailable." : nil,
             subtaskCount: subtaskCount,
             ancestors: ancestors.map { SubTaskEntry(task: $0, title: useCase.title($0.taskID)) },

@@ -76,8 +76,15 @@ protocol TaskDetailViewModel: ViewModel {
     func didLoadArtifacts(taskID: String)
     var summaryModel: SummaryPaneModel { get }
     var promptText: String { get }
+    var requestReadState: TaskRequestReadState { get }
+    var observationFrames: [String: EventObservationFrame] { get }
+    var orderedHistoryFrames: [EventObservationFrame] { get }
+    var recoveredTranscript: RecoveredTranscriptFrame { get }
+    var copyFeedback: String? { get }
+    func didReadRequest(maxBytes: Int)
+    func didCopyObservationText(_ text: String)
+    func didRequestObservation(_ action: EventObservationAction, taskID: String)
     var rawEvents: [TaskEvent] { get }
-    var rawEventsPath: String { get }
     var inspectorModel: InspectorModel? { get }
     var messageBoxModel: MessageBoxModel { get }
 
@@ -101,6 +108,15 @@ protocol TaskDetailViewModel: ViewModel {
 }
 
 extension TaskDetailViewModel {
+    var requestReadState: TaskRequestReadState { .notRequested }
+    var observationFrames: [String: EventObservationFrame] { [:] }
+    var orderedHistoryFrames: [EventObservationFrame] { [] }
+    var recoveredTranscript: RecoveredTranscriptFrame { .init() }
+    var copyFeedback: String? { nil }
+    func didReadRequest(maxBytes _: Int) {}
+    func didCopyObservationText(_: String) {}
+    func didRequestObservation(_: EventObservationAction, taskID _: String) {}
+
     var resourceContext: TaskResourceContext? { nil }
     var resourceBlockersExpanded: Bool { false }
     func didToggleResourceBlockers() {}
@@ -122,11 +138,10 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @State private var activityState: ParallelColumnUIState
     private let isEmbedded: Bool
     private let onToolbarEvaluation: (() -> Void)?
-    @State private var embeddedInspectorVisible = false
-    @State private var isRawEventsPresented = false
+    @State private var eventsExpanded = true
+    @State private var snapshotFactsExpanded = false
     @State private var supervisionRequest = 0
     @FocusState private var continuityDetailsFocused: Bool
-    @AppStorage("monitor.inspectorVisible") private var isInspectorVisible = false
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
@@ -188,31 +203,22 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                                 .padding(.horizontal, HfRadius.Metrics.spacing16)
                                 .padding(.bottom, HfRadius.Metrics.spacing8)
                         }
-                        tabPicker
                         column
                     }
                     .frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity, minHeight: HfRadius.Metrics.zero, maxHeight: .infinity)
                     .background(Color.windowBG)
-                    if showsInspector {
-                        HStack(spacing: HfRadius.Metrics.zero) {
-                            Divider()
-                            InspectorView(model: viewModel.inspectorModel, supervisionRequest: supervisionRequest)
-                                .frame(width: HfRadius.Metrics.taskInspectorWidth)
-                        }
-                        .transition(.move(edge: .trailing))
-                    }
+                    Divider()
+                    eventsPane
+                        .frame(width: isEmbedded ? 280 : 320)
                 }
                 // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
                 // change can land outside the tap's transaction and would then not animate. Reduce
                 // Motion drops the slide (§8); the pane still appears and disappears without motion.
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showsInspector)
-                .onChange(of: showsInspector) { wasVisible, visible in
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: eventsExpanded)
+                .onChange(of: eventsExpanded) { wasVisible, visible in
                     if wasVisible, !visible, supervisionRequest > 0 { continuityDetailsFocused = true }
                 }
                 .opensFileLinks(repoPath: task.repoPath)
-                .sheet(isPresented: $isRawEventsPresented) {
-                    RawEventsSheetView(events: viewModel.rawEvents, path: viewModel.rawEventsPath) { isRawEventsPresented = false }
-                }
             }
         } else if viewModel.hasListed {
             VStack(spacing: HfRadius.Metrics.spacing8) {
@@ -273,6 +279,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             Spacer(minLength: HfRadius.Metrics.spacing8)
                             Button("Details") {
                                 setInspectorVisible(true)
+                                snapshotFactsExpanded = true
                                 supervisionRequest += 1
                             }
                             .buttonStyle(.plain)
@@ -314,12 +321,12 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         } else {
             content().background {
                 TaskDetailToolbar(
-                    snapshot: TaskDetailToolbarSnapshot(viewModel, task: task, showsInspector: showsInspector),
+                    snapshot: TaskDetailToolbarSnapshot(viewModel, task: task, showsInspector: eventsExpanded),
                     actions: TaskDetailToolbarActions(
                         takeover: viewModel.didTapTakeover, cancel: viewModel.didTapCancel,
                         copyResumeCommand: viewModel.didTapCopyResumeCommand, openTask: viewModel.didTapTask,
-                        showRawEvents: { isRawEventsPresented = true },
-                        toggleInspector: { setInspectorVisible(!showsInspector) }
+                        showRawEvents: { eventsExpanded = true },
+                        toggleInspector: { eventsExpanded.toggle() }
                     ),
                     onEvaluation: onToolbarEvaluation
                 ).equatable()
@@ -401,14 +408,12 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         HfMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion)
     }
 
-    private var showsInspector: Bool { isEmbedded ? embeddedInspectorVisible : isInspectorVisible }
-
     private func setInspectorVisible(_ visible: Bool) {
-        if isEmbedded { embeddedInspectorVisible = visible } else { isInspectorVisible = visible }
+        eventsExpanded = visible
     }
 
     private var inspectorToggleText: String {
-        showsInspector ? "Hide inspector" : "Show inspector"
+        eventsExpanded ? "Hide event details" : "Show event details"
     }
 
     private func statusLabel(_ task: TaskInfo) -> some View {
@@ -430,11 +435,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     private var inspectorToggle: some View {
         Button {
-            setInspectorVisible(!showsInspector)
+            eventsExpanded.toggle()
         } label: {
             Image(systemName: "sidebar.right")
         }
-        .buttonStyle(QuietButtonStyle(isSelected: showsInspector))
+        .buttonStyle(QuietButtonStyle(isSelected: eventsExpanded))
         .help(inspectorToggleText)
         .accessibilityLabel(inspectorToggleText)
     }
@@ -451,7 +456,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             Button("Open parent") { viewModel.didTapTask(parentID) }
         }
         Divider()
-        Button("Raw events") { isRawEventsPresented = true }
+        Button("Events") { eventsExpanded = true }
     }
 
     private var moreMenu: some View {
@@ -467,21 +472,6 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         .accessibilityLabel("More actions")
     }
 
-    // MARK: Tabs and content
-
-    /// The redesign places the segmented control left-aligned under the header (§6.2), inset to
-    /// the content column's own padding; the tabs, binding and `didSelectTab` routing are today's.
-    private var tabPicker: some View {
-        SlidingSegmentedControl(
-            options: viewModel.tabs.map { ($0, $0.rawValue) },
-            selection: Binding(get: { viewModel.tab }, set: { viewModel.didSelectTab($0) })
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, isEmbedded ? HfRadius.Metrics.spacing16 : HfRadius.Metrics.spacing24)
-        .padding(.top, isEmbedded ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing16)
-        .padding(.bottom, isEmbedded ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing16)
-    }
-
     /// Content over the composer. Each tab centres its own content with `readingColumn()` inside its
     /// scroll view (settled plan D13), so scrollbars sit at the pane's edge.
     private var column: some View {
@@ -492,61 +482,45 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }
     }
 
-    @ViewBuilder
     private var content: some View {
-        switch viewModel.tab {
-        case .activity:
+        VStack(spacing: 0) {
+            StoredRequestView(state: viewModel.requestReadState, read: viewModel.didReadRequest, copy: viewModel.didCopyObservationText)
+                .padding(16)
+            ForEach(viewModel.orderedHistoryFrames, id: \.taskID) { frame in
+                ObservationHistoryView(frame: frame) { viewModel.didRequestObservation($0, taskID: frame.taskID) }
+                    .padding(.horizontal, 16)
+.padding(.bottom, 8)
+            }
+            if let feedback = viewModel.copyFeedback { Text(feedback).font(.hf(.caption)).textSelection(.enabled) }
             TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
                              isCancelDisabled: viewModel.isBusy)
-        case .summary:
-            VStack(spacing: 0) {
-                approvalHint
-                SummaryPaneView(model: viewModel.summaryModel, artifactMembers: viewModel.artifactMembers,
-                                loadArtifacts: { viewModel.didLoadArtifacts(taskID: $0) })
-            }
-        case .prompt:
-            VStack(spacing: 0) {
-                approvalHint
-                ScrollView {
-                Text(viewModel.promptText)
-                    .font(.hf(.reading))
-                    .lineSpacing(HfRadius.Metrics.spacing6)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(HfRadius.Metrics.spacing24)
-                    .readingColumn()
-                    // The document probe (§6.2): inside the prompt pane's own document, so it
-                    // can only ever target this scroll view.
-                    .background(ScrollChrome())
-                }
-            }
         }
     }
 
-    @ViewBuilder private var approvalHint: some View {
-        if let controller = viewModel.callerApprovalController,
-           (controller.awaitingDecisionCount.map { $0 > 0 } ?? controller.cards.contains(where: \.pending)) || controller.hasMorePending {
-            Button {
-                viewModel.didSelectTab(.activity)
-                controller.revealPending()
-            } label: {
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-                    Text("Waiting for approval").font(.hf(.secondary, weight: .semibold)).foregroundStyle(Color.warningFG)
-                    Text(controller.hasMorePending ? "More pending requests · View in Activity"
-                         : controller.awaitingDecisionCount.map { "\($0) pending · View in Activity" } ?? "View request in Activity")
-                        .font(.hf(.caption))
-                }
-.frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(HfRadius.Metrics.spacing12)
-                    .background(Color.warningBG, in: RoundedRectangle(cornerRadius: HfRadius.row))
-                    .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.warningFG))
+    private var eventsPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Events").font(.hf(.secondary, weight: .semibold)).padding(16)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if eventsExpanded {
+                        PublicEventsView(frame: viewModel.task.flatMap { viewModel.observationFrames[$0.taskID] },
+                                         recovered: viewModel.recoveredTranscript, copy: viewModel.didCopyObservationText)
+                    }
+                    DisclosureGroup("Task snapshot facts and actions", isExpanded: $snapshotFactsExpanded) {
+                        TaskSnapshotFactsView(model: viewModel.inspectorModel, supervisionRequest: supervisionRequest)
+                            .frame(height: 360)
+                    }
+                    DisclosureGroup("Reported result, usage and artifacts") {
+                        SummaryPaneView(model: viewModel.summaryModel, artifactMembers: viewModel.artifactMembers,
+                                        loadArtifacts: { viewModel.didLoadArtifacts(taskID: $0) })
+                            .frame(height: 360)
+                    }
+                }.padding(16)
             }
-.buttonStyle(.plain)
-.padding(.horizontal, HfRadius.Metrics.spacing24)
-.padding(.vertical, HfRadius.Metrics.spacing8)
-                .readingColumn()
-        }
+        }.background(Color.inspectorFill)
     }
+
 }
 
 // MARK: - NoticeSummary

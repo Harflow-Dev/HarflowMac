@@ -9,30 +9,7 @@ import os
 final class PublicEventObservationSession: Sendable {
     typealias Delivery = @Sendable (@escaping @Sendable () -> Void) -> Void
     typealias Publisher = @Sendable (PublicEventObservationSnapshot) -> Void
-    private enum Lane: Int { case live, older, summary }
-    private struct State: Sendable {
-        var snapshot: PublicEventObservationSnapshot
-        var reducer = PublicEventSummaryReducer()
-        var busy = false
-        var liveDemand = true
-        var liveForwardPages = 0
-        var olderDemand = false
-        var summaryCursor: String?
-        var summarySeeking = false
-        var summaryDemand = false
-        var summaryFollowLive = false
-        var summaryForwardPages = 0
-        var nextLane = 0
-        var admission = 0
-        var resetUsed = false
-        var capacityBlocked = false
-        var publicationPending = false
-        var forwardTerminalSeq: Int?
-        var bootstrapFinished = false
-        var budgetID: UUID?
-        var subscribers: [UUID: Publisher] = [:]
-        var delivered: [UUID: PublicEventObservationSnapshot] = [:]
-    }
+    fileprivate enum Lane: Int, Hashable { case live, older, summary }
 
     let id: UUID
     private let taskID: String
@@ -45,14 +22,17 @@ final class PublicEventObservationSession: Sendable {
     private let timer = ObservationTimer()
 
     init(taskID: String, reader: any PublicEventObservationReader, scheduler: any Scheduling,
-         budget: any PublicEventObservationAdmission, delivery: @escaping Delivery) {
+         budget: any PublicEventObservationAdmission, delivery: @escaping Delivery, activityEnabled: Bool = true) {
         let id = UUID()
         self.id = id
         self.taskID = taskID
         self.reader = reader
         self.budget = budget
         self.delivery = delivery
-        self.state = OSAllocatedUnfairLock(initialState: State(snapshot: .init(sessionID: id)))
+        var initial = State(snapshot: .init(sessionID: id))
+        initial.activityEnabled = activityEnabled
+        initial.liveDemand = activityEnabled
+        self.state = OSAllocatedUnfairLock(initialState: initial)
         let token = scheduler.scheduleRepeating(every: 1) { [weak self] in self?.tick() }
         timer.set(token)
     }
@@ -71,7 +51,7 @@ final class PublicEventObservationSession: Sendable {
 
     func tick() {
         state.withLock { value in
-            value.liveDemand = true
+            value.liveDemand = value.activityEnabled
             value.liveForwardPages = 0
             value.summaryForwardPages = 0
             if value.snapshot.summaryPhase == .caughtUp { value.summaryDemand = true }
@@ -79,8 +59,70 @@ final class PublicEventObservationSession: Sendable {
         queue.async { [self] in pump() }
     }
 
-    func requestOlder() {
-        state.withLock { $0.olderDemand = true }
+    @discardableResult func requestOlder() -> Bool {
+        let accepted = state.withLock { value -> Bool in
+            guard !value.snapshot.stopped, value.activityEnabled, !value.capacityBlocked, !value.snapshot.sourceChangePending,
+                  !value.snapshot.historyLoading, !value.paused.contains(.older),
+                  !value.bootstrapFinished || value.snapshot.olderCursor != nil else { return false }
+            value.olderDemand = true
+            value.snapshot.historyLoading = true
+            value.snapshot.revision += 1
+            return true
+        }
+        guard accepted else { return false }
+        publishLatest()
+        queue.async { [self] in pump() }
+        return true
+    }
+
+    /// Controls aggregate activity interest without stopping the independent summary lineage.
+    func setActivityEnabled(_ enabled: Bool) {
+        state.withLock { value in
+            guard !value.snapshot.stopped, value.activityEnabled != enabled else { return }
+            value.activityEnabled = enabled
+            value.liveDemand = enabled
+            if !enabled {
+                value.activityGeneration += 1
+                value.olderDemand = false
+                value.snapshot.historyLoading = false
+            } else if value.bootstrapFinished, value.snapshot.liveCursor == nil,
+                      !value.snapshot.sourceChangePending, !value.capacityBlocked {
+                // Summary-only bootstrap admitted no activity cursor or occurrence identity.
+                value.bootstrapFinished = false
+                value.windowBootstrap = true
+                value.snapshot.windowID = UUID()
+                value.snapshot.revision += 1
+            }
+        }
+        queue.async { [self] in pump() }
+    }
+
+    /// Retries paused public reads only; never restarts task execution or adopts a changed source.
+    func retryObservation() {
+        state.withLock { value in
+            guard !value.snapshot.stopped, !value.snapshot.sourceChangePending else { return }
+            let retryOlder = value.activityEnabled && value.paused.contains(.older) && value.snapshot.olderCursor != nil
+            value.paused.removeAll()
+            if let phase = value.pausedSummaryPhase { value.snapshot.summaryPhase = phase }
+            value.pausedSummaryPhase = nil
+            value.liveDemand = true
+            value.summaryDemand = true
+            value.olderDemand = retryOlder
+            value.snapshot.historyLoading = retryOlder
+            value.snapshot.issues.remove(.nonprogress)
+            value.snapshot.issues.remove(.unavailable)
+        }
+        queue.async { [self] in pump() }
+    }
+
+    /// Explicitly replaces the activity window after source change or capacity refusal.
+    /// Adoption waits for the current operation to return, retaining its admission permit.
+    func adoptCurrentActivity() {
+        state.withLock { value in
+            guard !value.snapshot.stopped,
+                  value.snapshot.sourceChangePending || value.capacityBlocked else { return }
+            value.adoptionRequested = true
+        }
         queue.async { [self] in pump() }
     }
 
@@ -112,16 +154,19 @@ final class PublicEventObservationSession: Sendable {
     }
 
     private func pump() {
-        let request = state.withLock { value -> (Lane, TaskEventPagePosition, UUID)? in
+        let request = state.withLock { value -> (Lane, TaskEventPagePosition, UUID, Int)? in
             guard !value.snapshot.stopped, !value.busy else { return nil }
-            if !value.bootstrapFinished, !value.capacityBlocked, value.liveDemand {
+            if value.adoptionRequested { adopt(value: &value) }
+            guard !value.snapshot.sourceChangePending else { return nil }
+            if !value.bootstrapFinished, !value.capacityBlocked, !value.paused.contains(.live),
+               value.liveDemand || !value.activityEnabled, value.liveForwardPages < 2 {
                 value.liveDemand = false
                 value.busy = true
-                return (.live, .newest, value.snapshot.epoch)
+                return (.live, .newest, value.snapshot.epoch, value.activityGeneration)
             }
             return nextRequest(value: &value)
         }
-        guard let (lane, position, epoch) = request else { publishLatest(); return }
+        guard let (lane, position, epoch, activityGeneration) = request else { publishLatest(); return }
         let budgetID = UUID()
         state.withLock { $0.budgetID = budgetID }
         budget.submit(id: budgetID) { [self] done in
@@ -133,7 +178,7 @@ final class PublicEventObservationSession: Sendable {
                 let result = await reader.read(taskID: taskID, position: position, operationIsCurrent: current)
                 done()
                 queue.async { [self] in
-                    apply(result, lane: lane, position: position, epoch: epoch)
+                    apply(result, lane: lane, position: position, epoch: epoch, activityGeneration: activityGeneration)
                     publishLatest()
                     // A queue turn is an explicit executor yield; never synchronously drain.
                     queue.async { [self] in pump() }
@@ -146,7 +191,7 @@ final class PublicEventObservationSession: Sendable {
         if state.withLock({ $0.snapshot.stopped }) { budget.cancel(budgetID) }
     }
 
-    private func nextRequest(value: inout State) -> (Lane, TaskEventPagePosition, UUID)? {
+    private func nextRequest(value: inout State) -> (Lane, TaskEventPagePosition, UUID, Int)? {
         for offset in 0 ..< 3 {
             let index = (value.nextLane + offset) % 3
             guard let lane = Lane(rawValue: index), let cursor = cursor(for: lane, value: &value) else { continue }
@@ -156,19 +201,20 @@ final class PublicEventObservationSession: Sendable {
             if lane == .summary {
                 if value.summaryFollowLive { value.summaryForwardPages += 1 } else { value.snapshot.historicalOperations += 1 }
             }
-            return (lane, .cursor(cursor), value.snapshot.epoch)
+            return (lane, .cursor(cursor), value.snapshot.epoch, value.activityGeneration)
         }
         return nil
     }
 
     private func cursor(for lane: Lane, value: inout State) -> String? {
+        guard !value.paused.contains(lane) else { return nil }
         switch lane {
         case .live:
-            guard value.liveDemand, value.liveForwardPages < 2, !value.capacityBlocked else { return nil }
+            guard value.activityEnabled, value.liveDemand, value.liveForwardPages < 2, !value.capacityBlocked else { return nil }
             value.liveDemand = false
             return value.snapshot.liveCursor
         case .older:
-            guard value.olderDemand, !value.capacityBlocked else { return nil }
+            guard value.activityEnabled, value.olderDemand, !value.capacityBlocked else { return nil }
             value.olderDemand = false
             return value.snapshot.olderCursor
         case .summary:
@@ -195,70 +241,110 @@ final class PublicEventObservationSession: Sendable {
     }
 
     private func apply(_ result: Result<TaskEventPage, ToolError>, lane: Lane,
-                       position: TaskEventPagePosition, epoch: UUID) {
+                       position: TaskEventPagePosition, epoch: UUID, activityGeneration: Int) {
         state.withLock { value in
             guard !value.snapshot.stopped, value.snapshot.epoch == epoch else { return }
             value.busy = false
             value.budgetID = nil
             let before = value.snapshot
             defer {
+                if lane == .older { value.snapshot.historyLoading = false }
+                if position == .newest,
+                   value.snapshot.olderCursor == nil || value.capacityBlocked || value.snapshot.error != nil {
+                    value.snapshot.historyLoading = false
+                    value.olderDemand = false
+                }
+                value.snapshot.pausedReads = !value.paused.isEmpty
                 value.snapshot.summary = value.reducer.snapshot(caughtUp: value.snapshot.summaryPhase == .caughtUp)
+                if value.paused.contains(.summary), !value.snapshot.sourceChangePending {
+                    value.snapshot.summary = PublicEventSummary(state: .unavailable, counts: nil, files: [], totalFiles: nil,
+                                                               issues: value.snapshot.summary.issues.union([.requestUnavailable]))
+                }
                 if value.snapshot != before { value.snapshot.revision += 1 }
             }
             switch result {
             case .failure(let error): applyFailure(error, lane: lane, value: &value)
-            case .success(let page): applyPage(page, lane: lane, position: position, epoch: epoch, value: &value)
+            case .success(let page): applyPage(page, lane: lane, position: position, activityGeneration: activityGeneration, value: &value)
             }
         }
     }
 
     private func applyFailure(_ error: ToolError, lane: Lane, value: inout State) {
         value.snapshot.error = error
+        value.snapshot.forwardDrained = false
         if error.refusalCode == "cursor_expired" || error.refusalCode == "cursor_invalid" {
-            guard !value.resetUsed else {
+            if value.resetUsed || value.snapshot.historicalOperations >= 4096 {
                 value.snapshot.issues.insert(.resetExhausted)
-                value.reducer.qualify(.requestUnavailable)
-                value.summaryCursor = nil
-                value.snapshot.summaryPhase = .unavailable
-                return
             }
-            reset(value: &value)
+            value.snapshot.sourceChangePending = true
+            value.olderDemand = false
+            value.snapshot.historyLoading = false
+            value.snapshot.forwardDrained = false
+            value.snapshot.summaryPhase = .unavailable
+            value.reducer.qualify(.requestUnavailable)
+            value.paused = [.live, .older, .summary]
         } else {
             value.snapshot.issues.insert(.unavailable)
-            if lane == .summary {
-                value.reducer.qualify(.requestUnavailable)
-                value.summaryCursor = nil; value.snapshot.summaryPhase = .unavailable
+            value.paused.insert(lane)
+            if lane == .summary || (lane == .live && !value.bootstrapFinished && value.snapshot.summaryPhase == .waiting) {
+                value.paused.insert(.summary)
+                value.pausedSummaryPhase = value.snapshot.summaryPhase
+                value.snapshot.summaryPhase = .unavailable
             }
         }
     }
 
-    private func reset(value: inout State) {
-        value.resetUsed = true
-        let work = min(4096, value.snapshot.historicalOperations + 1)
-        let coverage = value.snapshot.coverage
-        let issues = value.snapshot.issues
-        value.snapshot = .init(sessionID: id)
-        value.snapshot.coverage = coverage
-        value.snapshot.issues = issues
-        value.snapshot.historicalOperations = work
-        value.bootstrapFinished = false
+    private func adopt(value: inout State) {
+        value.adoptionRequested = false
+        let sourceChanged = value.snapshot.sourceChangePending
+        if sourceChanged {
+            guard !value.resetUsed, value.snapshot.historicalOperations < 4096 else {
+                value.snapshot.issues.insert(.resetExhausted)
+                return
+            }
+            value.resetUsed = true
+            value.snapshot.historicalOperations += 1
+            value.snapshot.epoch = UUID()
+            // Source uncertainty and reducer loss survive adoption. No fresh exact totals.
+            value.summaryCursor = nil
+            value.pausedSummaryPhase = nil
+            value.snapshot.summaryDeliveryCursor = nil
+            value.summarySeeking = false
+            value.summaryDemand = false
+            value.summaryFollowLive = false
+            value.snapshot.summaryPhase = .unavailable
+        }
+        value.snapshot.sourceChangePending = false
+        value.snapshot.windowID = UUID()
+        value.snapshot.activity = []
+        value.snapshot.rawBytes = 0
+        value.snapshot.liveCursor = nil
+        value.snapshot.olderCursor = nil
+        value.snapshot.lifecycle = nil
+        value.snapshot.forwardDrained = false
+        value.snapshot.hasPendingLive = false
+        value.snapshot.error = nil
+        value.snapshot.issues.remove(.capacity)
+        value.snapshot.issues.remove(.nonprogress)
+        value.snapshot.issues.remove(.unavailable)
+        value.snapshot.revision += 1
         value.forwardTerminalSeq = nil
+        value.bootstrapFinished = false
+        value.windowBootstrap = true
         value.admission = 0
-        value.summarySeeking = false
-        value.summaryDemand = false
-        value.summaryFollowLive = false
-        value.summaryForwardPages = 0
-        value.olderDemand = false
-        value.reducer = PublicEventSummaryReducer()
-        value.summaryCursor = nil
         value.capacityBlocked = false
+        value.paused.removeAll()
+        value.snapshot.pausedReads = false
+        value.snapshot.historyLoading = false
         value.liveDemand = true
-        value.liveForwardPages = 0
+        value.olderDemand = false
+        // Page allowances are tick-scoped, never replenished by a window replacement.
     }
 
-    private func applyPage(_ page: TaskEventPage, lane: Lane, position: TaskEventPagePosition, epoch: UUID, value: inout State) {
+    private func applyPage(_ page: TaskEventPage, lane: Lane, position: TaskEventPagePosition, activityGeneration: Int, value: inout State) {
         value.snapshot.error = nil
         guard page.log.state != .unavailable else {
+            value.paused.insert(lane)
             value.reducer.qualify(.requestUnavailable)
             value.snapshot.lifecycle = page.log
             value.snapshot.forwardDrained = false
@@ -271,8 +357,18 @@ final class PublicEventObservationSession: Sendable {
         let bootstrap = position == .newest
         if bootstrap { value.bootstrapFinished = true }
         guard progresses(page, lane: lane, position: position, value: &value) else { return }
-        if lane != .summary, !admitActivity(page, lane: lane, bootstrap: bootstrap, epoch: epoch, value: &value) { return }
+        if lane != .summary, value.activityEnabled, value.activityGeneration == activityGeneration,
+           !admitActivity(page, lane: lane, bootstrap: bootstrap, value: &value) { return }
         applySummary(page, lane: lane, bootstrap: bootstrap, value: &value)
+        if bootstrap, value.activityEnabled, value.activityGeneration != activityGeneration,
+           value.snapshot.liveCursor == nil {
+            // An activity role left and rejoined while the initial lineage read was in
+            // flight. Its result may seed summary, but must not consume the replacement
+            // activity bootstrap or fold that summary a second time.
+            value.bootstrapFinished = false
+            value.windowBootstrap = true
+            value.liveDemand = true
+        }
         if value.reducer.isUnavailable || value.reducer.isLimited {
             value.summaryCursor = nil
             value.snapshot.summaryPhase = value.reducer.isLimited ? .limited : .unavailable
@@ -286,11 +382,14 @@ final class PublicEventObservationSession: Sendable {
             let next = backwards ? page.olderCursor : page.newerCursor
             let more = backwards ? page.hasOlder : page.hasNewer
             if more, next == previous {
+                value.snapshot.forwardDrained = false
                 value.snapshot.issues.insert(.nonprogress)
+                value.paused.insert(lane)
                 if lane == .live { value.liveDemand = false }
                 if lane == .summary {
-                    value.reducer.qualify(.nonprogress)
-                    value.summaryCursor = nil; value.snapshot.summaryPhase = .unavailable
+                    value.pausedSummaryPhase = value.snapshot.summaryPhase
+                    value.snapshot.summaryPhase = .unavailable
+                    value.summaryDemand = false
                 }
                 return false
             }
@@ -298,19 +397,20 @@ final class PublicEventObservationSession: Sendable {
         return true
     }
 
-    private func admitActivity(_ page: TaskEventPage, lane: Lane, bootstrap: Bool, epoch: UUID, value: inout State) -> Bool {
+    private func admitActivity(_ page: TaskEventPage, lane: Lane, bootstrap: Bool, value: inout State) -> Bool {
         let bytes = page.events.reduce(0) { $0 + JSONValue.object($1.raw).rendered().utf8.count }
         guard page.events.count <= 2000 - value.snapshot.activity.count,
               bytes <= 4 * 1024 * 1024 - value.snapshot.rawBytes else {
             value.capacityBlocked = true
+            if lane == .live { value.snapshot.forwardDrained = false }
             value.snapshot.issues.insert(.capacity)
             value.snapshot.hasPendingLive = true
-            if bootstrap { configureSummary(page, value: &value) }
+            if bootstrap, !value.windowBootstrap { configureSummary(page, value: &value) }
             return false
         }
         let records = page.events.map { record -> PublicEventOccurrence in
             value.admission += 1
-            return .init(epoch: epoch, admission: value.admission, record: record)
+            return .init(epoch: value.snapshot.windowID, admission: value.admission, record: record)
         }
         if lane == .older {
             value.snapshot.activity.insert(contentsOf: records, at: 0)
@@ -336,6 +436,11 @@ final class PublicEventObservationSession: Sendable {
 
     private func applySummary(_ page: TaskEventPage, lane: Lane, bootstrap: Bool, value: inout State) {
         if bootstrap {
+            if value.windowBootstrap {
+                value.reducer.noteSeek(page)
+                value.windowBootstrap = false
+                return
+            }
             configureSummary(page, value: &value)
         } else if lane == .summary {
             if value.summarySeeking {
@@ -397,33 +502,41 @@ final class PublicEventObservationSession: Sendable {
         }
     }
 
-    /// One latest-value mailbox; delivery rechecks epoch and subscription identity.
+    /// One latest-value mailbox; each callback rechecks the complete current snapshot.
     private func publishLatest() {
-        let scheduledEpoch = state.withLock { value -> UUID? in
-            guard !value.publicationPending else { return nil }
+        let scheduled = state.withLock { value -> Bool in
+            guard !value.publicationPending, !value.snapshot.stopped,
+                  value.subscribers.keys.contains(where: { value.delivered[$0] != value.snapshot }) else { return false }
             value.publicationPending = true
-            return value.snapshot.epoch
+            return true
         }
-        guard let scheduledEpoch else { return }
+        guard scheduled else { return }
         delivery { [weak self] in
             guard let self else { return }
             let deliveries = state.withLock { value -> [(UUID, Publisher, PublicEventObservationSnapshot)] in
-                value.publicationPending = false
-                guard value.snapshot.epoch == scheduledEpoch, !value.snapshot.stopped else { return [] }
-                var deliveries: [(UUID, Publisher, PublicEventObservationSnapshot)] = []
-                for (id, publisher) in value.subscribers where value.delivered[id] != value.snapshot {
-                    value.delivered[id] = value.snapshot
-                    deliveries.append((id, publisher, value.snapshot))
+                guard !value.snapshot.stopped else { return [] }
+                return value.subscribers.compactMap { id, publisher in
+                    value.delivered[id] == value.snapshot ? nil : (id, publisher, value.snapshot)
                 }
-                return deliveries
             }
             for (subscriberID, publisher, snapshot) in deliveries {
-                guard state.withLock({ !$0.snapshot.stopped && $0.snapshot.epoch == snapshot.epoch && $0.subscribers[subscriberID] != nil }) else { continue }
-                publisher(snapshot)
+                let current = state.withLock { value -> Bool in
+                    guard !value.snapshot.stopped, value.snapshot == snapshot,
+                          value.subscribers[subscriberID] != nil else { return false }
+                    value.delivered[subscriberID] = snapshot
+                    return true
+                }
+                if current { publisher(snapshot) }
             }
-            if state.withLock({ !$0.snapshot.stopped && $0.snapshot.epoch != scheduledEpoch }) { publishLatest() }
+            let needsDelivery = state.withLock { value -> Bool in
+                value.publicationPending = false
+                return !value.snapshot.stopped
+                    && value.subscribers.keys.contains(where: { value.delivered[$0] != value.snapshot })
+            }
+            if needsDelivery { publishLatest() }
         }
     }
+
 }
 
 // MARK: - ObservationTimer
@@ -441,4 +554,39 @@ private final class ObservationTimer: @unchecked Sendable {
         }
         current?.cancel()
     }
+}
+
+// MARK: - Observation state
+
+private extension PublicEventObservationSession {
+    struct State: Sendable {
+        var snapshot: PublicEventObservationSnapshot
+        var reducer = PublicEventSummaryReducer()
+        var busy = false
+        var activityEnabled = true
+        var activityGeneration = 0
+        var paused: Set<Lane> = []
+        var pausedSummaryPhase: PublicEventSummaryPhase?
+        var adoptionRequested = false
+        var windowBootstrap = false
+        var liveDemand = true
+        var liveForwardPages = 0
+        var olderDemand = false
+        var summaryCursor: String?
+        var summarySeeking = false
+        var summaryDemand = false
+        var summaryFollowLive = false
+        var summaryForwardPages = 0
+        var nextLane = 0
+        var admission = 0
+        var resetUsed = false
+        var capacityBlocked = false
+        var publicationPending = false
+        var forwardTerminalSeq: Int?
+        var bootstrapFinished = false
+        var budgetID: UUID?
+        var subscribers: [UUID: Publisher] = [:]
+        var delivered: [UUID: PublicEventObservationSnapshot] = [:]
+    }
+
 }

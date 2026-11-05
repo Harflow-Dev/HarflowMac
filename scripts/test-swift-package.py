@@ -75,7 +75,10 @@ DISCOVERY_TIMEOUT_SECONDS = 600
 SUITE_TIMEOUT_SECONDS = 300
 AGGREGATE_TIMEOUT_SECONDS = 1200
 TERM_GRACE_SECONDS = 5.0
-HOSTED_SUITE = "MainWindowFeatureTests.ActivityFeedApprovalHostedTests"
+HOSTED_SUITES = frozenset({
+    "MainWindowFeatureTests.ActivityFeedApprovalHostedTests",
+    "MainWindowFeatureTests.ObservationHostedTests",
+})
 HOSTED_PACKAGE = "MainWindowFeature"
 
 # Identifier grammar, deliberately minimal: anything outside it is rejected, not
@@ -750,17 +753,27 @@ class AppKitHost:
 
 
 def requires_appkit_host(package: str, partition: Partition) -> bool:
-    """Select only the explicitly supported package and exact hosted suite."""
-    hosted = [test_id for test_id in partition.ids if suite_identity(test_id) == HOSTED_SUITE]
-    if not hosted:
+    """Select one exact allowlisted suite; never combine hosted or ordinary identities."""
+    identities = {suite_identity(test_id) for test_id in partition.ids}
+    hosted = identities.intersection(HOSTED_SUITES)
+    if not hosted and partition.name not in HOSTED_SUITES:
         return False
     if os.path.basename(package) != HOSTED_PACKAGE:
         raise RunnerError("hosted suite discovered in an unsupported package")
-    if partition.name != HOSTED_SUITE or len(hosted) != len(partition.ids):
-        raise RunnerError("AppKit hosted tests require --mode suites; aggregate is unsupported")
-    if partition.filter_expression != suite_filter(HOSTED_SUITE):
+    if partition.name not in HOSTED_SUITES or identities != {partition.name}:
+        raise RunnerError("AppKit hosted tests require one exact suite in --mode suites; aggregate or mixed selections are unsupported")
+    if partition.filter_expression != suite_filter(partition.name):
         raise RunnerError("AppKit hosted partition has an inconsistent filter")
     return True
+
+
+def order_partitions_for_execution(package: str, partitions: list[Partition]) -> list[Partition]:
+    """Run admitted AppKit suites first, preserving order and partition identities."""
+    hosted = []
+    ordinary = []
+    for partition in partitions:
+        (hosted if requires_appkit_host(package, partition) else ordinary).append(partition)
+    return hosted + ordinary
 
 
 def prepare_appkit_host(swift: str, package: str, output_dir: str,
@@ -1050,6 +1063,7 @@ def run_package(
 
     host = None
     try:
+        partitions = order_partitions_for_execution(package, partitions)
         hosted = [part for part in partitions if requires_appkit_host(package, part)]
         if hosted:
             host = prepare_appkit_host(swift, package, overall.output_dir, build_deadline, overall.host_setup)

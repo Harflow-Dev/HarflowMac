@@ -163,19 +163,23 @@ private final class LockedBox<Value>: @unchecked Sendable {
         verify(events).eventsAvailabilityPublisher(for: .value("abc123")).called(1)
     }
 
-    @Test func givenEventsPath_whenComputed_thenItUsesTheToolEnvironmentsTasksDirectory() {
+    @Test func givenAtomicObservationQueries_whenForwarded_thenScopeRowsAndHistoryRemainOneValue() {
         // given
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn("/tmp/hf-tasks")
-        let sut = TaskDetailViewRepository(toolEnvironmentRepository: toolEnvironment)
-        
-        // when
-        let path = sut.eventsPath(for: "abc12345")
-        
-        // then
-        #expect(path == "/tmp/hf-tasks/abc12345.events.jsonl")
+        let events = MockEventStreamRepository()
+        let frame = FeatureObservationFixture.frame(id: "abc12345", availability: .available)
+        given(events).observation(for: .value("abc12345")).willReturn(frame)
+        given(events).observationPublisher(for: .value("abc12345")).willReturn(Just(frame).eraseToAnyPublisher())
+        given(events).requestObservation(action: .value(.rebaseWindow), for: .value("abc12345"), scope: .value(frame.scope)).willReturn(true)
+        let sut = TaskDetailViewRepository(eventStreamRepository: events)
+        // when / then
+        #expect(sut.observation(for: "abc12345") == frame)
+        var delivered: EventObservationFrame?
+        let subscription = sut.observationPublisher(for: "abc12345").sink { delivered = $0 }
+        #expect(delivered == frame)
+        #expect(sut.requestObservation(.rebaseWindow, for: "abc12345", scope: frame.scope))
+        subscription.cancel()
     }
-    
+
     // MARK: - Fixtures
     
     private func task(id: String, spawnedBy: String?, status: String = "running") -> TaskInfo {

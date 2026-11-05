@@ -42,6 +42,7 @@ extension TaskDetailVMTests {
         let routing: MockTaskDetailRouting
         let tasksSubject: PassthroughSubject<[TaskInfo], Never>
         let membersBox: Box<[TaskInfo]>
+        let observationSubjects: [String: PassthroughSubject<EventObservationFrame, Never>]
         let eventsBox: [String: Box<[TaskEvent]>]
         let childrenBox: [String: Box<[TaskInfo]>]
         /// Counts `children(ofEach:)` calls (Codex review round 1, finding 1) — a plain call-count
@@ -74,7 +75,6 @@ extension TaskDetailVMTests {
         given(useCase).activity(for: .value(id)).willReturn(ActivityCounts())
         given(useCase).current(for: .value(id)).willReturn(nil)
         given(useCase).prompt(for: .value(id)).willProduce { _ in Timeline.prompt(in: box.value) }
-        given(useCase).eventsPath(for: .value(id)).willReturn("/tmp/\(id).events.jsonl")
         given(useCase).events(for: .value(id)).willProduce { _ in box.value }
         // The Timeline reads `items(for:)`, not `events(for:)` (Monitor piece 8, Codex review round
         // 2, finding 2) — derived from the same box so these tests' existing event fixtures still
@@ -101,11 +101,12 @@ extension TaskDetailVMTests {
         eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() }
     ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
-        useCase.configurePagingDefaults(eventHistory: eventHistory)
         let routing = MockTaskDetailRouting()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let membersBox = Box(initialMembers)
         let initialMembers = stubbedMembers ?? initialMembers
+        let observationSubjects = Dictionary(uniqueKeysWithValues: initialMembers.map { ($0.taskID, PassthroughSubject<EventObservationFrame, Never>()) })
+        useCase.configurePagingDefaults(eventHistory: eventHistory, observationSubjects: observationSubjects)
 
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(Just(true).eraseToAnyPublisher())
@@ -166,7 +167,7 @@ extension TaskDetailVMTests {
                                continuityHistory: TaskContinuityHistoryStore(), isWorkflowBuilder: isWorkflowBuilder)
         return ConversationSUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, membersBox: membersBox,
-            eventsBox: eventsBoxes, childrenBox: childrenBoxes, childrenOfEachCallCount: childrenOfEachCallCount,
+            observationSubjects: observationSubjects, eventsBox: eventsBoxes, childrenBox: childrenBoxes, childrenOfEachCallCount: childrenOfEachCallCount,
             cancelScopeBox: cancelScopeBox, ancestorsBox: ancestorsBox
         )
     }
@@ -520,11 +521,11 @@ extension TaskDetailVMTests {
         let taskB = conversationTask("b", status: "completed", parentTaskID: "a", minute: 1)
         let harness = makeConversationSUT(openedAs: "a", initialMembers: [taskA, taskB])
         harness.eventsBox["a"]?.value = [
-            conversationEvent(#""seq":0,"kind":"task_started","prompt":"fix the bug"}"#),
+            conversationEvent(#""seq":0,"kind":"user_message","text":"fix the bug","source":"initial"}"#),
             conversationEvent(#""seq":1,"kind":"assistant_text","text":"Looked at the failing test."}"#)
         ]
         harness.eventsBox["b"]?.value = [
-            conversationEvent(#""seq":0,"kind":"task_started","prompt":"also add a test"}"#),
+            conversationEvent(#""seq":0,"kind":"user_message","text":"also add a test","source":"initial"}"#),
             conversationEvent(#""seq":1,"kind":"assistant_text","text":"Added the missing test."}"#)
         ]
         // when
@@ -542,7 +543,7 @@ extension TaskDetailVMTests {
         let separatorIndex = harness.sut.timelineModel.rows.firstIndex { if case .separator = $0.kind { return true }; return false }
         #expect(separatorIndex != nil)
         if let separatorIndex, case .separator(let text) = harness.sut.timelineModel.rows[separatorIndex].kind {
-            #expect(text == "also add a test")
+            #expect(text.isEmpty, "a turn boundary does not invent assignment provenance from display events")
         }
     }
 
@@ -576,25 +577,5 @@ extension TaskDetailVMTests {
         await waitUntil { !harness.sut.conversationLoading }
         harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesAvailability == .available)
-    }
-}
-
-// MARK: - Exact execution detail
-
-extension TaskDetailVMTests {
-    @Test func givenWorkflowResumeChain_whenOlderChildOpened_thenShowsThatExecutionOnly() async throws {
-        // given
-        var oldRaw = conversationTask("old").raw
-        oldRaw["workflow_run_id"] = .string("workflow")
-        var nextRaw = conversationTask("next", parentTaskID: "old", minute: 1).raw
-        nextRaw["workflow_run_id"] = .string("workflow")
-        let old = try #require(TaskInfo(.object(oldRaw)))
-        let next = try #require(TaskInfo(.object(nextRaw)))
-        let harness = makeConversationSUT(openedAs: "old", initialMembers: [old, next])
-        // when
-        harness.sut.recomputeMembersAndLeases()
-        // then
-        #expect(harness.sut.conversationMembers.map(\.taskID) == ["old"])
-        #expect(harness.sut.currentTaskID == "old")
     }
 }

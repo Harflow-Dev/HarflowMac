@@ -31,8 +31,9 @@ public final class Module: HfModule {
         let toolEnvironment = ManagedToolEnvironmentRepository(coordinator: runtime, layout: layout, baseEnvironment: baseEnvironment)
         let stateRecovery = StateRecoveryRepositoryImpl(toolEnvironment: toolEnvironment)
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
-        let capturedEvents = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler)
-        let eventStream = RecoveryEventStreamRepository(base: capturedEvents, environment: toolEnvironment, snapshots: snapshot, scheduler: scheduler)
+        let taskPrompt = TaskPromptRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery)
+        let eventStream = makeEventStream(toolEnvironment: toolEnvironment, snapshot: snapshot, scheduler: scheduler,
+                                                taskPrompt: taskPrompt, runtime: runtime)
         let (notificationMode, finishNotifier) = notificationRouting(settings: settings)
         let taskList = TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment,
@@ -60,6 +61,7 @@ public final class Module: HfModule {
             .environment(\.taskSnapshotRepository, snapshot)
             .environment(\.resourceSlotsRepository, ResourceSlotsRepositoryImpl(tooling: toolEnvironment, scheduler: scheduler))
             .environment(\.eventStreamRepository, eventStream)
+            .environment(\.taskPromptRepository, taskPrompt)
             .environment(\.finishNotifier, finishNotifier)
             .environment(\.taskListRepository, taskList)
             .environment(\.taskActionRepository, taskAction)
@@ -75,13 +77,23 @@ public final class Module: HfModule {
         registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode)
     }
 
+    private func makeEventStream(toolEnvironment: any ToolEnvironmentRepository, snapshot: any TaskSnapshotRepository,
+                                 scheduler: any Scheduling, taskPrompt: any TaskPromptRepository,
+                                 runtime: ManagedRuntimeCoordinator) -> RecoveryEventStreamRepository {
+        let repository = EventStreamRepositoryImpl(toolEnvironment: toolEnvironment, snapshotRepository: snapshot, scheduler: scheduler,
+                                                  promptRepository: taskPrompt)
+        repository.bindRuntimeChanges(runtime.statePublisher())
+        let recovery = RecoveryEventStreamRepository(base: repository, environment: toolEnvironment, snapshots: snapshot, scheduler: scheduler)
+        recovery.bindRuntimeChanges(runtime.statePublisher())
+        return recovery
+    }
+
     private func registerPublicReaders(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: any StateRecoveryRepository) {
         GlobalValues
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.qualificationRepository, QualificationRepositoryImpl(tooling: toolEnvironment, recovery: stateRecovery))
             .environment(\.statisticsRepository, StatisticsRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
-            .environment(\.taskPromptRepository, TaskPromptRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery))
     }
 
     private func notificationRouting(settings: any SettingsRepository) -> (NotificationDeliveryMode, FinishNotifierImpl) {

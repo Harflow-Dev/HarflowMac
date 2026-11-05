@@ -66,7 +66,11 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
     /// rows alone can never prove it.
     nonisolated static func noToolCallsRecorded(members: [ParallelMemberInput], history: EventHistoryState) -> Bool {
         guard !members.isEmpty else { return false }
-        guard members.allSatisfy({ $0.availability == .available }) else { return false }
+        guard members.allSatisfy({ member in
+            guard let frame = member.observation else { return false }
+            return frame.summary.state == .observed && frame.summary.counts?.toolCalls == 0
+                && frame.history.caughtUp && frame.history.reasons.isEmpty && frame.history.currentness == .current
+        }) else { return false }
         guard history.error == nil, !history.hasMore, !history.isLoading else { return false }
         return members.allSatisfy { member in
             member.items.allSatisfy { item in
@@ -86,11 +90,15 @@ enum TaskDetailTimelineBuilder {
         for member in input.members {
             try Task.checkCancellation()
             members.append(WorkflowBuilderPresentation.conversationMember(task: member.task,
-                items: member.items, prompt: member.prompt, isBuilder: input.isBuilder))
+                items: member.items, prompt: member.prompt, isBuilder: input.isBuilder, identityScope: member.observation?.scope.identity))
         }
         let rawRows = try ParallelPresentationBuilder.rows(members)
-        let rows = input.isBuilder ? WorkflowBuilderPresentation.visibleRows(rawRows)
-        : WorkflowNodePresentation.visibleRows(rawRows, tasks: Dictionary(uniqueKeysWithValues: input.members.map { ($0.task.taskID, $0.task) }))
+        let transcriptRows = rawRows.filter { row in
+            if case .item(let item) = row.kind, case .started = item.body { return false }
+            return true
+        }
+        let rows = input.isBuilder ? WorkflowBuilderPresentation.visibleRows(transcriptRows)
+        : WorkflowNodePresentation.visibleRows(transcriptRows, tasks: Dictionary(uniqueKeysWithValues: input.members.map { ($0.task.taskID, $0.task) }))
         try Task.checkCancellation()
         let count = rows.filter { if case .item = $0.kind { return true }; return false }.count
         let markdown = ActivityRowsBuilder.markdownSnapshot(from: rows, previous: input.previousMarkdown)
@@ -102,7 +110,7 @@ enum TaskDetailTimelineBuilder {
             start: input.start, stepCount: count,
             stepCountText: count > 0 ? "\(count) \(count == 1 ? "activity item" : "activity items")" : nil,
             turnsText: input.turnsText,
-            noToolCallsText: noTools ? "No tool calls recorded" : nil,
+            noToolCallsText: noTools ? "No tool calls observed in the available captured history" : nil,
             emptyText: rows.isEmpty && !noTools ? (input.task.status.isRunning ? "Waiting for the first event…"
                 : "This task's event log is empty or was not found.") : nil,
             isLoading: count == 0 && input.members.contains { $0.availability == .loading },

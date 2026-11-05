@@ -149,6 +149,20 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func beginTakeover(taskID: String) { takeoverService.beginTakeover(taskID: taskID) }
     func setOutcome(_ id: String, _ text: String?) { taskActionRepository.setOutcome(id, text) }
 
+    func observation(for id: String) -> EventObservationFrame { eventStreamRepository.observation(for: id) }
+    func observationPublisher(for id: String) -> AnyPublisher<EventObservationFrame, Never> { eventStreamRepository.observationPublisher(for: id) }
+    @discardableResult func requestObservation(_ action: EventObservationAction, for id: String, scope: EventObservationScope) -> Bool {
+        eventStreamRepository.requestObservation(action: action, for: id, scope: scope)
+    }
+
+    func requestState(for id: String) -> TaskRequestReadState { eventStreamRepository.requestState(for: id) }
+    func requestPublisher(for id: String) -> AnyPublisher<TaskRequestReadState, Never> { eventStreamRepository.requestPublisher(for: id) }
+    func readRequest(for id: String, maxBytes: Int) { eventStreamRepository.readRequest(for: id, maxBytes: maxBytes) }
+    func recoveredTranscript(for id: String) -> RecoveredTranscriptFrame { eventStreamRepository.recoveredTranscript(for: id) }
+    func recoveredTranscriptPublisher(for id: String) -> AnyPublisher<RecoveredTranscriptFrame, Never> {
+        eventStreamRepository.recoveredTranscriptPublisher(for: id)
+    }
+
     func acquireEventLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquire(id) }
     private var conversationInventory: [TaskInfo] {
         var tasks = relatedMembers
@@ -187,11 +201,4 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func activity(for id: String) -> ActivityCounts { eventStreamRepository.activity(for: id) }
     func current(for id: String) -> TimelineItem? { eventStreamRepository.current(for: id) }
     func prompt(for id: String) -> String? { eventStreamRepository.prompt(for: id) }
-    /// Display-only (the Raw Events overlay), computed the same way `AppModel.acquireEvents` used
-    /// to — `EventStreamRepository` does the identical `/dev/null`-fallback resolution internally but
-    /// does not expose it, so it is recomputed here rather than adding a path accessor to that
-    /// protocol for one read-only debug label.
-    func eventsPath(for id: String) -> String {
-        TaskTitle.eventsPath(tasksDirectory: toolEnvironmentRepository.tasksDirectory, taskID: id) ?? "/dev/null"
-    }
 }

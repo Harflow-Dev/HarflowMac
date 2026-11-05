@@ -122,7 +122,7 @@ extension ParallelVMTests {
         inventory.loadOlder(original.id)
         await waitUntil { gate.started }
         state.activityMembers = ["earlier", "current"]
-        state.oldestSequences = ["current": 10]
+        state.oldestSequences = ["current": FeatureObservationFixture.scope.identity + ":10"]
         let replacement = Conversation(members: [changed])
         inventory.update(conversations: [replacement], visible: [replacement.id], states: [replacement.id: state])
         #expect(!inventory.isLoading(replacement.id))

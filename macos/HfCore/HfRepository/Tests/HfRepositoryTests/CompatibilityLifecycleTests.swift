@@ -7,92 +7,14 @@ import MonitorCore
 import Testing
 
 @Suite struct CompatibilityLifecycleTests {
-    @Test func givenActivityCompatibilityIsDelayed_whenTheLastLeaseIsReleased_thenNoLatePublicationOccurs() async throws {
-        let fixture = try EventFixture()
-        defer { fixture.remove() }
-        let baseline = EventStreamRepositoryImpl(toolEnvironment: fixture.environment(), snapshotRepository: NullTaskSnapshotRepository(),
-            scheduler: NullScheduling(), compatibilityCheck: { _ in .success(()) })
-        let baselineLease = baseline.acquire(fixture.taskID)
-        await waitUntil { baseline.events(for: fixture.taskID).count == 1 }
-        baselineLease.release()
-        let checker = SuspendedCompatibilityCheck()
-        let environment = fixture.environment()
-        let snapshots = MockTaskSnapshotRepository()
-        given(snapshots).refresh(.any).willReturn()
-        let initialLoads = EventInitialLoadQueue(limit: 1)
-        let blocker = QueueBlocker()
-        initialLoads.submit(id: UUID()) { completion in blocker.completion = completion }
-        await waitUntil { blocker.completion != nil }
-        let repository = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots,
-            scheduler: NullScheduling(), initialLoads: initialLoads, compatibilityCheck: checker.call)
-        let lease = repository.acquire(fixture.taskID)
-        await checker.waitUntilCalled()
-        await waitUntil { checker.callCount == 2 }
-        let publications = LockedBox<[[TimelineItem]]>([])
-        let subscription = repository.itemsPublisher(for: fixture.taskID).sink { value in
-            publications.mutate { $0.append(value) }
-        }
-        lease.release()
-        checker.resumeNext(.success(()))
-        checker.resumeNext(.success(()))
-        await checker.waitUntilCompleted(count: 2)
-        await drainTasks()
-        let sentinel = QueueBlocker()
-        initialLoads.submit(id: UUID()) { completion in
-            sentinel.completion = completion
-            sentinel.completed = true
-            completion()
-        }
-        blocker.release()
-        await waitUntil { sentinel.completed }
-        await drainTasks()
-        #expect(repository.events(for: fixture.taskID).isEmpty)
-        #expect(repository.items(for: fixture.taskID).isEmpty)
-        #expect(repository.eventsAvailability(for: fixture.taskID) == .loading)
-        #expect(!publications.value.contains { !$0.isEmpty })
-        subscription.cancel()
+    @Test func givenActivityCompatibilityIsDelayed_whenTheLastLeaseIsReleased_thenNoLatePublicationOccurs() async {
+        // given / when / then
+        await verifyDelayedPublicCompatibility(activity: true)
     }
 
-    @Test func givenSummaryCompatibilityIsDelayed_whenTheLastLeaseIsReleased_thenNoLatePublicationOccurs() async throws {
-        let fixture = try EventFixture()
-        defer { fixture.remove() }
-        let baseline = EventStreamRepositoryImpl(toolEnvironment: fixture.environment(), snapshotRepository: NullTaskSnapshotRepository(),
-            scheduler: NullScheduling(), compatibilityCheck: { _ in .success(()) })
-        let baselineLease = baseline.acquireSummary(fixture.taskID)
-        await waitUntil { baseline.summary(for: fixture.taskID).availability == .available }
-        baselineLease.release()
-        let checker = SuspendedCompatibilityCheck()
-        let environment = fixture.environment()
-        let initialLoads = EventInitialLoadQueue(limit: 1)
-        let blocker = QueueBlocker()
-        initialLoads.submit(id: UUID()) { completion in blocker.completion = completion }
-        await waitUntil { blocker.completion != nil }
-        let repository = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: NullTaskSnapshotRepository(),
-            scheduler: NullScheduling(), initialLoads: initialLoads, compatibilityCheck: checker.call)
-        let lease = repository.acquireSummary(fixture.taskID)
-        await checker.waitUntilCalled()
-        await waitUntil { checker.callCount == 1 }
-        let publications = LockedBox<[EventSummary]>([])
-        let subscription = repository.summaryPublisher(for: fixture.taskID).sink { value in
-            publications.mutate { $0.append(value) }
-        }
-        lease.release()
-        checker.resumeNext(.success(()))
-        await checker.waitUntilCompleted()
-        await drainTasks()
-        let sentinel = QueueBlocker()
-        initialLoads.submit(id: UUID()) { completion in
-            sentinel.completion = completion
-            sentinel.completed = true
-            completion()
-        }
-        blocker.release()
-        await waitUntil { sentinel.completed }
-        await drainTasks()
-        #expect(repository.summary(for: fixture.taskID).availability == .loading)
-        #expect(repository.history(for: fixture.taskID).error == nil)
-        #expect(publications.value.allSatisfy { $0.availability == .loading && $0.files.isEmpty })
-        subscription.cancel()
+    @Test func givenSummaryCompatibilityIsDelayed_whenTheLastLeaseIsReleased_thenNoLatePublicationOccurs() async {
+        // given / when / then
+        await verifyDelayedPublicCompatibility(activity: false)
     }
 
     @Test func givenCompatibilityIsSuspended_whenSettingsChange_thenTheStaleCheckCannotLaunchCtl() async {
@@ -119,39 +41,14 @@ import Testing
         #expect(sut.tasks.map(\.taskID) == ["current"])
     }
 
-    @Test func givenActivityCompatibilityFails_whenTheLeaseIsAcquired_thenUnavailableStatePublishesWithoutEvents() async throws {
-        let fixture = try EventFixture()
-        defer { fixture.remove() }
-        let environment = fixture.environment()
-        let error = WireEnvelope.incompatibility("incompatible events")
-        let repository = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: NullTaskSnapshotRepository(),
-            scheduler: NullScheduling(), compatibilityCheck: { _ in .failure(error) })
-        let lease = repository.acquire(fixture.taskID)
-        defer { lease.release() }
-        // Availability and history are published one after the other; wait for both.
-        await waitUntil {
-            repository.eventsAvailability(for: fixture.taskID) == .unavailable
-                && repository.history(for: fixture.taskID).error == error.message
-        }
-        #expect(repository.events(for: fixture.taskID).isEmpty)
-        #expect(repository.history(for: fixture.taskID).error == error.message)
+    @Test func givenActivityCompatibilityFails_whenTheLeaseIsAcquired_thenUnavailableStatePublishesWithoutEvents() async {
+        // given / when / then
+        await verifyPublicCompatibilityFailure(activity: true)
     }
 
-    @Test func givenSummaryCompatibilityFails_whenTheLeaseIsAcquired_thenUnavailableStatePublishesWithoutEvents() async throws {
-        let fixture = try EventFixture()
-        defer { fixture.remove() }
-        let environment = fixture.environment()
-        let error = WireEnvelope.incompatibility("incompatible summary")
-        let repository = EventStreamRepositoryImpl(toolEnvironment: environment, snapshotRepository: NullTaskSnapshotRepository(),
-            scheduler: NullScheduling(), compatibilityCheck: { _ in .failure(error) })
-        let lease = repository.acquireSummary(fixture.taskID)
-        defer { lease.release() }
-        await waitUntil {
-            repository.summary(for: fixture.taskID).availability == .unavailable
-                && repository.history(for: fixture.taskID).error == error.message
-        }
-        #expect(repository.events(for: fixture.taskID).isEmpty)
-        #expect(repository.history(for: fixture.taskID).error == error.message)
+    @Test func givenSummaryCompatibilityFails_whenTheLeaseIsAcquired_thenUnavailableStatePublishesWithoutEvents() async {
+        // given / when / then
+        await verifyPublicCompatibilityFailure(activity: false)
     }
 
     @Test func givenCtlListingIsOutstanding_whenSettingsChange_thenStaleListingCannotPublishOrStartObservation() async {
@@ -329,8 +226,56 @@ import Testing
         return stdout(JSONValue.object(response).rendered())
     }
 
-    private func drainTasks() async {
-        for _ in 0 ..< 8 { await Task.yield() }
+    private func verifyDelayedPublicCompatibility(activity: Bool) async {
+        // given
+        let gate = LifecycleProbeGate()
+        let commands = LockedBox(0)
+        let runner = LifecyclePublicRunner(gate: gate, commands: commands, incompatible: false)
+        let tools = MockToolEnvironmentRepository()
+        given(tools).ctl().willReturn(.success(CtlClient(executable: "/fixture/ctl", environment: [:], runner: runner)))
+        let reader = LifecycleCompletionReader(base: BoundPublicEventObservationReader(tooling: tools))
+        let repository = EventStreamRepositoryImpl(snapshotRepository: NullTaskSnapshotRepository(), scheduler: NullScheduling(),
+            reader: reader, promptRepository: NullTaskPromptRepository(), delivery: { $0() })
+        let publications = LockedBox<[EventObservationFrame]>([])
+        let subscription = repository.observationPublisher(for: "task").sink { frame in publications.mutate { $0.append(frame) } }
+        defer { subscription.cancel() }
+        let lease = activity ? repository.acquire("task") : repository.acquireSummary("task")
+        await waitUntil { gate.entered.value }
+        // when
+        lease.release()
+        await gate.open()
+        await waitUntil { reader.completed.value }
+        // then
+        #expect(commands.value == 0)
+        #expect(repository.observation(for: "task").records.isEmpty)
+        #expect(repository.observation(for: "task").summary.counts == nil)
+        #expect(repository.eventsAvailability(for: "task") == .loading)
+        #expect(publications.value.allSatisfy { $0.records.isEmpty && $0.summary.counts == nil })
+        #expect(repository.leasedTaskIDs.isEmpty)
+    }
+
+    private func verifyPublicCompatibilityFailure(activity: Bool) async {
+        // given
+        let gate = LifecycleProbeGate()
+        await gate.open()
+        let commands = LockedBox(0)
+        let runner = LifecyclePublicRunner(gate: gate, commands: commands, incompatible: true)
+        let tools = MockToolEnvironmentRepository()
+        given(tools).ctl().willReturn(.success(CtlClient(executable: "/fixture/ctl", environment: [:], runner: runner)))
+        let reader = LifecycleCompletionReader(base: BoundPublicEventObservationReader(tooling: tools))
+        let repository = EventStreamRepositoryImpl(snapshotRepository: NullTaskSnapshotRepository(), scheduler: NullScheduling(),
+            reader: reader, promptRepository: NullTaskPromptRepository(), delivery: { $0() })
+        let lease = activity ? repository.acquire("task") : repository.acquireSummary("task")
+        defer { lease.release() }
+        // when
+        await waitUntil { repository.eventsAvailability(for: "task") == .unavailable }
+        // then
+        #expect(commands.value == 0)
+        #expect(repository.observation(for: "task").history.reasons.contains(.unavailable))
+        #expect(repository.observation(for: "task").summary.state == .unavailable)
+        #expect(repository.observation(for: "task").summary.counts == nil)
+        #expect(repository.events(for: "task").isEmpty)
+        #expect(repository.items(for: "task").isEmpty)
     }
 }
 
@@ -363,56 +308,51 @@ private final class SuspendedCompatibilityCheck: @unchecked Sendable {
     }
 }
 
-private final class QueueBlocker: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedCompletion: (@Sendable () -> Void)?
-    private var completedValue = false
-    private var released = false
-
-    var completion: (@Sendable () -> Void)? {
-        get { lock.withLock { storedCompletion } }
-        set {
-            let completion = lock.withLock { () -> (@Sendable () -> Void)? in
-                storedCompletion = newValue
-                return released ? storedCompletion : nil
-            }
-            completion?()
-        }
+private actor LifecycleProbeGate {
+    let entered = LockedBox(false)
+    let completed = LockedBox(false)
+    private var opened = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    func wait() async {
+        entered.mutate { $0 = true }
+        if !opened { await withCheckedContinuation { continuation = $0 } }
+        completed.mutate { $0 = true }
     }
 
-    var completed: Bool {
-        get { lock.withLock { completedValue } }
-        set { lock.withLock { completedValue = newValue } }
-    }
+    func open() { opened = true; continuation?.resume(); continuation = nil }
+}
 
-    func release() {
-        let completion = lock.withLock { () -> (@Sendable () -> Void)? in
-            released = true
-            return storedCompletion
+private struct LifecyclePublicRunner: ProcessRunning {
+    let gate: LifecycleProbeGate
+    let commands: LockedBox<Int>
+    let incompatible: Bool
+    func run(executable _: String, arguments: [String], environment: [String: String],
+             currentDirectory _: String?, timeout _: Double) async -> Result<ProcessOutput, ToolError> {
+        guard arguments.first == "version-info" else {
+            commands.mutate { $0 += 1 }
+            let raw: [String: JSONValue] = ["product": .string("harflow"), "format": .string("harflow.ctl"),
+                "v": .number(1), "product_version": .string(HarflowVersion.current), "result": .object(ObservationFixtures.page().raw)]
+            return .success(stdout(JSONValue.object(raw).rendered()))
         }
-        completion?()
+        await gate.wait()
+        let root = RuntimeCompatibilityContext.derived(environment: environment).expectedStateRoot
+        let format = incompatible ? "unsupported.version-info" : "harflow.version-info"
+        return .success(stdout("""
+            {"product":"harflow","format":"\(format)","v":1,"product_version":"\(HarflowVersion.current)",
+            "component":"engine","state_root":"\(root)",
+            "contracts":{"ctl":{"format":"harflow.ctl","v":1},"events":{"format":"harflow.event","v":1}},
+            "capabilities":["ctl.v1","events.v1","task-event-page.v1"],"os":"darwin","architecture":"arm64"}
+            """))
     }
 }
 
-private struct EventFixture {
-    let directory: URL
-    let taskID = "lifecycle"
-    let tasksDirectory: URL
-
-    init() throws {
-        self.directory = FileManager.default.temporaryDirectory.appendingPathComponent("HfLifecycle-\(UUID())")
-        self.tasksDirectory = directory.appendingPathComponent("tasks")
-        try FileManager.default.createDirectory(at: tasksDirectory, withIntermediateDirectories: true)
-        let line = currentEventFixture(#"{"v":1,"seq":1,"kind":"notice","text":"fixture"}"#) + "\n"
-        try line.write(
-            to: tasksDirectory.appendingPathComponent("\(taskID).events.jsonl"), atomically: true, encoding: .utf8)
-    }
-
-    func remove() { try? FileManager.default.removeItem(at: directory) }
-
-    func environment() -> MockToolEnvironmentRepository {
-        let environment = MockToolEnvironmentRepository()
-        given(environment).tasksDirectory.willReturn(tasksDirectory.path)
-        return environment
+private struct LifecycleCompletionReader: PublicEventObservationReader {
+    let base: BoundPublicEventObservationReader
+    let completed = LockedBox(false)
+    func read(taskID: String, position: TaskEventPagePosition,
+              operationIsCurrent: @escaping @Sendable () -> Bool) async -> Result<TaskEventPage, ToolError> {
+        let result = await base.read(taskID: taskID, position: position, operationIsCurrent: operationIsCurrent)
+        completed.mutate { $0 = true }
+        return result
     }
 }

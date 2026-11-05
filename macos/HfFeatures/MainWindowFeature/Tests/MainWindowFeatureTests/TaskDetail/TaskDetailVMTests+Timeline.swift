@@ -172,10 +172,8 @@ extension TaskDetailVMTests {
     // MARK: - Summary recomputes only while shown (Monitor piece 8, Codex review round 2, finding 2)
 
     @Test
-    func givenTheSummaryTabIsNotShown_whenEditableEventsArrive_thenSummaryModelStaysAtItsPriorState() async {
-        // given — the simpler of finding 2's two options was chosen (recompute Summary only while
-        // its own tab is shown, over gating on "did a non-delta event arrive"); this is the negative
-        // case that actually distinguishes it from the old always-recompute behavior.
+    func givenEventsFactsAreVisible_whenQualifiedEditObservationArrives_thenSummaryUpdatesWithoutRemovedTabSelection() async {
+        // given — captured summary facts live in Events alongside the transcript.
         let harness = makeSUT()
         let running = task(status: "running", repoPath: "/repo")
         harness.detailBox.value = running
@@ -193,10 +191,10 @@ extension TaskDetailVMTests {
             + #""seq":1,"kind":"tool_result","call_id":"c1","ok":true,"output_tail":""}"#)!
         ]
         harness.itemsSubject.send([])
-        try? await Task.sleep(for: .milliseconds(100))
 
-        // then — Summary was never asked to look, so it still shows nothing.
-        #expect(harness.sut.summaryModel.editedFiles.isEmpty)
+        // then — the approved Events facts consume the public summary without a removed tab.
+        await waitUntil { harness.sut.summaryModel.editedFiles == [EditedFile(path: "a.swift", status: .edited)] }
+        #expect(harness.sut.summaryModel.editedFiles == [EditedFile(path: "a.swift", status: .edited)])
 
         // when — switching TO Summary recomputes it immediately from the data already gathered.
         harness.sut.didSelectTab(.summary)

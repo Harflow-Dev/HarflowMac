@@ -53,7 +53,11 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var summaryModel = SummaryPaneModel.empty
     var promptText = "Fix the flaky login test."
     var rawEvents: [TaskEvent] = []
-    var rawEventsPath = "/tmp/abc12345.events.jsonl"
+    var requestReadState = TaskDetailViewModelMock.previewRequest()
+    var observationFrames: [String: EventObservationFrame] = [:]
+    var orderedHistoryFrames: [EventObservationFrame] = []
+    var recoveredTranscript = RecoveredTranscriptFrame()
+    var copyFeedback: String?
     var inspectorModel: InspectorModel? = InspectorModel(
         task: TaskDetailViewModelMock.sampleTask(), current: nil, stepCount: 1,
         activity: ActivityCounts(), subtaskCount: 0, ancestors: [], siblings: [],
@@ -66,6 +70,42 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
         hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
         buttonLabel: "Send"
     )
+
+    init() {
+        let frame = Self.previewObservation()
+        self.observationFrames = [taskID: frame]
+        self.orderedHistoryFrames = [frame]
+    }
+
+    /// Synthetic preview evidence; no engine or user state is consulted.
+    static func previewRequest() -> TaskRequestReadState {
+        let text = "Fix the flaky login test.\n\nPreserve the session refresh behavior."
+        let raw: [String: JSONValue] = [
+            "task_id": .string("abc12345"), "title": .string("Fix the login bug"),
+            "prompt": .object([
+                "state": .string("available"), "text": .string(text),
+                "returned_bytes": .number(Double(text.utf8.count)), "total_bytes": .number(Double(text.utf8.count)),
+                "truncated": .bool(false), "complete": .bool(true), "integrity": .string("not_applicable")
+            ])
+        ]
+        guard let result = TaskPromptResult(raw: raw) else { return .notRequested }
+        return .received(result, maxBytes: 65536)
+    }
+
+    /// A bounded, tool-free synthetic captured record window for the preview's visible text.
+    static func previewObservation() -> EventObservationFrame {
+        let scope = EventObservationScope(sessionID: UUID(), sourceID: UUID(), windowID: UUID())
+        let raw: [String: JSONValue] = [
+            "product": .string("harflow"), "format": .string(WireContract.events.format),
+            "v": .number(1), "product_version": .string(HarflowVersion.current), "seq": .number(1),
+            "kind": .string("assistant_text"), "observed_at": .null, "text": .string("Looked at the failing test.")
+        ]
+        let records = TaskEventRecord(raw: raw).map { [ObservedEventRecord(id: .init(scope: scope, admission: 0), record: $0)] } ?? []
+        let events = TaskEvent(line: JSONValue.object(raw).rendered()).map { [$0] } ?? []
+        return EventObservationFrame(taskID: "abc12345", scope: scope, records: records, events: events,
+            items: [PreviewFixtures.textItem("Looked at the failing test.")],
+            history: .init(caughtUp: true), summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
+    }
 
     func didAppear() {}
     func didDisappear() {}
