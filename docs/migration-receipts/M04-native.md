@@ -1,12 +1,12 @@
 # M04 native shell and composer
 
-Status: implementation in progress; final native validation and aggregate acceptance are not established.
+Status: the local strict gates passed on 7b4dbfe (see "Capture gate and sidebar toggle correction"). Owner visual acceptance, aggregate M03/M04 acceptance and 0.0.11 runtime qualification are not established.
 
 ## Scope and source
 
 The earlier shell/composer validation used HarflowDesign commit `5b37a3d4d4d06b3d96c517cd384892e1ac6883cf`: `v2/docs/m04-proposal.md`, `v2/docs/approval.md`, `v2/scripts/screens-new-task.js`, `v2/scripts/screens-m04-proposal.js`, `v2/scripts/m04-proposal.js` and `v2/styles/m04-proposal.css`. All 24 proposal states are represented in the synthetic hosted matrix, in Light/Dark at 1280×800 and 1000×620. The corrected matrix passed its strict state, authority and geometry checks; 96 complete native-window captures and eight open-options captures are retained. These are synthetic-view evidence, not ordinary app or provider qualification.
 
-The selected runtime remains exact HarflowMCP 0.0.10. Its isolated qualification is recorded separately in [M03 runtime 0.0.10](M03-runtime-0010.md). Public polling remains selected. This change introduces no watcher adoption, wire contract, provider execution, user-state migration, installation or release.
+At the time of this earlier validation the selected runtime was exact HarflowMCP 0.0.10; the source now selects 0.0.11, which has not been installed or runtime-qualified. The 0.0.10 isolated qualification is recorded separately in [M03 runtime 0.0.10](M03-runtime-0010.md). Public polling remains selected. This change introduces no watcher adoption, wire contract, provider execution, user-state migration, installation or release.
 
 ## Entry and remaining dependencies
 
@@ -69,7 +69,7 @@ The owner requested committing and pushing both this implementation and the
 other session's completed contract-fixture updates before full UI validation.
 The 217 changed contract fixtures match the canonical HarflowMCP checkout byte
 for byte. This does not select or qualify a newer production runtime: 0.0.10
-remains selected. Full post-change strict validation, native visual acceptance
+remained selected at that point; 0.0.11 was selected later. Full post-change strict validation, native visual acceptance
 and aggregate M03/M04 acceptance remain outstanding. Foreground testing is held
 at the owner's request. Runtime smoke is explicitly out of scope.
 
@@ -93,3 +93,51 @@ violations. Legacy-name/private-reference guards and protected-input hashes
 pass. The new foreground suites are registered in the runner's exact AppKit
 host allowlist. No foreground UI or runtime smoke was executed for this
 amendment. Release packaging and full strict UI validation remain pending.
+
+
+## Capture gate and sidebar toggle correction (2026-11-06)
+
+This owner-approved bounded cycle ran under the second macOS account sharing this workspace, with the Xcode 26 toolchain. A reboot erased the earlier scratch evidence, so earlier results in this receipt cannot be rechecked. Current evidence is in the workspace's `.claude-work/mac/` directory, outside the repository.
+
+### Results on 7b4dbfe
+
+| Check | Result |
+| --- | --- |
+| MainWindowFeature, `--mode suites`, with `HARFLOW_M04_CAPTURE_DIR` and `HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1` | Passed: 259/259 suites, 1,911/1,911 tests, 104 window captures, no capture errors. Peak one-minute load 8.2 |
+| `SidebarUnifiedHostedTests`, 20 fresh processes | Passed 20/20 |
+| `macos/build-app.sh` (build only) | Passed |
+| Python runner and CI tests | Passed: 235 tests, 30 subtests |
+| Format, strict lint, legacy-name and private-reference guards | Passed |
+
+The other eight packages passed their aggregate gates at c53a6f7 (1,552 tests): HfCommon 18, HfUI 239, HfUtilities 19, HfRepository 520, MonitorCore 462, MenuBarFeature 88, SettingsFeature 87 and Harflow 119. Later commits change only MainWindowFeature, documentation and fixtures, so these were not rerun.
+
+### Earlier capture failure: not reproduced, cause unknown
+
+`/usr/sbin/screencapture` failing with "could not create image from window" at `composer-invalid-light-1280x800` did not recur in three undisturbed focused runs or either full gate. The same text is printed for a nonexistent window number, so it does not identify a cause. The capture assertions are unchanged. This is an absence of recurrence, not a fix.
+
+Three earlier focused runs are void because of accidental mouse input. Two later attempts did not execute: leftover diagnostic load processes stopped the builds, and a separate macOS permission prompt held the foreground and blocked host activation. The prompt shows that an unrelated system dialog can block foreground fixtures.
+
+### Sidebar scroll test
+
+`SidebarUnifiedHostedTests.swift` failed its end-marker visibility check in one full gate and 2/10 focused runs on c53a6f7, and in 0/10 runs under CPU load. The test scrolled once while row presentations were still settling. Document height changes transiently during entry presentation; the end marker moved between y=2052 and y=2240, and failing viewports stopped at origins 831.9 and 1855.4. The fixture now waits for settled geometry, scrolls once and asserts the result without retrying. No product scrolling defect was shown, and this transient height behavior remains in the product.
+
+### System sidebar toggle removed
+
+The owner reported two sidebar toggles. `.toolbar(removing: .sidebarToggle)` on the split view did not remove the system item. It is now applied to the sidebar column before `navigationSplitViewColumnWidth`.
+
+| Probe placement (`NSHostingController`) | Sidebar width | System toggle | Title midX, 1000-point window |
+| --- | --- | --- | --- |
+| On the split view | 264 | Present | 636.75 |
+| On the column, before the width modifier | 264 | Absent, also collapsed and re-expanded | 500.25 |
+| On the column, after the width modifier | 140 | Absent | 500.25 |
+
+Removal also removes the split-view separator item, centres the title on the window and lowers the sidebar card about 6 points. The owner accepted this on real before and after captures on 2026-11-06; tests pin the title within 16 points of the window centre. The toolbar check depends on SwiftUI's private identifier `com.apple.SwiftUI.navigationSplitView.toggleSidebar`, so a positive-control test fails if it is renamed. Before the fix, the check failed in all 96 matrix cases and at 3 re-expansion checkpoints.
+
+### Review and limits
+
+Plan and code each ran the three-reviewer loop for two rounds, over `705ceb7..7b4dbfe` for code. All code findings were fixed or adjudicated. Accepted findings strengthened silent waits, corrected stale 0.0.10 statements and added the changelog entries.
+
+- The real SwiftUI `Window` scene was not measured: the scratch probe opened no window in that shape, and no development app was launched. Owner visual review of the real window closes this.
+- 0.0.11 installation, execution and runtime qualification remain pending and were out of scope. ST05 was not started.
+- CI on `main` previously failed in `macos/build-app.sh` on Xcode macro enablement for Dummyable, Mockable and SwiftEnvironment. The local build passed. CI was not rechecked, and macro trust settings were not changed.
+- Captures are synthetic fixture evidence. Passing gates are not owner acceptance of M04.
