@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pair the app with HarflowMCP 0.0.10 using qualified frozen runtime inputs and the complete released v1 contract fixture bundle. Preserve public task-list polling; watcher adoption remains separate.
+
 - Add an independently tested internal public-event observation layer with bounded cursor replay, qualified totals and fenced leases; production cutover remains blocked on approved consumer states.
 
 - Add strict public task-event page models and a freshly gated ctl client, preserving normalized loss, cursor accounting and historical provenance for the upcoming shared transport migration.

@@ -1,0 +1,1038 @@
+{
+  "schema": 1,
+  "status": "Exact 0.0.10 source selection validated and delivered as a cohesive local commit; aggregate M03/M04 acceptance remains separate.",
+  "base": "665f53f36b2f989ba9994a193adb56b8b7749d67",
+  "engine_commit": "8a936de61b5f9f2fdff671b65b5384259267350b",
+  "release_prerelease": true,
+  "selected_source_pin": "0.0.10",
+  "committed": true,
+  "user_installation": false,
+  "candidate_specification_sha256": "37dc449a1d0ac25c374ce4fb66b96ec6886bfbb38802a6e829eb8a48aac6edc5",
+  "specification_identity": "b4a7512c42ebd06607547a672f63509fb93aa746c1b9e70c802bf8749ccb842d",
+  "contract_manifest_sha256": "ceb336216b8e5b0938f101b2a8b2ba5f85e3d939e281c446461499a2ae5c4906",
+  "contract_files": 209,
+  "contract_fixture_cases": 207,
+  "inputs": [
+    {
+      "artifact": "inputs/ManagedRuntime-0.0.10.json",
+      "bytes": 12071,
+      "sha256": "37dc449a1d0ac25c374ce4fb66b96ec6886bfbb38802a6e829eb8a48aac6edc5"
+    },
+    {
+      "artifact": "inputs/cpython-3.13.16+20261020-aarch64-apple-darwin-install_only.tar.gz",
+      "bytes": 25400715,
+      "sha256": "235f3d5b182a171f6564ee98ef2812cfb2da8a73c4a37fca1937b25702f94880"
+    },
+    {
+      "artifact": "inputs/github-release-0.0.10.json",
+      "bytes": 10722,
+      "sha256": "102f6075ea7d8691ee779a50246bb289b4b708d50a9e788b6b730d1251fb3483"
+    },
+    {
+      "artifact": "inputs/github-tag-0.0.10.json",
+      "bytes": 388,
+      "sha256": "e095f89bacad501b91b6ebe444a177e34aba9793759a99a70ec4e23a023b491e"
+    },
+    {
+      "artifact": "inputs/harflow_mcp-0.0.10-py3-none-any.whl",
+      "bytes": 1145760,
+      "sha256": "c6ada9fd00c1ff85faf9fd94165b84820777bfcda5be5641bf00d300163ac8b9"
+    },
+    {
+      "artifact": "inputs/interpreter.json",
+      "bytes": 451,
+      "sha256": "ce8c86a22eb73faca5aa4c95c0b8f5a0045254884ca6c256e8777fb89d3816be"
+    },
+    {
+      "artifact": "inputs/production-requirements.txt",
+      "bytes": 41813,
+      "sha256": "ef908cb53878759c8846fec6c1e2a556718745a20e2e61b227de23d3ae57e945"
+    },
+    {
+      "artifact": "inputs/pypi-0.0.10.json",
+      "bytes": 25307,
+      "sha256": "4741f2b166b3c3fd147bb8f3dfbe5c061de854f23e132e455a3ec85b869e81bb"
+    },
+    {
+      "artifact": "inputs/pyproject.toml",
+      "bytes": 1435,
+      "sha256": "f70b91c615f8aab191a3f9b1df08c4804e03c629815a966321a9ac70ccbe137b"
+    },
+    {
+      "artifact": "inputs/source.tar",
+      "bytes": 13455360,
+      "sha256": "a38d95bdc4775f18e6a99c6ac74491171f31bb12b686de6caf553931ede34118"
+    },
+    {
+      "artifact": "inputs/uv.lock",
+      "bytes": 160966,
+      "sha256": "8daa68aa11b497bccd5ff98704c28919bcec378979834561e7282c53f2cc44c1"
+    }
+  ],
+  "runtime_reports": [
+    {
+      "mode": "baseline-install",
+      "downloads": 32,
+      "processes": 9,
+      "specification": "0785b7ec49d724765771290f27700718d7159ce6cc68e87679118325cbda0089",
+      "reportSHA256": "628d17f397c1b1bf2ce086dfcdfe7ccee5cb7ce1d477959d2ad3bc80af653004",
+      "artifact": "harness/evidence/baseline-install.json",
+      "success": true
+    },
+    {
+      "mode": "baseline-check",
+      "downloads": 0,
+      "processes": 6,
+      "specification": "0785b7ec49d724765771290f27700718d7159ce6cc68e87679118325cbda0089",
+      "reportSHA256": "8ff8dc7dcb3352db2cb6717931d6b0a81f37aa61afc63522f79645e3f98e005c",
+      "artifact": "harness/evidence/baseline-check.json",
+      "success": true
+    },
+    {
+      "mode": "upgrade",
+      "downloads": 32,
+      "processes": 9,
+      "specification": "b4a7512c42ebd06607547a672f63509fb93aa746c1b9e70c802bf8749ccb842d",
+      "reportSHA256": "70abadbd45ceac8d326fcf91ce56d951c2896562db135775fab9e424c71165e1",
+      "artifact": "harness/evidence/upgrade.json",
+      "success": true
+    },
+    {
+      "mode": "check-before",
+      "downloads": 0,
+      "processes": 6,
+      "specification": "b4a7512c42ebd06607547a672f63509fb93aa746c1b9e70c802bf8749ccb842d",
+      "reportSHA256": "9ab23b0c59a0ff0529e011560c67f2b87d79566f70f1aba673da76e001bb81aa",
+      "artifact": "harness/evidence/check-before.json",
+      "success": true
+    },
+    {
+      "mode": "reuse-before",
+      "downloads": 0,
+      "processes": 6,
+      "specification": "b4a7512c42ebd06607547a672f63509fb93aa746c1b9e70c802bf8749ccb842d",
+      "reportSHA256": "5f8add97152e0d3001ca62f76cfc34352fb142a52205fafe08cc9db21037d15a",
+      "artifact": "harness/evidence/reuse-before.json",
+      "success": true
+    },
+    {
+      "mode": "failure",
+      "downloads": 32,
+      "processes": 0,
+      "specification": "b4a7512c42ebd06607547a672f63509fb93aa746c1b9e70c802bf8749ccb842d",
+      "reportSHA256": "6d1f14ace6913262ee984a91567cf5beb1652998e619756ccd4da4fb3dfe99f9",
+      "artifact": "harness/evidence/failure.json",
+      "success": true
+    },
+    {
+      "mode": "check-after",
+      "downloads": 0,
+      "processes": 6,
+      "specification": "b4a7512c42ebd06607547a672f63509fb93aa746c1b9e70c802bf8749ccb842d",
+      "reportSHA256": "a3a9640ea4c9e3275f78a5cba6e14a9f742b2349767e67a0e9a0f50a5203b99d",
+      "artifact": "harness/evidence/check-after.json",
+      "success": true
+    },
+    {
+      "mode": "reuse-after",
+      "downloads": 0,
+      "processes": 6,
+      "specification": "b4a7512c42ebd06607547a672f63509fb93aa746c1b9e70c802bf8749ccb842d",
+      "reportSHA256": "32ac362d8db34e05a9baab632fbee4d9ab0f6881a4dfaecb4d6c202b8fbe8fe0",
+      "artifact": "harness/evidence/reuse-after.json",
+      "success": true
+    }
+  ],
+  "old_generation_file_hashes_and_symlinks_preserved": true,
+  "old_receipt_preserved": true,
+  "installed_wheels": 30,
+  "installed_payload_files": 1131,
+  "record_files_excluded": 30,
+  "installed_payload_mismatches": 0,
+  "source_python_payloads": 180,
+  "source_payload_mismatches": 0,
+  "monitorcore_tests": 440,
+  "other_packages": [
+    {
+      "package": "HfCommon",
+      "exit": 0,
+      "passed": true,
+      "tests": 17
+    },
+    {
+      "package": "HfUI",
+      "exit": 0,
+      "passed": true,
+      "tests": 239
+    },
+    {
+      "package": "HfUtilities",
+      "exit": 0,
+      "passed": true,
+      "tests": 19
+    },
+    {
+      "package": "HfRepository",
+      "exit": 0,
+      "passed": true,
+      "tests": 518
+    },
+    {
+      "package": "MenuBarFeature",
+      "exit": 0,
+      "passed": true,
+      "tests": 88
+    },
+    {
+      "package": "SettingsFeature",
+      "exit": 0,
+      "passed": true,
+      "tests": 87
+    },
+    {
+      "package": "Harflow",
+      "exit": 0,
+      "passed": true,
+      "tests": 119
+    }
+  ],
+  "python": {
+    "tests_passed": 165,
+    "subtests_passed": 30,
+    "initial_failures_retained": 8,
+    "cause": "stale bundled-path mocks expected 0.0.7 after exact 0.0.10 resource selection"
+  },
+  "swiftformat": {
+    "version": "0.60.1",
+    "files": 1049,
+    "skipped": 31,
+    "required_edits": 0
+  },
+  "swiftlint": {
+    "version": "0.63.2",
+    "files": 1096,
+    "violations": 0,
+    "cache": false,
+    "initial_cache_failure_retained": true
+  },
+  "pending": [],
+  "watcher_adopted": false,
+  "polling_changed": false,
+  "provider_dispatch": false,
+  "mcp_registration": false,
+  "aggregate_m03_accepted": false,
+  "m04_accepted": false,
+  "source_snapshot": [
+    {
+      "path": "macos/Harflow/Tests/HarflowTests/PackagedStartupTests.swift",
+      "sha256": "e922166f293792c9a94f3e503efddd44e9dc14e86366adb0c886a372cff12f42"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Sources/MonitorCore/ManagedRuntime/ManagedRuntimeSpecification.swift",
+      "sha256": "2a6e3c0c92d458d71bd3aaa573c47f43796170ea7c91b6e3b597bf9e794958b2"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Sources/MonitorCore/Resources/ManagedRuntime.json",
+      "sha256": "37dc449a1d0ac25c374ce4fb66b96ec6886bfbb38802a6e829eb8a48aac6edc5"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Sources/MonitorCore/WireContracts.swift",
+      "sha256": "1d3ac1913bbc3ead38b8b00951b1d3ad2f2f3cb65ea40eb8b2c8e7729e923740"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ManagedRuntimeInstallerTests.swift",
+      "sha256": "7218cd1c01e3b88cfb6159540bc259e5edec1fa9a92c6bdfb44c65587c2c3d60"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/ManagedRuntimeSpecificationTests.swift",
+      "sha256": "92174be80e404d92bc3da466d0e5b114906871f055d48c9e181736072763fc99"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-already-answered.json",
+      "sha256": "9073a0af12f0579c76c1c695314d84dcdc158ef049ed6125435ac8cfb75b8b24"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-caller-undecidable-approval.json",
+      "sha256": "c2424d5a5c6f313955ccf4ea7e809ae7b7d0a1f78081c67640005f532a4903fd"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-caller-undecidable-global.json",
+      "sha256": "e46248b51236fa9ba414855d897b0ec74f6d11c98aae61b80513c2d8a7d118ae"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-expired.json",
+      "sha256": "9aca26a18629b81339296a9d2ffa6307f36613aed0ad8d6ea7ea38f9ed76c870"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-generic-no-reason.json",
+      "sha256": "5d1b6d87252aa0729869691f545877099f91a5655e834d6a032303821a3f02dd"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-legacy-no-reason-synthetic.json",
+      "sha256": "53c5001a8adfff1a7325e7a0c9ae54ff8db354e8eea0ab16abcd886ce1593c5c"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-not-current.json",
+      "sha256": "96fae2bdedc2d44c6d857bb42886b9d1ada5abde3fac02f9e682af7d8eb00a80"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-ownership-lost.json",
+      "sha256": "a26e8a1dd12a2875db77ed37db1eb96a6673acba70d1937b09aa296f6d3ec82a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-reason-incomplete-synthetic.json",
+      "sha256": "8091759615e2b508266f0c8f4449eeec415c87c1bf5d0462929ee24e0cc86edc"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-reason-unsupported-synthetic.json",
+      "sha256": "fd18ea665e04b4bcc99aaed1b9dae4b0a2a6d21b46c8d18f904aaa461178031c"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-settled.json",
+      "sha256": "8767f651df5d973b262495d3f979a6fd9cdd4dd2ab91ed3ae3d0af55b06c8b5f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unauthorized-agent.json",
+      "sha256": "b815b58eaf7fe453fd0ffa0b0f29412e81a870109f9ea29c3d4f81e5cf8bd9e6"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unauthorized-managed-task.json",
+      "sha256": "012a9b2398e6666f56d46d4dcddbefcee75d7c23ba436aa5ec30532bc324764e"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unauthorized-owner.json",
+      "sha256": "e0d0dd235cf05bb68c1f46642ff6369401179d25a332ecb178ea4bbaf9ffa9fe"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-error-unknown-reason-synthetic.json",
+      "sha256": "4212330272bf412bce492c671af5d7197bc9129c58678479cab4e9824c56a883"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-bash-no-reason.json",
+      "sha256": "edd346a2f792a2fc187cb396031aa0d41ffa998da980f34e55600795c03dc3be"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-bash.json",
+      "sha256": "0fcee27598b6fdf41d47623ae03a54df32eb5621805e1256c02c8ca67b52c1bc"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-edit.json",
+      "sha256": "679e28bf271740055ae3c3bdd5ed34a82c05a5a21328bed4955862c79274ec95"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-claude-write.json",
+      "sha256": "614f762cf9efd9b75bd4890300479368aaa4671699d807d1adea5316499d42b5"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-codex-command.json",
+      "sha256": "e8ae708b86713b25526844f17dc1b5c15437bbbf7685b4765d444b4d0f24be44"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-codex-file-change-move.json",
+      "sha256": "7e8ed4189275c4a2c3ac2ced00ae1e33c2b9a48d300414b72c700978d778be8f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-codex-file-change.json",
+      "sha256": "42bd8254c17a1e4eb17aee1c73e6ea1e22a88e55838c6190b154697bb3bae213"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-get-optional-fields-omitted-synthetic.json",
+      "sha256": "bed55e00337457480776e689eeb6f5aca7d8ab20e5d7b6c836bb64019eeb4d23"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-codex.json",
+      "sha256": "f6edbdb0f7c57624cdcc0df9d8debae6bbe51bd8533e3e042daee1abd8d65141"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-history.json",
+      "sha256": "066f8e81f6a307056d2d79770f5d4c060090c60143d99f39a0c5e609e139cbe7"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-optional-fields-omitted-synthetic.json",
+      "sha256": "2272c19802f8e7f5318aade5dc7e06324e1230e0cb112d8d7d5b2c60fed172f5"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-page-1.json",
+      "sha256": "f7508984af715f44608584509e4c13e08c51f546f36ced055ee786c16cb8e70e"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-page-2.json",
+      "sha256": "fa2043fa944136c9de8b538e31a9f7e249067054d66ff54a573d984f06f01ce3"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-page-3.json",
+      "sha256": "26f6da652db2599cb784ab1f8ad6ce8cfa3a8c9126c4721e34c8d6c957f54e09"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-list-pending.json",
+      "sha256": "96251e4eaf0009793ff6e89cb3dadedfbc2b9980c96324cc5a5548f1b5270a3b"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-respond-caller.json",
+      "sha256": "560b670c8e0727cbb9c3227f699fcf0fcaeb50834e15cf0360f7c2973963b48d"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-respond-monitor-owned.json",
+      "sha256": "ef059037f71e55002bbe7fac45d4d65af00c1f4bd413e516727447e485c30516"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-respond-monitor.json",
+      "sha256": "821bb328536697b0b0af6920bf9b691f53249f1431ac8887616d3bf7f801d93a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-cancelled.json",
+      "sha256": "f632003e99405a161c02f3ca057fbf019c713ffb1c60dabe206deccdae0d9b31"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-codex-sent.json",
+      "sha256": "1421c59b0ec1441390403c6630dc8cf626b059771e4c34d1ca1143f78d1b8007"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-delivery-unknown.json",
+      "sha256": "33957dff5917a27b0908434c51a0f1f5f5bbf16183c800ba90f92618fb4980af"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-expired-override.json",
+      "sha256": "1325d63314d00baca79c0c46250c9762a2d308b0bffcbb277e7217c73e6fbc82"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-expired-unanswered.json",
+      "sha256": "91008e6bbd9314b9d245fc3df3e7b9da36c11b2c4ce7c03674c4c1aab2dcd453"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-invalidated.json",
+      "sha256": "f00a2a04aea582b5715e2535148190b13d3aca51fd004c3f2d97bb90cebd6ee1"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-reserved.json",
+      "sha256": "821bb328536697b0b0af6920bf9b691f53249f1431ac8887616d3bf7f801d93a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-sending.json",
+      "sha256": "2ac511315ee1def47147cc4bae2cb8d8ac612a2885e1e84f3258d4afd46e5bc4"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-sent-approved.json",
+      "sha256": "86019f42bf88907e42c89216f41eecf317a04352c5642ebb2bd556056662fbd7"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-sent-rejected-monitor.json",
+      "sha256": "325035f7da2b1024bf1da80f39c04f31ed9bb2b0618be0e26c706bfce79ce14a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-system-rejected-admission.json",
+      "sha256": "75cd36fd964e980418c4d463222b040ab27247b60ace77ae717b3d1ff7d059bf"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-system-rejected-delivery.json",
+      "sha256": "4f19383c6bddfbf6c4e4837236e26740031bdec9541e6612de9b1ec60b9d7691"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-state-unsupported.json",
+      "sha256": "77876b958b7f1f2cce57ece0573ba7a0f4363d9b03cfe1fca77dc9a33075357a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-approval-status-awaiting.json",
+      "sha256": "29155dafefd637417af8efd77d7eee947a129786cfb43d244f7254d87a7d1fe2"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-resume-accepted.json",
+      "sha256": "5db0da8bf819aae9d14c57b6afecea94e75fc5c7468130abd6be5b1a6ef71972"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-resume-refused.json",
+      "sha256": "c7281f6d153631dc26edda89b639e44d2d3fe98fc60148d371b04514e40bcd4e"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-resume-unknown.json",
+      "sha256": "61c043f4a1c251edd1a274b7e01496c7ee6cf24f42e76e6fcb9413a76d109132"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-run-accepted.json",
+      "sha256": "5db0da8bf819aae9d14c57b6afecea94e75fc5c7468130abd6be5b1a6ef71972"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-run-refused.json",
+      "sha256": "c7281f6d153631dc26edda89b639e44d2d3fe98fc60148d371b04514e40bcd4e"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-run-unknown.json",
+      "sha256": "61c043f4a1c251edd1a274b7e01496c7ee6cf24f42e76e6fcb9413a76d109132"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-launch-unknown-operation.json",
+      "sha256": "26aede1695e7c6b6bb766ce16c7c1487c2c9c9de841337567c2bfdc812c13fbc"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-limit-hits-empty.json",
+      "sha256": "b840858677977f4e2da31bce3c54941b8b97312c9de25f46b269507c4bf8bf81"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-limit-hits-preparing.json",
+      "sha256": "54b41785c74df221b750ba45c7a5084b885c6dcbb957c678c6b86aca663c7512"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-limit-hits-ready.json",
+      "sha256": "68b664607ee868f1f934b34df858c53130dd12ec8414b70f6cfc468c943be919"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-not-enabled.json",
+      "sha256": "3d5626c4b66900fc9a5823e3e8090ef82ca4426aede711d320a2b2eb7312ef7b"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-configured-idle.json",
+      "sha256": "908b799ff521b337e0671fd83596590c0c0e7a3a9aaf8f65b0e49b345450d25e"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-empty.json",
+      "sha256": "0934bd8043c8de8ff8a5fe9e32a1cf5b9c511615f3580431df12b75c6822e658"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-populated.json",
+      "sha256": "405960b49e5a4f3dca4949be51772afccedf7a94886187fcf331f2e06a9a865f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-service-unavailable.json",
+      "sha256": "c7f52d36695bd5f95dc040a0cf09977f17cbc0e10ab9ec92cae802c6fe441653"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-phase-slot-status-truncated.json",
+      "sha256": "16281d2368e02d2df7c96fc21764781b92b4d5207b837e1212c8e3cce333bd2a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-resources-mixed.json",
+      "sha256": "625d4fb9834c0bc1c9ef13aeacbd58f47e8c88e3540d8a9137b709e61580269c"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-statistics-page-cost-reported-and-silent.json",
+      "sha256": "1cec3b7df181fc994cde893be0bb00a3a5c3394db7c5ac44bad0dae39f63aa1c"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-available-listing.json",
+      "sha256": "53a564ba284ae56ba518a992965b1464095fd685979d1b9c880721ad5e4b4762"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-cursor-expired.json",
+      "sha256": "570abefa17dc703dce668707a3d75cc4e5f3160a1393eb0615e48941edb43b8f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-cursor-invalid.json",
+      "sha256": "d2b10b42877e98bca252cd8d6f67caabf3a7af913aa30e94b5869edf5d471b2b"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-direct-caller-refused.json",
+      "sha256": "4e418b28776b3226b4ed0fd4b681071f499e732e86b7a9568c1f31225e61079d"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-document-invalid.json",
+      "sha256": "ee408714b5fa526aabb9ac391299bc3a176d4f40d5ac032275428feb571c40b5"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-entry-not-found.json",
+      "sha256": "b660d4c7c9cd6cc4fad938add4d5d2608de010ab5f6c3e862b5b09f5d5dd9e6f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-incomplete.json",
+      "sha256": "18ef281c659351c2e0a88c7fac3bc09961a187b31718438a098b0fac8155cc1b"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-listing-next-page.json",
+      "sha256": "4a3459ad685f45073335c37ccd4c6104d57f11752974c2e6a0a67ba1deabd98a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-no-repository.json",
+      "sha256": "16cab59399d81fd2ab9825b4cafb7ecef6883d68582a5e41c02022bf9103ea34"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-not-captured-missing.json",
+      "sha256": "3332f2d03159e536426865cdf9477ba92495242cbdeaa9962c890efcc87df4b4"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-not-captured-unobserved.json",
+      "sha256": "de10ab0c6ef15ff890dc5a5c707d868a8860a140190cac0023f669a6210b6bf6"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-page-too-large.json",
+      "sha256": "672da46310604244e49f1eb207a89f53c8c3bc3ec63ffaa0ec42274ac97940bd"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-pending-launch.json",
+      "sha256": "7a233ccc5ebeae24467410aeb71c4e2f207295eeacb3cfd66741a3968a96c671"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-pending-running.json",
+      "sha256": "0e8cbfc1627689f23a462b8ccbce02702a8849873a941476469e9211e45817b6"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-pending-settling.json",
+      "sha256": "d98bb24b47e5eaa43b06d7f9637083122c2eff71fd146326cb615ccac6a9891e"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-text-chunk-next.json",
+      "sha256": "dc2d155c04fd421241f84347c728b83c95434dad2de1a98eadf61bb24bf60264"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-text-chunk.json",
+      "sha256": "de770b513931b33d3260116bf84bd1a19d770a9090030bb21d8ce6711ff9940f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-text-complete.json",
+      "sha256": "9ffb3ec9c5440e1d3e5c491ce08c17ba5480f03c461328adb53b17532c66c8fd"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-unavailable.json",
+      "sha256": "f67c634dede9274fb6ac7b368006f8f21e86146b6663d33e2285a29d9c5d748f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-changes-unknown-task.json",
+      "sha256": "0851e69e0ea432f2d229795c7f5ba270f8b93edbae86d6c6668b7319b37854e1"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-all-kinds.json",
+      "sha256": "b68c814d6b6a7c054e04dc21a0069432dfffa8d5f91efb2ae3cf7d340166d677"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-cursor-expired.json",
+      "sha256": "20e4691658d171b7c56c79619c1697979e5cd5d226b2dd0d7fef7587091e4932"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-cursor-invalid.json",
+      "sha256": "2525533e0dce18b30015c31f6dae4965753d95d03569bb82c0832adb43502e43"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-default-filter-delta-seqs.json",
+      "sha256": "fb244e7dd1bb7da1d3feca7c3c71040fe078b7c569ddca118b8b3cab9ec50f25"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-direct-caller-refused.json",
+      "sha256": "4e418b28776b3226b4ed0fd4b681071f499e732e86b7a9568c1f31225e61079d"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-gaps-skipped.json",
+      "sha256": "3bee8764e2e15e3292ca6dc5193a14bc98a58917caa14e5de71671813665d80c"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-incomplete.json",
+      "sha256": "aa80d9ca2924d347a7a68c62d9e74df8f57477f78c31f415f0a7d8133f653643"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-kinds-filtered.json",
+      "sha256": "c9152510b936f7b5b68d93aafaa31c60285bc702cc8bd058f8857e9d42c52499"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-newer-empty-final.json",
+      "sha256": "17318cf9fb27b32211b19d7a36d729e1cbfee8d8e2ba738ad1b0a906bb04bc9a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-newer.json",
+      "sha256": "1abb5405be28d0aa8c451e3f760affcc52f72ae8c6855cbe00a01437c8ac8ad6"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-newest.json",
+      "sha256": "d08f7ffef1d9924c8370c4f8bb45825dee7ab7c93fcc52c5ed55ace93fd81a96"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-older.json",
+      "sha256": "bd9fb0c8bccac4bd583526efc8d538974bf105bc0d08f50bf6580476f8f709c3"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-oldest-forward.json",
+      "sha256": "4c5defffd4c1cfd0d210dc4154a4f8a16d365108fa98d379c445b5fb6491df41"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-open.json",
+      "sha256": "cc8c992febe4c48d300c5d886e0da88a64c2c0d5401d709dd690b645837a7335"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-pending-launch.json",
+      "sha256": "546e19ca4e70d3ce30528024bf5802c8ec0dcb41e8d27d2e62c86467e656ec01"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-settling.json",
+      "sha256": "5f77a5a0074638d4286dcb75e9f377774d7d0bd3dacc038bca44b9b173dce0d3"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-unavailable.json",
+      "sha256": "e17f1165879911f85a8b4656597130b2de488a4455b6ced029d1bb09b18b950d"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-events-unknown-task.json",
+      "sha256": "2f8e56ae708811d8de63ee8bc423f728a024b83968fae497ae4c47a373268f5d"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-list-watch-baseline.json",
+      "sha256": "1e2dfabb14f09b7f2ab9167204b84e4d78417d455dfcec84c1c670c1ae685e68"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-list-watch-changed.json",
+      "sha256": "e969253b99e245aa4a131597e49a944db357b32ff35753fa116bef3a33023d7d"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-list-watch-cursor-invalid.json",
+      "sha256": "a579ecb1607e93d557d49c41613bec060ffc24b608889a07ae33eb968ad572e2"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-list-watch-direct-caller-refused.json",
+      "sha256": "5dbdd43340ec85cae201ce89a8d42ff14ae41c8baeae632c772540d273e3b879"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-list-watch-reset.json",
+      "sha256": "45ae58d522ad88956f75a07b73dc923889c53559c1b6b92a2d7bc7c586c4c994"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-list-watch-timeout.json",
+      "sha256": "c3beb69e4894a9f7a9cd086c930feb9c18f070d2a20e146f20a6049ffb9da423"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-list-watch-unavailable.json",
+      "sha256": "3ec0577d4e511b011db441a9bbd04668b411c40cf21029086c5e6574bb1fe523"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-direct-caller-refused.json",
+      "sha256": "b4493039b7679dbabc66b4fb2249b3dc50eae32196ec568606d05a6b4eff8328"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-found-first-page.json",
+      "sha256": "383ab237f909188c8ea4f7676add89b9f91d1943e5be3a8828b954d8bced85f5"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-found.json",
+      "sha256": "588d5956676d5c52d64d5cadeb3c28aed051081c148cd1bb344fc3ab30607ac9"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-none-found.json",
+      "sha256": "89aa56a4859dc703cd9fa66d1517c70b4201461bb88e03f5d547a54cbf914561"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-pending-launch-predecessor.json",
+      "sha256": "c885e113baee4b39724b5576c5fa7e1098c66f1f83b80c2100851e60757c6751"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-page-successors-unknown-predecessor.json",
+      "sha256": "87050fa4a8aea453fb6e718145f05aa8c71d8bc596519c73b7ca24e897f27496"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-available.json",
+      "sha256": "ab00572e98e116cc5f3a72278a6b5ad90c277c25b33cdda3aac18daa4b0e0b1b"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-integrity-failed.json",
+      "sha256": "6db0e7b2243c3fc1eb0c3ebeb3496c3997b972f088fd382b08172440a8f9e77a"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-preview-only.json",
+      "sha256": "8455123f206ee2c458f400fd68f380579675c0fa0b8cad9ab78e98f4278c5178"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-task-prompt-truncated.json",
+      "sha256": "b349852950e894d9207b85b0eb78cc2f2b46e404c38ca827542e3b7be6ffde98"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-agent-caller-settled-only.json",
+      "sha256": "fb912e238e0e3ebb71788f9db0b7e3137b4a5c43559fca61981790fcda24c9aa"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-no-attempt.json",
+      "sha256": "5eeda8ba84fc5c306d914ecd1cb7139f7de417d7582cccd5b60c885da3796d6f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-reserved-attempt.json",
+      "sha256": "f5eab0f9891e94b1432791983f07bda7d229b35ab9b39b3cdb3159687eb81abd"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-running-attempt-after.json",
+      "sha256": "0de240782c4a2dcf665b5f7e2392741f9c89d46e5d88fdb11837fdd261adfd3d"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-inspect-live-running-attempt.json",
+      "sha256": "b935096be11e947c7a8ebff29aa534c5de86601e195bafa8587b36e8e7c30463"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-limit-hits-empty.json",
+      "sha256": "30e9d573fbba72bae910e7408fcedc07b5cb6d0a39798448c73c7a9b0216a4d7"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-limit-hits-preparing.json",
+      "sha256": "8a15253ee51e1cf1cc3dbf373948ac93b0fd247ab4aaba9008dc631987a66bba"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/ctl-workflow-limit-hits-ready.json",
+      "sha256": "ca40fb2e2284d83c452662ac2309b9eb1592fd47744ca2276d734d51e2b93fc3"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-statistics-cost-model.json",
+      "sha256": "03e37a5311acfa01611c13ba8bcbe00a677488a9d51d1049a7895ef47ecfdab0"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-changes.json",
+      "sha256": "00ea9e2286e736121729e709947660508da7e6592ec070520bcc1d2128b98a23"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-event-page.json",
+      "sha256": "561369d8c434228dc8f703ba239ba7895734a234c075ddd4e89f8121b2d16be6"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-list-watch.json",
+      "sha256": "f5822dfed1bdc2c1a5030a5af256b0dc1123fd34d8d943126b825bfb29a6efe4"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-prompt.json",
+      "sha256": "023b830995e1ded870f74f452374094f11ea5483934cd119a9d54cbcc5fc63ac"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-task-successors.json",
+      "sha256": "200110541f32195ada0c2933299a5a52b6dcf6fd519c44b8c6ff9ffff778fece"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/invalid-s05-missing-workflow-live-activity.json",
+      "sha256": "a970dd9a26fa161622790428bd4defd357ccaa5dc777fc9ebdb5c93bb7611ade"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/manifest.json",
+      "sha256": "ceb336216b8e5b0938f101b2a8b2ba5f85e3d939e281c446461499a2ae5c4906"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/manifest.sha256",
+      "sha256": "eeeca5e583870b2c9dc2faefc21e8c3b62975d031216fc789356fe8eba12e78f"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/version-info-s05-additive.json",
+      "sha256": "374d127d228666bf77c9f7d674c2d490708e1e9ef936f0d97839cc59d6ef65e8"
+    },
+    {
+      "path": "macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/version-info.json",
+      "sha256": "37f3e1fc7abb775c94ce9331d86a59e88e35b179f38711b2d261c285494045ef"
+    },
+    {
+      "path": "scripts/ci/release.py",
+      "sha256": "b11e555fa5cfa0eca98e89796c0b9f0cbaf31d4ea8a58ded0a29bae46e2b3130"
+    },
+    {
+      "path": "tests/ci/test_release.py",
+      "sha256": "84cdcb5593ed161626dab4527689b64084918d5caf9373f1e1f83d828274a3d0"
+    }
+  ],
+  "raw_artifacts": [
+    {
+      "artifact": "evidence/candidate-after-publication.stdout",
+      "sha256": "b6fec98db0004aa084cf23eeecf2e00407fdfd11adb24fc8c4d1dd4d4acc9d65"
+    },
+    {
+      "artifact": "evidence/candidate-old-records.stdout",
+      "sha256": "0b4ff43ed2ecd17f5988ccee783321903636b26408a4cc549554f96126886f30"
+    },
+    {
+      "artifact": "evidence/candidate-upgrade-manifest.stdout",
+      "sha256": "22c95fe47931cd4af28538c967e074c1b3216f514ceec3733fa0923d85e0f880"
+    },
+    {
+      "artifact": "evidence/core-pinned/manifest.json",
+      "sha256": "e5744516fdc5d4f1e5f7917f2b5f24e8d92f6dab489bf3694db2a7dcfed70c41"
+    },
+    {
+      "artifact": "evidence/installed-wheel-payloads.json",
+      "sha256": "5b02ab1f0939ea4707fdf94e0c8296d891d49142aa2fc762c6e7342a3a36b3f1"
+    },
+    {
+      "artifact": "evidence/native-Harflow/manifest.json",
+      "sha256": "28348adeed8473d26357fcad775b8cf82379ebb5431b5a637e153ff26c49b227"
+    },
+    {
+      "artifact": "evidence/native-HfCommon/manifest.json",
+      "sha256": "c72861d7704af30cb222b8bffb52c79cd242e544fe33c11cd4cd5177a98aa8ec"
+    },
+    {
+      "artifact": "evidence/native-HfRepository/manifest.json",
+      "sha256": "6aae9d9a1da6c25dc6944ce5f82b9c29bba6173d18ab081a6980d880f562157a"
+    },
+    {
+      "artifact": "evidence/native-HfUI/manifest.json",
+      "sha256": "9b1fdc1ec41107e6731ec3db0742d4b0e5dbae84c6c5b4cc70c6593efd65aff6"
+    },
+    {
+      "artifact": "evidence/native-HfUtilities/manifest.json",
+      "sha256": "004174bf9f782d95b6ec432c5f7743da279043efe1c9cf07b2ec745e3e0e0d65"
+    },
+    {
+      "artifact": "evidence/native-MenuBarFeature/manifest.json",
+      "sha256": "c1ebb4f7627131837b78412cd743141225c9e04a80ba68197da456a0c4c57a6b"
+    },
+    {
+      "artifact": "evidence/native-SettingsFeature/manifest.json",
+      "sha256": "dc90ad1dc4004186f28649236b604a71305486cd2093f8df55267a6850b3c1ed"
+    },
+    {
+      "artifact": "evidence/native-other-packages.json",
+      "sha256": "ddaeb82ece0048cc393e722dc8ea4e567a1605acf6376c2552794bb0a1417e4d"
+    },
+    {
+      "artifact": "evidence/python-tooling-final.log",
+      "sha256": "dbf95788c9905cea3b65fab87f93efdcaaac6b54d445baf84e6a4e003c64dc08"
+    },
+    {
+      "artifact": "evidence/python-tooling.log",
+      "sha256": "d6c3e1c903372289f573cc49acc2184589148c651c6788c40719352ef08a386b"
+    },
+    {
+      "artifact": "evidence/runtime-summary.json",
+      "sha256": "2caf243726d27035bc7d1196b9e4855b5988d340dcc5c579936668e636f214b4"
+    },
+    {
+      "artifact": "evidence/source-payloads.json",
+      "sha256": "f3b3b4c77dd9f013b308aa76647a1c751e64dd3fb26aa977183b6f3823fa947e"
+    },
+    {
+      "artifact": "evidence/swiftformat.log",
+      "sha256": "d5f89c093be688bda8c5a176683ca649202ce34f98bad12fa7890cca2fde80d9"
+    },
+    {
+      "artifact": "evidence/swiftlint-no-cache.log",
+      "sha256": "2bb11bb786f3d6e978d772e030e19ebcb69551b993bd7090930f087105bb3fd4"
+    },
+    {
+      "artifact": "evidence/swiftlint.log",
+      "sha256": "d6b9c0b80546698dfb5f9c2a997f5980f65564db85b0aa04e7e231d90df4c510"
+    },
+    {
+      "artifact": "evidence/wnowait-native-probe.json",
+      "sha256": "d96419f6a69f7284147172c4f410175b536e98a976a1077c3f1cf03ab018caf7"
+    },
+    {
+      "artifact": "evidence/release-build.log",
+      "sha256": "c796f1ac7abf5cf1271282929634cc556567fec7113672ef7bbb25f50a2848bf"
+    },
+    {
+      "artifact": "evidence/release-build-existing-toolchain.log",
+      "sha256": "306ed6064613b115212753245319dad7050871cea29177fb6180a3db396c642a"
+    },
+    {
+      "artifact": "evidence/bundle.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "artifact": "evidence/bundle-result.json",
+      "sha256": "27b54c19cf1c4cd7ab852936be4f5876084632f042b8615b76391f764edf1a4d"
+    },
+    {
+      "artifact": "evidence/ax-helper-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "artifact": "evidence/app-smoke-preparation.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "artifact": "evidence/app-smoke-preparation.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "artifact": "evidence/smoke-binary-hashes.json",
+      "sha256": "71446d2708d66422bd55daddc4f35cc9bbfbd773e01242344289d5cf462fa507"
+    },
+    {
+      "artifact": "evidence/controller-mock-tests.log",
+      "sha256": "17bfea3c14e5102243f0b9dbea33f38e83cf0b30cb74203fad3398a059243e93"
+    },
+    {
+      "artifact": "evidence/final-foreground-preflight.json",
+      "sha256": "45ecba2f91abebc06f4e64fcc6877643ee9d6346af7a3dbc6af3edc00ccd9eb8"
+    },
+    {
+      "artifact": "app-smoke/prep-manifest.json",
+      "sha256": "46394bae10fcfe0ef13476f1aeed3698d21c47e47f454dfd4cf4ca9b6025d21d"
+    },
+    {
+      "artifact": "app-smoke/source-hashes.json",
+      "sha256": "7385736445735770135394c5a30bbe5e5ecd8c60ea6f77059527250f91fdb231"
+    },
+    {
+      "artifact": "evidence/next-consumer-contract-plan.md",
+      "sha256": "4bf1dc84769716207dffc58eb0d4df48a8a277bf3d237fb085d837657b4ad98c"
+    },
+    {
+      "artifact": "evidence/quiet-foreground-preflight.json",
+      "sha256": "845f84d8a056ee411c8053b64ed584d6153f837135e9c7cc0bc4ab32f8975999"
+    },
+    {
+      "artifact": "evidence/app-smoke-wrapper.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "artifact": "evidence/app-smoke-wrapper.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "artifact": "app-smoke/controller-status.json",
+      "sha256": "ddb92fda371af3cf26cf1caa36fcd7f7e2b954c20d820c6b7bec3fb9cb82fa58"
+    },
+    {
+      "artifact": "app-smoke/verified-run/result.json",
+      "sha256": "fe4a4c6027a9f7e8505bf54a2f710d78dd60eadff32f37469bd70fe3a2c8bdf6"
+    },
+    {
+      "artifact": "app-smoke/verified-run/initial-ax-0.stdout",
+      "sha256": "0289c013e7c61419e61b989743ff6692a349d6826911353054674fe404938a18"
+    },
+    {
+      "artifact": "app-smoke/verified-run/refreshed-ax-0.stdout",
+      "sha256": "04489887c9f62e50f19b6d346ae56427c554d36eebf305f64ce127a7102bfff2"
+    },
+    {
+      "artifact": "app-smoke/verified-run/validate-after-append.stdout",
+      "sha256": "c211f8e78e905bd0cd14c30dff30a8c7d08df4ca76f9b6dedea7e0fb0e0357c4"
+    },
+    {
+      "artifact": "app-smoke/verified-run/preferences-snapshot.stdout",
+      "sha256": "bf61afac9050f145bfb122ee8165bfb4320b35d359d040bd522f8d6b0b6e5a97"
+    },
+    {
+      "artifact": "app-smoke/verified-run/preferences-restore.stdout",
+      "sha256": "d5d434ad998798afec19e2786384c5717fd60c37344d2bc1bd3fe3bb5b6d328c"
+    },
+    {
+      "artifact": "app-smoke/verified-run/preferences-verify-empty.stdout",
+      "sha256": "a8e79b0db41754e7916e2db3513c1c44b8ac65df6d0508fb4b657a4bc4099785"
+    },
+    {
+      "artifact": "evidence/app-smoke-independent-teardown.json",
+      "sha256": "bf32725ebd2f7b33bf6779104b2d1dbb5716446f206eee534b0acc8614b08cd7"
+    },
+    {
+      "artifact": "evidence/mainwindow-final/manifest.json",
+      "sha256": "3a4551ccf32f0db4db53fe6266d029a33b5dc8b3f10c859b74872e41cca56cd5"
+    },
+    {
+      "artifact": "evidence/mainwindow-final.log",
+      "sha256": "1929f53cd23e57b635565f5a97fd6dcf5ab2929fd30bb8e1c6d8eae2e14019c4"
+    }
+  ],
+  "release_build_passed": true,
+  "bundle_validation_passed": true,
+  "helpers_built_not_launched": false,
+  "final_product_review": "no actionable findings",
+  "foreground_console_locked": false,
+  "app_smoke": {
+    "passed": true,
+    "pid": 18896,
+    "start": "Fri Nov 6 07:23:37 2026",
+    "firstAXProof": true,
+    "refreshedAXProof": true,
+    "taskCountBefore": 3,
+    "taskCountAfter": 4,
+    "publicReadsAfterAppend": 26,
+    "controllerExitCode": 0,
+    "cleanupComplete": true,
+    "preferencesRestored": true,
+    "independentRetainedIdentitiesAbsent": 65,
+    "independentKernelMatches": 0,
+    "terminalWaitidRawRecordRetained": false
+  },
+  "mainwindow": {
+    "passed": true,
+    "tests": 1814,
+    "suites": 246,
+    "assertionsUnchanged": true,
+    "artifact": "evidence/mainwindow-final/manifest.json",
+    "sha256": "3a4551ccf32f0db4db53fe6266d029a33b5dc8b3f10c859b74872e41cca56cd5"
+  }
+}
