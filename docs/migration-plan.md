@@ -1,99 +1,78 @@
-# Native product continuity migration checklist
+# Native Mac redesign and engine migration checklist
 
-Dispatchable work packages: [migration sessions](migration-sessions.md).
+Revised 2026-11-04. Governing [revision 3](../../HARFLOW_MIGRATION_PLAN_V3.md),
+[workspace gates](../../HARFLOW_MIGRATION_CHECKLIST.md) and [current sessions](migration-sessions.md).
 
-Status: reconciled 2026-11-04. Delivered evidence and outstanding acceptance are
-distinguished below; aggregate migration gates remain pending.
+HarflowMac remains the product. Reuse sound SwiftUI/AppKit/domain/repository code;
+apply approved v2 with native adaptations, then switch its public adapter to Rust.
+The requested Xcode app host + SwiftPM modules is planned, not implemented.
 
-Own current daily-use native app maintenance and its contract consumption.
-Preserve existing dirty source work. No new product features are implied by this
-migration. Inputs are the reproducible current app and Python contract; outputs
-are baseline captures, compatibility evidence and retirement handoff.
+- [x] B0-MA-01/02/03 S02 bounded baseline, captures and coupling inventory delivered.
+- [ ] C0-MA-01/02 Accept S06 exact fixture/decoder/fallback evidence; three MainWindow
+  failures retain their bounded owner waiver, not a passing baseline.
+- [ ] M01 Scope/code-to-design inventory, missing-state M01-Gxx receipts and native
+  performance/accessibility budgets; resolve relevant Proposed/Undecided rows.
+- [ ] M02 Thin .xcodeproj app target and SwiftPM modules: decide shell/test ownership,
+  preserve identity/resources/Bundle.module/CI/packaged-startup/release pipeline.
+- [ ] M03 Pin/qualify intended Python 0.0.8; migrate direct event/state reads/watches
+  to bounded public operations. Eliminate private persistence coupling before Rust.
+- [ ] M04–M07 Native shell/composer, task transcript/right-pane/capture/history,
+  queued messages/continuation, inline exact-action approvals and Needs you.
+- [ ] M08–M10 Workflow editor/builder/run/nested/parallel/recovery, statistics/cost/
+  incomplete accounting and resources with scope-approved observations.
+- [ ] M11 Settings/onboarding/harnesses/human-only allowlist, menu bar/notifications,
+  deep links/single instance, lifecycle/preferences and truthful unavailable states.
+- [ ] M12 Complete redesigned native acceptance on exact Python route, approved
+  pixels/states, native budgets, accessibility and isolated packaged evidence.
+- [ ] I01–I04 Native Rust adapter/responder secure storage, managed engine
+  distribution/update/recovery/signing and same product acceptance on fresh roots.
+- [ ] O01–O04 Rehearse/authorize cutover, observe and publish; retain Mac, archive
+  old histories, validate definitions/config/preferences and registration handoff.
 
-## Redesign target and intent
+Mac freeze now permits separately assigned redesign/build-transition work while
+other feature expansion remains scoped. No native failure is automatically waived
+for new UI. Keep guarded package tests serialized and use actual rendered-flow checks;
+follow existing development/release guidance. No real user state in development.
 
-The approved baseline is [HarflowDesign v2 at commit `3643d083700be4032c93237813b573d04bab6ab1`](https://github.com/Harflow-Dev/HarflowDesign/tree/3643d083700be4032c93237813b573d04bab6ab1/v2), including the owner-approved Mac connector amendment. Consult the optional workspace [coverage and intent ledger](../../HarflowDesign/v2/docs/migration-coverage.md); it is not a build dependency. Use the native app as behavioral and source inventory, not as the redesigned pixel template. Missing required states need a v2 design and explicit owner approval with exact commit, path and state before dependent implementation. Approval of visuals does not authorize new authority, public contract changes, backends or deferred features. Core execution safety and observability remain required.
+## Product engine API
 
-## Dispatch and boundaries
+The native app uses **harflow-ctl as its engine API**. MCP is agent-facing only:
+no native MCP client or fallback. Existing harflow-setup acquisition/registration
+tasks remain separate from product operations. If required app functionality lacks
+a ctl operation, first scope additive work in the current canonical contract owner:
+HarflowMCP before accepted O04 transfer, HarflowEngine afterward. Specify provenance,
+authority, bounds and unknown/refusal semantics, capability, fixtures and tests;
+then coordinate byte-identical fixture vendoring and consumer adapters. Pre-transfer
+native work starts in Python; Rust implements that same accepted ctl contract.
+After transfer, later Web work does not depend on retired Python. Missing API is not
+permission to read persistence, invoke agent MCP or invent semantics. M03 may split
+bounded suffix sessions.
 
-Work only on the assigned item. Read the workspace AGENTS.md, this repository's AGENTS.md if present, and
-applicable package instructions first; preserve concurrent edits and use primary checkouts.
-The orchestrator delegates unit tests under the current workflow. A checkbox is
-not authorization to start runtimes, mutate real roots, register clients, push,
-release, clean up, or expand scope. Use disposable roots and workspaces where
-needed. Report a blocker with concrete evidence; task status is not proof of
-completion. Repository builds and tests must not depend on sibling checkouts.
+## Parallel-track coordination
 
-The optional [workspace coordination index](../../HARFLOW_MIGRATION_CHECKLIST.md)
-uses B0 (baseline), C0 (contracts and design), E0 (client and Electron on
-Python), R0 (Rust parity), I0 (integrated stack), and O0 (owner cutover and
-publication). It is not a build dependency. Freeze and qualify the reproducible existing baseline without waiting for open
-feature tickets. Use the v2 intent ledger to decide retained and simplified scope;
-legacy UI parity and open tickets do not independently mandate inclusion. Unchecked items retain outstanding acceptance or contributions; checked items
-record the bounded evidence stated below, not blanket gate acceptance. Early-use gates and defaults remain
-subject to evidence and explicit authorization for root registration. Use fresh
-Rust state; archive historical task, run and event records rather than importing
-them. Import only definitions, configuration and preferences, with an explicit
-registration backup and handoff. No engine may share a writable root.
+M01 shared readiness follows S09 coverage disposition and the native capability,
+code/private-read inventory, with ratified initial ctl/capability/fixture baseline,
+exact identities, explicit blocking gaps and canonical change owner. M02+ native
+and R01/R02+ Rust work may then run concurrently with disjoint files/isolated roots.
+Pin each accepted subset, serialize canonical changes under MCP before O04 (Engine
+afterward), coordinate consumer fixture deltas and carry forward affected conformance.
+Both accepted M12 and R14 are required before I01; missing baseline/fault evidence
+is not automatically waived. Read-only research remains separately assignable.
 
-Stage dependencies: B0 → C0 → E0 → R0 → I0 → O0; native maintenance
-continues as needed throughout, within the freeze policy.
+## Boundaries and evidence
 
-## B0 — daily-use baseline
+This plan authorizes no implementation by itself. Follow workspace/child/package
+AGENTS.md and the current session brief; preserve concurrent work in primary
+checkouts. Use isolated roots/fixtures. No implicit live-state, install, registration,
+paid-probe, signing, push, publication, retirement or deletion authority. Record exact
+commit/contract/design/runtime/profile identities, actual checks/reviews, missing
+coverage and owner decisions in the lead receipt. Delivery and acceptance differ.
+Builds/tests must not depend on sibling source checkouts. Documentation-only plan
+changes need link/consistency checks, not product test reruns.
 
-- [x] B0-MA-01 Record current commit, dirty work and qualified build behavior;
-      preserve uncommitted changes and report any unverified native behavior.
-- [x] B0-MA-02 Capture representative task, workflow, approval, settings and
-      accessibility states for the parity ledger using isolated fixtures.
-- [x] B0-MA-03 Map public contract use and direct file-read coupling, including
-      event observation, and record relevant preferences for later import.
-- [ ] B0-MA-04 Apply the current freeze policy to maintenance and capture any
-      accepted defect or behavior change in the parity ledger.
+## Conversational steering scope amendment — 2026-11-05
 
-S02 evidence: [qualified baseline receipt](migration-receipts/S02.md), including
-recorded limitations. The freeze is in force from 2026-11-03; the
-[S03 receipt](../../HarflowMCP/docs/migration-receipts/S03.md) records its permitted
-maintenance for B0-MA-04, pending acceptance.
-
-Current fixture reconciliation (2026-11-04): S06 vendors the complete S05
-producer bundle from `b69b5754a7b6496aaf5e3106116e302ea7a10675`, manifest
-`383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0`
-(199 fixtures). See the [S06 receipt](migration-receipts/S06.md) for checks and
-limits; owner receipt acceptance remains pending. Mac runtime pin is unchanged;
-intended Electron development engine 0.0.8 is a separate target, not qualification.
-
-## C0 / E0 — compatibility and reference
-
-- [ ] C0-MA-01 When Python contracts change, re-vendor the full canonical
-      fixture bundle and compare manifest digests byte-for-byte. S06 evidence
-      is recorded in its receipt; owner acceptance pending.
-- [ ] C0-MA-02 Verify decoders, independent version gates and fallback behavior;
-      make only necessary compatibility changes. S06 decoder/fallback evidence
-      is recorded in its receipt; no production decoder change was necessary.
-- [ ] E0-MA-01 Supply verified behavioral and source inventory evidence to the
-      v2 scope review; native pixels are not the redesign template.
-
-## O0 — owner handoff
-
-- [ ] O0-MA-01 Rehearse preference export or transfer on isolated copies and
-      verify each imported preference; do not import historical execution state.
-- [ ] O0-MA-02 Record unresolved discrepancies, archive and rollback evidence;
-      retire the native product only on explicit owner decision.
-
-## Validation
-
-Run relevant guarded Swift package suites sequentially through
-`scripts/test-swift-package.py`, plus `python3 scripts/check-legacy-names.py`
-and `scripts/check-private-refs.sh`; see [development](development.md) and
-[architecture](architecture.md). For changes under `macos/`, follow its
-AGENTS.md and package instructions, including format and lint. Never launch a
-development build against real user state.
-
-## Handoff evidence
-
-For every assigned item report: item ID and result; repository and dependency
-commit IDs; fixture manifest hash where applicable; commands, environment,
-results and evidence locations; local, committed, pushed, CI-passed, packaged
-and released state, stated separately; approved design commit, path and state where
-applicable; deviations, blockers and remaining work. Record unrun checks and
-why. Do not infer passing gates from a dispatched task's status.
+ST05 uses existing transcript/composer/status and ctl contracts for builder/orchestrator/worker steering; affected M07/M08/M09/M12 acceptance includes steering. Current Mac work continues unchanged; no ST05 implementation is assigned.
+See the [current ST session briefs](../../HARFLOW_MIGRATION_SESSIONS.md#conversational-steering-track--accepted-scope-2026-11-05)
+and [steering plan](../../HARFLOW_WORKFLOW_STEERING_PLAN.md). Scope acceptance does
+not pass prior gates, permit live control or authorize releases.

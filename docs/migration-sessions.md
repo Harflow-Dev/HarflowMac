@@ -1,32 +1,42 @@
-# HarflowMac migration sessions
+# HarflowMac migration sessions — native revision 3
 
-Status: S06 fixture compatibility evidence recorded 2026-11-04; receipt acceptance pending; S07 onward unstarted. The [workspace session index](../../HARFLOW_MIGRATION_SESSIONS.md) defines dispatch order; the [repository checklist](migration-plan.md) retains full item criteria. These session specifications include work led or co-owned by this repository.
+Revised 2026-11-04. The [workspace session index](../../HARFLOW_MIGRATION_SESSIONS.md)
+is authoritative for each brief, prerequisites, acceptance and receipt output.
+Read [repository checklist](migration-plan.md) and applicable guidance before work.
 
-## Dispatch protocol
+## Current ownership
 
-Read the workspace `AGENTS.md` and `HARFLOW_MIGRATION_CHECKLIST.md`, the lead and co-owned repositories' `AGENTS.md` files where present, their `docs/migration-plan.md` files, applicable package guidance, and the session and all accepted prerequisite receipts before work. The workspace session index gives the full sequence. A session is a bounded assignment, not an instruction to start the next session. A standalone session lead owns the normal required plan/code reviews, test delegation and validation; a worker explicitly handed off by an orchestrator follows that handoff and does not restart its workflow. Stop and report a concrete unresolved ambiguity or missing prerequisite instead of inventing a decision.
+M01–M12, I01–I04 and O02/O03; co-own Rust responder/distribution/cutover rehearsal.
 
-Use primary checkouts and preserve concurrent work. Never share a writable state root between engines or import historical task/run/event state. Work on isolated roots and fixtures unless separately authorized. MCP owns canonical contracts until explicit S50 transfer. Cross-repository package changes require a committed producer, exact consumer pin and clean install without sibling source dependencies; a necessary push requires current authorization. Do not run concurrent sessions that mutate the same repository, generated contract bundle or IPC boundary. Within a session, coordinate delegated workers through explicit file ownership. Approval for publication, signing, paid probes, live state, registrations, cutover and retirement is separate and current; prepare concrete evidence first.
+- **M01 — Native scope, design and acceptance inventory**; prerequisites and acceptance in the workspace index.
+- **M02 — Xcode app host and SwiftPM modules**; prerequisites and acceptance in the workspace index.
+- **M03 — Pinned Python runtime and public observation boundary**; prerequisites and acceptance in the workspace index.
+- **M04 — Native shell and new-task composition**; prerequisites and acceptance in the workspace index.
+- **M05 — Task transcript and bounded reading**; prerequisites and acceptance in the workspace index.
+- **M06 — Queued messages and continuation**; prerequisites and acceptance in the workspace index.
+- **M07 — Approvals, Needs you and checkpoints**; prerequisites and acceptance in the workspace index.
+- **M08 — Native workflow editor and builder**; prerequisites and acceptance in the workspace index.
+- **M09 — Workflow runs, parallel and recovery**; prerequisites and acceptance in the workspace index.
+- **M10 — Native statistics and resources**; prerequisites and acceptance in the workspace index.
+- **M11 — Onboarding, settings and native integration**; prerequisites and acceptance in the workspace index.
+- **M12 — Redesigned Mac on Python acceptance**; prerequisites and acceptance in the workspace index.
+- **I01 — Native Mac Rust adapter and responder**; prerequisites and acceptance in the workspace index.
+- **I02 — Managed Rust acquisition and recovery**; prerequisites and acceptance in the workspace index.
+- **I03 — Native distribution qualification**; prerequisites and acceptance in the workspace index.
+- **I04 — Integrated native Rust acceptance**; prerequisites and acceptance in the workspace index.
+- **O02 — Authorized owner cutover and canaries**; prerequisites and acceptance in the workspace index.
+- **O03 — Observation and publication decision**; prerequisites and acceptance in the workspace index.
 
-A session receipt is proposed at the lead repository's `docs/migration-receipts/<session>.md`. It records prerequisites, accepted scope and decisions, exact commits for every involved repository, contract/design/package/runtime identities, actual commands and results, platform and profiles, acceptance evidence, deviations, missing checks and authorization or blockers. Distinguish local, committed, pushed, CI-passed, packaged and released states. It contains technical evidence, not review transcripts. A multi-repository session has one lead receipt covering each repository. A receipt is accepted only after the applicable review and owner decisions. Delivered work and receipt acceptance are distinct; see session statuses below and the workspace reconciliation.
+Each assignment is bounded and stops before the next. Record its lead receipt in
+`docs/migration-receipts/<ID>.md`; co-owned work is included in that lead receipt.
+No plan status authorizes live operations or publication. All new sessions are planned.
 
-Checklist items may span sessions. Each mention is partial until the final contributing session identified below; even then, check the source item only after all contributing receipts and the full original item acceptance have been reviewed and accepted. The sequential order is the safe default; S25's isolated research exception and optional sessions are explicit. There is no duration guarantee. Defects or follow-up work discovered during a session need separately scoped assignments; they do not automatically expand or advance the session.
+## Historical session evidence
 
-Copyable dispatch (replace bracketed inputs):
-
-```text
-Run session Sxx from HARFLOW_MIGRATION_SESSIONS.md and the lead repository's docs/migration-sessions.md.
-Accepted prerequisite receipt paths and IDs: [paths and IDs]
-Pinned contract, design, package and runtime identities: [commits, digests and paths]
-Allowed isolated roots, fixtures and external actions: [scope and authorizations]
-Return the session receipt at the specified lead-repository path, including all repository commits, evidence, decisions and blockers. Complete only this session; do not start the next.
-```
-
-For optional work replace `Sxx` with `X01`, `X02` or `X03`.
-
-The [v2 coverage ledger](../../HarflowDesign/v2/docs/migration-coverage.md) is an optional workspace coordination reference, not a build dependency. S10-Gxx bounded gap sub-sessions follow scope approval and obtain exact design approval before dependent work; unresolved required states block only their dependent feature. Independent work continues. The approved mock does not establish runtime capability or authority. Existing S01 evidence and S02 status remain as recorded in their receipts.
-
-## Sessions
+S01–S09 keep their original IDs, outputs and recorded limits. S09 bounded evidence
+is delivered, not accepted. Historical future S10–S50/X01–X03 are superseded and cannot be dispatched;
+see the [crosswalk](../../HARFLOW_MIGRATION_PLAN_V3.md#supersession-and-scope-crosswalk).
+The preserved briefs below describe original scope, not new authorization.
 
 ### S02 — Native pair qualification and references
 
@@ -52,50 +62,9 @@ The [v2 coverage ledger](../../HarflowDesign/v2/docs/migration-coverage.md) is a
 - Scope and acceptance: Vendor the complete canonical bundle and prove matching digests, independent version gates, decoder compatibility and fallback.
 - Output: lead receipt `docs/migration-receipts/S06.md`, with the evidence and identities required by the dispatch protocol.
 
-### S10 — Approved v2 design and gap reconciliation
+## Conversational steering scope amendment — 2026-11-05
 
-- Status: planned. Lead: HarflowDesign. Co-owned: HarflowMac.
-- Prerequisite receipts: S09.
-- Checklist coverage: C0-DS-01 (final contribution), C0-DS-02 (final contribution), C0-DS-03 (final contribution), C0-DS-04 (final contribution), E0-DS-01 (final contribution).
-- Scope and acceptance: Reconcile the pinned approved v2 baseline, intent ledger and contract/design gaps. For each retained or approved simplified feature, commission missing states in v2 and obtain explicit owner approval with exact commit/path/state before dependent implementation. Use bounded S10-Gxx sub-sessions as needed; independent work continues.
-- Output: lead receipt `docs/migration-receipts/S10.md`, with the evidence and identities required by the dispatch protocol.
-
-### S24 — Electron on Python acceptance
-
-- Status: planned. Lead: HarflowDesktop. Co-owned: HarflowMCP, HarflowMac, HarflowDesign, HarflowClient.
-- Prerequisite receipts: S23.
-- Checklist coverage: E0-MC-01 (final contribution), E0-MA-01 (final contribution), E0-DS-02 (final contribution), E0-CL-05 (final contribution), E0-CL-06 (final contribution), E0-CL-07 (final contribution), E0-CL-14 (final contribution), E0-DE-02 (final contribution), E0-DE-06 (final contribution), E0-DE-12 (final contribution).
-- Scope and acceptance: Accept Electron on Python against approved v2 production pixels and the retained/simplified feature ledger, including reconnect, disposal, accessibility, performance, clean pinned install and sandbox smoke. Do not restore removed UI for parity; record exact identities and limitations.
-- Output: lead receipt `docs/migration-receipts/S24.md`, with the evidence and identities required by the dispatch protocol.
-
-### S46 — Cutover rehearsal
-
-- Status: planned. Lead: HarflowEngine. Co-owned: HarflowMac, HarflowDesktop, HarflowMCP.
-- Prerequisite receipts: S45.
-- Checklist coverage: I0-EN-03 (final contribution), O0-EN-02 (partial), O0-MA-01 (final contribution), O0-MA-02 (partial), O0-MC-01 (partial).
-- Scope and acceptance: Rehearse isolated archive, restore, validated definition/configuration/preference imports, registration backup and handoff; document rollback boundaries, exclusive roots and no history import.
-- Output: lead receipt `docs/migration-receipts/S46.md`, with the evidence and identities required by the dispatch protocol.
-
-### S47 — Owner cutover and canaries
-
-- Status: planned. Lead: HarflowDesktop. Co-owned: HarflowEngine, HarflowMac, HarflowMCP.
-- Prerequisite receipts: S46.
-- Checklist coverage: O0-EN-02 (final contribution), O0-MA-02 (partial), O0-MC-01 (partial).
-- Scope and acceptance: Only with explicit owner authorization, settle active work, perform cutover and canaries; retain any qualified early-use next store and record first writes and external effects.
-- Output: lead receipt `docs/migration-receipts/S47.md`, with the evidence and identities required by the dispatch protocol.
-
-### S48 — Observation and go/no-go
-
-- Status: planned. Lead: HarflowDesktop. Co-owned: HarflowEngine, HarflowMac.
-- Prerequisite receipts: S47.
-- Checklist coverage: O0-DE-01 (partial), O0-MA-02 (partial).
-- Scope and acceptance: Complete owner-agreed observation period and restart/upgrade checks; record elapsed time and evidence for release decision.
-- Output: lead receipt `docs/migration-receipts/S48.md`, with the evidence and identities required by the dispatch protocol.
-
-### S50 — Contract transfer and retirement
-
-- Status: planned. Lead: HarflowMCP. Co-owned: HarflowEngine, HarflowMac, HarflowDesktop, HarflowClient.
-- Prerequisite receipts: S49.
-- Checklist coverage: O0-MC-01 (final contribution), O0-EN-03 (final contribution), O0-MA-02 (final contribution).
-- Scope and acceptance: With explicit owner decisions, transfer canonical contracts once with consumer/provenance updates and retire legacy product; cleanup needs separate authorization and never deletes user repositories implicitly.
-- Output: lead receipt `docs/migration-receipts/S50.md`, with the evidence and identities required by the dispatch protocol.
+ST05 uses existing transcript/composer/status and ctl contracts for builder/orchestrator/worker steering; affected M07/M08/M09/M12 acceptance includes steering. Current Mac work continues unchanged; no ST05 implementation is assigned.
+See the [current ST session briefs](../../HARFLOW_MIGRATION_SESSIONS.md#conversational-steering-track--accepted-scope-2026-11-05)
+and [steering plan](../../HARFLOW_WORKFLOW_STEERING_PLAN.md). Scope acceptance does
+not pass prior gates, permit live control or authorize releases.

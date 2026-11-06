@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-04",
+  "timezone": "Asia/Jakarta",
+  "status": "M01 preparation delivered; acceptance pending",
+  "heads": {
+    "HarflowMac": "9175d46baf8c8507eb7cec81d21b90225103f557",
+    "HarflowMCP": "ac675b51400ec0ee66b8f9faaaef999bba2467e6",
+    "HarflowDesign": "9cfe4ce81789ed87c7ee40c10802ff0e3b2c7552",
+    "HarflowEngine": "f9cd9b9070918f4884c24fe3164fb1dd998209f3",
+    "HarflowWeb": "554fbd7c6eb01ab900159ed3a729b51aea7928ed"
+  },
+  "preserved_input_sha256": {
+    "HarflowMac/docs/migration-plan.md": "5c1a482873fb0636ac1bd63797c42aaf0b8c31f74dd5044a22d31958ece12dfb",
+    "HarflowMac/docs/migration-sessions.md": "9b8b3c6a44f05dbda1c6457f301318426fb71bf5a6ac558564f777a379b6d52d",
+    "HarflowMCP/docs/migration-plan.md": "a07ef3276fa647858f5a55932316cfe3872fdff8e08a850b64fa9913377f1301",
+    "HarflowMCP/docs/migration-sessions.md": "6bae4e35a179c9f0e1d661686daef6519702cd115c1969168490a2306a9e90aa",
+    "HarflowDesign/docs/migration-plan.md": "d744411a70ac93b00c82f04e58918acb6f7fac2797194bb1accb35b190e992d3",
+    "HarflowDesign/docs/migration-sessions.md": "02dcc7868a1ecbd35b657b46d82f0c7ddfa0283a60bbb5ea2c2a2cef098f7c21",
+    "HarflowDesign/v2/docs/migration-coverage.md": "ec9dafe333b7698c1e6587d9ac78113e025c4b8debb773d61e0c733357c29154",
+    "HarflowEngine/docs/migration-plan.md": "51339611e30edf9478418b8e6e4b489339f23f0848851f982e77f27860066b21",
+    "HarflowEngine/docs/migration-sessions.md": "b805fbeee3d976c0f0990fe04d44b6893f1d2657bdfd180696cff6403d41d02b",
+    "HarflowWeb/docs/migration-plan.md": "d6ce27428dfe33f87d470d952bfebfcf2a6aa0a5f5855798afca8def5328cedc",
+    "HarflowWeb/docs/migration-sessions.md": "def1c25b2f61a6ef6785340c4ce03f180a252d07fcfbaa909eca2f64a75cc4de",
+    "HARFLOW_MIGRATION_PLAN_V3.md": "0e0c2dd4c6602eb6e09d0c312ca01c26bcbf4c5dd3e84f0b5c97a5ee6e8db4aa",
+    "HARFLOW_MIGRATION_PLAN_V2.md": "6ea512c26e26848d76ccc3ca35bca57e8d05fa4461dc1b780821323fa0cbb38f",
+    "HARFLOW_MIGRATION_CHECKLIST.md": "e692e68ae086f29198f933488a592745d90a1d4cda502ff756e7534db0bed114",
+    "HARFLOW_MIGRATION_PLAN.md": "e900a44371886fc4523ed1d18a75b6496f3b64010e65766c0691f35c2c220fc6",
+    "HARFLOW_MIGRATION_SESSIONS.md": "b8eb3ddf7e977df1d97b7961f224c2e4ddade2134e23671e0358d011b7e30c31",
+    "AGENTS.md": "ca2e69a6955e0a8bc1b7651aff3a9d3a5bcc91fb5e44b588b560aa1cbe0ad8be"
+  },
+  "preserved_input_mismatches": [],
+  "manifest_sha256": {
+    "HarflowMCP/contracts/v1/manifest.json": "383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0",
+    "HarflowMac/macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1/manifest.json": "383ecf7a9b234a1ece18eb15585398f08a77205c02a43cb2a928a2819f76fee0"
+  },
+  "markdown_sha256": {
+    "M01-contracts.md": "202227208e9ecf4c51753f3b9c3c21a805ce6d4092548b77d46c4c60d87122d1",
+    "M01.md": "e91c86eddaa5903c2a32ca4a39456a1e67361ff2ba1755d27893c50dda2c3521",
+    "M01-design.md": "789d1785d4325a74165f52a911776b88a95da4502f02d82642c72ccc69d65214",
+    "M01-native.md": "0f391a8b2faad1ddaa543ee44b732cbf8afa25010363c249c5e29a991efdb5c9"
+  },
+  "checks": {
+    "new_markdown_whitespace": "passed",
+    "tracked_git_diff_check": "passed",
+    "legacy_name_guard": "passed",
+    "private_reference_guard": "passed",
+    "local_links": "passed after record creation"
+  },
+  "review": {
+    "contract": "three findings corrected and verified; no remaining substantive issue",
+    "design": "no actionable findings",
+    "native_shell": "no actionable findings"
+  },
+  "product_tests_builds_launches_installs_external_mutations": "not performed",
+  "staged_committed": "none"
+}
