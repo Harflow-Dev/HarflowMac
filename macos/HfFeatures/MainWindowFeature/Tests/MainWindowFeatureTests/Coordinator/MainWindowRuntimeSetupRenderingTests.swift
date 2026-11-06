@@ -15,12 +15,12 @@ import Testing
 @MainActor @Suite(.serialized) struct MainWindowRuntimeSetupRenderingTests {
     private nonisolated static let states: [RuntimeSetupState] = [
         .checking,
-        .installationRequired(installedVersion: nil, requiredVersion: "0.0.10"),
-        .installationRequired(installedVersion: "0.0.9", requiredVersion: "0.0.10"),
+        .installationRequired(installedVersion: nil, requiredVersion: "0.0.11"),
+        .installationRequired(installedVersion: "0.0.9", requiredVersion: "0.0.11"),
         .installing,
-        .updating(installedVersion: "0.0.9", requiredVersion: "0.0.10"),
+        .updating(installedVersion: "0.0.9", requiredVersion: "0.0.11"),
         .failed("Synthetic installation failure."),
-        .updateFailed(message: "Synthetic update failure.", installedVersion: "0.0.9", requiredVersion: "0.0.10")
+        .updateFailed(message: "Synthetic update failure.", installedVersion: "0.0.9", requiredVersion: "0.0.11")
     ]
 
     @Test(arguments: states, [NSAppearance.Name.aqua, .darkAqua])
@@ -69,7 +69,7 @@ import Testing
         #expect(fixture.element(identifier: "runtimeSetup.action") == nil)
 
         // when
-        coordinator.runtimeSetupState = .installationRequired(installedVersion: nil, requiredVersion: "0.0.10")
+        coordinator.runtimeSetupState = .installationRequired(installedVersion: nil, requiredVersion: "0.0.11")
         await fixture.waitForTitle("Set up Harflow")
 
         // then

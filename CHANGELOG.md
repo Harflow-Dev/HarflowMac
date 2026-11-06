@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-- Pair the app with HarflowMCP 0.0.10 using qualified frozen runtime inputs and the complete released v1 contract fixture bundle. Preserve public task-list polling; watcher adoption remains separate.
+- Select HarflowMCP 0.0.11 as the paired engine, with its frozen runtime inputs and published contract fixtures. Installation and runtime qualification against 0.0.11 are still pending.
+
+- Add the M04 centered composer, adaptive to the window size, and a single scroll area in the sidebar body for navigation, Running and Recent work, with the brand header and appearance/settings footer fixed. M04 is not yet accepted.
+
+- Remove the duplicate system sidebar toggle from the main window, leaving the sidebar's own control. The window title is now centred on the window and the sidebar card sits slightly lower.
+
+- Pair the app with HarflowMCP 0.0.10 (superseded by the 0.0.11 selection above) using qualified frozen runtime inputs and the complete released v1 contract fixture bundle. Preserve public task-list polling; watcher adoption remains separate.
 
 - Add an independently tested internal public-event observation layer with bounded cursor replay, qualified totals and fenced leases; production cutover remains blocked on approved consumer states.
 

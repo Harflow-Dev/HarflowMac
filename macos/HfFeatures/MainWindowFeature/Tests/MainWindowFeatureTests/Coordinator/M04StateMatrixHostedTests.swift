@@ -264,10 +264,10 @@ struct M04StateMatrixHostedTests {
                 coordinator.runtimeSetupState = .checking
                 fixture.landmarks = ["Checking Harflow runtime"]
             case "runtime-install-required":
-                coordinator.runtimeSetupState = .installationRequired(installedVersion: nil, requiredVersion: "0.0.10")
+                coordinator.runtimeSetupState = .installationRequired(installedVersion: nil, requiredVersion: "0.0.11")
                 fixture.landmarks = ["Set up Harflow", "Install runtime"]
             case "runtime-update-required":
-                coordinator.runtimeSetupState = .installationRequired(installedVersion: "0.0.9", requiredVersion: "0.0.10")
+                coordinator.runtimeSetupState = .installationRequired(installedVersion: "0.0.9", requiredVersion: "0.0.11")
                 fixture.landmarks = ["Update required", "Update runtime"]
             case "runtime-installing":
                 coordinator.runtimeSetupState = .installing
