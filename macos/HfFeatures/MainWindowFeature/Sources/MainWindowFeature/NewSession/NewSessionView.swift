@@ -272,6 +272,9 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         }
         .frame(width: Layout.optionsWidth, height: height)
         .disabled(viewModel.optionsLocked)
+        // Stable identity for the actual options scroll view — hosted tests measure this exact
+        // owned scroll surface, never the native popover bubble chrome around it.
+        .accessibilityIdentifier("new-session-options-scroll")
         .accessibilityLabel("Task options")
     }
 

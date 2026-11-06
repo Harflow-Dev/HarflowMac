@@ -65,6 +65,9 @@ struct SidebarNativeList: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
         var contentHeightChanged: ((CGFloat) -> Void)?
+        /// Optional observation of raw geometry before presentation admission and deduplication.
+        /// The production owner leaves this nil; hosted diagnostics can observe suppressed attempts.
+        var historyGeometryObserved: ((Bool) -> Void)?
         var lastContentHeight: CGFloat?
         let actions = SidebarNativeActions()
         weak var scroll: NSScrollView?
@@ -181,6 +184,7 @@ struct SidebarNativeList: NSViewRepresentable {
 
         func stop() {
             contentHeightChanged = nil
+            historyGeometryObserved = nil
             reconciliation?.cancel()
             detached?.cancel()
             detached = nil

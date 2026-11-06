@@ -9,8 +9,9 @@ import Testing
 
 // MARK: - M04StateMatrixHostedTests
 
-/// Synthetic native evidence for HarflowDesign 5b37a3d, v2/docs/m04-proposal.md.
-/// Captures require separate visual review; these assertions do not establish pixel fidelity.
+/// Synthetic native evidence for HarflowDesign v2/docs/m04-proposal.md: baseline 5b37a3d,
+/// amended by the currently approved design commit 9d64bfda. Captures require separate visual
+/// review; these assertions do not establish pixel fidelity.
 @MainActor
 @Suite(.serialized)
 struct M04StateMatrixHostedTests {
@@ -76,9 +77,10 @@ struct M04StateMatrixHostedTests {
             }
 
             await DisplayFrames.waitForPresentedFrame()
-            try assertState(.init(state: state, size: size, originalComposer: originalComposer, originalTask: originalTask),
-                            window: window, host: host, fixture: fixture)
-            let name = "\(state)-\(dark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height))"
+            let context = HostedState(state: state, size: size, dark: dark,
+                                      originalComposer: originalComposer, originalTask: originalTask)
+            try assertState(context, window: window, host: host, fixture: fixture)
+            let name = context.name
             try await capture(host, name: name, window: window)
             try await captureOptions(fixture, existing: existing, window: window, name: name)
         }
@@ -112,8 +114,13 @@ struct M04StateMatrixHostedTests {
     private struct HostedState {
         let state: String
         let size: NSSize
+        let dark: Bool
         let originalComposer: NewSessionViewModelMock
         let originalTask: TaskDetailViewModelMock
+
+        /// The capture artifact name for this exact state/color/size, shared with the capture
+        /// helpers so diagnostics land next to the evidence they explain.
+        var name: String { "\(state)-\(dark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height))" }
     }
 
     private func assertState(_ context: HostedState, window: NSWindow, host: NSView, fixture: Fixture) throws {
@@ -144,7 +151,7 @@ struct M04StateMatrixHostedTests {
             #expect(!contains("Install runtime", in: window))
             #expect(!contains("Retry setup", in: window))
         }
-        try assertNavigationGeometry(window, host: host, collapsed: state == "shell-collapsed")
+        try assertNavigationGeometry(window, host: host, collapsed: state == "shell-collapsed", name: context.name)
         if fixture.isComposer {
             try assertComposer(window, host: host, fixture: fixture)
         }
@@ -295,7 +302,7 @@ struct M04StateMatrixHostedTests {
         }
     }
 
-    private func assertNavigationGeometry(_ window: NSWindow, host: NSView, collapsed: Bool) throws {
+    private func assertNavigationGeometry(_ window: NSWindow, host: NSView, collapsed: Bool, name: String) throws {
         let settings = try #require(tree(window).first { matches($0, "Settings") })
         let frame = try #require(accessibilityFrame(settings))
         let content = window.convertToScreen(host.bounds)
@@ -307,6 +314,9 @@ struct M04StateMatrixHostedTests {
             #expect(abs(railFrame.width - 56) < 1)
             #expect(contains("Change appearance", in: window))
             #expect(contains("Expand sidebar", in: window))
+            if !contains("Change appearance", in: window) {
+                try captureCollapsedRailDiagnostics(window: window, rail: rail, name: name)
+            }
         } else {
             let sidebars = tree(window).filter { hasIdentifier($0, "main-window-sidebar") }
             #expect(sidebars.count == 1, "Measure the unique semantic sidebar, never an incidental split child")
@@ -321,6 +331,107 @@ struct M04StateMatrixHostedTests {
     private func hasIdentifier(_ object: NSObject, _ identifier: String) -> Bool {
         let selector = NSSelectorFromString("accessibilityIdentifier")
         return object.responds(to: selector) && object.perform(selector)?.takeUnretainedValue() as? String == identifier
+    }
+
+    /// Bounded collapsed-rail AX diagnostic, written under the existing capture directory only
+    /// when the expected `Change appearance` name is absent: the owned rail's public AX tree
+    /// (role, identifier, label, title, value, description, help and action names per node)
+    /// plus the native controls — `NSButton`/`NSPopUpButton` — whose frames intersect the
+    /// rail's own accessibility frame, since a virtual rail AX node may expose no children of
+    /// its own. Safe selector/KVC probes only — no AX action is invoked and no other window
+    /// is touched.
+    private func captureCollapsedRailDiagnostics(window: NSWindow, rail: NSObject, name: String) throws {
+        guard let output = ProcessInfo.processInfo.environment["HARFLOW_M04_CAPTURE_DIR"], !output.isEmpty else { return }
+        var railTreeNodes: [[String: Any]] = []
+        var visited = Set<ObjectIdentifier>()
+        func record(_ object: NSObject, depth: Int) {
+            guard railTreeNodes.count < 128, depth <= 12, visited.insert(ObjectIdentifier(object)).inserted else { return }
+            var node = axAttributes(of: object)
+            node["depth"] = depth
+            railTreeNodes.append(node)
+            for child in axChildren(of: object).prefix(16) { record(child, depth: depth + 1) }
+        }
+        record(rail, depth: 0)
+        let railFrame = accessibilityFrame(rail)
+        let nativeControls = ownedNativeControlRecords(window: window, railFrame: railFrame)
+        var outlines: [[String: Any]] = []
+        if let contentView = window.contentView {
+            for outline in descendants(contentView).compactMap({ $0 as? NSOutlineView }).prefix(4) {
+                var rows: [[String: Any]] = []
+                for row in 0 ..< min(outline.numberOfRows, 64) {
+                    guard let rowView = outline.rowView(atRow: row, makeIfNecessary: false) else { continue }
+                    var entry = axAttributes(of: rowView)
+                    entry["rowIndex"] = row
+                    let children = axChildren(of: rowView).prefix(8).map { axAttributes(of: $0) }
+                    if !children.isEmpty { entry["axChildren"] = Array(children) }
+                    rows.append(entry)
+                }
+                outlines.append(["type": String(describing: type(of: outline)),
+                                  "identifier": outline.identifier?.rawValue ?? "none",
+                                  "rows": rows] as [String: Any])
+            }
+        }
+        let payload: [String: Any] = ["expectedName": "Change appearance",
+                                      "railFrame": railFrame.map { NSStringFromRect($0) } ?? "none",
+                                      "railTree": railTreeNodes,
+                                      "nativeControls": nativeControls,
+                                      "outlines": outlines] as [String: Any]
+        let directory = URL(fileURLWithPath: output, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .prettyPrinted])
+            .write(to: directory.appendingPathComponent(name + "-collapsed-rail-ax.json"))
+    }
+
+    private func ownedNativeControlRecords(window: NSWindow, railFrame: NSRect?) -> [[String: Any]] {
+        var nativeControls: [[String: Any]] = []
+        if let railFrame, let contentView = window.contentView {
+            for view in descendants(contentView) where view is NSButton {
+                let screenFrame = window.convertToScreen(view.convert(view.bounds, to: nil))
+                guard screenFrame.intersects(railFrame) else { continue }
+                var entry = axAttributes(of: view)
+                entry["identifier"] = view.identifier?.rawValue ?? "none"
+                entry["frame"] = NSStringFromRect(view.frame)
+                entry["bounds"] = NSStringFromRect(view.bounds)
+                entry["screenFrame"] = NSStringFromRect(screenFrame)
+                if view.responds(to: NSSelectorFromString("isEnabled")) {
+                    entry["enabled"] = (view.value(forKey: "isEnabled") as? Bool) ?? false
+                }
+                nativeControls.append(entry)
+                if nativeControls.count >= 16 { break }
+            }
+        }
+        return nativeControls
+    }
+
+    /// The public AX attributes one node exposes: absent attributes are omitted, never guessed.
+    private func axAttributes(of object: NSObject) -> [String: Any] {
+        var entry: [String: Any] = ["type": String(describing: type(of: object))]
+        for (key, attribute) in [("role", "accessibilityRole"), ("identifier", "accessibilityIdentifier"),
+                                 ("label", "accessibilityLabel"), ("title", "accessibilityTitle"),
+                                 ("value", "accessibilityValue"), ("description", "accessibilityRoleDescription"),
+                                 ("help", "accessibilityHelp")] {
+            if let text = axText(of: object, attribute) { entry[key] = text }
+        }
+        let actions = NSSelectorFromString("accessibilityActionNames")
+        if object.responds(to: actions), let names = object.perform(actions)?.takeUnretainedValue() as? [Any] {
+            entry["actions"] = names.compactMap { $0 as? String }
+        }
+        return entry
+    }
+
+    /// A guarded string-attribute probe through the selector ABI.
+    private func axText(of object: NSObject, _ attribute: String) -> String? {
+        let selector = NSSelectorFromString(attribute)
+        guard object.responds(to: selector) else { return nil }
+        return object.perform(selector)?.takeUnretainedValue() as? String
+    }
+
+    /// The node's public AX children, read through the same safe ABI as the tree walker.
+    private func axChildren(of object: NSObject) -> [NSObject] {
+        let selector = NSSelectorFromString("accessibilityChildren")
+        guard object.responds(to: selector),
+              let children = object.perform(selector)?.takeUnretainedValue() as? [NSObject] else { return [] }
+        return children
     }
 
     private func accessibilityFrame(_ object: NSObject) -> NSRect? {
@@ -371,7 +482,8 @@ struct M04StateMatrixHostedTests {
         try await M04NativeWindowEvidence.record(window: window, name: name, directory: directory)
         let geometry = ["content": NSStringFromRect(host.bounds), "outerWindow": NSStringFromRect(window.frame),
                         "contentLayout": NSStringFromRect(window.contentLayoutRect), "reduceMotion": "true",
-                        "designCommit": "5b37a3d4d4d06b3d96c517cd384892e1ac6883cf",
+                        "designCommit": "9d64bfda7bed735d42c761c3149516c7f3e6ca01",
+                        "baselineDesignCommit": "5b37a3d4d4d06b3d96c517cd384892e1ac6883cf",
                         "captureMethod": "window-server exact owned window", "hostBitmap": name + "-host-bitmap.png"]
         try JSONSerialization.data(withJSONObject: geometry, options: [.sortedKeys, .prettyPrinted])
             .write(to: directory.appendingPathComponent(name + ".json"))

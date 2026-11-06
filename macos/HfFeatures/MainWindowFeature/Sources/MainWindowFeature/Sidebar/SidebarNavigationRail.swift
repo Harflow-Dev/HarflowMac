@@ -48,19 +48,19 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
             }
             Spacer(minLength: 8)
             Menu {
-                ForEach(AppAppearance.allCases) { appearance in
-                    Button {
-                        viewModel.didSelectAppearance(appearance)
-                    } label: {
-                        if appearance == viewModel.appAppearance {
-                            Label(appearance.rawValue.capitalized, systemImage: "checkmark")
-                        } else {
-                            Text(appearance.rawValue.capitalized)
-                        }
+                Picker(selection: appearanceSelection) {
+                    ForEach(AppAppearance.allCases) { appearance in
+                        Text(appearance.rawValue.capitalized).tag(appearance.rawValue)
                     }
+                } label: {
+                    EmptyView()
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
-                Label { Text("Change appearance") } icon: { SidebarNavigationIcon(.appearance(viewModel.appAppearance), size: 16) }
+                Label { Text("Change appearance") } icon: {
+                    SidebarNavigationIcon(.appearance(viewModel.appAppearance), size: 16, isDecorative: false)
+                }
             }
             .menuIndicator(.hidden)
             .accessibilityLabel("Change appearance")
@@ -82,6 +82,14 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
         .publishViewEvent(from: viewModel, to: viewEvent)
     }
 
+    /// Native Picker selection supplies real menu-item state as well as the visible mark.
+    private var appearanceSelection: Binding<String> {
+        Binding(get: { viewModel.appAppearance.rawValue }, set: { value in
+            guard let appearance = AppAppearance(rawValue: value) else { return }
+            viewModel.didSelectAppearance(appearance)
+        })
+    }
+
     private func navigation(_ title: String, icon: SidebarNavigationArtwork, destination: MonitorDestination,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -91,6 +99,7 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
             .background(viewModel.selection == destination ? Color.accentLink.opacity(0.12) : .clear,
                         in: RoundedRectangle(cornerRadius: 8))
             .help(title)
+            .accessibilityLabel(title)
             .disabled(!viewModel.runtimeSetupState.isReady)
     }
 }

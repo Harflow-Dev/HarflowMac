@@ -17,7 +17,7 @@ import Testing
 struct SidebarUnifiedHostedTests {
     @Test func givenUnifiedSidebar_whenHosted_thenOneBoundedOutlineScrollsUnderFixedChrome() async throws {
         // given
-        let fixture = try await UnifiedSidebarHostFixture(sections: Self.scrollingSections())
+        let fixture = try await UnifiedSidebarHostFixture(sections: Self.scrollingSections(), witnessName: "bounded-scroll")
         defer { fixture.close() }
         await fixture.drain(cycles: 4)
         // when
@@ -49,8 +49,10 @@ struct SidebarUnifiedHostedTests {
         #expect(scrollFrame.maxY < fixture.host.bounds.height - 1)
         #expect(document.bounds.height > scroll.contentView.bounds.height + 1)
 
-        // when — the unified document scrolls navigation, Running and Recent work as one.
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: document.bounds.height))
+        // when — the unified document scrolls navigation, Running and Recent work as one,
+        // bounded by the clip view's own constrained origin: never an overscroll past the
+        // document, with the sentinel revealed through the native row reveal.
+        fixture.scrollToUnifiedBottom()
         await fixture.drain(cycles: 4)
         let viewport = outline.convert(scroll.contentView.bounds, from: scroll.contentView)
         let runningRow = try #require(fixture.row(for: "header:running"))
@@ -68,7 +70,7 @@ struct SidebarUnifiedHostedTests {
 
     @Test func givenUnifiedOutline_whenSelectionMovesAcrossSections_thenDispatchAndHighlightStayAtomic() async throws {
         // given
-        let fixture = try await UnifiedSidebarHostFixture(sections: Self.selectableSections())
+        let fixture = try await UnifiedSidebarHostFixture(sections: Self.selectableSections(), witnessName: "selection")
         defer { fixture.close() }
         await fixture.drain(cycles: 4)
         let outline = try #require(fixture.unifiedOutline)
@@ -116,7 +118,7 @@ struct SidebarUnifiedHostedTests {
 
     @Test func givenNeedsYouSelectionWithItemID_whenHosted_thenSingleNormalizedRowHighlights() async throws {
         // given
-        let fixture = try await UnifiedSidebarHostFixture(sections: Self.selectableSections())
+        let fixture = try await UnifiedSidebarHostFixture(sections: Self.selectableSections(), witnessName: "needs-you")
         defer { fixture.close() }
         await fixture.drain(cycles: 4)
         let outline = try #require(fixture.unifiedOutline)
@@ -133,7 +135,7 @@ struct SidebarUnifiedHostedTests {
 
     @Test func givenOverflowingHistory_whenBottomIsOffscreen_thenAdmissionIsRevisionQualified() async throws {
         // given
-        let fixture = try await UnifiedSidebarHostFixture(sections: Self.scrollingSections())
+        let fixture = try await UnifiedSidebarHostFixture(sections: Self.scrollingSections(), witnessName: "revision-qualified")
         defer { fixture.close() }
         var tasks = HistoryLoadingState()
         tasks.hasMore = true
@@ -141,7 +143,6 @@ struct SidebarUnifiedHostedTests {
         await fixture.drain(cycles: 4)
         let outline = try #require(fixture.unifiedOutline)
         let scroll = try #require(outline.enclosingScrollView)
-        let document = try #require(scroll.documentView)
         _ = try #require(fixture.row(for: "history:tasks"))
         _ = try #require(fixture.row(for: "history:sentinel"))
         // when — the bottom is offscreen at the document top.
@@ -153,7 +154,7 @@ struct SidebarUnifiedHostedTests {
         #expect(fixture.model.loadMoreTasksTapCount == 0)
 
         // when — the unified bottom scrolls into view.
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: document.bounds.height))
+        fixture.scrollToUnifiedBottom()
         await fixture.drain(cycles: 4)
         await waitUntil(timeout: 5) { fixture.model.historyPublications.last?.visible == true }
         // then — admission carries the current revision.
@@ -169,7 +170,7 @@ struct SidebarUnifiedHostedTests {
         scroll.contentView.scroll(to: NSPoint(x: 0, y: 0))
         await fixture.drain(cycles: 4)
         await waitUntil(timeout: 5) { fixture.model.historyPublications.last?.visible == false }
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: document.bounds.height))
+        fixture.scrollToUnifiedBottom()
         await fixture.drain(cycles: 4)
         await waitUntil(timeout: 5) { fixture.model.historyPublications.last?.visible == true }
         // then — visibility flips are recorded at the bottom revision, never a stale one.
@@ -208,6 +209,34 @@ struct SidebarUnifiedHostedTests {
 
 // MARK: - Hosted model and fixture
 
+/// One history publication observed at publication time, on the main actor: the admitted
+/// visibility and revision next to the geometry and reconciler state that produced them.
+/// `nil` fields mean the corresponding state was not yet reachable at publication time.
+private struct HistoryPublicationWitness {
+    let visible: Bool
+    let revision: Int
+    let sentinelRect: String?
+    let viewportRect: String?
+    /// The reconciler's actual column width (`availableWidth`), not the clip view's bounds.
+    let availableWidth: CGFloat?
+    /// The scroll clip view's own bounds width, recorded separately from `availableWidth`.
+    let clipWidth: CGFloat?
+    let knownWidth: CGFloat?
+    let inputHistoryRevision: Int?
+    let inputHistoryToken: String?
+    let appliedHistoryRevision: Int?
+    let appliedHistoryToken: String?
+    let generation: Int?
+    let settledGeneration: Int?
+    let widthInvalidationQueued: Bool?
+    let nativeOperationDepth: Int?
+    let windowAttached: Bool?
+    let windowVisible: Bool?
+    let outlineNeedsLayout: Bool?
+    let applyingStructure: Bool?
+    let pendingHeights: Int?
+}
+
 /// A recording SidebarViewModel: selections, composer dispatches and history admissions are
 /// observable on the main actor without touching the preview mock outside this file.
 @MainActor
@@ -234,6 +263,12 @@ private final class UnifiedSidebarHostedModel: SidebarViewModel {
     private(set) var loadMoreTasksTapCount = 0
     private(set) var didSelectDestinations: [MonitorDestination?] = []
     private(set) var historyPublications: [(visible: Bool, revision: Int)] = []
+    /// Test-only publication-time witness for every history callback: the fixture installs the
+    /// recorder before its window gains content, so initial publications are retained, never
+    /// cleared or hidden. Recorded facts never gate the existing history assertions.
+    var historyWitnessRecorder: (@MainActor (_ visible: Bool, _ revision: Int) -> HistoryPublicationWitness)?
+    private(set) var historyWitnesses: [HistoryPublicationWitness] = []
+    let presentationEvidence = SidebarHistoryPresentationEvidence()
 
     func didAppear() {}
     func didDisappear() {}
@@ -253,6 +288,9 @@ private final class UnifiedSidebarHostedModel: SidebarViewModel {
     func didTapLoadMoreTasks() { loadMoreTasksTapCount += 1 }
     func didChangeHistoryBottomVisibility(_ visible: Bool, revision: Int) {
         historyPublications.append((visible, revision))
+        if let record = historyWitnessRecorder?(visible, revision) {
+            historyWitnesses.append(record)
+        }
     }
 }
 
@@ -263,20 +301,35 @@ private final class UnifiedSidebarHostFixture {
     let model: UnifiedSidebarHostedModel
     let host: NSHostingView<AnyView>
     let window: NSWindow
+    let witnessName: String
 
-    init(sections: [SidebarSection]) async throws {
+    init(sections: [SidebarSection], witnessName: String) async throws {
         // given
         _ = NSApplication.shared
         let model = UnifiedSidebarHostedModel()
         model.sections = sections
         self.model = model
+        self.witnessName = witnessName
         let root = AnyView(SidebarView(model).frame(width: 300, height: 480))
-        self.host = NSHostingView(rootView: root)
+        let host = NSHostingView(rootView: root)
+        self.host = host
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 480),
             styleMask: [.titled], backing: .buffered, defer: false
         )
         window.isReleasedWhenClosed = false
+        // The publication-time witness is installed before the window gains content and is
+        // ordered front, so the initial history publications are recorded, never swallowed.
+        model.historyWitnessRecorder = { [weak host, weak model] visible, revision in
+            if let host, let outline = Self.unifiedOutline(in: host),
+               let coordinator = outline.delegate as? SidebarNativeList.Coordinator {
+                coordinator.historyGeometryObserved = { [weak coordinator, weak model] rawVisible in
+                    guard let coordinator, let model else { return }
+                    model.presentationEvidence.record(rawVisible: rawVisible, coordinator: coordinator)
+                }
+            }
+            return Self.captureHistoryWitness(visible: visible, revision: revision, host: host)
+        }
         window.contentView = host
         window.orderFront(nil)
         self.window = window
@@ -290,28 +343,138 @@ private final class UnifiedSidebarHostFixture {
     }
 
     func close() {
+        model.presentationEvidence.write(name: witnessName)
+        captureHistoryWitnessJSON()
         window.contentView = nil
         window.close()
     }
 
-    var unifiedOutline: NSOutlineView? {
-        allOutlines.first { outline in
-            let ids = Set((0 ..< outline.numberOfRows).compactMap { (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id })
-            return ids.contains("navigation:new-task") && ids.contains("header:running") && ids.contains("header:recent")
-        }
-    }
+    var unifiedOutline: NSOutlineView? { Self.unifiedOutline(in: host) }
 
-    var allOutlines: [NSOutlineView] { allViews.compactMap { $0 as? NSOutlineView } }
-    var allScrollViews: [NSScrollView] { allViews.compactMap { $0 as? NSScrollView } }
+    var allOutlines: [NSOutlineView] { Self.allViews(of: host).compactMap { $0 as? NSOutlineView } }
+    var allScrollViews: [NSScrollView] { Self.allViews(of: host).compactMap { $0 as? NSScrollView } }
 
-    private var allViews: [NSView] {
+    private static func allViews(of root: NSView) -> [NSView] {
         var views: [NSView] = []
-        var queue: [NSView] = [host]
+        var queue: [NSView] = [root]
         while let view = queue.popLast() {
             views.append(view)
             queue.append(contentsOf: view.subviews)
         }
         return views
+    }
+
+    private static func unifiedOutline(in view: NSView) -> NSOutlineView? {
+        allViews(of: view).compactMap { $0 as? NSOutlineView }.first { outline in
+            let ids = Set((0 ..< outline.numberOfRows).compactMap { (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id })
+            return ids.contains("navigation:new-task") && ids.contains("header:running") && ids.contains("header:recent")
+        }
+    }
+
+    /// Scrolls the unified document to its bottom the way the clip view itself bounds it: the
+    /// constrained maximum origin — never an overscroll past the document — followed by the
+    /// native sentinel row reveal and the clip view's own scrolled-position reflection.
+    func scrollToUnifiedBottom() {
+        guard let outline = unifiedOutline, let scroll = outline.enclosingScrollView,
+              let document = scroll.documentView else { return }
+        let maximumOriginY = max(0, document.bounds.height - scroll.contentView.bounds.height)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: maximumOriginY))
+        if let sentinelRow = row(for: "history:sentinel") { outline.scrollRowToVisible(sentinelRow) }
+        scroll.reflectScrolledClipView(scroll.contentView)
+    }
+
+    /// Captures one history publication where it happens, reading only public state from this
+    /// fixture's own hosted tree and its reconciler: sentinel and viewport geometry, the
+    /// reconciler's actual and known widths, the input and applied history revisions/tokens,
+    /// its generation, width-invalidation and native-operation state, and the outline's own
+    /// attachment/layout state. Nothing is invoked or mutated.
+    private static func captureHistoryWitness(visible: Bool, revision: Int, host: NSView?) -> HistoryPublicationWitness {
+        func empty() -> HistoryPublicationWitness {
+            HistoryPublicationWitness(visible: visible, revision: revision, sentinelRect: nil, viewportRect: nil,
+                                      availableWidth: nil, clipWidth: nil, knownWidth: nil, inputHistoryRevision: nil,
+                                      inputHistoryToken: nil, appliedHistoryRevision: nil, appliedHistoryToken: nil,
+                                      generation: nil, settledGeneration: nil, widthInvalidationQueued: nil,
+                                      nativeOperationDepth: nil, windowAttached: nil, windowVisible: nil,
+                                      outlineNeedsLayout: nil, applyingStructure: nil, pendingHeights: nil)
+        }
+        guard let host, let outline = unifiedOutline(in: host) else { return empty() }
+        let scroll = outline.enclosingScrollView
+        let coordinator = outline.delegate as? SidebarNativeList.Coordinator
+        let sentinelRect = (0 ..< outline.numberOfRows)
+            .first { (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id == "history:sentinel" }
+            .map { NSStringFromRect(outline.rect(ofRow: $0)) }
+        let viewportRect = scroll.map { NSStringFromRect(outline.convert($0.contentView.bounds, from: $0.contentView)) }
+        return HistoryPublicationWitness(
+            visible: visible,
+            revision: revision,
+            sentinelRect: sentinelRect,
+            viewportRect: viewportRect,
+            availableWidth: coordinator?.availableWidth,
+            clipWidth: scroll?.contentView.bounds.width,
+            knownWidth: coordinator?.knownWidth,
+            inputHistoryRevision: coordinator?.input?.historyRevision,
+            inputHistoryToken: coordinator?.input?.historyToken,
+            appliedHistoryRevision: coordinator?.appliedInput?.historyRevision,
+            appliedHistoryToken: coordinator?.appliedInput?.historyToken,
+            generation: coordinator?.generation,
+            settledGeneration: coordinator?.settledGeneration,
+            widthInvalidationQueued: coordinator?.widthInvalidationQueued,
+            nativeOperationDepth: coordinator?.nativeOperationDepth,
+            windowAttached: outline.window != nil,
+            windowVisible: outline.window?.isVisible,
+            outlineNeedsLayout: outline.needsLayout,
+            applyingStructure: coordinator?.applyingStructure,
+            pendingHeights: coordinator?.pendingHeights.count
+        )
+    }
+
+    /// Optional bounded JSON under the existing M04 capture directory, for primary diagnosis
+    /// only: this fixture's own witness records, truncated at the bound. It never gates or
+    /// clears the recorded history.
+    private func captureHistoryWitnessJSON() {
+        guard let output = ProcessInfo.processInfo.environment["HARFLOW_M04_CAPTURE_DIR"], !output.isEmpty else { return }
+        let records = model.historyWitnesses
+        let prefixBound = 64
+        let suffixBound = 128
+        let selected: [HistoryPublicationWitness] = if records.count > prefixBound + suffixBound {
+            Array(records.prefix(prefixBound)) + Array(records.suffix(suffixBound))
+        } else {
+            records
+        }
+        var witnesses: [[String: Any]] = []
+        for record in selected {
+            var entry: [String: Any] = ["visible": record.visible, "revision": record.revision]
+            entry["sentinelRect"] = record.sentinelRect
+            entry["viewportRect"] = record.viewportRect
+            entry["availableWidth"] = record.availableWidth.map { NSNumber(value: Double($0)) }
+            entry["clipWidth"] = record.clipWidth.map { NSNumber(value: Double($0)) }
+            entry["knownWidth"] = record.knownWidth.map { NSNumber(value: Double($0)) }
+            entry["inputHistoryRevision"] = record.inputHistoryRevision
+            entry["inputHistoryToken"] = record.inputHistoryToken
+            entry["appliedHistoryRevision"] = record.appliedHistoryRevision
+            entry["appliedHistoryToken"] = record.appliedHistoryToken
+            entry["generation"] = record.generation
+            entry["settledGeneration"] = record.settledGeneration
+            entry["widthInvalidationQueued"] = record.widthInvalidationQueued
+            entry["nativeOperationDepth"] = record.nativeOperationDepth
+            entry["windowAttached"] = record.windowAttached
+            entry["windowVisible"] = record.windowVisible
+            entry["outlineNeedsLayout"] = record.outlineNeedsLayout
+            entry["applyingStructure"] = record.applyingStructure
+            entry["pendingHeights"] = record.pendingHeights
+            witnesses.append(entry)
+        }
+        let payload: [String: Any] = [
+            "fixture": witnessName,
+            "totalWitnesses": records.count,
+            "truncated": selected.count < records.count,
+            "witnesses": witnesses
+        ] as [String: Any]
+        if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .prettyPrinted]) {
+            let directory = URL(fileURLWithPath: output, isDirectory: true)
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try? data.write(to: directory.appendingPathComponent("sidebar-unified-history-witness-\(witnessName).json"))
+        }
     }
 
     var entryIDs: [String] {

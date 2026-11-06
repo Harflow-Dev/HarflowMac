@@ -2,10 +2,11 @@
 // SidebarNativeParityBaselineTests.swift
 // MainWindowFeatureTests
 //
-// This is the recorded native List baseline for the sidebar adapter.  The first run writes a
-// machine-readable observation outside the repository.  Once that observation has been reviewed,
-// the stable fields are copied into the expectations below; the test then remains useful when the
-// List renderer is replaced by the owned NSOutlineView renderer.
+// The recorded native unified-outline baseline for the sidebar adapter (M04). The first run writes a
+// machine-readable observation outside the repository; reviewed stable fields are pinned here,
+// including the per-row AX signatures from the actual full observe. Discovery is ID-based on the
+// single unified outline that owns the navigation entries — the obsolete AXButton navigation frame
+// lookup is gone.
 //
 
 import AppKit
@@ -19,9 +20,9 @@ import Testing
 
 @MainActor
 @Suite(.serialized) struct SidebarNativeParityBaselineTests {
-    @Test func givenTheCurrentSidebarList_whenHosted_thenRecordNativeParityBaseline() async throws {
-        // given — explicit local rows cover each current sidebar presentation kind in a real
-        // window; no backend or persisted task data is used.
+    @Test func givenTheUnifiedSidebarOutline_whenHosted_thenRecordNativeParityBaseline() async throws {
+        // given — explicit local rows cover every unified presentation kind in a real window; no
+        // backend or persisted task data is used.
         let fixture = try await SidebarNativeBaselineFixture()
         defer { fixture.close() }
 
@@ -31,86 +32,94 @@ import Testing
         fixture.write(baseline)
 
         // then — missing public accessibility is a baseline issue, never an empty pass.
-        // A missing native accessibility surface is an issue to resolve, not an empty successful
-        // baseline.  Keep the observed names in the report so the failure is actionable.
-        #expect(!baseline.rows.isEmpty, "The native sidebar baseline must contain rows")
+        #expect(baseline.rows.count == 15, "The unified baseline must contain exactly fifteen rows")
         #expect(baseline.rows.allSatisfy { !$0.accessibility.isEmpty },
-                "Every baseline row must expose an accessibility element")
+                "Every unified baseline row must expose an accessibility element")
         #expect(baseline.missingAccessibility.isEmpty,
                 "Native sidebar AX baseline is incomplete: \(baseline.missingAccessibility)")
 
-        // Stable public control settings and semantic row behavior are pinned below. The external
-        // JSON is diagnostic evidence only; CI does not depend on it.
-        #expect(baseline.flags.indentationPerLevel >= 0)
-        #expect(baseline.rows.allSatisfy { $0.rect.width >= 0 && $0.rect.height >= 0 })
-        #expect(baseline.keyboard.count == KeyboardProbe.allCases.count)
+        // Single-outline ID-based discovery: exactly one outline owns the navigation entry, the
+        // pinned unified entry order holds, and the semantic probes' rows are pinned indices.
+        #expect(SidebarNativeBaselineFixture.unifiedOutlines(in: fixture.controller.view).count == 1)
+        #expect(SidebarNativeBaselineFixture.entryIDs(in: fixture.outline) == SidebarNativeBaselineFixture.unifiedEntryIDs)
+        #expect(fixture.anchorRow == 10 && fixture.groupRow == 8)
+        #expect(fixture.workflowAliasRow == 11 && fixture.shortcutAliasRow == 12)
+        #expect(SidebarNativeBaselineFixture.row(of: "task:abc123", in: fixture.outline) == 6)
+        #expect(SidebarNativeBaselineFixture.row(of: "navigation:statistics", in: fixture.outline) == 4)
+
+        // Stable public control settings, fixed chrome, shared viewport and semantic row geometry.
+        assertNativeFlagsAndChrome(baseline)
+        assertSharedViewport(baseline)
+        assertUnifiedRowGeometry(baseline, fixture: fixture)
+
+        #expect(baseline.rows.map(\.stableAXSignature) == expectedUnifiedAXSignatures)
+
+        // The actual prompt NSTextView keeps focus, text and selection isolated from the outline.
         #expect(baseline.promptFocus.requestedFirstResponder)
         #expect(baseline.promptFocus.arrowsKeptFocus)
         #expect(baseline.promptFocus.nativeTextUnchanged)
         #expect(baseline.promptFocus.modelMessageUnchanged)
-        #expect(baseline.promptFocus.runningSelectionBefore == [1])
-        #expect(baseline.promptFocus.runningSelectionAfter == baseline.promptFocus.runningSelectionBefore)
-        #expect(baseline.promptFocus.recentSelectionBefore == [1])
-        #expect(baseline.promptFocus.recentSelectionAfter == baseline.promptFocus.recentSelectionBefore)
-        #expect(baseline.aliasSelection == [2, 3])
-        #expect(fixture.runningOutline.numberOfRows == 4)
-        #expect((0 ..< fixture.runningOutline.numberOfRows).map {
-            (fixture.runningOutline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id
-        } == ["header:running", "task:abc123", "task:abc123-child", "group:review-bot"])
-        let runningSignatures = (0 ..< fixture.runningOutline.numberOfRows).map { row in
-            let view = fixture.runningOutline.view(atColumn: 0, row: row, makeIfNecessary: true)
-            return RowObservation(index: row, identifier: "", rect: .zero, fittingHeight: 0,
-                                  isGroupItem: nil, isGroupRowStyle: nil,
-                                  accessibility: SidebarNativeBaselineFixture.accessibilityTree(view)).stableAXSignature
-        }
-        #expect(runningSignatures == expectedRunningAXSignatures)
-        #expect(fixture.runningOutline !== fixture.outline)
-        #expect(fixture.runningOutline.enclosingScrollView !== fixture.outline.enclosingScrollView)
+        #expect(baseline.promptFocus.selectionBefore == [fixture.anchorRow])
+        #expect(baseline.promptFocus.selectionAfter == baseline.promptFocus.selectionBefore)
 
-        assertNativeFlagsAndFooter(baseline)
-        assertViewportAllocation(baseline, fixture: fixture)
-        let recentContentRows = baseline.rows.dropFirst().dropLast()
-        #expect(recentContentRows.count == 4)
-        #expect(recentContentRows.allSatisfy {
-            $0.rect.minY >= fixture.outline.visibleRect.minY
-                && $0.rect.maxY <= fixture.outline.visibleRect.maxY
-        })
-        #expect(baseline.firstRowFrame.minY >= baseline.effectiveViewportBottom - 1)
-        #expect(baseline.firstRowFrame.maxY <= baseline.navigationFrame.minY)
-        #expect(zip(baseline.rows, baseline.rows.dropFirst()).allSatisfy { current, next in
-            next.rect.minY >= current.rect.maxY
-        })
-        let contentRows = baseline.rows.enumerated().filter { ![0, 5].contains($0.offset) }
-        #expect(contentRows.allSatisfy { $0.element.rect.height >= $0.element.fittingHeight - 1 })
-        #expect(baseline.rows.map(\.stableAXSignature) == expectedAXSignatures)
+        // The workflow and shortcut aliases of one logical destination stay programmatically
+        // selectable together at their pinned unified indices (11 and 12).
+        #expect(baseline.aliasSelection == [fixture.workflowAliasRow, fixture.shortcutAliasRow])
+
+        // Keyboard across nav, Running and Recent, anchored by entry id; AppKit skips the
+        // destinationless headings and the adapter synchronizes both alias rows on the next selection.
+        #expect(baseline.keyboard.count == KeyboardProbe.allCases.count)
+        let expectedSelection = expectedUnifiedKeyboardSelection(fixture)
+        let expectedAnchors = expectedUnifiedKeyboardAnchors(fixture)
         for probe in KeyboardProbe.allCases {
             let result = try #require(baseline.keyboard[probe.rawValue])
-            #expect(result.selectedRowsBefore == [1])
+            #expect(result.selectedRowsBefore == expectedAnchors[probe])
             #expect(result.firstResponder)
-            #expect(result.selectedRowsAfter == expectedKeyboardSelection[probe])
+            #expect(result.represented)
+            #expect(result.selectedRowsAfter == expectedSelection[probe])
         }
     }
 
-    private func assertViewportAllocation(_ baseline: Baseline, fixture: SidebarNativeBaselineFixture) {
-        // Native M04 adaptation: the fixed brand/navigation consumes 224 points. This
-        // fixture's Running heading, two task rows and group occupy 14 + 48 + 48 + 54.
-        // Pin both allocations as well as the resulting Recent edge; moving either section
-        // must fail even if its rows still happen to fit. The native footer remains 61 below.
-        let runningRowHeights = (0 ..< fixture.runningOutline.numberOfRows).map {
-            fixture.runningOutline.rect(ofRow: $0).height
-        }
-        #expect(runningRowHeights == [14, 48, 48, 54])
+    /// Reviewed unified geometry (native outline coordinates): five navigation rows tile into a
+    /// 160-point block followed by a 13-point section gap, the Running heading opens at 173, Recent work at 350, the sentinel at 574.
+    private func assertUnifiedRowGeometry(_ baseline: Baseline, fixture: SidebarNativeBaselineFixture) {
+        #expect(baseline.rows.first?.rect.minY == 0)
+        #expect(zip(baseline.rows, baseline.rows.dropFirst()).enumerated().allSatisfy { index, pair in
+            pair.1.rect.minY - pair.0.rect.maxY == ([4, 8].contains(index) ? 13 : 0)
+        })
+        #expect(baseline.rows[5].rect.minY == 173 && baseline.rows[5].rect.maxY == 187)
+        #expect(baseline.rows[9].rect.minY == 350 && baseline.rows[9].rect.maxY == 364)
+        #expect(baseline.rows[14].rect.minY == 574 && baseline.rows[14].rect.maxY == 575)
+        // Headings, Running content, the Recent content rows and the sentinel have exact heights.
+        #expect(Array(baseline.rows.map(\.rect.height).dropFirst(5)) == [14, 48, 48, 54, 14, 48, 48, 66, 48, 1])
+        // Each navigation row fits 32 points; section gaps remain outside native row rects.
+        #expect(baseline.rows[0 ... 4].allSatisfy { $0.fittingHeight == 32 })
+        #expect(baseline.rows[0 ... 4].map(\.rect.height).reduce(0, +) == 160)
+        // The group disclosure retains its observed 54-point slot.
+        #expect(baseline.rows[fixture.groupRow].fittingHeight == 54)
+        // Content never clips its hosted fit, and every row stays inside the shared viewport.
+        let contentRows = baseline.rows.filter { ![5, 9, 14].contains($0.index) }
+        #expect(contentRows.allSatisfy { $0.rect.height >= $0.fittingHeight - 1 })
+        let visible = fixture.outline.visibleRect
+        #expect(baseline.rows.allSatisfy { $0.rect.minY >= visible.minY && $0.rect.maxY <= visible.maxY })
+    }
+
+    /// Reviewed unified viewport: one shared scroll under the fixed brand header and above the fixed
+    /// footer — bottom 61, top 716, height 655, content layout 760 tall, and the navigation block
+    /// flush at the viewport top.
+    private func assertSharedViewport(_ baseline: Baseline) {
         #expect(baseline.contentLayoutRect.maxY == 760)
-        #expect(baseline.effectiveViewportTop == 372)
-        let runningFrame = fixture.runningOutline.enclosingScrollView!.convert(fixture.runningOutline.enclosingScrollView!.bounds, to: nil)
-        #expect(runningFrame.maxY == baseline.contentLayoutRect.maxY - 224)
-        #expect(runningFrame.height == 164)
-        #expect(abs(runningFrame.minY - baseline.scrollFrame.maxY) <= 1)
+        #expect(baseline.effectiveViewportBottom == 61)
+        #expect(baseline.effectiveViewportTop == 716)
+        #expect(baseline.scrollFrame.minY == 61 && baseline.scrollFrame.maxY == 716)
+        #expect(baseline.scrollFrame.maxY - baseline.scrollFrame.minY == 655)
+        #expect(baseline.navigationFrame.maxY - baseline.navigationFrame.minY == 160)
+        #expect(baseline.navigationFrame.maxY == baseline.effectiveViewportTop)
+        #expect(baseline.firstRowFrame.maxY == baseline.effectiveViewportTop)
     }
 
-    private func assertNativeFlagsAndFooter(_ baseline: Baseline) {
-        // Reviewed native List baseline (captured on the current macOS SDK).  These are public
-        // control settings and semantic row geometry, not object addresses or SwiftUI internals.
+    private func assertNativeFlagsAndChrome(_ baseline: Baseline) {
+        // Reviewed public control settings and semantic chrome, not object addresses or internals.
         #expect(baseline.flags.allowsTypeSelect)
         #expect(!baseline.flags.floatsGroupRows)
         #expect(baseline.flags.indentationPerLevel == 12)
@@ -120,9 +129,7 @@ import Testing
         #expect(baseline.flags.selectionHighlightStyle == 1)
         #expect(baseline.flags.rowSizeStyle == 2)
         #expect(baseline.flags.style == 3)
-        // Record the production-context inset for comparison, but do not make the adapter copy the
-        // legacy List's private footer accounting. B5 requires the owned native scroll view to use
-        // zero contentInsets while the surrounding footer remains outside that surface.
+        // B5: the owned native scroll view keeps zero contentInsets; the footer stays outside it.
         #expect(baseline.flags.contentInsets.top == 0)
         #expect(baseline.flags.contentInsets.left == 0)
         #expect(baseline.flags.contentInsets.right == 0)
@@ -131,9 +138,32 @@ import Testing
         #expect(baseline.navigationFrame.maxY <= baseline.contentLayoutRect.maxY + 1)
         #expect(baseline.scrollFrame.minY >= baseline.contentLayoutRect.minY - 1)
         #expect(baseline.scrollFrame.maxY <= baseline.contentLayoutRect.maxY + 1)
-        // The compact footer reserves only the appearance icons and Settings control; connection
-        // status now lives in the main window title bar.
-        #expect(baseline.effectiveViewportBottom == 61)
+    }
+
+    /// Keyboard expectations from the actual observed unified baseline: `down` from the Recent task
+    /// selects both aliased rows (11, 12); `up` crosses the unselectable Recent heading onto the
+    /// group row (8); `home` is a viewport scroll, not a selection jump, and keeps the anchor — the
+    /// same observed public semantics as the old List baseline; `end`, `pageUp`, `pageDown`,
+    /// `commandA`, `return`, `space` and the type-select letter also keep the anchor. The two
+    /// cross-section probes pin navigation ↔ Running travel: `runningUp` walks from the Running
+    /// task up onto the Statistics navigation row, and `statisticsDown` walks back down, skipping
+    /// the destinationless Running heading, onto the Running task.
+    private func expectedUnifiedKeyboardSelection(_ fixture: SidebarNativeBaselineFixture) -> [KeyboardProbe: [Int]] {
+        let anchor = fixture.anchorRow
+        return [
+            .up: [fixture.groupRow], .down: [fixture.workflowAliasRow, fixture.shortcutAliasRow],
+            .home: [anchor], .end: [anchor], .pageUp: [anchor], .pageDown: [anchor],
+            .commandA: [anchor], .return: [anchor], .space: [anchor], .letter: [anchor],
+            .runningUp: [4], .statisticsDown: [6]
+        ]
+    }
+
+    /// Each probe's pinned before-selection: the Recent anchor (10) for the ten original probes,
+    /// the Running task (6) for `runningUp`, and Statistics (4) for `statisticsDown`.
+    private func expectedUnifiedKeyboardAnchors(_ fixture: SidebarNativeBaselineFixture) -> [KeyboardProbe: [Int]] {
+        Dictionary(uniqueKeysWithValues: KeyboardProbe.allCases.map { probe in
+            (probe, [probe == .runningUp ? 6 : probe == .statisticsDown ? 4 : fixture.anchorRow])
+        })
     }
 
     @Test func givenPlainOwnedOutline_whenMultipleSelectionIsDisabled_thenProgrammaticAliasesRemainSelectable() {
@@ -154,7 +184,7 @@ import Testing
     }
 }
 
-private let expectedAXSignatures: [[String]] = [
+private let expectedRecentAXSignatures: [[String]] = [
     ["AXHeading|Recent work||"],
     ["AXStaticText||Refactor the parser|", "AXUnknown|Done||", "AXStaticText||Codex · repo|"],
     ["AXStaticText||Baseline workflow|", "AXUnknown|Done||", "AXStaticText||Codex · repo|"],
@@ -162,13 +192,6 @@ private let expectedAXSignatures: [[String]] = [
      "AXStaticText||Vibe · repo|"],
     ["AXStaticText||Bump dependencies|", "AXUnknown|Failed||", "AXStaticText||Vibe · app|"],
     []
-]
-
-// Rows 2 and 3 are the workflow and shortcut aliases of the same logical destination.
-// Down must synchronize both, just as the explicit alias-selection probe requires.
-private let expectedKeyboardSelection: [KeyboardProbe: [Int]] = [
-    .up: [1], .down: [2, 3], .home: [1], .end: [1], .pageUp: [1], .pageDown: [1],
-    .commandA: [1], .return: [1], .space: [1], .letter: [1]
 ]
 
 private let expectedRunningAXSignatures: [[String]] = [
@@ -179,3 +202,8 @@ private let expectedRunningAXSignatures: [[String]] = [
     ["AXStaticText||review-bot|", "AXUnknown|Claude, Codex||", "AXStaticText||Parallel run · 1 of 2 finished|",
      "AXUnknown|Running||", "AXButton|Expand or collapse review-bot|Collapsed|"]
 ]
+
+private let expectedUnifiedAXSignatures: [[String]] = [
+    ["AXStaticText||New task|"], ["AXStaticText||Needs you, 3 pending|"],
+    ["AXStaticText||Workflows|"], ["AXStaticText||Resources|"], ["AXStaticText||Statistics|"]
+] + expectedRunningAXSignatures + expectedRecentAXSignatures

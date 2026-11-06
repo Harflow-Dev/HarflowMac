@@ -44,6 +44,15 @@ struct SidebarNativeRow: View {
     let increasedProminence: Bool
     var availableWidth: CGFloat?
     let occupiedHeight: @MainActor @Sendable (CGFloat) -> Void
+    /// Presentation bridge for bridged disclosure rows: carries progress, natural height,
+    /// the final logical target and the report authority generation so the coordinator gates
+    /// on presentation settlement. When nil, bridged rows fall back to the
+    /// occupied-height-only channel.
+    var onPresentation: (@MainActor @Sendable (SidebarNativePresentationReport) -> Void)?
+    /// Reporting authority generation for this root configuration; renews on every
+    /// association, root refresh and detach. Participates in the combined report value,
+    /// so an identical endpoint re-emits after a root refresh and confirms current authority.
+    var reportAuthority: Int = 0
     var measurementOnly = false
 
     var resolvedEnvironment: EnvironmentValues {
@@ -139,8 +148,13 @@ struct SidebarNativeRow: View {
             if measurementOnly {
                 itemContent(item).frame(minHeight: entry.minimumHeight)
             } else {
+                let bridgedPresentation = usesDisclosureBridge ? onPresentation : nil
                 SidebarDisclosureRow(isVisible: !entry.isFading, animate: animate, minimumHeight: entry.minimumHeight,
-                                     onOccupiedHeight: usesDisclosureBridge ? occupiedHeight : nil) {
+                                     reportAuthority: reportAuthority,
+                                     // With a presentation channel the disclosure reports through exactly
+                                     // one authority; the occupied-height callback alone serves the fallback.
+                                     onOccupiedHeight: usesDisclosureBridge && bridgedPresentation == nil ? occupiedHeight : nil,
+                                     onPresentation: bridgedPresentation) {
                     itemContent(item)
                 }
                 .allowsHitTesting(!entry.isFading)

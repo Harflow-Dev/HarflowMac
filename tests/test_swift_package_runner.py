@@ -406,6 +406,7 @@ M04_STATE_MATRIX_SUITE = "MainWindowFeatureTests.M04StateMatrixHostedTests"
 NEW_SESSION_COMPOSER_SUITE = "MainWindowFeatureTests.NewSessionComposerHostedTests"
 CENTERED_COMPOSER_SUITE = "MainWindowFeatureTests.CenteredComposerHostedTests"
 SIDEBAR_UNIFIED_SUITE = "MainWindowFeatureTests.SidebarUnifiedHostedTests"
+SIDEBAR_RAIL_AX_SUITE = "MainWindowFeatureTests.SidebarNavigationRailFocusedAXHostedTests"
 SIDEBAR_BASELINE_SUITE = "MainWindowFeatureTests.SidebarNativeParityBaselineTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
@@ -415,6 +416,7 @@ HOSTED_SUITE_NAMES = (
     NEW_SESSION_COMPOSER_SUITE,
     CENTERED_COMPOSER_SUITE,
     SIDEBAR_UNIFIED_SUITE,
+    SIDEBAR_RAIL_AX_SUITE,
     SIDEBAR_BASELINE_SUITE,
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"

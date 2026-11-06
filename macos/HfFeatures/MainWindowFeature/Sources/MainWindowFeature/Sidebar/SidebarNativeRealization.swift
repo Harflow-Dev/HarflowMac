@@ -25,6 +25,9 @@ extension SidebarNativeList.Coordinator {
         if box.latestHostedReport != nil, cells[box.entry.displayID] == nil {
             box.height = nil
             box.latestHostedReport = nil
+            // The reporting association is gone; retire its blocker so the restored natural
+            // estimate settles the row geometry deterministically.
+            retirePresentationSettlement(box)
         }
         if let height = box.height { return max(HfRadius.Metrics.hairlineStroke, height) }
         // AppKit requires a positive native slot even while real disclosure content occupies
@@ -64,6 +67,10 @@ extension SidebarNativeList.Coordinator {
         cell.hasLaidOut = false
         cell.frame.size.width = availableWidth
         cell.animate = !seenIDs.contains(box.entry.id)
+        // A fresh animated association presents from zero against provisional natural
+        // estimates: mark it unsettled BEFORE the first hosted callback can run, so the
+        // settlement gate never admits on the un-reported layout window.
+        if cell.animate, usesPresentationBridge(box.entry) { box.presentationSettled = false }
         box.reportGeneration += 1
         let reportGeneration = box.reportGeneration
         box.associationToken = UUID()
@@ -71,12 +78,17 @@ extension SidebarNativeList.Coordinator {
         cells[box.entry.displayID] = cell
         invalidateNaturalProminence(box)
         rootWriteCount += 1
-        cell.configure(entry: box.entry, actions: actions, selected: box.entry.destination == selection,
+        cell.configure(entry: box.entry, actions: actions, selected: isSelected(box.entry),
                        animate: cell.animate, environment: environment,
                        onHeight: { [weak self, weak box, weak cell] height in
                            guard let self, let box, let cell else { return }
                            recordHostedHeight(height, box: box, cell: cell, generation: reportGeneration)
-                       })
+                       },
+                       onPresentation: { [weak self, weak box, weak cell] report in
+                           guard let self, let box, let cell else { return }
+                           recordHostedPresentation(report, box: box, cell: cell, generation: reportGeneration)
+                       },
+                       reportAuthority: reportGeneration)
         cell.frame.size.width = availableWidth
         cell.host?.frame.size.width = availableWidth
         cell.onProminence = { [weak self, weak box, weak cell] in
@@ -114,9 +126,15 @@ extension SidebarNativeList.Coordinator {
         box.reportGeneration += 1
         box.associationToken = UUID()
         box.height = nil
-        box.pendingHostedHeight = nil
         box.latestHostedReport = nil
-        pendingHostedHeights.remove(box.entry.displayID)
+        // Retire the unsettled blocker: the row can never re-report in this association, and
+        // the natural measurement estimate owns its geometry again (see `heightOfRowByItem`),
+        // so detached or offscreen cells cannot deadlock bounded pagination. The stale native
+        // slot itself is restored at the queued native-safe boundary — no height invalidation
+        // here, inside AppKit's own operation — and sentinel admission holds until then.
+        retirePresentationSettlement(box)
+        box.pendingNativeSlotRestoration = true
+        queueGeometry()
         pendingMounted.remove(box.entry.displayID)
     }
 

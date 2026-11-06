@@ -52,7 +52,7 @@ import Testing
     }
 
     @Test func givenTheRealSidebar_whenNavigationAccessibilityActionsArePressed_thenOnlyTheirOwnRoutesFire() async throws {
-        // given — approved M04 navigation is external to both native observation lists.
+        // given — approved M04 navigation belongs to the single native body outline.
         _ = NSApplication.shared
         let axAttribute = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
         let previousAX = NSApplication.shared.accessibilityAttributeValue(axAttribute)
@@ -75,39 +75,59 @@ import Testing
         }
         await waitUntil {
             host.layoutSubtreeIfNeeded()
-            return sidebarFixtureOutline(in: host, role: .running) != nil
-                && sidebarFixtureOutline(in: host) != nil
+            return sidebarUnifiedFixtureOutline(in: host) != nil
         }
-        let running = try #require(sidebarFixtureOutline(in: host, role: .running))
-        let recent = try #require(sidebarFixtureOutline(in: host))
-        let runningRows = running.numberOfRows
-        let recentRows = recent.numberOfRows
+        let outline = try #require(sidebarUnifiedFixtureOutline(in: host))
+        let rowIDs = (0 ..< outline.numberOfRows).compactMap {
+            (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id
+        }
         let elements = unique(accessibilityObjects(in: host))
+        try assertNavigationNames(in: outline, badgeName: harness.sut.needsYouBadge.accessibilityLabel)
         let navigation: [(String, MonitorDestination)] = [
-            ("Workflows", .workflowLibrary), ("Resources", .resourceSlots), ("Statistics", .statistics)
+            ("navigation:workflows", .workflowLibrary), ("navigation:resources", .resourceSlots),
+            ("navigation:statistics", .statistics)
         ]
 
-        // when — press each real navigation button through its public AX action.
-        for (title, destination) in navigation {
-            let buttons = elements.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == title }
-            #expect(buttons.count == 1)
-            let button = try #require(buttons.first)
+        // when — select each real native row using the public accessibility table API.
+        // Native delegate delivery, including the exact route count, remains under test.
+        for (id, destination) in navigation {
+            let row = try #require(rowIDs.firstIndex(of: id))
+            let accessibleRows = try #require((outline as any NSAccessibilityProtocol).accessibilityRows())
+            try #require(accessibleRows.indices.contains(row))
             let before = selections.count
-            #expect(press(button))
+            (outline as any NSAccessibilityProtocol)
+.setAccessibilitySelectedRows([accessibleRows[row]])
+            await waitUntil { selections.count > before }
             #expect(selections.count == before + 1)
-            #expect(selections.last! == destination)
+            #expect(selections.last == .some(destination))
+            #expect(outline.selectedRowIndexes == IndexSet(integer: row))
         }
 
-        // then — navigation never exposes the removed header actions, search or backend filter,
-        // and never mutates either list's disclosure/row state.
-        #expect(elements.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "New task" }.count == 1)
-        #expect(elements.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && (label(of: $0)?.hasPrefix("Needs you") ?? false) }.count == 1)
+        // then — all five navigation rows are present, without restoring removed controls.
+        #expect(Array(rowIDs.prefix(5)) == ["navigation:new-task", "navigation:needs-you",
+                                          "navigation:workflows", "navigation:resources", "navigation:statistics"])
         #expect(!elements.contains { ["Collapse workflows", "Expand workflows", "New workflow", "Search loaded history"].contains(label(of: $0) ?? "") })
         #expect(!nativeViews(in: host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
-        #expect(running.numberOfRows == runningRows)
-        #expect(recent.numberOfRows == recentRows)
-        #expect(running.selectedRowIndexes.isEmpty)
-        #expect(recent.selectedRowIndexes.isEmpty)
+        #expect((0 ..< outline.numberOfRows).compactMap {
+            (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id
+        } == rowIDs)
+    }
+
+    private func assertNavigationNames(in outline: NSOutlineView, badgeName: String) throws {
+        let expectedNames = ["New task", badgeName,
+                             "Workflows", "Resources", "Statistics"]
+        let axRows = try #require((outline as any NSAccessibilityProtocol).accessibilityRows())
+        #expect(axRows.count == outline.numberOfRows)
+        for (index, name) in expectedNames.enumerated() {
+            let cell = try #require(outline.view(atColumn: 0, row: index, makeIfNecessary: true))
+            #expect(unique(accessibilityObjects(in: cell)).contains { object in
+                ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { attribute in
+                    let selector = NSSelectorFromString(attribute)
+                    return object.responds(to: selector)
+                        && object.perform(selector)?.takeUnretainedValue() as? String == name
+                }
+            }, "Native navigation row must expose its spoken name: \(name)")
+        }
     }
 
     @Test func givenAHeaderCell_whenReconfigured_thenItsHeadingLabelTracksStateWithoutStaleRole() async throws {

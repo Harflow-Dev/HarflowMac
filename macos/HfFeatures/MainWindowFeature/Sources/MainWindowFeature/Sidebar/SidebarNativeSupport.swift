@@ -13,7 +13,24 @@ import SwiftUI
     var reportGeneration = 0
     /// Most recent valid preference report, independent of deferred native-height commitment.
     var latestHostedReport: CGFloat?
+    /// Latest valid combined occupancy/presentation report, stored after every identity guard
+    /// passes. The raw-geometry witness reads this; the parent's published state derives from
+    /// committed pairs, not from it.
+    var latestCombinedReport: SidebarNativePresentationReport?
     var pendingHostedHeight: CGFloat?
+    /// Settlement to commit atomically with `pendingHostedHeight` at the native flush boundary.
+    var pendingHostedSettlement = false
+    /// Report authority generation of the pending height/settlement pair; a stale
+    /// generation (a root refresh or re-association) never commits it.
+    var pendingHostedGeneration = 0
+    /// Committed presentation settlement. False marks an animated disclosure whose
+    /// presentation has not yet committed its final logical target together with its final
+    /// height; admission paths hold off a box while this is false.
+    var presentationSettled = true
+    /// Set when this box's reporting association detached: its native slot keeps a stale
+    /// hosted height until the queued native-safe boundary restores the static natural
+    /// estimate. Sentinel admission holds while any restoration is pending.
+    var pendingNativeSlotRestoration = false
     var entryRevision = 0
     var naturalHeight: CGFloat?
     var measurementKey: SidebarNativeMeasurementKey?
@@ -68,7 +85,9 @@ import SwiftUI
     }
 
     func configure(entry: SidebarListEntry, actions: SidebarNativeActions, selected: Bool, animate: Bool = false,
-                   environment: EnvironmentValues, onHeight: @escaping @MainActor @Sendable (CGFloat) -> Void) {
+                   environment: EnvironmentValues, onHeight: @escaping @MainActor @Sendable (CGFloat) -> Void,
+                   onPresentation: (@MainActor @Sendable (SidebarNativePresentationReport) -> Void)? = nil,
+                   reportAuthority: Int = 0) {
         if case .workflowsHeader(let expanded) = entry.content {
             headingLabel = expanded ? "Collapse workflows" : "Expand workflows"
         } else {
@@ -77,7 +96,8 @@ import SwiftUI
         let root = SidebarNativeRow(entry: entry, actions: actions, selected: selected, animate: animate,
                                     environment: environment, increasedProminence: backgroundStyle == .emphasized,
                                     availableWidth: frame.width > 0 ? frame.width : nil,
-                                    occupiedHeight: onHeight)
+                                    occupiedHeight: onHeight, onPresentation: onPresentation,
+                                    reportAuthority: reportAuthority)
         if let host {
             host.rootView = root
         } else {

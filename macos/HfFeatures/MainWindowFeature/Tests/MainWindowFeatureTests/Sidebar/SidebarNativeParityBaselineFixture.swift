@@ -13,13 +13,63 @@ import Testing
     let viewModel: SidebarViewModelMock
     let controller: NSHostingController<AnyView>
     let window: NSWindow
-    let navigationFrame: CGRect
     let promptViewModel: NewSessionViewModelMock
     let promptEditor: NSTextView
-    let runningOutline: NSOutlineView
     let outline: NSOutlineView
+    let anchorRow: Int
+    let groupRow: Int
+    let workflowAliasRow: Int
+    let shortcutAliasRow: Int
     private let previousEnhancedInterface: Any?
     private let previousActivationPolicy: NSApplication.ActivationPolicy
+
+    /// The unified surface's exact entry order: five navigation rows, the Running section, its
+    /// travelled Recent work, and the admission sentinel. Discovery is ID-based — the single
+    /// outline that owns the `navigation:new-task` entry.
+    static let unifiedEntryIDs = [
+        "navigation:new-task", "navigation:needs-you", "navigation:workflows", "navigation:resources",
+        "navigation:statistics", "header:running", "task:abc123", "task:abc123-child", "group:review-bot",
+        "header:recent", "task:def456", "workflow:baseline-workflow",
+        "workflow-shortcut:baseline-parent:baseline-workflow", "task:ghi789", "history:sentinel"
+    ]
+
+    /// Every outline under `view` that realizes the unified navigation entry.
+    static func unifiedOutlines(in view: NSView) -> [NSOutlineView] {
+        findViews(view).compactMap { $0 as? NSOutlineView }.filter { outline in
+            (0 ..< outline.numberOfRows).contains {
+                (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id == "navigation:new-task"
+            }
+        }
+    }
+
+    /// The single unified outline, `nil` while reconciliation has not settled it (or on duplication).
+    static func unifiedOutline(in view: NSView) -> NSOutlineView? {
+        let outlines = unifiedOutlines(in: view)
+        return outlines.count == 1 ? outlines[0] : nil
+    }
+
+    static func entryIDs(in outline: NSOutlineView) -> [String] {
+        (0 ..< outline.numberOfRows).compactMap { (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id }
+    }
+
+    /// The outline row realizing one unified entry id.
+    static func row(of entryID: String, in outline: NSOutlineView) -> Int? {
+        (0 ..< outline.numberOfRows).first {
+            (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id == entryID
+        }
+    }
+
+    /// The shared navigation block's row geometry in window space: the union of every navigation
+    /// row's native rect, independent of the obsolete AX-button frame lookup.
+    static func navigationFrame(of outline: NSOutlineView) -> CGRect? {
+        var frame: CGRect?
+        for index in 0 ..< outline.numberOfRows
+        where (outline.item(atRow: index) as? SidebarNativeItemBox)?.entry.id.hasPrefix("navigation:") == true {
+            let rect = outline.convert(outline.rect(ofRow: index), to: nil)
+            frame = frame.map { $0.union(rect) } ?? rect
+        }
+        return frame
+    }
 
     init() async throws {
         _ = NSApplication.shared
@@ -61,25 +111,24 @@ import Testing
         let hostedWindow = window
         await waitUntil(timeout: 5) {
             hostedView.layoutSubtreeIfNeeded()
+            guard let outline = Self.unifiedOutline(in: hostedView), Self.entryIDs(in: outline).count == 15 else { return false }
             return NSApp.isActive && hostedWindow.isKeyWindow
-                && Self.findNavigationFrame(in: hostedView) != nil
+                && Self.entryIDs(in: outline) == Self.unifiedEntryIDs
                 && Self.findViews(hostedView).compactMap { $0 as? ComposerPromptScrollView }.count == 1
-                && sidebarFixtureOutline(in: hostedView, role: .running) != nil
-                && (sidebarFixtureOutline(in: hostedView)?.numberOfRows ?? 0) > 0
         }
-        self.navigationFrame = try #require(Self.findNavigationFrame(in: hostedView))
+        Self.writeUnifiedDiagnostic(hostedView: hostedView, hostedWindow: hostedWindow)
+        let foundOutline = try #require(Self.unifiedOutline(in: hostedView))
+        self.outline = foundOutline
+        // ID-based row resolution: every probe anchors on an entry id, never a subview order.
+        self.anchorRow = try #require(Self.row(of: "task:def456", in: foundOutline))
+        self.groupRow = try #require(Self.row(of: "group:review-bot", in: foundOutline))
+        self.workflowAliasRow = try #require(Self.row(of: "workflow:baseline-workflow", in: foundOutline))
+        self.shortcutAliasRow = try #require(Self.row(of: "workflow-shortcut:baseline-parent:baseline-workflow", in: foundOutline))
         let promptScrollViews = Self.findViews(hostedView).compactMap { $0 as? ComposerPromptScrollView }
         try #require(promptScrollViews.count == 1)
         self.promptEditor = try #require(promptScrollViews.first?.promptTextView)
         try #require(promptEditor.isEditable && promptEditor.window === hostedWindow)
-        self.runningOutline = try #require(sidebarFixtureOutline(in: hostedView, role: .running))
         #expect(!Self.findViews(hostedView).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
-        let foundOutline = try #require(sidebarFixtureOutline(in: hostedView))
-        self.outline = foundOutline
-        await waitUntil(timeout: 5) {
-            hostedView.layoutSubtreeIfNeeded()
-            return foundOutline.numberOfRows >= 5
-        }
     }
 
     private static func fixtureSections() -> [SidebarSection] {
@@ -119,7 +168,7 @@ import Testing
                 index: row,
                 identifier: String(describing: item),
                 rect: outline.rect(ofRow: row),
-                fittingHeight: rowView?.fittingSize.height ?? 0,
+                fittingHeight: Self.contentFittingHeight(of: rowView, row: row),
                 isGroupItem: outline.delegate?.outlineView?(outline, isGroupItem: item),
                 isGroupRowStyle: realizedRowView?.isGroupRowStyle,
                 accessibility: Self.accessibilityTree(rowView)
@@ -152,7 +201,7 @@ import Testing
             keyboard: keyboard,
             promptFocus: promptFocus,
             aliasSelection: aliases,
-            navigationFrame: FrameRecord(navigationFrame),
+            navigationFrame: Self.navigationFrame(of: outline).map(FrameRecord.init) ?? FrameRecord(.zero),
             scrollFrame: FrameRecord(outline.enclosingScrollView?.convert(
                 outline.enclosingScrollView?.bounds ?? .zero, to: nil
             ) ?? .zero),
@@ -166,15 +215,14 @@ import Testing
     }
 
     func settle() async {
-        var previous: [CGRect] = []
-        var stablePasses = 0
         await waitUntil(timeout: 5) {
             controller.view.layoutSubtreeIfNeeded()
             controller.view.displayIfNeeded()
-            let current = (0 ..< outline.numberOfRows).map { outline.rect(ofRow: $0) }
-            stablePasses = current == previous ? stablePasses + 1 : 0
-            previous = current
-            return stablePasses >= 6
+            guard let coordinator = outline.delegate as? SidebarNativeList.Coordinator else { return false }
+            return coordinator.reconciliation == nil && coordinator.detached == nil
+                && coordinator.pendingInput == nil && !coordinator.hasUnsettledPresentations
+                && coordinator.pendingHeights.isEmpty && coordinator.pendingHostedHeights.isEmpty
+                && coordinator.settledGeneration == coordinator.generation
         }
     }
 
@@ -189,9 +237,27 @@ import Testing
         }
     }
 
+    /// The native `NSTableCellView` wrapper has no intrinsic content size (its fit reports 0);
+    /// the production hosted cell's own `NSHostingView` fit is the real row content height, proven
+    /// by the hosted layout tests. A row without its hosted content is recorded and fails loudly —
+    /// never a silent zero that could pass as an empty measurement.
+    private static func contentFittingHeight(of rowView: NSView?, row: Int) -> CGFloat {
+        guard rowView != nil else {
+            Issue.record("Unified baseline row \(row) has no realized native cell to measure")
+            return 0
+        }
+        guard let cell = rowView as? SidebarNativeCell else { return rowView?.fittingSize.height ?? 0 }
+        guard let host = cell.host else {
+            Issue.record("Unified baseline row \(row) has a native cell without its hosted content")
+            return 0
+        }
+        return host.fittingSize.height
+    }
+
     private func send(_ probe: KeyboardProbe) -> KeyboardObservation {
         outline.window?.makeFirstResponder(outline)
-        outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        let anchor = Self.row(of: probe.anchorEntryID, in: outline) ?? anchorRow
+        outline.selectRowIndexes(IndexSet(integer: anchor), byExtendingSelection: false)
         let before = Array(outline.selectedRowIndexes)
         let event = NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: probe.modifiers,
@@ -210,11 +276,10 @@ import Testing
     }
 
     private func probePromptFocus() -> PromptFocusObservation {
-        // Seed both independent lists after the keyboard probes and before alias selection.
-        runningOutline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
-        outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
-        let runningBefore = Array(runningOutline.selectedRowIndexes)
-        let recentBefore = Array(outline.selectedRowIndexes)
+        // Seed the unified outline's anchor row after the keyboard probes and before alias selection.
+        outline.window?.makeFirstResponder(outline)
+        outline.selectRowIndexes(IndexSet(integer: anchorRow), byExtendingSelection: false)
+        let selectionBefore = Array(outline.selectedRowIndexes)
         let textBefore = promptEditor.string
         let messageBefore = promptViewModel.message
         let requested = window.makeFirstResponder(promptEditor)
@@ -231,16 +296,14 @@ import Testing
             arrowsKeptFocus: focusedBefore && window.firstResponder === promptEditor,
             nativeTextUnchanged: !textBefore.isEmpty && promptEditor.string == textBefore,
             modelMessageUnchanged: !messageBefore.isEmpty && promptViewModel.message == messageBefore,
-            runningSelectionBefore: runningBefore,
-            runningSelectionAfter: Array(runningOutline.selectedRowIndexes),
-            recentSelectionBefore: recentBefore,
-            recentSelectionAfter: Array(outline.selectedRowIndexes)
+            selectionBefore: selectionBefore,
+            selectionAfter: Array(outline.selectedRowIndexes)
         )
     }
 
     private func aliasSelection() -> [Int] {
         outline.window?.makeFirstResponder(outline)
-        outline.selectRowIndexes(IndexSet([2, 3]), byExtendingSelection: false)
+        outline.selectRowIndexes(IndexSet([workflowAliasRow, shortcutAliasRow]), byExtendingSelection: false)
         return Array(outline.selectedRowIndexes)
     }
 }
@@ -360,66 +423,14 @@ struct PromptFocusObservation: Codable {
     let arrowsKeptFocus: Bool
     let nativeTextUnchanged: Bool
     let modelMessageUnchanged: Bool
-    let runningSelectionBefore: [Int]
-    let runningSelectionAfter: [Int]
-    let recentSelectionBefore: [Int]
-    let recentSelectionAfter: [Int]
-}
-
-enum KeyboardProbe: String, CaseIterable, Hashable {
-    case up, down, home, end, pageUp, pageDown, commandA, `return`, space, letter
-
-    var characters: String {
-        switch self {
-        case .up: String(UnicodeScalar(0xF700)!)
-        case .down: String(UnicodeScalar(0xF701)!)
-        case .home: String(UnicodeScalar(0xF729)!)
-        case .end: String(UnicodeScalar(0xF72B)!)
-        case .pageUp: String(UnicodeScalar(0xF72C)!)
-        case .pageDown: String(UnicodeScalar(0xF72D)!)
-        case .commandA: "a"
-        case .return: "\r"
-        case .space: " "
-        case .letter: "b"
-        }
-    }
-
-    var keyCode: UInt16 {
-        switch self {
-        case .up: 126
-        case .down: 125
-        case .home: 115
-        case .end: 119
-        case .pageUp: 116
-        case .pageDown: 121
-        case .commandA: 0
-        case .return: 36
-        case .space: 49
-        case .letter: 11
-        }
-    }
-
-    var modifiers: NSEvent.ModifierFlags { self == .commandA ? .command : [] }
+    let selectionBefore: [Int]
+    let selectionAfter: [Int]
 }
 
 // MARK: - Native helpers
 
 extension SidebarNativeBaselineFixture {
-    static func findNavigationFrame(in view: NSView) -> CGRect? {
-        guard let window = view.window else { return nil }
-        // The public semantic AX button supplies geometry independently of native focus.
-        var seen = Set<ObjectIdentifier>()
-        let buttons = accessibilityObjects(view).filter { object in
-            seen.insert(ObjectIdentifier(object)).inserted
-                && object.accessibilityObjectValue("accessibilityIdentifier") == "sidebar-navigation-New task"
-                && object.accessibilityObjectValue("accessibilityRole") == "AXButton"
-        }
-        guard buttons.count == 1,
-              let button = buttons.first,
-              let frame = accessibilityFrameInWindow(button, window: window),
-              !frame.isEmpty else { return nil }
-        return frame
-    }
+    static func findViews(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(findViews) }
 
     private static func accessibilityFrameInWindow(_ object: NSObject, window: NSWindow) -> CGRect? {
         if let accessible = object as? any NSAccessibilityProtocol {
@@ -430,8 +441,6 @@ extension SidebarNativeBaselineFixture {
               let value = object.value(forKey: "accessibilityFrame") as? NSValue else { return nil }
         return window.convertFromScreen(value.rectValue)
     }
-
-    static func findViews(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(findViews) }
 
     static func accessibilityTree(_ view: NSView?) -> [AXObservation] {
         guard let view else { return [] }
@@ -473,6 +482,91 @@ extension SidebarNativeBaselineFixture {
     }
 }
 
+// MARK: - Unified AX diagnostic (test-only)
+
+/// Env-gated, diagnostic-only AX/geometry snapshot of the unified surface before the strict `#require`.
+private extension SidebarNativeBaselineFixture {
+    static func writeUnifiedDiagnostic(hostedView: NSView, hostedWindow: NSWindow) {
+        guard let output = ProcessInfo.processInfo.environment["HARFLOW_SIDEBAR_NATIVE_BASELINE_OUTPUT"] else { return }
+        let base = output as NSString
+        let name = base.deletingPathExtension + "-unified-diagnostic." + (base.pathExtension.isEmpty ? "json" : base.pathExtension)
+        do {
+            let data = try JSONSerialization.data(withJSONObject: unifiedPayload(hostedView: hostedView, hostedWindow: hostedWindow),
+                                                   options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: URL(fileURLWithPath: name), options: .atomic)
+        } catch {
+            Issue.record("Unified sidebar diagnostic failed at \(name): \(error)")
+        }
+    }
+
+    private static func unifiedPayload(hostedView: NSView, hostedWindow: NSWindow) -> [String: Any] {
+        let outlines = findViews(hostedView).compactMap { $0 as? NSOutlineView }.filter { outline in
+            (0 ..< outline.numberOfRows).contains { (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id == "navigation:new-task" }
+        }
+        return [
+            "window": ["frame": frameRecord(hostedWindow.frame), "contentLayoutRect": frameRecord(hostedWindow.contentLayoutRect)],
+            "unifiedOutlines": outlines.map { outlineRecord($0, window: hostedWindow) },
+            "chromeAX": chromeAX(hostedView, window: hostedWindow)
+        ]
+    }
+
+    private static func chromeAX(_ view: NSView, window: NSWindow) -> [[String: Any]] {
+        accessibilityObjects(view)
+.filter { object in
+            ["sidebar-unified", "sidebar-navigation-New task"].contains(object.accessibilityObjectValue("accessibilityIdentifier") ?? "")
+                || ["Collapse sidebar", "Settings", "New task"].contains(object.accessibilityObjectValue("accessibilityLabel") ?? "")
+        }
+.map { axRecord($0, window: window) }
+    }
+
+    private static func outlineRecord(_ outline: NSOutlineView, window: NSWindow) -> [String: Any] {
+        let selector = NSSelectorFromString("accessibilityRows")
+        let rows = outline.responds(to: selector)
+            ? (outline.value(forKey: "accessibilityRows") as? [Any])?.compactMap { $0 as? NSObject } ?? [] : []
+        let entries = (0 ..< outline.numberOfRows).map { row -> [String: Any] in
+            let box = outline.item(atRow: row) as? SidebarNativeItemBox
+            let view = outline.view(atColumn: 0, row: row, makeIfNecessary: false)
+            return [
+                "index": row,
+                "entryID": box?.entry.id ?? NSNull(),
+                "destination": box?.entry.destination.map(\.pathId) ?? NSNull(),
+                "displayID": box.map { String(describing: $0.entry.displayID) } ?? NSNull(),
+                "rect": frameRecord(outline.rect(ofRow: row)),
+                "fittingHeight": view?.fittingSize.height ?? 0,
+                "cellAX": accessibilityTree(view).map { observation in
+                    ["role": observation.role ?? NSNull(), "label": observation.label ?? NSNull(), "value": observation.value ?? NSNull(),
+                     "actions": observation.actions, "childCount": observation.childCount] as [String: Any]
+                }
+            ]
+        }
+        let scroll = outline.enclosingScrollView
+        return [
+            "rowCount": outline.numberOfRows,
+            "scrollBounds": frameRecord(scroll?.bounds ?? .zero),
+            "scrollFrameInWindow": frameRecord(scroll.map { $0.convert($0.bounds, to: nil) } ?? .zero),
+            "outlineEntries": entries,
+            "axRowsCount": rows.count,
+            "axRows": rows.map { axRecord($0, window: window) },
+            "axTree": accessibilityObjects(outline).map { axRecord($0, window: window) }
+        ]
+    }
+
+    private static func axRecord(_ object: NSObject, window: NSWindow) -> [String: Any] {
+        let selected = object.responds(to: NSSelectorFromString("isAccessibilitySelected")) ? object.value(forKey: "accessibilitySelected") as? NSNumber : nil
+        var record: [String: Any] = Dictionary(uniqueKeysWithValues: ["Role", "Label", "Title", "Identifier", "Value", "Help", "Description"].map {
+            ($0.lowercased(), (object.accessibilityObjectValue("accessibility\($0)") as Any?) ?? NSNull())
+        })
+        record["actions"] = object.accessibilityObjectValues("accessibilityActionNames")
+        record["selected"] = selected?.boolValue ?? NSNull()
+        record["supportsSetAccessibilitySelected"] = object.responds(to: NSSelectorFromString("setAccessibilitySelected:"))
+        record["supportsAccessibilityPerformPress"] = object.responds(to: NSSelectorFromString("accessibilityPerformPress"))
+        record["frameInWindow"] = accessibilityFrameInWindow(object, window: window).map(frameRecord) ?? NSNull()
+        return record
+    }
+
+    private static func frameRecord(_ rect: CGRect) -> [Double] { [rect.minX, rect.minY, rect.maxX, rect.maxY] }
+}
+
 extension NSObject {
     var accessibilityChildrenCount: Int {
         let selector = NSSelectorFromString("accessibilityChildren")
@@ -491,16 +585,6 @@ extension NSObject {
         guard responds(to: selector), let values = perform(selector)?.takeUnretainedValue() as? [Any] else { return [] }
         return values.map(String.init(describing:))
     }
-}
-
-@MainActor final class TwoRowOutlineDataSource: NSObject, NSOutlineViewDataSource {
-    func outlineView(_: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        item == nil ? 2 : 0
-    }
-
-    func outlineView(_: NSOutlineView, isItemExpandable _: Any) -> Bool { false }
-
-    func outlineView(_: NSOutlineView, child index: Int, ofItem _: Any?) -> Any { index }
 }
 
 extension String {

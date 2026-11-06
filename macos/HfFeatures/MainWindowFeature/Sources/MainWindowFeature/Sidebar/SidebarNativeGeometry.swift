@@ -6,11 +6,24 @@ import SwiftUI
 // MARK: - Native selection and geometry
 
 extension SidebarNativeList.Coordinator {
+    /// The selection key every native surface shares: native row selection, realized cell
+    /// configuration and measurement caching. Every Needs you selection, with or without a
+    /// request id, resolves onto the one Needs you row.
+    var normalizedSelectionKey: MonitorDestination? {
+        guard case .needsYou? = selection else { return selection }
+        return .needsYou(itemID: nil)
+    }
+
+    /// True when `entry` realizes the current selection. An entry without a destination — a
+    /// heading, diagnostic row or the sentinel — never matches, including while no selection exists.
+    func isSelected(_ entry: SidebarListEntry) -> Bool {
+        guard let destination = entry.destination else { return false }
+        return normalizedSelectionKey == destination
+    }
+
     func synchronizeSelection() {
         guard let outline else { return }
-        // Every Needs you selection, with or without a request, highlights the one sidebar row.
-        let key: MonitorDestination? = if case .needsYou? = selection { .needsYou(itemID: nil) } else { selection }
-        let indexes = key.flatMap { destinationIndexes[$0] } ?? []
+        let indexes = normalizedSelectionKey.flatMap { destinationIndexes[$0] } ?? []
         let selectedIDs = Set(indexes.compactMap { boxes.indices.contains($0) ? boxes[$0].entry.displayID : nil })
         let changedIDs = lastHostedSelectedIDs.symmetricDifference(selectedIDs)
         // AppKit may already have changed its indexes before notifying the delegate. Keep
@@ -75,6 +88,9 @@ extension SidebarNativeList.Coordinator {
     func deliverGeometry() {
         guard let outline, let scroll else { return }
         flushHostedHeights()
+        // Detached slots restore their static natural estimate at this native-safe queued
+        // boundary, before this delivery's sentinel admission reads the gate and the rects.
+        restoreDetachedNativeSlots(outline)
         let indexes = IndexSet(pendingHeights.compactMap { indexesByID[$0] })
         pendingHeights.removeAll()
         if !indexes.isEmpty {
@@ -107,10 +123,21 @@ extension SidebarNativeList.Coordinator {
         let rect = outline.rect(ofRow: sentinel)
         let viewport = outline.convert(scroll.contentView.bounds, from: scroll.contentView)
         let visible = rect.maxY >= viewport.minY && rect.minY <= viewport.maxY
-        let publication = SidebarNativeHistoryPublication(visible: visible, revision: input.historyRevision, token: input.historyToken)
+        historyGeometryObserved?(visible)
+        // Presentation-settlement gate: a hosted disclosure that has not committed its final
+        // logical target atomically with its final height at the native flush boundary keeps
+        // every intermediate geometry provisional, so sentinel visibility admits true only
+        // from settled layout. A standing admission is actively revoked while any
+        // presentation remains unsettled — never merely skipped, which would leave a stale
+        // true in force. This is why the arrangement above flushes hosted heights first:
+        // admission reads only committed (height, settlement) pairs.
+        let publication = SidebarNativeHistoryPublication(
+            visible: visible && !hasUnsettledPresentations,
+            revision: input.historyRevision, token: input.historyToken
+        )
         guard publication != historyPublication else { return }
         historyPublication = publication
-        actions.history(visible, input.historyRevision)
+        actions.history(publication.visible, input.historyRevision)
     }
 
     func outlineViewSelectionDidChange(_: Notification) {

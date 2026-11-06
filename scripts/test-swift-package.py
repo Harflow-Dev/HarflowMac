@@ -83,6 +83,7 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.NewSessionComposerHostedTests",
     "MainWindowFeatureTests.CenteredComposerHostedTests",
     "MainWindowFeatureTests.SidebarUnifiedHostedTests",
+    "MainWindowFeatureTests.SidebarNavigationRailFocusedAXHostedTests",
     "MainWindowFeatureTests.SidebarNativeParityBaselineTests",
 })
 HOSTED_PACKAGE = "MainWindowFeature"

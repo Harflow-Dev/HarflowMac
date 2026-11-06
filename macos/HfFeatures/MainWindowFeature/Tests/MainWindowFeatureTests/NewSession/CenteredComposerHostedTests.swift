@@ -39,10 +39,26 @@ struct CenteredComposerHostedTests {
                 "The centered composer must host its real native prompt editor."
             )
 
-            // then — the empty draft takes the one-line floor inside the 720-point group.
-            #expect(abs(prompt.bounds.height - ComposerSizing.floorHeight) < 0.5)
+            // then — the empty draft takes the one-line floor (26) inside the 720-point group.
+            let editor = prompt.promptTextView
+            #expect(editor.string.isEmpty)
+            #expect(abs(prompt.bounds.height - 26) < 0.5)
             #expect(abs(prompt.bounds.width - 688) < 1)
-            #expect(contains("Describe the task.", in: fixture.window))
+            // and — the real native editor carries the exact placeholder attribute, with its
+            // Task prompt label unchanged; the placeholder on screen stays a pure overlay.
+            #expect(CenteredComposerEvidence.accessibilityPlaceholder(of: editor) == "Describe the task.",
+                    "The native editor must expose its exact placeholder attribute.")
+            #expect(matches(editor, "Task prompt"))
+
+            // Availability readiness before the unchanged centering inequalities: the hosted
+            // AX tree publishes element frames lazily, so the heading, help and editor frames
+            // are waited on semantically until they exist — never the inequality values.
+            await waitUntil(timeout: 5) {
+                fixture.host.layoutSubtreeIfNeeded()
+                return accessibilityFrame(in: fixture.window, text: "What should we work on?") != nil
+                    && accessibilityFrame(in: fixture.window, text: Self.helpText) != nil
+                    && accessibilityFrame(in: fixture.window, text: "Task prompt") != nil
+            }
 
             // and — the complete group centers: symmetric gaps outside its 24-point padding.
             let heading = try #require(accessibilityFrame(in: fixture.window, text: "What should we work on?"),
@@ -153,12 +169,53 @@ struct CenteredComposerHostedTests {
         }
         let popup = try #require(ownedPopovers(of: fixture.window).first)
         let content = try #require(popup.contentView)
+        let effort = try #require(
+            optionFields(ownedBy: fixture.window).first { $0.stringValue == "retained-effort" },
+            "The retained effort value proves the popover's option fields mounted."
+        )
 
-        // then — the popover itself adapts, bounded by this window's actual viewport height.
-        #expect(abs(content.bounds.width - 360) < 1)
-        #expect(abs(content.bounds.height - expectedHeight) < 1)
-        let fields = optionFields(ownedBy: fixture.window)
-        let effort = try #require(fields.first { $0.stringValue == "retained-effort" })
+        // Evidence first and always while the capture directory is set: the owned native
+        // options hierarchy, the mounted field's ancestor chain, the popup's AX tree and the
+        // locator identities with every bound and frame, including any mismatch. The intended
+        // inner 360 x expectedHeight surface stays asserted unchanged below — never derived
+        // from bubble chrome, never re-invented before the hierarchy proves it.
+        try CenteredComposerEvidence.captureOptionsEvidence(
+            popup: popup, width: width, height: height, expectedHeight: expectedHeight, effort: effort
+        )
+
+        // then — the popup's own AX tree exposes the options scroll view's stable identifier,
+        // and the exact owned inner native scroll view is the one that scrolls those fields.
+        let foundAxScroll = tree(popup).first { CenteredComposerEvidence.hasIdentifier($0, "new-session-options-scroll") }
+        let foundScroll = CenteredComposerEvidence.optionsScrollView(containing: effort, in: popup)
+        let axScroll = try #require(
+            foundAxScroll, "The options scroll view must carry its stable accessibilityIdentifier."
+        )
+        let scroll = try #require(
+            foundScroll, "The options content must scroll through its own native scroll view."
+        )
+
+        // The popover adapts at the framed inner scroll surface — exactly 360 wide and bounded
+        // by this window's actual available viewport height — never at the bubble chrome.
+        // AppKit's HostingScrollView includes popover margins in native bounds. Its public
+        // AX frame is the actual framed viewport (observed 360 x 400 / 372); no fixed chrome
+        // subtraction is used. The identifier must resolve to the identical native object.
+        #expect(axScroll === scroll)
+        let axFrame = try #require(CenteredComposerEvidence.accessibilityFrame(of: scroll))
+        #expect(abs(axFrame.width - 360) < 1)
+        #expect(abs(axFrame.height - expectedHeight) < 1)
+
+        // and — containment stays separate: the inner scroll view sits inside its own popup
+        // content and inside the popup's actual window viewport.
+        let frameInContent = scroll.convert(scroll.bounds, to: content)
+        #expect(content.bounds.insetBy(dx: -1, dy: -1).contains(frameInContent))
+        let viewportOnScreen = popup.convertToScreen(popup.contentLayoutRect)
+        #expect(viewportOnScreen.insetBy(dx: -1, dy: -1).contains(
+            popup.convertToScreen(scroll.convert(scroll.bounds, to: nil))
+        ))
+        #expect(viewportOnScreen.insetBy(dx: -1, dy: -1).contains(axFrame))
+        #expect(scroll.documentView.map { effort.isDescendant(of: $0) } == true)
+        #expect(scroll.scrollerStyle == .overlay)
+        #expect(scroll.verticalScroller?.controlSize == .small)
         #expect(effort.isEditable)
     }
 

@@ -144,6 +144,9 @@ final class ComposerPromptScrollView: NSScrollView {
         promptTextView.textContainer?.widthTracksTextView = false
         promptTextView.textContainer?.heightTracksTextView = false
         promptTextView.setAccessibilityLabel("Task prompt")
+        // The approved M04 placeholder as native AX metadata: the visible placeholder stays the
+        // composer's overlay, while assistive tech reads the editor's own placeholder attribute.
+        promptTextView.setAccessibilityPlaceholderValue("Describe the task.")
         documentView = promptTextView
     }
 

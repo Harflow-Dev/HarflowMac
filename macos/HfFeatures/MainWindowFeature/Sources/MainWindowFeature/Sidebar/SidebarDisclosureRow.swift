@@ -1,26 +1,54 @@
 import HfUI
 import SwiftUI
 
+// MARK: - SidebarNativePresentationReport
+
+/// Combined occupied-height report for a hosted disclosure row. `progress` is the actual
+/// presentation progress; `logicalTarget` is the FINAL logical target — `isVisible ? 1 : 0` —
+/// never the interim `appeared` flag, so a fresh visible row presenting from zero stays
+/// unsettled until its presentation really commits the target. `authorityGeneration` is the
+/// reporting authority captured when the cell's root was configured (renewed on every
+/// association, root refresh and detach): it participates in the report's value equality, so a
+/// root refresh that re-reports an IDENTICAL endpoint still re-emits through the preference
+/// channel and confirms the CURRENT authority — otherwise an identical value would be
+/// suppressed as unchanged after the refresh and the new authority would never be recorded.
+struct SidebarNativePresentationReport: Equatable, Sendable {
+    let progress: CGFloat
+    let naturalHeight: CGFloat
+    let logicalTarget: CGFloat
+    let authorityGeneration: Int
+
+    var occupiedHeight: CGFloat { naturalHeight * progress }
+    /// Settled iff the actual presentation has reached its final logical target.
+    var isSettled: Bool { progress == logicalTarget }
+}
+
 // MARK: - SidebarDisclosureRow
 
 /// Measures a row before opening it, keeping native List insertion and removal reversible.
 struct SidebarDisclosureRow<Content: View>: View {
     let isVisible: Bool
     private let minimumHeight: CGFloat
+    private let reportAuthority: Int
     private let content: () -> Content
     private let onOccupiedHeight: (@MainActor @Sendable (CGFloat) -> Void)?
+    private let onPresentation: (@MainActor @Sendable (SidebarNativePresentationReport) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
     @State private var appeared: Bool
     @State private var height: CGFloat?
 
     init(isVisible: Bool, animate: Bool, minimumHeight: CGFloat = HfRadius.Metrics.zero,
+         reportAuthority: Int = 0,
          onOccupiedHeight: (@MainActor @Sendable (CGFloat) -> Void)? = nil,
+         onPresentation: (@MainActor @Sendable (SidebarNativePresentationReport) -> Void)? = nil,
          @ViewBuilder content: @escaping () -> Content) {
         self.isVisible = isVisible
         self.minimumHeight = minimumHeight
+        self.reportAuthority = reportAuthority
         self.content = content
         self.onOccupiedHeight = onOccupiedHeight
+        self.onPresentation = onPresentation
         _appeared = State(initialValue: !animate)
     }
 
@@ -52,12 +80,18 @@ struct SidebarDisclosureRow<Content: View>: View {
                         .clipped()
                         .modifier(SidebarOccupiedHeightReporter(
                             progress: isVisible && appeared ? 1 : 0,
-                            naturalHeight: onOccupiedHeight == nil ? nil : height
+                            logicalTarget: isVisible ? 1 : 0,
+                            authorityGeneration: reportAuthority,
+                            naturalHeight: onOccupiedHeight == nil && onPresentation == nil ? nil : height
                         ))
                 }
-                .onPreferenceChange(SidebarOccupiedHeight.self) { occupied in
-                    guard let occupied, occupied.isFinite, occupied >= HfRadius.Metrics.zero else { return }
-                    MainActor.assumeIsolated { onOccupiedHeight?(occupied) }
+                .onPreferenceChange(SidebarOccupiedHeight.self) { report in
+                    guard let report, report.occupiedHeight.isFinite,
+                          report.occupiedHeight >= HfRadius.Metrics.zero else { return }
+                    MainActor.assumeIsolated {
+                        onOccupiedHeight?(report.occupiedHeight)
+                        onPresentation?(report)
+                    }
                 }
                 .onPreferenceChange(SidebarRowHeight.self) { measured in
                     var transaction = Transaction()
@@ -77,9 +111,14 @@ struct SidebarDisclosureRow<Content: View>: View {
 
 // MARK: - Native occupied-height reporting
 
-/// Reports animation presentation progress without changing the original disclosure layout.
+/// Reports presentation progress without changing the original disclosure layout. The report
+/// carries the ACTUAL progress, the natural height, the final LOGICAL target and the reporting
+/// authority generation, so settlement is decided by presentation state — never by height
+/// comparison — and a refreshed root re-emits even an identical endpoint.
 private struct SidebarOccupiedHeightReporter: ViewModifier, @MainActor Animatable {
     var progress: CGFloat
+    let logicalTarget: CGFloat
+    let authorityGeneration: Int
     let naturalHeight: CGFloat?
 
     var animatableData: CGFloat {
@@ -88,13 +127,21 @@ private struct SidebarOccupiedHeightReporter: ViewModifier, @MainActor Animatabl
     }
 
     func body(content: Content) -> some View {
-        content.preference(key: SidebarOccupiedHeight.self, value: naturalHeight.map { $0 * progress })
+        content.preference(
+            key: SidebarOccupiedHeight.self,
+            value: naturalHeight.map { height in
+                SidebarNativePresentationReport(progress: progress, naturalHeight: height,
+                                                logicalTarget: logicalTarget,
+                                                authorityGeneration: authorityGeneration)
+            }
+        )
     }
 }
 
 private struct SidebarOccupiedHeight: PreferenceKey {
-    static let defaultValue: CGFloat? = nil
-    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+    static let defaultValue: SidebarNativePresentationReport? = nil
+    static func reduce(value: inout SidebarNativePresentationReport?,
+                       nextValue: () -> SidebarNativePresentationReport?) {
         if let next = nextValue() { value = next }
     }
 }

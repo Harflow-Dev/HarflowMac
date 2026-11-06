@@ -44,14 +44,19 @@ enum SidebarNavigationArtwork: String, CaseIterable {
 
 // MARK: - SidebarNavigationIcon
 
-/// Decorative template artwork; the containing control supplies its accessible name.
+/// Template artwork copied without geometry changes from the approved v2 design, decorative by
+/// default: the containing control supplies its accessible name, so the icon element stays
+/// hidden. A control whose whole visible label is the artwork opts out, because an icon-only
+/// menu needs the icon's element to materialize at all.
 struct SidebarNavigationIcon: View {
     let artwork: SidebarNavigationArtwork
     let size: CGFloat
+    let isDecorative: Bool
 
-    init(_ artwork: SidebarNavigationArtwork, size: CGFloat) {
+    init(_ artwork: SidebarNavigationArtwork, size: CGFloat, isDecorative: Bool = true) {
         self.artwork = artwork
         self.size = size
+        self.isDecorative = isDecorative
     }
 
     var body: some View {
@@ -64,7 +69,7 @@ struct SidebarNavigationIcon: View {
             }
         }
         .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        .accessibilityHidden(isDecorative)
     }
 }
 

@@ -13,6 +13,16 @@ func sidebarFixtureOutline(in view: NSView, role: SidebarListPresentation.Role =
     }
 }
 
+/// Finds the approved single body surface even while history headings are not loaded.
+@MainActor
+func sidebarUnifiedFixtureOutline(in view: NSView) -> NSOutlineView? {
+    sidebarFixtureViews(view).compactMap { $0 as? NSOutlineView }.first { outline in
+        (0 ..< outline.numberOfRows).contains {
+            (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id == "navigation:new-task"
+        }
+    }
+}
+
 @MainActor
 private func sidebarFixtureViews(_ view: NSView) -> [NSView] {
     [view] + view.subviews.flatMap(sidebarFixtureViews)

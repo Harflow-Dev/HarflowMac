@@ -41,14 +41,16 @@ import Testing
         await waitUntil {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
             host.layoutSubtreeIfNeeded()
-            return (sidebarFixtureOutline(in: host, role: outlineRole)?.numberOfRows ?? 0) > 0
+            return (sidebarUnifiedFixtureOutline(in: host)?.numberOfRows ?? 0) > 0
         }
         await waitUntil {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
             host.layoutSubtreeIfNeeded()
             host.displayIfNeeded()
             guard let outline = outlineView(host, role: outlineRole) else { return false }
-            return contentRows(outline).allSatisfy { outline.rect(ofRow: $0).height > HfRadius.Metrics.formRowHeight }
+            guard let coordinator = outline.delegate as? SidebarNativeList.Coordinator else { return false }
+            return !coordinator.hasUnsettledPresentations && coordinator.pendingHostedHeights.isEmpty
+                && coordinator.pendingHeights.isEmpty && coordinator.reconciliation == nil
         }
         return (host, window)
     }
@@ -61,7 +63,7 @@ import Testing
     private func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
 
     private func outlineView(_ host: NSView, role: SidebarListPresentation.Role = .recent) -> NSOutlineView? {
-        sidebarFixtureOutline(in: host, role: role)
+        sidebarUnifiedFixtureOutline(in: host)
     }
 
     /// The hosted accessibility tree: the AppKit subviews plus the platform elements SwiftUI
@@ -143,27 +145,25 @@ import Testing
         (0 ..< outline.numberOfRows).filter { row in
             let item = outline.item(atRow: row) as Any
             guard let box = item as? SidebarNativeItemBox else { return false }
-            if case .statistics = box.entry.content { return false }
-            if case .resourceSlots = box.entry.content { return false }
-            if case .needsYou = box.entry.content { return false }
+            guard case .item = box.entry.content else { return false }
             return outline.delegate?.outlineView?(outline, shouldSelectItem: item) == true
         }
     }
 
     // MARK: - New session (moved action)
 
-    @Test func givenTheSidebar_whenRendered_thenNewTaskStaysAboveHistoryAndCallsTheExistingAction() async throws {
+    @Test func givenTheSidebar_whenRendered_thenNewTaskSharesTheBodyAndCallsTheExistingAction() async throws {
         // given
         let vm = SidebarViewModelMock()
         let sut = try await present(vm)
         defer { release(sut.window) }
 
-        // when / then — the fixed control above the search field, never a scrollable list row.
+        // when / then — New task is the first row in the approved shared scroll body.
         let button = try #require(elements(labelled: "New task", in: sut.host).first, "The New session control must be present")
         let outline = try #require(outlineView(sut.host))
         let buttonFrame = try #require(frameInWindow(button, window: sut.window))
         let outlineFrame = outline.convert(outline.bounds, to: nil)
-        #expect(buttonFrame.minY >= outlineFrame.maxY - 0.5, "New task must stay above the observation surfaces")
+        #expect(outlineFrame.contains(buttonFrame), "New task must belong to the shared observation surface")
         #expect(buttonFrame.maxY <= sut.window.contentLayoutRect.maxY + 0.5)
         #expect(!descendants(sut.host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
 
@@ -172,11 +172,23 @@ import Testing
                 "The ⌘N hint is display-only and must stay hidden from VoiceOver")
 
         // when — pressed, it performs today's action exactly.
-        #expect(press(button))
+        let rowIDs = (0 ..< outline.numberOfRows).compactMap {
+            (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id
+        }
+        #expect(rowIDs.first == "navigation:new-task")
+        let selectionBefore = vm.selection
+        let accessibleRows = try #require((outline as any NSAccessibilityProtocol).accessibilityRows())
+        #expect(accessibleRows.count == outline.numberOfRows)
+        let newTaskRow = try #require(accessibleRows.first)
+        (outline as any NSAccessibilityProtocol).setAccessibilitySelectedRows([newTaskRow])
         await waitUntil { vm.newSessionTapCount == 1 }
 
         // then
         #expect(vm.newSessionTapCount == 1)
+        #expect(vm.selection == selectionBefore)
+        #expect((0 ..< outline.numberOfRows).compactMap {
+            (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id
+        } == rowIDs)
     }
 
     @Test func givenInstallNotice_whenRendered_thenItSitsAboveNewSessionOutsideTheOutline() async throws {
