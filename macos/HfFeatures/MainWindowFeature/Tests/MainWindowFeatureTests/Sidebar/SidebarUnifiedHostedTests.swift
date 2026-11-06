@@ -52,7 +52,7 @@ struct SidebarUnifiedHostedTests {
         // when — the unified document scrolls navigation, Running and Recent work as one,
         // bounded by the clip view's own constrained origin: never an overscroll past the
         // document, with the sentinel revealed through the native row reveal.
-        fixture.scrollToUnifiedBottom()
+        await fixture.scrollToSettledUnifiedBottom()
         await fixture.drain(cycles: 4)
         let viewport = outline.convert(scroll.contentView.bounds, from: scroll.contentView)
         let runningRow = try #require(fixture.row(for: "header:running"))
@@ -154,7 +154,7 @@ struct SidebarUnifiedHostedTests {
         #expect(fixture.model.loadMoreTasksTapCount == 0)
 
         // when — the unified bottom scrolls into view.
-        fixture.scrollToUnifiedBottom()
+        await fixture.scrollToSettledUnifiedBottom()
         await fixture.drain(cycles: 4)
         await waitUntil(timeout: 5) { fixture.model.historyPublications.last?.visible == true }
         // then — admission carries the current revision.
@@ -170,9 +170,11 @@ struct SidebarUnifiedHostedTests {
         scroll.contentView.scroll(to: NSPoint(x: 0, y: 0))
         await fixture.drain(cycles: 4)
         await waitUntil(timeout: 5) { fixture.model.historyPublications.last?.visible == false }
+        #expect(fixture.model.historyPublications.last?.visible == false)
         fixture.scrollToUnifiedBottom()
         await fixture.drain(cycles: 4)
         await waitUntil(timeout: 5) { fixture.model.historyPublications.last?.visible == true }
+        #expect(fixture.model.historyPublications.last?.visible == true)
         // then — visibility flips are recorded at the bottom revision, never a stale one.
         #expect(fixture.model.historyPublications.last?.revision == 1)
         #expect(fixture.model.historyPublications.filter(\.visible).allSatisfy { $0.revision <= 1 })
@@ -381,6 +383,50 @@ private final class UnifiedSidebarHostFixture {
         scroll.contentView.scroll(to: NSPoint(x: 0, y: maximumOriginY))
         if let sentinelRow = row(for: "history:sentinel") { outline.scrollRowToVisible(sentinelRow) }
         scroll.reflectScrolledClipView(scroll.contentView)
+    }
+
+    /// True when the reconciler has no unsettled presentation, no pending height and no queued
+    /// width invalidation: the document height is final for the current content.
+    private var isGeometrySettled: Bool {
+        guard let outline = unifiedOutline, let coordinator = outline.delegate as? SidebarNativeList.Coordinator else { return false }
+        return !coordinator.hasUnsettledPresentations && coordinator.pendingHeights.isEmpty && !coordinator.widthInvalidationQueued
+    }
+
+    private var sentinelIntersectsViewport: Bool {
+        guard let outline = unifiedOutline, let scroll = outline.enclosingScrollView,
+              let sentinelRow = row(for: "history:sentinel") else { return false }
+        let viewport = outline.convert(scroll.contentView.bounds, from: scroll.contentView)
+        let sentinelRect = outline.rect(ofRow: sentinelRow)
+        return sentinelRect.maxY >= viewport.minY && sentinelRect.minY <= viewport.maxY
+    }
+
+    /// Waits for settled geometry on two consecutive polls, pumping layout and display directly
+    /// in each poll. Returns whether the document settled within the bound.
+    private func waitForSettledGeometry() async -> Bool {
+        var consecutive = 0
+        await waitUntil(timeout: 5) {
+            host.layoutSubtreeIfNeeded()
+            host.displayIfNeeded()
+            consecutive = isGeometrySettled ? consecutive + 1 : 0
+            return consecutive >= 2
+        }
+        return consecutive >= 2
+    }
+
+    /// Settles the document, scrolls to its bottom exactly once, then waits without scrolling
+    /// again for the sentinel to be in the viewport on settled geometry. The outcome is asserted
+    /// here because `waitUntil` does not report a timeout.
+    func scrollToSettledUnifiedBottom() async {
+        let settledBefore = await waitForSettledGeometry()
+        #expect(settledBefore, "The unified document must settle before scrolling")
+        scrollToUnifiedBottom()
+        await waitUntil(timeout: 5) {
+            host.layoutSubtreeIfNeeded()
+            host.displayIfNeeded()
+            return sentinelIntersectsViewport && isGeometrySettled
+        }
+        #expect(sentinelIntersectsViewport, "One scroll on a settled document must reach the sentinel")
+        #expect(isGeometrySettled, "The document must remain settled after the scroll")
     }
 
     /// Captures one history publication where it happens, reading only public state from this

@@ -32,12 +32,12 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             }
             NavigationSplitView(columnVisibility: $columns) {
                 coordinator.buildSidebarView()
+                    .toolbar(removing: .sidebarToggle)
                     .navigationSplitViewColumnWidth(min: 264, ideal: 264, max: 320)
                     .environment(\.toggleHarflowSidebar, { columns = .detailOnly })
             } detail: {
                 detail
             }
-            .toolbar(removing: .sidebarToggle)
         }
         .toolbar {
             if coordinator.canReturnToResourceSlots {

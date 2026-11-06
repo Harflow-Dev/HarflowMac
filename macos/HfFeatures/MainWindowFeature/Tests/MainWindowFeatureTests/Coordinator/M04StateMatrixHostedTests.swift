@@ -69,6 +69,7 @@ struct M04StateMatrixHostedTests {
                 return NSApp.isActive && (window.isKeyWindow || window.isMainWindow)
                     && fixture.landmarks.allSatisfy { contains($0, in: window) }
                     && sidebarLayoutIsReady(fixture, host: host)
+                    && M04ToolbarEvidence.isPopulated(window)
             }
             if fixture.optionsOpen {
                 await waitUntil(timeout: 5) {
@@ -152,6 +153,7 @@ struct M04StateMatrixHostedTests {
             #expect(!contains("Retry setup", in: window))
         }
         try assertNavigationGeometry(window, host: host, collapsed: state == "shell-collapsed", name: context.name)
+        try assertToolbarOwnsOnlyTheContextTitle(window, coordinator: coordinator, name: context.name)
         if fixture.isComposer {
             try assertComposer(window, host: host, fixture: fixture)
         }
@@ -163,7 +165,7 @@ struct M04StateMatrixHostedTests {
         }
     }
 
-    private struct Fixture {
+    struct Fixture {
         let coordinator: MainWindowNavigationCoordinatorMock
         var landmarks = ["What should we work on?", "More task options"]
         var optionsOpen = false
@@ -171,7 +173,7 @@ struct M04StateMatrixHostedTests {
         var startEnabled = false
     }
 
-    private func makeFixture(_ state: String) -> Fixture {
+    func makeFixture(_ state: String) -> Fixture {
         let coordinator = MainWindowNavigationCoordinatorMock()
         let composer = coordinator.composerViewModel
         composer.repo = "/fixture/repository"
@@ -328,7 +330,7 @@ struct M04StateMatrixHostedTests {
         }
     }
 
-    private func hasIdentifier(_ object: NSObject, _ identifier: String) -> Bool {
+    func hasIdentifier(_ object: NSObject, _ identifier: String) -> Bool {
         let selector = NSSelectorFromString("accessibilityIdentifier")
         return object.responds(to: selector) && object.perform(selector)?.takeUnretainedValue() as? String == identifier
     }
@@ -434,7 +436,7 @@ struct M04StateMatrixHostedTests {
         return children
     }
 
-    private func accessibilityFrame(_ object: NSObject) -> NSRect? {
+    func accessibilityFrame(_ object: NSObject) -> NSRect? {
         guard object.responds(to: NSSelectorFromString("accessibilityFrame")) else { return nil }
         return (object.value(forKey: "accessibilityFrame") as? NSValue)?.rectValue
     }
@@ -443,9 +445,9 @@ struct M04StateMatrixHostedTests {
         NSApplication.shared.windows.filter { !existing.contains(ObjectIdentifier($0)) && $0 !== main && $0.isVisible }
     }
 
-    private func contains(_ text: String, in window: NSWindow) -> Bool { tree(window).contains { matches($0, text) } }
+    func contains(_ text: String, in window: NSWindow) -> Bool { tree(window).contains { matches($0, text) } }
 
-    private func matches(_ object: NSObject, _ text: String) -> Bool {
+    func matches(_ object: NSObject, _ text: String) -> Bool {
         ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { key in
             let selector = NSSelectorFromString(key)
             guard object.responds(to: selector) else { return false }
@@ -453,7 +455,7 @@ struct M04StateMatrixHostedTests {
         }
     }
 
-    private func tree(_ root: NSObject) -> [NSObject] {
+    func tree(_ root: NSObject) -> [NSObject] {
         var visited = Set<ObjectIdentifier>()
         func collect(_ object: NSObject) -> [NSObject] {
             guard visited.insert(ObjectIdentifier(object)).inserted else { return [] }

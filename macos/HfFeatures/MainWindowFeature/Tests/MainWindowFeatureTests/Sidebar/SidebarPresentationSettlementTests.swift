@@ -186,6 +186,7 @@ struct SidebarPresentationSettlementTests {
         #expect(!fixture.coordinator.hasUnsettledPresentations)
         fixture.coordinator.queueGeometry()
         await waitUntil(timeout: 5) { fixture.historyPublications.last?.visible == true }
+        #expect(fixture.historyPublications.last == SettlementAdmission(visible: true, revision: 0))
 
         // when — a non-settled report for a changed height is recorded inside a native
         // operation, so its (height, settlement) pair is held pending.
@@ -204,6 +205,7 @@ struct SidebarPresentationSettlementTests {
 
         // then — the standing admission is revoked by the actual queued publication.
         await waitUntil(timeout: 5) { fixture.historyPublications.last?.visible == false }
+        #expect(fixture.historyPublications.last == SettlementAdmission(visible: false, revision: 0))
         #expect(box.height == 22)
         #expect(!box.presentationSettled)
     }

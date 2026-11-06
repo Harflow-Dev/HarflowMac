@@ -183,10 +183,12 @@ import Testing
                 let commandsBefore = vm.newSessionTapCount
                 outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
                 await waitUntil(timeout: 5) { vm.newSessionTapCount == commandsBefore + 1 }
+                #expect(vm.newSessionTapCount == commandsBefore + 1)
                 #expect(vm.selection == nil)
             } else {
                 outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
                 await waitUntil(timeout: 5) { vm.selection == destination }
+                #expect(vm.selection == destination)
             }
         }
 
