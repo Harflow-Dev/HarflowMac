@@ -4,9 +4,10 @@ import Foundation
 import Testing
 
 /// Headless coverage of the pure entry-diff plan: no window, hosting view or application state.
-/// Limit: the append cases use entries without the trailing bottom sentinel. `build` always ends
-/// its list with that sentinel, so a real row append currently plans `.structural`, and these
-/// tests do not establish that live appends avoid a table reload.
+/// Limit: the append cases use synthetic entries without the trailing bottom sentinel. `build`
+/// always ends its list with that sentinel, so a real row append currently plans `.structural`;
+/// `givenBuiltEntries_whenOneRowAppended_thenStructuralDueToBottomSentinelDefect` records that
+/// defect. The synthetic append tests do not establish that live appends avoid a table reload.
 struct ActivityFeedNativePlanTests {
     private func entry(_ seq: Int, topSpacing: CGFloat = 20, fade: Bool = false) -> ActivityFeedNativeEntry {
         .row(ActivityFeedNativeEntry.Row(
@@ -56,19 +57,17 @@ struct ActivityFeedNativePlanTests {
         #expect(plan == .unchanged)
     }
 
-    @Test func givenAppendedEntries_whenPlanned_thenAppendWithPreviousAsExactPrefix() {
+    @Test func givenSentinelFreeEntries_whenTwoAppended_thenAppend() {
         // given
         let previous = entries(1 ... 4)
         let next = entries(1 ... 6)
         // when
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
-        // then — the appended range is exactly the entries after the previous count.
+        // then
         #expect(plan == .append)
-        #expect(Array(next.map(\.id).prefix(previous.count)) == previous.map(\.id))
-        #expect(next.dropFirst(previous.count).map(\.id) == ["t1#5", "t1#6"])
     }
 
-    @Test func givenSingleAppendedEntry_whenPlanned_thenAppend() {
+    @Test func givenSentinelFreeEntries_whenOneAppended_thenAppend() {
         // given / when
         let plan = ActivityFeedNativePlan.plan(previous: entries(1 ... 1), next: entries(1 ... 2))
         // then
@@ -159,7 +158,7 @@ struct ActivityFeedNativePlanTests {
         #expect(plan == .structural)
     }
 
-    @Test func givenLargeList_whenOneEntryAppended_thenAppendIsPlanned() {
+    @Test func givenSentinelFreeLargeList_whenOneAppended_thenAppend() {
         // given
         let previous = entries(1 ... 5_000)
         let next = entries(1 ... 5_001)
@@ -167,7 +166,6 @@ struct ActivityFeedNativePlanTests {
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
         // then
         #expect(plan == .append)
-        #expect(next.count - previous.count == 1)
     }
 
     @Test func givenLargeList_whenIdenticalUpdate_thenUnchanged() {
@@ -196,5 +194,17 @@ struct ActivityFeedNativePlanTests {
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: built(count: 50))
         // then
         #expect(plan == .unchanged)
+    }
+
+    @Test func givenBuiltEntries_whenOneRowAppended_thenStructuralDueToBottomSentinelDefect() {
+        // given — real builder output; `build` ends every list with the bottom sentinel.
+        let previous = built(count: 50)
+        let next = built(count: 51)
+        // when
+        let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
+        // then — characterization of a current defect, not desired behaviour: a new row reloads
+        // the whole table because the trailing bottom sentinel shifts position. Update this
+        // expectation with the fix.
+        #expect(plan == .structural)
     }
 }
