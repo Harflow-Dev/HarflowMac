@@ -8,6 +8,10 @@ import SwiftEnvironment
 /// CLI-only workflow persistence and execution seam. No Monitor code writes workflow state.
 @Mockable
 public protocol WorkflowRepository: Sendable {
+    /// Reads activity with explicit settlement admission, bound to one current selected runtime.
+    func activityRuntime() throws -> QualificationRuntimeToken
+    func activity(runID: String, executionID: String, intent: WorkflowActivityReadIntent,
+                  runtime: QualificationRuntimeToken) async throws -> WorkflowActivityPage
     func historyBatch(runIDs: [String]) async throws -> HistoryPage
     func historyPage(cursor: String?, activeOnly: Bool, relatedRunID: String?) async throws -> HistoryPage
     /// Executes a workflow command and returns its versioned result payload.
@@ -31,6 +35,18 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
     public init(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: (any StateRecoveryRepository)? = nil) {
         self.toolEnvironment = toolEnvironment
         self.stateRecovery = stateRecovery ?? NullStateRecoveryRepository()
+    }
+
+    public func activityRuntime() throws -> QualificationRuntimeToken {
+        try QualificationRuntimeToken(client: toolEnvironment.ctl().get())
+    }
+
+    public func activity(runID: String, executionID: String, intent: WorkflowActivityReadIntent,
+                         runtime: QualificationRuntimeToken) async throws -> WorkflowActivityPage {
+        let client = try runtime.boundClient(tooling: toolEnvironment)
+        let result = await client.workflowActivity(runID: runID, executionID: executionID, intent: intent)
+        guard client.operationIsCurrent(), !Task.isCancelled else { throw QualificationSessionError.runtimeChanged }
+        return try observed(result)
     }
 
     public func historyBatch(runIDs: [String]) async throws -> HistoryPage {
@@ -84,6 +100,15 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
 }
 
 public extension WorkflowRepository {
+    func activityRuntime() throws -> QualificationRuntimeToken {
+        throw ToolError.notFound(tool: "harflow-ctl", searched: [])
+    }
+
+    func activity(runID _: String, executionID _: String, intent _: WorkflowActivityReadIntent,
+                  runtime _: QualificationRuntimeToken) async throws -> WorkflowActivityPage {
+        throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "workflow-inspect", detail: "Runtime-bound activity unavailable")
+    }
+
     func historyBatch(runIDs: [String]) async throws -> HistoryPage {
         throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "workflow-list-page", detail: "History batches unavailable")
     }

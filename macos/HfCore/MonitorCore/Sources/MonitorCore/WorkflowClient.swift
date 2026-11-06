@@ -11,6 +11,16 @@ public extension CtlClient {
 
     /// Calls the versioned workflow CLI boundary. State is owned exclusively by Harflow.
     func workflow(_ command: String, options: [String] = [], positionals: [String] = []) async -> Result<[String: JSONValue], ToolError> {
+        // Preserve the existing settled-only generic API. Native live observation uses
+        // the dedicated intent-bearing method below.
+        if Self.isWorkflowActivity("workflow-\(command)", options: options) {
+            return await result("workflow-inspect", options: options, positionals: positionals).flatMap { payload in
+                guard payload["settled"] != .bool(false) else {
+                    return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Unsettled workflow activity response"))
+                }
+                return .success(payload)
+            }
+        }
         let hasDecision = options.contains { $0 == "--decision-id" || $0.hasPrefix("--decision-id=") }
         if command == "recover", hasDecision {
             return .failure(.refused(code: "attention_checkpoint_invalid",
@@ -30,6 +40,18 @@ public extension CtlClient {
             : (["send", "cancel-message"].contains(command) || command == "build" && options.contains("--monitor") ? "messaging.v1" : nil)
         return await result("workflow-\(command)", options: options, positionals: positionals, timeout: Self.startTimeout,
                             requiringCapability: capability)
+    }
+
+    /// Reads a bounded activity page. Intent is native admission evidence, never a new wire flag.
+    func workflowActivity(runID: String, executionID: String, intent: WorkflowActivityReadIntent) async -> Result<WorkflowActivityPage, ToolError> {
+        await result("workflow-inspect", options: ["--view=activity", "--limit=200"], positionals: [runID, executionID],
+                     requiringCapability: intent == .allowUnsettled ? CtlCapability.workflowLiveActivity : nil).flatMap { raw in
+            guard let page = WorkflowActivityPage(raw: raw, runID: runID, executionID: executionID),
+                  intent != .settledOnly || page.settled != false else {
+                return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Invalid or unsettled workflow activity response"))
+            }
+            return .success(page)
+        }
     }
 
     /// Validates through Harflow without creating a saved definition or run.

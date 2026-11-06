@@ -11,6 +11,8 @@ extension TaskDetailVM {
             let resolved = await useCase.resolveTask(currentTaskID)
             guard !Task.isCancelled else { return }
             if initial { recomputeMembersAndLeases() }
+            await observeConversationSuccessors(resolved?.taskID ?? currentTaskID)
+            guard !Task.isCancelled else { return }
             guard let session = (resolved ?? task)?.sessionID else {
                 conversationHistoryResolved = true
                 conversationLoading = false
@@ -32,6 +34,18 @@ extension TaskDetailVM {
             conversationLoading = false
             olderActivityReady = true
             recompute()
+        }
+    }
+
+    private func observeConversationSuccessors(_ id: String) async {
+        do {
+            let partial = try await useCase.observeSuccessors(id)
+            guard !Task.isCancelled else { return }
+            if partial { conversationError = "Conversation history is incomplete. Retry to continue." }
+            recomputeMembersAndLeases()
+        } catch {
+            guard !Task.isCancelled else { return }
+            conversationError = "Conversation history could not be loaded. Retry to continue."
         }
     }
 

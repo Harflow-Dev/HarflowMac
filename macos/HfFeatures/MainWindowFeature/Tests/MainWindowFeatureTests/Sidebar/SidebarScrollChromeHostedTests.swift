@@ -19,10 +19,10 @@ import Testing
         window.orderFront(nil)
         defer { window.contentView = nil; window.close() }
         // when
-        await waitUntil(timeout: 5) { descendants(host).compactMap { $0 as? NSOutlineView }.first != nil }
+        await waitUntil(timeout: 5) { sidebarFixtureOutline(in: host) != nil }
         await drainSidebar(host, cycles: 4)
         await waitUntil(timeout: 5) { settledSidebar(host) != nil }
-        let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
+        let outline = try #require(sidebarFixtureOutline(in: host))
         let scroll = try #require(outline.enclosingScrollView)
         // then
         #expect(scroll.scrollerStyle == .overlay)
@@ -56,12 +56,12 @@ import Testing
         host.autoresizingMask = [.width, .height]
         await waitUntil(timeout: 5) {
             host.layoutSubtreeIfNeeded()
-            guard let outline = descendants(host).compactMap({ $0 as? NSOutlineView }).first,
+            guard let outline = sidebarFixtureOutline(in: host),
                   let scroll = outline.enclosingScrollView
             else { return false }
             return hasOverflowingDocument(scroll)
         }
-        let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
+        let outline = try #require(sidebarFixtureOutline(in: host))
         let scroll = try #require(outline.enclosingScrollView)
         let document = try #require(scroll.documentView)
         var observedCurrent: [NSScroller.Style] = []
@@ -113,7 +113,7 @@ import Testing
 
     private func settledSidebar(_ host: NSView) -> (NSOutlineView, NSScrollView)? {
         host.layoutSubtreeIfNeeded()
-        guard let outline = descendants(host).compactMap({ $0 as? NSOutlineView }).first,
+        guard let outline = sidebarFixtureOutline(in: host),
               let scroll = outline.enclosingScrollView,
               outline.numberOfRows > 0,
               settledNativeEntries(outline),
@@ -206,9 +206,9 @@ import Testing
         host.rootView = AnyView(SidebarView(model).frame(width: 300, height: 700))
         await waitUntil(timeout: 5) {
             host.layoutSubtreeIfNeeded()
-            return descendants(host).compactMap { $0 as? NSOutlineView }.first != nil
+            return sidebarFixtureOutline(in: host) != nil
         }
-        let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
+        let outline = try #require(sidebarFixtureOutline(in: host))
         return (outline, try #require(outline.enclosingScrollView))
     }
 

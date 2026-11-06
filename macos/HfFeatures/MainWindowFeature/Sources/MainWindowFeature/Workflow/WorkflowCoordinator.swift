@@ -20,6 +20,9 @@ public extension MainWindowNavigationCoordinator {
     /// Empty launcher content for preview coordinators.
     func buildWorkflowRunnerView() -> AnyView { EmptyView().eraseToAnyView() }
 
+    /// Reuses the retained chooser until the workflow library's own redesign stage.
+    func buildWorkflowLibraryView() -> AnyView { buildWorkflowRunnerView() }
+
     /// Safe default for lightweight preview/test coordinators that do not mount workflows.
     func buildWorkflowEditorView(name _: String?) -> AnyView { Text("Workflow editor").eraseToAnyView() }
     /// Default for preview/test coordinators without a run monitor.

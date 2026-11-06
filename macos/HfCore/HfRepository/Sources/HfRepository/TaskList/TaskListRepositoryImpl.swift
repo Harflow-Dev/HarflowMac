@@ -474,6 +474,14 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         return task(id)
     }
 
+    public func successorPage(predecessorTaskID: String, cursor: String?, runtime: QualificationRuntimeToken) async throws -> TaskSuccessorPage {
+        let client = try runtime.boundClient(tooling: toolEnvironment)
+        let page = try await client.taskSuccessorPage(predecessorTaskID: predecessorTaskID, cursor: cursor).get()
+        guard !Task.isCancelled, client.operationIsCurrent() else { throw QualificationSessionError.runtimeChanged }
+        _ = try runtime.boundClient(tooling: toolEnvironment)
+        return page
+    }
+
     public func conversationPage(sessionID: String, cursor: String?, limit: Int = 100) async throws -> TaskHistoryPage {
         let client = try toolEnvironment.ctl().get()
         let page = try await client.taskHistoryPage(cursor: cursor, limit: limit, sessionID: sessionID).get()

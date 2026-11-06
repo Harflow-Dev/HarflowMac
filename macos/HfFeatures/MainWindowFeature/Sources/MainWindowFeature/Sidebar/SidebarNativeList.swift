@@ -12,6 +12,7 @@ struct SidebarNativeList: NSViewRepresentable {
     let seenIDs: Set<String>
     let configureActions: (SidebarNativeActions) -> Void
     var relay: SidebarNativeTransitionRelay?
+    var onContentHeight: ((CGFloat) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -45,11 +46,13 @@ struct SidebarNativeList: NSViewRepresentable {
         scroll.documentView = outline
         context.coordinator.install(scroll: scroll, outline: outline)
         context.coordinator.bind(relay)
+        context.coordinator.contentHeightChanged = onContentHeight
         return scroll
     }
 
     func updateNSView(_: NSScrollView, context: Context) {
         context.coordinator.bind(relay)
+        context.coordinator.contentHeightChanged = onContentHeight
         configureActions(context.coordinator.actions)
         context.coordinator.actions.viewEvent = context.environment.viewEvent
         context.coordinator.update(presentation: presentation, selection: selection,
@@ -61,6 +64,8 @@ struct SidebarNativeList: NSViewRepresentable {
     // MARK: - Coordinator
 
     @MainActor final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
+        var contentHeightChanged: ((CGFloat) -> Void)?
+        var lastContentHeight: CGFloat?
         let actions = SidebarNativeActions()
         weak var scroll: NSScrollView?
         weak var outline: SidebarOwnedOutlineView?
@@ -175,6 +180,7 @@ struct SidebarNativeList: NSViewRepresentable {
         }
 
         func stop() {
+            contentHeightChanged = nil
             reconciliation?.cancel()
             detached?.cancel()
             detached = nil

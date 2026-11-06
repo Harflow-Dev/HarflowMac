@@ -79,17 +79,18 @@ import Testing
 .called(1)
     }
 
-    @Test func givenRunReturnsNoID_whenCalled_thenUsageIsNotRecorded() async throws {
+    @Test(arguments: ["", " \n\t"])
+    func givenRunReturnsNoID_whenCalled_thenUsageIsNotRecorded(_ id: String) async throws {
         // given
         let taskAction = MockTaskActionRepository()
         let usage = MockAgentUsageRepository()
         let request = RunRequest(backend: "claude", repo: "/tmp", prompt: "hi")
-        given(taskAction).run(.value(request), runtime: .any).willReturn("")
+        given(taskAction).run(.value(request), runtime: .any).willReturn(id)
         given(usage).record(.any, acknowledgementID: .any).willReturn()
         let sut = NewSessionViewRepository(taskActionRepository: taskAction, agentUsageRepository: usage)
 
         // when
-        #expect(try await sut.run(request, runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))) == "")
+        #expect(try await sut.run(request, runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))) == id)
 
         // then
         verify(usage).record(.any, acknowledgementID: .any).called(0)

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -157,6 +158,7 @@ import Testing
         let routing = MockWorkflowRouting()
         given(routing).openWorkflowRun(id: .any).willReturn()
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())

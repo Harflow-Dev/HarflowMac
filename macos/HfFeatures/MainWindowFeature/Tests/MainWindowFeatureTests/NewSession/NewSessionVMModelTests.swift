@@ -120,18 +120,19 @@ import Testing
         #expect(sut.modelChoices.map(\.id) == ["", "gpt-a"])
     }
 
-    @Test func givenAModelWasTyped_whenTheAgentChanges_thenTheModelIsCleared() async {
+    @Test func givenAModelWasTyped_whenTheAgentChanges_thenModelRemainsAndRequiresExplicitReview() {
         // given
-        let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true), ("codex", true)]))
+        let (sut, useCase, _, _) = makeSUT(catalog: catalog([("claude", true), ("codex", true)]))
         sut.didChangeModel("opus")
-
         // when
         sut.didChangeBackend("codex")
-        await start(sut, useCase, routing)
-
+        sut.didTapStart()
         // then
-        #expect(sut.model == "")
-        verify(useCase).run(.matching { $0.backend == "codex" && $0.model == nil }, runtime: .any).called(1)
+        #expect(sut.model == "opus")
+        #expect(!sut.validationMessages.isEmpty)
+        verify(useCase).run(.any, runtime: .any).called(0)
+        sut.didChangeModel("opus")
+        #expect(sut.validationMessages.isEmpty)
     }
 
     @Test func givenAModelWasTyped_whenTheSameAgentIsChosenAgain_thenTheModelIsKept() {
@@ -146,7 +147,7 @@ import Testing
         #expect(sut.model == "opus")
     }
 
-    @Test func givenTheSelectedAgentLeavesTheCatalog_whenReplaced_thenTheModelIsCleared() async {
+    @Test func givenTheSelectedAgentLeavesTheCatalog_whenReplaced_thenRequestedAgentAndModelRemain() async {
         // given
         let (sut, _, _, catalogSubject) = makeSUT(catalog: catalog([("claude", true), ("codex", true)]))
         sut.didAppear()
@@ -156,8 +157,10 @@ import Testing
         catalogSubject.send(catalog([("codex", true)]))
 
         // then
-        await waitUntil { sut.backend == "codex" }
-        #expect(sut.model == "")
+        await waitUntil { sut.agentNotFoundNote != nil }
+        #expect(sut.backend == "claude")
+        #expect(sut.model == "opus")
+        #expect(!sut.canStart)
     }
 
     @Test func givenDefaultIsPicked_whenStarted_thenTheModelIsNil() async {

@@ -7,20 +7,31 @@
 
 import Foundation
 import HfUI
+import SwiftUI
 
 // MARK: - NewSessionViewModelMock
 
 /// Preview mock for `NewSessionView`.
 @MainActor
+@Observable
 final class NewSessionViewModelMock: NewSessionViewModel {
     var qualificationCards: [QualificationCard] = [.init(id: "fixture", model: .init(
         identity: "Fixture harness · fixture version", state: .ready, message: "Fixture required features are ready.",
         features: [.init(id: "fixture_feature", result: "Ready · seeded")]))]
 
+    var composerState: ComposerState = .editable
+    var optionsLocked: Bool { composerState != .editable }
+    var validationMessages: [String] = []
+    var canReviewSettings: Bool { composerState == .refused }
+    var canReviewRecent: Bool { composerState == .unknown }
+    func didTapReviewSettings() { composerState = .editable }
+    func didTapReviewRecent() {}
     var backend: String
     var repo: String
     var freedom: String
     var message: String
+    var callerApprovals = false
+    func didChangeCallerApprovals(_ value: Bool) { callerApprovals = value }
     var name = ""
     var model = ""
     var turnLimit = ""
@@ -60,7 +71,8 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     }
 
     var canStart: Bool {
-        !qualificationCards.isEmpty && qualificationCards.allSatisfy { $0.model.state == .ready }
+        composerState == .editable && validationMessages.isEmpty && turnLimitError == nil
+            && !qualificationCards.isEmpty && qualificationCards.allSatisfy { $0.model.state == .ready }
             && !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 

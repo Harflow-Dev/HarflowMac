@@ -26,6 +26,12 @@ public enum CtlCapability {
     /// Permits bounded, integrity-reported task prompt reads.
     public static let taskPrompt = "task-prompt.v1"
 
+    /// Permits bounded discovery of recorded direct task successors.
+    public static let taskSuccessors = "task-successors.v1"
+
+    /// Permits direct-caller activity reads of unsettled workflow executions.
+    public static let workflowLiveActivity = "workflow-live-activity.v1"
+
     /// Allows caller and Monitor response channels to compete for the same exact checkpoint.
     public static let workflowSharedInteractions = "workflow-shared-interactions.v1"
 

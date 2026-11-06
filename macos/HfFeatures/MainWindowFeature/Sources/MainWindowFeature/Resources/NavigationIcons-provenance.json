@@ -1,0 +1,79 @@
+{
+  "repository": "https://github.com/Harflow-Dev/HarflowDesign",
+  "commit": "5b37a3d4d4d06b3d96c517cd384892e1ac6883cf",
+  "path": "v2/styles/bundle.css",
+  "extraction": "Exact percent-decoded SVG data URI bytes; no geometry changes.",
+  "icons": [
+    {
+      "selector": ".hd-i-sidebar",
+      "sha256": "cd173a703daf37148e73e84deb97ed86ea4717373d1ead94dd27eb98e870d0b2",
+      "pdf": "sidebar.pdf",
+      "pdfSHA256": "9a02920d35d99959641d138f0ac969852bce6e8fe4190e7278802041c57ec393",
+      "source": "sidebar.svg"
+    },
+    {
+      "selector": ".hd-i-plus",
+      "sha256": "9203835793a5f07b314ec63834ceb74eb4819fd9cde06abfe726bbbd448712c7",
+      "pdf": "plus.pdf",
+      "pdfSHA256": "4f7affcd5ce3d16e166b86e62cfd30875acefd2a4276e690d20483a9faff1475",
+      "source": "plus.svg"
+    },
+    {
+      "selector": ".hd-i-hand",
+      "sha256": "9333cef6a177c145fb54ea5b413d6ef93433681ed5132869a84817c773ff6244",
+      "pdf": "hand.pdf",
+      "pdfSHA256": "c2c20c65b8eea329008d2e6a011c94818d900b171175360089c19a08e9709496",
+      "source": "hand.svg"
+    },
+    {
+      "selector": ".hd-i-workflow",
+      "sha256": "3214ca534a00e520956ae9560451a94eed0b1bda2d1d380d384b6bb9af8e93b0",
+      "pdf": "workflow.pdf",
+      "pdfSHA256": "2ac022dab18d227ac888d81c9f82e0b052d6f018ef71d466e19d904d1f2b561e",
+      "source": "workflow.svg"
+    },
+    {
+      "selector": ".hd-i-gauge",
+      "sha256": "539afac75b389df269d7db9220a5dba2aeef52bb80c4875815f3f40b8a8197e2",
+      "pdf": "gauge.pdf",
+      "pdfSHA256": "052bdd213a1a1bd55d93f17207d5803e3d8302844efc69b5e668f6847e7a0f4c",
+      "source": "gauge.svg"
+    },
+    {
+      "selector": ".hd-i-chart",
+      "sha256": "ac5c62db6f36d76e19f5317be31ea30bfa72f2c5f37abce999ce8904f5ea717f",
+      "pdf": "chart.pdf",
+      "pdfSHA256": "b17dcab18b89a982397fe30492aa9cd94c28defc2274b48e605695b4ed69bdd2",
+      "source": "chart.svg"
+    },
+    {
+      "selector": ".hd-i-settings",
+      "sha256": "a095e24b9dafbb9b9b0214dc038ac076e3d274742b12e69c59bde933bac34478",
+      "pdf": "settings.pdf",
+      "pdfSHA256": "f1151d0ce9bc1628fa8cb75d90dbf12714241e1ac9c64054d7ee9c7ea074df65",
+      "source": "settings.svg"
+    },
+    {
+      "selector": ".hd-i-sun",
+      "sha256": "4175a6a5ae636f3a5af813b638ec9f51dc021038364fc690302b66a5d49f6cdc",
+      "pdf": "sun.pdf",
+      "pdfSHA256": "8fa62e5c747d0bd2ada8a89859984498e8e6539d635bd4b97c1c4d3ba1b06444",
+      "source": "sun.svg"
+    },
+    {
+      "selector": ".hd-i-moon",
+      "sha256": "65f8bb73ee943f3b0b5b1011147b5210c725ca702e5f4ca3bbdcf492088da521",
+      "pdf": "moon.pdf",
+      "pdfSHA256": "a310027a768332584fcc8540f3fcefdb710194956fb7a9d7b9227343767b2f8e",
+      "source": "moon.svg"
+    },
+    {
+      "selector": ".hd-i-monitor",
+      "sha256": "6999cfa1fd3f9257d79244b7cff8184b3096f07c8814e74926d9fcf33060e50e",
+      "pdf": "monitor.pdf",
+      "pdfSHA256": "497fdfd7e140d257a9baaaf376f06dd13675cce0cc14f6e50315cfdb644ff330",
+      "source": "monitor.svg"
+    }
+  ],
+  "export": "Vector PDF format conversion only: offscreen WKWebView, nonpersistent data store, JavaScript disabled, inline exact source SVG, transparent 24px HTML/body/SVG, WKPDFConfiguration rect 24x24 and allowTransparentBackground=true. Source geometry and strokes unchanged."
+}

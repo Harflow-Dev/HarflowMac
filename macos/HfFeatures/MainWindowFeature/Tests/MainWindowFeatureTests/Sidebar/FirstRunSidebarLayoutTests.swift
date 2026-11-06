@@ -99,10 +99,11 @@ import Testing
         await waitUntil {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
             fixture.host.layoutSubtreeIfNeeded()
-            return fixture.textField(matchingPlaceholder: "Search loaded history") != nil
+            return sidebarFixtureOutline(in: fixture.host) != nil
         }
         #expect(fixture.element(label: "Prepare Harflow") == nil)
-        #expect(fixture.textField(matchingPlaceholder: "Search loaded history") != nil)
+        #expect(fixture.textField(matchingPlaceholder: "Search loaded history") == nil)
+        #expect(sidebarFixtureOutline(in: fixture.host) != nil)
     }
 }
 

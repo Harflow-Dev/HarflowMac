@@ -23,6 +23,13 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
         return try await repository.command(command, options: options, positionals: positionals)
     }
 
+    func activityRuntime() throws -> QualificationRuntimeToken { try repository.activityRuntime() }
+
+    func activity(runID: String, executionID: String, intent: WorkflowActivityReadIntent,
+                  runtime: QualificationRuntimeToken) async throws -> WorkflowActivityPage {
+        try await repository.activity(runID: runID, executionID: executionID, intent: intent, runtime: runtime)
+    }
+
     func validate(definition: JSONValue) async throws -> [String: JSONValue] {
         try await repository.validate(definition: definition)
     }

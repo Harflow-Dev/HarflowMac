@@ -20,6 +20,15 @@ private struct CompositeFeatureDestination: CompositeDestination {
 }
 
 @Suite struct PathDestinationTests {
+    @Test func givenWorkflowNavigation_whenLibraryAndSavedDefinitionAreSelected_thenTheirIdentitiesAreDistinct() {
+        // given / when
+        let library = MonitorDestination.workflowLibrary
+        let definition = MonitorDestination.workflow("workflowLibrary")
+        // then
+        #expect(library.pathId == "workflowLibrary")
+        #expect(library.pathId != definition.pathId)
+        #expect(library != definition)
+    }
     
     @Test func givenADestinationType_whenCheckingIsPartOfItsOwnInstance_thenReturnsTrue() {
         // given

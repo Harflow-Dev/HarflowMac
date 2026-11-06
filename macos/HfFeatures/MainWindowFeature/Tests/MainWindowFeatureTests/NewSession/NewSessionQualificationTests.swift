@@ -47,7 +47,8 @@ struct NewSessionQualificationTests {
     @Test func givenFailedRequiredEvidence_whenStarting_thenNoRunAndExplicitRetryCanRecover() async {
         // given
         let fixture = QualificationFixture(ready: false)
-        let (vm, useCase, _) = make(fixture)
+        let (vm, useCase, routing) = make(fixture)
+        defer { withExtendedLifetime(routing) {} }
         await waitUntil { vm.qualificationCards.first?.model.state == .failed }
         // when
         vm.didTapStart()
@@ -65,8 +66,9 @@ struct NewSessionQualificationTests {
 
     @Test func givenUnsupportedEngine_whenOpening_thenExplicitUnsupportedAndNoRun() async {
         // given
-        let (vm, useCase, _) = make(QualificationFixture(error: .unsupportedCommand(tool: "harflow-ctl", command: "qualification",
+        let (vm, useCase, routing) = make(QualificationFixture(error: .unsupportedCommand(tool: "harflow-ctl", command: "qualification",
                                                                                      detail: "Fixture unsupported")))
+        defer { withExtendedLifetime(routing) {} }
         // when
         await waitUntil { vm.qualificationCards.first?.model.state == .unsupported }
         vm.didTapStart()
@@ -85,10 +87,12 @@ struct NewSessionQualificationTests {
         fixture.setReady(false)
         // when
         subject.send(.init(entries: [.init(backend: "second", installed: true)], state: .available))
-        await waitUntil { vm.backend == "second" }
-        // then
+        await waitUntil { vm.agentNotFoundNote != nil }
+        // then: a catalog replacement cannot choose a different harness on the user's behalf.
+        #expect(vm.backend == "fixture")
         #expect(!vm.canStart)
-        #expect(vm.qualificationCards.allSatisfy { !$0.model.identity.hasPrefix("Fixture") })
+        #expect(vm.qualificationCards.first?.model.state == .unavailable)
+        vm.didChangeBackend("second")
         await waitUntil { vm.qualificationCards.first?.model.state == .failed }
         #expect(vm.qualificationCards.first?.model.identity.hasPrefix("Second") == true)
         #expect(fixture.checks == 0)
@@ -98,7 +102,8 @@ struct NewSessionQualificationTests {
     @Test func givenKnownMissingHarnessWithNoRequiredFeatures_whenSheetOpens_thenUnavailableAndCannotStart() async {
         // given
         let catalog = BackendCatalog(entries: [.init(backend: "fixture", installed: false)], state: .available)
-        let (vm, useCase, _) = make(QualificationFixture(gated: false), catalog: catalog)
+        let (vm, useCase, routing) = make(QualificationFixture(gated: false), catalog: catalog)
+        defer { withExtendedLifetime(routing) {} }
         // when / then
         #expect(vm.qualificationCards.first?.model.state == .unavailable)
         #expect(!vm.canStart)
@@ -142,6 +147,24 @@ struct NewSessionQualificationTests {
                 return
             }
         }
+    }
+
+    @Test func givenCachedReadiness_whenFreshStartQualificationFails_thenDraftReturnsEditableWithoutDispatch() async {
+        // given
+        let fixture = QualificationFixture()
+        let (vm, useCase, routing) = make(fixture)
+        defer { withExtendedLifetime(routing) {} }
+        await waitUntil { vm.canStart }
+        fixture.setReady(false)
+        // when
+        vm.didTapStart()
+        #expect(vm.composerState == .preparing)
+        await waitUntil { vm.composerState == .editable }
+        // then
+        #expect(vm.composerState == .editable && !vm.optionsLocked)
+        #expect(vm.message == "Fixture prompt" && vm.errorText != nil)
+        verify(useCase).run(.any, runtime: .any).called(0)
+        vm.didDisappear()
     }
 
 }

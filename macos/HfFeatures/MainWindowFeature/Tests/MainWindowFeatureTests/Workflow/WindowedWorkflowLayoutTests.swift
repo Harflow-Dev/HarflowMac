@@ -41,11 +41,11 @@ import Testing
         defer { workflow.didDisappear(); fixture.close() }
         // when
         for target in [size, CGSize(width: size.width == 1000 ? 1440 : 1000, height: size.height == 620 ? 900 : 620)] {
-            let previousHeader = fixture.element("New session").flatMap { fixture.frame($0) }
+            let previousHeader = fixture.element("New task").flatMap { fixture.frame($0) }
             fixture.window.setContentSize(target)
-            await fixture.settle { fixture.element("New session") != nil && fixture.element("Android Feature Implementation") != nil
+            await fixture.settle { fixture.element("New task") != nil && fixture.element("Android Feature Implementation") != nil
                 && fixture.host.frame.width == target.width
-                && fixture.element("New session").flatMap { fixture.frame($0) } != previousHeader
+                && fixture.element("New task").flatMap { fixture.frame($0) } != previousHeader
                 && (!isBuilder || hasActivity(in: fixture))
             }
             workflow.didDisappear()
@@ -66,12 +66,12 @@ import Testing
                 "Workflow must not inflate navigation minimum height through wrapped headers or native panes")
         let close = try #require(fixture.window.standardWindowButton(.closeButton))
         let controls = close.convert(close.bounds, to: nil)
-        let newSession = try #require(fixture.element("New session"))
-        let newSessionBounds = try #require(fixture.frame(newSession))
-        #expect(newSessionBounds.maxY <= fixture.window.contentLayoutRect.maxY,
-                "New session must fit below the native titlebar: \(newSessionBounds), content=\(fixture.window.contentLayoutRect)")
-        #expect(newSessionBounds.maxY < controls.minY,
-                "New session must stay below traffic lights: \(newSessionBounds), controls=\(controls)")
+        let newTask = try #require(fixture.element("New task"))
+        let newTaskBounds = try #require(fixture.frame(newTask))
+        #expect(newTaskBounds.maxY <= fixture.window.contentLayoutRect.maxY,
+                "New task must fit below the native titlebar: \(newTaskBounds), content=\(fixture.window.contentLayoutRect)")
+        #expect(newTaskBounds.maxY < controls.minY,
+                "New task must stay below traffic lights: \(newTaskBounds), controls=\(controls)")
         let titles = fixture.descendants.flatMap { fixture.elements(in: $0) }.filter {
             fixture.matches($0, "Android Feature Implementation")
         }

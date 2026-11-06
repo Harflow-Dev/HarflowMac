@@ -51,10 +51,8 @@ import Testing
         #expect(newWorkflowCount == 1)
     }
 
-    // The integration assertion intentionally keeps the complete AX state transition together.
-    // swiftlint:disable:next function_body_length
-    @Test func givenTheRealSidebar_whenWorkflowHeaderAccessibilityActionsArePressed_thenOnlyTheirOwnStateChanges() async throws {
-        // given — the real SidebarVM routing owner and a retained native window.
+    @Test func givenTheRealSidebar_whenNavigationAccessibilityActionsArePressed_thenOnlyTheirOwnRoutesFire() async throws {
+        // given — approved M04 navigation is external to both native observation lists.
         _ = NSApplication.shared
         let axAttribute = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
         let previousAX = NSApplication.shared.accessibilityAttributeValue(axAttribute)
@@ -77,60 +75,39 @@ import Testing
         }
         await waitUntil {
             host.layoutSubtreeIfNeeded()
-            return unique(accessibilityObjects(in: host)).contains {
-                role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Collapse workflows"
-            }
+            return sidebarFixtureOutline(in: host, role: .running) != nil
+                && sidebarFixtureOutline(in: host) != nil
         }
-        let header = try #require(nativeViews(in: host).compactMap { $0 as? SidebarNativeCell }.first {
-            $0.accessibilityRole() == .headingRole && $0.accessibilityLabel() == "Collapse workflows"
-        })
+        let running = try #require(sidebarFixtureOutline(in: host, role: .running))
+        let recent = try #require(sidebarFixtureOutline(in: host))
+        let runningRows = running.numberOfRows
+        let recentRows = recent.numberOfRows
+        let elements = unique(accessibilityObjects(in: host))
+        let navigation: [(String, MonitorDestination)] = [
+            ("Workflows", .workflowLibrary), ("Resources", .resourceSlots), ("Statistics", .statistics)
+        ]
 
-        // when — press the actual public AX children, not the cell's heading element.
-        let before = unique(accessibilityObjects(in: header))
-        #expect(before.filter { role(of: $0) == NSAccessibility.Role.headingRole.rawValue && label(of: $0) == "Collapse workflows" }.count == 1)
-        #expect(before.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Collapse workflows" }.count == 1)
-        #expect(before.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "New workflow" }.count == 1)
-        #expect(before.filter { role(of: $0) == NSAccessibility.Role.button.rawValue }.count == 2)
-        let collapse = try #require(before.first { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Collapse workflows" })
-        #expect(press(collapse))
-        await waitUntil {
-            host.layoutSubtreeIfNeeded()
-            let current = unique(accessibilityObjects(in: header))
-            return current.contains { role(of: $0) == NSAccessibility.Role.headingRole.rawValue && label(of: $0) == "Expand workflows" }
-                && current.contains { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Expand workflows" }
+        // when — press each real navigation button through its public AX action.
+        for (title, destination) in navigation {
+            let buttons = elements.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == title }
+            #expect(buttons.count == 1)
+            let button = try #require(buttons.first)
+            let before = selections.count
+            #expect(press(button))
+            #expect(selections.count == before + 1)
+            #expect(selections.last! == destination)
         }
-        #expect(selections.isEmpty)
-        let expanded = unique(accessibilityObjects(in: header))
-        #expect(expanded.filter { role(of: $0) == NSAccessibility.Role.headingRole.rawValue && label(of: $0) == "Expand workflows" }.count == 1)
-        #expect(expanded.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Expand workflows" }.count == 1)
-        #expect(expanded.filter { role(of: $0) == NSAccessibility.Role.button.rawValue }.count == 2)
-        let expand = try #require(expanded.first { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Expand workflows" })
-        #expect(press(expand))
-        await waitUntil {
-            host.layoutSubtreeIfNeeded()
-            let current = unique(accessibilityObjects(in: header))
-            return current.contains { role(of: $0) == NSAccessibility.Role.headingRole.rawValue && label(of: $0) == "Collapse workflows" }
-                && current.contains { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Collapse workflows" }
-                && current.contains { label(of: $0) == "baseline-definition" }
-        }
-        let restored = unique(accessibilityObjects(in: header))
-        #expect(restored.filter { role(of: $0) == NSAccessibility.Role.headingRole.rawValue && label(of: $0) == "Collapse workflows" }.count == 1)
-        #expect(restored.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "Collapse workflows" }.count == 1)
-        #expect(restored.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "New workflow" }.count == 1)
-        #expect(restored.filter { role(of: $0) == NSAccessibility.Role.button.rawValue }.count == 2)
-        let newWorkflow = try #require(restored.first { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "New workflow" })
-        #expect(press(newWorkflow))
 
-        // then — creation does not select a task or route through the collapse action.
-        #expect(selections.count == 1)
-        #expect(selections.compactMap { destination in
-            if case .newWorkflow = destination { return destination }
-            return nil
-        }
-.count == 1)
-        #expect(unique(accessibilityObjects(in: header)).contains {
-            label(of: $0) == "Collapse workflows" && role(of: $0) == NSAccessibility.Role.button.rawValue
-        })
+        // then — navigation never exposes the removed header actions, search or backend filter,
+        // and never mutates either list's disclosure/row state.
+        #expect(elements.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && label(of: $0) == "New task" }.count == 1)
+        #expect(elements.filter { role(of: $0) == NSAccessibility.Role.button.rawValue && (label(of: $0)?.hasPrefix("Needs you") ?? false) }.count == 1)
+        #expect(!elements.contains { ["Collapse workflows", "Expand workflows", "New workflow", "Search loaded history"].contains(label(of: $0) ?? "") })
+        #expect(!nativeViews(in: host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
+        #expect(running.numberOfRows == runningRows)
+        #expect(recent.numberOfRows == recentRows)
+        #expect(running.selectedRowIndexes.isEmpty)
+        #expect(recent.selectedRowIndexes.isEmpty)
     }
 
     @Test func givenAHeaderCell_whenReconfigured_thenItsHeadingLabelTracksStateWithoutStaleRole() async throws {

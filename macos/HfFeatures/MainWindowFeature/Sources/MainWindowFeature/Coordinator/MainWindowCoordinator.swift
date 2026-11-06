@@ -17,101 +17,6 @@ import SwiftUI
 // `GlobalValues.monitorVisibility`/`GlobalValues.scheduling` resolve here at VM-build time —
 // after `ApplicationModules.initialize()` has registered the real values.
 
-// MARK: - MainWindowSheet
-
-/// Mutually exclusive modal destinations presented by the main window.
-public enum MainWindowSheet: String, Identifiable {
-    /// Starts a new headless session.
-    case newSession
-    /// Chooses and launches a saved workflow.
-    case workflowRunner
-
-    /// Stable identity for the presented destination.
-    public var id: String { rawValue }
-}
-
-// MARK: - MainWindowNavigationCoordinator
-
-/// Navigation/view-building contract for the main window's split view. `MainWindowNavigationView`
-/// (this package) is generic over this protocol, never the concrete `MainWindowCoordinator` —
-/// `selection` and `presentedSheet` are the single source of truth the settled plan's
-/// window/navigation seam formalises; the app target's root `AppCoordinator` (Phase 5) delegates
-/// `.task`/`.group`/`.newSession` straight onto `handle(path:)` for the URL/notification/Cmd-N
-/// paths it owns (see that file's header).
-@MainActor
-public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
-    /// The currently selected task/group destination, or `nil`. Never set to
-    /// `.newSession`/`.openWindow` — those are handled separately (`presentedSheet`, and the
-    /// parent's own window-opening seam) — see `MainWindowCoordinator.handle(path:)`.
-    var runtimeIsReady: Bool { get }
-    var selection: MonitorDestination? { get set }
-    func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never>
-
-    /// The main window's mutually exclusive modal destination.
-    var presentedSheet: MainWindowSheet? { get set }
-
-    /// Compatibility projection of the New Session destination; false dismisses only that destination.
-    var isNewSessionPresented: Bool { get set }
-    func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never>
-
-    /// Presents the saved-workflow chooser and existing launch flow independently of editor focus.
-    func presentWorkflowRunner()
-    /// Compatibility projection of the workflow runner destination; false dismisses only that destination.
-    var isWorkflowRunnerPresented: Bool { get set }
-    /// Builds the saved-workflow chooser and launch sheet.
-    func buildWorkflowRunnerView() -> AnyView
-
-    /// Builds retained finished-work Statistics.
-    func buildStatisticsView() -> AnyView
-    /// Builds read-only resource slots, retaining its reading and disclosure state.
-    func buildResourceSlotsView() -> AnyView
-    /// A narrow return action for the owner destination opened by Resource slots.
-    var canReturnToResourceSlots: Bool { get }
-    func returnToResourceSlots()
-    /// Builds Needs you; `itemID` opens that request's detail.
-    func buildNeedsYouView(itemID: String?) -> AnyView
-    /// Builds the ready runtime start screen.
-    func buildStartScreenView() -> AnyView
-    /// Builds the sidebar (task list, search/filter, parallel runs).
-    func buildSidebarView() -> AnyView
-    /// Builds the main window title's connection indicator.
-    func buildConnectionStatusView() -> AnyView
-    /// Builds the New Session sheet's content.
-    func buildNewSessionView() -> AnyView
-    /// Builds the Parallel screen for the group named `name`.
-    func buildParallelView(name: String) -> AnyView
-    /// Builds the task detail screen for `id`.
-    func buildTaskDetailView(id: String) -> AnyView
-    /// Builds the workflow library and execution monitor.
-    func buildWorkflowEditorView(name: String?) -> AnyView
-    /// Builds the monitor for a persisted workflow run.
-    func buildWorkflowRunView(id: String) -> AnyView
-}
-
-public extension MainWindowNavigationCoordinator {
-    var runtimeIsReady: Bool { true }
-    func buildStartScreenView() -> AnyView { AnyView(EmptyView()) }
-    func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
-
-    func buildStatisticsView() -> AnyView { AnyView(EmptyView()) }
-    func buildResourceSlotsView() -> AnyView { AnyView(EmptyView()) }
-    var canReturnToResourceSlots: Bool { false }
-    func returnToResourceSlots() {}
-    func buildNeedsYouView(itemID: String?) -> AnyView { AnyView(EmptyView()) }
-
-    /// Derives modal state for lightweight preview and test coordinators.
-    var presentedSheet: MainWindowSheet? {
-        get {
-            if isNewSessionPresented { return .newSession }
-            return isWorkflowRunnerPresented ? .workflowRunner : nil
-        }
-        set {
-            isNewSessionPresented = newValue == .newSession
-            isWorkflowRunnerPresented = newValue == .workflowRunner
-        }
-    }
-}
-
 // MARK: - PasteboardWriting
 
 /// Seam over `NSPasteboard` (Monitor piece 3/3's "Copy resume command") so a test can verify a
@@ -152,27 +57,29 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
                 }
             }
             selectionSubject.send(selection)
+            isNewSessionPresentedSubject.send(selection == .newSession)
         }
     }
 
     public var presentedSheet: MainWindowSheet? {
         didSet {
+            if presentedSheet == .newSession {
+                presentedSheet = nil
+                openNewSession()
+                return
+            }
             if presentedSheet != .workflowRunner { initialWorkflowRunnerName = nil }
             if presentedSheet != nil, !runtimeIsReady { presentedSheet = nil; return }
-            let wasNewSession = oldValue == .newSession
-            let isNewSession = presentedSheet == .newSession
-            guard wasNewSession != isNewSession else { return }
-            isNewSessionPresentedSubject.send(isNewSession)
         }
     }
 
     public var isNewSessionPresented: Bool {
-        get { presentedSheet == .newSession }
+        get { selection == .newSession }
         set {
             if newValue {
-                presentedSheet = .newSession
-            } else if presentedSheet == .newSession {
-                presentedSheet = nil
+                openNewSession()
+            } else if selection == .newSession {
+                selection = nil
             }
         }
     }
@@ -203,7 +110,11 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     }
 
     public private(set) var runtimeIsReady = true
+    public private(set) var runtimeSetupState: RuntimeSetupState = .ready
+    public private(set) var hasLoadedWork = false
+    public private(set) var loadingWorkError: String?
     @ObservationIgnored private var runtimeSubscription: AnyCancellable?
+    @ObservationIgnored private var listingSubscription: AnyCancellable?
 
     // MARK: - Private Properties
 
@@ -212,11 +123,13 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored let workflowRunPolling = WorkflowRunPolling()
     @ObservationIgnored private var sidebarVM: SidebarVM?
     @ObservationIgnored private var startScreenVM: StartScreenVM?
+    @ObservationIgnored private var newSessionVM: NewSessionVM?
     @ObservationIgnored private var statisticsVM: StatisticsVM?
     @ObservationIgnored private var resourceSlotsVM: ResourceSlotsVM?
     private var resourceSlotsReturnDestination: MonitorDestination?
     @ObservationIgnored private var needsYouVM: NeedsYouVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
+    @ObservationIgnored private let installRepository: any InstallRepository
     /// The latest unconsumed navigation-triggered reveal (settled plan, Design point 5's
     /// "coordinator owns the pending reveal") — set on every navigation request for a task, so it
     /// survives even while the sidebar is unsubscribed (window closed).
@@ -231,15 +144,32 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public init(
         parent: any Coordinator,
         pasteboard: any PasteboardWriting = NSPasteboard.general,
-        installRepository: (any InstallRepository)? = nil
+        installRepository: (any InstallRepository)? = nil,
+        taskListRepository: (any TaskListRepository)? = nil
     ) {
         self.parent = parent
         self.pasteboard = pasteboard
-        let install = installRepository ?? GlobalValues.installRepository
+        self.installRepository = installRepository ?? GlobalValues.installRepository
+        if let taskListRepository { self.taskListRepository = taskListRepository }
+        let listing = self.taskListRepository
+        self.hasLoadedWork = listing.hasListed
+        self.loadingWorkError = listing.listError?.message
+        self.listingSubscription = listing.hasListedPublisher()
+.combineLatest(listing.listErrorPublisher())
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] hasListed, error in
+                guard let self else { return }
+                if hasLoadedWork != hasListed { self.hasLoadedWork = hasListed }
+                let message = error?.message
+                if loadingWorkError != message { self.loadingWorkError = message }
+            }
+        let install = self.installRepository
         self.runtimeIsReady = install.setupState.isReady
+        self.runtimeSetupState = install.setupState
         self.runtimeSubscription = install.setupStatePublisher().receive(on: DispatchQueue.main).sink { [weak self] state in
             guard let self else { return }
             if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
+            if runtimeSetupState != state { self.runtimeSetupState = state }
             if !state.isReady { self.presentedSheet = nil }
             resourceSlotsVM?.runtimeChanged()
         }
@@ -254,7 +184,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         }
         if !runtimeIsReady {
             switch destination {
-            case .newSession, .newWorkflow, .workflow: return
+            case .newSession, .newWorkflow, .workflow, .workflowLibrary: return
             default: break
             }
         }
@@ -265,8 +195,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).
             requestReveal(taskID: id)
-        case .group, .workflow, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .needsYou: selection = destination
-        case .newSession: isNewSessionPresented = true
+        case .group, .workflow, .workflowLibrary, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .needsYou: selection = destination
+        case .newSession: openNewSession()
         case .openWindow: parent.handle(path: destination)
         }
     }
@@ -315,20 +245,35 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     }
 
     public func buildSidebarView() -> AnyView {
-        SidebarView(sharedSidebarVM()).eraseToAnyView()
+        SidebarView(sharedSidebarVM(), managesLifecycle: false).eraseToAnyView()
+    }
+
+    public func buildNavigationRail(expand: @escaping @MainActor () -> Void) -> AnyView {
+        SidebarNavigationRail(sharedSidebarVM(), expand: expand).eraseToAnyView()
+    }
+
+    public func startShellObservation() { sharedSidebarVM().didAppear() }
+    public func stopShellObservation() { sidebarVM?.didDisappear() }
+    public func performRuntimeSetup() {
+        guard !runtimeSetupState.isReady, !runtimeSetupState.isBusy else { return }
+        let install = installRepository
+        Task { await install.install() }
     }
 
     public func buildConnectionStatusView() -> AnyView {
         ConnectionStatusView(ConnectionStatusVM(useCase: SidebarViewRepository())).eraseToAnyView()
     }
     
-    /// A fresh VM every call, deliberately not cached: the sheet's defaults (claude/interactive/
-    /// read_only, empty repo/message) must reappear every time it opens, exactly as the old
-    /// `NewSessionSheet`'s `@State` did on each reconstruction (MS-NS-1).
+    /// The window owns one composer, so navigation and appearance never replay or reset a submission.
     public func buildNewSessionView() -> AnyView {
-        let useCase = NewSessionViewRepository()
-        let vm = NewSessionVM(useCase: useCase, routing: self)
-        return NewSessionView(vm).eraseToAnyView()
+        NewSessionView(sharedNewSessionVM()).eraseToAnyView()
+    }
+
+    func sharedNewSessionVM() -> NewSessionVM {
+        if let newSessionVM { return newSessionVM }
+        let vm = NewSessionVM(useCase: NewSessionViewRepository(), routing: self)
+        newSessionVM = vm
+        return vm
     }
     
     @ObservationIgnored private var parallelPositions: [String: ParallelViewportPosition] = [:]
@@ -428,7 +373,7 @@ extension MainWindowCoordinator: SidebarRouting {
     public func select(_ destination: MonitorDestination?) {
         if !runtimeIsReady {
             switch destination {
-            case .newSession, .newWorkflow, .workflow: return
+            case .newSession, .newWorkflow, .workflow, .workflowLibrary: return
             default: break
             }
         }
@@ -436,7 +381,15 @@ extension MainWindowCoordinator: SidebarRouting {
     }
 
     public func openNewSession() {
-        isNewSessionPresented = true
+        guard runtimeIsReady else { return }
+        presentedSheet = nil
+        sharedNewSessionVM().prepareForNewTask()
+        selection = .newSession
+    }
+
+    public func retryLoadingWork() {
+        let listing = taskListRepository
+        Task { _ = await listing.refreshAndWait() }
     }
 
     func revealPublisher() -> AnyPublisher<PendingReveal, Never> { revealSubject.eraseToAnyPublisher() }
@@ -465,7 +418,14 @@ extension MainWindowCoordinator: NewSessionRouting {
     
     public func didStart(taskID: String) {
         selection = .task(taskID)
-        isNewSessionPresented = false
+    }
+
+    public func reviewRecent() {
+        // Only navigate to a task actually observed through the public listing.
+        if let task = taskListRepository.tasks.max(by: { ($0.startedAt ?? .distantPast) < ($1.startedAt ?? .distantPast) }) {
+            selectTask(task.taskID)
+        }
+        sharedSidebarVM().didTapLoadMoreTasks()
     }
 
     public func dismiss() {

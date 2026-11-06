@@ -1,6 +1,8 @@
 # M04 — shell and new-task entry preparation
 
-Status: preparation only. No M04 production implementation or acceptance is established.
+Historical preparation snapshot. Current production runtime selection and exact qualification are recorded in [M03 runtime 0.0.10](M03-runtime-0010.md). The owner subsequently approved M04 design commit `5b37a3d4d4d06b3d96c517cd384892e1ac6883cf` and independently admissible shell/composer implementation. The gates below describe the earlier snapshot; they do not revoke that later scope or establish aggregate acceptance. Native implementation verification remains separate.
+
+Original status: preparation only. No M04 production implementation or acceptance is established.
 
 The owner-approved 2026-11-05 stage amendment permits D2B delivery and independent
 M04 preparation. It permits implementation only where the actual prerequisites and

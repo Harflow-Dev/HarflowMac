@@ -43,7 +43,7 @@ import Testing
     @Test(arguments: windowSizes, [ColorScheme.light, .dark])
     func givenEditorWithNoRunSelected_whenHosted_thenNoComposerAndOnlyTheStepTrayIsBelowTheCanvas(size: CGSize, appearance: ColorScheme) async throws {
         // given
-        let vm = WorkflowPreview.make()
+        let createdAt = ProcessInfo.processInfo.systemUptime, vm = WorkflowPreview.make()
         defer { vm.didDisappear() }
         #expect(vm.selectedRun == nil)
         let fixture = RedesignHost(WorkflowView(vm).preferredColorScheme(appearance), size: size, appearance: appearance)
@@ -60,6 +60,15 @@ import Testing
         // The tray's accessibility frame ends at the validation row's text, inside its vertical padding.
         #expect(abs(trayFrame.minY - (content.minY + HfRadius.Metrics.spacing12 + HfRadius.Metrics.spacing6)) < 2,
                 "The step tray must sit at the bottom edge with only its own padding and no reserved footer")
+        if !(frame.minY >= trayFrame.maxY - 1),
+           ProcessInfo.processInfo.environment["HARFLOW_S02_LAYOUT_CAPTURE_DIR"] != nil {
+            await WorkflowFailedLayoutEvidence.record(
+                fixture: fixture, operands: ["canvasFrame": rectString(frame), "trayFrame": rectString(trayFrame),
+                    "contentRect": rectString(content), "canvasMinY": frame.minY, "trayMaxY": trayFrame.maxY,
+                    "comparisonRightHandSide": trayFrame.maxY - 1, "comparisonPassed": frame.minY >= trayFrame.maxY - 1],
+                checkpoint: validationCheckpoint(vm, label: "failedComparison", createdAt: createdAt),
+                directory: { try layoutCaptureDirectory() }, geometry: { try layoutGeometry(fixture: fixture, canvas: canvas, tray: tray) })
+        }
         #expect(frame.minY >= trayFrame.maxY - 1, "The canvas must end above the step tray")
     }
 
@@ -588,13 +597,4 @@ private struct HeaderGeometryProbe: NSViewRepresentable {
     }
 
     func updateNSView(_: NSView, context _: Context) {}
-}
-
-extension RedesignHost {
-    /// Whether any accessibility element's label, title or value contains `text`.
-    func hasElement(containing text: String) -> Bool {
-        descendants.flatMap { elements(in: $0) }.contains { object in
-            ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { string(object, $0)?.contains(text) == true }
-        }
-    }
 }

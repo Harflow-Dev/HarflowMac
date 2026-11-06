@@ -21,6 +21,19 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.taskArtifactRepository) private var taskArtifactRepository
     private let builderRunID: String?
     private var relatedMembers: [String: TaskInfo] = [:]
+    private var successorMembers: [String: TaskInfo] = [:]
+    private var successorRefreshMembers: [String: TaskInfo] = [:]
+    private var successorRuntime: QualificationRuntimeToken?
+    private var successorEpoch = UUID()
+    private var successorEnabled = false
+    private(set) var successorObservationError: String?
+    private var successorTask: Task<Void, Never>?
+    private var successorIncomplete = false
+    private var successorBusy = false
+    private var successorFrontier: [(String, String?)] = []
+    private var successorVisited: Set<String> = []
+    private var successorCursors: [String: Set<String>] = [:]
+    private let successorChanges = PassthroughSubject<[TaskInfo], Never>()
     @GlobalEnvironment(\.workflowRepository) private var workflowRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.taskSnapshotRepository) private var taskSnapshotRepository
@@ -63,15 +76,20 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
 
     // MARK: - TaskDetailUseCase Methods
     
-    func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher() }
+    func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { taskListRepository.tasksPublisher().merge(with: successorChanges).eraseToAnyPublisher() }
     func hasListedPublisher() -> AnyPublisher<Bool, Never> { taskListRepository.hasListedPublisher() }
     func titlesPublisher() -> AnyPublisher<[String: String], Never> { taskListRepository.titlesPublisher() }
     func detail(_ id: String) -> TaskInfo? {
-        guard let listed = taskListRepository.task(id) else { return taskListRepository.detail(id) }
+        synchronizeSuccessorRuntime()
+        guard let listed = taskListRepository.task(id) else { return successorMembers[id] ?? relatedMembers[id] ?? taskListRepository.detail(id) }
         return WorkflowNodePresentation.merged(taskListRepository.detail(id), with: listed)
     }
 
-    func task(_ id: String) -> TaskInfo? { taskListRepository.task(id) }
+    func task(_ id: String) -> TaskInfo? {
+        synchronizeSuccessorRuntime()
+        return taskListRepository.task(id) ?? successorMembers[id] ?? relatedMembers[id]
+    }
+
     func title(_ id: String) -> String { taskListRepository.title(id) }
     func ancestors(of id: String) -> [TaskInfo] { Lineage.ancestors(of: id, in: taskListRepository.tasks) }
     func children(of id: String) -> [TaskInfo] { Lineage.children(of: id, in: taskListRepository.tasks) }
@@ -129,7 +147,25 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         if builderRunID != nil {
             return try await builderFollowup(id, text: text)
         }
-        return try await taskActionRepository.resume(id, text: text, onResumed: onResumed)
+        let epoch = successorEpoch
+        let acknowledged = try await taskActionRepository.resume(id, text: text, onResumed: onResumed)
+        if acknowledged != nil, successorEnabled, successorEpoch == epoch {
+            // Observation never changes the acknowledged mutation outcome or retries it.
+            successorTask?.cancel()
+            successorTask = Task { [weak self] in
+                guard let self, successorEpoch == epoch, successorEnabled else { return }
+                do {
+                    let partial = try await observeSuccessors(id)
+                    guard successorEpoch == epoch, !Task.isCancelled else { return }
+                    successorObservationError = partial ? "Conversation history is incomplete. Retry to continue." : nil
+                } catch {
+                    guard successorEpoch == epoch, !Task.isCancelled else { return }
+                    successorObservationError = "Conversation history could not be loaded. Retry to continue."
+                }
+                successorChanges.send(conversationInventory.sorted { $0.taskID < $1.taskID })
+            }
+        }
+        return acknowledged
     }
     
     private func builderFollowup(_ id: String, text: String) async throws -> String? {
@@ -165,19 +201,151 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
 
     func acquireEventLease(_ id: String) -> any EventStreamLease { eventStreamRepository.acquire(id) }
     private var conversationInventory: [TaskInfo] {
+        synchronizeSuccessorRuntime()
         var tasks = relatedMembers
+        tasks.merge(successorMembers) { _, successor in successor }
         for task in taskListRepository.tasks { tasks[task.taskID] = task }
         return Array(tasks.values)
     }
 
+    private func synchronizeSuccessorRuntime() {
+        let current = (try? toolEnvironmentRepository.ctl().get()).map(QualificationRuntimeToken.init(client:))
+        guard current != successorRuntime else { return }
+        stopSuccessorObservation()
+        successorRuntime = current
+    }
+
+    func stopSuccessorObservation() {
+        successorEpoch = UUID()
+        successorTask?.cancel()
+        successorTask = nil
+        successorIncomplete = false
+        successorObservationError = nil
+        successorEnabled = false
+        successorBusy = false
+        successorFrontier = []
+        successorVisited = []
+        successorCursors = [:]
+        relatedMembers = [:]
+        successorMembers = [:]
+        successorRefreshMembers = [:]
+    }
+
+    /// A selected-surface serial frontier. Empty observations only concern recorded tasks.
+    func observeSuccessors(_ id: String) async throws -> Bool {
+        guard successorEnabled else { throw CancellationError() }
+        synchronizeSuccessorRuntime()
+        successorEnabled = true
+        guard !successorBusy else { return true }
+        guard let runtime = successorRuntime else { throw QualificationSessionError.runtimeChanged }
+        let epoch = successorEpoch
+        successorBusy = true
+        defer { if successorEpoch == epoch { successorBusy = false } }
+        if successorFrontier.isEmpty {
+            successorIncomplete = false
+            successorRefreshMembers = [:]
+            successorVisited = []
+            successorCursors = [:]
+            successorFrontier = [(id, nil)]
+        }
+        var pages = 0
+        var rows = 0
+        while !successorFrontier.isEmpty, pages < 4, rows < 400 {
+            let (predecessor, cursor) = successorFrontier[0]
+            if !successorVisited.contains(predecessor), successorVisited.count >= 32 { return markSuccessorIncomplete() }
+            successorVisited.insert(predecessor)
+            let response = try await taskListRepository.successorPage(predecessorTaskID: predecessor, cursor: cursor, runtime: runtime)
+            synchronizeSuccessorRuntime()
+            guard !Task.isCancelled, successorEpoch == epoch, successorRuntime == runtime else {
+                throw QualificationSessionError.runtimeChanged
+            }
+            let page = response.history
+            let count = page.items.count + page.relatedItems.count
+            guard rows + count <= 400 else { return markSuccessorIncomplete() }
+            pages += 1
+            rows += count
+            try applySuccessorPage(response, predecessor: predecessor, cursor: cursor)
+            if page.page.bootstrapPending || !page.page.catalogState.isReady { return markSuccessorIncomplete() }
+        }
+        return finishSuccessorCycle()
+    }
+
+    private func applySuccessorPage(_ response: TaskSuccessorPage, predecessor: String, cursor: String?) throws {
+        let page = response.history
+        let health = page.page
+        let incompleteHealth = response.readinessUnknown || health.bootstrapPending || health.historyIncomplete
+            || health.authorityIncomplete || !health.catalogState.isReady
+        successorIncomplete = successorIncomplete || incompleteHealth
+        if let next = health.nextCursor, health.hasMore {
+            guard next != cursor, successorCursors[predecessor, default: []].insert(next).inserted else {
+                throw ToolError.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Recorded successor cursor did not advance")
+            }
+        }
+        successorFrontier.removeFirst()
+        if health.hasMore, let next = health.nextCursor { successorFrontier.insert((predecessor, next), at: 0) }
+        let changed = mergeSuccessorRows(page.items + page.relatedItems)
+        enqueueSuccessors(page.items)
+        if changed { successorChanges.send(conversationInventory.sorted { $0.taskID < $1.taskID }) }
+    }
+
+    private func mergeSuccessorRows(_ tasks: [TaskInfo]) -> Bool {
+        var changed = false
+        for task in tasks {
+            guard successorRefreshMembers[task.taskID] != nil || successorRefreshMembers.count < 400 else {
+                successorIncomplete = true
+                continue
+            }
+            successorRefreshMembers[task.taskID] = task
+            guard successorMembers[task.taskID] != nil || successorMembers.count < 800 else {
+                successorIncomplete = true
+                continue
+            }
+            if successorMembers[task.taskID] != task { successorMembers[task.taskID] = task; changed = true }
+        }
+        return changed
+    }
+
+    private func enqueueSuccessors(_ tasks: [TaskInfo]) {
+        for task in tasks where !successorVisited.contains(task.taskID) && !successorFrontier.contains(where: { $0.0 == task.taskID }) {
+            if successorVisited.count + successorFrontier.count < 32 {
+                successorFrontier.append((task.taskID, nil))
+            } else { successorIncomplete = true }
+        }
+    }
+
+    private func finishSuccessorCycle() -> Bool {
+        let incomplete = successorIncomplete || !successorFrontier.isEmpty
+        successorObservationError = incomplete ? "Conversation history is incomplete. Retry to continue." : nil
+        if !incomplete, successorMembers != successorRefreshMembers {
+            successorMembers = successorRefreshMembers
+            successorChanges.send(conversationInventory.sorted { $0.taskID < $1.taskID })
+        }
+        return incomplete
+    }
+
+    private func markSuccessorIncomplete() -> Bool {
+        successorIncomplete = true
+        successorObservationError = "Conversation history is incomplete. Retry to continue."
+        return true
+    }
+
     func resolveTask(_ id: String) async -> TaskInfo? {
+        synchronizeSuccessorRuntime()
+        successorEnabled = true
+        let epoch = successorEpoch
         let task = await taskListRepository.resolve(id)
-        if let task { relatedMembers[id] = task }
+        synchronizeSuccessorRuntime()
+        guard !Task.isCancelled, epoch == successorEpoch else { return nil }
+        if let task { relatedMembers[task.taskID] = task }
         return task
     }
 
     func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage? {
+        synchronizeSuccessorRuntime()
+        let epoch = successorEpoch
         let page = try await taskListRepository.conversationPage(sessionID: sessionID, cursor: cursor, limit: 100)
+        synchronizeSuccessorRuntime()
+        guard !Task.isCancelled, successorEpoch == epoch else { throw QualificationSessionError.runtimeChanged }
         for task in page.items { relatedMembers[task.taskID] = task }
         return page
     }

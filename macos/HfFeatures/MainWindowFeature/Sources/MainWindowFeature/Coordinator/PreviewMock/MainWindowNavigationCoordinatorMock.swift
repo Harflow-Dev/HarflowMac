@@ -27,6 +27,14 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     
     var selection: MonitorDestination?
     var runtimeIsReady: Bool
+    var hasLoadedWork = true
+    var loadingWorkError: String?
+    var listingRetryCount = 0
+    func retryLoadingWork() { listingRetryCount += 1 }
+    let composerViewModel = NewSessionViewModelMock()
+    var optionsInitiallyPresented = false
+    let retainedTaskViewModel = TaskDetailViewModelMock()
+    func performRuntimeSetup() { sidebarViewModel.didTapRuntimeSetup() }
     /// One retained sidebar VM, so a `runtimeSetupState` change reaches the mounted `SidebarView`
     /// (which holds its VM in `@State`) the way the production VM's published state does.
     let sidebarViewModel: SidebarViewModelMock
@@ -46,13 +54,17 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
         SidebarView(sidebarViewModel).eraseToAnyView()
     }
 
+    func buildNavigationRail(expand: @escaping @MainActor () -> Void) -> AnyView {
+        SidebarNavigationRail(sidebarViewModel, expand: expand).eraseToAnyView()
+    }
+
     func buildConnectionStatusView() -> AnyView {
         ConnectionStatusView(ConnectionStatusPreviewMock()).eraseToAnyView()
     }
 
-    func buildNewSessionView() -> AnyView { NewSessionView(NewSessionViewModelMock()).eraseToAnyView() }
+    func buildNewSessionView() -> AnyView { NewSessionView(composerViewModel, optionsPresented: optionsInitiallyPresented).eraseToAnyView() }
     func buildParallelView(name: String) -> AnyView { Text("Parallel: \(name)").eraseToAnyView() }
-    func buildTaskDetailView(id: String) -> AnyView { Text("Task: \(id)").eraseToAnyView() }
+    func buildTaskDetailView(id _: String) -> AnyView { TaskDetailView(retainedTaskViewModel).eraseToAnyView() }
     
     func start() -> AnyView { MainWindowNavigationView(self).eraseToAnyView() }
 

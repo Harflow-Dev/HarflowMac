@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import MonitorCore
 
 // MARK: - WorkflowMonitorSnapshot
@@ -6,7 +7,8 @@ import MonitorCore
 /// Reads one immutable CLI transport snapshot, even while its source run advances.
 @MainActor
 struct WorkflowMonitorSnapshot {
-    static func read(first: [String: JSONValue], id: String, useCase: any WorkflowUseCase) async throws -> [String: JSONValue] {
+    static func read(first: [String: JSONValue], id: String, useCase: any WorkflowUseCase,
+                     runtime: QualificationRuntimeToken? = nil) async throws -> [String: JSONValue] {
         var page = first
         var text = ""
         let digest = first["content_sha256"]?.stringValue
@@ -22,7 +24,7 @@ struct WorkflowMonitorSnapshot {
             text += chunk
             guard text.utf8.count <= total else { throw SnapshotError.invalidPage }
             guard let cursor = page["next_cursor"]?.stringValue else { break }
-            page = try await useCase.command("status", options: ["--monitor-view", "--snapshot", "--cursor=\(cursor)"], positionals: [id])
+            page = try await useCase.command("status", options: ["--monitor-view", "--snapshot", "--cursor=\(cursor)"], positionals: [id], runtime: runtime)
         } while true
         let reconciliationStart = MonitorMetrics.begin()
         defer { MonitorMetrics.end(reconciliationStart, stage: .workflowReconciliation) }

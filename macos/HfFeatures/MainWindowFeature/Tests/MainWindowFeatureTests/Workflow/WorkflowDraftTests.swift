@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -16,6 +17,7 @@ import Testing
 
     func vm(store: any WorkflowDraftStoring, current: [String: JSONValue] = [:]) -> WorkflowVM {
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(false)])
         given(useCase).backendIDs.willReturn(["codex"])

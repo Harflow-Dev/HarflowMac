@@ -24,11 +24,13 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
     case needsYou(itemID: String?)
     /// Open a saved workflow in the canvas editor.
     case workflow(String)
+    /// Browse saved workflows without choosing an execution or creating a definition.
+    case workflowLibrary
     /// Create a fresh editor for every add action.
     case newWorkflow(UUID)
     /// Open a persisted workflow run from history or the status item.
     case workflowRun(String)
-    /// Open the New Session sheet.
+    /// Open the inline new-task composer.
     case newSession
     /// Bring the main window forward.
     case openWindow
@@ -41,6 +43,7 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
         case .resourceSlots: "resourceSlots"
         case .needsYou(let itemID): "needsYou:\(itemID ?? "")"
         case .workflow(let name): "workflow:\(name)"
+        case .workflowLibrary: "workflowLibrary"
         case .newWorkflow(let id): "newWorkflow:\(id)"
         case .workflowRun(let id): "workflowRun:\(id)"
         case .newSession: "newSession"

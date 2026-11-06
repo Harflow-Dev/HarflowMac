@@ -76,6 +76,9 @@ struct SidebarNativeRow: View {
 
     @ViewBuilder private var content: some View {
         switch entry.content {
+        case .navigation(let navigation):
+            SidebarNavigationRow(navigation: navigation, minimumHeight: entry.minimumHeight)
+                .hfFadeIn(animate: animate)
         case .needsYou(let badge):
             // One Label element, like Statistics: the capsule is drawn over it and left out of accessibility,
             // and the spoken label carries the count.

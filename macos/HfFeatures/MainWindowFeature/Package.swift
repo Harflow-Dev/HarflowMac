@@ -27,7 +27,12 @@ let package = Package(
             dependencies: [
                 "HfUtilities", "HfCommon", "HfUI", "MonitorCore", "HfRepository", "SwiftEnvironment", "Mockable"
             ],
-            resources: [.copy("Resources/Branding")],
+            resources: [
+                .copy("Resources/Branding"),
+                .copy("Resources/NavigationIcons"),
+                .copy("Resources/NavigationIcons-provenance.json"),
+                .copy("Resources/NavigationIcons-README.md")
+            ],
             swiftSettings: [
                 .define("MOCKING", .when(configuration: .debug))
             ]

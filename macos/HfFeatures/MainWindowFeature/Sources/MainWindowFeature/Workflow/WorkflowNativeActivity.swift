@@ -1,3 +1,4 @@
+import HfRepository
 import HfUI
 import MonitorCore
 import SwiftUI
@@ -16,6 +17,18 @@ struct WorkflowNativeActivityModel: Equatable {
     var hasEarlierActivity = false
     /// Whether a fetch for this execution has succeeded; a settled execution is pulsed until one has.
     var loaded = false
+    var settled: Bool?
+    var activityState: String?
+    var runID: String?
+}
+
+/// Captured public input identity for a single activity read.
+struct WorkflowNativeActivityRequest: Equatable {
+    let runID: String
+    let executionID: String
+    let activation: [String: JSONValue]?
+    let intent: WorkflowActivityReadIntent
+    let runtime: QualificationRuntimeToken?
 }
 
 // MARK: - WorkflowNativeActivityView
@@ -56,22 +69,32 @@ extension WorkflowVM {
     }
 
     func updateNativeActivity() {
-        nativeActivityTask?.cancel()
-        nativeActivityTask = nil
         guard runGraphVisible, let run = selectedRun,
               let activation = runSidebar.activation,
               let executionID = activation["id"]?.stringValue,
               WorkflowExecutionPresentation(raw: activation).isSubagent else {
+            nativeActivityRequestID = UUID()
+            nativeActivityTask?.cancel()
+            nativeActivityTask = nil
             if nativeActivity != nil { nativeActivity = nil }
             return
         }
+        let runtime = try? useCase.activityRuntime()
+        let desired = WorkflowNativeActivityRequest(runID: run.id, executionID: executionID, activation: activation,
+                                                   intent: activityIntent(runtime: runtime), runtime: runtime)
+        if nativeActivityTask != nil, nativeActivityRequest == desired { return }
+        nativeActivityRequestID = UUID()
+        nativeActivityTask?.cancel()
+        nativeActivityTask = nil
         let projection = WorkflowExecutionPresentation(raw: activation)
-        var next = nativeActivity?.executionID == executionID ? nativeActivity! : WorkflowNativeActivityModel(
+        var next = nativeActivity?.executionID == executionID && nativeActivity?.runID == run.id ? nativeActivity! : WorkflowNativeActivityModel(
             executionID: executionID, title: runSidebar.title, status: activation["status"]?.stringValue ?? "unknown",
             limited: projection.activityLimited)
         next = WorkflowNativeActivityModel(executionID: executionID, title: runSidebar.title,
             status: activation["status"]?.stringValue ?? "unknown", limited: projection.activityLimited,
-            items: next.items, markdown: next.markdown, error: next.error, hasEarlierActivity: next.hasEarlierActivity, loaded: next.loaded)
+            items: next.items, markdown: next.markdown, error: next.error, hasEarlierActivity: next.hasEarlierActivity,
+            loaded: next.loaded, settled: next.settled,
+            activityState: next.activityState, runID: run.id)
         if nativeActivity != next { nativeActivity = next }
         nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: executionID)
     }
@@ -84,30 +107,72 @@ extension WorkflowVM {
         // Relies on every cancel site (`updateNativeActivity`, `WorkflowVM.didDisappear`) setting
         // `nativeActivityTask` to nil; a stale non-nil task would block the pulse forever.
         guard runGraphVisible, nativeActivityTask == nil, let run = selectedRun, let current = nativeActivity,
-              !current.loaded || ["running", "launch_requested"].contains(current.status) else { return }
+              !current.loaded || currentActivityIntent != .settledOnly else { return }
         nativeActivityTask = fetchNativeActivity(runID: run.id, executionID: current.executionID)
     }
 
-    private func applyNativeActivity(items: [TimelineItem], markdown: [Int: StreamingMarkdownState], more: Bool) {
+    private func applyNativeActivity(items: [TimelineItem], markdown: [Int: StreamingMarkdownState], page: WorkflowActivityPage) {
         guard var next = nativeActivity else { return }
         next.items = items
         next.markdown = markdown
-        next.hasEarlierActivity = more
+        next.hasEarlierActivity = page.hasMore
+        next.settled = page.settled
+        next.activityState = page.activityState
         next.error = nil
         next.loaded = true
         if nativeActivity != next { nativeActivity = next }
     }
 
+    private var currentActivityIntent: WorkflowActivityReadIntent {
+        guard let run = selectedRun, let activation = runSidebar.activation else { return .allowUnsettled }
+        return runPolling.activityIntent(runID: run.id, activation: activation, runtime: try? useCase.activityRuntime())
+    }
+
+    private func activityIntent(runtime: QualificationRuntimeToken?) -> WorkflowActivityReadIntent {
+        guard let run = selectedRun, let activation = runSidebar.activation else { return .allowUnsettled }
+        return runPolling.activityIntent(runID: run.id, activation: activation, runtime: runtime)
+    }
+
+    private func applyUnavailableNativeActivity(_ page: WorkflowActivityPage) -> Bool {
+        guard page.activityState == "unavailable" else { return false }
+        if nativeActivity?.activityState != page.activityState { nativeActivity?.activityState = page.activityState }
+        if nativeActivity?.settled != page.settled { nativeActivity?.settled = page.settled }
+        let message = "Subagent activity is unavailable."
+        if nativeActivity?.error != message { nativeActivity?.error = message }
+        return true
+    }
+
+    private func applyNativeActivityFailure(_ error: Error, capturedRuntime: Result<QualificationRuntimeToken, Error>) {
+        if case .success(let runtime) = capturedRuntime, (try? useCase.activityRuntime()) != runtime { return }
+        let message = "Unable to load subagent activity. " + Self.message(error)
+        if nativeActivity?.error != message { nativeActivity?.error = message }
+    }
+
     private func fetchNativeActivity(runID: String, executionID: String) -> Task<Void, Never> {
-        Task { [weak self] in
+        let requestID = UUID()
+        nativeActivityRequestID = requestID
+        let capturedRuntime = Result { try useCase.activityRuntime() }
+        let runtime = try? capturedRuntime.get()
+        let intent = activityIntent(runtime: runtime)
+        let activation = runSidebar.activation
+        nativeActivityRequest = WorkflowNativeActivityRequest(runID: runID, executionID: executionID, activation: activation,
+                                                              intent: intent, runtime: runtime)
+        return Task { [weak self] in
             guard let self else { return }
-            defer { if !Task.isCancelled { nativeActivityTask = nil } }
+            defer { if nativeActivityRequestID == requestID { nativeActivityTask = nil } }
             do {
-                let page = try await useCase.command("inspect", options: ["--view=activity", "--limit=200"], positionals: [runID, executionID])
-                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
+                let runtime = try capturedRuntime.get()
+                let page = try await useCase.activity(runID: runID, executionID: executionID, intent: intent, runtime: runtime)
+                guard !Task.isCancelled, nativeActivityRequestID == requestID, runGraphVisible,
+                      selectedRun?.id == runID, nativeActivity?.executionID == executionID,
+                      runSidebar.activation == activation, currentActivityIntent == intent, (try? useCase.activityRuntime()) == runtime else { return }
+                guard intent != .settledOnly || page.settled != false else {
+                    throw ToolError.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Unsettled workflow activity response")
+                }
+                if applyUnavailableNativeActivity(page) { return }
                 let previous = nativeActivity?.markdown ?? [:]
                 let prepared = await Task.detached(priority: .userInitiated) {
-                    let events = (page["events"]?.arrayValue ?? []).compactMap { TaskEvent(line: $0.rendered()) }
+                    let events = page.events
                     let items = Timeline.items(from: events)
                     var markdown: [Int: StreamingMarkdownState] = [:]
                     for item in items {
@@ -117,12 +182,15 @@ extension WorkflowVM {
                     }
                     return (items, markdown)
                 }.value
-                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
-                applyNativeActivity(items: prepared.0, markdown: prepared.1, more: page["has_more"]?.boolValue ?? false)
+                guard !Task.isCancelled, nativeActivityRequestID == requestID, runGraphVisible,
+                      selectedRun?.id == runID, nativeActivity?.executionID == executionID,
+                      runSidebar.activation == activation, currentActivityIntent == intent, (try? useCase.activityRuntime()) == runtime else { return }
+                applyNativeActivity(items: prepared.0, markdown: prepared.1, page: page)
             } catch {
-                guard !Task.isCancelled, selectedRun?.id == runID, nativeActivity?.executionID == executionID else { return }
-                let message = "Unable to load subagent activity. " + Self.message(error)
-                if nativeActivity?.error != message { nativeActivity?.error = message }
+                guard !Task.isCancelled, nativeActivityRequestID == requestID, runGraphVisible,
+                      selectedRun?.id == runID, nativeActivity?.executionID == executionID,
+                      runSidebar.activation == activation, currentActivityIntent == intent else { return }
+                applyNativeActivityFailure(error, capturedRuntime: capturedRuntime)
             }
         }
     }

@@ -17,6 +17,7 @@ import Testing
     private func makeVM(visibility: FakeMonitorVisibility, scheduler: CapturingScheduler, reads: PollCounter,
                         raw: [String: JSONValue]) -> WorkflowVM {
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
@@ -111,7 +112,8 @@ import Testing
             "definition": .object(["nodes": .array([.object(["id": .string("n1"), "type": .string("agent")])])]),
             "activations": .array([.object(activation)])
         ]
-        let page: [String: JSONValue] = ["events": .array([]), "has_more": .bool(true)]
+        let page = WorkflowActivityPage(raw: ["workflow_run_id": .string("run"), "execution_id": .string("act1"),
+                                              "events": .array([]), "has_more": .bool(true)], runID: "run", executionID: "act1")!
         let inspects = PollCounter()
         let useCase = MockWorkflowUseCase()
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
@@ -121,10 +123,12 @@ import Testing
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
-        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { command, _, _, _ in
-            if command == "inspect" { inspects.increment(); return page }
-            return runRaw
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
+        given(useCase).activity(runID: .any, executionID: .any, intent: .any, runtime: .any).willProduce { _, _, _, _ in
+            inspects.increment()
+            return page
         }
+        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn(runRaw)
         given(routing).chooseDirectory().willReturn(nil)
         let store = WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
@@ -157,7 +161,7 @@ import Testing
 
     /// A VM holding a native-subagent activation whose `inspect` reads fail until `failures`
     /// is used up, then succeed.
-    private func makeNativeVM(status: String, failures: Int, inspects: PollCounter) -> WorkflowVM {
+    private func makeNativeVM(status: String, failures: Int, inspects: PollCounter) async throws -> WorkflowVM {
         let activation: [String: JSONValue] = [
             "id": .string("act1"), "node_id": .string("n1"), "role": .string("node"), "status": .string(status),
             "execution_kind": .string("native_subagent")
@@ -175,25 +179,39 @@ import Testing
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).modelOptions(backend: .any).willReturn([])
         given(useCase).refreshTasks().willReturn()
-        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { command, _, _, _ in
-            guard command == "inspect" else { return runRaw }
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
+        given(useCase).activity(runID: .any, executionID: .any, intent: .any, runtime: .any).willProduce { _, _, _, _ in
             inspects.increment()
             if inspects.value <= failures { throw InspectFailure() }
-            return ["events": .array([]), "has_more": .bool(false)]
+            return WorkflowActivityPage(raw: ["workflow_run_id": .string("run"), "execution_id": .string("act1"),
+                                              "events": .array([]), "has_more": .bool(false)], runID: "run", executionID: "act1")!
+        }
+        given(useCase).command(.any, options: .any, positionals: .any, runtime: .any).willProduce { _, options, _, _ in
+            // A complete public transport snapshot supplies the attempts inventory, unlike status alone.
+            guard options.contains("--snapshot") else { return runRaw }
+            var full = runRaw
+            var complete = activation
+            complete["tasks"] = .array([])
+            full["activations"] = .array([.object(complete)])
+            let content = JSONValue.object(full).rendered()
+            return ["monitor_snapshot": .bool(true), "workflow_run_id": .string("run"),
+                    "content_sha256": .string("frozen"), "offset": .number(0),
+                    "total_characters": .number(Double(content.utf8.count)), "chunk": .string(content), "next_cursor": .null]
         }
         given(routing).chooseDirectory().willReturn(nil)
         let store = WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         let vm = WorkflowVM(useCase: useCase, routing: routing, parallel: ParallelVMTests().makeSUT().sut, draftStore: store,
                             visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
-        vm.selectedRun = WorkflowRunModel(raw: runRaw)
+        let complete = try await vm.runPolling.load(id: "run", useCase: useCase)
+        vm.selectedRun = WorkflowRunModel(raw: complete)
         vm.selectedNodeID = "n1"
         return vm
     }
 
-    @Test func givenAFailedActivityRead_whenALaterPollSucceeds_thenTheErrorClearsOnceAndIdenticalPollsStayQuiet() async {
+    @Test func givenAFailedActivityRead_whenALaterPollSucceeds_thenTheErrorClearsOnceAndIdenticalPollsStayQuiet() async throws {
         // given — the first read fails.
         let inspects = PollCounter()
-        let vm = makeNativeVM(status: "running", failures: 1, inspects: inspects)
+        let vm = try await makeNativeVM(status: "running", failures: 1, inspects: inspects)
         await vm.sidebarTask?.value
         await waitUntil { vm.nativeActivity?.error != nil && vm.nativeActivityTask == nil }
 
@@ -213,10 +231,10 @@ import Testing
         #expect(changed.value == 0)
     }
 
-    @Test func givenASettledExecutionWhoseFirstReadFailed_whenPollsContinue_thenItRetriesUntilOneSucceedsThenStops() async {
+    @Test func givenASettledExecutionWhoseFirstReadFailed_whenPollsContinue_thenItRetriesUntilOneSucceedsThenStops() async throws {
         // given — a completed execution, first read fails.
         let inspects = PollCounter()
-        let vm = makeNativeVM(status: "completed", failures: 1, inspects: inspects)
+        let vm = try await makeNativeVM(status: "completed", failures: 1, inspects: inspects)
         await vm.sidebarTask?.value
         await waitUntil { vm.nativeActivity?.error != nil && vm.nativeActivityTask == nil }
         #expect(inspects.value == 1)
@@ -236,6 +254,7 @@ import Testing
     @Test func givenAChangedRun_whenRefreshed_thenSelectedRunIsReassigned() async {
         // given
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         let status = PollCounter()

@@ -22,16 +22,16 @@ import Testing
 
     // MARK: - Helpers
 
-    private func makeSUT() async -> (vm: SidebarViewModelMock, outline: NSOutlineView, window: NSWindow)? {
+    private func makeSUT() async -> (vm: SidebarViewModelMock, outlines: [NSOutlineView], window: NSWindow)? {
         let vm = SidebarViewModelMock()
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 280, height: 800), styleMask: [.titled], backing: .buffered, defer: false)
         let host = NSHostingView(rootView: SidebarView(vm).frame(width: 280, height: 800))
         window.contentView = host
         host.layoutSubtreeIfNeeded()
-        let findOutline = { Self.allSubviews(host).compactMap { $0 as? NSOutlineView }.first }
+        let findOutline = { sidebarFixtureOutline(in: host) }
         await waitUntil { (findOutline()?.numberOfRows ?? 0) > 0 }
-        guard let outline = findOutline() else { return nil }
-        return (vm, outline, window)
+        guard let recent = findOutline(), let running = sidebarFixtureOutline(in: host, role: .running) else { return nil }
+        return (vm, [running, recent], window)
     }
 
     private static func allSubviews(_ view: NSView) -> [NSView] {
@@ -40,15 +40,17 @@ import Testing
 
     /// Rows the delegate allows selecting, selected one at a time, with the destination each
     /// selection wrote back through the binding.
-    private func selectEverySelectableRow(_ sut: (vm: SidebarViewModelMock, outline: NSOutlineView, window: NSWindow)) async -> [MonitorDestination] {
+    private func selectEverySelectableRow(_ sut: (vm: SidebarViewModelMock, outlines: [NSOutlineView], window: NSWindow)) async -> [MonitorDestination] {
         var selected: [MonitorDestination] = []
-        for row in 0 ..< sut.outline.numberOfRows {
-            let item = sut.outline.item(atRow: row) as Any
-            guard sut.outline.delegate?.outlineView?(sut.outline, shouldSelectItem: item) == true else { continue }
+        for outline in sut.outlines {
+        for row in 0 ..< outline.numberOfRows {
+            let item = outline.item(atRow: row) as Any
+            guard outline.delegate?.outlineView?(outline, shouldSelectItem: item) == true else { continue }
             let previous = sut.vm.selection
-            sut.outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
             await waitUntil { sut.vm.selection != previous }
             if let destination = sut.vm.selection, destination != previous { selected.append(destination) }
+        }
         }
         return selected
     }
@@ -67,7 +69,7 @@ import Testing
         // Monitor piece 4: the tree's guide gutter and disclosure chevron must not make the
         // expanded child row itself unselectable.
         #expect(selected == [
-            .needsYou(itemID: nil), .statistics, .resourceSlots, .task("abc123"), .task("abc123-child"), .group("review-bot"), .task("def456"), .task("ghi789")
+            .task("abc123"), .task("abc123-child"), .group("review-bot"), .task("def456"), .task("ghi789")
         ])
     }
 }

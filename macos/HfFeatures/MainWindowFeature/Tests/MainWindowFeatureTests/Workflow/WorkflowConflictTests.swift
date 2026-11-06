@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import HfCommon
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -14,6 +15,7 @@ import Testing
     func harness(current: [String: JSONValue]) -> (WorkflowVM, WorkflowDraftStore) {
         let store = WorkflowDraftTests().store()
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).agentUsageSnapshot.willReturn(.init())

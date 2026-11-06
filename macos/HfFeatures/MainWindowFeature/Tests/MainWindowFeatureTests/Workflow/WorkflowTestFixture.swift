@@ -18,6 +18,11 @@ extension WorkflowTests {
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).recordAgentUsage(.any, acknowledgementID: .any).willReturn()
         given(useCase).refreshTasks().willReturn()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
+        given(useCase).activity(runID: .any, executionID: .any, intent: .any, runtime: .any).willProduce { runID, executionID, _, _ in
+            WorkflowActivityPage(raw: ["workflow_run_id": .string(runID), "execution_id": .string(executionID),
+                                      "events": .array([]), "has_more": .bool(false)], runID: runID, executionID: executionID)!
+        }
         given(routing).chooseDirectory().willReturn(nil)
         given(routing).selectTask(.any).willReturn()
         given(routing).didSaveWorkflow(name: .any).willReturn()

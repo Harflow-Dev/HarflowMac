@@ -108,10 +108,12 @@ struct SidebarView<VM: SidebarViewModel>: View {
     // MARK: - Environment
     
     @Environment(\.viewEvent) var viewEvent
+    @Environment(\.toggleHarflowSidebar) private var toggleSidebar
     
     // MARK: - State
     
     @State var viewModel: VM
+    private let managesLifecycle: Bool
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
     @Environment(\.defaultMinListRowHeight) private var minimumRowHeight
@@ -121,7 +123,6 @@ struct SidebarView<VM: SidebarViewModel>: View {
     @State private var disclosureTask: Task<Void, Never>?
     @State private var transitionRelay = SidebarNativeTransitionRelay()
     @State private var transitionEpoch = 0
-    @State private var workflowsExpanded = true
 
     private var reduceMotion: Bool {
         HfMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion)
@@ -129,8 +130,9 @@ struct SidebarView<VM: SidebarViewModel>: View {
     
     // MARK: - Init
     
-    init(_ viewModel: VM) {
+    init(_ viewModel: VM, managesLifecycle: Bool = true) {
         _viewModel = State(initialValue: viewModel)
+        self.managesLifecycle = managesLifecycle
     }
     
     // MARK: - View Body
@@ -138,13 +140,16 @@ struct SidebarView<VM: SidebarViewModel>: View {
     var body: some View {
         Group {
             if viewModel.runtimeSetupState.isReady {
-                list
-                    .safeAreaInset(edge: .top, spacing: HfRadius.Metrics.zero) { header.background(.bar) }
-                    .safeAreaInset(edge: .bottom, spacing: HfRadius.Metrics.zero) { footer.background(.bar) }
+                VStack(spacing: 0) {
+                    header
+                    list
+                    footer
+                }
             } else {
                 // The ScrollView owns the top safe area, so the card stays below the unified toolbar;
                 // the fixed footer stays at the bottom.
                 VStack(spacing: HfRadius.Metrics.zero) {
+                    header
                     ScrollView {
                         RuntimeSetupCard(state: viewModel.runtimeSetupState, action: viewModel.didTapRuntimeSetup)
                             .padding(.horizontal, HfRadius.Metrics.spacing16)
@@ -158,18 +163,17 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        // New session moved from the toolbar into the column itself (SPEC §6.1): the same
-        // `didTapNewSession` action, now a fixed full-width button above the search field — never
-        // a scrollable List row. The window controls and the sidebar toggle stay system-owned.
-        .onAppear { viewModel.didAppear() }
-        .onDisappear { viewModel.didDisappear() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Sidebar")
+        .accessibilityIdentifier("main-window-sidebar")
+        .onAppear { if managesLifecycle { viewModel.didAppear() } }
+        .onDisappear { if managesLifecycle { viewModel.didDisappear() } }
         .publishViewEvent(from: viewModel, to: viewEvent)
     }
 
     // MARK: - Private Views
 
-    /// The fixed controls above the list: the full-width New session button, then the search field
-    /// beside the compact backend-dot filter, then the degraded-catalog note when there is one.
+    /// Approved M04 fixed brand and navigation, with retained runtime/store diagnostics.
     private var header: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
             if let banner = viewModel.installBannerModel {
@@ -187,17 +191,14 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 .help("Open Settings → General to inspect the store and review recovery")
                 .accessibilityIdentifier("sidebar-store-attention")
             }
-            newSessionButton
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: HfRadius.Metrics.spacing6) {
-                    searchField.frame(minWidth: HfRadius.Metrics.sidebarSearchMinimumWidth)
-                    backendFilterMenu.fixedSize()
-                }
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
-                    searchField
-                    backendFilterMenu
-                }
+            HStack {
+                Text("Harflow").font(.headline)
+                Spacer()
+                Button(action: { toggleSidebar?() }) { SidebarNavigationIcon(.sidebar, size: 16) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Collapse sidebar")
             }
+            .padding(.bottom, 8)
             if let note = viewModel.catalogUnavailableNote {
                 Text(note)
                     .font(.hf(.caption))
@@ -210,87 +211,26 @@ struct SidebarView<VM: SidebarViewModel>: View {
         .padding(.bottom, HfRadius.Metrics.spacing8)
     }
 
-    /// The sidebar's New session control: the existing action today's toolbar "+" performs, with the
-    /// app-owned ⌘N shortcut shown as a display-only hint — no new `keyboardShortcut` is attached
-    /// here, because the shortcut already belongs to the app's command handling. VoiceOver hears
-    /// the plain "New session" label; the hint is hidden from it.
-    private var newSessionButton: some View {
-        Button(action: { viewModel.didTapNewSession() }) {
-            HStack(spacing: HfRadius.Metrics.spacing8) {
-                Image(systemName: "plus")
-                    .font(.hf(.body, weight: .semibold))
-                    .foregroundStyle(Color.accentLink)
-                Text("New session")
-                Spacer(minLength: HfRadius.Metrics.spacing4)
-                Text("⌘N")
-                    .font(.hf(.caption))
-                    .foregroundStyle(Color.tertiaryText)
-                    .accessibilityHidden(true)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(MonitorButtonStyle(.glass))
-        .help("New session")
-        .accessibilityLabel("New session")
-    }
-
-    private var searchField: some View {
-        HStack(spacing: HfRadius.Metrics.spacing6) {
-            Image(systemName: "magnifyingglass").foregroundStyle(Color.secondaryText)
-            TextField("Search loaded history", text: Binding(get: { viewModel.searchQuery }, set: { viewModel.didChangeSearchQuery($0) }))
-                .textFieldStyle(.plain)
-        }
-        .padding(.horizontal, HfRadius.Metrics.spacing10)
-        .padding(.vertical, HfRadius.Metrics.spacing6)
-        .background(RoundedRectangle(cornerRadius: HfRadius.row).fill(Color.pillFill))
-    }
-
-    /// The backend filter as a compact control beside the search field: one dot per catalog entry
-    /// besides "all" (unknown and history-only backends included), the selected name, and a
-    /// chevron. The menu's choices, not-found titles, accessibility value and the degraded-catalog
-    /// note are exactly today's.
-    private var backendFilterMenu: some View {
-        Menu {
-            ForEach(viewModel.backendTabs) { tab in
-                Button {
-                    viewModel.didSelectBackendFilter(tab.id)
-                } label: {
-                    if tab.id == viewModel.selectedBackend {
-                        Label(menuTitle(for: tab), systemImage: "checkmark")
-                    } else {
-                        Text(menuTitle(for: tab))
-                    }
-                }
-            }
-        } label: {
-            SidebarBackendFilterLabel(
-                backendIDs: viewModel.backendTabs.filter { $0.id != "all" }.map(\.id),
-                selectedTitle: viewModel.selectedBackend == "all" ? nil : selectedTitle
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize(horizontal: false, vertical: true)
-        .accessibilityLabel("Harness filter")
-        .accessibilityValue(selectedTitle)
-    }
-
-    private var selectedTitle: String {
-        viewModel.selectedBackend == "all" ? "All harnesses" : BackendStyle.displayName(viewModel.selectedBackend)
-    }
-
-    private func menuTitle(for tab: BackendTab) -> String {
-        if tab.id == "all" { return "All harnesses" }
-        let name = BackendStyle.displayName(tab.id)
-        return tab.isNotFound ? "\(name) (not found on PATH)" : name
-    }
-
+    /// M04 `.hd-m04-sidebar-scroll`: navigation, Running and Recent work scroll as one bounded
+    /// native outline under the fixed header and above the fixed footer.
     private var list: some View {
+        nativeList
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("sidebar-unified")
+            .onChange(of: viewModel.sections) { old, new in reconcileRows(from: old, to: new) }
+            .onDisappear {
+                disclosureTask?.cancel()
+                displayedSections = nil
+                fadingRowIDs = []
+            }
+    }
+
+    private var nativeList: some View {
         SidebarNativeList(
             presentation: SidebarListPresentation(
                 sections: displayedSections ?? viewModel.sections,
                 workflowTitles: viewModel.savedWorkflows.map(\.id),
-                workflowsExpanded: workflowsExpanded,
+                workflowsExpanded: false,
                 banner: nil,
                 listError: viewModel.listErrorMessage,
                 skeleton: viewModel.showsLoadingSkeleton,
@@ -302,16 +242,22 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 historyRevision: viewModel.historyPresentationRevision,
                 historyToken: historyLayoutToken,
                 transitionEpoch: transitionEpoch,
-                needsYouBadge: viewModel.needsYouBadge
+                needsYouBadge: viewModel.needsYouBadge,
+                role: .unified
             ),
             selection: viewModel.selection,
             seenIDs: seenRowIDs,
             configureActions: { actions in
-                actions.select = viewModel.didSelect
-                actions.toggle = toggleExpansion
-                actions.toggleWorkflows = {
-                    withAnimation(HfMotion.disclosure(reduceMotion: reduceMotion)) { workflowsExpanded.toggle() }
+                actions.select = { destination in
+                    // New task stays a composer request gated on runtime readiness, never a
+                    // destination selection; every other destination routes through didSelect.
+                    if destination == .newSession {
+                        viewModel.didTapNewSession()
+                    } else {
+                        viewModel.didSelect(destination)
+                    }
                 }
+                actions.toggle = toggleExpansion
                 actions.newWorkflow = viewModel.didTapNewWorkflow
                 actions.primary = viewModel.didTapInstallBannerPrimary
                 actions.secondary = viewModel.didTapInstallBannerSecondary
@@ -332,16 +278,9 @@ struct SidebarView<VM: SidebarViewModel>: View {
             relay: transitionRelay
         )
         .scrollChromeScope()
-        .padding(.top, HfRadius.Metrics.spacing8)
         .environment(\.defaultMinListRowHeight, 0)
         .animation(HfMotion.disclosure(reduceMotion: reduceMotion), value: expansionToken)
         .hfFadeIn()
-        .onChange(of: viewModel.sections) { old, new in reconcileRows(from: old, to: new) }
-        .onDisappear {
-            disclosureTask?.cancel()
-            displayedSections = nil
-            fadingRowIDs = []
-        }
     }
 
     /// A content change requests a fresh layout even when the trailing frame is unchanged.
@@ -408,7 +347,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
             HStack(spacing: HfRadius.Metrics.spacing6) {
                 SidebarAppearanceControl(appearance: viewModel.appAppearance, onSelect: viewModel.didSelectAppearance)
                 Spacer(minLength: HfRadius.Metrics.zero)
-                SettingsLink { Image(systemName: "gearshape") }
+                SettingsLink { SidebarNavigationIcon(.settings, size: 16) }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Settings")
             }

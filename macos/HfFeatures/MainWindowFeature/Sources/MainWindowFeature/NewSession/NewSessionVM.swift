@@ -57,10 +57,20 @@ extension NewSessionUseCase {
 /// (this dispatch's `AGENTS.md`), not the VM.
 @Mockable
 @MainActor
-protocol NewSessionRouting: Sendable {
+protocol NewSessionRouting: AnyObject, Sendable {
     func chooseDirectory() async -> String?
     func didStart(taskID: String)
     func dismiss()
+    func reviewRecent()
+}
+
+extension NewSessionRouting {
+    func reviewRecent() {}
+}
+
+/// Retained launch boundary; unknown and created cannot be replayed by remounting the composer.
+enum ComposerState: Equatable, Sendable {
+    case editable, preparing, submitting, refused, unknown, created
 }
 
 // MARK: - NewSessionVM
@@ -69,15 +79,7 @@ protocol NewSessionRouting: Sendable {
 /// empty repo/message; a non-blank message and a chosen (non-empty) backend are required to start;
 /// success dismisses the sheet, failure stays inline.
 ///
-/// **Agent picker (Monitor piece 6).** `backend`'s default no longer hardcodes `"claude"` — it comes
-/// from the backends catalog (`BackendsRepository`, via `NewSessionUseCase`), kept live for as long
-/// as the sheet is open (Design's New Session section + Review round 2's selection reconciliation):
-/// the previously-selected backend survives a catalog replacement while it's still listed; otherwise
-/// selection falls to the catalog's first entry; an empty **successful** catalog (`state == .available`
-/// with no entries) clears `backend` and disables Start, so the sheet can never submit a backend it
-/// isn't even showing. `HfUI.BackendStyle.known` is used only as New Session's own degraded-mode
-/// display fallback (Design: "flagged 'list unavailable'"), while loading and whenever the catalog is
-/// degraded with nothing carried over — never as a hardcoded default.
+/// Requested choices survive catalog changes and remain visible until explicitly reviewed.
 @Observable
 @MainActor
 final class NewSessionVM: NewSessionViewModel {
@@ -96,7 +98,7 @@ final class NewSessionVM: NewSessionViewModel {
     }
 
     func didTapQualification() {
-        guard !backend.isEmpty, agentNotFoundNote == nil, let qualification else { return }
+        guard !optionsLocked, !backend.isEmpty, agentNotFoundNote == nil, let qualification else { return }
         if qualification.isChecking { qualification.cancel() } else { qualification.check() }
     }
 
@@ -122,7 +124,45 @@ final class NewSessionVM: NewSessionViewModel {
     /// The chosen reasoning effort; empty means the agent's default.
     private(set) var effort = ""
     private(set) var errorText: String?
-    private(set) var isStarting = false
+    private(set) var composerState: ComposerState = .editable
+    var isStarting: Bool { composerState == .preparing || composerState == .submitting }
+    var optionsLocked: Bool { composerState != .editable }
+    var canReviewSettings: Bool { composerState == .refused }
+    var canReviewRecent: Bool { composerState == .unknown }
+    private var requestRevision = UUID()
+    private var modelBackend = ""
+    private var hasChosenBackend = false
+    private var catalogBackendIDs: Set<String> = []
+    private var rememberedChoices: [String: Choices] = [:]
+    private struct Choices {
+        let backend: String
+        let model: String
+        let modelBackend: String
+        let freedom: String
+        let effort: String
+        let turnLimit: String
+        let callerApprovals: Bool
+    }
+
+    var validationMessages: [String] {
+        var messages: [String] = []
+        if !backend.isEmpty, !catalogBackendIDs.contains(backend) {
+            messages.append("The requested harness is unavailable. Choose a harness explicitly.")
+        }
+        if !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !showsModel {
+                messages.append("This harness does not accept a model option. Choose Default explicitly.")
+            } else if modelBackend != backend {
+                messages.append("Review and select the model for this harness.")
+            }
+        }
+        if !effort.isEmpty, !effortOptions.contains(effort) { messages.append("The requested effort is unsupported by this harness.") }
+        if !Self.freedomLevels.contains(where: { $0.id == freedom }) { messages.append("The requested access is unsupported.") }
+        if let turnLimitError { messages.append(turnLimitError) }
+        if let callerApprovalError { messages.append(callerApprovalError) }
+        return messages
+    }
+
     private(set) var agentOptions: [BackendTab] = []
     /// "<backend> wasn't found on your PATH — starting it may fail." (Review round 2's wording) when
     /// the currently selected backend is a confirmed not-found one; `nil` otherwise.
@@ -176,12 +216,12 @@ final class NewSessionVM: NewSessionViewModel {
     var showsTurnLimit: Bool { BackendStyle.supportsTurnLimit(backend) }
     /// The effort levels offered for the chosen backend: antigravity takes only `low`/`medium`/
     /// `high` (it refuses `xhigh`), cursor takes none, and the others take harflow's full
-    /// vocabulary. The table lives in `BackendStyle`, and `didChangeBackend` resets an effort
-    /// the new backend does not offer.
+    /// vocabulary. The table lives in `BackendStyle`; unsupported requested effort remains
+    /// visible for review and blocks Start.
     var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
 
     var canStart: Bool {
-        agentNotFoundNote == nil && qualification?.isReady == true && !isStarting && !backend.isEmpty && !repo.isEmpty
+        agentNotFoundNote == nil && qualification?.isReady == true && !optionsLocked && validationMessages.isEmpty && !backend.isEmpty && !repo.isEmpty
             && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && turnLimitError == nil && callerApprovalError == nil
     }
@@ -194,7 +234,9 @@ final class NewSessionVM: NewSessionViewModel {
 
     /// Why Start is held back by the Turn limit field, or `nil` when it is blank, valid or hidden.
     var turnLimitError: String? {
-        guard showsTurnLimit, !turnLimit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, parsedTurnLimit == nil else { return nil }
+        guard !turnLimit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        if !showsTurnLimit { return "The requested turn limit is unsupported by this harness." }
+        guard parsedTurnLimit == nil else { return nil }
         return "Enter a whole number above 0, or leave it empty for the default."
     }
 
@@ -218,7 +260,7 @@ final class NewSessionVM: NewSessionViewModel {
     private var modelOptions: [ModelOption] = []
     private var usage = AgentUsageSnapshot()
     @ObservationIgnored private let useCase: any NewSessionUseCase
-    @ObservationIgnored private let routing: any NewSessionRouting
+    @ObservationIgnored private weak var routing: (any NewSessionRouting)?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored private var modelsTask: Task<Void, Never>?
@@ -253,71 +295,120 @@ final class NewSessionVM: NewSessionViewModel {
     }
 
     func didChangeBackend(_ value: String) {
+        guard !optionsLocked else { return }
         let previous = backend
         backend = value
-        if !effortOptions.contains(effort) { effort = "" }
+        hasChosenBackend = true
         recomputeAgentNotFoundNote()
         if value != previous { agentDidChange() }
         refreshQualification()
     }
 
-    func didChangeRepo(_ value: String) { repo = value; refreshQualification() }
-    func didChangeFreedom(_ value: String) { freedom = value; refreshQualification() }
-    func didChangeMessage(_ value: String) { message = value; refreshQualification() }
-    func didChangeName(_ value: String) { name = value; refreshQualification() }
-    func didChangeModel(_ value: String) { model = value; refreshQualification() }
-    func didChangeTurnLimit(_ value: String) { turnLimit = value; refreshQualification() }
-    func didChangeCallerApprovals(_ value: Bool) { callerApprovals = value && supportsCallerApprovals; approvalNote = nil; refreshQualification() }
-    func didChangeEffort(_ value: String) { effort = effortOptions.contains(value) ? value : ""; refreshQualification() }
-    func didTapRecentRepo(_ path: String) { repo = path; refreshQualification() }
+    func didChangeRepo(_ value: String) {
+        guard !optionsLocked else { return }
+        repo = value
+        if let choices = rememberedChoices[value] {
+            backend = choices.backend; model = choices.model; modelBackend = choices.modelBackend
+            freedom = choices.freedom; effort = choices.effort; turnLimit = choices.turnLimit
+            callerApprovals = choices.callerApprovals; hasChosenBackend = true
+            recomputeAgentNotFoundNote(); agentDidChange()
+        }
+        refreshQualification()
+    }
+
+    func didChangeFreedom(_ value: String) { guard !optionsLocked else { return }; freedom = value; refreshQualification() }
+    func didChangeMessage(_ value: String) { guard !optionsLocked else { return }; message = value; refreshQualification() }
+    func didChangeName(_ value: String) { guard !optionsLocked else { return }; name = value; refreshQualification() }
+    func didChangeModel(_ value: String) { guard !optionsLocked else { return }; model = value; modelBackend = backend; refreshQualification() }
+    func didChangeTurnLimit(_ value: String) { guard !optionsLocked else { return }; turnLimit = value; refreshQualification() }
+    func didChangeCallerApprovals(_ value: Bool) { guard !optionsLocked else { return }; callerApprovals = value; approvalNote = nil; refreshQualification() }
+    func didChangeEffort(_ value: String) { guard !optionsLocked else { return }; effort = value; refreshQualification() }
+    func didTapRecentRepo(_ path: String) { didChangeRepo(path) }
 
     func didTapChooseDirectory() {
+        guard !optionsLocked else { return }
         Task { [weak self] in
-            guard let path = await self?.routing.chooseDirectory() else { return }
-            self?.repo = path
-            self?.refreshQualification()
+            guard let path = await self?.routing?.chooseDirectory() else { return }
+            self?.didChangeRepo(path)
         }
     }
 
     func didTapCancel() {
-        qualification?.stop()
-        routing.dismiss()
+        if composerState == .editable { qualification?.stop() }
+        routing?.dismiss()
+    }
+
+    func didTapReviewSettings() {
+        guard canReviewSettings else { return }
+        composerState = .editable
+        errorText = nil
+        refreshQualification()
+    }
+
+    func didTapReviewRecent() {
+        guard canReviewRecent else { return }
+        routing?.reviewRecent()
+    }
+
+    /// Only an explicit new-task intent may clear an acknowledged, terminal composer.
+    func prepareForNewTask() {
+        guard composerState == .created else { return }
+        composerState = .editable
+        message = ""; name = ""; errorText = nil
+        refreshQualification()
     }
 
     func didTapStart() {
-        guard canStart, let path = useCase.resolvedRepoPath(repo) else {
+        guard !optionsLocked else { return }
+        guard canStart else { return }
+        guard let path = useCase.resolvedRepoPath(repo) else {
             errorText = "Choose an existing folder."
             return
         }
+        guard let qualification, let routing else { return }
         errorText = nil
-
-        isStarting = true
+        qualificationTask?.cancel()
+        let revision = requestRevision
         let request = makeRequest(repo: path)
-        // Capture `useCase`/`routing` strongly before awaiting, so the run completes and routes to
-        // the new task even if this VM is torn down first (the sheet was dismissed some other way
-        // while the request was in flight) — decision 3/F4-17's "capture Routing strongly" rule.
-        // Only the failure path touches `self` (to show the error inline), weakly — there is
-        // nothing left to show inline if the VM is already gone.
-        guard let qualification else { isStarting = false; return }
-        let capturedUseCase = useCase
-        let capturedRouting = routing
-        Task { [weak self] in
+        // Start adopts even a loading-catalog default as an explicit submitted choice.
+        hasChosenBackend = true
+        composerState = .preparing
+        Task { [self, useCase, routing] in
+            guard await qualification.discover(Self.qualificationRequest(request)),
+                  let runtime = qualification.runtime,
+                  requestRevision == revision, makeRequest(repo: path) == request,
+                  composerState == .preparing else {
+                if composerState == .preparing {
+                    composerState = .editable
+                    errorText = "Qualification is unavailable or changed. Review the request before starting."
+                }
+                return
+            }
+            // The immutable request, revision and runtime token cross this boundary exactly once.
+            rememberedChoices[path] = Choices(backend: backend, model: model, modelBackend: modelBackend,
+                freedom: freedom, effort: effort, turnLimit: turnLimit, callerApprovals: callerApprovals)
+            composerState = .submitting
             do {
-                guard await qualification.discover(Self.qualificationRequest(request)),
-                      let self, let runtime = qualification.runtime, makeRequest(repo: path) == request, isStarting else {
-                    self?.isStarting = false
+                let id = try await useCase.run(request, runtime: runtime)
+                guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    composerState = .unknown
+                    errorText = "No task identity was acknowledged. A task may exist. Review Recent work before any further action."
                     return
                 }
-                let id = try await capturedUseCase.run(request, runtime: runtime)
-                // Reset `isStarting` before routing, exactly like the old `NewSessionSheet`'s
-                // completion handler always did regardless of outcome — moot for the user (the
-                // coordinator dismisses the sheet right after), but keeps the VM's own state
-                // consistent for as long as it survives.
-                isStarting = false
-                capturedRouting.didStart(taskID: id)
+                composerState = .created
+                routing.didStart(taskID: id)
             } catch {
-                self?.isStarting = false
-                self?.errorText = (error as? ToolError)?.message ?? "\(error)"
+                // Only the public launch-refusal code exercised by ctl-launch-run-refused is
+                // classified. Unknown codes, transport failures and list-refresh failure stay locked.
+                if case ToolError.refused(code: "invalid_params", message: _) = error {
+                    composerState = .refused
+                } else {
+                    composerState = .unknown
+                }
+                errorText = (error as? ToolError)?.message ?? "\(error)"
+                if composerState == .unknown {
+                    errorText = (errorText ?? "") + " A task may exist. Review Recent work; do not start it again."
+                }
             }
         }
     }
@@ -325,6 +416,8 @@ final class NewSessionVM: NewSessionViewModel {
     // MARK: - Private Methods
 
     private static func qualificationRequest(_ request: RunRequest) -> QualificationRequest {
+        // permission-preview accepts authority fields only. Revision and full-request equality
+        // still fence every draft option, including model, effort, title, prompt and turn limit.
         var options = ["--backend=\(request.backend)", "--repo=\(request.repo)"]
         if let freedom = request.freedom { options.append("--freedom=\(freedom)") }
         if request.callerApprovals { options.append("--caller-approvals") }
@@ -332,9 +425,11 @@ final class NewSessionVM: NewSessionViewModel {
     }
 
     private func refreshQualification() {
+        guard composerState == .editable else { return }
+        requestRevision = UUID()
         qualificationTask?.cancel()
         guard let qualification else { return }
-        guard !backend.isEmpty, agentNotFoundNote == nil else { qualification.stop(); return }
+        guard !backend.isEmpty, agentNotFoundNote == nil, validationMessages.isEmpty else { qualification.stop(); return }
         let request = makeRequest(repo: repo)
         qualification.prepare(request: Self.qualificationRequest(request))
         qualificationTask = Task {
@@ -351,21 +446,15 @@ final class NewSessionVM: NewSessionViewModel {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         return RunRequest(
             backend: backend, repo: path, prompt: message, freedom: freedom,
-            reasoningEffort: effortOptions.contains(effort) ? effort : nil,
+            reasoningEffort: effort.isEmpty ? nil : effort,
             title: trimmedName.isEmpty ? nil : trimmedName,
-            model: showsModel && !trimmedModel.isEmpty ? trimmedModel : nil,
-            maxTurns: showsTurnLimit ? parsedTurnLimit : nil, callerApprovals: callerApprovals
+            model: trimmedModel.isEmpty ? nil : trimmedModel,
+            maxTurns: parsedTurnLimit, callerApprovals: callerApprovals
         )
     }
 
-    /// A model typed or picked for one agent means nothing to another, so it is cleared (like effort
-    /// for vibe), and the new agent's suggestions are requested.
+    /// Refresh suggestions without changing the requested model or its harness provenance.
     private func agentDidChange() {
-        if callerApprovals, !supportsCallerApprovals {
-            callerApprovals = false
-            approvalNote = "Caller approvals were cleared because the selected harness does not support them."
-        }
-        model = ""
         modelOptions = []
         loadModels()
     }
@@ -418,11 +507,11 @@ final class NewSessionVM: NewSessionViewModel {
             .store(in: &cancellables)
     }
 
-    /// Review round 2's reconciliation: keep the selected backend while it's still in the new
-    /// catalog; otherwise fall to the catalog's first entry — or to nothing at all when the catalog
-    /// is empty, which is what disables Start.
+    /// Only initial selection may default. Later catalog loss keeps the requested harness visible.
     private func applyCatalog(_ catalog: BackendCatalog) {
-        let previousNotFoundNote = agentNotFoundNote
+        // An in-flight preflight must not launch using a catalog snapshot it no longer owns.
+        if composerState == .preparing { requestRevision = UUID() }
+        catalogBackendIDs = Set(Self.computeAgentOptions(from: catalog).options.map(\.id))
         approvalBackends = catalog.state == .available ? Set(catalog.entries.filter(\.supportsCallerApprovals).map(\.backend)) : []
         let (options, unavailableNote) = Self.computeAgentOptions(from: catalog)
         let order = usage.rankedBackends(options.map(\.id))
@@ -430,16 +519,16 @@ final class NewSessionVM: NewSessionViewModel {
         if agentOptions != ranked { agentOptions = ranked }
         agentListUnavailableNote = unavailableNote
         let previous = backend
-        if !options.contains(where: { $0.id == backend }) {
+        if composerState == .editable, !hasChosenBackend, backend.isEmpty || catalog.state == .available {
             backend = agentOptions.first?.id ?? ""
+            if catalog.state == .available { hasChosenBackend = true }
+        }
+        if !backend.isEmpty, !agentOptions.contains(where: { $0.id == backend }) {
+            agentOptions.append(BackendTab(id: backend, isNotFound: true))
         }
         recomputeAgentNotFoundNote()
-        if backend != previous, didSubscribe {
-            agentDidChange()
-            refreshQualification()
-        } else if didSubscribe, previousNotFoundNote != agentNotFoundNote {
-            refreshQualification()
-        }
+        if backend != previous, didSubscribe { agentDidChange() }
+        if didSubscribe, composerState == .editable { refreshQualification() }
     }
 
     // Catalogs contain a bounded handful of harnesses; this pure presentation ordering never
@@ -451,6 +540,13 @@ final class NewSessionVM: NewSessionViewModel {
     }
 
     private func recomputeAgentNotFoundNote() {
+        if !backend.isEmpty, !catalogBackendIDs.contains(backend) {
+            if !agentOptions.contains(where: { $0.id == backend }) {
+                agentOptions.append(BackendTab(id: backend, isNotFound: true))
+            }
+            agentNotFoundNote = "The requested harness \(backend) is unavailable in the current catalog. Choose a harness explicitly."
+            return
+        }
         guard let option = agentOptions.first(where: { $0.id == backend }), option.isNotFound else {
             agentNotFoundNote = nil
             return

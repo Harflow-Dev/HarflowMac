@@ -425,9 +425,9 @@ final class NativeSidebarWindowFixture {
         let hostedView = host
         await waitUntil(timeout: 5) {
             hostedView.layoutSubtreeIfNeeded()
-            return Self.descendants(hostedView).compactMap { $0 as? NSOutlineView }.first?.numberOfRows ?? 0 > 0
+            return sidebarFixtureOutline(in: hostedView)?.numberOfRows ?? 0 > 0
         }
-        self.outline = try #require(Self.descendants(hostedView).compactMap { $0 as? NSOutlineView }.first)
+        self.outline = try #require(sidebarFixtureOutline(in: hostedView))
     }
 
     func settle() async {
@@ -547,11 +547,12 @@ final class NativeSidebarWindowFixture {
 
     fileprivate func geometry() throws -> SidebarShellGeometry {
         layout()
-        let search = try #require(Self.descendants(host).compactMap { $0 as? NSTextField }.first { $0.placeholderString == "Search loaded history" })
+        let running = try #require(sidebarFixtureOutline(in: host, role: .running)?.enclosingScrollView)
+        #expect(!Self.descendants(host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
         let scroll = try #require(outline.enclosingScrollView)
         return SidebarShellGeometry(
             contentLayout: window.contentLayoutRect,
-            searchFrame: search.convert(search.bounds, to: nil),
+            searchFrame: running.convert(running.bounds, to: nil),
             scrollFrame: scroll.convert(scroll.bounds, to: nil),
             effectiveViewportBottom: scroll.convert(scroll.bounds, to: nil).minY + scroll.contentInsets.bottom,
             effectiveViewportTop: scroll.convert(scroll.bounds, to: nil).maxY - scroll.contentInsets.top

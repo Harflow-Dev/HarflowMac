@@ -168,12 +168,11 @@ public final class AppCoordinator: ParentCoordinator, WindowPresenting, LaunchUR
     public func handle(path: any PathDestination) {
         guard let destination = path as? MonitorDestination else { return }
         switch destination {
-        case .task, .group, .workflow, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .needsYou:
+        case .task, .group, .workflow, .workflowLibrary, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .needsYou:
             mainWindowCoordinator.handle(path: destination)
         case .newSession:
             // Decision 5: ⌘N (or the File menu item) must bring the window forward before the New
-            // Session sheet is presented — `MainWindowCoordinator` only flips a `Bool` flag, which
-            // does nothing while the window is closed.
+            // task composer is selected; changing selection alone cannot open a closed window.
             showWindow()
             mainWindowCoordinator.handle(path: destination)
         case .openWindow:

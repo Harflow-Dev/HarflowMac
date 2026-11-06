@@ -1,71 +1,43 @@
-//
-//  MainWindowNavigationView.swift
-//  MainWindowFeature
-//
-//  The main window's `NavigationSplitView`, moved here from the app target's `MainView.swift` with
-//  no behaviour change: the sidebar and the detail pane come from the coordinator, the detail switch
-//  mirrors the old `switch model.selection` exactly (same empty-detail state), and the New Session
-//  and Run Workflow sheets share `presentedSheet`. Generic over `MainWindowNavigationCoordinator`, never
-//  the concrete `MainWindowCoordinator`, so a preview (or a future test) can supply a stub.
-//
-//  `withPresentationContext()` (HfUI) is applied exactly once, here at the window root — moved out of
-//  `MainWindowCoordinator.buildParallelView(name:)`/`buildTaskDetailView(id:)`, which used to apply it
-//  themselves (each screen its own isolated environment/state) because nothing above them owned a
-//  scene yet. Every screen under this view now shares the one `@Environment(\.viewEvent)` this root
-//  provides, including the New Session sheet, which SwiftUI carries the presenting view's environment
-//  into.
-//
-
 import HfCommon
 import HfUI
 import HfUtilities
 import SwiftUI
 
+// MARK: - Native shell environment
+
+extension EnvironmentValues {
+    @Entry var toggleHarflowSidebar: (@MainActor () -> Void)?
+}
+
 // MARK: - MainWindowNavigationView
 
+/// Approved M04 shell: HarflowDesign 5b37a3d, m04-proposal/shell and shell-collapsed.
+/// Native titlebar and window controls remain owned by AppKit.
 struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: View {
-    
-    // MARK: - State
-    
     @State var coordinator: Coordinator
-    
-    // MARK: - Init
-    
-    init(_ coordinator: Coordinator) {
+    @State private var columns: NavigationSplitViewVisibility = .all
+
+    init(_ coordinator: Coordinator, sidebarCollapsed: Bool = false) {
         _coordinator = State(initialValue: coordinator)
+        _columns = State(initialValue: sidebarCollapsed ? .detailOnly : .all)
     }
-    
-    // MARK: - View Body
-    
+
+    private var isCollapsed: Bool { columns == .detailOnly }
+
     var body: some View {
-        NavigationSplitView {
-            coordinator.buildSidebarView()
-                .navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
-        } detail: {
-            if !coordinator.runtimeIsReady {
-                RuntimeSetupWelcomeView()
-            } else {
-            switch coordinator.selection {
-            case .statistics:
-                coordinator.buildStatisticsView()
-            case .resourceSlots:
-                coordinator.buildResourceSlotsView()
-            case .needsYou(let itemID):
-                coordinator.buildNeedsYouView(itemID: itemID)
-            case .task(let id):
-                coordinator.buildTaskDetailView(id: id)
-            case .group(let name):
-                coordinator.buildParallelView(name: name)
-            case .workflow(let name):
-                coordinator.buildWorkflowEditorView(name: name)
-            case .newWorkflow(let id):
-                coordinator.buildWorkflowEditorView(name: nil).id(id)
-            case .workflowRun(let id):
-                coordinator.buildWorkflowRunView(id: id)
-            case .newSession, .openWindow, nil:
-                coordinator.buildStartScreenView()
+        HStack(spacing: 0) {
+            if isCollapsed {
+                coordinator.buildNavigationRail { columns = .all }
+                Divider()
             }
+            NavigationSplitView(columnVisibility: $columns) {
+                coordinator.buildSidebarView()
+                    .navigationSplitViewColumnWidth(min: 264, ideal: 264, max: 320)
+                    .environment(\.toggleHarflowSidebar, { columns = .detailOnly })
+            } detail: {
+                detail
             }
+            .toolbar(removing: .sidebarToggle)
         }
         .toolbar {
             if coordinator.canReturnToResourceSlots {
@@ -75,38 +47,61 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: HfRadius.Metrics.spacing6) {
-                    if let emblem = MainWindowEmblem.image {
-                        Image(nsImage: emblem)
-                            .accessibilityHidden(true)
-                    }
-                    Text("Harflow").font(.hf(.headline, weight: .bold))
+                    Text(contextTitle).font(.hf(.secondary))
                     coordinator.buildConnectionStatusView()
                 }
                 .accessibilityElement(children: .contain)
             }
             .sharedBackgroundVisibility(.hidden)
         }
-        .sheet(item: Binding(get: { coordinator.presentedSheet }, set: { coordinator.presentedSheet = $0 })) { destination in
-            switch destination {
-            case .newSession: coordinator.buildNewSessionView()
-            case .workflowRunner: coordinator.buildWorkflowRunnerView()
-            }
+        .sheet(item: Binding(get: {
+            coordinator.presentedSheet == .workflowRunner ? MainWindowSheet.workflowRunner : nil
+        }, set: { coordinator.presentedSheet = $0 })) { _ in
+            coordinator.buildWorkflowRunnerView()
         }
         .frame(minWidth: 1000, minHeight: 620)
-        .modifier(HiddenWindowTitle())
+        .toolbar(removing: .title)
         .withPresentationContext()
+        .onAppear { coordinator.startShellObservation() }
+        .onDisappear { coordinator.stopShellObservation() }
     }
-    
-}
 
-// MARK: - HiddenWindowTitle
-
-/// Drops the window title SwiftUI draws in the toolbar — the task header already names what is on
-/// screen. The window keeps its title, so the Window menu and Mission Control still name it.
-private struct HiddenWindowTitle: ViewModifier {
-    func body(content: Content) -> some View {
-        content.toolbar(removing: .title)
+    @ViewBuilder private var detail: some View {
+        if !coordinator.runtimeIsReady {
+            RuntimeSetupWelcomeView(state: coordinator.runtimeSetupState, action: coordinator.performRuntimeSetup)
+        } else {
+            switch coordinator.selection {
+            case .statistics: coordinator.buildStatisticsView()
+            case .resourceSlots: coordinator.buildResourceSlotsView()
+            case .needsYou(let id): coordinator.buildNeedsYouView(itemID: id)
+            case .task(let id): coordinator.buildTaskDetailView(id: id)
+            case .group(let name): coordinator.buildParallelView(name: name)
+            case .workflow(let name): coordinator.buildWorkflowEditorView(name: name)
+            case .workflowLibrary: coordinator.buildWorkflowLibraryView()
+            case .newWorkflow(let id): coordinator.buildWorkflowEditorView(name: nil).id(id)
+            case .workflowRun(let id): coordinator.buildWorkflowRunView(id: id)
+            case .newSession, .openWindow, nil:
+                if coordinator.hasLoadedWork {
+                    coordinator.buildNewSessionView()
+                } else {
+                    InitialWorkLoadingView(error: coordinator.loadingWorkError, retry: coordinator.retryLoadingWork)
+                }
+            }
+        }
     }
+
+    private var contextTitle: String {
+        guard coordinator.runtimeIsReady else { return "Harflow · Runtime setup" }
+        switch coordinator.selection {
+        case .statistics: return "Harflow · Statistics"
+        case .resourceSlots: return "Harflow · Resources"
+        case .needsYou: return "Harflow · Needs you"
+        case .workflow, .workflowLibrary, .newWorkflow, .workflowRun: return "Harflow · Workflows"
+        case .task, .group: return "Harflow · Work"
+        default: return "Harflow · New task"
+        }
+    }
+
 }
 
 #if DEBUG

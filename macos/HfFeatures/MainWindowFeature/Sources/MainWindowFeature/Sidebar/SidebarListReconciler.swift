@@ -171,32 +171,74 @@ enum SidebarListReconciler {
     }
 
     private static func flatten(_ input: SidebarListPresentation, previous: [SidebarListEntry], excluding fading: Set<String>) -> Result {
-        var entries: [SidebarListEntry] = [
+        var entries: [SidebarListEntry] = input.role == .combined ? [
             .init(id: "header:overview", content: .heading("Overview")),
             .init(id: "overview:needs-you", content: .needsYou(input.needsYouBadge), minimumHeight: input.minimumRowHeight),
             .init(id: "overview:statistics", content: .statistics, minimumHeight: input.minimumRowHeight),
             .init(id: "overview:resource-slots", content: .resourceSlots, minimumHeight: input.minimumRowHeight),
             .init(id: "header:workflows", content: .workflowsHeader(expanded: input.workflowsExpanded))
-        ]
-        if input.workflowsExpanded {
+        ] : []
+        if input.role == .combined, input.workflowsExpanded {
             entries += input.workflowTitles.map {
                 .init(id: "definition:\($0)", content: .workflowDefinition($0), minimumHeight: input.minimumRowHeight)
             }
         }
-        if let banner = input.banner {
-            entries.append(.init(id: "diagnostic:banner", content: .banner(banner)))
-        } else if let error = input.listError {
-            entries.append(.init(id: "diagnostic:error", content: .error(error)))
-        }
-        if input.skeleton {
-            entries.append(.init(id: "diagnostic:skeleton", content: .skeleton))
-        } else {
-            var occurrences: [SidebarDisplayID: Int] = [:]
-            for section in input.sections {
-                entries.append(.init(id: "header:\(section.id)", content: .heading(section.title)))
-                entries += itemEntries(section.items, minimumHeight: input.minimumRowHeight, excluding: fading, occurrences: &occurrences)
+        if input.role == .unified {
+            entries += SidebarNavigationEntry.unifiedEntries(badge: input.needsYouBadge).map {
+                .init(id: $0.id, content: .navigation($0), minimumHeight: input.minimumRowHeight)
             }
-            if needsPresentation(input.taskHistory) || needsPresentation(input.workflowHistory) {
+            if input.skeleton {
+                entries.append(.init(id: "diagnostic:skeleton", content: .skeleton))
+            } else {
+                var occurrences: [SidebarDisplayID: Int] = [:]
+                entries.append(.init(id: "header:running", content: .heading("Running")))
+                entries += unifiedSectionEntries(input.sections.filter { $0.bucket == .running },
+                                                 minimumHeight: input.minimumRowHeight,
+                                                 excluding: fading, occurrences: &occurrences)
+                entries.append(.init(id: "header:recent", content: .heading("Recent work")))
+                entries += unifiedSectionEntries(input.sections.filter { $0.bucket != .running },
+                                                 minimumHeight: input.minimumRowHeight,
+                                                 excluding: fading, occurrences: &occurrences)
+                if let banner = input.banner {
+                    entries.append(.init(id: "diagnostic:banner", content: .banner(banner)))
+                } else if let error = input.listError {
+                    entries.append(.init(id: "diagnostic:error", content: .error(error)))
+                }
+                entries += historyEntries(input)
+            }
+        } else {
+            if let banner = input.banner {
+                entries.append(.init(id: "diagnostic:banner", content: .banner(banner)))
+            } else if let error = input.listError {
+                entries.append(.init(id: "diagnostic:error", content: .error(error)))
+            }
+            if input.role == .running { entries.append(.init(id: "header:running", content: .heading("Running"))) }
+            if input.role == .recent { entries.append(.init(id: "header:recent", content: .heading("Recent work"))) }
+            if input.skeleton {
+                entries.append(.init(id: "diagnostic:skeleton", content: .skeleton))
+            } else {
+                entries += sectionEntries(input, excluding: fading)
+                entries += historyEntries(input)
+            }
+        }
+        let old = Dictionary(uniqueKeysWithValues: previous.map { ($0.displayID, $0) })
+        return Result(entries: entries,
+                      changedIDs: Set(entries.filter { old[$0.displayID] != $0 }.map(\.displayID)))
+    }
+
+    /// One occurrence scope spans both unified halves, so a display identity never collides
+    /// across the Running and Recent work groups.
+    private static func unifiedSectionEntries(_ sections: [SidebarSection], minimumHeight: Double,
+                                              excluding fading: Set<String>,
+                                              occurrences: inout [SidebarDisplayID: Int]) -> [SidebarListEntry] {
+        sections.flatMap { section in
+            itemEntries(section.items, minimumHeight: minimumHeight, excluding: fading, occurrences: &occurrences)
+        }
+    }
+
+    private static func historyEntries(_ input: SidebarListPresentation) -> [SidebarListEntry] {
+        var entries: [SidebarListEntry] = []
+            if input.role != .running, needsPresentation(input.taskHistory) || needsPresentation(input.workflowHistory) {
                 entries.append(.init(id: "header:history", content: .heading("History")))
                 if needsPresentation(input.taskHistory) {
                     entries.append(.init(id: "history:tasks", content: .history("Tasks", input.taskHistory), minimumHeight: input.minimumRowHeight))
@@ -205,14 +247,31 @@ enum SidebarListReconciler {
                     entries.append(.init(id: "history:workflows", content: .history("Workflows", input.workflowHistory), minimumHeight: input.minimumRowHeight))
                 }
             }
-            if let message = input.emptyMessage {
+            if input.role != .running, let message = input.emptyMessage {
                 entries.append(.init(id: "diagnostic:empty", content: .empty(message)))
             }
-            entries.append(.init(id: "history:sentinel", content: .sentinel))
-        }
-        let old = Dictionary(uniqueKeysWithValues: previous.map { ($0.displayID, $0) })
-        return Result(entries: entries,
-                      changedIDs: Set(entries.filter { old[$0.displayID] != $0 }.map(\.displayID)))
+            if input.role != .running { entries.append(.init(id: "history:sentinel", content: .sentinel)) }
+        return entries
+    }
+
+    private static func sectionEntries(_ input: SidebarListPresentation, excluding fading: Set<String>) -> [SidebarListEntry] {
+        var entries: [SidebarListEntry] = []
+            var occurrences: [SidebarDisplayID: Int] = [:]
+            if input.role == .recent {
+                for section in input.sections {
+                    entries += itemEntries(section.items, minimumHeight: input.minimumRowHeight,
+                                           excluding: fading, occurrences: &occurrences)
+                }
+            } else {
+                if input.role == .running, input.sections.isEmpty {
+                    entries.append(.init(id: "running:empty", content: .empty("No running work")))
+                }
+                for section in input.sections {
+                    if input.role == .combined { entries.append(.init(id: "header:\(section.id)", content: .heading(section.title))) }
+                    entries += itemEntries(section.items, minimumHeight: input.minimumRowHeight, excluding: fading, occurrences: &occurrences)
+                }
+            }
+        return entries
     }
 
     private static func itemEntries(_ items: [SidebarItem], minimumHeight: Double, excluding fading: Set<String>,

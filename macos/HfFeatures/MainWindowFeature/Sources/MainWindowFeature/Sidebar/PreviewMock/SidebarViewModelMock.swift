@@ -18,6 +18,8 @@ import SwiftUI
 @MainActor
 @Observable
 final class SidebarViewModelMock: SidebarViewModel {
+    var appAppearance: AppAppearance = .system
+    func didSelectAppearance(_ appearance: AppAppearance) { appAppearance = appearance }
 
     var sections: [SidebarSection]
     var savedWorkflows: [WorkflowRecord] = []

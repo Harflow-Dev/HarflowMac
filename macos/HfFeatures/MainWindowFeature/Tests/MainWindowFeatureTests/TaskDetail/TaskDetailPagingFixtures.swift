@@ -46,6 +46,9 @@ extension MockTaskDetailUseCase {
             return self?.loadMoreEvents(id) ?? false
         }
         given(self).callerApprovalUseCase().willReturn(nil)
+        given(self).successorObservationError.willReturn(nil)
+        given(self).observeSuccessors(.any).willReturn(false)
+        given(self).stopSuccessorObservation().willReturn()
         given(self).resolveTask(.any).willReturn(nil)
         given(self).conversationHistory(sessionID: .any, cursor: .any).willReturn(nil)
         given(self).eventHistory(for: .any).willProduce(eventHistory)

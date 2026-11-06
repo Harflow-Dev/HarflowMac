@@ -59,7 +59,7 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String {
         let identity = AgentUsageIdentity(backend: request.backend, model: request.model)
         let id = try await taskActionRepository.run(request, runtime: runtime)
-        if !id.isEmpty { await agentUsageRepository.record(identity, acknowledgementID: "task:" + id) }
+        if !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { await agentUsageRepository.record(identity, acknowledgementID: "task:" + id) }
         return id
     }
 

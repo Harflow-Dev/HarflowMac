@@ -29,7 +29,7 @@ extension TaskDetailVM {
             hasMore: states.contains(where: \.hasMore) || conversationHasMore
                 || conversationMembers.contains(where: { !loadedActivityMembers.contains($0.taskID) }),
             isLoading: states.contains(where: \.isLoading) || conversationLoading,
-            error: states.compactMap(\.error).first ?? conversationError,
+            error: states.compactMap(\.error).first ?? conversationError ?? useCase.successorObservationError,
             generation: states.map(\.generation).max() ?? 0
         )
     }

@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -11,6 +12,7 @@ import Testing
 @Suite struct WorkflowRunnerRoutingTests {
     private func makeRunner() async throws -> (WorkflowVM, MockWorkflowUseCase, MockWorkflowRouting) {
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).agentUsageSnapshot.willReturn(.init())

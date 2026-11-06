@@ -1,44 +1,69 @@
+import HfRepository
 import HfUI
+import MonitorCore
 import SwiftUI
 
 // MARK: - RuntimeSetupWelcomeView
 
-/// Quiet detail-pane explanation while the managed runtime is unavailable.
+/// Approved M04 runtime setup states; presentation never starts acquisition automatically.
 struct RuntimeSetupWelcomeView: View {
+    var state: RuntimeSetupState = .installationRequired(installedVersion: nil, requiredVersion: HarflowVersion.current)
+    var action: () -> Void = {}
+
     var body: some View {
-        VStack(spacing: HfRadius.Metrics.spacing10) {
-            if let image = MainWindowEmblem.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .frame(width: 40, height: 40)
-                    .foregroundStyle(Color.primaryText)
-                    .padding(.bottom, 6)
-                    .accessibilityHidden(true)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(title)
+.font(.hf(.title, weight: .semibold))
+                    .accessibilityIdentifier("runtimeSetup.welcomeTitle")
+                Text(state.detail)
+.font(.hf(.body))
+.foregroundStyle(Color.secondaryText)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier(isFailure ? "runtimeSetup.error" : "runtimeSetup.welcomeBody")
+                if state.isBusy {
+                    ProgressView().controlSize(.small).accessibilityLabel(state.title)
+                }
+                if let actionTitle {
+                    Button(actionTitle, action: action)
+.buttonStyle(MonitorButtonStyle(.glass))
+                        .accessibilityIdentifier("runtimeSetup.action")
+                }
             }
-
-            Text("SETUP REQUIRED")
-                .font(.hf(.setupEyebrow, weight: .semibold))
-                .foregroundStyle(Color.secondaryText)
-                .tracking(HfRadius.Metrics.setupEyebrowTracking)
-
-            Text("Finish setting up Harflow")
-                .font(.hf(.setupWelcomeTitle, weight: .semibold))
-                .foregroundStyle(Color.primaryText)
-                .multilineTextAlignment(.center)
-                .accessibilityIdentifier("runtimeSetup.welcomeTitle")
-
-            Text("Once the runtime components required by this app are ready, sessions and workflows will be available here.")
-                .font(.hf(.body))
-                .foregroundStyle(Color.secondaryText)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: HfRadius.Metrics.setupWelcomeTextWidth)
-                .accessibilityIdentifier("runtimeSetup.welcomeBody")
+            .frame(maxWidth: 620, alignment: .leading)
+            .padding(32)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 88)
+            .background(ScrollChrome())
         }
-        .frame(maxWidth: HfRadius.Metrics.setupWelcomeTextWidth)
-        .padding(.horizontal, HfRadius.Metrics.spacing24)
-        .frame(maxWidth: HfRadius.Metrics.setupWelcomeContainerWidth, maxHeight: .infinity)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.windowBG)
+    }
+
+    private var isFailure: Bool {
+        switch state {
+        case .failed, .updateFailed: true
+        default: false
+        }
+    }
+
+    private var title: String {
+        switch state {
+        case .checking: "Checking Harflow runtime"
+        case .installationRequired(let installed, _): installed == nil ? "Set up Harflow" : "Update required"
+        case .installing: "Installing runtime"
+        case .updating: "Updating runtime"
+        case .failed: "Setup could not finish"
+        case .updateFailed: "Update could not finish"
+        case .ready: "Runtime ready"
+        }
+    }
+
+    private var actionTitle: String? {
+        switch state {
+        case .installationRequired(let installed, _): installed == nil ? "Install runtime" : "Update runtime"
+        case .failed, .updateFailed: "Retry setup"
+        default: nil
+        }
     }
 }
 

@@ -51,8 +51,6 @@ import Testing
         BackendCatalog(entries: entries.map { BackendCatalogEntry(backend: $0.0, installed: $0.1) }, state: state)
     }
 
-    // MARK: - Defaults (headless-only)
-
     @Test func givenDefaults_whenTheSheetOpens_thenTheFirstIdentityReadOnlyAndEmptyFieldsShow() {
         // given / when — loading uses known harnesses with zero usage, so binary identity breaks ties.
         let (sut, _, _, _) = makeSUT()
@@ -64,8 +62,6 @@ import Testing
         #expect(sut.message == "")
         #expect(sut.errorText == nil)
     }
-
-    // MARK: - Start-button enable rules
 
     @Test func givenABlankMessage_whenCanStartIsRead_thenItIsFalse() async {
         // given
@@ -84,8 +80,7 @@ import Testing
     }
 
     @Test func givenAnEmptyRepo_whenCanStartIsRead_thenItIsFalse() {
-        // given — every other condition satisfied (a non-blank message), so the only thing left to
-        // make `canStart` false is the empty repo itself.
+        // given — the message is valid, leaving only the empty repo to block starting.
         let (sut, _, _, _) = makeSUT()
         sut.didChangeMessage("do the thing")
         #expect(sut.repo.isEmpty)
@@ -98,7 +93,8 @@ import Testing
 
     @Test func givenARelativeOrMissingPath_whenStarted_thenTheExactValidationTextIsShown() async {
         // given
-        let (sut, useCase, _, _) = makeSUT()
+        let (sut, useCase, routing, _) = makeSUT()
+        defer { withExtendedLifetime(routing) {} }
         given(useCase).resolvedRepoPath(.any).willReturn(nil)
         sut.didChangeRepo("relative/path")
         sut.didChangeMessage("do the thing")
@@ -126,8 +122,7 @@ import Testing
         await waitUntil { sut.canStart }
         sut.didTapStart()
 
-        // then — `isStarting` flips synchronously, then clears once the (mocked, immediate) run
-        // completes; `waitUntil` times out silently, so the condition is asserted again afterward.
+        // then — assert completion after waiting for the mocked run.
         #expect(sut.isStarting == true)
         await waitUntil { sut.isStarting == false }
         #expect(sut.isStarting == false)
@@ -137,7 +132,8 @@ import Testing
 
     @Test func givenAHeadlessStartFails_whenCompleted_thenTheErrorStaysInlineAndNothingIsDismissed() async {
         // given
-        let (sut, useCase, _, _) = makeSUT()
+        let (sut, useCase, routing, _) = makeSUT()
+        defer { withExtendedLifetime(routing) {} }
         given(useCase).resolvedRepoPath(.any).willReturn("/tmp/repo")
         given(useCase).run(.any, runtime: .any).willThrow(ToolError.notFound(tool: "harflow-ctl", searched: []))
         sut.didChangeRepo("/tmp/repo")
@@ -267,7 +263,7 @@ import Testing
         #expect(sut.backend == "codex")
     }
 
-    @Test func givenTheSelectedBackendLeavesTheCatalog_whenReplaced_thenSelectionFallsToTheFirstRankedEntry() async {
+    @Test func givenTheSelectedBackendLeavesTheCatalog_whenReplaced_thenRequestedSelectionRemainsVisible() async {
         // given
         let (sut, _, _, catalogSubject) = makeSUT(catalog: catalog([("claude", true), ("codex", true)]))
         sut.didAppear()
@@ -278,11 +274,13 @@ import Testing
         catalogSubject.send(catalog([("vibe", true), ("claude", true)]))
 
         // then
-        await waitUntil { sut.backend == "claude" }
-        #expect(sut.backend == "claude")
+        await waitUntil { sut.agentNotFoundNote != nil }
+        #expect(sut.backend == "codex")
+        #expect(sut.agentOptions.contains { $0.id == "codex" })
+        #expect(!sut.canStart)
     }
 
-    @Test func givenAnEmptySuccessfulCatalog_whenReplaced_thenBackendClearsAndStartDisables() async {
+    @Test func givenAnEmptySuccessfulCatalog_whenReplaced_thenRequestedBackendRemainsAndStartDisables() async {
         // given
         let (sut, _, _, catalogSubject) = makeSUT(catalog: catalog([("claude", true)]))
         sut.didAppear()
@@ -295,10 +293,10 @@ import Testing
         catalogSubject.send(BackendCatalog(entries: [], state: .available))
 
         // then — never submits an invisible backend.
-        await waitUntil { sut.backend.isEmpty }
-        #expect(sut.backend.isEmpty)
+        await waitUntil { sut.agentNotFoundNote != nil }
+        #expect(sut.backend == "claude")
         #expect(sut.canStart == false)
-        #expect(sut.qualificationCards.isEmpty)
+        #expect(sut.qualificationCards.first?.model.state == .unavailable)
         sut.didDisappear()
     }
 
@@ -432,18 +430,19 @@ import Testing
     }
 
     @Test(arguments: ["codex", "opencode"])
-    func givenAnAgentHarflowCannotCap_whenATurnLimitWasTyped_thenTheFieldIsHiddenAndNothingIsSent(_ backend: String) async {
-        // given — codex and opencode reject --max-turns, so the run would fail at start.
+    func givenAnAgentHarflowCannotCap_whenATurnLimitWasTyped_thenTheRequestRemainsVisibleAndBlocked(_ backend: String) {
+        // given
         let (sut, useCase, routing, _) = makeSUT()
+        defer { withExtendedLifetime(routing) {} }
         sut.didChangeTurnLimit("40")
-        sut.didChangeBackend(backend)
-
         // when
-        await start(sut, useCase, routing)
-
+        sut.didChangeBackend(backend)
+        sut.didTapStart()
         // then
-        #expect(!sut.showsTurnLimit)
-        verify(useCase).run(.matching { $0.maxTurns == nil }, runtime: .any).called(1)
+        #expect(sut.turnLimit == "40")
+        #expect(sut.turnLimitError != nil)
+        #expect(!sut.canStart)
+        verify(useCase).run(.any, runtime: .any).called(0)
     }
 
     @Test(arguments: ["abc", "0", "-3", "1.5", "99999999999999999999"])
@@ -493,7 +492,7 @@ import Testing
         verify(useCase).run(.matching { $0.reasoningEffort == "high" }, runtime: .any).called(1)
     }
 
-    @Test func givenAnUnknownEffort_whenChosen_thenItFallsBackToDefault() {
+    @Test func givenAnUnknownEffort_whenChosen_thenItRemainsVisibleAndBlocksStart() {
         // given
         let (sut, _, _, _) = makeSUT()
 
@@ -501,7 +500,8 @@ import Testing
         sut.didChangeEffort("ultra")
 
         // then
-        #expect(sut.effort == "")
+        #expect(sut.effort == "ultra")
+        #expect(!sut.validationMessages.isEmpty)
     }
 
     @Test func givenVibeSelected_whenAdvancedIsRead_thenEffortAndModelAreHidden() {
@@ -527,19 +527,20 @@ import Testing
         #expect(!sut.showsEffort && sut.effortOptions.isEmpty && sut.showsModel && !sut.showsTurnLimit)
     }
 
-    @Test func givenEffortAndModelSetThenVibeChosen_whenStarted_thenNeitherIsSent() async {
+    @Test func givenEffortAndModelSetThenVibeChosen_whenStarting_thenBothArePreservedAndBlockLaunch() {
         // given
         let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true), ("vibe", true)]))
+        defer { withExtendedLifetime(routing) {} }
         sut.didChangeEffort("high")
         sut.didChangeModel("some-model")
-        sut.didChangeBackend("vibe")
-
         // when
-        await start(sut, useCase, routing)
-
+        sut.didChangeBackend("vibe")
+        sut.didTapStart()
         // then
-        #expect(sut.effort == "")
-        verify(useCase).run(.matching { $0.backend == "vibe" && $0.reasoningEffort == nil && $0.model == nil }, runtime: .any).called(1)
+        #expect(sut.effort == "high")
+        #expect(sut.model == "some-model")
+        #expect(sut.validationMessages.count == 2)
+        verify(useCase).run(.any, runtime: .any).called(0)
     }
 
     @Test func givenAntigravitySelected_whenEffortOptionsAreRead_thenOnlyItsThreeLevelsAreOffered() {
@@ -554,20 +555,19 @@ import Testing
         #expect(sut.effortOptions == ["low", "medium", "high"])
     }
 
-    @Test func givenXhighSelectedThenAntigravityChosen_whenStarted_thenTheInvalidEffortIsNotSent() async {
+    @Test func givenXhighSelectedThenAntigravityChosen_whenStarting_thenEffortIsPreservedAndBlocksLaunch() {
         // given
         let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true), ("antigravity", true)]))
+        defer { withExtendedLifetime(routing) {} }
         sut.didChangeBackend("claude")
         sut.didChangeEffort("xhigh")
-        #expect(sut.effort == "xhigh")
-
         // when
         sut.didChangeBackend("antigravity")
-        await start(sut, useCase, routing)
-
-        // then — the switch resets an effort the new backend does not offer.
-        #expect(sut.effort == "")
-        verify(useCase).run(.matching { $0.backend == "antigravity" && $0.reasoningEffort == nil }, runtime: .any).called(1)
+        sut.didTapStart()
+        // then
+        #expect(sut.effort == "xhigh")
+        #expect(!sut.validationMessages.isEmpty)
+        verify(useCase).run(.any, runtime: .any).called(0)
     }
 
     // MARK: - Freedom

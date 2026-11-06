@@ -15,7 +15,7 @@ struct SidebarAppearanceControl: View {
                 Button {
                     onSelect(option)
                 } label: {
-                    Image(systemName: symbol(for: option))
+                    SidebarNavigationIcon(.appearance(option), size: 14)
                         .font(.hf(.caption, weight: .medium))
                         .frame(width: HfRadius.Metrics.appearanceControlSize, height: HfRadius.Metrics.appearanceControlSize)
                         .background {
@@ -40,14 +40,6 @@ struct SidebarAppearanceControl: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Appearance")
         .accessibilityValue(title(for: appearance))
-    }
-
-    private func symbol(for appearance: AppAppearance) -> String {
-        switch appearance {
-        case .light: "sun.max"
-        case .dark: "moon"
-        case .system: "desktopcomputer"
-        }
     }
 
     private func title(for appearance: AppAppearance) -> String {

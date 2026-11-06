@@ -401,7 +401,22 @@ def test_run_process_records_exit_probe_failures_and_cleans_owned_group(
 
 APPROVAL_SUITE = "MainWindowFeatureTests.ActivityFeedApprovalHostedTests"
 OBSERVATION_SUITE = "MainWindowFeatureTests.ObservationHostedTests"
-HOSTED_SUITE_NAMES = (APPROVAL_SUITE, OBSERVATION_SUITE)
+ACCESS_OPTION_SUITE = "MainWindowFeatureTests.AccessOptionRowTests"
+M04_STATE_MATRIX_SUITE = "MainWindowFeatureTests.M04StateMatrixHostedTests"
+NEW_SESSION_COMPOSER_SUITE = "MainWindowFeatureTests.NewSessionComposerHostedTests"
+CENTERED_COMPOSER_SUITE = "MainWindowFeatureTests.CenteredComposerHostedTests"
+SIDEBAR_UNIFIED_SUITE = "MainWindowFeatureTests.SidebarUnifiedHostedTests"
+SIDEBAR_BASELINE_SUITE = "MainWindowFeatureTests.SidebarNativeParityBaselineTests"
+HOSTED_SUITE_NAMES = (
+    APPROVAL_SUITE,
+    OBSERVATION_SUITE,
+    ACCESS_OPTION_SUITE,
+    M04_STATE_MATRIX_SUITE,
+    NEW_SESSION_COMPOSER_SUITE,
+    CENTERED_COMPOSER_SUITE,
+    SIDEBAR_UNIFIED_SUITE,
+    SIDEBAR_BASELINE_SUITE,
+)
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"
 
@@ -573,6 +588,7 @@ def _fake_host_setup_environment(
     monkeypatch: pytest.MonkeyPatch,
     *,
     include_bundle: bool = True,
+    include_resource_bundle: bool = True,
     include_testing_image: bool = True,
     version_mismatch: bool = False,
     selected_swift_mismatch: bool = False,
@@ -604,6 +620,10 @@ def _fake_host_setup_environment(
     if include_bundle:
         bundle.parent.mkdir(parents=True)
         bundle.touch()
+    module_resources = build / runner.HOSTED_RESOURCE_BUNDLE
+    if include_resource_bundle:
+        module_resources.mkdir(parents=True)
+        (module_resources / "SidebarNavigationIcon.pdf").write_text("%PDF-fixture\n", encoding="utf-8")
     outputs = {
         "compiler": str(compiler), "swift": str(swift), "platform": str(platform),
         "sdk": str(sdk), "build": str(build), "version": "Swift version 6.3.3",
@@ -612,6 +632,12 @@ def _fake_host_setup_environment(
 
     def fake_run_process(argv, cwd, timeout, stdout_path, stderr_path, env=None):
         del cwd, timeout, env
+        if argv[:1] == ["codesign"]:
+            app_path = Path(argv[-1])
+            outputs["codesign_app"] = str(app_path)
+            outputs["resources_at_signing"] = sorted(
+                str(entry.relative_to(app_path)) for entry in app_path.rglob("*")
+            )
         text = ""
         if argv[:2] == ["xcrun", "--find"]:
             text = outputs["compiler"] if argv[2] == "swiftc" else outputs["swift"]
@@ -658,6 +684,36 @@ def test_prepare_appkit_host_rejects_missing_bundle_and_testing_image(
     with pytest.raises(runner.RunnerError, match="Testing Library 1902"):
         runner.prepare_appkit_host(swift, str(package), str(tmp_path / "missing-testing" / "logs"),
                                    time.monotonic() + 10, {})
+
+
+def test_prepare_appkit_host_rejects_missing_module_resource_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "missing-resource-bundle"
+    swift, package, _ = _fake_host_setup_environment(root, monkeypatch, include_resource_bundle=False)
+    (root / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match="resource bundle is missing"):
+        runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, {})
+
+
+def test_prepare_appkit_host_copies_module_resources_into_the_app_before_signing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "resource-copy"
+    swift, package, outputs = _fake_host_setup_environment(root, monkeypatch)
+    (root / "logs").mkdir()
+    evidence: dict = {}
+    host = runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, evidence)
+    app = Path(host.executable).parents[2]
+    recorded = evidence["host-resource-bundle"]
+    assert recorded["source"] == str(Path(outputs["build"]) / runner.HOSTED_RESOURCE_BUNDLE)
+    assert recorded["destination"] == str(app / "Contents" / "Resources" / runner.HOSTED_RESOURCE_BUNDLE)
+    assert recorded["entries"] == ["SidebarNavigationIcon.pdf"]
+    assert (Path(recorded["destination"]) / "SidebarNavigationIcon.pdf").is_file()
+    assert outputs["codesign_app"] == str(app)
+    signed_at = outputs["resources_at_signing"]
+    assert f"Contents/Resources/{runner.HOSTED_RESOURCE_BUNDLE}/SidebarNavigationIcon.pdf" in signed_at
+    assert list(evidence).index("host-resource-bundle") < list(evidence).index("host-sign")
 
 
 def test_prepare_appkit_host_rejects_toolchain_version_and_path_mismatches(

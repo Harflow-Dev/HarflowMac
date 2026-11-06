@@ -66,7 +66,7 @@ import Testing
         harness.sut.recompute()
         await harness.sut.waitForPresentation()
         await settle(host)
-        let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
+        let outline = try #require(sidebarFixtureOutline(in: host))
         #expect(harness.sut.sections.flatMap(\.items).contains { $0.id == "workflow-shortcut:parent:child" })
         let twoLine = NSHostingView(rootView: TaskRow(model: TaskRowModel(id: "reference", backend: "workflow",
             title: "Plan Review Panel", status: .completed, repoName: "Code", ageText: "1d"))
@@ -129,7 +129,7 @@ import Testing
         vm.recompute()
         await vm.waitForPresentation()
         await settle(host)
-        let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
+        let outline = try #require(sidebarFixtureOutline(in: host))
         // Drive native selection, including the saved-workflow and history section headers.
         for row in 0 ..< outline.numberOfRows {
             outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)

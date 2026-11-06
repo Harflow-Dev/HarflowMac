@@ -36,14 +36,14 @@ import Testing
         await harness.sut.waitForPresentation()
         workflow.didDisappear()
         workflow.selectedRun = WorkflowRunModel(raw: raw)
-        let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
-        let search = try #require(descendants(host).compactMap { $0 as? NSTextField }.first { $0.placeholderString == "Search loaded history" })
+        let outline = try #require(sidebarFixtureOutline(in: host))
+        let search = try #require(sidebarFixtureOutline(in: host, role: .running)?.enclosingScrollView)
+        #expect(!descendants(host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
         let scroll = try #require(outline.enclosingScrollView)
         await waitUntil { host.layoutSubtreeIfNeeded(); return outline.numberOfRows > 25 && outline.rect(ofRow: 2).height > 20 }
         await waitForStableLayout(host: host, search: search, outline: outline, scroll: scroll)
         #expect(scroll.contentInsets.top == 0)
-        scroll.contentView.scroll(to: CGPoint(x: 0, y: scrollOffset))
-        scroll.reflectScrolledClipView(scroll.contentView)
+        scrollSidebar(scroll, offset: scrollOffset)
         await waitForStableLayout(host: host, search: search, outline: outline, scroll: scroll)
         let baseline = sample(host: host, search: search, outline: outline, scroll: scroll)
         let recorder = SidebarGeometryRecorder { sample(host: host, search: search, outline: outline, scroll: scroll) }
@@ -78,6 +78,11 @@ import Testing
         #expect(clockDuration(harness.sut) == 62)
         #expect(harness.sut.selection == .workflowRun("polling-layout"))
         #expect(recorder.samples.allSatisfy { $0 == baseline }, "Native geometry callbacks must not capture a temporary jump")
+    }
+
+    private func scrollSidebar(_ scroll: NSScrollView, offset: Double) {
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: offset))
+        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     private func descendants(_ view: NSView) -> [NSView] {

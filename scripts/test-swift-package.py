@@ -78,8 +78,15 @@ TERM_GRACE_SECONDS = 5.0
 HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.ActivityFeedApprovalHostedTests",
     "MainWindowFeatureTests.ObservationHostedTests",
+    "MainWindowFeatureTests.AccessOptionRowTests",
+    "MainWindowFeatureTests.M04StateMatrixHostedTests",
+    "MainWindowFeatureTests.NewSessionComposerHostedTests",
+    "MainWindowFeatureTests.CenteredComposerHostedTests",
+    "MainWindowFeatureTests.SidebarUnifiedHostedTests",
+    "MainWindowFeatureTests.SidebarNativeParityBaselineTests",
 })
 HOSTED_PACKAGE = "MainWindowFeature"
+HOSTED_RESOURCE_BUNDLE = HOSTED_PACKAGE + "_" + HOSTED_PACKAGE + ".bundle"
 
 # Identifier grammar, deliberately minimal: anything outside it is rejected, not
 # escaped. Suite identity is everything before the last slash of a discovered
@@ -819,6 +826,9 @@ def prepare_appkit_host(swift: str, package: str, output_dir: str,
                           "MacOS", "MainWindowFeaturePackageTests")
     if not os.path.isfile(bundle):
         raise RunnerError(f"AppKit host test bundle is missing: {bundle}")
+    module_resources = os.path.join(build_path, HOSTED_RESOURCE_BUNDLE)
+    if not os.path.isdir(module_resources):
+        raise RunnerError(f"AppKit host module resource bundle is missing: {module_resources}")
     app = os.path.join(output_dir, "AppKitTestHost-" + uuid.uuid4().hex + ".app")
     contents = os.path.join(app, "Contents")
     os.makedirs(os.path.join(contents, "MacOS"))
@@ -831,6 +841,22 @@ def prepare_appkit_host(swift: str, package: str, output_dir: str,
     stage("host-compile", [compiler, "-parse-as-library", "-sdk", sdk, source, "-F", framework_dir,
                            "-framework", "Testing", "-Xlinker", "-rpath", "-Xlinker",
                            framework_dir, "-o", executable])
+    # The production loaders resolve Bundle.resourceURL inside an .app, i.e.
+    # Contents/Resources; development-build fallback is deliberately absent, so
+    # the built module bundle must be inside the app before it is sealed by
+    # codesign. A missing bundle fails closed instead of degrading.
+    resource_destination = os.path.join(contents, "Resources", HOSTED_RESOURCE_BUNDLE)
+    shutil.copytree(module_resources, resource_destination)
+    resource_entries = sorted(
+        os.path.relpath(os.path.join(current, name), resource_destination)
+        for current, _, names in os.walk(resource_destination)
+        for name in names
+    )
+    evidence["host-resource-bundle"] = {
+        "source": module_resources,
+        "destination": resource_destination,
+        "entries": resource_entries,
+    }
     stage("host-sign", ["codesign", "--force", "--sign", "-", app])
     environment = {key: value for key, value in os.environ.items() if not key.startswith("DYLD_")}
     for key in ("HOME", "CFFIXED_USER_HOME", "TMPDIR"):

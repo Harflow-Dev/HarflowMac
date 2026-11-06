@@ -45,7 +45,7 @@ public struct CtlClient: Sendable {
                 defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
                 return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
                                           command: command, productVersion: compatibilityContext.productVersion,
-                                          eventPage: command == "workflow-inspect" && options.contains("--view=activity"))
+                                          eventPage: Self.isWorkflowActivity(command, options: options))
             }
     }
 
@@ -70,8 +70,8 @@ public struct CtlClient: Sendable {
             return .failure(WireEnvelope.incompatibility("operation superseded before compatibility probe"))
         }
         let probe = await VersionInfoClient(executable: executable, environment: environment, context: compatibilityContext, runner: runner)
-            .check(requiring: command == "task-events" ? [.ctl, .events] : [.ctl])
-        if command == "task-events", !operationIsCurrent() || Task.isCancelled {
+            .check(requiring: command == "task-events" || Self.isWorkflowActivity(command, options: options) ? [.ctl, .events] : [.ctl])
+        if command == "task-events" || Self.isWorkflowActivity(command, options: options), !operationIsCurrent() || Task.isCancelled {
             return .failure(WireEnvelope.incompatibility("task-events operation superseded after compatibility probe"))
         }
         switch probe {
@@ -89,10 +89,18 @@ public struct CtlClient: Sendable {
             let bytes = (try? output.get().stdout.count) ?? 0
             MonitorMetrics.end(transportStart, stage: .transport, bytes: bytes, stderrBytes: (try? output.get().stderr.utf8.count) ?? 0)
         }
-        if command == "task-events", !operationIsCurrent() || Task.isCancelled {
+        if command == "task-events" || Self.isWorkflowActivity(command, options: options), !operationIsCurrent() || Task.isCancelled {
             return .failure(WireEnvelope.incompatibility("task-events operation superseded after response"))
         }
         return output.flatMap { validateTransportOutput($0, command: command, options: options, timeout: timeout) }
+    }
+
+    /// Both supported argv spellings share the activity event contract and byte budget.
+    static func isWorkflowActivity(_ command: String, options: [String]) -> Bool {
+        guard command == "workflow-inspect" else { return false }
+        return options.contains("--view=activity") || options.indices.contains {
+            options[$0] == "--view" && options.indices.contains($0 + 1) && options[$0 + 1] == "activity"
+        }
     }
 
     private static func validCommandToken(_ value: String) -> Bool {
@@ -103,8 +111,8 @@ public struct CtlClient: Sendable {
     private func validateTransportOutput(
         _ output: ProcessOutput, command: String, options: [String], timeout: Double
     ) -> Result<ProcessOutput, ToolError> {
-        if command == "task-events", output.stdout.count > 262144 {
-            return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: "task-events exceeded document byte limit"))
+        if command == "task-events" || Self.isWorkflowActivity(command, options: options), output.stdout.count > 262144 {
+            return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: "\(command) exceeded document byte limit"))
         }
         if output.timedOut { return .failure(.timedOut(tool: "harflow-ctl \(command)", seconds: timeout)) }
         guard let document = CtlDocument.firstJSONObject(in: output.stdout) else {
@@ -116,7 +124,7 @@ public struct CtlClient: Sendable {
         if let error = WireEnvelope.validate(document, contract: .ctl, productVersion: compatibilityContext.productVersion) {
             return .failure(error)
         }
-        if CtlDocument.isEventPageCommand(command) || (command == "workflow-inspect" && options.contains("--view=activity")),
+        if CtlDocument.isEventPageCommand(command) || (Self.isWorkflowActivity(command, options: options)),
            let error = WireEnvelope.validateEventPage(document) { return .failure(error) }
         return .success(output)
     }

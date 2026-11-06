@@ -6,13 +6,17 @@ import SwiftUI
 import Testing
 
 @MainActor @Suite(.serialized) struct SidebarWindowLayoutTests {
-    @Test func givenPopulatedSplitSidebar_whenWindowedAndResized_thenSearchAndRowsStayBelowWindowControls() async throws {
+    @Test func givenM04SplitSidebar_whenWindowedAndResized_thenIndependentListsStayWithinContent() async throws {
         // given
         _ = NSApplication.shared
         let vm = SidebarViewModelMock()
-        vm.savedWorkflows = (0 ..< 20).map { WorkflowRecord(raw: ["name": .string("Workflow \($0)")]) }
+        vm.sections = [.init(bucket: .running, items: (0 ..< 20).map {
+            .task(TaskRowModel(id: "running-\($0)", backend: "codex", title: "Running task \($0)", status: .running, repoName: "fixture", ageText: "1m"))
+        }), .init(bucket: .today, items: (0 ..< 30).map {
+            .task(TaskRowModel(id: "recent-\($0)", backend: "codex", title: "Recent task \($0)", status: .completed, repoName: "fixture", ageText: "1h"))
+        })]
         let host = NSHostingView(rootView: NavigationSplitView {
-            SidebarView(vm).navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
+            SidebarView(vm).navigationSplitViewColumnWidth(min: 240, ideal: 264, max: 340)
         } detail: { Text("Detail") }.frame(minWidth: 1000, minHeight: 620).modifier(LayoutHiddenTitle()).withPresentationContext())
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 620),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -28,22 +32,39 @@ import Testing
         // when / then
         for appearance in [NSAppearance.Name.aqua, .darkAqua] {
             window.appearance = NSAppearance(named: appearance)
-            for size in [NSSize(width: 1000, height: 620), NSSize(width: 1300, height: 850)] {
+            for size in [NSSize(width: 1000, height: 620), NSSize(width: 1280, height: 800)] {
                 window.setContentSize(size)
                 await waitUntil {
                     RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
                     host.layoutSubtreeIfNeeded()
-                    return descendants(host).contains { ($0 as? NSTextField)?.placeholderString == "Search loaded history" }
+                    return descendants(host).compactMap { $0 as? NSOutlineView }.count == 2
+                        && descendants(host).compactMap { $0 as? NSOutlineView }.allSatisfy { $0.numberOfRows > 0 }
                 }
-                let search = try #require(descendants(host).compactMap { $0 as? NSTextField }.first { $0.placeholderString == "Search loaded history" })
-                let close = try #require(window.standardWindowButton(.closeButton))
-                let searchFrame = search.convert(search.bounds, to: nil)
-                let closeFrame = close.convert(close.bounds, to: nil)
-                #expect(searchFrame.maxY <= window.contentLayoutRect.maxY, "Search must remain within the native content layout area")
-                let outline = try #require(descendants(host).compactMap { $0 as? NSOutlineView }.first)
-                let firstRow = outline.convert(outline.rect(ofRow: 0), to: nil)
-                #expect(firstRow.maxY < searchFrame.minY, "Workflows must stay below search and filter")
-                #expect(searchFrame.maxY < closeFrame.minY, "Search must stay below window controls: search=\(searchFrame), close=\(closeFrame)")
+                let fields = descendants(host).compactMap { $0 as? NSTextField }
+                #expect(!fields.contains { $0.placeholderString == "Search loaded history" })
+                let outlines = descendants(host).compactMap { $0 as? NSOutlineView }
+                #expect(outlines.count == 2)
+                let scrolls = try outlines.map { try #require($0.enclosingScrollView) }
+                #expect(scrolls[0] !== scrolls[1])
+                let frames = scrolls.map { $0.convert($0.bounds, to: nil) }
+                #expect(frames.allSatisfy { $0.maxY <= window.contentLayoutRect.maxY && $0.height > 0 })
+                #expect(!frames[0].intersects(frames[1]), "Running and Recent work own disjoint scroll viewports")
+                #expect(outlines.allSatisfy { $0.accessibilityRole() == .outline })
+                let running = try #require(sidebarFixtureOutline(in: host, role: .running)?.enclosingScrollView)
+                let recent = try #require(sidebarFixtureOutline(in: host)?.enclosingScrollView)
+                let runningOrigin = running.contentView.bounds.origin
+                recent.contentView.scroll(to: CGPoint(x: 0, y: 80))
+                recent.reflectScrolledClipView(recent.contentView)
+                #expect(running.contentView.bounds.origin == runningOrigin)
+                #expect(recent.contentView.bounds.origin.y == 80)
+                if let directory = ProcessInfo.processInfo.environment["HARFLOW_M04_SIDEBAR_CAPTURE_DIR"] {
+                    let url = URL(fileURLWithPath: directory, isDirectory: true)
+                    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                    let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                    host.cacheDisplay(in: host.bounds, to: bitmap)
+                    let data = try #require(bitmap.representation(using: .png, properties: [:]))
+                    try data.write(to: url.appendingPathComponent("sidebar-\(appearance.rawValue)-\(Int(size.width))x\(Int(size.height)).png"))
+                }
             }
         }
     }

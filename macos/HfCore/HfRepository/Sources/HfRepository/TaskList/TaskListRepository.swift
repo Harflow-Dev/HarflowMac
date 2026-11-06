@@ -18,6 +18,8 @@ public protocol TaskListRepository: Sendable {
     func resolve(_ id: String) async -> TaskInfo?
     func conversationPage(sessionID: String, cursor: String?, limit: Int) async throws -> TaskHistoryPage
 
+    func successorPage(predecessorTaskID: String, cursor: String?, runtime: QualificationRuntimeToken) async throws -> TaskSuccessorPage
+
     var tasks: [TaskInfo] { get }
     var listError: ToolError? { get }
     var hasListed: Bool { get }
@@ -94,6 +96,10 @@ public struct HistoryLoadingState: Equatable, Sendable {
 }
 
 public extension TaskListRepository {
+    func successorPage(predecessorTaskID: String, cursor: String?, runtime: QualificationRuntimeToken) async throws -> TaskSuccessorPage {
+        throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "task-list-page", detail: "Recorded successors unavailable")
+    }
+
     func runtimeBecameReady() { settingsChanged() }
     var historyState: HistoryLoadingState { HistoryLoadingState() }
     func historyStatePublisher() -> AnyPublisher<HistoryLoadingState, Never> { Just(historyState).eraseToAnyPublisher() }

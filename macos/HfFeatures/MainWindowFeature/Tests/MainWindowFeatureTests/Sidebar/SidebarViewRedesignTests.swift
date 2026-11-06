@@ -23,7 +23,10 @@ import Testing
 
     // MARK: - Helpers
 
-    private func present(_ vm: SidebarViewModelMock) async throws -> (host: NSHostingView<AnyView>, window: NSWindow) {
+    private func present(
+        _ vm: SidebarViewModelMock,
+        outlineRole: SidebarListPresentation.Role = .recent
+    ) async throws -> (host: NSHostingView<AnyView>, window: NSWindow) {
         _ = NSApplication.shared
         NSApplication.shared.accessibilitySetValue(true, forAttribute: NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))
         // Activate SwiftUI's accessibility descriptors only in this test application's process.
@@ -38,13 +41,13 @@ import Testing
         await waitUntil {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
             host.layoutSubtreeIfNeeded()
-            return (descendants(host).compactMap { $0 as? NSOutlineView }.first?.numberOfRows ?? 0) > 0
+            return (sidebarFixtureOutline(in: host, role: outlineRole)?.numberOfRows ?? 0) > 0
         }
         await waitUntil {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
             host.layoutSubtreeIfNeeded()
             host.displayIfNeeded()
-            guard let outline = outlineView(host) else { return false }
+            guard let outline = outlineView(host, role: outlineRole) else { return false }
             return contentRows(outline).allSatisfy { outline.rect(ofRow: $0).height > HfRadius.Metrics.formRowHeight }
         }
         return (host, window)
@@ -57,8 +60,8 @@ import Testing
 
     private func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
 
-    private func outlineView(_ host: NSView) -> NSOutlineView? {
-        descendants(host).compactMap { $0 as? NSOutlineView }.first
+    private func outlineView(_ host: NSView, role: SidebarListPresentation.Role = .recent) -> NSOutlineView? {
+        sidebarFixtureOutline(in: host, role: role)
     }
 
     /// The hosted accessibility tree: the AppKit subviews plus the platform elements SwiftUI
@@ -121,10 +124,6 @@ import Testing
         return window.convertFromScreen(frame.rectValue)
     }
 
-    private func searchField(in host: NSView) throws -> NSTextField {
-        try #require(descendants(host).compactMap { $0 as? NSTextField }.first { $0.placeholderString == "Search loaded history" })
-    }
-
     private func rowHeight(_ outline: NSOutlineView, _ row: Int) -> CGFloat {
         outline.rect(ofRow: row).height
     }
@@ -153,19 +152,20 @@ import Testing
 
     // MARK: - New session (moved action)
 
-    @Test func givenTheSidebar_whenRendered_thenNewSessionSitsAboveSearchAndCallsTheExistingAction() async throws {
+    @Test func givenTheSidebar_whenRendered_thenNewTaskStaysAboveHistoryAndCallsTheExistingAction() async throws {
         // given
         let vm = SidebarViewModelMock()
         let sut = try await present(vm)
         defer { release(sut.window) }
 
         // when / then — the fixed control above the search field, never a scrollable list row.
-        let button = try #require(elements(labelled: "New session", in: sut.host).first, "The New session control must be present")
-        let search = try searchField(in: sut.host)
+        let button = try #require(elements(labelled: "New task", in: sut.host).first, "The New session control must be present")
+        let outline = try #require(outlineView(sut.host))
         let buttonFrame = try #require(frameInWindow(button, window: sut.window))
-        let searchFrame = search.convert(search.bounds, to: nil)
-        #expect(buttonFrame.minY >= searchFrame.maxY - 0.5, "New session must sit above the search field")
-        #expect(buttonFrame.maxY <= sut.window.contentLayoutRect.maxY + 0.5, "New session must stay inside the content area")
+        let outlineFrame = outline.convert(outline.bounds, to: nil)
+        #expect(buttonFrame.minY >= outlineFrame.maxY - 0.5, "New task must stay above the observation surfaces")
+        #expect(buttonFrame.maxY <= sut.window.contentLayoutRect.maxY + 0.5)
+        #expect(!descendants(sut.host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
 
         // The retained plain label, with the display-only hint hidden from VoiceOver.
         #expect(!accessibilityElements(sut.host).contains { accessibilityString($0, "accessibilityLabel")?.contains("⌘N") == true },
@@ -187,7 +187,7 @@ import Testing
 
         // when
         let notice = try #require(elements(labelled: "Runtime installed", in: sut.host).first)
-        let button = try #require(elements(labelled: "New session", in: sut.host).first)
+        let button = try #require(elements(labelled: "New task", in: sut.host).first)
         let noticeFrame = try #require(frameInWindow(notice, window: sut.window))
         let buttonFrame = try #require(frameInWindow(button, window: sut.window))
         let outline = try #require(outlineView(sut.host))
@@ -199,25 +199,15 @@ import Testing
 
     // MARK: - Backend filter
 
-    @Test func givenTheCompactFilter_whenRendered_thenTheSelectedNameStaysVisibleAndSpoken() async throws {
-        // given — "all" selected.
-        let all = try await present(SidebarViewModelMock())
-        defer { release(all.window) }
-        // Native popup buttons expose their selected value on the associated accessibility cell.
-        let allElement = try #require(elements(labelled: "Harness filter", in: all.host).first {
-            accessibilityString($0, "accessibilityValue") != nil
-        })
+    @Test func givenSelectedBackend_whenRendered_thenRemovedFilterIsAbsentAndHistoryRemainsAvailable() async throws {
+        // given
+        let vm = SidebarViewModelMock(selectedBackend: "claude")
+        let sut = try await present(vm)
+        defer { release(sut.window) }
         // when / then
-        #expect(accessibilityString(allElement, "accessibilityValue") == "All harnesses")
-
-        // given — a concrete backend selected, same control, same menu choices.
-        let claude = try await present(SidebarViewModelMock(selectedBackend: "claude"))
-        defer { release(claude.window) }
-        let claudeElement = try #require(elements(labelled: "Harness filter", in: claude.host).first {
-            accessibilityString($0, "accessibilityValue") != nil
-        })
-        // when / then — the visible selected name is preserved as the control's value.
-        #expect(accessibilityString(claudeElement, "accessibilityValue") == "Claude")
+        #expect(elements(labelled: "Harness filter", in: sut.host).isEmpty)
+        #expect(sidebarFixtureOutline(in: sut.host) != nil)
+        #expect(!descendants(sut.host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
     }
 
     @Test func givenADegradedCatalog_whenRendered_thenTheNoteStaysWithTheFilter() async throws {
@@ -231,25 +221,21 @@ import Testing
     }
 
     @Test(arguments: [5, 40])
-    func givenAFullBackendCatalog_whenRenderedAtMinimumWidth_thenSearchAndFilterFit(count: Int) async throws {
+    func givenAFullBackendCatalog_whenRenderedAtMinimumWidth_thenNavigationFitsWithoutRemovedControls(count: Int) async throws {
         // given
         let tabs = [BackendTab.all] + (0 ..< count).map { BackendTab(id: "backend-\($0)", isNotFound: false) }
         let sut = try await present(SidebarViewModelMock(backendTabs: tabs))
         defer { release(sut.window) }
 
-        // when
-        let search = try searchField(in: sut.host)
-        let filter = try #require(elements(labelled: "Harness filter", in: sut.host).first)
-        let filterFrame = try #require(frameInWindow(filter, window: sut.window))
-        let searchFrame = search.convert(search.bounds, to: nil)
-
-        // then
-        #expect(searchFrame.width >= HfRadius.Metrics.sidebarSearchMinimumWidth - 2 * HfRadius.Metrics.spacing12)
-        #expect(filterFrame.minX >= 0)
-        #expect(filterFrame.maxX <= sut.window.contentLayoutRect.maxX + 1)
-        #expect(elements(labelled: "Harness filter", in: sut.host).contains {
-            accessibilityString($0, "accessibilityValue") == "All harnesses"
-        })
+        // when / then — catalog size cannot restore removed controls or crowd navigation.
+        #expect(elements(labelled: "Harness filter", in: sut.host).isEmpty)
+        #expect(!descendants(sut.host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
+        for title in ["New task", "Workflows", "Resources", "Statistics"] {
+            let element = try #require(elements(labelled: title, in: sut.host).first)
+            let frame = try #require(frameInWindow(element, window: sut.window))
+            #expect(frame.minX >= 0)
+            #expect(frame.maxX <= sut.window.contentLayoutRect.maxX + 1)
+        }
         #expect(tabs.count == count + 1)
     }
 
@@ -353,9 +339,20 @@ import Testing
                 hasChildren: false, isExpanded: true, guides: [.last]
             ))
         ])])
-        let sut = try await present(vm)
-        let outline = try #require(outlineView(sut.host))
+        let sut = try await present(vm, outlineRole: .running)
+        let outline = try #require(outlineView(sut.host, role: .running))
         defer { release(sut.window) }
+        // Observe completed native reconciliation rather than an in-flight row-height animation.
+        var previousFrames: [CGRect] = []
+        var stablePasses = 0
+        await waitUntil(timeout: 5) {
+            sut.host.layoutSubtreeIfNeeded()
+            let frames = contentRows(outline).map { outline.rect(ofRow: $0) }
+            stablePasses = frames == previousFrames ? stablePasses + 1 : 0
+            previousFrames = frames
+            return settledNativeRows(outline) && stablePasses >= 6
+        }
+        try #require(settledNativeRows(outline) && stablePasses >= 6)
         let rows = contentRows(outline)
 
         // when / then — the sidebar's 7 pt row padding applies symmetrically: the single-line

@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
@@ -11,6 +12,7 @@ extension WorkflowTests {
     @Test func givenCanonicalRetryMetadata_whenLimitsAndTopologyChange_thenDraftStaysRawAndInferenceNeverStales() async throws {
         // given
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).agentUsageSnapshot.willReturn(.init())
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,

@@ -12,6 +12,9 @@ import MonitorCore
 @Mockable
 @MainActor
 protocol WorkflowUseCase: Sendable {
+    func activityRuntime() throws -> QualificationRuntimeToken
+    func activity(runID: String, executionID: String, intent: WorkflowActivityReadIntent,
+                  runtime: QualificationRuntimeToken) async throws -> WorkflowActivityPage
     func qualificationSession() -> QualificationSession
     func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken?) async throws -> [String: JSONValue]
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
@@ -27,6 +30,15 @@ protocol WorkflowUseCase: Sendable {
 }
 
 extension WorkflowUseCase {
+    func activityRuntime() throws -> QualificationRuntimeToken {
+        throw ToolError.notFound(tool: "harflow-ctl", searched: [])
+    }
+
+    func activity(runID _: String, executionID _: String, intent _: WorkflowActivityReadIntent,
+                  runtime _: QualificationRuntimeToken) async throws -> WorkflowActivityPage {
+        throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "workflow-inspect", detail: "Runtime-bound activity unavailable")
+    }
+
     func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
         try await self.command(command, options: options, positionals: positionals, runtime: nil)
     }
@@ -179,6 +191,8 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored private var terminationSubscription: AnyCancellable?
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored var refreshErrorText: String?
+    @ObservationIgnored var nativeActivityRequestID = UUID()
+    @ObservationIgnored var nativeActivityRequest: WorkflowNativeActivityRequest?
     @ObservationIgnored var runPolling = WorkflowRunPolling()
     @ObservationIgnored var generationID = UUID()
     @ObservationIgnored private var didSubscribe = false

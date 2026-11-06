@@ -29,7 +29,7 @@ import Testing
         #expect(sut.parallelPosition(for: "group:B").offset == 90)
     }
 
-    @Test func givenNewSessionSheet_whenWorkflowRunnerRequested_thenRunnerReplacesSession() {
+    @Test func givenInlineComposer_whenWorkflowRunnerRequested_thenModalPreservesComposerSelection() {
         // given
         let sut = MainWindowCoordinator(parent: MockCoordinator())
         sut.handle(path: MonitorDestination.newSession)
@@ -37,7 +37,8 @@ import Testing
         sut.presentWorkflowRunner()
         // then
         #expect(sut.presentedSheet == .workflowRunner)
-        #expect(!sut.isNewSessionPresented)
+        #expect(sut.isNewSessionPresented)
+        #expect(sut.selection == .newSession)
         #expect(sut.isWorkflowRunnerPresented)
     }
 
@@ -48,7 +49,8 @@ import Testing
         // when
         sut.handle(path: MonitorDestination.newSession)
         // then
-        #expect(sut.presentedSheet == .newSession)
+        #expect(sut.presentedSheet == nil)
+        #expect(sut.selection == .newSession)
         #expect(sut.isNewSessionPresented)
         #expect(!sut.isWorkflowRunnerPresented)
     }
@@ -60,7 +62,8 @@ import Testing
         // when
         sut.openNewSession()
         // then
-        #expect(sut.presentedSheet == .newSession)
+        #expect(sut.presentedSheet == nil)
+        #expect(sut.selection == .newSession)
         #expect(!sut.isWorkflowRunnerPresented)
     }
 
@@ -81,14 +84,15 @@ import Testing
         sut.isNewSessionPresented = true
         sut.isWorkflowRunnerPresented = false
         // then
-        #expect(sut.presentedSheet == .newSession)
+        #expect(sut.presentedSheet == nil)
+        #expect(sut.selection == .newSession)
         // when
         sut.isNewSessionPresented = false
         // then
         #expect(sut.presentedSheet == nil)
     }
 
-    @Test func givenSessionPublisher_whenSheetsSwitch_thenSessionTransitionsPublishOnce() {
+    @Test func givenComposerSelectionPublisher_whenModalChanges_thenSelectionStaysStable() {
         // given
         let sut = MainWindowCoordinator(parent: MockCoordinator())
         var received: [Bool] = []
@@ -100,7 +104,7 @@ import Testing
         sut.openNewSession()
         sut.openNewSession()
         // then
-        #expect(received == [false, true, false, true])
+        #expect(received == [false, true])
         withExtendedLifetime(cancellable) {}
     }
 
@@ -132,7 +136,7 @@ import Testing
         #expect(sut.selection == .group("release-notes"))
     }
     
-    @Test func givenANewSessionDestination_whenHandled_thenTheSheetIsPresented() {
+    @Test func givenANewSessionDestination_whenHandled_thenInlineComposerIsSelected() {
         // given
         let parent = MockCoordinator()
         let sut = MainWindowCoordinator(parent: parent)
@@ -233,12 +237,25 @@ import Testing
         let selectionToken = selectionPublisher.sink { selections.append($0) }
         let sheetToken = sheetPublisher.sink { presentations.append($0) }
         // then — replay is subscription-time state, not a getter-time captured default.
-        #expect(selections == [.workflowRun("current-run")])
+        #expect(selections == [.newSession])
         #expect(presentations == [true])
         selectionToken.cancel()
         sheetToken.cancel()
     }
     
+    @Test func givenWorkflowRunSelectedBeforeSubscription_whenSubscribed_thenLatestRunIsReplayed() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        let publisher = sut.selectionPublisher()
+        sut.selection = .workflowRun("current-run")
+        var selections: [MonitorDestination?] = []
+        // when
+        let token = publisher.sink { selections.append($0) }
+        // then
+        #expect(selections == [.workflowRun("current-run")])
+        token.cancel()
+    }
+
     // MARK: - SidebarRouting
     
     @Test func givenSidebarSelect_whenCalled_thenSelectionIsSet() {
@@ -320,11 +337,42 @@ import Testing
         let parent = MockCoordinator()
         let sut = MainWindowCoordinator(parent: parent)
         
-        // then — must not crash; `buildSidebarView` shares one VM, `buildNewSessionView` builds fresh.
+        // then — both window-owned presenters remain stable across view reconstruction.
         _ = sut.buildSidebarView()
         _ = sut.buildSidebarView()
         _ = sut.buildNewSessionView()
         _ = sut.start()
+    }
+
+    @Test func givenComposerDraft_whenNavigatingAndRebuilding_thenTheWindowRetainsOneVMWithoutACycle() {
+        // given
+        var coordinator: MainWindowCoordinator? = MainWindowCoordinator(parent: MockCoordinator())
+        weak var weakCoordinator = coordinator
+        let composer = coordinator!.sharedNewSessionVM()
+        composer.didChangeMessage("Keep this draft through navigation")
+        // when
+        coordinator!.openNewSession()
+        coordinator!.selection = .task("known")
+        coordinator!.openNewSession()
+        let returned = coordinator!.sharedNewSessionVM()
+        // then
+        #expect(returned === composer)
+        #expect(returned.message == "Keep this draft through navigation")
+        #expect(coordinator!.selection == .newSession)
+        #expect(coordinator!.presentedSheet == nil)
+        coordinator = nil
+        #expect(weakCoordinator == nil)
+        withExtendedLifetime(composer) {}
+    }
+
+    @Test func givenWorkflowLibraryDestination_whenHandled_thenItSelectsRetainedLibraryWithoutAModal() {
+        // given
+        let coordinator = MainWindowCoordinator(parent: MockCoordinator())
+        // when
+        coordinator.handle(path: MonitorDestination.workflowLibrary)
+        // then
+        #expect(coordinator.selection == .workflowLibrary)
+        #expect(coordinator.presentedSheet == nil)
     }
 
     @Test func givenCoordinatorSelectionChanges_whenStartScreenIsRebuilt_thenItReusesOneViewModelWithoutARetainCycle() {

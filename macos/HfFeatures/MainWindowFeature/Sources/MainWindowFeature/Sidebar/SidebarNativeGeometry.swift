@@ -95,6 +95,11 @@ extension SidebarNativeList.Coordinator {
             seenIDs.formUnion(mounted)
             if !mounted.isEmpty { actions.mounted(mounted) }
         }
+        let height = outline.numberOfRows > 0 ? outline.rect(ofRow: outline.numberOfRows - 1).maxY : 0
+        if height.isFinite, height >= 0, lastContentHeight != height {
+            lastContentHeight = height
+            contentHeightChanged?(height)
+        }
         guard let input, let appliedInput,
               input.historyRevision == appliedInput.historyRevision, input.historyToken == appliedInput.historyToken,
               let sentinel = indexesByID[.init(logicalID: "history:sentinel")],

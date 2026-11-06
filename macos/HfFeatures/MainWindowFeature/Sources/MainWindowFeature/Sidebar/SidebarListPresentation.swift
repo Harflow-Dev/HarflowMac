@@ -7,6 +7,7 @@ import MonitorCore
 
 /// Immutable inputs to the native renderer. Domain ordering remains owned by SidebarVM.
 struct SidebarListPresentation: Equatable, Sendable {
+    enum Role: Equatable, Sendable { case combined, running, recent, unified }
     var sections: [SidebarSection]
     var workflowTitles: [String]
     var workflowsExpanded: Bool
@@ -22,6 +23,9 @@ struct SidebarListPresentation: Equatable, Sendable {
     var historyToken: String
     var transitionEpoch: Int = 0
     var needsYouBadge: NeedsYouBadge = .none
+    /// Explicit render role: production scrolls `.unified` (navigation, Running and Recent work in
+    /// one bounded outline); `.combined`, `.running` and `.recent` remain the legacy fixture roles.
+    var role: Role = .combined
 }
 
 struct SidebarBannerPresentation: Equatable, Sendable {
@@ -54,6 +58,7 @@ struct SidebarBannerPresentation: Equatable, Sendable {
 
 struct SidebarListEntry: Identifiable, Equatable, Sendable {
     enum Content: Equatable, Sendable {
+        case navigation(SidebarNavigationEntry)
         case needsYou(NeedsYouBadge)
         case statistics
         case resourceSlots
@@ -91,6 +96,7 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
     var destination: MonitorDestination? {
         guard !isFading else { return nil }
         switch content {
+        case .navigation(let navigation): return navigation.destination
         case .needsYou: return .needsYou(itemID: nil)
         case .statistics: return .statistics
         case .resourceSlots: return .resourceSlots
@@ -111,6 +117,33 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
 struct SidebarNativeIdentity: Hashable, Sendable {
     let displayID: SidebarDisplayID
     let incarnation: Int
+}
+
+/// One unified-surface navigation row (M04 `.hd-m04-sidebar-scroll`): title, exact rail artwork,
+/// a real destination, an optional Needs you badge and an optional keyboard shortcut hint.
+struct SidebarNavigationEntry: Equatable, Sendable {
+    let id: String
+    let title: String
+    let artwork: SidebarNavigationArtwork
+    let destination: MonitorDestination
+    var badge: NeedsYouBadge = .none
+    var shortcut: String?
+
+    /// The unified scroll's navigation order: New task, Needs you, Workflows, Resources, Statistics.
+    static func unifiedEntries(badge: NeedsYouBadge) -> [SidebarNavigationEntry] {
+        [
+            .init(id: "navigation:new-task", title: "New task", artwork: .plus,
+                  destination: .newSession, shortcut: "⌘N"),
+            .init(id: "navigation:needs-you", title: "Needs you", artwork: .hand,
+                  destination: .needsYou(itemID: nil), badge: badge),
+            .init(id: "navigation:workflows", title: "Workflows", artwork: .workflow,
+                  destination: .workflowLibrary),
+            .init(id: "navigation:resources", title: "Resources", artwork: .gauge,
+                  destination: .resourceSlots),
+            .init(id: "navigation:statistics", title: "Statistics", artwork: .chart,
+                  destination: .statistics)
+        ]
+    }
 }
 
 struct SidebarDisplayID: Hashable, Sendable {

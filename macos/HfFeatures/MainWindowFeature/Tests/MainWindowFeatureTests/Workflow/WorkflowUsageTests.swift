@@ -11,6 +11,7 @@ import Testing
 @Suite struct WorkflowUsageTests {
     private func makeVM(routesStartedRun: Bool = false) -> (WorkflowVM, MockWorkflowUseCase) {
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])

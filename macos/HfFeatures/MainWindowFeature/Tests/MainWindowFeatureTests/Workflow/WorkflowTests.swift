@@ -566,6 +566,7 @@ extension WorkflowTests {
     @Test func givenChildLink_whenOpened_thenCoordinatorReceivesRunDestination() {
         // given
         let useCase = MockWorkflowUseCase()
+        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])
         given(useCase).agentUsageSnapshot.willReturn(.init())
