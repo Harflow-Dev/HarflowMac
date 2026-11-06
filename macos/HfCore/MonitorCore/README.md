@@ -73,3 +73,15 @@ bound, not ASCII-escaped wire size. Native explicit-filter admission is limited
 to200names/16KiB UTF-8; cursors remain opaque and at most2048Unicode scalars.
 This typed foundation does not yet replace the application's private activity
 and cumulative-summary readers; their shared observation migration is M03-D2.
+
+## Conversation delivery adapters
+
+`ConversationDelivery/` holds typed adapters for the `conversation-delivery.v1`
+ctl contract: `conversationPrepare`, `conversationSend` and `conversationControl`
+on `CtlClient`, immutable request values, projection and receipt decoders, and an
+outcome type that distinguishes not-dispatched, engine-error and uncertain
+results. There are no callers and no UI. Evidence is the vendored contract
+fixtures and fake-runner tests only; nothing here is qualified against a running
+runtime. An engine error is not evidence that a message was not admitted, and
+the only post-launch proof of non-dispatch is exit code 2 with a validated
+envelope whose error code is `usage`.

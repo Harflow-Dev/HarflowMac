@@ -10,6 +10,10 @@ extension ToolError {
             return "The installed `\(tool)` does not support capability `messaging.v1`, required for `\(command)`. "
                 + "Use a compatible managed Harflow runtime."
         }
+        if detail == "Missing capability \(CtlCapability.conversationDelivery)" {
+            return "The installed `\(tool)` does not support capability `\(CtlCapability.conversationDelivery)`, required for `\(command)`. "
+                + "Use a compatible managed Harflow runtime."
+        }
         return "The installed `\(tool)` has no `\(command)` command — it predates this app. "
             + "Use a compatible managed Harflow runtime."
     }

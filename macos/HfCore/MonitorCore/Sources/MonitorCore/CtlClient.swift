@@ -108,7 +108,7 @@ public struct CtlClient: Sendable {
             && value.range(of: "^[a-z][a-z0-9-]*$", options: .regularExpression) == (value.startIndex ..< value.endIndex)
     }
 
-    private func validateTransportOutput(
+    func validateTransportOutput(
         _ output: ProcessOutput, command: String, options: [String], timeout: Double
     ) -> Result<ProcessOutput, ToolError> {
         if command == "task-events" || Self.isWorkflowActivity(command, options: options), output.stdout.count > 262144 {

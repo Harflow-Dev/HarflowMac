@@ -40,6 +40,9 @@ public enum CtlCapability {
 
     /// Permits the Monitor response channel to answer caller-owned approval requests.
     public static let callerApprovalMonitorRespond = "caller-approvals.monitor-respond.v1"
+
+    /// Permits typed conversation message delivery, control and projection reads.
+    public static let conversationDelivery = "conversation-delivery.v1"
 }
 
 /// Numeric semantic version with bounded components and optional build metadata; no prereleases.

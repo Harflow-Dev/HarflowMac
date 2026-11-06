@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add typed conversation-delivery adapters to MonitorCore for the `conversation-delivery.v1` ctl contract (prepare, send, control) with request values, an outcome type that separates not-dispatched, engine-error and uncertain results, and projection and receipt decoders. They have no callers and no UI; evidence is contract fixtures and fake-runner tests only, with no runtime qualification.
+
 - Select HarflowMCP 0.0.11 as the paired engine, with its frozen runtime inputs and published contract fixtures. Installation and runtime qualification against 0.0.11 are still pending.
 
 - Add the M04 centered composer, adaptive to the window size, and a single scroll area in the sidebar body for navigation, Running and Recent work, with the brand header and appearance/settings footer fixed. M04 is not yet accepted.
