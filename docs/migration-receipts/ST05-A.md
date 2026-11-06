@@ -50,3 +50,5 @@ This work ran overnight on the coordinator's assignment. The planning documents 
 All 33 `ctl-conversation-*` fixtures are consumed, and a catalogue test fails if a new one is unhandled. Cases the fixtures lack, such as engine errors with `data`, post-admission errors and every transport fault, are labelled synthetic in the tests. The plan and code each ran two review rounds with three reviewers; all findings were fixed or adjudicated.
 
 The prepare timeout of 60 seconds deliberately differs from the plan's quick timeout, for the reason given above.
+
+A later complete run on 9ae14ce, the first commit after this work that adds only activity feed plan tests, also passed: MainWindowFeature `--mode suites` 260/260 suites and 1,931/1,931 tests with 104 window captures and no capture errors, and all eight other packages, including MonitorCore 628/628. The automated commit security tool did not complete on 9ae14ce's parent because its model could not be reached, so it is not reviewed by that tool.
