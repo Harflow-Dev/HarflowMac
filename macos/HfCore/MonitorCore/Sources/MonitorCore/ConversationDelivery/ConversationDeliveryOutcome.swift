@@ -62,7 +62,8 @@ public struct ConversationDeliveryEngineError: Equatable, Sendable {
 public enum ConversationDeliveryUncertainCause: Equatable, Sendable {
     /// The command did not finish within the bound and was terminated.
     case timedOut(seconds: Double)
-    /// The runner failed after launch in a way other than a launch failure.
+    /// The runner failed after launch in a way other than a launch failure, or the engine
+    /// reported an unknown outcome.
     case processFailure(ToolError)
     /// Stdout was not one JSON document.
     case unreadableOutput(exitCode: Int32, stderr: String)
@@ -74,4 +75,48 @@ public enum ConversationDeliveryUncertainCause: Equatable, Sendable {
     case inconsistentEnvelope(exitCode: Int32, detail: String)
     /// A result carried a receipt with a missing, malformed or mismatched identity.
     case receiptIdentityMismatch
+}
+
+// MARK: - ConversationLaunchProfile
+
+/// The conversation profile a launch enrolls the task under, rendered as the exact wire value of
+/// `harflow-ctl run|resume --conversation-profile`.
+public enum ConversationLaunchProfile: Equatable, Sendable {
+    case native
+    case shippedMedium35High
+
+    /// The exact value the engine accepts.
+    public var wireValue: String {
+        switch self {
+        case .native: return "native"
+        case .shippedMedium35High: return "shipped-medium35-high"
+        }
+    }
+}
+
+// MARK: - ConversationLaunchMarker
+
+/// Stands in for the request value the shared classifier carries; a launch has no replayable request.
+struct ConversationLaunchMarker: Equatable, Sendable {}
+
+// MARK: - ConversationLaunchOutcome
+
+/// Evidence about one profiled launch (`run` or `resume`), and nothing else.
+///
+/// `.engineError` does not prove that no record exists. A refused launch can leave a task record
+/// and a process behind: the engine can fail after spawning, persist the task, then terminate the
+/// process and report the same error code it uses when nothing happened. Launches have no
+/// idempotency key, so a retry can start a second task; they are never retried automatically and
+/// no API here retries one. There is deliberately no refused case.
+public enum ConversationLaunchOutcome: Equatable, Sendable {
+    /// Exit 0, a validated envelope with a result, and a usable task id.
+    case launched(taskID: String)
+    /// No process was launched, or the command was positively identified as a parser rejection
+    /// (exit 2 with a validated envelope whose code is `usage`).
+    case notDispatched(ConversationDeliveryNotDispatchedCause)
+    /// A validated envelope with an `error` object at exit 1. A task record may still exist.
+    case engineError(ConversationDeliveryEngineError)
+    /// The command launched and the outcome cannot be established, including exit 3 and a
+    /// success envelope without a usable task id.
+    case uncertain(ConversationDeliveryUncertainCause)
 }

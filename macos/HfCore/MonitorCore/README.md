@@ -85,3 +85,11 @@ fixtures and fake-runner tests only; nothing here is qualified against a running
 runtime. An engine error is not evidence that a message was not admitted, and
 the only post-launch proof of non-dispatch is exit code 2 with a validated
 envelope whose error code is `usage`.
+
+`conversationLaunch(_:profile:)` and `conversationResume(taskID:text:profile:maxTurns:)`
+start a task with an explicit `--conversation-profile`, returning a
+`ConversationLaunchOutcome`. They also have no callers, and provide no durable
+delivery. An engine error from a launch does not prove that no task exists, because a
+refused launch can leave a record behind. A launch has no idempotency key and is never
+retried automatically. Qualification is decided by the engine at launch; this package
+holds no qualification table.

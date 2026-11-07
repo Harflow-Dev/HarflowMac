@@ -42,11 +42,14 @@ enum ConversationExchange {
 // MARK: - CtlClient conversation delivery
 
 public extension CtlClient {
-    /// Enrolls the task if needed and reads its conversation projection through a fresh
-    /// capability handshake. Enrollment dispatches no response, so plain failures suffice.
+    /// Reads a task's conversation projection through a fresh capability handshake. Prepare
+    /// dispatches no response, so plain failures suffice.
     ///
-    /// Prepare can enroll the task and can itself refuse. A failed prepare leaves any earlier
-    /// uncertain state uncertain.
+    /// Prepare does not enroll a standalone task: a task launched without a conversation profile is
+    /// refused for real backends. Enrollment of a standalone task happens at launch, through
+    /// ``conversationLaunch(_:profile:)`` or ``conversationResume(taskID:text:profile:maxTurns:)``. Only a
+    /// workflow-owned target can be bound by prepare. A failed prepare leaves any earlier uncertain
+    /// state uncertain.
     func conversationPrepare(taskID: String) async -> Result<ConversationDeliveryProjection, ToolError> {
         guard ConversationDeliveryWire.isIdentifier(taskID) else {
             return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "conversation-prepare task id is invalid"))
@@ -109,6 +112,31 @@ public extension CtlClient {
             ConversationDeliveryControlReceipt(raw: $0, matching: request)
         }
     }
+
+    /// Starts a task enrolled in conversation delivery under `profile`, appended after the
+    /// request's own arguments.
+    ///
+    /// Launches have no idempotency key and are never retried automatically; no API retries one.
+    /// The `conversation-delivery.v1` capability gate is a floor and does not prove that the
+    /// runtime, backend and profile are qualified. See ``ConversationLaunchOutcome``.
+    func conversationLaunch(_ request: RunRequest, profile: ConversationLaunchProfile) async -> ConversationLaunchOutcome {
+        await conversationStart(command: "run",
+                                options: request.arguments + ["--conversation-profile=\(profile.wireValue)"],
+                                positionals: [])
+    }
+
+    /// Resumes a task under a conversation profile, with an optional turn cap. The same
+    /// no-retry, floor and evidence rules as ``conversationLaunch(_:profile:)`` apply.
+    ///
+    /// A resume starts a successor task: the returned id is a new task, not the input id. This
+    /// code deliberately does not compare them.
+    func conversationResume(taskID: String, text: String, profile: ConversationLaunchProfile,
+                            maxTurns: Int? = nil) async -> ConversationLaunchOutcome {
+        var options: [String] = []
+        if let maxTurns { options.append("--max-turns=\(maxTurns)") }
+        options.append("--conversation-profile=\(profile.wireValue)")
+        return await conversationStart(command: "resume", options: options, positionals: [taskID, text])
+    }
 }
 
 // MARK: - Transport and classification
@@ -119,7 +147,7 @@ extension CtlClient {
     static let conversationReadStdoutCap = 32 << 20
     /// Above the engine's 30-second session lock wait.
     static let conversationPrepareTimeout = 60.0
-    /// Stdout cap for send and control receipts.
+    /// Stdout cap for send, control and launch results.
     static let conversationMutationStdoutCap = 1 << 20
     /// The non-native path can wait about 30 seconds on the session lock and drain for about 50;
     /// terminating it after a claim can leave a claim held.
@@ -137,6 +165,39 @@ extension CtlClient {
             return .unreadable(tool: "harflow-ctl", exitCode: 0, stderr: detail)
         case .launchFailed(let tool, let detail): return .launchFailed(tool: tool, detail: detail)
         case .usageRejected(let detail): return .unreadable(tool: "harflow-ctl", exitCode: 2, stderr: detail)
+        }
+    }
+
+    /// Runs `run` or `resume` through the phase-tagged exchange and classifies it with the shared rules.
+    func conversationStart(command: String, options: [String], positionals: [String]) async -> ConversationLaunchOutcome {
+        let exchange = await conversationExchange(command: command, options: options, positionals: positionals,
+                                                  timeout: Self.startTimeout)
+        let classified: ConversationDeliveryOutcome<ConversationLaunchMarker, String>
+        switch exchange {
+        case .notLaunched(let cause):
+            return .notDispatched(cause)
+        case .launched(let launched):
+            classified = classifyConversationMutation(launched, command: command, options: options,
+                                                      request: ConversationLaunchMarker(), timeout: Self.startTimeout) {
+                guard let id = $0["task_id"]?.stringValue, ConversationDeliveryWire.isIdentifier(id) else { return nil }
+                return id
+            }
+        }
+        switch classified {
+        case .accepted(let taskID): return .launched(taskID: taskID)
+        case .notDispatched(_, let cause): return .notDispatched(cause)
+        case .engineError(_, let error): return .engineError(error)
+        case .uncertain(_, .receiptIdentityMismatch):
+            return .uncertain(.inconsistentEnvelope(exitCode: 0, detail: "launch result carries no usable task id"))
+        case .uncertain(_, let cause) where cause.isExitThreeInconsistency:
+            // The classifier has validated the envelope; a validated `unknown` document at exit 3 is
+            // the engine's own "owner never answered" report. Keep its message.
+            if case .launched(.success(let output)) = exchange,
+               let unknown = CtlDocument.firstJSONObject(in: output.stdout)?["unknown"]?.objectValue {
+                return .uncertain(.processFailure(.unknownOutcome(message: unknown["message"]?.stringValue ?? "")))
+            }
+            return .uncertain(cause)
+        case .uncertain(_, let cause): return .uncertain(cause)
         }
     }
 
@@ -194,9 +255,9 @@ extension CtlClient {
     /// Classifies by phase and source. Anything after launch that no row matches is uncertain.
     func classifyConversationMutation<Request: Equatable & Sendable, Receipt: Equatable & Sendable>(
         _ launched: Result<ProcessOutput, ToolError>, command: String, options: [String],
-        request: Request, receipt decodeReceipt: ([String: JSONValue]) -> Receipt?
+        request: Request, timeout: Double = CtlClient.conversationMutationTimeout,
+        receipt decodeReceipt: ([String: JSONValue]) -> Receipt?
     ) -> ConversationDeliveryOutcome<Request, Receipt> {
-        let timeout = Self.conversationMutationTimeout
         let output: ProcessOutput
         switch launched {
         case .failure(.launchFailed(let tool, let detail)):
@@ -268,5 +329,15 @@ extension CtlClient {
         case (nil, nil):
             return inconsistent("neither result nor error")
         }
+    }
+}
+
+// MARK: - ConversationDeliveryUncertainCause launch helpers
+
+private extension ConversationDeliveryUncertainCause {
+    /// An inconsistent envelope reported at exit 3.
+    var isExitThreeInconsistency: Bool {
+        if case .inconsistentEnvelope(exitCode: 3, _) = self { return true }
+        return false
     }
 }
