@@ -5,7 +5,7 @@
 //  Ported from the app target's `InspectorView.swift`. "Now" reads the timeline's current running
 //  tool; "Details"/"Enforcement" read the raw snapshot (falling back to the listing). "Files
 //  changed" (git) and the "Branch" row are gone (piece 2/3 of the Monitor architecture plan — see
-//  the Summary tab's "Files edited" section instead).
+//  the summary's "Files edited" section instead).
 //
 //  Redesign phase 5 (settled plan D14/D17): the plain "Details" (Agent, Access, Started, Started
 //  by) and the copy buttons come first; everything the old panel showed — session, lineage, limits,
@@ -35,7 +35,7 @@ struct InspectorModel {
     var showsContinuity: Bool { task.status.isRunning && detail.status.isRunning && detail.supervision?.hasHealthyContinuity == true }
     let notices: [String]
     /// What harflow reports as enforced (`HfUI.EnforcementText.lines(_:)`, mapped in the VM from
-    /// the snapshot-or-listing `detail`) — moved here from the Summary tab (item 15). Empty when
+    /// the snapshot-or-listing `detail`) — moved here from the summary (item 15). Empty when
     /// nothing was reported; defaults so call sites that read a bare task (previews, older tests)
     /// keep building.
     var enforcementLines: [String] = []
@@ -49,7 +49,7 @@ struct InspectorModel {
 
     /// "What was enforced" shows only once there are lines to list or a settled snapshot carried
     /// none — never while the snapshot itself hasn't loaded (item 15 moved the section here from
-    /// the Summary tab).
+    /// the summary).
     var showsEnforcement: Bool {
         !enforcementLines.isEmpty || InspectorModel.showsEnforcementNotRecorded(detail: detail, hasSnapshot: hasSnapshot)
     }
@@ -221,7 +221,7 @@ struct TaskSnapshotFactsView: View {
         "PID \(value.pid) · \(value.startTime)"
     }
 
-    /// "What was enforced" (Summary-tab item 15: the section moved here): the plain
+    /// "What was enforced" (item 15: the section moved here): the plain
     /// `HfUI.EnforcementText` sentences, plus the not-recorded note once a snapshot settled
     /// without any enforcement data.
     private func enforcement(_ model: InspectorModel) -> some View {

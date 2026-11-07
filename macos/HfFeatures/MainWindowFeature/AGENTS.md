@@ -4,7 +4,7 @@ Root AGENTS.md applies (`../../AGENTS.md`).
 
 The main window's whole split view, including its own navigation view: Sidebar (task list,
 search/backend filter, parallel runs), New Session (start a headless task), Parallel (one column per
-group member), and TaskDetail (Activity/Summary/Prompt tabs, a Raw events sheet, the Inspector, the
+group member), and TaskDetail (the Activity feed, the Events and Summary content, the Inspector, the
 MessageBox). `MainWindowCoordinator.start()` returns `MainWindowNavigationView` — the
 `NavigationSplitView` is generic over the `MainWindowNavigationCoordinator` protocol, never the concrete coordinator. There is
 no embedded terminal anywhere in this package:
@@ -71,10 +71,9 @@ no embedded terminal anywhere in this package:
   (`MonitorCore.ConversationTimeline.rows(members:)` — pairing stays scoped per member, since call
   ids and `seq` both restart per task) with a turn separator ahead of every follow-up; a row's `live`
   flag is per-turn, so an unresolved tool call in an older, already-terminal turn never shows a
-  spinner even while the newest turn runs. The Summary tab's "Files edited" merges every
-  member's own `EditedFiles.build(from:repoPath:)` result (`EditedFiles.build(fromMembers:repoPath:)`)
-  and aggregates their `EventAvailability` (`SummaryPaneModel.aggregateAvailability(_:)`) rather than
-  reading one task's stream. Every action (send/cancel/take over/copy resume command/continue)
+  spinner even while the newest turn runs. The summary's "Files edited" merges each
+  member's `observationFrames[_].summary` projection, and the VM derives availability from those
+  frames, rather than reading one task's stream. Every action (send/cancel/take over/copy resume command/continue)
   targets the conversation's current member (`TaskDetailVM.currentTaskID`), never the VM's own fixed
   `taskID`. Continue (`submitMessage`'s resume branch) no longer navigates on success — the
   conversation stays selected, and the new turn appears once `tasksPublisher` picks up the new member
@@ -127,13 +126,13 @@ no embedded terminal anywhere in this package:
 - `.id(id)` for `buildTaskDetailView(id:)`'s per-task VM reset follows the exact same rule as
   `buildParallelView(name:)` above: applied at the coordinator call site, wrapping the whole
   `TaskDetailView(vm)` value — never inside `TaskDetailView.body`.
-- TaskDetail's Summary tab replaced the git-backed
+- TaskDetail's summary model replaced the git-backed
   Changes tab outright — no git guard, no poll, no `Scheduling` dependency in this package any more.
   `TaskDetailVM+Summary.swift` rebuilds `SummaryPaneModel` synchronously on every `recompute()`
   from the task's own reported fields (`TaskInfo.summary`/`notices`/`permissionDenials`/
-  `enforcement`/`totalCostUSD`/`numTurns`/`raw["usage"]`) and its raw event stream — "Files edited"
-  pairs `tool_call`/`tool_result` events by `call_id` (`MonitorCore.EditedFiles`),
-  never git. `TaskDetailUseCase.eventsAvailability(for:)`/`eventsAvailabilityPublisher(for:)`
+  `enforcement`/`totalCostUSD`/`numTurns`/`raw["usage"]`) and the observed activity summaries — "Files edited"
+  merges each conversation member's already-paired projection
+  (`observationFrames[_].summary`), never git. `TaskDetailUseCase.eventsAvailability(for:)`/`eventsAvailabilityPublisher(for:)`
   (backed by `EventStreamRepository`) carry the tailer's `loading`/`available`/`unavailable` state
   so an empty edit list is never confused with "the log couldn't be read".
 - Take over (`TaskDetailVM+Actions.swift`'s `didTapTakeover()`, `ParallelVM`'s `didTapTakeover(taskID:)`)

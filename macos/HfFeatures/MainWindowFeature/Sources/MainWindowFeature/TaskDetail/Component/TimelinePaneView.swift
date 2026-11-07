@@ -2,7 +2,7 @@
 //  TimelinePaneView.swift
 //  MainWindowFeature
 //
-//  The Activity tab's feed. Bottom-aware following stays local `@State` per the screen
+//  The Activity feed. Bottom-aware following stays local `@State` per the screen
 //  shape's own allowance — the VM never owns it, nor which tool cards are expanded (keyed by the
 //  card's stable group id). Plain rows render through the package-root `TimelineRow` shared with the
 //  Parallel screen; adjacent tool calls render as `ToolGroupCardView`s.

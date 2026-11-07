@@ -334,27 +334,6 @@ import Testing
         #expect(sut.hasListed == true)
     }
     
-    // MARK: - MS-DETAIL-2: tabs (no embedded terminal — the Terminal tab never exists; Summary
-
-    // replaced the git-backed Changes tab, piece 2/3 of the Monitor architecture plan)
-
-    @Test func givenATaskShown_whenListingTabs_thenTheyAreTheFixedFourWithNoTerminal() async {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let tasksSubject = harness.tasksSubject
-        let detailBox = harness.detailBox
-        detailBox.value = task()
-        sut.didAppear()
-
-        // when
-        tasksSubject.send([task()])
-        await waitUntil { sut.task != nil }
-
-        // then
-        #expect(sut.tabs == [.activity, .summary, .prompt])
-    }
-
     // MARK: - Piece 2/3: no git use-case calls are ever made from the VM any more
 
     @Test func givenATaskLifecycle_whenObserved_thenNoGitUseCaseMembersAreEverCalled() async {

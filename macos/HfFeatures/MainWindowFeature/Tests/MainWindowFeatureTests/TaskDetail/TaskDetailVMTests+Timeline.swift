@@ -14,15 +14,14 @@ import Testing
 /// repository's own already-built `items(for:)`/`itemsPublisher(for:)` snapshot (`itemsByMember`),
 /// never by rebuilding `Timeline.items(from:)` over the whole raw event history — that rebuild, run
 /// for every conversation member on every single publication (including every coalesced delta
-/// flush), is exactly what made a running task's Timeline tab O(n²) over its lifetime. Summary, kept
-/// on raw events for "Files edited", is gated so it only recomputes while its own tab is
-/// actually shown.
+/// flush), is exactly what made a running task's timeline O(n²) over its lifetime. The summary
+/// model recomputes on every update.
 @MainActor
 extension TaskDetailVMTests {
 
     @Test
     func givenItemsForDivergesFromARebuildOfRawEvents_whenBuildingTheTimeline_thenTheRepositorysOwnItemsWin() async {
-        // given — deliberately DIVERGENT: `events(for:)` (Raw Events/Summary) tells one story,
+        // given — deliberately DIVERGENT: `events(for:)` (the raw events) tells one story,
         // `items(for:)` (the Timeline's own source) tells a completely different one. If the VM ever
         // fell back to rebuilding the Timeline via `Timeline.items(from: events(for:))` instead of
         // consuming `items(for:)`/`itemsPublisher(for:)` directly, it would show the events-derived
@@ -50,7 +49,7 @@ extension TaskDetailVMTests {
             return nil
         }
         #expect(texts == ["FROM THE REPOSITORYS OWN ITEMS"])
-        // Raw Events, unaffected — it still reads `events(for:)` directly, never `items(for:)`.
+        // The raw events are unaffected by the repository's items.
         #expect(harness.sut.rawEvents.count == 1)
         if case .assistantText(let text, _, _) = harness.sut.rawEvents[0].kind {
             #expect(text == "FROM RAW EVENTS")
@@ -169,10 +168,10 @@ extension TaskDetailVMTests {
         #expect(harness.sut.timelineModel.emptyText != nil)
     }
 
-    // MARK: - Summary recomputes only while shown (Monitor piece 8, Codex review round 2, finding 2)
+    // MARK: - Summary recomputes without any selection
 
     @Test
-    func givenEventsFactsAreVisible_whenQualifiedEditObservationArrives_thenSummaryUpdatesWithoutRemovedTabSelection() async {
+    func givenEventsFactsAreVisible_whenQualifiedEditObservationArrives_thenSummaryUpdates() async {
         // given — captured summary facts live in Events alongside the transcript.
         let harness = makeSUT()
         let running = task(status: "running", repoPath: "/repo")
@@ -180,10 +179,9 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
-        #expect(harness.sut.tab == .activity, "the default tab — Summary has never been shown")
         #expect(harness.sut.summaryModel.editedFiles.isEmpty)
 
-        // when — an edit arrives while the Timeline tab (not Summary) is showing.
+        // when — an edit arrives.
         harness.eventsBox.value = [
             TaskEvent(line: #"{"product":"harflow","format":"harflow.event","v":1,"product_version":"1.0.0","#
             + #""seq":0,"kind":"tool_call","call_id":"c1","tool":"Edit","category":"edit","input_preview":"","path":"/repo/a.swift"}"#)!,
@@ -192,16 +190,8 @@ extension TaskDetailVMTests {
         ]
         harness.itemsSubject.send([])
 
-        // then — the approved Events facts consume the public summary without a removed tab.
+        // then — the summary model carries the edit.
         await waitUntil { harness.sut.summaryModel.editedFiles == [EditedFile(path: "a.swift", status: .edited)] }
-        #expect(harness.sut.summaryModel.editedFiles == [EditedFile(path: "a.swift", status: .edited)])
-
-        // when — switching TO Summary recomputes it immediately from the data already gathered.
-        harness.sut.didSelectTab(.summary)
-
-        await waitUntil { harness.sut.timelineWorker == nil && harness.sut.latestTimelineInput != nil }
-
-        // then
         #expect(harness.sut.summaryModel.editedFiles == [EditedFile(path: "a.swift", status: .edited)])
     }
 }

@@ -35,7 +35,6 @@ import Testing
         // then
         fixture.harness.itemsSubject.send([PreviewFixtures.textItem("New streamed output")])
         await waitUntil { fixture.harness.sut.timelineModel.rows.count == 1 }
-        fixture.harness.sut.didSelectTab(.summary)
         fixture.pump()
         #expect(fixture.evaluations == baseline)
         #expect(itemIDs == toolbar.items.map(ObjectIdentifier.init))

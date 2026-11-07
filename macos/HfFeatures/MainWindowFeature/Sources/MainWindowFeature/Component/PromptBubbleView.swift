@@ -3,7 +3,7 @@
 //  MainWindowFeature
 //
 //  A right-aligned tinted bubble for a prompt or a message the user sent. Long text is clamped to
-//  three lines with an inline "Show more" that expands in place — it never jumps to the Prompt tab.
+//  three lines with an inline "Show more" that expands in place — it never navigates away.
 //
 
 import HfUI

@@ -2,17 +2,17 @@
 //  TaskDetailVM+Summary.swift
 //  MainWindowFeature
 //
-//  The Summary tab (piece 2/3 of the Monitor architecture plan): git is gone; everything here comes
-//  from the task's own reported fields and its raw event stream. No poll, no generation guard — the
+//  The summary model (piece 2/3 of the Monitor architecture plan): git is gone; everything here comes
+//  from the task's own reported fields and the observed activity summaries. No poll, no generation guard — the
 //  git flow (`TaskDetailVM+Changes.swift`, removed) needed both because it awaited a network-ish
 //  process each time; this is a pure, synchronous rebuild from data the VM already holds.
 //
 //  Monitor piece 7: the final answer, refusals and usage stay the CURRENT member's own (Design
-//  point 6); "Files edited" is built across every member's own events
-//  (`SummaryPaneModel.build(task:summary:memberEventsOldestFirst:memberAvailabilities:)`), pairing
-//  each member's calls/results independently (Review round 1, item 1).
+//  point 6); "Files edited" is merged across every member's own
+//  observed summary projection (`observationFrames[_].summary`), already paired per member; the
+//  base model is built with no raw events.
 //
-//  "What was enforced" no longer lives here (Summary-tab item 15): the Inspector's own model
+//  "What was enforced" no longer lives here (item 15): the Inspector's own model
 //  carries the enforcement lines now — see `TaskDetailVM+Inspector.swift`.
 //
 

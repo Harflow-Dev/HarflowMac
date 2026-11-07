@@ -137,7 +137,7 @@ extension ActivityFeedApprovalHostedTests {
         }
         timeline.onCancelQueuedMessage = { _ in }
         vm.timelineModel = timeline
-        try #require(vm.task != nil && vm.hasListed && vm.tab == .activity && !timeline.isLoading)
+        try #require(vm.task != nil && vm.hasListed && !timeline.isLoading)
         let fixture = RedesignHost(
             TaskDetailView(vm).preferredColorScheme(appearance).environment(\.hfReduceMotionOverride, true),
             size: CGSize(width: 1000, height: 700), appearance: appearance

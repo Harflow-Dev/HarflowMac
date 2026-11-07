@@ -37,9 +37,6 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var copyResumeCommandHelp = "Copies a command that resumes this session in your own terminal."
     var turnsText: String?
 
-    var tab: TaskTab = .activity
-    var tabs: [TaskTab] = [.activity, .summary, .prompt]
-
     var timelineModel = TimelinePaneModel(
         stepCountText: "1 activity item",
         rows: [ConversationTimelineRow(
@@ -109,7 +106,6 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
 
     func didAppear() {}
     func didDisappear() {}
-    func didSelectTab(_ tab: TaskTab) { self.tab = tab }
     func didTapTask(_: String) {}
     func didTapTakeover() {}
     func didTapCancel() {}

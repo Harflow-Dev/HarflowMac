@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the old segmented control from the task loading skeleton, and unused raw-events views and task tab code.
+
 - Add a `task-changes.v1` client and repository, with a bounded read and an explicit completeness result. It has no callers and no UI; evidence is contract fixtures and fake-runner tests only.
 
 - Insert new activity rows in place instead of reloading the whole table, keeping your reading position, including when rows slide out of the 100-row window. Applies to task, Parallel and workflow activity.

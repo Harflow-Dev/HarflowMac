@@ -2,7 +2,7 @@
 //  ActivityRow.swift
 //  MainWindowFeature
 //
-//  The Activity tab's own row model: MonitorCore's `ConversationTimelineRow`s with adjacent tool
+//  The Activity feed's own row model: MonitorCore's `ConversationTimelineRow`s with adjacent tool
 //  calls folded into cards. `ActivityRowsBuilder` produces them; the raw rows stay on
 //  `TimelinePaneModel.rows` (the inspector's step count reads those, not these).
 //

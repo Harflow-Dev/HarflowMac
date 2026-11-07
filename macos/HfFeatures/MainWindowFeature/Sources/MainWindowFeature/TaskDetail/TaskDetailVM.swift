@@ -104,7 +104,7 @@ protocol TaskDetailUseCase: Sendable {
     func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never>
     func items(for id: String) -> [TimelineItem]
     func itemsPublisher(for id: String) -> AnyPublisher<[TimelineItem], Never>
-    /// Threaded through so the Summary tab's "Files edited" section can tell "nothing has
+    /// Threaded through so the summary's "Files edited" section can tell "nothing has
     /// happened yet" apart from "there is no log to read at all" — an empty `events(for:)` cannot.
     func eventsAvailability(for id: String) -> EventAvailability
     func eventsAvailabilityPublisher(for id: String) -> AnyPublisher<EventAvailability, Never>
@@ -183,8 +183,6 @@ final class TaskDetailVM: TaskDetailViewModel {
     // file-scoped in Swift. They stay non-public (no external module can write them).
     var callerApprovalController: CallerApprovalController?
     @ObservationIgnored private var isMounted = false
-    var tab: TaskTab = .activity
-    var tabs: [TaskTab] = [.activity, .summary, .prompt]
 
     var timelineModel = TimelinePaneModel.empty
     var artifactMembers: [ArtifactMemberModel] = []
@@ -253,15 +251,15 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored var memberLeaseTokens: [String: UUID] = [:]
     @ObservationIgnored var leases: [String: any EventStreamLease] = [:]
     @ObservationIgnored var memberCancellables: [String: [AnyCancellable]] = [:]
-    /// Kept only for Summary/"Files edited" (`+Summary.swift`), which still pairs
-    /// `tool_call`/`tool_result` from raw events. The Timeline no longer reads this at all (Monitor
-    /// piece 8, Codex review round 2, finding 2) — see `itemsByMember` below.
+    /// Each member's decoded events. The timeline input carries only the current member's entry
+    /// (`+Timeline.swift`); the timeline's rows come from `itemsByMember` below, never rebuilt from
+    /// these events.
     @ObservationIgnored var eventsByMember: [String: [TaskEvent]] = [:]
     /// Each member's own ALREADY-BUILT timeline items, straight from
     /// `EventStreamRepository`'s incremental per-task `TimelineBuilder` snapshot
     /// (`itemsPublisher(for:)`/`items(for:)`) — never rebuilt here via `Timeline.items(from:)` (Monitor
     /// piece 8, Codex review round 2, finding 2: that one-shot rebuild, run for every member on every
-    /// publication, is exactly what made a running task's Timeline tab O(n²) over its lifetime).
+    /// publication, is exactly what made a running task's timeline O(n²) over its lifetime).
     @ObservationIgnored var itemsByMember: [String: [TimelineItem]] = [:]
     @ObservationIgnored var eventsAvailabilityByMember: [String: EventAvailability] = [:]
     @ObservationIgnored var latestSnapshots: [String: TaskInfo] = [:]
@@ -360,11 +358,6 @@ final class TaskDetailVM: TaskDetailViewModel {
         didSubscribe = false
     }
 
-    func didSelectTab(_ tab: TaskTab) {
-        self.tab = tab
-        if tab == .summary, let task { recomputeSummary(task: task) }
-    }
-
     func didTapTask(_ taskID: String) {
         routing.selectTask(taskID)
     }
@@ -450,15 +443,9 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// placement, age and every action target the conversation's **current** (newest) member; only
     /// the title and lineage come from its **first**.
     ///
-    /// Summary is the one piece deliberately NOT rebuilt on every call (Monitor piece 8, Codex review
-    /// round 2, finding 2): `recomputeSummary` pairs `tool_call`/`tool_result` across every member's
-    /// raw events, real work this VM previously repeated on every single delta publication even
-    /// though deltas are pure streamed TEXT and can never change which files were edited. Recomputing
-    /// it only while the Summary tab is actually shown — the simpler of the two options finding 2
-    /// offered, over gating on "did a non-delta event arrive" — means it stays correct the moment
-    /// it's visible (every update while shown still reaches it) and costs nothing while it is not;
-    /// `didSelectTab(_:)` recomputes it once more on switching TO that tab, so it is never stale on
-    /// arrival either.
+    /// The summary model is rebuilt on every call (`recomputeSummary` merges each member's observed
+    /// "Files edited" projection with the task's reported fields), so it is current for any surface
+    /// that reads it; nothing gates it on a selected view.
     func recompute() {
         guard let currentMember = conversationMembers.last, let detail = useCase.detail(currentMember.taskID) else {
             task = nil

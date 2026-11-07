@@ -11,8 +11,8 @@ unsupported, loading and long text in Light/Dark. Composer placement follows the
 
 | Surface | Presentation and public engine route |
 | --- | --- |
-| Task Activity/Summary/Prompt | Always offers queued Send and secondary Send now, including tasks without live input. `send --monitor` routes workflow-owned tasks through their run. Taken-over sessions explain why messaging is unavailable. |
-| Queued messages | Queued bubbles appear at the end of the Task Activity tab and of each Activity surface, with Cancel while queued. The Summary and Prompt tabs keep the composer but not the bubbles. `cancel-message` or `workflow-cancel-message --monitor` withdraws the exact message ID. |
+| Task screen | Always offers queued Send and secondary Send now, including tasks without live input. `send --monitor` routes workflow-owned tasks through their run. Taken-over sessions explain why messaging is unavailable. |
+| Queued messages | Queued bubbles appear at the end of the task Activity feed and of each Activity surface, with Cancel while queued. `cancel-message` or `workflow-cancel-message --monitor` withdraws the exact message ID. |
 | Workflow run | The canvas has no global composer. Select Orchestrator to open its right-hand Activity and composer; messages route through that activity’s exact task. |
 | Workflow create/edit | No workflow-window composer (#43). Builder tasks start from Generate and Edit with agent. An embedded builder task keeps its own sole composer. |
 | Selected node Activity | Every node’s right-hand Activity includes a composer. Task activities use their current task; native and fallback surfaces use `workflow-send --monitor --task-id`, child-workflow Activity addresses that child’s orchestrator. An unstarted or unavailable target shows a disabled composer with its specific reason. Empty activity keeps the header at the top, the placeholder centred in the remaining space and the composer at the bottom, including when an attempt picker is present. |

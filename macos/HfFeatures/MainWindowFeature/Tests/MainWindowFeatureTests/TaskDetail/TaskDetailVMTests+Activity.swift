@@ -103,7 +103,6 @@ extension TaskDetailVMTests {
         harness.sut.conversationHasMore = true
         harness.sut.recompute()
         #expect(harness.sut.inspectorModel?.activityNote?.contains("Partial") == true)
-        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesAvailability == .loading)
         #expect(harness.sut.summaryModel.editedFilesNote?.contains("incomplete") == true)
         harness.sut.didDisappear()
@@ -127,7 +126,6 @@ extension TaskDetailVMTests {
         #expect(!harness.sut.conversationHasMore)
         #expect(!harness.sut.timelineModel.history.hasMore)
         #expect(harness.sut.inspectorModel?.activityNote?.contains("Partial") == true)
-        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesNote?.contains("incomplete") == true)
         harness.sut.didDisappear()
         #expect(!harness.sut.conversationHistoryIncomplete)

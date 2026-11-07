@@ -206,7 +206,7 @@ import Testing
         let many = build(["num_turns": .number(3)])
         let one = build(["num_turns": .number(1)])
         // then — "Agent turns: N" is the backend's own reported count, deliberately distinct from
-        // the conversation-turn counts the header and Activity tab show.
+        // the conversation-turn counts the header and transcript show.
         #expect(many.hero?.turnsText == "Agent turns: 3")
         #expect(one.hero?.turnsText == "Agent turns: 1")
         #expect(many.hero?.backend == "claude")
@@ -463,7 +463,7 @@ import Testing
     // MARK: - What was enforced (item 15: moved to the Inspector; the Summary model carries none)
 
     @Test func givenEnforcementData_whenBuilt_thenTheSummaryModelCarriesNoEnforcementData() {
-        // given — enforcement still arrives on the task; the Summary tab just ignores it now.
+        // given — enforcement still arrives on the task; the summary pane just ignores it now.
         let withEnforcement = task(["enforcement": .object(["os_enforced": .bool(true)])])
         // when
         let model = SummaryPaneModel.build(task: withEnforcement, summary: nil, events: [], eventsAvailability: .available)

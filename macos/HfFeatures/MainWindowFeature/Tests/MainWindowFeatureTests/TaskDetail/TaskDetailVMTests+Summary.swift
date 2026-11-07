@@ -10,9 +10,8 @@ import MonitorCore
 import SwiftUI
 import Testing
 
-/// Piece 2/3 of the Monitor architecture plan: the Summary tab's "Files edited" section
-/// is fed from the live raw event stream the VM already holds — the same `rawEvents` the Raw
-/// events tab reads — so it must track every shape that stream can take: the history already on
+/// Piece 2/3 of the Monitor architecture plan: the summary's "Files edited" section
+/// is fed from the event stream the VM already observes, so it must track every shape that stream can take: the history already on
 /// disk when the screen first appears, a later append, a tailer reset, and a disappear/reappear
 /// cycle re-seeding it from scratch.
 @MainActor
@@ -30,7 +29,7 @@ extension TaskDetailVMTests {
         + #""seq":\#(seq),"kind":"tool_result","call_id":"\#(callID)","ok":true,"output_tail":""}"#)!
     }
 
-    // MARK: - `.summary` tab availability wiring
+    // MARK: - summary availability wiring
 
     @Test func givenEventsAvailabilityPublishes_whenObserved_thenSummaryModelTracksIt() async {
         // given
@@ -41,8 +40,6 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
-        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2).
-        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesAvailability == .loading)
 
         // when
@@ -74,9 +71,7 @@ extension TaskDetailVMTests {
         // when
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
-        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2).
         await waitUntil { harness.sut.task != nil }
-        harness.sut.didSelectTab(.summary)
 
         // then
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
@@ -92,7 +87,6 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
-        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // when — a second call arrives; `itemsPublisher` firing is what makes the VM re-read events
@@ -113,7 +107,6 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
-        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // when — the underlying log was replaced (a reset); the VM's own `events(for:)` read now
@@ -135,10 +128,6 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
-        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2);
-        // `tab` itself survives a disappear/reappear cycle (it is not part of the teardown), so the
-        // second `didAppear()` below recomputes Summary without needing to select the tab again.
-        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // when
@@ -152,7 +141,7 @@ extension TaskDetailVMTests {
         #expect(harness.sut.summaryModel.editedFiles == [EditedFile(path: "b.swift", status: .edited)])
     }
 
-    // MARK: - Enforcement no longer lives on the Summary tab (Summary item 15)
+    // MARK: - Enforcement no longer lives on the summary (Summary item 15)
 
     @Test func givenEnforcementData_whenTheSummaryIsRebuilt_thenTheModelCarriesNoEnforcementData() async {
         // given — the task still reports enforcement; the Inspector's model owns it now.
@@ -162,7 +151,6 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([running])
         await waitUntil { harness.sut.task != nil }
-        harness.sut.didSelectTab(.summary)
 
         // when / then
         await waitUntil { harness.sut.summaryModel.hero != nil }

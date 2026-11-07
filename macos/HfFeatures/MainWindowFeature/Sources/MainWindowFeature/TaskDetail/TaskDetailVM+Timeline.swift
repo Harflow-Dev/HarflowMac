@@ -2,13 +2,13 @@
 //  TaskDetailVM+Timeline.swift
 //  MainWindowFeature
 //
-//  The Timeline tab, the Prompt tab's text, and Raw Events. Unknown events never enter
+//  The Activity timeline model, the prompt text, and the raw events. Unknown events never enter
 //  `latestItems` (`Timeline.items(from:)` already drops `.unknown` — MS-DETAIL-6), so they can only
 //  ever appear in `rawEvents` (all decoded events, `TaskDetailVM.didAppear`/`itemsPublisher` sink).
 //
 //  Monitor piece 7: the Timeline concatenates every conversation member's own paired events
 //  (`MonitorCore.ConversationTimeline`, task-scoped pairing per Review round 1, item 1), oldest to
-//  newest, with a turn separator ahead of every follow-up. Raw Events and the events-path label stay
+//  newest, with a turn separator ahead of every follow-up. The raw events and the events-path label stay
 //  scoped to the conversation's CURRENT member only — a per-process debug view, not a merged one.
 //
 //  Monitor piece 8, Codex review round 2, finding 2: this reads each member's own ALREADY-BUILT
@@ -76,7 +76,7 @@ extension TaskDetailVM {
         return olderActivityRequest
     }
 
-    /// Rebuilds the Timeline tab's model: the concatenated conversation rows, whether the task is
+    /// Rebuilds the Activity timeline's model: the concatenated conversation rows, whether the task is
     /// live (per-turn — a running spinner never appears on an older, already-terminal turn even
     /// while the newest one runs), and the sub-task strip (children of ANY member, Design point 3).
     /// `allChildren` is `recompute()`'s own `allConversationChildren()` result (Monitor piece 11) —

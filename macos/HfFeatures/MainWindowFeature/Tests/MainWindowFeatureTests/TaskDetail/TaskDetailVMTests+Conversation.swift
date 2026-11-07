@@ -568,14 +568,11 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([taskA, taskB])
         await waitUntil { harness.sut.task != nil }
-        // Summary only recomputes while shown (Monitor piece 8, Codex review round 2, finding 2).
-        harness.sut.didSelectTab(.summary)
         await waitUntil { !harness.sut.summaryModel.editedFiles.isEmpty }
 
         // then
         #expect(Set(harness.sut.summaryModel.editedFiles.map(\.path)) == ["a.swift", "b.swift"])
         await waitUntil { !harness.sut.conversationLoading }
-        harness.sut.didSelectTab(.summary)
         #expect(harness.sut.summaryModel.editedFilesAvailability == .available)
     }
 }

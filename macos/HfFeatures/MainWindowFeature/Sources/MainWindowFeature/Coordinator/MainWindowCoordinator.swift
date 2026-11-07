@@ -319,7 +319,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// The `.id()` key is `id` normalised to its conversation's first member (Monitor piece 7,
     /// Review round 1 item 4), never the raw `id` this was called with: `id` may be any member (a
     /// URL/notification/breadcrumb can carry a non-first one), and two different members of the
-    /// SAME conversation must keep the identical VM instance — its own tab selection and message
+    /// SAME conversation must keep the identical VM instance — its own message
     /// draft — rather than rebuilding on every such navigation. `TaskDetailVM` itself is still built
     /// with the raw `id`; it resolves the whole conversation from whichever member it is given.
     public func buildTaskDetailView(id: String) -> AnyView {

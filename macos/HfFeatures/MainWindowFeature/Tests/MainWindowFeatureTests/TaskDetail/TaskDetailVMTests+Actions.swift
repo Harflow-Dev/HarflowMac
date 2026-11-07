@@ -228,7 +228,7 @@ extension TaskDetailVMTests {
     
     @Test func givenAnUnknownEvent_whenBuildingTheTimeline_thenItAppearsOnlyInRawEvents() async {
         // given — the repository's `items(for:)`/`itemsPublisher` never include an unknown event
-        // (`Timeline.items(from:)` drops it), while `events(for:)` (Raw Events) carries every line.
+        // (`Timeline.items(from:)` drops it), while `events(for:)` carries every line.
         let harness = makeSUT()
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject

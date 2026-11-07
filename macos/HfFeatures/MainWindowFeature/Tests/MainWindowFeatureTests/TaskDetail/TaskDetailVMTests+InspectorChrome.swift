@@ -149,9 +149,4 @@ extension TaskDetailVMTests {
         // when / then
         #expect(harness.sut.loadingHeader == nil)
     }
-
-    @Test func givenTheTabs_whenListingThem_thenTheirLabelsAreActivitySummaryPrompt() {
-        // given / when / then
-        #expect(TaskTab.allCases.map(\.rawValue) == ["Activity", "Summary", "Prompt"])
-    }
 }

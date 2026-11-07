@@ -2,9 +2,9 @@
 //  SummaryPaneView.swift
 //  MainWindowFeature
 //
-//  The Summary tab (piece 2/3 of the Monitor architecture plan): what the agent itself reported,
-//  never git. Replaces the git-backed Changes tab outright — "Files edited" reads the
-//  agent's own tool_call/tool_result pairs (`MonitorCore.EditedFiles`), not a diff.
+//  The summary content (piece 2/3 of the Monitor architecture plan): what the agent itself reported,
+//  never git. Replaces the git-backed Changes content outright — "Files edited" comes from the
+//  agent's own tool_call/tool_result pairs, not a diff.
 //
 
 import HfUI
@@ -166,7 +166,7 @@ struct SummaryPaneModel {
     /// Duration tile use. Without it the headline is status-only — the old `task.elapsed()` call
     /// fabricated an ever-growing duration for a settled task that had an exit but no recorded
     /// duration. The turns subline names the CURRENT agent run's own reported turns, deliberately
-    /// distinct from the conversation-turn counts shown in the header and the Activity tab.
+    /// distinct from the conversation-turn counts shown in the header and the Activity feed.
     static func heroParts(task: TaskInfo) -> SummaryHeroModel {
         let status = task.status
         let settledDuration = TaskSettledDuration.seconds(for: task)
@@ -212,7 +212,7 @@ struct SummaryPaneModel {
         return object["command"]?.stringValue ?? object["title"]?.stringValue ?? "an action"
     }
 
-    /// Builds the whole Summary tab from a task and its raw event stream. A pure mapping (decision
+    /// Builds the whole summary model from a task and its raw event stream. A pure mapping (decision
     /// 9), so it is testable without a VM harness. `summary` is passed in already resolved (the
     /// VM's own snapshot-preferring rule — `summary` is a snapshot-only field, nil on a bare
     /// listing) rather than read off `task` here, so this stays a pure function of its arguments.

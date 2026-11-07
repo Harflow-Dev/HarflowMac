@@ -3,8 +3,8 @@
 //  MainWindowFeature
 //
 //  Ported from the app target's `TaskDetailView.swift`/`TaskDetailContent`/`MessageBox`. The
-//  redesign (§6.2) restyles the header (title 18 semibold, agent/repo/turns/access meta line),
-//  left-aligns the segmented tabs and keeps every action, route and guard unchanged. `.id(taskID)`
+//  redesign (§6.2) restyles the header (title 18 semibold, agent/repo/turns/access meta line)
+//  and keeps every action, route and guard unchanged. `.id(taskID)`
 //  (F4-35) is applied by the caller (`MainWindowCoordinator.buildTaskDetailView`),
 //  never inside this view's own body — see that method's header comment and the phase-4 brief's
 //  binding Lesson.
@@ -15,14 +15,6 @@ import HfRepository
 import HfUI
 import MonitorCore
 import SwiftUI
-
-// MARK: - TaskTab
-
-/// The detail pane's tabs. Raw events are not a tab: they open as a sheet from the "…" menu.
-enum TaskTab: String, CaseIterable, Identifiable {
-    case activity = "Activity", summary = "Summary", prompt = "Prompt"
-    var id: String { rawValue }
-}
 
 // MARK: - AncestorCrumb
 
@@ -67,9 +59,6 @@ protocol TaskDetailViewModel: ViewModel {
     /// plain, never-followed-up task.
     var turnsText: String? { get }
 
-    var tab: TaskTab { get }
-    var tabs: [TaskTab] { get }
-
     var callerApprovalController: CallerApprovalController? { get }
     var timelineModel: TimelinePaneModel { get }
     var artifactMembers: [ArtifactMemberModel] { get }
@@ -90,7 +79,6 @@ protocol TaskDetailViewModel: ViewModel {
 
     func didAppear()
     func didDisappear()
-    func didSelectTab(_ tab: TaskTab)
     func didTapTask(_ taskID: String)
     func didTapTakeover()
     func didTapCancel()
@@ -472,7 +460,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         .accessibilityLabel("More actions")
     }
 
-    /// Content over the composer. Each tab centres its own content with `readingColumn()` inside its
+    /// Content over the composer. The feed centres its own content with `readingColumn()` inside its
     /// scroll view (settled plan D13), so scrollbars sit at the pane's edge.
     private var column: some View {
         VStack(spacing: HfRadius.Metrics.zero) {

@@ -167,14 +167,4 @@ extension TaskDetailVMTests {
             .calledEventually(1, before: .seconds(5))
     }
     
-    // MARK: - Item e: default tab
-    
-    @Test func givenAFreshVM_whenNoTabHasBeenSelected_thenTimelineIsTheDefaultTab() {
-        // given / when
-        let harness = makeSUT()
-        
-        // then
-        #expect(harness.sut.tab == .activity)
-    }
-    
 }

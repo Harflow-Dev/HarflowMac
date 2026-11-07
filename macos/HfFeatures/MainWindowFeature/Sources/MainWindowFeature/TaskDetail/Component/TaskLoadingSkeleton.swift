@@ -4,7 +4,7 @@
 //
 //  The task screen while its data is still arriving (the design's "Task loading — shimmer"
 //  artboards). It mirrors the loaded layout block for block — content header, the toolbar's four
-//  native items and their glass grouping, tab switcher, the 760 pt reading column, the composer —
+//  native items and their glass grouping, the 760 pt reading column, the composer —
 //  so nothing jumps when the content replaces it.
 //
 
@@ -30,13 +30,6 @@ struct TaskLoadingSkeleton: View {
             title
                 .padding(.horizontal, isEmbedded ? HfRadius.Metrics.spacing16 : HfRadius.Metrics.spacing24)
                 .padding(.top, HfRadius.Metrics.spacing12)
-            SlidingSegmentedControl(options: TaskTab.allCases.map { ($0, $0.rawValue) }, selection: .constant(.activity))
-                .disabled(true)
-                .opacity(0.6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, isEmbedded ? HfRadius.Metrics.spacing16 : HfRadius.Metrics.spacing24)
-                .padding(.top, isEmbedded ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing16)
-                .padding(.bottom, isEmbedded ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing16)
             ScrollView {
                 feed
                     .padding(.horizontal, HfRadius.Metrics.spacing24)

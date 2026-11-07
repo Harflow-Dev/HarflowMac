@@ -51,7 +51,7 @@ extension TaskDetailVM {
             hasSnapshot: snapshot != nil,
             restartHistory: continuityHistory.observations(for: detail.taskID),
             notices: InspectorModel.distinctNotices(detail.notices),
-            // Summary-tab item 15: "What was enforced" moved from the Summary tab to the
+            // Item 15: "What was enforced" moved from the summary to the
             // Inspector's "Technical info" disclosure — mapped here (decision 9) from the same
             // `HfUI.EnforcementText` source, read off the snapshot-or-listing `detail` exactly
             // like the "not recorded" rule beside it.
