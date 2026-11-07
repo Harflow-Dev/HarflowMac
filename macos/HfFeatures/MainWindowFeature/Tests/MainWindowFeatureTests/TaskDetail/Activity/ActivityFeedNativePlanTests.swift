@@ -4,10 +4,8 @@ import Foundation
 import Testing
 
 /// Headless coverage of the pure entry-diff plan: no window, hosting view or application state.
-/// Limit: the append cases use synthetic entries without the trailing bottom sentinel. `build`
-/// always ends its list with that sentinel, so a real row append currently plans `.structural`;
-/// `givenBuiltEntries_whenOneRowAppended_thenStructuralDueToBottomSentinelDefect` records that
-/// defect. The synthetic append tests do not establish that live appends avoid a table reload.
+/// The synthetic entry lists end with the bottom sentinel, as the production builder's do; the
+/// tail-insert plans over builder output are covered in `ActivityFeedNativeTailInsertPlanTests`.
 struct ActivityFeedNativePlanTests {
     private func entry(_ seq: Int, topSpacing: CGFloat = 20, fade: Bool = false) -> ActivityFeedNativeEntry {
         .row(ActivityFeedNativeEntry.Row(
@@ -16,7 +14,7 @@ struct ActivityFeedNativePlanTests {
     }
 
     private func entries(_ range: ClosedRange<Int>) -> [ActivityFeedNativeEntry] {
-        range.map { entry($0) }
+        range.map { entry($0) } + [.bottom(topSpacing: 0)]
     }
 
     private func model(rows: [ActivityRow]) -> ActivityFeedNativeModel {
@@ -43,7 +41,7 @@ struct ActivityFeedNativePlanTests {
     @Test func givenSameIDsWithRefreshedContent_whenPlanned_thenUnchanged() {
         // given — spacing and fade differ, ids do not.
         let previous = entries(1 ... 3)
-        let next = [entry(1, topSpacing: 12), entry(2, fade: true), entry(3)]
+        let next = [entry(1, topSpacing: 12), entry(2, fade: true), entry(3)] + [.bottom(topSpacing: 0)]
         // when
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
         // then
@@ -57,21 +55,21 @@ struct ActivityFeedNativePlanTests {
         #expect(plan == .unchanged)
     }
 
-    @Test func givenSentinelFreeEntries_whenTwoAppended_thenAppend() {
+    @Test func givenSentinelEntries_whenTwoAppended_thenTailInsertBeforeSentinel() {
         // given
         let previous = entries(1 ... 4)
         let next = entries(1 ... 6)
         // when
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
         // then
-        #expect(plan == .append)
+        #expect(plan == .tailInsert(removeLeading: 0, insertAt: 4, count: 2))
     }
 
-    @Test func givenSentinelFreeEntries_whenOneAppended_thenAppend() {
+    @Test func givenSentinelEntries_whenOneAppended_thenTailInsertBeforeSentinel() {
         // given / when
         let plan = ActivityFeedNativePlan.plan(previous: entries(1 ... 1), next: entries(1 ... 2))
         // then
-        #expect(plan == .append)
+        #expect(plan == .tailInsert(removeLeading: 0, insertAt: 1, count: 1))
     }
 
     @Test func givenEmptyPrevious_whenEntriesArrive_thenStructural() {
@@ -106,7 +104,7 @@ struct ActivityFeedNativePlanTests {
 
     @Test func givenRemovedInteriorEntry_whenPlanned_thenStructural() {
         // given
-        let next = [entry(1), entry(3), entry(4)]
+        let next = [entry(1), entry(3), entry(4)] + [.bottom(topSpacing: 0)]
         // when
         let plan = ActivityFeedNativePlan.plan(previous: entries(1 ... 4), next: next)
         // then
@@ -115,7 +113,7 @@ struct ActivityFeedNativePlanTests {
 
     @Test func givenReorderedEntries_whenPlanned_thenStructural() {
         // given
-        let next = [entry(2), entry(1), entry(3)]
+        let next = [entry(2), entry(1), entry(3)] + [.bottom(topSpacing: 0)]
         // when
         let plan = ActivityFeedNativePlan.plan(previous: entries(1 ... 3), next: next)
         // then
@@ -124,7 +122,7 @@ struct ActivityFeedNativePlanTests {
 
     @Test func givenReorderedEntriesWithAppend_whenPlanned_thenStructural() {
         // given
-        let next = [entry(2), entry(1), entry(3), entry(4)]
+        let next = [entry(2), entry(1), entry(3), entry(4)] + [.bottom(topSpacing: 0)]
         // when
         let plan = ActivityFeedNativePlan.plan(previous: entries(1 ... 3), next: next)
         // then
@@ -133,7 +131,7 @@ struct ActivityFeedNativePlanTests {
 
     @Test func givenInteriorIDEditWithAppend_whenPlanned_thenStructuralNotAppend() {
         // given — an interior entry is replaced while the list also grows.
-        let next = [entry(1), entry(9), entry(3), entry(4)]
+        let next = [entry(1), entry(9), entry(3), entry(4)] + [.bottom(topSpacing: 0)]
         // when
         let plan = ActivityFeedNativePlan.plan(previous: entries(1 ... 3), next: next)
         // then
@@ -142,7 +140,7 @@ struct ActivityFeedNativePlanTests {
 
     @Test func givenInteriorIDEditAtSameCount_whenPlanned_thenStructural() {
         // given
-        let next = [entry(1), entry(9), entry(3)]
+        let next = [entry(1), entry(9), entry(3)] + [.bottom(topSpacing: 0)]
         // when
         let plan = ActivityFeedNativePlan.plan(previous: entries(1 ... 3), next: next)
         // then
@@ -158,14 +156,14 @@ struct ActivityFeedNativePlanTests {
         #expect(plan == .structural)
     }
 
-    @Test func givenSentinelFreeLargeList_whenOneAppended_thenAppend() {
+    @Test func givenSentinelLargeList_whenOneAppended_thenTailInsertBeforeSentinel() {
         // given
         let previous = entries(1 ... 5_000)
         let next = entries(1 ... 5_001)
         // when
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
         // then
-        #expect(plan == .append)
+        #expect(plan == .tailInsert(removeLeading: 0, insertAt: 5_000, count: 1))
     }
 
     @Test func givenLargeList_whenIdenticalUpdate_thenUnchanged() {
@@ -194,17 +192,5 @@ struct ActivityFeedNativePlanTests {
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: built(count: 50))
         // then
         #expect(plan == .unchanged)
-    }
-
-    @Test func givenBuiltEntries_whenOneRowAppended_thenStructuralDueToBottomSentinelDefect() {
-        // given — real builder output; `build` ends every list with the bottom sentinel.
-        let previous = built(count: 50)
-        let next = built(count: 51)
-        // when
-        let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
-        // then — characterization of a current defect, not desired behaviour: a new row reloads
-        // the whole table because the trailing bottom sentinel shifts position. Update this
-        // expectation with the fix.
-        #expect(plan == .structural)
     }
 }

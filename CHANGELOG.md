@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Insert new activity rows in place instead of reloading the whole table, keeping your reading position, including when rows slide out of the 100-row window. Applies to task, Parallel and workflow activity.
+
 - Add explicit conversation enrollment at launch to MonitorCore, with an outcome type in which an engine error does not imply that no task exists. It has no callers and no durable delivery; evidence is fixtures and fake-runner tests only, with no runtime qualification.
 
 - Sort workflow runs in the sidebar, and place them in Today or Earlier, by the later of their start and the engine's `resumed_at` time. Run pages remain ordered by `created_at`, so an old run beyond the loaded page that is no longer active appears only once paging reaches it.

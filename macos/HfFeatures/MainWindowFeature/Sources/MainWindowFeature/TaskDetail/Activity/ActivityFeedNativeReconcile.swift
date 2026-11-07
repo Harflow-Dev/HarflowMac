@@ -39,8 +39,8 @@ extension ActivityFeedNativeList.Coordinator {
             }
         }
 
-        // What an incoherent native window held — a detached document's synthetic moves —
-        // resumes first: its paging intent at the offset it reached, then its reading.
+        // What an incoherent native window held resumes first: its paging intent at the
+        // offset it reached, then its reading.
         resumeHeldReading()
         // The pending page settles before this transaction builds its entries, so a committed
         // request never leaves a stale loading header behind, and the retained boundary reveals
@@ -93,9 +93,8 @@ extension ActivityFeedNativeList.Coordinator {
         guard pendingPage != nil, let model, let state else { return }
         if case .header(.loading) = entries.first { return }
         let wasReconciling = reconciling
-        // Direct request callbacks can arrive before a bounds notification publishes the
-        // current reading. A header-only transaction captures that coherent native reading;
-        // a reconcile already owns any transferred regroup anchor and keeps it intact.
+        // A direct request callback can precede the bounds notification that publishes the
+        // reading; a reconcile already owns any transferred regroup anchor.
         if !wasReconciling { publishPosition() }
         reconciling = true
         defer { reconciling = wasReconciling }
@@ -108,41 +107,45 @@ extension ActivityFeedNativeList.Coordinator {
         publishPosition()
     }
 
-    /// Applies one reconcile plan to the table: an unchanged id set refreshes content and
-    /// heights, a pure append notes the new row count, and a structural change reloads — each
-    /// with at most one owned scroll write at its end.
+    /// Applies one reconcile plan: unchanged ids refresh content and heights, a tail insert
+    /// batches its removal and insertion, and a structural change reloads — each with at most
+    /// one owned scroll write at its end.
     private func apply(plan: ActivityFeedNativePlan, next: [ActivityFeedNativeEntry], following: Bool,
                        environmentHeightsInvalidated: Bool, rootsNeedRefresh: Bool) {
         guard let table else { return }
         switch plan {
         case .unchanged:
-            // Same entry ids: only content can change — and a same-ID change above the
-            // viewport shifts the rows below it, so every paused transaction captures the
-            // reading first, not only an environment refresh.
+            // Same ids: only content changes, and a same-ID change above the viewport shifts
+            // the rows below it, so every paused transaction captures the reading first.
             applyUnchanged(next: next, following: following,
                            environmentHeightsInvalidated: environmentHeightsInvalidated,
                            rootsNeedRefresh: rootsNeedRefresh)
-        case .append:
-            let changedIDs = installEntries(next)
-            let changed = measureChangedHeights()
-            guard positioned, table.window != nil else { return }
-            table.noteNumberOfRowsChanged()
-            if !changed.isEmpty { table.noteHeightOfRows(withIndexesChanged: changed) }
-            refreshVisibleCells(changedIDs: changedIDs, refreshAll: rootsNeedRefresh)
-            layoutNow()
-            if following { writeBottom() }
-        case .structural:
-            let captured = positioned && !following ? structuralReading(next: next) : nil
-            _ = installEntries(next)
-            _ = measureChangedHeights()
-            guard table.window != nil else { return }
-            table.reloadData()
-            layoutNow()
-            if positioned, following {
-                writeBottom()
-            } else if positioned, let captured {
-                restore(captured)
+        case .tailInsert(let removeLeading, let insertAt, let count):
+            // Environment and root-input changes remeasure every row; an unpositioned table
+            // has no reading to keep. Both reload.
+            if environmentHeightsInvalidated || rootsNeedRefresh || !positioned || table.window == nil {
+                applyStructural(next: next, following: following)
+            } else {
+                applyTailInsert(next: next, following: following, removeLeading: removeLeading,
+                                insertAt: insertAt, count: count)
             }
+        case .structural:
+            applyStructural(next: next, following: following)
+        }
+    }
+
+    private func applyStructural(next: [ActivityFeedNativeEntry], following: Bool) {
+        guard let table else { return }
+        let captured = positioned && !following ? structuralReading(next: next) : nil
+        _ = installEntries(next)
+        _ = measureChangedHeights()
+        guard table.window != nil else { return }
+        table.reloadData()
+        layoutNow()
+        if positioned, following {
+            writeBottom()
+        } else if positioned, let captured {
+            restore(captured)
         }
     }
 

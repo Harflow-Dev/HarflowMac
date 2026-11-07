@@ -400,6 +400,7 @@ def test_run_process_records_exit_probe_failures_and_cleans_owned_group(
 
 
 APPROVAL_SUITE = "MainWindowFeatureTests.ActivityFeedApprovalHostedTests"
+TAIL_INSERT_SUITE = "MainWindowFeatureTests.ActivityFeedNativeTailInsertHostedTests"
 OBSERVATION_SUITE = "MainWindowFeatureTests.ObservationHostedTests"
 ACCESS_OPTION_SUITE = "MainWindowFeatureTests.AccessOptionRowTests"
 M04_STATE_MATRIX_SUITE = "MainWindowFeatureTests.M04StateMatrixHostedTests"
@@ -410,6 +411,7 @@ SIDEBAR_RAIL_AX_SUITE = "MainWindowFeatureTests.SidebarNavigationRailFocusedAXHo
 SIDEBAR_BASELINE_SUITE = "MainWindowFeatureTests.SidebarNativeParityBaselineTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
+    TAIL_INSERT_SUITE,
     OBSERVATION_SUITE,
     ACCESS_OPTION_SUITE,
     M04_STATE_MATRIX_SUITE,

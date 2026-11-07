@@ -130,11 +130,16 @@ enum ActivityFeedNativeEntries {
 
 // MARK: - ActivityFeedNativePlan
 
-/// What one update does to the table. A pure append only notes the new row count (no existing
-/// row is touched); a structural change reloads the table and restores the reading position.
+/// What one update does to the table. A tail insert removes a leading run of entries (a window
+/// slide, with a lost "Beginning of activity" header) and inserts new rows ahead of the trailing
+/// approvals, tail and bottom sentinel, leaving every other entry in place; a structural change
+/// reloads the table and restores the reading position.
 enum ActivityFeedNativePlan: Equatable {
     case unchanged
-    case append
+    /// `removeLeading` counts the leading table entries removed from the previous list, a lost
+    /// header included. `insertAt` is the index, after that removal, of the first trailing
+    /// non-row entry, where `count` entries of the next list are inserted.
+    case tailInsert(removeLeading: Int, insertAt: Int, count: Int)
     case structural
 
     static func plan(previous: [ActivityFeedNativeEntry], next: [ActivityFeedNativeEntry]) -> Self {
@@ -142,10 +147,50 @@ enum ActivityFeedNativePlan: Equatable {
         let nextIDs = next.map(\.id)
         // Same entry ids: the table's structure is untouched and only content refreshes.
         guard previousIDs != nextIDs else { return .unchanged }
-        // Pure bottom append: the previous entries are exactly next's prefix.
-        guard !previous.isEmpty, nextIDs.count > previousIDs.count,
-              Array(nextIDs.prefix(previousIDs.count)) == previousIDs else { return .structural }
-        return .append
+        guard let old = Segments(previous), let new = Segments(next),
+              old.trailing == new.trailing, !old.rowIDs.isEmpty, !new.rowIDs.isEmpty,
+              let dropped = old.rowIDs.firstIndex(of: new.rowIDs[0]) else { return .structural }
+        let kept = old.rowIDs.count - dropped
+        guard new.rowIDs.count > kept, Array(old.rowIDs[dropped...]) == Array(new.rowIDs.prefix(kept)) else {
+            return .structural
+        }
+        let leadingOK = if dropped == 0 {
+            old.leading == new.leading && (old.leading.isEmpty || old.leading == [.beginning])
+        } else {
+            new.leading.isEmpty && (old.leading.isEmpty || old.leading == [.beginning])
+        }
+        guard leadingOK else { return .structural }
+        let removeLeading = dropped == 0 ? 0 : old.leading.count + dropped
+        return .tailInsert(removeLeading: removeLeading, insertAt: new.leading.count + kept,
+                           count: new.rowIDs.count - kept)
+    }
+
+    /// An entry list split into leading headers, one contiguous run of rows and the trailing
+    /// non-row entries. Rows are identified by their case, never by id.
+    private struct Segments {
+        var leading: [ActivityFeedNativeEntry.Header] = []
+        var rowIDs: [String] = []
+        var trailing: [String] = []
+
+        init?(_ entries: [ActivityFeedNativeEntry]) {
+            var inRun = false
+            var finished = false
+            for entry in entries {
+                switch entry {
+                case .row(let row):
+                    guard !finished else { return nil }
+                    inRun = true
+                    rowIDs.append(row.row.id)
+                case .header(let header) where !inRun && !finished:
+                    leading.append(header)
+                case .header:
+                    return nil
+                default:
+                    finished = true
+                    trailing.append(entry.id)
+                }
+            }
+        }
     }
 }
 
