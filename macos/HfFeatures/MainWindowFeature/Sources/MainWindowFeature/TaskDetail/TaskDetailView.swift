@@ -469,7 +469,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var column: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             content
-            MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow) { text in viewModel.submitMessage(text) }
+            MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow,
+                           style: transcriptStyle.isTranscript ? .transcript : .standard) { text in viewModel.submitMessage(text) }
                 .readingColumn()
         }
     }

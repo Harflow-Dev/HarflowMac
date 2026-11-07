@@ -33,16 +33,14 @@ struct TaskLoadingSkeleton: View {
                 .padding(.top, HfRadius.Metrics.spacing12)
             ScrollView {
                 feed
-                    .padding(.horizontal, HfRadius.Metrics.spacing24)
-                    .padding(.top, HfRadius.Metrics.spacing12)
+                    .padding(.horizontal, style.horizontalPadding(standard: HfRadius.Metrics.spacing24))
+                    .padding(.top, style.isTranscript ? TaskScreenStyle.Transcript.paddingTop : HfRadius.Metrics.spacing12)
                     .readingColumn()
                     // The document probe (§6.2): inside the skeleton feed's own document.
                     .background(ScrollChrome())
             }
             .frame(minHeight: HfRadius.Metrics.zero, maxHeight: .infinity, alignment: .top)
-            composer
-                .padding(.horizontal, HfRadius.Metrics.spacing24)
-                .padding(.bottom, HfRadius.Metrics.spacing20)
+            composerPlaceholder
                 .readingColumn()
         }
         .background(style.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
@@ -92,23 +90,31 @@ struct TaskLoadingSkeleton: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The bubble: navy with the tailed corner in the standard style; the loaded bubble's grey fill, plain
+    /// radius and padding in the transcript style, so it does not jump on load.
     private var promptBubble: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
             fractionBar(1, height: HfRadius.Metrics.spacing12)
             fractionBar(0.88, height: HfRadius.Metrics.spacing12)
             fractionBar(0.52, height: HfRadius.Metrics.spacing12)
         }
-        .padding(HfRadius.Metrics.spacing14)
+        .padding(.vertical, style.isTranscript ? TaskScreenStyle.UserBubble.paddingVertical : HfRadius.Metrics.spacing14)
+        .padding(.horizontal, style.isTranscript ? TaskScreenStyle.UserBubble.paddingHorizontal : HfRadius.Metrics.spacing14)
         .frame(width: HfRadius.Metrics.taskSkeletonPromptWidth)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
-                bottomLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
-                bottomTrailingRadius: HfRadius.Metrics.promptBubbleTailCornerRadius,
-                topTrailingRadius: HfRadius.Metrics.promptBubbleCornerRadius
-            )
-            .fill(Color.promptBubble)
-        )
+        .background {
+            if style.isTranscript {
+                RoundedRectangle(cornerRadius: TaskScreenStyle.UserBubble.cornerRadius)
+                    .fill(TaskScreenStyle.UserBubble.fill.color)
+            } else {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
+                    bottomLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
+                    bottomTrailingRadius: HfRadius.Metrics.promptBubbleTailCornerRadius,
+                    topTrailingRadius: HfRadius.Metrics.promptBubbleCornerRadius
+                )
+                .fill(Color.promptBubble)
+            }
+        }
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -149,6 +155,45 @@ struct TaskLoadingSkeleton: View {
     }
 
     // MARK: Composer
+
+    /// The composer placeholder with its wrapper: the loaded composer's surface and metrics in the transcript
+    /// style, the standard glass capsule otherwise.
+    @ViewBuilder
+    private var composerPlaceholder: some View {
+        if style.isTranscript {
+            let composer = TaskScreenStyle.Composer.self
+            let wrapper = TaskScreenStyle.ComposerWrapper.self
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                transcriptComposer
+                    .padding(.top, composer.paddingTop)
+                    .padding(.trailing, composer.paddingTrailing)
+                    .padding(.bottom, composer.paddingBottom)
+                    .padding(.leading, composer.paddingLeading)
+                    .background { TranscriptComposerSurface() }
+                // Reserves the enabled composer's hint row, so the surface does not move on load.
+                TranscriptComposerHint(text: MessageBoxModel.disabled.printedHint).hidden()
+            }
+            .padding(.horizontal, wrapper.paddingHorizontal)
+                .padding(.top, wrapper.paddingTop)
+                .padding(.bottom, wrapper.paddingBottom)
+                .frame(maxWidth: wrapper.maxWidth)
+                .frame(maxWidth: .infinity)
+        } else {
+            composer
+                .padding(.horizontal, HfRadius.Metrics.spacing24)
+                .padding(.bottom, HfRadius.Metrics.spacing20)
+        }
+    }
+
+    private var transcriptComposer: some View {
+        let composer = TaskScreenStyle.Composer.self
+        return HStack(spacing: HfRadius.Metrics.spacing10) {
+            SkeletonBlock(width: HfRadius.Metrics.taskSkeletonComposerWidth, height: HfRadius.Metrics.spacing12)
+            Spacer(minLength: HfRadius.Metrics.zero)
+            SkeletonBlock(width: composer.sendSize, height: composer.sendSize, cornerRadius: composer.sendSize / 2)
+        }
+        .frame(minHeight: composer.inputMinHeight)
+    }
 
     /// Mirrors the loaded composer: a rounded-18 glass capsule with a circular 32 pt send button.
     private var composer: some View {
@@ -287,6 +332,18 @@ private func skeletonPreview(_ header: TaskLoadingHeader?) -> some View {
 
 #Preview("Loading, title known - light") {
     skeletonPreview(TaskLoadingHeader(title: "MT-2477 vibe brief", repoName: "Carousell-iOS")).preferredColorScheme(.light)
+}
+
+#Preview("Loading, transcript - light") {
+    NavigationStack { TaskLoadingSkeleton(header: nil, style: .transcript) }
+        .frame(width: HfRadius.Metrics.taskDetailPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Loading, transcript - dark") {
+    NavigationStack { TaskLoadingSkeleton(header: nil, style: .transcript) }
+        .frame(width: HfRadius.Metrics.taskDetailPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
+        .preferredColorScheme(.dark)
 }
 
 #Preview("Loading, nothing known - dark") { skeletonPreview(nil).preferredColorScheme(.dark) }

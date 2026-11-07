@@ -64,6 +64,9 @@ no embedded terminal anywhere in this package:
   standalone task (`MainWindowCoordinator.buildTaskDetailView`) and Group
   (`GroupPresentationView`) mounts; off for the builder mount (`isEmbedded`), Parallel columns and
   workflow surfaces. Tool bodies are unbounded in height (no 220 point cap): a recorded deviation pending owner review.
+  `MessageBoxStyle` follows the same mounts through `TaskDetailView`: `.transcript` is the solid
+  `.hd-composer` surface, `.standard` keeps glass for Parallel and workflow composers. Field and actions stay
+  in one row with the printed hint; the stacked form and an editor swap wait on a design for Send now and locked states.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

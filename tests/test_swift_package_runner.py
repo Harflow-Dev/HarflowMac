@@ -405,6 +405,7 @@ OBSERVATION_SUITE = "MainWindowFeatureTests.ObservationHostedTests"
 ACCESS_OPTION_SUITE = "MainWindowFeatureTests.AccessOptionRowTests"
 M04_STATE_MATRIX_SUITE = "MainWindowFeatureTests.M04StateMatrixHostedTests"
 TRANSCRIPT_STYLE_SUITE = "MainWindowFeatureTests.ActivityFeedTranscriptStyleHostedTests"
+MESSAGE_BOX_STYLE_SUITE = "MainWindowFeatureTests.MessageBoxTranscriptStyleHostedTests"
 NEW_SESSION_COMPOSER_SUITE = "MainWindowFeatureTests.NewSessionComposerHostedTests"
 CENTERED_COMPOSER_SUITE = "MainWindowFeatureTests.CenteredComposerHostedTests"
 SIDEBAR_UNIFIED_SUITE = "MainWindowFeatureTests.SidebarUnifiedHostedTests"
@@ -417,6 +418,7 @@ HOSTED_SUITE_NAMES = (
     ACCESS_OPTION_SUITE,
     M04_STATE_MATRIX_SUITE,
     TRANSCRIPT_STYLE_SUITE,
+    MESSAGE_BOX_STYLE_SUITE,
     NEW_SESSION_COMPOSER_SUITE,
     CENTERED_COMPOSER_SUITE,
     SIDEBAR_UNIFIED_SUITE,

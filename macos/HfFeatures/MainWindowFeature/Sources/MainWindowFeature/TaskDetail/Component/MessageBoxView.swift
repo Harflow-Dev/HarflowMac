@@ -65,37 +65,113 @@ struct MessageBoxModel {
     /// Show the lock icon and `placeholder` in place of the text field.
     var isLocked = false
 
+    /// The printed hint under an enabled composer: the guaranteed shortcut, after the model's hint when it has one.
+    var printedHint: String { hint.isEmpty ? "⌘↩ to send" : hint + " · ⌘↩ to send" }
+
     static let disabled = MessageBoxModel(
         canSend: false, canContinue: false, isBusy: false,
         label: "Messages", hint: "", placeholder: MessageBoxDisabledReason.noSession.text, buttonLabel: "Continue"
     )
 }
 
+// MARK: - MessageBoxStyle
+
+/// The composer's presentation. `.standard` is the glass capsule every surface had before the task screen's
+/// metrics and the default everywhere; `.transcript` applies `TaskScreenStyle.Composer` and `ComposerWrapper`
+/// and is requested only by the standalone task and Group mounts of the task detail.
+enum MessageBoxStyle: Equatable {
+    case standard
+    case transcript
+
+    /// The transcript composer's "Send now" size (13 pt); not part of `TaskScreenStyle.Composer`.
+    static let sendNowSize: CGFloat = 13
+    /// The transcript composer's printed hint size (12 pt); not part of `TaskScreenStyle.Composer`.
+    static let hintSize: CGFloat = 12
+}
+
+// MARK: - UndimmedButtonStyle
+
+/// Returns the label as is. `.plain` dims a disabled button, which would blend the transcript send button's
+/// disabled fill with the page; the transcript chooses every state's colours itself.
+private struct UndimmedButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+// MARK: - TranscriptComposerHint
+
+/// The transcript composer's printed hint, shared with the skeleton so the two reserve the same row.
+struct TranscriptComposerHint: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(TaskScreenStyle.sans(size: MessageBoxStyle.hintSize))
+            .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+            .padding(.leading, TaskScreenStyle.Composer.paddingLeading)
+    }
+}
+
+// MARK: - TranscriptComposerSurface
+
+/// `.hd-composer`'s surface: `surface` fill, 1 pt `border`, and the two `--shadow-composer` layers in black ink.
+/// Shared with the loading skeleton's composer placeholder so the two cannot drift.
+struct TranscriptComposerSurface: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let composer = TaskScreenStyle.Composer.self
+        let shape = RoundedRectangle(cornerRadius: composer.cornerRadius)
+        ZStack {
+            ForEach(Array(composer.shadow.enumerated()), id: \.offset) { _, layer in
+                shape.fill(composer.fill.color)
+                    .shadow(
+                        color: Color.shadow.opacity(colorScheme == .dark ? layer.darkOpacity : layer.lightOpacity),
+                        // CSS blur is the full blur diameter; SwiftUI's radius is half of it.
+                        radius: layer.blur / 2,
+                        y: layer.offsetY
+                    )
+            }
+            shape.strokeBorder(composer.borderColor.color, lineWidth: composer.borderWidth)
+        }
+    }
+}
+
 // MARK: - MessageBoxView
 
 /// "Message this task" while a live-input run is going; "Continue" (a resume) once it settled.
-/// The redesign's composer (§3/§6.2): a rounded-18 Liquid Glass capsule with a circular 32 pt
-/// `accentFill` send button. The submit decision and every guard stay with the VM; this component
-/// still owns only its own text field. The printed hint is the guaranteed ⌘↩ shortcut the send
-/// button already declares — it must not imply a new key behavior.
+/// The redesign's composer (§3/§6.2). `.standard` is a rounded-18 Liquid Glass capsule with a circular
+/// 32 pt `accentFill` send button; `.transcript` is the task screen's `.hd-composer` (an opaque surface with
+/// a border, two shadow layers and a `TaskScreenStyle` send button). The submit decision and every guard stay
+/// with the VM; this component still owns only its own text field. The printed hint is the guaranteed ⌘↩
+/// shortcut the send button already declares — it must not imply a new key behavior.
 struct MessageBoxView: View {
     let model: MessageBoxModel
     var onSubmitNow: ((String) -> Bool)?
     var isCompact = false
+    var style: MessageBoxStyle = .standard
     let onSubmit: (String) -> Bool
     @State private var text = ""
+    @State private var isHoveringSend = false
     @FocusState private var fieldFocused: Bool
-
     private var isEnabled: Bool { model.canSend || model.canContinue }
 
     var body: some View {
+        switch style {
+        case .standard: standardBody
+        case .transcript: transcriptBody
+        }
+    }
+
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
             controls
             .padding(.horizontal, isCompact ? HfRadius.Metrics.spacing12 : HfRadius.Metrics.spacing16)
             .padding(.vertical, HfRadius.Metrics.spacing12)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: HfRadius.Metrics.composerCornerRadius))
             if isEnabled {
-                Text(model.hint.isEmpty ? "⌘↩ to send" : model.hint + " · ⌘↩ to send")
+                Text(model.printedHint)
                     .font(.hf(.caption))
                     .foregroundStyle(Color.tertiaryText)
                     .padding(.leading, HfRadius.Metrics.spacing16)
@@ -104,6 +180,28 @@ struct MessageBoxView: View {
         .padding(.horizontal, isCompact ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing24)
         .padding(.top, HfRadius.Metrics.spacing12)
         .padding(.bottom, HfRadius.Metrics.spacing20)
+    }
+
+    /// `.hd-composer` inside its task-screen wrapper. The wrapper is clear so the page background shows.
+    private var transcriptBody: some View {
+        let composer = TaskScreenStyle.Composer.self
+        let wrapper = TaskScreenStyle.ComposerWrapper.self
+        return VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            controls
+                .padding(.top, composer.paddingTop)
+                .padding(.trailing, composer.paddingTrailing)
+                .padding(.bottom, composer.paddingBottom)
+                .padding(.leading, composer.paddingLeading)
+                .background { TranscriptComposerSurface() }
+            if isEnabled {
+                TranscriptComposerHint(text: model.printedHint)
+            }
+        }
+        .padding(.horizontal, wrapper.paddingHorizontal)
+        .padding(.top, wrapper.paddingTop)
+        .padding(.bottom, wrapper.paddingBottom)
+        .frame(maxWidth: wrapper.maxWidth)
+        .frame(maxWidth: .infinity)
     }
 
     private var canSubmit: Bool {
@@ -133,13 +231,18 @@ struct MessageBoxView: View {
         }
     }
 
+    /// Standard splices the buttons into the caller's row; the transcript groups them `Composer.barGap` apart.
     @ViewBuilder private var actions: some View {
+        switch style {
+        case .standard: actionButtons
+        case .transcript:
+            HStack(spacing: TaskScreenStyle.Composer.barGap) { actionButtons }
+        }
+    }
+
+    @ViewBuilder private var actionButtons: some View {
         if let onSubmitNow {
-            Button("Send now") { if onSubmitNow(text) { text = "" } }
-                .buttonStyle(.plain)
-                .foregroundStyle(canSubmit ? Color.primaryText : Color.tertiaryText)
-                .disabled(!canSubmit)
-                .help("Ask for immediate delivery; an engine refusal keeps the message queued")
+            sendNowButton(onSubmitNow)
         }
         if !isCompact || fieldFocused {
             sendButton.keyboardShortcut(.return, modifiers: .command)
@@ -148,9 +251,63 @@ struct MessageBoxView: View {
         }
     }
 
-    /// A circular 32 pt `accentFill` button (§6.2); `buttonLabel` ("Send"/"Continue") is its tooltip
-    /// and accessibility label, and the printed ⌘↩ hint matches the shortcut it declares.
-    private var sendButton: some View {
+    @ViewBuilder
+    private func sendNowButton(_ onSubmitNow: @escaping (String) -> Bool) -> some View {
+        switch style {
+        case .standard:
+            Button("Send now") { if onSubmitNow(text) { text = "" } }
+                .buttonStyle(.plain)
+                .foregroundStyle(sendNowColor)
+                .disabled(!canSubmit)
+                .help("Ask for immediate delivery; an engine refusal keeps the message queued")
+        case .transcript:
+            Button("Send now") { if onSubmitNow(text) { text = "" } }
+                .buttonStyle(UndimmedButtonStyle())
+                .font(TaskScreenStyle.sans(size: MessageBoxStyle.sendNowSize))
+                .foregroundStyle(sendNowColor)
+                .disabled(!canSubmit)
+                .help("Ask for immediate delivery; an engine refusal keeps the message queued")
+        }
+    }
+
+    private var sendNowColor: Color {
+        switch style {
+        case .standard: canSubmit ? Color.primaryText : Color.tertiaryText
+        case .transcript: (canSubmit ? TaskScreenStyle.Colors.text : TaskScreenStyle.Colors.textTertiary).color
+        }
+    }
+
+    /// The send button: a circular `accentFill` button (§6.2) in the standard style, a `Composer.send*` circle in
+    /// the transcript style. `buttonLabel` ("Send"/"Continue") is its tooltip and accessibility label in both, and
+    /// the printed ⌘↩ hint matches the shortcut it declares.
+    @ViewBuilder private var sendButton: some View {
+        switch style {
+        case .standard: standardSendButton
+        case .transcript: transcriptSendButton
+        }
+    }
+
+    private var transcriptSendButton: some View {
+        let composer = TaskScreenStyle.Composer.self
+        let fill = canSubmit
+            ? (isHoveringSend ? composer.sendHoverFill : composer.sendFill)
+            : composer.sendDisabledFill
+        return Button(action: submit) {
+            Image(systemName: "arrow.up")
+                .font(.hf(.body, weight: .bold))
+                .foregroundStyle((canSubmit ? composer.sendForeground : composer.sendDisabledForeground).color)
+                .frame(width: composer.sendSize, height: composer.sendSize)
+                .background(Circle().fill(fill.color))
+                .contentShape(Circle())
+        }
+        .buttonStyle(UndimmedButtonStyle())
+        .disabled(!canSubmit)
+        .onHover { isHoveringSend = $0 }
+        .help("\(model.buttonLabel) (⌘↩)")
+        .accessibilityLabel(model.buttonLabel)
+    }
+
+    private var standardSendButton: some View {
         Button(action: submit) {
             Image(systemName: "arrow.up")
                 .font(.hf(.body, weight: .bold))
@@ -170,6 +327,60 @@ struct MessageBoxView: View {
 
     @ViewBuilder
     private var field: some View {
+        switch style {
+        case .standard: standardField
+        case .transcript: transcriptField
+        }
+    }
+
+    @ViewBuilder
+    private var transcriptField: some View {
+        let composer = TaskScreenStyle.Composer.self
+        if model.isLocked {
+            HStack(spacing: HfRadius.Metrics.spacing8) {
+                Image(systemName: "lock.fill").accessibilityHidden(true)
+                Text(model.placeholder)
+            }
+            .font(TaskScreenStyle.sans(size: composer.inputText.size))
+            .lineSpacing(TaskScreenStyle.lineSpacing(composer.inputText))
+            .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, composer.inputPaddingVertical)
+            .frame(minHeight: composer.inputMinHeight)
+            .accessibilityElement(children: .combine)
+        } else {
+            // macOS ignores a `prompt:` foreground colour, so the placeholder is an overlay in
+            // `Composer.placeholderColor`. The title is empty; VoiceOver gets the placeholder as the label.
+            // No `.lineSpacing`: it has no effect on a vertical-axis `TextField` (measured 17 pt per line,
+            // not the design's 22), a recorded deviation pending an editor swap.
+            TextField("", text: $text, axis: .vertical)
+                .focused($fieldFocused)
+                .scrollChromeScope()
+                .accessibilityLabel(model.placeholder)
+                .accessibilityHint(model.hint)
+                .lineLimit(1 ... 6)
+                .textFieldStyle(.plain)
+                .font(TaskScreenStyle.sans(size: composer.inputText.size))
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(model.placeholder)
+                            .font(TaskScreenStyle.sans(size: composer.inputText.size))
+                            .foregroundStyle(composer.placeholderColor.color)
+                            .lineLimit(1)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+            .foregroundStyle(composer.inputColor.color)
+            .disabled(!isEnabled)
+            .onSubmit(submit)
+            .padding(.vertical, composer.inputPaddingVertical)
+            .frame(minHeight: composer.inputMinHeight)
+        }
+    }
+
+    @ViewBuilder
+    private var standardField: some View {
         if model.isLocked {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 Image(systemName: "lock.fill").accessibilityHidden(true)
@@ -235,11 +446,38 @@ private func previewStack() -> some View {
     .background(Color.windowBG)
 }
 
+@MainActor
+private func transcriptPreviewStack() -> some View {
+    VStack(spacing: HfRadius.Metrics.spacing8) {
+        MessageBoxView(model: MessageBoxModel(
+            canSend: true, canContinue: false, isBusy: false, label: "Message this task",
+            hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
+            buttonLabel: "Send"
+        ), onSubmitNow: { _ in true }, style: .transcript) { _ in true }
+        MessageBoxView(model: MessageBoxModel(
+            canSend: false, canContinue: false, isBusy: false, label: "Messages", hint: "",
+            placeholder: MessageBoxDisabledReason.takenOver.text, buttonLabel: "Send", isLocked: true
+        ), style: .transcript) { _ in true }
+        MessageBoxView(model: .disabled, style: .transcript) { _ in true }
+    }
+    .frame(width: TaskScreenStyle.ComposerWrapper.maxWidth)
+    .padding(.vertical, HfRadius.Metrics.spacing16)
+    .background(TaskScreenStyle.Colors.pageBackground.color)
+}
+
 #Preview("Light") {
     previewStack().preferredColorScheme(.light)
 }
 
 #Preview("Dark") {
     previewStack().preferredColorScheme(.dark)
+}
+
+#Preview("Transcript, light") {
+    transcriptPreviewStack().preferredColorScheme(.light)
+}
+
+#Preview("Transcript, dark") {
+    transcriptPreviewStack().preferredColorScheme(.dark)
 }
 #endif

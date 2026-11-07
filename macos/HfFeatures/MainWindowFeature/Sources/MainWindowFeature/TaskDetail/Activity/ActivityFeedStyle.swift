@@ -57,6 +57,11 @@ extension TaskScreenStyle {
         Font(NSFont.monospacedSystemFont(ofSize: size, weight: weight))
     }
 
+    /// A fixed-size system font for a design size, bypassing HfUI's type scale (the transcript's own sizes).
+    static func sans(size: CGFloat) -> Font {
+        Font(NSFont.systemFont(ofSize: size))
+    }
+
     /// Extra line spacing that brings a system-font line of `size` to `lineHeight`.
     static func lineSpacing(_ spec: TextSpec) -> CGFloat {
         let font = NSFont.systemFont(ofSize: spec.size)
