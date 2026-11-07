@@ -111,6 +111,9 @@ public struct CtlClient: Sendable {
     func validateTransportOutput(
         _ output: ProcessOutput, command: String, options: [String], timeout: Double
     ) -> Result<ProcessOutput, ToolError> {
+        if command == "task-changes", output.stdout.count > TaskChangesLimits.maxDocumentBytes {
+            return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: "\(command) exceeded document byte limit"))
+        }
         if command == "task-events" || Self.isWorkflowActivity(command, options: options), output.stdout.count > 262144 {
             return .failure(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: "\(command) exceeded document byte limit"))
         }

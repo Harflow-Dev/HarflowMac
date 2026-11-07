@@ -92,6 +92,7 @@ public final class Module: HfModule {
         GlobalValues
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
+            .environment(\.taskChangesRepository, TaskChangesRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery, now: { .now }))
             .environment(\.qualificationRepository, QualificationRepositoryImpl(tooling: toolEnvironment, recovery: stateRecovery))
             .environment(\.statisticsRepository, StatisticsRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
     }

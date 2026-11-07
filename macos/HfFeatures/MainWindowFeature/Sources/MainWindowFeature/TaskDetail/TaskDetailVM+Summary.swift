@@ -8,7 +8,7 @@
 //  process each time; this is a pure, synchronous rebuild from data the VM already holds.
 //
 //  Monitor piece 7: the final answer, refusals and usage stay the CURRENT member's own (Design
-//  point 6); "Files the agent edited" is built across every member's own events
+//  point 6); "Files edited" is built across every member's own events
 //  (`SummaryPaneModel.build(task:summary:memberEventsOldestFirst:memberAvailabilities:)`), pairing
 //  each member's calls/results independently (Review round 1, item 1).
 //

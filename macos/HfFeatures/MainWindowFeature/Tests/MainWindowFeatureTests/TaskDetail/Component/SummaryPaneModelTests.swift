@@ -110,7 +110,7 @@ import Testing
         #expect(model.refusalLines == ["git commit", "a notice"])
     }
 
-    // MARK: - Files the agent edited: availability drives presence
+    // MARK: - Files edited: availability drives presence
 
     @Test func givenEventsLoading_whenBuilt_thenAvailabilityIsLoading() {
         // given / when

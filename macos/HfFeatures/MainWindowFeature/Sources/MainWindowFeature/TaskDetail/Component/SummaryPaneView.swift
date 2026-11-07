@@ -3,7 +3,7 @@
 //  MainWindowFeature
 //
 //  The Summary tab (piece 2/3 of the Monitor architecture plan): what the agent itself reported,
-//  never git. Replaces the git-backed Changes tab outright — "Files the agent edited" reads the
+//  never git. Replaces the git-backed Changes tab outright — "Files edited" reads the
 //  agent's own tool_call/tool_result pairs (`MonitorCore.EditedFiles`), not a diff.
 //
 
@@ -233,7 +233,7 @@ struct SummaryPaneModel {
     }
 
     /// The conversation-level version of `build(task:summary:events:eventsAvailability:)` (Monitor
-    /// piece 7): "Files the agent edited" pairs each member's own events independently
+    /// piece 7): "Files edited" pairs each member's own events independently
     /// (`EditedFiles.build(fromMembers:repoPath:)`, Review round 1 item 1), and availability is
     /// aggregated across every member's own lease (item 6).
     static func build(

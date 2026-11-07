@@ -71,7 +71,7 @@ no embedded terminal anywhere in this package:
   (`MonitorCore.ConversationTimeline.rows(members:)` — pairing stays scoped per member, since call
   ids and `seq` both restart per task) with a turn separator ahead of every follow-up; a row's `live`
   flag is per-turn, so an unresolved tool call in an older, already-terminal turn never shows a
-  spinner even while the newest turn runs. The Summary tab's "Files the agent edited" merges every
+  spinner even while the newest turn runs. The Summary tab's "Files edited" merges every
   member's own `EditedFiles.build(from:repoPath:)` result (`EditedFiles.build(fromMembers:repoPath:)`)
   and aggregates their `EventAvailability` (`SummaryPaneModel.aggregateAvailability(_:)`) rather than
   reading one task's stream. Every action (send/cancel/take over/copy resume command/continue)
@@ -131,8 +131,8 @@ no embedded terminal anywhere in this package:
   Changes tab outright — no git guard, no poll, no `Scheduling` dependency in this package any more.
   `TaskDetailVM+Summary.swift` rebuilds `SummaryPaneModel` synchronously on every `recompute()`
   from the task's own reported fields (`TaskInfo.summary`/`notices`/`permissionDenials`/
-  `enforcement`/`totalCostUSD`/`numTurns`/`raw["usage"]`) and its raw event stream — "Files the
-  agent edited" pairs `tool_call`/`tool_result` events by `call_id` (`MonitorCore.EditedFiles`),
+  `enforcement`/`totalCostUSD`/`numTurns`/`raw["usage"]`) and its raw event stream — "Files edited"
+  pairs `tool_call`/`tool_result` events by `call_id` (`MonitorCore.EditedFiles`),
   never git. `TaskDetailUseCase.eventsAvailability(for:)`/`eventsAvailabilityPublisher(for:)`
   (backed by `EventStreamRepository`) carry the tailer's `loading`/`available`/`unavailable` state
   so an empty edit list is never confused with "the log couldn't be read".

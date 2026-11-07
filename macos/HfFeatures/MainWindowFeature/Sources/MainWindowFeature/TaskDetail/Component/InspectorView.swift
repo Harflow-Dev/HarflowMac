@@ -5,7 +5,7 @@
 //  Ported from the app target's `InspectorView.swift`. "Now" reads the timeline's current running
 //  tool; "Details"/"Enforcement" read the raw snapshot (falling back to the listing). "Files
 //  changed" (git) and the "Branch" row are gone (piece 2/3 of the Monitor architecture plan — see
-//  the Summary tab's "Files the agent edited" section instead).
+//  the Summary tab's "Files edited" section instead).
 //
 //  Redesign phase 5 (settled plan D14/D17): the plain "Details" (Agent, Access, Started, Started
 //  by) and the copy buttons come first; everything the old panel showed — session, lineage, limits,

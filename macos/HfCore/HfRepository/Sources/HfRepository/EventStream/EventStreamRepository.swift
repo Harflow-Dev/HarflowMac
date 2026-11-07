@@ -48,7 +48,7 @@ public protocol EventStreamRepository: Sendable {
 
     /// Whether the task's event log could actually be read the last time it was tailed — `.loading`
     /// before any lease has been acquired or any read attempted. Lets a caller (the Summary tab's
-    /// "Files the agent edited" section) tell "nothing has happened yet" apart from "there is no log
+    /// "Files edited" section) tell "nothing has happened yet" apart from "there is no log
     /// to read at all", which an empty `events(for:)` cannot do on its own.
     func eventsAvailability(for taskID: String) -> EventAvailability
     func eventsAvailabilityPublisher(for taskID: String) -> AnyPublisher<EventAvailability, Never>

@@ -104,7 +104,7 @@ protocol TaskDetailUseCase: Sendable {
     func eventsPublisher(for id: String) -> AnyPublisher<[TaskEvent], Never>
     func items(for id: String) -> [TimelineItem]
     func itemsPublisher(for id: String) -> AnyPublisher<[TimelineItem], Never>
-    /// Threaded through so the Summary tab's "Files the agent edited" section can tell "nothing has
+    /// Threaded through so the Summary tab's "Files edited" section can tell "nothing has
     /// happened yet" apart from "there is no log to read at all" — an empty `events(for:)` cannot.
     func eventsAvailability(for id: String) -> EventAvailability
     func eventsAvailabilityPublisher(for id: String) -> AnyPublisher<EventAvailability, Never>
@@ -253,7 +253,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored var memberLeaseTokens: [String: UUID] = [:]
     @ObservationIgnored var leases: [String: any EventStreamLease] = [:]
     @ObservationIgnored var memberCancellables: [String: [AnyCancellable]] = [:]
-    /// Kept only for Summary/"Files the agent edited" (`+Summary.swift`), which still pairs
+    /// Kept only for Summary/"Files edited" (`+Summary.swift`), which still pairs
     /// `tool_call`/`tool_result` from raw events. The Timeline no longer reads this at all (Monitor
     /// piece 8, Codex review round 2, finding 2) — see `itemsByMember` below.
     @ObservationIgnored var eventsByMember: [String: [TaskEvent]] = [:]

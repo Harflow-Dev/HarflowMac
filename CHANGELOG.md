@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a `task-changes.v1` client and repository, with a bounded read and an explicit completeness result. It has no callers and no UI; evidence is contract fixtures and fake-runner tests only.
+
 - Insert new activity rows in place instead of reloading the whole table, keeping your reading position, including when rows slide out of the 100-row window. Applies to task, Parallel and workflow activity.
 
 - Add explicit conversation enrollment at launch to MonitorCore, with an outcome type in which an engine error does not imply that no task exists. It has no callers and no durable delivery; evidence is fixtures and fake-runner tests only, with no runtime qualification.

@@ -10,7 +10,7 @@ import MonitorCore
 import SwiftUI
 import Testing
 
-/// Piece 2/3 of the Monitor architecture plan: the Summary tab's "Files the agent edited" section
+/// Piece 2/3 of the Monitor architecture plan: the Summary tab's "Files edited" section
 /// is fed from the live raw event stream the VM already holds — the same `rawEvents` the Raw
 /// events tab reads — so it must track every shape that stream can take: the history already on
 /// disk when the screen first appears, a later append, a tailer reset, and a disappear/reappear

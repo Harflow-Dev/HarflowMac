@@ -74,6 +74,14 @@ to200names/16KiB UTF-8; cursors remain opaque and at most2048Unicode scalars.
 This typed foundation does not yet replace the application's private activity
 and cumulative-summary readers; their shared observation migration is M03-D2.
 
+## Task changes
+
+`TaskChanges*` decodes the `task-changes.v1` listing and text chunks on `CtlClient`, with
+`TaskChangesListingBuilder` and `TaskChangesTextAssembler` merging pages and chunks. `isComplete`
+alone does not mean no changes: only `hasNoChanges` does, because a missing repository, a capture
+reason or reported conflicts all stay complete. Unknown states remain open values. There are no
+callers yet.
+
 ## Conversation delivery adapters
 
 `ConversationDelivery/` holds typed adapters for the `conversation-delivery.v1`

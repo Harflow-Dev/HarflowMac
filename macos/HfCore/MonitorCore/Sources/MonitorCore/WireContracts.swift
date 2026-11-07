@@ -26,6 +26,9 @@ public enum CtlCapability {
     /// Permits bounded, integrity-reported task prompt reads.
     public static let taskPrompt = "task-prompt.v1"
 
+    /// Permits bounded reads of a task's stored repository differences.
+    public static let taskChanges = "task-changes.v1"
+
     /// Permits bounded discovery of recorded direct task successors.
     public static let taskSuccessors = "task-successors.v1"
 

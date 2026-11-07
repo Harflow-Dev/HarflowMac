@@ -15,7 +15,7 @@ import Testing
 /// never by rebuilding `Timeline.items(from:)` over the whole raw event history — that rebuild, run
 /// for every conversation member on every single publication (including every coalesced delta
 /// flush), is exactly what made a running task's Timeline tab O(n²) over its lifetime. Summary, kept
-/// on raw events for "Files the agent edited", is gated so it only recomputes while its own tab is
+/// on raw events for "Files edited", is gated so it only recomputes while its own tab is
 /// actually shown.
 @MainActor
 extension TaskDetailVMTests {

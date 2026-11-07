@@ -513,7 +513,7 @@ struct LineTailTests {
         #expect(sawSecond, "received so far: \(received)")
     }
 
-    // MARK: - EventAvailability (the Summary tab's "Files the agent edited" section needs to tell
+    // MARK: - EventAvailability (the Summary tab's "Files edited" section needs to tell
 
     // "nothing has happened yet" apart from "there is no log to read at all")
 
