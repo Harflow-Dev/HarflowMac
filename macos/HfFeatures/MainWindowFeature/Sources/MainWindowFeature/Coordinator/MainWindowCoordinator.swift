@@ -327,7 +327,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self, continuityHistory: continuityHistory)
         let conversationID = WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID
             ?? Lineage.conversationID(of: id, in: taskListRepository.tasks)
-        return TaskDetailView(vm).id(conversationID).eraseToAnyView()
+        return TaskDetailView(vm, transcriptStyle: .transcript).id(conversationID).eraseToAnyView()
     }
     
     // MARK: - ViewCoordinator

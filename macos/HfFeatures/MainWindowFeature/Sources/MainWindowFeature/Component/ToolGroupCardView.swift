@@ -24,12 +24,72 @@ struct ToolGroupCardView: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     @State private var seenMemberIDs: Set<String> = []
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     var body: some View {
-        GroupedActivityCard {
-            headerButton
-            if isExpanded { expandedContent }
+        if feedStyle.isTranscript {
+            transcriptBody
+        } else {
+            GroupedActivityCard {
+                headerButton
+                if isExpanded { expandedContent }
+            }
         }
+    }
+
+    // MARK: Transcript
+
+    /// `.hd-tool`: the head alone, collapsed; expanded, the file pills and each call as its own tool row,
+    /// indented under the head like a tool body.
+    private var transcriptBody: some View {
+        VStack(alignment: .leading, spacing: TaskScreenStyle.ToolBody.marginTop) {
+            Button(action: onToggle) {
+                transcriptHeader
+                    .textSelection(.disabled)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .transcriptToolHeadPlate()
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(isExpanded ? "Hides the individual calls" : "Shows the individual calls")
+            if isExpanded {
+                VStack(alignment: .leading, spacing: TaskScreenStyle.ToolBody.marginTop) {
+                    if !group.pillNames.isEmpty {
+                        FilePillsView(names: group.pillNames, paths: group.pillPaths, overflowCount: group.overflowCount)
+                    }
+                    ForEach(group.members) { member in
+                        ToolRow(model: ToolRowModel(call: member.call, result: member.result, live: member.live))
+                            .hfFadeIn(animate: !seenMemberIDs.contains(member.id))
+                            .onAppear { seenMemberIDs.insert(member.id) }
+                    }
+                }
+                .padding(.leading, TaskScreenStyle.ToolBody.marginLeading)
+            }
+        }
+    }
+
+    private var transcriptHeader: some View {
+        HStack(spacing: TaskScreenStyle.ToolHead.gap) {
+            Image(systemName: group.bucket.iconName)
+                .font(.hf(.body))
+                .frame(width: TaskScreenStyle.ToolBody.marginLeading - TaskScreenStyle.ToolHead.gap)
+                .foregroundStyle(TaskScreenStyle.ToolHead.iconColor.color)
+            Text(group.summary).monospacedDigit().lineLimit(1)
+            if let subtitle = group.subtitle {
+                Text(subtitle)
+                    .font(.hf(.secondary, design: .monospaced))
+                    .foregroundStyle(TaskScreenStyle.ToolHead.summaryCodeColor.color)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: HfRadius.Metrics.spacing8)
+            if group.isRunning { RunningSpinner(size: HfRadius.Metrics.spacing12) }
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(.hf(.secondary, weight: .semibold))
+                .foregroundStyle(TaskScreenStyle.ToolHead.iconColor.color)
+        }
+        .lineSpacing(TaskScreenStyle.toolHeadLineSpacing)
     }
 
     private var headerButton: some View {
@@ -97,6 +157,7 @@ struct FilePillsView: View {
     var paths: [String] = []
     let overflowCount: Int
     @Environment(\.openURL) private var openURL
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     var body: some View {
         PillFlowLayout(spacing: HfRadius.Metrics.spacing6) {
@@ -121,7 +182,7 @@ struct FilePillsView: View {
             .lineLimit(1)
             .padding(.horizontal, HfRadius.Metrics.spacing8)
             .padding(.vertical, HfRadius.Metrics.rowLineSpacing)
-            .background(Capsule().fill(Color.pillFill))
+            .background(Capsule().fill(feedStyle.pillFill))
     }
 }
 

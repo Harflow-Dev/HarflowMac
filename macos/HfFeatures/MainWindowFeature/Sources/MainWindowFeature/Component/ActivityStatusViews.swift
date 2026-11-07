@@ -30,6 +30,8 @@ struct StartLineView: View {
         return text
     }
 
+    @Environment(\.activityFeedStyle) private var feedStyle
+
     private var startedText: String {
         let name = backend.map(BackendStyle.displayName) ?? "Task"
         return "\(name) started"
@@ -43,7 +45,7 @@ struct StartLineView: View {
                 Text(AccessLabel.text(freedom: freedom))
                     .padding(.horizontal, HfRadius.Metrics.spacing6)
                     .padding(.vertical, HfRadius.Metrics.spacing2)
-                    .background(Capsule().fill(Color.pillFill))
+                    .background(Capsule().fill(feedStyle.pillFill))
             }
             Spacer(minLength: HfRadius.Metrics.zero)
             if let time {
@@ -71,6 +73,7 @@ struct ActivityNoticeView: View {
     let text: String
     let systemImage: String
     var style: Style = .info
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: HfRadius.Metrics.spacing6) {
@@ -81,7 +84,7 @@ struct ActivityNoticeView: View {
         .foregroundStyle(tint)
         .padding(.horizontal, HfRadius.Metrics.spacing12)
         .padding(.vertical, HfRadius.Metrics.spacing6)
-        .background(RoundedRectangle(cornerRadius: HfRadius.row).fill(Color.pillFill))
+        .background(RoundedRectangle(cornerRadius: HfRadius.row).fill(feedStyle.pillFill))
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
@@ -122,12 +125,38 @@ struct LiveStepLineView: View {
     @State private var isDimmed = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     private var reduceMotion: Bool {
         HfMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion)
     }
 
+    /// The transcript's `.hd-working` row replaces the single-dot line only; the Parallel variant is unchanged.
+    private var isWorkingRow: Bool { feedStyle.isTranscript && indicator == .singleDot }
+
     var body: some View {
+        if isWorkingRow {
+            workingRow
+        } else {
+            standardBody
+        }
+    }
+
+    /// `.hd-working`: the running glyph and the step, 13 pt `text-secondary`, 8 pt apart.
+    private var workingRow: some View {
+        HStack(spacing: TaskScreenStyle.Working.gap) {
+            TranscriptWorkingGlyph()
+            Text(text)
+                .font(.hf(.body))
+                .foregroundStyle(TaskScreenStyle.Working.color.color)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var standardBody: some View {
         HStack(spacing: HfRadius.Metrics.spacing8) {
             dots
             Text(text)

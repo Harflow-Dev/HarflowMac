@@ -199,7 +199,7 @@ struct GroupPresentationView<VM: GroupPresentationViewModel>: View {
             if let parallel = viewModel.parallelVM {
                 ParallelView(parallel, initiallyPrepared: viewModel.hasPromotedActivity)
             } else if let detail = viewModel.detailVM {
-                TaskDetailView(detail, activityState: viewModel.activityState).id(viewModel.detailIdentity)
+                TaskDetailView(detail, activityState: viewModel.activityState, transcriptStyle: .transcript).id(viewModel.detailIdentity)
             } else {
                 ContentUnavailableView("No tasks in this group", systemImage: "rectangle.split.3x1")
             }

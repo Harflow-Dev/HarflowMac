@@ -54,6 +54,16 @@ no embedded terminal anywhere in this package:
   closed) is not lost.
 - `Component/TimelineRow.swift` and `Component/ToolRow.swift` (root-level, not under `Parallel/`) are
   shared Model+View pairs Parallel and TaskDetail's own `TimelinePaneView` both use.
+- **Transcript style.** `ActivityFeedStyle` (`TaskDetail/Activity/ActivityFeedStyle.swift`) is `.standard`
+  (default everywhere, unchanged) or `.transcript` (`TaskScreenStyle` metrics: 760 column, 32 point
+  side padding, 16 point row gap, user bubble, prose, tool head/body, working row, turn separator,
+  the `--bg` pane background). It travels `TaskDetailView(transcriptStyle:)` → `TimelinePaneView(style:)`
+  → `ActivityFeedView(style:)` → `ActivityFeedNativeModel.style` and reaches row views through the
+  `activityFeedStyle` environment value set by the row root, so measurement and display agree. A style
+  change is part of the feed's root-inputs key and remeasures through the structural route. On for the
+  standalone task (`MainWindowCoordinator.buildTaskDetailView`) and Group
+  (`GroupPresentationView`) mounts; off for the builder mount (`isEmbedded`), Parallel columns and
+  workflow surfaces. Tool bodies are unbounded in height (no 220 point cap): a recorded deviation pending owner review.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

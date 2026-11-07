@@ -29,6 +29,7 @@ struct ActivityFeedView: View {
     var emptyText: String?
     var horizontalPadding: CGFloat = HfRadius.Metrics.zero
     var showsPromptBubble = true
+    var style = ActivityFeedStyle.standard
     let state: ParallelColumnUIState
     let onLoadMore: (() -> Bool)?
     var tailPresentation = ActivityFeedTailPresentation.absent
@@ -44,7 +45,7 @@ struct ActivityFeedView: View {
     init(rows: [ActivityRow], activitySnapshot: ActivityFeedSnapshot? = nil, start: Date?, history: EventHistoryState, isLoading: Bool,
          tailValue: ActivityFeedTail = ActivityFeedTail(), paginationRevision: Int = 0, isVisible: Bool = true,
          emptyText: String? = nil, horizontalPadding: CGFloat = HfRadius.Metrics.zero, showsPromptBubble: Bool = true,
-         state: ParallelColumnUIState, onLoadMore: (() -> Bool)?,
+         style: ActivityFeedStyle = .standard, state: ParallelColumnUIState, onLoadMore: (() -> Bool)?,
          tailPresentation: ActivityFeedTailPresentation = .absent, onSelectChildTask: ((String) -> Void)? = nil,
          approvalReveal: CallerApprovalReveal? = nil, onApprovalResponse: ((String, String) -> Void)? = nil,
          onApprovalToggle: ((String) -> Void)? = nil, onApprovalLoadMore: (() -> Void)? = nil,
@@ -62,6 +63,7 @@ struct ActivityFeedView: View {
         self.emptyText = emptyText
         self.horizontalPadding = horizontalPadding
         self.showsPromptBubble = showsPromptBubble
+        self.style = style
         self.state = state
         self.onLoadMore = onLoadMore
         self.tailPresentation = tailPresentation
@@ -107,6 +109,7 @@ struct ActivityFeedView: View {
             emptyText: emptyText,
             horizontalPadding: horizontalPadding,
             showsPromptBubble: showsPromptBubble,
+            style: style,
             expandedGroups: state.expandedGroups,
             tailPresentation: hasTailContent ? tailPresentation : .absent,
             history: history,

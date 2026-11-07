@@ -24,6 +24,7 @@ struct TaskLoadingHeader: Equatable {
 struct TaskLoadingSkeleton: View {
     let header: TaskLoadingHeader?
     var isEmbedded = false
+    var style = ActivityFeedStyle.standard
 
     var body: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
@@ -44,7 +45,7 @@ struct TaskLoadingSkeleton: View {
                 .padding(.bottom, HfRadius.Metrics.spacing20)
                 .readingColumn()
         }
-        .background(Color.windowBG)
+        .background(style.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading task")
         .modifier(LoadingToolbar(isEmbedded: isEmbedded))

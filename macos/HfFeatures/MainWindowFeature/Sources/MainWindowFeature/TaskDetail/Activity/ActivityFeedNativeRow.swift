@@ -185,6 +185,7 @@ struct ActivityFeedNativeRowRoot: View {
     let start: Date?
     let horizontalPadding: CGFloat
     let showsPromptBubble: Bool
+    var style = ActivityFeedStyle.standard
     let environment: ActivityFeedNativeEnvironment
     let actions: ActivityFeedNativeActions
     var disclosureContext: ActivityFeedDisclosureContext?
@@ -195,8 +196,9 @@ struct ActivityFeedNativeRowRoot: View {
     var body: some View {
         content
             .environment(\.activityFeedDisclosure, disclosureContext)
+            .environment(\.activityFeedStyle, style)
             .id(entry.id)
-            .padding(EdgeInsets(top: entry.topSpacing, leading: horizontalPadding, bottom: 0, trailing: horizontalPadding))
+            .padding(EdgeInsets(top: topSpacing, leading: sidePadding, bottom: 0, trailing: sidePadding))
             .frame(width: availableWidth, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
@@ -209,13 +211,27 @@ struct ActivityFeedNativeRowRoot: View {
             })
     }
 
+    /// The side padding. The table lays a cell out one intercell spacing narrower than its column, half of it
+    /// as a margin on each side, so the transcript style takes half the spacing out of each side's padding to
+    /// keep the text centred in the column. The standard style keeps its padding exactly.
+    private var sidePadding: CGFloat {
+        style.isTranscript ? max(0, horizontalPadding - ActivityFeedNativeListMetrics.horizontalIntercellSpacing / 2) : horizontalPadding
+    }
+
+    /// The entry's top spacing. The header always opens the feed, so the transcript style gives it the
+    /// feed's top padding; every other entry carries its resolved spacing.
+    private var topSpacing: CGFloat {
+        if case .header = entry, style.isTranscript { return TaskScreenStyle.Transcript.paddingTop }
+        return entry.topSpacing
+    }
+
     @ViewBuilder private var content: some View {
         switch entry {
         case .header(let header): headerContent(header)
         case .empty(let text, _):
             Text(text).font(.hf(.body)).foregroundStyle(Color.secondaryText)
         case .row(let row): rowContent(row)
-        case .tail(let presentation, _): ActivityFeedNativeTailContent(presentation: presentation, actions: actions)
+        case .tail(let presentation, _): ActivityFeedNativeTailContent(presentation: presentation, actions: actions, style: style)
         case .approval(let card, _):
             CallerApprovalRequestCard(model: card, respond: { actions.onApprovalResponse(card.id, $0) },
                                       toggle: { actions.onApprovalToggle(card.id) },
@@ -270,6 +286,7 @@ struct ActivityFeedNativeRowRoot: View {
 struct ActivityFeedNativeTailContent: View {
     let presentation: ActivityFeedTailPresentation
     let actions: ActivityFeedNativeActions
+    var style = ActivityFeedStyle.standard
 
     @ViewBuilder var body: some View {
         switch presentation {
@@ -278,7 +295,8 @@ struct ActivityFeedNativeTailContent: View {
         case .plainText(let text):
             Text(text)
         case .standard(let standard):
-            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing20) {
+            VStack(alignment: .leading,
+                   spacing: style.isTranscript ? TaskScreenStyle.Transcript.gap : HfRadius.Metrics.spacing20) {
                 if let strip = standard.subTaskStrip {
                     SubTaskStripView(model: SubTaskStripModel(
                         children: strip.children.map { SubTaskEntry(task: $0.task, title: $0.title) }, start: strip.start,

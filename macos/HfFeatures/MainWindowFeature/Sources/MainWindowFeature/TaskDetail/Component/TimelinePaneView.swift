@@ -113,10 +113,12 @@ struct TimelinePaneView: View {
     let model: TimelinePaneModel
     var approvalController: CallerApprovalController?
     var isCancelDisabled = false
+    var style = ActivityFeedStyle.standard
     @State private var state: ParallelColumnUIState
 
     init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil,
-         isCancelDisabled: Bool = false) {
+         isCancelDisabled: Bool = false, style: ActivityFeedStyle = .standard) {
+        self.style = style
         self.approvalController = approvalController
         self.isCancelDisabled = isCancelDisabled
         self.model = model
@@ -135,14 +137,15 @@ struct TimelinePaneView: View {
                     .help(model.headerText ?? "")
                 Spacer()
             }
-            .padding(.horizontal, HfRadius.Metrics.spacing24)
+            .padding(.horizontal, style.horizontalPadding(standard: HfRadius.Metrics.spacing24))
             .padding(.vertical, HfRadius.Metrics.spacing8)
             .readingColumn()
             .accessibilityHidden(model.headerText == nil)
             SkeletonContent(isLoading: model.isLoading && model.liveStep == nil && approvalController?.cards.isEmpty != false,
                             state: state.activityHandoff) {
                 SkeletonRows(count: 5, showsBadge: false)
-                    .padding(HfRadius.Metrics.spacing24)
+                    .padding(.horizontal, style.horizontalPadding(standard: HfRadius.Metrics.spacing24))
+                    .padding(.vertical, HfRadius.Metrics.spacing24)
                     .readingColumn()
                     .frame(maxHeight: .infinity, alignment: .top)
             } content: {
@@ -163,7 +166,8 @@ struct TimelinePaneView: View {
         ActivityFeedView(rows: model.activityRows, activitySnapshot: model.activitySnapshot, start: model.start, history: model.history,
                          isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages,
                             children: model.subTaskStrip?.children.map { TaskDetailTimelineChild(task: $0.task, title: $0.title) } ?? []),
-                         paginationRevision: model.paginationRevision, emptyText: model.emptyText, horizontalPadding: HfRadius.Metrics.spacing24,
+                         paginationRevision: model.paginationRevision, emptyText: model.emptyText,
+                         horizontalPadding: style.horizontalPadding(standard: HfRadius.Metrics.spacing24), style: style,
                          state: state, onLoadMore: model.onLoadMore,
                          tailPresentation: .standard(.init(
                             subTaskStrip: model.subTaskStrip.map { strip in
@@ -210,6 +214,7 @@ struct SubTaskStripModel {
 
 struct SubTaskStripView: View {
     let model: SubTaskStripModel
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     var body: some View {
         ActivityCard {
@@ -236,7 +241,7 @@ struct SubTaskStripView: View {
                         }
                         .font(.hf(.secondary))
                         .padding(HfRadius.Metrics.spacing8)
-                        .background(RoundedRectangle(cornerRadius: HfRadius.row).fill(Color.pillFill))
+                        .background(RoundedRectangle(cornerRadius: HfRadius.row).fill(feedStyle.pillFill))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

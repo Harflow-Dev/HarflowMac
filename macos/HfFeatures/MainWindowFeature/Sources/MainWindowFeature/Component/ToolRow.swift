@@ -48,8 +48,13 @@ struct ToolRow: View {
     }
 
     @Environment(\.openURL) private var openURL
-    
-    var body: some View {
+    @Environment(\.activityFeedStyle) private var feedStyle
+
+    @ViewBuilder var body: some View {
+        if feedStyle.isTranscript { transcriptBody } else { standardBody }
+    }
+
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
             HStack(spacing: HfRadius.Metrics.spacing6) {
             Button {
@@ -121,6 +126,98 @@ struct ToolRow: View {
         }
     }
     
+    // MARK: Transcript
+
+    private var showsOutput: Bool { expanded || (model.result == nil && model.live && model.call.category == "shell") }
+
+    /// `.hd-tool`: a plain head (icon, summary, state, chevron) with the output in a sunken body beneath.
+    private var transcriptBody: some View {
+        VStack(alignment: .leading, spacing: TaskScreenStyle.ToolBody.marginTop) {
+            HStack(spacing: HfRadius.Metrics.spacing6) {
+                Button {
+                    expanded.toggle()
+                } label: {
+                    transcriptHead
+                }
+                .buttonStyle(.plain)
+                if let path = model.call.path, let link = FileLinks.link(forPath: path) {
+                    Button {
+                        openURL(link)
+                    } label: {
+                        Image(systemName: "arrow.up.forward.square").foregroundStyle(TaskScreenStyle.ToolHead.iconColor.color)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Open \((path as NSString).lastPathComponent)")
+                    .accessibilityLabel("Open \((path as NSString).lastPathComponent)")
+                }
+            }
+            .transcriptToolHeadPlate()
+            if expanded, let old = model.call.editOld, let new = model.call.editNew {
+                EditPreview(old: old, new: new)
+            }
+            if showsOutput { transcriptBodyText }
+        }
+    }
+
+    private var transcriptHead: some View {
+        HStack(spacing: TaskScreenStyle.ToolHead.gap) {
+            Image(systemName: icon)
+                .font(.hf(.body))
+                .frame(width: TaskScreenStyle.ToolBody.marginLeading - TaskScreenStyle.ToolHead.gap)
+                .foregroundStyle(model.call.category == "workflow_protocol_error" ? Color.failedRed : TaskScreenStyle.ToolHead.iconColor.color)
+            Text(model.call.tool)
+            Text(model.call.headline)
+                .font(.hf(.secondary, design: .monospaced))
+                .foregroundStyle(TaskScreenStyle.ToolHead.summaryCodeColor.color)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: HfRadius.Metrics.spacing4)
+            if let result = model.result {
+                if let code = result.exitCode {
+                    Text("exit \(code)")
+                        .font(.hf(.secondary))
+                        .monospacedDigit()
+                        .foregroundStyle(code == 0 ? Color.doneGreen : Color.failedRed)
+                } else if !result.ok, model.call.category != "workflow_protocol_error" {
+                    Text("failed").font(.hf(.secondary)).foregroundStyle(Color.failedRed)
+                }
+            } else if model.live {
+                RunningSpinner(size: HfRadius.Metrics.spacing12)
+            } else {
+                Text("no result").font(.hf(.secondary)).foregroundStyle(TaskScreenStyle.ToolHead.metaColor.color)
+            }
+            Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                .font(.hf(.secondary, weight: .semibold))
+                .foregroundStyle(TaskScreenStyle.ToolHead.iconColor.color)
+        }
+        .font(.hf(.body))
+        .lineSpacing(TaskScreenStyle.toolHeadLineSpacing)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder private var transcriptBodyText: some View {
+        if let output = model.result?.outputTail, !output.isEmpty {
+            transcriptBodyBox(output, lineLimit: expanded ? nil : 6)
+        } else if expanded {
+            transcriptBodyBox(model.call.inputPreview, lineLimit: nil)
+        }
+    }
+
+    private func transcriptBodyBox(_ text: String, lineLimit: Int?) -> some View {
+        Text(text)
+            .font(.hf(.secondary, design: .monospaced))
+            .lineSpacing(TaskScreenStyle.toolBodyLineSpacing)
+            .foregroundStyle(TaskScreenStyle.ToolBody.color.color)
+            .lineLimit(lineLimit)
+            .textSelection(.enabled)
+            .padding(.vertical, TaskScreenStyle.ToolBody.paddingVertical)
+            .padding(.horizontal, TaskScreenStyle.ToolBody.paddingHorizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: TaskScreenStyle.ToolBody.cornerRadius).fill(TaskScreenStyle.ToolBody.fill.color))
+            .padding(.leading, TaskScreenStyle.ToolBody.marginLeading)
+            .padding(.bottom, TaskScreenStyle.ToolBody.marginBottom)
+    }
+
     private var icon: String {
         switch model.call.category {
         case "workflow_protocol_error": "xmark.circle.fill"
@@ -144,8 +241,31 @@ struct ToolRow: View {
 struct EditPreview: View {
     let old: String
     let new: String
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     var body: some View {
+        if feedStyle.isTranscript { transcriptBody } else { standardBody }
+    }
+
+    /// The transcript's tool body: the sunken `.hd-tool__body` box, indented under the head.
+    private var transcriptBody: some View {
+        diff
+            .padding(.vertical, TaskScreenStyle.ToolBody.paddingVertical)
+            .padding(.horizontal, TaskScreenStyle.ToolBody.paddingHorizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: TaskScreenStyle.ToolBody.cornerRadius).fill(TaskScreenStyle.ToolBody.fill.color))
+            .padding(.leading, TaskScreenStyle.ToolBody.marginLeading)
+            .padding(.bottom, TaskScreenStyle.ToolBody.marginBottom)
+    }
+
+    private var standardBody: some View {
+        diff
+            .padding(HfRadius.Metrics.spacing6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: HfRadius.button).fill(Color.codeFill))
+    }
+
+    private var diff: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
             ForEach(Array(old.split(separator: "\n", omittingEmptySubsequences: false).prefix(8).enumerated()), id: \.offset) { _, line in
                 diffLine("− " + line, tint: Color.diffRemovedFill, foreground: Color.failedRed)
@@ -155,9 +275,6 @@ struct EditPreview: View {
             }
         }
         .font(.hf(.secondary, design: .monospaced))
-        .padding(HfRadius.Metrics.spacing6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: HfRadius.button).fill(Color.codeFill))
     }
 
     private func diffLine(_ text: String, tint: Color, foreground: Color) -> some View {

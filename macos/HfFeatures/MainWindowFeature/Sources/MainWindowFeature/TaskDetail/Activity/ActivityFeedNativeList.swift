@@ -378,7 +378,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             fingerprint = nextFingerprint
             let rootInputsChanged = previous.map {
                 $0.start != model.start || $0.horizontalPadding != model.horizontalPadding
-                    || $0.showsPromptBubble != model.showsPromptBubble
+                    || $0.showsPromptBubble != model.showsPromptBubble || $0.style != model.style
             } ?? false
             previousModel = previous
             self.model = model

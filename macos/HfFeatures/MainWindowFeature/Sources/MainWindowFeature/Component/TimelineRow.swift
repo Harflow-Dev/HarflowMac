@@ -33,6 +33,7 @@ struct TimelineRowModel: Identifiable {
 /// A single timeline row. Dumb component — no logic beyond layout.
 struct TimelineRow: View {
     let model: TimelineRowModel
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     var body: some View {
         rowBody.frame(maxWidth: .infinity, alignment: .leading)
@@ -50,7 +51,8 @@ struct TimelineRow: View {
             }
         case .text(let text, let streaming):
             preparedText(text)
-                .padding(.bottom, HfRadius.Metrics.spacing16)
+                // The transcript's row gap replaces the trailing space; a streaming reply keeps it for the caret.
+                .padding(.bottom, feedStyle.isTranscript && !streaming ? 0 : HfRadius.Metrics.spacing16)
                 .overlay(alignment: .bottomLeading) {
                     if streaming {
                         if model.live {
@@ -61,9 +63,13 @@ struct TimelineRow: View {
                     }
                 }
         case .tool(let call, let result):
-            GroupedActivityCard {
-                ActivityCardRow {
-                    ToolRow(model: ToolRowModel(call: call, result: result, live: model.live))
+            if feedStyle.isTranscript {
+                ToolRow(model: ToolRowModel(call: call, result: result, live: model.live))
+            } else {
+                GroupedActivityCard {
+                    ActivityCardRow {
+                        ToolRow(model: ToolRowModel(call: call, result: result, live: model.live))
+                    }
                 }
             }
         case .message(let text, let source):
@@ -88,7 +94,8 @@ struct TimelineRow: View {
             // Unprepared compatibility rows have deterministic geometry in native measurement.
             Text(text)
 .font(.hf(.reading))
-.lineSpacing(6)
+                .modifier(TranscriptProseText(isOn: feedStyle.isTranscript))
+                .lineSpacing(feedStyle.isTranscript ? TaskScreenStyle.bodyLineSpacing : 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
@@ -100,7 +107,7 @@ struct TimelineRow: View {
     /// the Summary headline and header badge own the settled duration, not this row.
     private func finishedMarker(status: TaskStatus, exitCode: Int?) -> some View {
         HStack(spacing: HfRadius.Metrics.spacing12) {
-            Rectangle().fill(Color.hairline).frame(height: HfRadius.Metrics.hairlineStroke)
+            Rectangle().fill(feedStyle.ruleColor).frame(height: HfRadius.Metrics.hairlineStroke)
             HStack(spacing: HfRadius.Metrics.spacing6) {
                 Image(systemName: StatusIcon.symbolName(for: status) ?? "flag.checkered")
                     .accessibilityHidden(true)
@@ -111,7 +118,7 @@ struct TimelineRow: View {
             .padding(.vertical, HfRadius.Metrics.spacing10)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
-            Rectangle().fill(Color.hairline).frame(height: HfRadius.Metrics.hairlineStroke)
+            Rectangle().fill(feedStyle.ruleColor).frame(height: HfRadius.Metrics.hairlineStroke)
         }
     }
 

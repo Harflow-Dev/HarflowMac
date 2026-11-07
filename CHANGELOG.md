@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Apply the approved transcript design to the task screen and Group view: a centered 696-point reading column, updated message bubbles, prose, tool rows and working row. Collapsed Edit rows now hide their diff until expanded. Parallel and the workflow builder are unchanged.
+
 - Remove the old segmented control from the task loading skeleton, and unused raw-events views and task tab code.
 
 - Add a `task-changes.v1` client and repository, with a bounded read and an explicit completeness result. It has no callers and no UI; evidence is contract fixtures and fake-runner tests only.

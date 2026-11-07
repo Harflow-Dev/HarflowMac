@@ -27,6 +27,7 @@ struct PromptBubbleView: View {
     var isCancelDisabled = false
     @State private var localExpanded: Bool
     @Environment(\.activityFeedDisclosure) private var disclosure
+    @Environment(\.activityFeedStyle) private var feedStyle
     var disclosureID: String?
 
     private var isExpanded: Bool {
@@ -64,7 +65,9 @@ struct PromptBubbleView: View {
 
     var body: some View {
         let isLong = Self.isLong(text)
-        PromptBubbleTrailingLayout {
+        let transcript = feedStyle.isTranscript
+        PromptBubbleTrailingLayout(fraction: transcript ? TaskScreenStyle.UserBubble.maxWidthFraction : 0.75,
+                                   cap: transcript ? .infinity : 420) {
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
                 if let caption {
                     Text(caption).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
@@ -72,7 +75,7 @@ struct PromptBubbleView: View {
                 Text(text)
                     .font(.hf(.reading))
                     .foregroundStyle(isPending ? Color.secondaryText : Color.primaryText)
-                    .lineSpacing(HfRadius.Metrics.spacing6)
+                    .lineSpacing(transcript ? TaskScreenStyle.bodyLineSpacing : HfRadius.Metrics.spacing6)
                     .lineLimit(isLong && !isExpanded ? Self.collapsedLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isLong {
@@ -95,19 +98,28 @@ struct PromptBubbleView: View {
                         .accessibilityLabel("Cancel queued message")
                 }
             }
-            .padding(.horizontal, HfRadius.Metrics.spacing14)
-            .padding(.vertical, HfRadius.Metrics.spacing10)
-            .background(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
-                    bottomLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
-                    bottomTrailingRadius: HfRadius.Metrics.promptBubbleTailCornerRadius,
-                    topTrailingRadius: HfRadius.Metrics.promptBubbleCornerRadius
-                )
-                .fill(isPending ? Color.promptBubble.opacity(0.45) : Color.promptBubble)
-            )
+            .padding(.horizontal, transcript ? TaskScreenStyle.UserBubble.paddingHorizontal : HfRadius.Metrics.spacing14)
+            .padding(.vertical, transcript ? TaskScreenStyle.UserBubble.paddingVertical : HfRadius.Metrics.spacing10)
+            .background(bubbleShape(transcript: transcript))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    /// The standard bubble keeps its tailed corner; the transcript bubble is `.hd-msg-user`: `surface-active`
+    /// fill, one radius on every corner.
+    @ViewBuilder private func bubbleShape(transcript: Bool) -> some View {
+        if transcript {
+            RoundedRectangle(cornerRadius: TaskScreenStyle.UserBubble.cornerRadius)
+                .fill(TaskScreenStyle.UserBubble.fill.color.opacity(isPending ? 0.45 : 1))
+        } else {
+            UnevenRoundedRectangle(
+                topLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
+                bottomLeadingRadius: HfRadius.Metrics.promptBubbleCornerRadius,
+                bottomTrailingRadius: HfRadius.Metrics.promptBubbleTailCornerRadius,
+                topTrailingRadius: HfRadius.Metrics.promptBubbleCornerRadius
+            )
+            .fill(isPending ? Color.promptBubble.opacity(0.45) : Color.promptBubble)
+        }
     }
 }
 
@@ -115,6 +127,10 @@ struct PromptBubbleView: View {
 
 struct PromptBubbleTrailingLayout: Layout {
     typealias Cache = Void
+
+    /// The bubble's widest share of the offered width, and its absolute cap.
+    var fraction: CGFloat = 0.75
+    var cap: CGFloat = 420
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
         guard let bubble = subviews.first else { return .zero }
@@ -137,8 +153,8 @@ struct PromptBubbleTrailingLayout: Layout {
     private func bubbleWidth(for bubble: LayoutSubview, proposedWidth: CGFloat?) -> CGFloat {
         let naturalWidth = bubble.sizeThatFits(.unspecified).width
         let preferredWidth = naturalWidth.isFinite ? max(0, ceil(naturalWidth)) : 420
-        let limit = proposedWidth.flatMap { $0.isFinite ? max(0, $0) * 0.75 : nil } ?? 420
-        return min(preferredWidth, limit, 420)
+        let limit = proposedWidth.flatMap { $0.isFinite ? max(0, $0) * fraction : nil } ?? cap
+        return min(preferredWidth, limit, cap)
     }
 }
 

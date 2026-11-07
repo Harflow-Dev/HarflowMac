@@ -26,6 +26,8 @@ struct ActivityFeedNativeModel: Equatable {
     var emptyText: String?
     var horizontalPadding: CGFloat
     var showsPromptBubble: Bool
+    /// The feed's presentation style; part of the root inputs, so a change remeasures every row.
+    var style = ActivityFeedStyle.standard
     var expandedGroups: Set<String>
     var tailPresentation: ActivityFeedTailPresentation
     var history: EventHistoryState
@@ -44,6 +46,7 @@ struct ActivityFeedNativeModel: Equatable {
         }
         return rowsEqual && lhs.start == rhs.start && lhs.emptyText == rhs.emptyText
             && lhs.horizontalPadding == rhs.horizontalPadding && lhs.showsPromptBubble == rhs.showsPromptBubble
+            && lhs.style == rhs.style
             && lhs.expandedGroups == rhs.expandedGroups && lhs.tailPresentation == rhs.tailPresentation
             && lhs.history == rhs.history && lhs.paginationRevision == rhs.paginationRevision
             && lhs.visible == rhs.visible && lhs.loading == rhs.loading && lhs.approvalReveal == rhs.approvalReveal
@@ -67,28 +70,32 @@ enum ActivityFeedNativeEntries {
     static func build(model: ActivityFeedNativeModel, header: ActivityFeedNativeEntry.Header?, following: Bool,
                       mountedIDs: Set<String>) -> [ActivityFeedNativeEntry] {
         var entries: [ActivityFeedNativeEntry] = []
+        let style = model.style
         let hasHeader = header != nil
         if let header { entries.append(.header(header)) }
         let showsEmpty = model.emptyText != nil && model.shownRows.isEmpty
         if showsEmpty, let emptyText = model.emptyText {
-            entries.append(.empty(emptyText, topSpacing: hasHeader ? HfRadius.Metrics.spacing20 : HfRadius.Metrics.spacing12))
+            entries.append(.empty(emptyText, topSpacing: style.spacing(
+                first: !hasHeader, standardFirst: HfRadius.Metrics.spacing12, standardBetween: HfRadius.Metrics.spacing20)))
         }
-        let rowTop = HfRadius.Metrics.spacing20
         for row in model.shownRows {
             let isFirst = !hasHeader && !showsEmpty && row.id == model.shownRows.first?.id
             entries.append(.row(ActivityFeedNativeEntry.Row(
                 row: row,
                 isExpanded: isExpanded(row: row, expandedGroups: model.expandedGroups),
                 fade: following && !mountedIDs.contains(row.id),
-                topSpacing: isFirst ? HfRadius.Metrics.spacing12 : rowTop
+                topSpacing: style.spacing(first: isFirst, standardFirst: HfRadius.Metrics.spacing12,
+                                          standardBetween: HfRadius.Metrics.spacing20)
             )))
         }
         if case .standard(let standard) = model.tailPresentation {
             for card in standard.approvals {
-                entries.append(.approval(card, topSpacing: HfRadius.Metrics.spacing12))
+                entries.append(.approval(card, topSpacing: style.isTranscript
+                    ? style.spacing(first: entries.isEmpty, standardFirst: 0, standardBetween: 0)
+                    : HfRadius.Metrics.spacing12))
             }
         }
-        let hasContent = hasHeader || showsEmpty || !model.shownRows.isEmpty
+        let hasContent = hasHeader || showsEmpty || !model.shownRows.isEmpty || (style.isTranscript && !entries.isEmpty)
         let hasTail = hasTail(model)
         if hasTail {
             var tail = model.tailPresentation
@@ -96,8 +103,8 @@ enum ActivityFeedNativeEntries {
                 standard.approvals = []
                 tail = .standard(standard)
             }
-            entries.append(.tail(tail,
-                                  topSpacing: hasContent ? HfRadius.Metrics.spacing20 : HfRadius.Metrics.spacing12))
+            entries.append(.tail(tail, topSpacing: style.spacing(
+                first: !hasContent, standardFirst: HfRadius.Metrics.spacing12, standardBetween: HfRadius.Metrics.spacing20)))
         }
         entries.append(.bottom(topSpacing: 0))
         return entries

@@ -73,7 +73,7 @@ struct TaskScreenStyleTests {
 
     /// `tokens.css` at 3643d08, light then dark.
     private static let pinnedTokens: [(cssName: String, light: UInt32, dark: UInt32)] = [
-        ("--surface", 0xFFFFFF, 0x343437), ("--surface-hover", 0xEBEBEA, 0x3B3B3E),
+        ("--bg", 0xFAFAFA, 0x2B2B2D), ("--surface", 0xFFFFFF, 0x343437), ("--surface-hover", 0xEBEBEA, 0x3B3B3E),
         ("--surface-active", 0xE3E3E2, 0x444448), ("--surface-sunken", 0xF4F4F3, 0x262628),
         ("--border", 0xE2E2E0, 0x404044), ("--text", 0x1D1D1F, 0xECECEE),
         ("--text-secondary", 0x56575C, 0xB7B7BC), ("--text-tertiary", 0x5F6065, 0xADADB3),
@@ -87,7 +87,7 @@ struct TaskScreenStyleTests {
         let mapped = Dictionary(uniqueKeysWithValues: TaskScreenStyle.Colors.all.map { ($0.cssName, $0) })
 
         // when / then
-        #expect(Self.pinnedTokens.count == 13)
+        #expect(Self.pinnedTokens.count == 14)
         #expect(TaskScreenStyle.Colors.all.count == Self.pinnedTokens.count)
         #expect(Set(mapped.keys) == Set(Self.pinnedTokens.map(\.cssName)))
         for pinned in Self.pinnedTokens {

@@ -47,6 +47,8 @@ enum TaskScreenStyle {
 
     /// `tokens.css` `:root` (light) and `[data-theme="dark"]`.
     enum Colors {
+        /// `--bg`: the task pane background, so `surface-sunken` reads darker than the page in both appearances.
+        static let pageBackground = Token("--bg", light: 0xFAFAFA, dark: 0x2B2B2D)
         static let surface = Token("--surface", light: 0xFFFFFF, dark: 0x343437)
         static let surfaceHover = Token("--surface-hover", light: 0xEBEBEA, dark: 0x3B3B3E)
         static let surfaceActive = Token("--surface-active", light: 0xE3E3E2, dark: 0x444448)
@@ -62,7 +64,7 @@ enum TaskScreenStyle {
         static let onAccent = Token("--on-accent", light: 0xFFFFFF, dark: 0xFFFFFF, palette: ("onAccent", Color.onAccent))
 
         static let all: [Token] = [
-            surface, surfaceHover, surfaceActive, surfaceSunken, border, text, textSecondary, textTertiary,
+            pageBackground, surface, surfaceHover, surfaceActive, surfaceSunken, border, text, textSecondary, textTertiary,
             accent, accentSolid, accentSolidHover, accentSubtle, onAccent
         ]
     }

@@ -125,6 +125,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @State var viewModel: VM
     @State private var activityState: ParallelColumnUIState
     private let isEmbedded: Bool
+    private let transcriptStyle: ActivityFeedStyle
     private let onToolbarEvaluation: (() -> Void)?
     @State private var eventsExpanded = true
     @State private var snapshotFactsExpanded = false
@@ -136,7 +137,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     
     // MARK: - Init
     
-    init(_ viewModel: VM, isEmbedded: Bool = false, activityState: ParallelColumnUIState? = nil, onToolbarEvaluation: (() -> Void)? = nil) {
+    init(_ viewModel: VM, isEmbedded: Bool = false, activityState: ParallelColumnUIState? = nil,
+         transcriptStyle: ActivityFeedStyle = .standard, onToolbarEvaluation: (() -> Void)? = nil) {
+        self.transcriptStyle = transcriptStyle
         _activityState = State(initialValue: activityState ?? ParallelColumnUIState())
         self.onToolbarEvaluation = onToolbarEvaluation
         self.isEmbedded = isEmbedded
@@ -194,7 +197,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                         column
                     }
                     .frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity, minHeight: HfRadius.Metrics.zero, maxHeight: .infinity)
-                    .background(Color.windowBG)
+                    .background(transcriptStyle.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
                     Divider()
                     eventsPane
                         .frame(width: isEmbedded ? 280 : 320)
@@ -215,6 +218,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                     .foregroundStyle(Color.secondaryText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(transcriptStyle.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.clear)
         } else {
             loadingSkeleton
         }
@@ -224,7 +228,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     /// mirrors the loaded screen (see `TaskLoadingSkeleton`). Never shown once `hasListed` is true —
     /// then either the task exists or it genuinely is not in harflow's records.
     private var loadingSkeleton: some View {
-        TaskLoadingSkeleton(header: viewModel.loadingHeader, isEmbedded: isEmbedded)
+        TaskLoadingSkeleton(header: viewModel.loadingHeader, isEmbedded: isEmbedded, style: transcriptStyle)
     }
 
     // MARK: Header
@@ -481,7 +485,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
             if let feedback = viewModel.copyFeedback { Text(feedback).font(.hf(.caption)).textSelection(.enabled) }
             TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
-                             isCancelDisabled: viewModel.isBusy)
+                             isCancelDisabled: viewModel.isBusy, style: transcriptStyle)
         }
     }
 

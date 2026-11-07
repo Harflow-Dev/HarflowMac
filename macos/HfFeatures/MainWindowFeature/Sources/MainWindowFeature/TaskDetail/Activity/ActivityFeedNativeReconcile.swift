@@ -385,7 +385,7 @@ extension ActivityFeedNativeList.Coordinator {
         var root = if let model {
             ActivityFeedNativeRowRoot(entry: box.entry, start: model.start,
                                              horizontalPadding: model.horizontalPadding,
-                                             showsPromptBubble: model.showsPromptBubble,
+                                             showsPromptBubble: model.showsPromptBubble, style: model.style,
                                              environment: environment, actions: actions,
                                              availableWidth: max(0, currentWidth))
         } else {

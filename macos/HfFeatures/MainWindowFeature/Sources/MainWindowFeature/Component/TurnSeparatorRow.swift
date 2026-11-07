@@ -17,6 +17,7 @@ import SwiftUI
 struct TurnSeparatorRow: View {
     let text: String
     let timestamp: Date?
+    @Environment(\.activityFeedStyle) private var feedStyle
 
     static func caption(timestamp: Date?) -> String {
         "You" + (timestamp.map { " · \(Format.time($0))" } ?? "")
@@ -27,8 +28,34 @@ struct TurnSeparatorRow: View {
     }
 
     var body: some View {
-        PromptBubbleView(text: text, caption: Self.caption(timestamp: timestamp))
-            .padding(.top, 8)
+        if feedStyle.isTranscript {
+            transcriptBody
+        } else {
+            PromptBubbleView(text: text, caption: Self.caption(timestamp: timestamp))
+                .padding(.top, 8)
+        }
+    }
+
+    /// `.hd-turn-sep`: the caption centred between two 1 pt rules, then the follow-up as a user bubble.
+    private var transcriptBody: some View {
+        VStack(alignment: .leading, spacing: TaskScreenStyle.TurnSeparator.gap) {
+            HStack(spacing: TaskScreenStyle.TurnSeparator.gap) {
+                rule
+                Text(Self.caption(timestamp: timestamp))
+                    .font(.hf(.secondary))
+                    .frame(height: TaskScreenStyle.TurnSeparator.text.lineHeight)
+                    .foregroundStyle(TaskScreenStyle.TurnSeparator.color.color)
+                    .fixedSize()
+                rule
+            }
+            PromptBubbleView(text: text)
+        }
+    }
+
+    private var rule: some View {
+        Rectangle()
+            .fill(TaskScreenStyle.TurnSeparator.ruleColor.color)
+            .frame(height: TaskScreenStyle.TurnSeparator.ruleThickness)
     }
 }
 
