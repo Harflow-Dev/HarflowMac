@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Lower CPU use while tasks run: the streaming caret, the running tool spinner, the working indicator and the live-step pulse in the activity feed now animate in Core Animation instead of redrawing the feed each frame. Their look is unchanged, except that the streaming caret is now hidden from accessibility as decorative.
+
 - Apply the approved transcript design to the task screen and Group view: a centered 696-point reading column, updated message bubbles, prose, tool rows and working row. Collapsed Edit rows now hide their diff until expanded. Parallel and the workflow builder are unchanged.
 
 - Apply the approved composer surface and metrics to the task screen and Group view: a solid surface with a border and shadow in place of glass, 696 points wide, in the same reading column. The field and actions stay in one row and its text is unchanged. The loading skeleton now matches the loaded bubble and composer. Parallel and the workflow builder are unchanged.

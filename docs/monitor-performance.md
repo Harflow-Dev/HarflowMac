@@ -22,8 +22,12 @@ metrics rather than partial totals.
 Native activity rows retain text selection. The table owns displayed hosting views;
 removing a native row releases its hosted content rather than keeping a SwiftUI graph
 for every row visited. Reading anchors and group disclosure remain feed state.
-Only explicit public presentation environment values cross into row hosts. Streaming
-caret drawing uses its own timeline rather than a repeating animation transaction.
+Only explicit public presentation environment values cross into row hosts. The running
+indicators inside feed cells (the streaming caret, the tool spinner, the working glyph and
+the live-step pulse) animate in Core Animation through layer-backed views, never through a
+SwiftUI `TimelineView` or repeating animation: a SwiftUI animation inside a hosted cell keeps
+its graph pending every frame and makes the feed's host re-measure the whole table.
+These layer indicators resolve their colours from the effective appearance of their AppKit view. That is the window's appearance, except where a SwiftUI colour-scheme override is set on the row: SwiftUI applies it to the hosted view as an appearance, so the override wins (measured for the caret, the tool spinner and the pulse dot). HfUI's shared `RunningSpinner` is unchanged for surfaces outside the feed.
 
 Unchanged feed inputs refresh action callbacks without rebuilding native entries or
 remeasuring rows. Background presentation preparation supplies row revisions so native
@@ -53,19 +57,25 @@ Without the duration variable, ordinary suite runs do not exercise the timed soa
 
 `ActivityFeedStreamingCPUProfileTests` attributes the soak's streaming CPU. It is opt-in in the same
 way: each variant runs only when its own variable holds a duration of at least 60 seconds, and an
-invalid value prints a skip line. Every variant streams into the same 3,000 retained rows at the
+invalid value prints a skip line. Every variant changes the same 3,000 retained rows at the
 soak's tick rate:
 
 - `HARFLOW_ACTIVITY_CPU_FIXED_SECONDS`: the soak's tick, one fixed-id streaming row.
 - `HARFLOW_ACTIVITY_CPU_NO_CARET_SECONDS`: the fixed row with the Reduce Motion override, which
-  pauses the streaming caret's animation timeline.
+  removes the streaming caret's blink animation (a layer animation) and leaves it static.
 - `HARFLOW_ACTIVITY_CPU_PREBUILT_SECONDS`: the fixed row with every row array and snapshot prepared
   before streaming starts.
 - `HARFLOW_ACTIVITY_CPU_APPEND_SECONDS`: each tick finalizes the streaming tail and appends a new
   streaming row.
-- `HARFLOW_ACTIVITY_CPU_APPEND_NO_CARET_SECONDS`: the append stream with the caret animation paused.
+- `HARFLOW_ACTIVITY_CPU_APPEND_NO_CARET_SECONDS`: the append stream with the caret's blink animation removed.
 - `HARFLOW_ACTIVITY_CPU_ROOT_SIZING_OFF_SECONDS`: the fixed row with the test root hosting view's
   sizing options cleared.
+- `HARFLOW_ACTIVITY_CPU_LIVE_TOOL_SECONDS`: no streaming text; a pending tool call with its running
+  spinner ends the feed, and each tick rewrites the settled row above it.
+- `HARFLOW_ACTIVITY_CPU_LIVE_STEP_SECONDS`: no streaming text; the standard style's live step line
+  (the pulsing dot) sits under the feed, and each tick rewrites the last settled row.
+- `HARFLOW_ACTIVITY_CPU_WORKING_ROW_SECONDS`: as the live step variant, in the transcript style,
+  where the line is the working row with its turning glyph.
 
 ```sh
 HARFLOW_ACTIVITY_CPU_FIXED_SECONDS=150 HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfFeatures/MainWindowFeature --mode suites
@@ -73,6 +83,7 @@ HARFLOW_ACTIVITY_CPU_FIXED_SECONDS=150 HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python
 
 Set one variable per run so variants do not share a process. Each prints one
 `HARFLOW_ACTIVITY_CPU` line with tick rate, CPU cores while streaming, with ticks stopped and after
-the stream finishes, feed counter deltas and the native subtree size. CPU is `getrusage` for the
+the stream finishes (the running indicator is still shown while ticks are stopped, and removed when
+the stream finishes), feed counter deltas and the native subtree size. CPU is `getrusage` for the
 whole test process in a debug build, so the figures compare variants rather than give an absolute
 feed cost.

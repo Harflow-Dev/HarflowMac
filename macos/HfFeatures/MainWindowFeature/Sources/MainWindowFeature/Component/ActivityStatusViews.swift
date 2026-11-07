@@ -105,9 +105,9 @@ struct ActivityNoticeView: View {
 
 // MARK: - LiveStepLineView
 
-/// A pulsing dot and the current step. It sits under the feed and owns nothing. The pulse follows
-/// Reduce Motion dynamically — the presentation-only override wins over the system setting, and a
-/// change mid-flight stops or restarts the pulse without waiting for a re-mount.
+/// A pulsing dot and the current step. It sits under the feed and owns nothing. The pulse runs in
+/// Core Animation (`FeedPulseDot`) and follows Reduce Motion dynamically — the presentation-only
+/// override wins over the system setting.
 ///
 /// The `threeDots` indicator is the Parallel lane variant (§6.5): three `liveDot` dots and the step
 /// text in tertiary text, shown only when the lane's existing `LiveStep` says real work is
@@ -122,14 +122,7 @@ struct LiveStepLineView: View {
 
     let text: String
     var indicator: Indicator = .singleDot
-    @State private var isDimmed = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
     @Environment(\.activityFeedStyle) private var feedStyle
-
-    private var reduceMotion: Bool {
-        HfMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion)
-    }
 
     /// The transcript's `.hd-working` row replaces the single-dot line only; the Parallel variant is unchanged.
     private var isWorkingRow: Bool { feedStyle.isTranscript && indicator == .singleDot }
@@ -166,8 +159,6 @@ struct LiveStepLineView: View {
                 .truncationMode(.middle)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear { updatePulse() }
-        .onChange(of: reduceMotion) { _, _ in updatePulse() }
         .accessibilityElement(children: .combine)
     }
 
@@ -176,11 +167,7 @@ struct LiveStepLineView: View {
         switch indicator {
         case .singleDot:
             // The shared default keeps its exact 8 pt dot, so TaskDetail's timeline is unchanged.
-            Circle()
-                .fill(Color.liveDot)
-                .frame(width: HfRadius.Metrics.spacing8, height: HfRadius.Metrics.spacing8)
-                .opacity(isDimmed ? 0.3 : 1)
-                .accessibilityHidden(true)
+            FeedPulseDot(diameter: HfRadius.Metrics.spacing8)
         case .threeDots:
             HStack(spacing: HfRadius.Metrics.liveIndicatorDotSpacing) {
                 dot
@@ -191,22 +178,7 @@ struct LiveStepLineView: View {
     }
 
     private var dot: some View {
-        Circle()
-            .fill(Color.liveDot)
-            .frame(width: HfRadius.Metrics.liveIndicatorDotSize, height: HfRadius.Metrics.liveIndicatorDotSize)
-            .opacity(isDimmed ? 0.3 : 1)
-            .accessibilityHidden(true)
-    }
-
-    /// Starts the pulse unless Reduce Motion is active, and settles the dot at full opacity when it
-    /// is — an arriving or re-resolved pulse never leaves the dot dimmed.
-    private func updatePulse() {
-        if reduceMotion {
-            withAnimation(.none) { isDimmed = false }
-            return
-        }
-        guard !isDimmed else { return }
-        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { isDimmed = true }
+        FeedPulseDot(diameter: HfRadius.Metrics.liveIndicatorDotSize)
     }
 }
 

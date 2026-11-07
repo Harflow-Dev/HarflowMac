@@ -42,6 +42,21 @@ import Testing
         try await profile(.rootSizingOff, gate: "HARFLOW_ACTIVITY_CPU_ROOT_SIZING_OFF_SECONDS")
     }
 
+    /// A pending tool call (the running spinner) ends the feed; ticks rewrite the settled row above it.
+    @Test func givenRetainedFeed_whenToolCallIsPending_thenReportsCPU() async throws {
+        try await profile(.liveTool, gate: "HARFLOW_ACTIVITY_CPU_LIVE_TOOL_SECONDS")
+    }
+
+    /// The standard style's live step line (the pulsing dot) sits under the feed; ticks rewrite the last settled row.
+    @Test func givenRetainedFeed_whenLiveStepPulses_thenReportsCPU() async throws {
+        try await profile(.liveStepPulse, gate: "HARFLOW_ACTIVITY_CPU_LIVE_STEP_SECONDS")
+    }
+
+    /// The transcript style's working row (the turning working glyph) sits under the feed; ticks rewrite the last settled row.
+    @Test func givenTranscriptFeed_whenWorkingRowTurns_thenReportsCPU() async throws {
+        try await profile(.workingRow, gate: "HARFLOW_ACTIVITY_CPU_WORKING_ROW_SECONDS")
+    }
+
     // MARK: - Run
 
     private func profile(_ variant: CPUProfileVariant, gate: String) async throws {
@@ -78,6 +93,7 @@ import Testing
     private func quietCPU(source: inout CPUProfileSource, host: NSHostingView<CPUProfileRoot>, owner: ActivityFeedNativeList.Coordinator,
                           state: ParallelColumnUIState, reduceMotion: Bool?) async throws -> String {
         let reference = Date()
+        let indicator = indicatorDescription(source: source, owner: owner)
         await observe(for: 1)
         let holdStart = try cpuMark(since: reference)
         await observe(for: 5)
@@ -90,7 +106,8 @@ import Testing
         let idleStart = try cpuMark(since: reference)
         await observe(for: 5)
         let idleEnd = try cpuMark(since: reference)
-        return "held_stream_cpu_cores=\(cpuRate([holdStart, holdEnd])) finished_idle_cpu_cores=\(cpuRate([idleStart, idleEnd]))"
+        return "\(indicator) held_stream_cpu_cores=\(cpuRate([holdStart, holdEnd])) "
+            + "finished_idle_cpu_cores=\(cpuRate([idleStart, idleEnd]))"
     }
 
     private func settle(host: NSHostingView<CPUProfileRoot>, state: ParallelColumnUIState) async throws -> ActivityFeedNativeList.Coordinator {
@@ -125,6 +142,7 @@ import Testing
             host.rootView = CPUProfileRoot(feed: feed(source, state: state), reduceMotion: reduceMotion)
             await waitUntil(timeout: 5) { owner.model?.activitySnapshot === expected }
             try #require(owner.model?.activitySnapshot === expected, "The streamed snapshot must actually commit")
+            if tick == 0 { try await requireIndicator(source.variant, host: host, reduceMotion: reduceMotion) }
             if Date() >= nextMark {
                 marks.append(try cpuMark(since: started))
                 nextMark = Date().addingTimeInterval(5)
@@ -145,8 +163,48 @@ import Testing
     // MARK: - Helpers
 
     private func feed(_ source: CPUProfileSource, state: ParallelColumnUIState) -> ActivityFeedView {
-        ActivityFeedView(rows: source.rows, activitySnapshot: source.snapshot, start: nil, history: EventHistoryState(),
-                         isLoading: false, state: state, onLoadMore: nil)
+        let tail = source.showsLiveStep ? ActivityFeedTail(liveStep: LiveStep(rows: [], isRunning: true)) : ActivityFeedTail()
+        let presentation: ActivityFeedTailPresentation = source.showsLiveStep
+            ? .standard(.init(liveStep: .init(text: "Thinking…", indicator: .singleDot))) : .absent
+        return ActivityFeedView(rows: source.rows, activitySnapshot: source.snapshot, start: nil, history: EventHistoryState(),
+                                isLoading: false, tailValue: tail, style: source.variant == .workingRow ? .transcript : .standard,
+                                state: state, onLoadMore: nil, tailPresentation: presentation)
+    }
+
+    /// Fails unless the variant's indicator is mounted, and moving unless the variant pauses it, before any measurement: a
+    /// profile of a feed without its indicator would report a number that means nothing.
+    private func requireIndicator(_ variant: CPUProfileVariant, host: NSView, reduceMotion: Bool?) async throws {
+        let paused = reduceMotion ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        switch variant {
+        case .fixedRow, .noCaretAnimation, .prebuiltSnapshots, .append, .appendNoCaretAnimation, .rootSizingOff:
+            await waitUntil(timeout: 10) { LayerMotionProbe.views(LayerCaretView.self, in: host).count == 1 }
+            let caret = try #require(LayerMotionProbe.views(LayerCaretView.self, in: host).first, "\(variant): the streaming caret must be mounted")
+            await waitUntil(timeout: 5) { caret.isMotionInstalled == !paused }
+            try #require(caret.isMotionInstalled == !paused, "\(variant): the caret must \(paused ? "not " : "")animate")
+        case .liveTool:
+            await waitUntil(timeout: 10) { !LayerMotionProbe.views(LayerSpinnerView.self, in: host).isEmpty }
+            let spinner = try #require(LayerMotionProbe.views(LayerSpinnerView.self, in: host).first, "liveTool: the pending tool spinner must be mounted")
+            await waitUntil(timeout: 5) { spinner.isMotionInstalled == !paused }
+            try #require(spinner.isMotionInstalled == !paused && spinner.spec.diameter == HfRadius.Metrics.spacing12, "liveTool: spinner state")
+        case .liveStepPulse:
+            await waitUntil(timeout: 10) { LayerMotionProbe.views(LayerPulseDotView.self, in: host).count == 1 }
+            let dot = try #require(LayerMotionProbe.views(LayerPulseDotView.self, in: host).first, "liveStepPulse: the pulse dot must be mounted")
+            await waitUntil(timeout: 5) { dot.isMotionInstalled == !paused }
+            try #require(dot.isMotionInstalled == !paused, "liveStepPulse: the dot must \(paused ? "not " : "")animate")
+        case .workingRow:
+            await waitUntil(timeout: 10) { LayerMotionProbe.views(LayerSpinnerView.self, in: host).count == 1 }
+            let glyph = try #require(LayerMotionProbe.views(LayerSpinnerView.self, in: host).first, "workingRow: the working glyph must be mounted")
+            await waitUntil(timeout: 5) { glyph.isMotionInstalled == !paused }
+            try #require(glyph.spec.margin == TaskScreenStyle.Working.glyphMargin && glyph.isMotionInstalled == !paused, "workingRow: glyph state")
+        }
+    }
+
+    /// Which running indicator the committed feed model carries while held.
+    private func indicatorDescription(source: CPUProfileSource, owner: ActivityFeedNativeList.Coordinator) -> String {
+        let pendingTool: Bool = if case .single(let row, _) = owner.model?.shownRows.last, case .item(let item) = row.kind,
+                                   case .tool(_, nil) = item.body { row.live } else { false }
+        let liveStep: Bool = if case .standard(let standard) = owner.model?.tailPresentation { standard.liveStep != nil } else { false }
+        return "pending_tool=\(pendingTool) live_step=\(liveStep) style=\(owner.model?.style ?? .standard)"
     }
 
     /// The feed's native subtree size and the cost of one Auto Layout fitting-size pass over it.
@@ -189,6 +247,9 @@ private enum CPUProfileVariant: Equatable {
     case append
     case appendNoCaretAnimation
     case rootSizingOff
+    case liveTool
+    case liveStepPulse
+    case workingRow
 }
 
 // MARK: - CPUProfileRoot
@@ -213,6 +274,8 @@ private struct CPUProfileSource {
     let variant: CPUProfileVariant
     private(set) var rows: [ActivityRow]
     private(set) var snapshot: ActivityFeedSnapshot
+    /// Whether the feed's tail shows the live step line (the standard pulse or the transcript working row).
+    private(set) var showsLiveStep: Bool
     private var cycle: [([ActivityRow], ActivityFeedSnapshot)] = []
 
     init(variant: CPUProfileVariant) {
@@ -220,6 +283,11 @@ private struct CPUProfileSource {
         self.rows = (0 ..< Self.retained).map { index in
             ActivityRow.single(ActivityFixture.text(index, "Synthetic retained message \(index). Selectable reading content.", task: "soak"))
         }
+        if variant == .liveTool {
+            rows[Self.retained - 1] = .single(ActivityFixture.tool(Self.retained - 1, task: "soak", category: "shell", command: "make test",
+                                                                   resolved: false))
+        }
+        self.showsLiveStep = [.liveStepPulse, .workingRow].contains(variant)
         self.snapshot = ActivityFeedSnapshot.preparing(rows, previous: nil)
     }
 
@@ -237,7 +305,10 @@ private struct CPUProfileSource {
 
     /// Ends the stream: the tail row stops streaming, keeping its identity.
     mutating func finish() -> ActivityFeedSnapshot {
-        rows[rows.count - 1] = .single(ActivityFixture.text(rows.count - 1, "Synthetic stream finished.", task: "soak"))
+        showsLiveStep = false
+        rows[rows.count - 1] = variant == .liveTool
+            ? .single(ActivityFixture.tool(rows.count - 1, task: "soak", category: "shell", command: "make test"))
+            : .single(ActivityFixture.text(rows.count - 1, "Synthetic stream finished.", task: "soak"))
         snapshot = ActivityFeedSnapshot.preparing(rows, previous: snapshot)
         return snapshot
     }
@@ -250,6 +321,10 @@ private struct CPUProfileSource {
         case .prebuiltSnapshots:
             (rows, snapshot) = cycle[tick % cycle.count]
             return snapshot
+        case .liveTool:
+            rows[rows.count - 2] = Self.settledRow(seq: Self.retained - 2, tick: tick)
+        case .liveStepPulse, .workingRow:
+            rows[rows.count - 1] = Self.settledRow(seq: Self.retained - 1, tick: tick)
         case .append, .appendNoCaretAnimation:
             let last = rows.count - 1
             rows[last] = .single(ActivityFixture.text(Self.retained - 1 + tick, "Synthetic finished message \(tick).", task: "soak"))
@@ -257,6 +332,11 @@ private struct CPUProfileSource {
         }
         snapshot = ActivityFeedSnapshot.preparing(rows, previous: snapshot)
         return snapshot
+    }
+
+    private static func settledRow(seq: Int, tick: Int) -> ActivityRow {
+        .single(ActivityFixture.text(seq, "Synthetic settled delta \(tick % 100). " + String(repeating: "bounded text ", count: tick % 8 + 1),
+                                     task: "soak"))
     }
 
     private static func streamingRow(seq: Int, tick: Int) -> ActivityRow {

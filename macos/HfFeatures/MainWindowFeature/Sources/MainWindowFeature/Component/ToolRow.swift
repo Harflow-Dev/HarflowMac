@@ -82,7 +82,7 @@ struct ToolRow: View {
                             Text("failed").font(.hf(.caption)).foregroundStyle(Color.failedRed)
                         }
                     } else if model.live {
-                        RunningSpinner(size: HfRadius.Metrics.spacing12)
+                        FeedRunningSpinner(size: HfRadius.Metrics.spacing12)
                     } else {
                         Text("no result").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
                     }
@@ -182,7 +182,7 @@ struct ToolRow: View {
                     Text("failed").font(.hf(.secondary)).foregroundStyle(Color.failedRed)
                 }
             } else if model.live {
-                RunningSpinner(size: HfRadius.Metrics.spacing12)
+                FeedRunningSpinner(size: HfRadius.Metrics.spacing12)
             } else {
                 Text("no result").font(.hf(.secondary)).foregroundStyle(TaskScreenStyle.ToolHead.metaColor.color)
             }

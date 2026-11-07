@@ -155,18 +155,16 @@ struct StreamingCaret: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            Text("▍")
-                .font(.hf(.body, design: .monospaced))
-                .foregroundStyle(Color.secondaryText)
-                .opacity(reduceMotion ? 1 : Self.opacity(at: context.date))
-        }
+        StreamingCaretLayer(blinks: !reduceMotion)
+            .accessibilityHidden(true)
     }
 
-    /// A 1.2 second cycle matches the former 0.6 second autoreversing blink. The clock
-    /// belongs to this tiny leaf, keeping its ticks out of the selectable text's transaction.
-    static func opacity(at date: Date) -> Double {
-        0.6 + 0.4 * cos(date.timeIntervalSinceReferenceDate * 2 * .pi / 1.2)
+    /// A 1.2 second cycle matches the former 0.6 second autoreversing blink.
+    static let period: TimeInterval = 1.2
+
+    /// The blink's opacity `seconds` into the reference-date clock: `0.6 + 0.4 cos`.
+    static func opacity(atPhase seconds: TimeInterval) -> Double {
+        0.6 + 0.4 * cos(seconds * 2 * .pi / period)
     }
 }
 

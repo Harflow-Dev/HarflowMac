@@ -411,6 +411,10 @@ CENTERED_COMPOSER_SUITE = "MainWindowFeatureTests.CenteredComposerHostedTests"
 SIDEBAR_UNIFIED_SUITE = "MainWindowFeatureTests.SidebarUnifiedHostedTests"
 SIDEBAR_RAIL_AX_SUITE = "MainWindowFeatureTests.SidebarNavigationRailFocusedAXHostedTests"
 SIDEBAR_BASELINE_SUITE = "MainWindowFeatureTests.SidebarNativeParityBaselineTests"
+LAYER_MOTION_ANIMATION_SUITE = "MainWindowFeatureTests.LayerMotionAnimationHostedTests"
+LAYER_MOTION_FEED_SUITE = "MainWindowFeatureTests.LayerMotionFeedHostedTests"
+LAYER_MOTION_LOOK_SUITE = "MainWindowFeatureTests.LayerMotionLookHostedTests"
+LAYER_MOTION_NO_LOOP_SUITE = "MainWindowFeatureTests.LayerMotionNoLoopHostedTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
     TAIL_INSERT_SUITE,
@@ -424,6 +428,10 @@ HOSTED_SUITE_NAMES = (
     SIDEBAR_UNIFIED_SUITE,
     SIDEBAR_RAIL_AX_SUITE,
     SIDEBAR_BASELINE_SUITE,
+    LAYER_MOTION_ANIMATION_SUITE,
+    LAYER_MOTION_FEED_SUITE,
+    LAYER_MOTION_LOOK_SUITE,
+    LAYER_MOTION_NO_LOOP_SUITE,
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"

@@ -49,23 +49,17 @@ struct TranscriptWorkingGlyph: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            let turns = reduceMotion ? 0 : context.date
-.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: TaskScreenStyle.Working.spinDuration) / TaskScreenStyle.Working.spinDuration
-            ZStack {
-                Circle().stroke(TaskScreenStyle.Working.glyphRing.color, lineWidth: TaskScreenStyle.Working.glyphRingWidth)
-                Circle()
-                    .trim(from: 0, to: 0.25)
-                    .stroke(TaskScreenStyle.Working.glyphArc.color,
-                            style: StrokeStyle(lineWidth: TaskScreenStyle.Working.glyphRingWidth, lineCap: .round))
-                    .rotationEffect(.degrees(turns * 360))
-            }
-        }
-        .padding(TaskScreenStyle.Working.glyphMargin)
-        .frame(width: TaskScreenStyle.Working.glyphSize + 2 * TaskScreenStyle.Working.glyphMargin,
-               height: TaskScreenStyle.Working.glyphSize + 2 * TaskScreenStyle.Working.glyphMargin)
-        .accessibilityHidden(true)
+        LayerSpinner(spec: LayerSpinnerSpec(diameter: TaskScreenStyle.Working.glyphSize,
+                                            margin: TaskScreenStyle.Working.glyphMargin,
+                                            lineWidth: TaskScreenStyle.Working.glyphRingWidth,
+                                            arcFraction: 0.25,
+                                            period: TaskScreenStyle.Working.spinDuration,
+                                            ringColor: TaskScreenStyle.Working.glyphRing.color,
+                                            arcColor: TaskScreenStyle.Working.glyphArc.color),
+                     animates: !reduceMotion)
+            .frame(width: TaskScreenStyle.Working.glyphSize + 2 * TaskScreenStyle.Working.glyphMargin,
+                   height: TaskScreenStyle.Working.glyphSize + 2 * TaskScreenStyle.Working.glyphMargin)
+            .accessibilityHidden(true)
     }
 }
 

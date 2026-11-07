@@ -84,7 +84,7 @@ struct ToolGroupCardView: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: HfRadius.Metrics.spacing8)
-            if group.isRunning { RunningSpinner(size: HfRadius.Metrics.spacing12) }
+            if group.isRunning { FeedRunningSpinner(size: HfRadius.Metrics.spacing12) }
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                 .font(.hf(.secondary, weight: .semibold))
                 .foregroundStyle(TaskScreenStyle.ToolHead.iconColor.color)
@@ -135,7 +135,7 @@ struct ToolGroupCardView: View {
                 }
             }
             Spacer(minLength: HfRadius.Metrics.spacing8)
-            if group.isRunning { RunningSpinner(size: HfRadius.Metrics.spacing12) }
+            if group.isRunning { FeedRunningSpinner(size: HfRadius.Metrics.spacing12) }
             Text(group.timeRangeText(start: start))
                 .font(.hf(.caption))
                 .monospacedDigit()
