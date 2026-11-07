@@ -10,7 +10,7 @@
 
 - Select HarflowMCP 0.0.11 as the paired engine, with its frozen runtime inputs and published contract fixtures. Installation and runtime qualification against 0.0.11 are still pending.
 
-- Add the M04 centered composer, adaptive to the window size, and a single scroll area in the sidebar body for navigation, Running and Recent work, with the brand header and appearance/settings footer fixed. M04 is not yet accepted.
+- Add the M04 centered composer, adaptive to the window size, and a single scroll area in the sidebar body for navigation, Running and Recent work, with the brand header and appearance/settings footer fixed. The owner accepted its appearance in the real window; 0.0.11 runtime qualification remains open, and the task screen belongs to M05.
 
 - Remove the duplicate system sidebar toggle from the main window, leaving the sidebar's own control. The sidebar card sits slightly lower.
 

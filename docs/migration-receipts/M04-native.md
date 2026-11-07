@@ -1,6 +1,6 @@
 # M04 native shell and composer
 
-Status: the local strict gates passed on 7b4dbfe (see "Capture gate and sidebar toggle correction"). Owner visual acceptance, aggregate M03/M04 acceptance and 0.0.11 runtime qualification are not established.
+Status: owner visual acceptance is complete as of 2026-11-07 (see "Real window review and composer padding"). The local strict gates passed on 7b4dbfe (see "Capture gate and sidebar toggle correction"). Aggregate M03/M04 acceptance and 0.0.11 runtime qualification are not established.
 
 ## Scope and source
 
@@ -148,7 +148,13 @@ The owner reviewed the real `Window` scene in an isolated copy of a Release buil
 
 - **Title position: accepted by the owner.** In the real window the title sits over the content column, about 135 points right of window centre at 1440 points wide. This corrects the statement above that removing the system toggle centres the title on the window, which holds only for the `NSHostingController` probe and the hosted tests that pin it.
 - **Composer padding: changed and accepted by the owner.** Inner padding now follows `.hd-composer` in HarflowDesign `v2/styles/bundle.css`: 12 points top and right, 8 bottom, 16 left. The owner viewed the result in the real window. The prompt width expectation moved from 688 to 692 with the same tolerance.
-- **Not yet given:** explicit owner verdicts on the single sidebar icon and on the sidebar card position. M04 is not accepted.
+- **Single sidebar icon and sidebar card position: accepted by the owner.** The owner's words, relayed by the coordinator, covered both: "sidebar is ok. but the task is still using old design. i think thats wip".
+
+With these four verdicts, owner visual acceptance of M04 is complete. It rests on the shell and composer in one real window at 1440 points wide, with synthetic state, and it does not cover:
+
+- 0.0.11 runtime qualification, which remains open. The isolated runs seeded and started the runtime but did not qualify it.
+- The task screen, which still shows the old design as the owner noted. It belongs to M05 (task transcript and bounded reading), not M04.
+- Aggregate M03/M04 acceptance beyond the visual check.
 
 Opus, Codex and Vibe each approved the padding diff with no findings to fix. Vibe could not open the design checkout and checked the CSS mapping against values supplied in its prompt; Opus read the design rule directly.
 
