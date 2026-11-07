@@ -37,7 +37,7 @@ final class PublicEventHolder: @unchecked Sendable {
         // Session revisions are transport bookkeeping, not rendered content.
         let comparable = EventObservationFrame(taskID: next.taskID, scope: next.scope, revision: frame.revision,
                                                records: next.records, events: next.events, items: next.items,
-                                               history: next.history, summary: next.summary)
+                                               history: next.history, summary: next.summary, logState: next.logState)
         guard comparable != frame else { return false }
         frame = next
         return true

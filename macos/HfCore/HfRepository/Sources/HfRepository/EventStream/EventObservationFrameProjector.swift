@@ -62,7 +62,23 @@ enum EventObservationFrameProjector {
         )
         return EventObservationFrame(taskID: taskID, scope: scope, revision: snapshot.revision,
                                      records: records, events: events, items: builder.items,
-                                     history: history, summary: summary(snapshot.summary))
+                                     history: history, summary: summary(snapshot.summary),
+                                     logState: logState(snapshot))
+    }
+
+    /// After a capacity or nonprogress rejection newer pages are dropped, so the last recorded state may be
+    /// stale; it is withheld (nil) so consumers never claim settling or final from it.
+    private static func logState(_ snapshot: PublicEventObservationSnapshot) -> EventLogState? {
+        guard let log = snapshot.lifecycle,
+              !snapshot.issues.contains(.capacity), !snapshot.issues.contains(.nonprogress) else { return nil }
+        return switch log.state {
+        case .open: .open
+        case .settling: .settling
+        case .final: .final
+        case .incomplete: .incomplete
+        case .unknown: .unknown
+        case .unavailable: .unavailable
+        }
     }
 
     private static func availableActions(_ snapshot: PublicEventObservationSnapshot) -> Set<EventObservationAction> {

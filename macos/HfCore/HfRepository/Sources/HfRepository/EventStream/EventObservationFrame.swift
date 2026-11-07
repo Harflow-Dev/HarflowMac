@@ -121,6 +121,15 @@ public struct ObservedActivitySummary: Equatable, Sendable {
     }
 }
 
+// MARK: - EventLogState
+
+/// The event log's lifecycle state (`log.state` on the wire).
+///
+/// Unknown wire states never reach the frame: MonitorCore rejects them, and they arrive as `nil`.
+public enum EventLogState: Hashable, Sendable {
+    case open, settling, final, incomplete, unknown, unavailable
+}
+
 // MARK: - EventObservationFrame
 
 /// One atomic revision of bounded captured records, semantic rows and qualified facts.
@@ -133,12 +142,15 @@ public struct EventObservationFrame: Equatable, Sendable {
     public let items: [TimelineItem]
     public let history: EventObservationHistory
     public let summary: ObservedActivitySummary
+    /// The latest observed `log.state`; `nil` until a page reports it, after a window replacement, and while
+    /// the observation has refused newer pages (capacity or nonprogress), when the last state may be stale.
+    public let logState: EventLogState?
 
     /// Creates a frame, including empty/loading mock frames without fabricated zero totals.
     public init(taskID: String, scope: EventObservationScope, revision: Int = 0,
                 records: [ObservedEventRecord] = [], events: [TaskEvent] = [], items: [TimelineItem] = [],
                 history: EventObservationHistory = .init(isLoading: true),
-                summary: ObservedActivitySummary = .init()) {
+                summary: ObservedActivitySummary = .init(), logState: EventLogState? = nil) {
         self.taskID = taskID
         self.scope = scope
         self.revision = revision
@@ -147,6 +159,7 @@ public struct EventObservationFrame: Equatable, Sendable {
         self.items = items
         self.history = history
         self.summary = summary
+        self.logState = logState
     }
 }
 

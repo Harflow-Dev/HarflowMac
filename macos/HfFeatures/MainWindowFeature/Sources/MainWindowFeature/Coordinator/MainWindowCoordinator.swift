@@ -40,6 +40,8 @@ extension NSPasteboard: PasteboardWriting {}
 @Observable
 public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     let continuityHistory: any TaskContinuityHistory = TaskContinuityHistoryStore()
+    /// Side-pane choices per conversation, kept here because the task view's own state is reset on selection.
+    let paneState = TaskPaneStateStore()
 
     // MARK: - Public Properties
 
