@@ -32,8 +32,20 @@ struct SidebarWorkflowRun: Equatable, Sendable {
     var name: String { raw["name"]?.stringValue ?? "Workflow" }
     var parentRunID: String? { raw["parent_workflow_run_id"]?.stringValue ?? raw["parent_link"]?["workflow_run_id"]?.stringValue }
     var startedAt: Date? { raw["created_at"]?.doubleValue.map(Date.init(timeIntervalSince1970:)) }
-    /// Keep recency stable during node activity until the engine exposes caller-resume time.
-    var latestRunAt: Date? { startedAt }
+    /// The engine's last caller-resume time; absent when the run was never resumed.
+    var resumedAt: Date? {
+        raw["resumed_at"]?.doubleValue.flatMap { $0.isFinite ? $0 : nil }.map(Date.init(timeIntervalSince1970:))
+    }
+
+    /// Sort time: the run's start or last resume, whichever is later, independent of node activity.
+    var latestRunAt: Date? {
+        switch (startedAt, resumedAt) {
+        case let (started?, resumed?): max(started, resumed)
+        case let (started?, nil): started
+        case let (nil, resumed?): resumed
+        case (nil, nil): nil
+        }
+    }
 
     var isActive: Bool {
         raw["settling"]?.boolValue == true

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Sort workflow runs in the sidebar, and place them in Today or Earlier, by the later of their start and the engine's `resumed_at` time. Run pages remain ordered by `created_at`, so an old run beyond the loaded page that is no longer active appears only once paging reaches it.
+
 - Add typed conversation-delivery adapters to MonitorCore for the `conversation-delivery.v1` ctl contract (prepare, send, control) with request values, an outcome type that separates not-dispatched, engine-error and uncertain results, and projection and receipt decoders. They have no callers and no UI; evidence is contract fixtures and fake-runner tests only, with no runtime qualification.
 
 - Select HarflowMCP 0.0.11 as the paired engine, with its frozen runtime inputs and published contract fixtures. Installation and runtime qualification against 0.0.11 are still pending.

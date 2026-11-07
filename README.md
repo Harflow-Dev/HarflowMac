@@ -8,7 +8,7 @@ Task activity uses bounded public event pages. The task transcript includes a se
 
 Resource slots in Overview shows capacity, holders and ordered waiters from a compatible engine, with links to known owning tasks and workflow runs. Task details show reported phase leases and actual blockers. Initial loading uses shimmer, with static placeholders under Reduce Motion; refresh failures retain and label the last successful view. This read-only screen requires `phase-slots.v1` and never enables slots or changes cleanup policy.
 
-Workflow runs sort and enter Today or Earlier by their creation time, so node progress does not move them around. Explicit resume ordering awaits the engine’s caller-resume timestamp contract.
+Workflow runs sort and enter Today or Earlier by when they were started or last resumed, so node progress does not move them around. Pages of runs stay ordered by `created_at`, so an old run beyond the loaded page that is no longer active (for example resumed and finished between polls, or after a relaunch) is not seen until paging reaches it.
 
 New task opens an inline composer with repository, harness, model and access choices. The + button opens advanced options in a bounded popover. Choices remain in memory for this window, separately by repository; unavailable choices stay visible for correction. Qualification status remains visible when options are closed. A submission with an unknown outcome stays locked while you review recent tasks, so revisiting the composer or pressing Command-N cannot replay it. A definitive settings refusal permits correction and a fresh submission.
 

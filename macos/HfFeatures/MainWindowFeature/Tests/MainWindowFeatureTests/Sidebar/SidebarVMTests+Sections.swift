@@ -322,3 +322,151 @@ extension SidebarVMTests {
         #expect(!sut.isConnected)
     }
 }
+
+// MARK: - Workflow run sort time: start or last resume
+
+extension SidebarVMTests {
+    private func resumeRun(_ id: String, status: String = "completed", createdAgo: TimeInterval,
+                           resumedAgo: TimeInterval? = nil, extra: [String: JSONValue] = [:]) -> [String: JSONValue] {
+        var raw: [String: JSONValue] = ["workflow_run_id": .string(id), "status": .string(status),
+                                        "created_at": .number(noon.addingTimeInterval(-createdAgo).timeIntervalSince1970)]
+        if let resumedAgo { raw["resumed_at"] = .number(noon.addingTimeInterval(-resumedAgo).timeIntervalSince1970) }
+        return raw.merging(extra) { _, new in new }
+    }
+
+    private func bucketed(_ sut: SidebarVM) -> [SidebarSection] {
+        sut.bucketedSections(trees: [], groups: [], forcedExpandedIDs: [])
+    }
+
+    // Fails before the fix: latestRunAt ignores resumed_at.
+    @Test func givenOldRunResumedRecently_whenBucketed_thenItSortsAboveNewerNeverResumedRun() async {
+        // given
+        let sut = makeBucketSUT().sut
+        // when
+        sut.workflowRuns = [
+            SidebarWorkflowRun(raw: resumeRun("never-resumed", createdAgo: 3600)),
+            SidebarWorkflowRun(raw: resumeRun("resumed", createdAgo: 7200, resumedAgo: 60))
+        ]
+        // then
+        let sections = bucketed(sut)
+        #expect(sections.map(\.bucket) == [.today])
+        #expect(sections.first?.items.map(\.id) == ["workflow:resumed", "workflow:never-resumed"])
+    }
+
+    // Fails before the fix: the resume moves the run's day bucket.
+    @Test func givenTerminalRunStartedEarlierResumedToday_whenBucketed_thenItLandsInToday() async {
+        // given
+        let sut = makeBucketSUT().sut
+        // when
+        sut.workflowRuns = [SidebarWorkflowRun(raw: resumeRun("resumed", createdAgo: 3 * 86_400, resumedAgo: 60))]
+        // then
+        let sections = bucketed(sut)
+        #expect(sections.map(\.bucket) == [.today])
+        #expect(sections.first?.items.map(\.id) == ["workflow:resumed"])
+    }
+
+    // The order check fails before the fix; the poll-state check passes and guards the recompute route.
+    @Test func givenRetainedHeader_whenMergedWithResumedAt_thenPollStateDiffersAndBucketedOrderChanges() async {
+        // given
+        let sut = makeBucketSUT().sut
+        sut.mergeWorkflowHeaders([resumeRun("old", createdAgo: 7200), resumeRun("new", createdAgo: 3600)])
+        let stateBefore = sut.workflowPollState
+        #expect(bucketed(sut).first?.items.map(\.id) == ["workflow:new", "workflow:old"])
+        // when
+        sut.mergeWorkflowHeaders([resumeRun("old", createdAgo: 7200, resumedAgo: 60)])
+        // then
+        #expect(sut.workflowPollState != stateBefore)
+        #expect(bucketed(sut).first?.items.map(\.id) == ["workflow:old", "workflow:new"])
+    }
+
+    // Guard (passes before the fix): a newer updated_at alone never moves the run.
+    @Test func givenRunWithNewerUpdatedAtOnly_whenBucketed_thenOrderAndBucketAreUnchanged() async {
+        // given
+        let sut = makeBucketSUT().sut
+        let touched = resumeRun("touched", createdAgo: 3 * 86_400,
+                                extra: ["updated_at": .number(noon.addingTimeInterval(-30).timeIntervalSince1970)])
+        // when
+        sut.workflowRuns = [SidebarWorkflowRun(raw: touched),
+                            SidebarWorkflowRun(raw: resumeRun("newer", createdAgo: 3600))]
+        // then
+        let sections = bucketed(sut)
+        #expect(sections.map(\.bucket) == [.today, .earlier])
+        #expect(sections.first?.items.map(\.id) == ["workflow:newer"])
+        #expect(sections.last?.items.map(\.id) == ["workflow:touched"])
+    }
+
+    // Guard (passes before the fix): resumed_at before created_at never moves the run backwards.
+    @Test func givenResumedAtEarlierThanCreatedAt_whenBucketed_thenRunKeepsItsStartPosition() async {
+        // given
+        let sut = makeBucketSUT().sut
+        // when
+        sut.workflowRuns = [
+            SidebarWorkflowRun(raw: resumeRun("skewed", createdAgo: 60, resumedAgo: 7200)),
+            SidebarWorkflowRun(raw: resumeRun("other", createdAgo: 3600))
+        ]
+        // then
+        #expect(bucketed(sut).first?.items.map(\.id) == ["workflow:skewed", "workflow:other"])
+    }
+
+    // Fails before the fix: resumed_at alone, with no created_at, must be the sort time.
+    @Test func givenOnlyResumedAt_whenLatestRunAtRead_thenItIsTheResumeTime() {
+        // given
+        let stamp = noon.addingTimeInterval(-90)
+        let run = SidebarWorkflowRun(raw: ["workflow_run_id": .string("r"),
+                                           "resumed_at": .number(stamp.timeIntervalSince1970)])
+        // when
+        let value = run.latestRunAt
+        // then
+        #expect(value == stamp)
+    }
+
+    // Fails before the fix: resumed_at later than created_at wins.
+    @Test func givenResumedAtLaterThanCreatedAt_whenLatestRunAtRead_thenItIsTheResumeTime() {
+        // given
+        let created = noon.addingTimeInterval(-7200)
+        let resumed = noon.addingTimeInterval(-60)
+        let run = SidebarWorkflowRun(raw: ["created_at": .number(created.timeIntervalSince1970),
+                                           "resumed_at": .number(resumed.timeIntervalSince1970)])
+        // when
+        let value = run.latestRunAt
+        // then
+        #expect(value == resumed)
+    }
+
+    // Guard (passes before the fix): resumed_at earlier than created_at never lowers the sort time.
+    @Test func givenResumedAtEarlierThanCreatedAt_whenLatestRunAtRead_thenItIsCreatedAt() {
+        // given
+        let created = noon.addingTimeInterval(-60)
+        let resumed = noon.addingTimeInterval(-7200)
+        let run = SidebarWorkflowRun(raw: ["created_at": .number(created.timeIntervalSince1970),
+                                           "resumed_at": .number(resumed.timeIntervalSince1970)])
+        // when
+        let value = run.latestRunAt
+        // then
+        #expect(value == created)
+    }
+
+    // Guard (passes before the fix): unusable resumed_at values fall back to created_at.
+    @Test(arguments: [JSONValue.string("soon"), .bool(true), .null, .number(.nan), .number(.infinity), .number(-.infinity)])
+    func givenUnusableResumedAt_whenLatestRunAtRead_thenItFallsBackToCreatedAt(value: JSONValue) {
+        // given
+        let created = noon.addingTimeInterval(-7200)
+        let run = SidebarWorkflowRun(raw: ["created_at": .number(created.timeIntervalSince1970), "resumed_at": value])
+        // when
+        let value = run.latestRunAt
+        // then
+        #expect(value == created)
+    }
+
+    // Guard (passes before the fix): absent resumed_at falls back to created_at; neither present is nil.
+    @Test func givenNoResumedAt_whenLatestRunAtRead_thenItIsCreatedAtOrNil() {
+        // given
+        let created = noon.addingTimeInterval(-7200)
+        // when
+        let withCreated = SidebarWorkflowRun(raw: ["created_at": .number(created.timeIntervalSince1970)]).latestRunAt
+        let empty = SidebarWorkflowRun(raw: [:]).latestRunAt
+        // then
+        #expect(withCreated == created)
+        #expect(empty == nil)
+    }
+}

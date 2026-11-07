@@ -41,8 +41,8 @@ enum SidebarEntry {
 
 extension SidebarPresentationBuilder {
 
-    /// Buckets `trees` and `groups` (D10), orders each bucket newest start first (an entry with no
-    /// start time sorts last, ties broken by id), then flattens every entry into items. Empty
+    /// Buckets `trees` and `groups` (D10), orders each bucket by most recent start or resume first (an
+    /// entry with no such time sorts last, ties broken by id), then flattens every entry into items. Empty
     /// buckets are omitted.
     func bucketedSections(trees: [ConversationNode], groups: [ParallelGroup], forcedExpandedIDs: Set<String>) -> [SidebarSection] {
         let taskEntries = trees.map(SidebarEntry.tree) + groups.map(SidebarEntry.group)
@@ -63,7 +63,7 @@ extension SidebarPresentationBuilder {
 
     private func bucket(for entry: SidebarEntry, now: Date) -> SidebarSection.Bucket {
         if entry.isRunning { return .running }
-        guard let startedAt = entry.latestRunAt, input.calendar.isDate(startedAt, inSameDayAs: now) else { return .earlier }
+        guard let latestRunAt = entry.latestRunAt, input.calendar.isDate(latestRunAt, inSameDayAs: now) else { return .earlier }
         return .today
     }
 
