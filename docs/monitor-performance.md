@@ -50,3 +50,29 @@ HARFLOW_ACTIVITY_SOAK_SECONDS=120 HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scr
 The opt-in test reports process CPU, resident memory, physical footprint and native
 host counts, and verifies that settled reconciliation and measurement work stops.
 Without the duration variable, ordinary suite runs do not exercise the timed soak.
+
+`ActivityFeedStreamingCPUProfileTests` attributes the soak's streaming CPU. It is opt-in in the same
+way: each variant runs only when its own variable holds a duration of at least 60 seconds, and an
+invalid value prints a skip line. Every variant streams into the same 3,000 retained rows at the
+soak's tick rate:
+
+- `HARFLOW_ACTIVITY_CPU_FIXED_SECONDS`: the soak's tick, one fixed-id streaming row.
+- `HARFLOW_ACTIVITY_CPU_NO_CARET_SECONDS`: the fixed row with the Reduce Motion override, which
+  pauses the streaming caret's animation timeline.
+- `HARFLOW_ACTIVITY_CPU_PREBUILT_SECONDS`: the fixed row with every row array and snapshot prepared
+  before streaming starts.
+- `HARFLOW_ACTIVITY_CPU_APPEND_SECONDS`: each tick finalizes the streaming tail and appends a new
+  streaming row.
+- `HARFLOW_ACTIVITY_CPU_APPEND_NO_CARET_SECONDS`: the append stream with the caret animation paused.
+- `HARFLOW_ACTIVITY_CPU_ROOT_SIZING_OFF_SECONDS`: the fixed row with the test root hosting view's
+  sizing options cleared.
+
+```sh
+HARFLOW_ACTIVITY_CPU_FIXED_SECONDS=150 HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfFeatures/MainWindowFeature --mode suites
+```
+
+Set one variable per run so variants do not share a process. Each prints one
+`HARFLOW_ACTIVITY_CPU` line with tick rate, CPU cores while streaming, with ticks stopped and after
+the stream finishes, feed counter deltas and the native subtree size. CPU is `getrusage` for the
+whole test process in a debug build, so the figures compare variants rather than give an absolute
+feed cost.
