@@ -82,6 +82,9 @@ private enum StyleReloadSpy {
         let column = mounted.scroll.convert(mounted.scroll.bounds, to: mounted.host)
         let separator = try await reveal("sep:" + Self.taskID, in: mounted)
         await DisplayFrames.waitForPresentedFrame()
+        // A cell realized by `reveal` paints into the window bitmap a little after two presented frames (measured:
+        // about 400 ms late in some capture-mode runs); the measure needs the row's rules to exist.
+        await waitUntil(timeout: 5) { inkExtent(in: mounted.host, band: separator.convert(separator.bounds, to: mounted.host)) != nil }
         let root = try #require(separator.host?.rootView)
         let cellFrame = separator.convert(separator.bounds, to: mounted.host)
         let ink = try inkBounds(in: mounted.host, band: cellFrame)
@@ -505,10 +508,10 @@ private enum StyleReloadSpy {
     }
 
     /// The horizontal extent, in `view`'s points, of what is rendered inside `band` that differs from the band's own
-    /// background (read at its left edge): the outer window content is rendered because an individual
-    /// cell host does not render on its own.
-    private func inkBounds(in view: NSView, band: CGRect) throws -> (minX: CGFloat, maxX: CGFloat) {
-        let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+    /// background (read at its left edge), or nil while nothing is rendered there yet: the outer window content is
+    /// rendered because an individual cell host does not render on its own.
+    private func inkExtent(in view: NSView, band: CGRect) -> (minX: CGFloat, maxX: CGFloat)? {
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: bitmap)
         let scale = CGFloat(bitmap.pixelsWide) / view.bounds.width
         func components(_ x: Int, _ y: Int) -> [CGFloat] {
@@ -524,8 +527,11 @@ private enum StyleReloadSpy {
                 maxX = max(maxX, x)
             }
         }
-        try #require(maxX >= 0, "nothing rendered in the band")
-        return (CGFloat(minX) / scale, CGFloat(maxX + 1) / scale)
+        return maxX >= 0 ? (CGFloat(minX) / scale, CGFloat(maxX + 1) / scale) : nil
+    }
+
+    private func inkBounds(in view: NSView, band: CGRect) throws -> (minX: CGFloat, maxX: CGFloat) {
+        try #require(inkExtent(in: view, band: band), "nothing rendered in the band")
     }
 
     private static func rowID(_ seq: Int) -> String { "\(taskID)#\(seq)" }
