@@ -47,7 +47,7 @@ Step 3 also needs decisions on which tasks enroll, who picks the profile, what t
 
 Tests are in `ConversationDelivery/ConversationLaunchTests.swift`. Vendored `ctl-launch-*` fixtures are read through the manifest, unchanged. No fixture covers a profile flag or a launch `unsupported` refusal, so those cases are synthetic and named as such. No real engine binary ran.
 
-MonitorCore through the guarded runner: 671/671 tests in 77 suites. SwiftFormat reported nothing to format. SwiftLint 0.57.1 reported no violations; CI pins 0.63.2. Both guards passed. Strict gates across all packages are recorded separately when run.
+MonitorCore through the guarded runner: 671/671 tests in 77 suites. SwiftFormat reported nothing to format. SwiftLint 0.57.1 reported no violations; CI pins 0.63.2. Both guards passed. Strict gates on `8e51185`, one package at a time, from 09:41 to 10:00 with a peak one-minute load of 18.5: MainWindowFeature 260/260 suites and 1,941/1,941 tests, HfCommon 18, HfUI 239, HfUtilities 19, HfRepository 520, MonitorCore 671, MenuBarFeature 88, SettingsFeature 87, Harflow 119. The Python tooling tests passed 235 and the Release build passed on `7642014`, one commit before these documentation-only changes.
 
 ## Limits
 
