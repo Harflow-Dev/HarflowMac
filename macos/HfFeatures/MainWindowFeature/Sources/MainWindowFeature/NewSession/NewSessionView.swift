@@ -148,7 +148,8 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             promptEditor
             composerControls(optionsHeight: optionsHeight)
         }
-        .padding(HfRadius.Metrics.spacing16)
+        .padding(EdgeInsets(top: HfRadius.Metrics.spacing12, leading: HfRadius.Metrics.spacing16,
+                            bottom: HfRadius.Metrics.spacing8, trailing: HfRadius.Metrics.spacing12))
         .background(RoundedRectangle(cornerRadius: HfRadius.card).fill(Color.composerFill))
         .overlay(RoundedRectangle(cornerRadius: HfRadius.card).stroke(Color.cardBorder))
     }

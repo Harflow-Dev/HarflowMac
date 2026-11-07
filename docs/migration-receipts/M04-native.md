@@ -141,3 +141,17 @@ Plan and code each ran the three-reviewer loop for two rounds, over `705ceb7..7b
 - 0.0.11 installation, execution and runtime qualification remain pending and were out of scope. ST05 was not started.
 - CI on `main` previously failed in `macos/build-app.sh` on Xcode macro enablement for Dummyable, Mockable and SwiftEnvironment. The local build passed. CI was not rechecked, and macro trust settings were not changed.
 - Captures are synthetic fixture evidence. Passing gates are not owner acceptance of M04.
+
+## Real window review and composer padding (2026-11-07)
+
+The owner reviewed the real `Window` scene in an isolated copy of a Release build at `04afd56`: unique bundle identifier, no URL schemes, a scratch HOME seeded through the production `ManagedRuntimeInstaller` with local acquisitions, and synthetic task state. Notification flags were set to typed `false` through launch arguments, which also settles the open question in the S02 fixture receipt. The app still writes its window frame to a unique preference domain in the real account, because macOS does not redirect preferences to the scratch HOME; that domain is removed afterwards. This run does not qualify runtime 0.0.11.
+
+- **Title position: accepted by the owner.** In the real window the title sits over the content column, about 135 points right of window centre at 1440 points wide. This corrects the statement above that removing the system toggle centres the title on the window, which holds only for the `NSHostingController` probe and the hosted tests that pin it.
+- **Composer padding: changed and accepted by the owner.** Inner padding now follows `.hd-composer` in HarflowDesign `v2/styles/bundle.css`: 12 points top and right, 8 bottom, 16 left. The owner viewed the result in the real window. The prompt width expectation moved from 688 to 692 with the same tolerance.
+- **Not yet given:** explicit owner verdicts on the single sidebar icon and on the sidebar card position. M04 is not accepted.
+
+Opus, Codex and Vibe each approved the padding diff with no findings to fix. Vibe could not open the design checkout and checked the CSS mapping against values supplied in its prompt; Opus read the design rule directly.
+
+Focused runs through the guarded runner passed for the six suites hosting the composer: `CenteredComposerHostedTests`, `NewSessionComposerHostedTests`, `QualificationHostedTests`, `AccessOptionRowTests`, `M04StateMatrixHostedTests` and `NativePreferenceCaptureTests`. Format, lint with installed SwiftLint 0.57.1 rather than CI's pinned 0.63.2, and both guards passed. The strict package gates were not rerun for this change.
+
+`M04StateMatrixHostedTests` failed once before passing. At a one-minute load near 30, with the isolated app open, it recorded 5 issues: `NSApp.isActive` false, `screencapture` exit status 15 twice and two missing PNG files, with no layout assertion among them. The same unchanged suite then passed twice at a load near 9, with no issues and 208 captures each, the isolated app still open. Load is a plausible factor but was not isolated, so the cause of that failure, like the earlier capture failure above, remains unknown.

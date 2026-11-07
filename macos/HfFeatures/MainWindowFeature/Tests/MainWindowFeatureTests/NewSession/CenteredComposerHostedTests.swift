@@ -43,7 +43,7 @@ struct CenteredComposerHostedTests {
             let editor = prompt.promptTextView
             #expect(editor.string.isEmpty)
             #expect(abs(prompt.bounds.height - 26) < 0.5)
-            #expect(abs(prompt.bounds.width - 688) < 1)
+            #expect(abs(prompt.bounds.width - 692) < 1)
             // and — the real native editor carries the exact placeholder attribute, with its
             // Task prompt label unchanged; the placeholder on screen stays a pure overlay.
             #expect(CenteredComposerEvidence.accessibilityPlaceholder(of: editor) == "Describe the task.",
