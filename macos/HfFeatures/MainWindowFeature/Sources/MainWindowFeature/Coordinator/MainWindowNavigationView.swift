@@ -16,16 +16,26 @@ extension EnvironmentValues {
 struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: View {
     @State var coordinator: Coordinator
     @State private var columns: NavigationSplitViewVisibility = .all
+    /// The window width band, written on a band crossing only. The shell body never reads it; the principal and the
+    /// task toolbar's chips do.
+    @State private var layout = TopBarLayoutState()
+    /// Native regression probes; production leaves these nil.
+    private let onShellEvaluation: (() -> Void)?
+    private let onPrincipalEvaluation: (() -> Void)?
 
-    init(_ coordinator: Coordinator, sidebarCollapsed: Bool = false) {
+    init(_ coordinator: Coordinator, sidebarCollapsed: Bool = false, onShellEvaluation: (() -> Void)? = nil,
+         onPrincipalEvaluation: (() -> Void)? = nil) {
         _coordinator = State(initialValue: coordinator)
         _columns = State(initialValue: sidebarCollapsed ? .detailOnly : .all)
+        self.onShellEvaluation = onShellEvaluation
+        self.onPrincipalEvaluation = onPrincipalEvaluation
     }
 
     private var isCollapsed: Bool { columns == .detailOnly }
 
     var body: some View {
-        HStack(spacing: 0) {
+        _ = onShellEvaluation?()
+        return HStack(spacing: 0) {
             if isCollapsed {
                 coordinator.buildNavigationRail { columns = .all }
                 Divider()
@@ -39,6 +49,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 detail
             }
         }
+        .onGeometryChange(for: TopBarWidthBand.self) { TopBarWidthBand(width: $0.size.width) } action: { layout.setBand($0) }
+        .environment(\.topBarLayout, layout)
         .toolbar {
             if coordinator.canReturnToResourceSlots {
                 ToolbarItem(placement: .navigation) {
@@ -46,11 +58,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 }
             }
             ToolbarItem(placement: .principal) {
-                HStack(spacing: HfRadius.Metrics.spacing6) {
-                    Text(contextTitle).font(.hf(.secondary))
-                    coordinator.buildConnectionStatusView()
-                }
-                .accessibilityElement(children: .contain)
+                TaskTopBarPrincipal(holder: coordinator.topBar, layout: layout, fallbackTitle: contextTitle,
+                                    status: coordinator.buildConnectionStatusView(), onEvaluation: onPrincipalEvaluation)
             }
             .sharedBackgroundVisibility(.hidden)
         }

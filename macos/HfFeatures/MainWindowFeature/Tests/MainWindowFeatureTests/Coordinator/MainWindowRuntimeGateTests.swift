@@ -77,6 +77,8 @@ import Testing
         let errors = CurrentValueSubject<ToolError?, Never>(nil)
         given(listing).hasListed.willReturn(false)
         given(listing).listError.willReturn(nil)
+        given(listing).tasksPublisher().willReturn(Empty<[TaskInfo], Never>().eraseToAnyPublisher())
+        given(listing).tasks.willReturn([])
         given(listing).hasListedPublisher().willReturn(listed.eraseToAnyPublisher())
         given(listing).listErrorPublisher().willReturn(errors.eraseToAnyPublisher())
         let refreshes = RefreshCounter()

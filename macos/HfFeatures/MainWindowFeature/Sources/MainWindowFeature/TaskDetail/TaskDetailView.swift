@@ -71,8 +71,11 @@ protocol TaskDetailViewModel: ViewModel {
     var changesCaptureSettling: Bool { get }
     /// Rows revealed per scope; a scope absent from it shows the first step.
     var changesRevealLimits: [TaskChangesScopeID: Int] { get }
-    /// The view reports whether the right pane is open; stored changes are read only while it is, or while settling.
-    func setChangesPaneOpen(_ open: Bool)
+    /// The view reports whether the right pane is open. Stored changes are read only while it is, or while settling,
+    /// and the top bar republishes, since the open pane decides whether its meta shows.
+    func setPaneOpen(_ open: Bool)
+    /// The last open state `setPaneOpen(_:)` reported; the top bar content reads it.
+    var topBarPaneOpen: Bool { get }
     /// "Retry read" and "Check again".
     func didTapRetryChanges()
     func didTapLoadMoreChangeRows(scope: TaskChangesScopeID)
@@ -134,6 +137,7 @@ extension TaskDetailViewModel {
     func didToggleResourceBlockers() {}
     func didOpenResourceSlots() {}
     var callerApprovalController: CallerApprovalController? { nil }
+    var topBarPaneOpen: Bool { false }
 }
 
 // MARK: - TaskDetailView
@@ -160,6 +164,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @AccessibilityFocusState var originAccessibilityFocus: TaskPaneController.Origin?
     @AccessibilityFocusState var groupAccessibilityFocus: TaskPaneStateStore.FactsGroup?
     @FocusState var focusedGroup: TaskPaneStateStore.FactsGroup?
+    @Environment(\.topBarLayout) private var topBarLayout
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
@@ -186,6 +191,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     private var isEmbedded: Bool { chrome == .embedded }
     var isStandalone: Bool { chrome == .standalone }
+    /// Whether the window is in the narrow band; read here so a band crossing re-evaluates this view, not the shell.
+    var topBarIsNarrow: Bool { topBarLayout?.isNarrow ?? false }
     var pane: TaskPaneController { paneHolder.controller }
     
     // MARK: - View Body
@@ -252,7 +259,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             if let context = viewModel.resourceContext {
                 TaskResourceContextView(context: context, blockersExpanded: viewModel.resourceBlockersExpanded,
                                         onToggleBlockers: viewModel.didToggleResourceBlockers,
-                                        onOpenResourceSlots: viewModel.didOpenResourceSlots)
+                                        onOpenResourceSlots: viewModel.didOpenResourceSlots, usesM05Metrics: isStandalone)
                     .padding(.horizontal, HfRadius.Metrics.spacing16)
                     .padding(.bottom, HfRadius.Metrics.spacing8)
             }
@@ -284,7 +291,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     /// mirrors the loaded screen (see `TaskLoadingSkeleton`). Never shown once `hasListed` is true —
     /// then either the task exists or it genuinely is not in harflow's records.
     private var loadingSkeleton: some View {
-        TaskLoadingSkeleton(header: viewModel.loadingHeader, isEmbedded: isEmbedded, style: transcriptStyle)
+        TaskLoadingSkeleton(header: viewModel.loadingHeader, chrome: chrome, style: transcriptStyle)
     }
 
     // MARK: Header
@@ -371,45 +378,53 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             content().background {
                 TaskDetailToolbar(
                     snapshot: TaskDetailToolbarSnapshot(viewModel, task: task, showsInspector: isStandalone ? pane.isOpen : eventsExpanded,
-                                                        isRightPane: isStandalone),
+                                                        isRightPane: isStandalone, chips: toolbarChips(task)),
                     actions: TaskDetailToolbarActions(
                         takeover: viewModel.didTapTakeover, cancel: viewModel.didTapCancel,
                         copyResumeCommand: viewModel.didTapCopyResumeCommand, openTask: viewModel.didTapTask,
                         showRawEvents: showEvents,
-                        toggleInspector: toggleInspector
+                        toggleInspector: toggleInspector,
+                        revealContinuity: revealContinuityChip, revealNotices: revealNoticesChip, revealAccess: revealAccessChip
                     ),
-                    onEvaluation: onToolbarEvaluation
+                    onEvaluation: onToolbarEvaluation,
+                    chipFocus: isStandalone ? TaskDetailToolbarFocus(focus: $originFocus, accessibility: $originAccessibilityFocus) : nil
                 ).equatable()
             }
         }
     }
 
+    /// The standalone mount's top bar carries the title, so its crumbs end at the last ancestor.
     private var breadcrumbs: some View {
         HStack(spacing: HfRadius.Metrics.spacing4) {
             ForEach(viewModel.ancestorCrumbs) { crumb in
                 Button(crumb.title) { viewModel.didTapTask(crumb.id) }
                     .buttonStyle(.link)
                     .lineLimit(1)
-                Text("›").foregroundStyle(Color.secondaryText)
+                if !isStandalone || crumb.id != viewModel.ancestorCrumbs.last?.id {
+                    Text("›").foregroundStyle(Color.secondaryText)
+                }
             }
-            Text(viewModel.title).foregroundStyle(Color.secondaryText).lineLimit(1)
+            if !isStandalone { Text(viewModel.title).foregroundStyle(Color.secondaryText).lineLimit(1) }
         }
         .font(.hf(.secondary))
     }
 
     /// The redesign's title block (§6.2): the page title at `.title` semibold in primary text, over
     /// a meta line of the agent label · repository menu · conversation turns · access — every value
-    /// the header already carried, now all in one line.
+    /// the header already carried, now all in one line. The standalone mount draws the title in the
+    /// window's top bar instead (stage D1) and keeps the meta line until the header moves (D2).
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            Text(viewModel.title)
-                .font(.hf(.title, weight: .semibold))
-                .foregroundStyle(Color.primaryText)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-                .help(viewModel.title)
+            if !isStandalone {
+                Text(viewModel.title)
+                    .font(.hf(.title, weight: .semibold))
+                    .foregroundStyle(Color.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .help(viewModel.title)
+            }
             HStack(spacing: HfRadius.Metrics.spacing6) {
                 BackendLabel(backend: task.backend)
                 repoMenu(task)
@@ -572,26 +587,4 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }.background(Color.inspectorFill)
     }
 
-}
-
-// MARK: - NoticeSummary
-
-/// The header's one-line pointer to the inspector's Notices section.
-enum NoticeSummary {
-    static func text(count: Int) -> String? {
-        count > 0 ? "\(count) notice\(count == 1 ? "" : "s")" : nil
-    }
-}
-
-// MARK: - StandaloneFocusable
-
-/// Makes a control programmatically focusable on the standalone mount only. Elsewhere it is the identity, so the
-/// group and embedded mounts keep the controls' default focus behaviour exactly.
-private struct StandaloneFocusable: ViewModifier {
-    let isEnabled: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isEnabled { content.focusable() } else { content }
-    }
 }

@@ -151,7 +151,7 @@ extension TaskDetailVMTests {
         defer { rig.sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount != nil }
 
         // then
@@ -166,12 +166,12 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig()
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount != nil }
 
         // when
-        rig.sut.setChangesPaneOpen(false)
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(false)
+        rig.sut.setPaneOpen(true)
 
         // then
         #expect(await quietCallCount(rig) == 1)
@@ -184,7 +184,7 @@ extension TaskDetailVMTests {
         defer { rig.sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesPresentation != .loading }
 
         // then: no cadence and no further read while it runs
@@ -209,7 +209,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(status: "running", logState: .open)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(false)
+        rig.sut.setPaneOpen(false)
 
         // when: the transition happens with the pane closed
         var done = rig.scenario
@@ -223,7 +223,7 @@ extension TaskDetailVMTests {
         #expect(await quietCallCount(rig) == 0)
 
         // when: the pane opens
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount == 0 }
 
         // then
@@ -234,7 +234,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(status: "running", logState: .open)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.script.count == 1 && rig.sut.changesTabCount == 0 }
 
         // when
@@ -276,7 +276,7 @@ extension TaskDetailVMTests {
         defer { rig.sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         rig.sut.didTapRetryChanges()
 
         // then

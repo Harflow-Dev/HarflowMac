@@ -103,6 +103,7 @@ extension TaskDetailVMTests {
     ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
+        stubTopBarRouting(routing)
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let membersBox = Box(initialMembers)
         let initialMembers = stubbedMembers ?? initialMembers

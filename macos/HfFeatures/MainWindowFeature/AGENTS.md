@@ -124,6 +124,27 @@ no embedded terminal anywhere in this package:
   item keeps its identifier and reads "Show right pane"/"Hide right pane" on the standalone mount only (Group keeps
   "Show/Hide event details"); its snapshot carries the open state and that label choice, so the equality boundary
   is unchanged.
+- **Task top bar (standalone mount, M05 stage D1).** The shell's single `.principal` toolbar item draws
+  `TaskTopBarPrincipal`: the title, status badge (`TaskBadgeModel`/`TaskStatusBadge`), a fixed busy slot, meta and the
+  connection status, laid out inside a width cap by the pure solver `TopBarPrincipalLayout.solve` (the toolbar never
+  truncates a principal item; it overflows the other items). Every other selection, and a task before it publishes,
+  keeps the shell's `contextTitle`. Content travels through `TaskTopBarHolder` (owned by the coordinator, exposed as
+  `topBar`): a standalone `TaskDetailVM` publishes a quantised `TaskTopBarContent` through `TaskDetailRouting`
+  (`publishTopBar`/`clearTopBar`/`activateTopBar`/`deactivateTopBar`/`retryTopBarActivation`; a publish retries activation only when no other writer holds the bar), writing only on change, on every `didAppear`
+  and clearing on `didDisappear` and `resetForMissingTask`. The holder shows only the entry of its `activeTag`, and only
+  while that tag's conversation equals `shownConversation`, which the coordinator sets from `selection` (never from a
+  view body) with the same normalisation as `buildTaskDetailView`; a change drops the active tag, so one task's content
+  never flashes over another's. A listing change refreshes `shownConversation` only while no tag is active. The shell
+  measures the window into a `TopBarWidthBand` (under 1100, 1100, 1280, 1600) and writes it into `TopBarLayoutState`
+  only when it changes, never reading it, so it does not re-evaluate on a crossing; the band gives the cap (read by the
+  principal) and an observed `isNarrow` (read through the `topBarLayout` environment value by the task view's chips,
+  which re-evaluate only when it flips). Group and embedded keep the `task-detail.status` item,
+  the full header and `contextTitle`. The standalone toolbar's chips (`task-detail.chip.continuity`, `.notices`,
+  `.access`) are separate trailing items that appear only while their condition holds; they reveal the matching facts
+  group and return focus to the chip where AppKit accepts it. The badge is derived only from `TaskSnapshotEvidence`
+  (`ownerState`, `settledDuration` and the exit come from the matching snapshot); HfUI `StatusBadge` is unchanged. On
+  the standalone mount the header drops its title line and the breadcrumbs their trailing title; the meta row, banners
+  and the notices and continuity shortcuts stay until D2. No explicit toolbar id may be reused or duplicated.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from
@@ -208,7 +229,7 @@ no embedded terminal anywhere in this package:
   `task-changes.v1` listing (`TaskDetail/Changes/`, `TaskDetailVM+Changes.swift`), and `TaskDetailVM` takes an explicit
   `scheduler: Scheduling` at every construction site, used only for the bounded settling cadence below.
   **Changes reads.** Only the standalone chrome reads, and only between `didAppear` and `didDisappear`. Demand is the
-  pane being open (reported by the view through `setChangesPaneOpen`), or a settling condition (a terminal status whose
+  pane being open (reported by the view through `setPaneOpen`), or a settling condition (a terminal status whose
   `logState` is `.settling`, or the last applied result being `pending/capture_settling`), which works with the pane
   closed. A read starts only with demand, once per epoch (the member, a shown-status transition, a changed member set, Retry); transitions
   without demand only mark the result stale, and reopening the pane does not re-read. Every read gets a new generation;

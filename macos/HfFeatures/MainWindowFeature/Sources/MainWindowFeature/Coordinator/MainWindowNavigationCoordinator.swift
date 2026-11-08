@@ -34,6 +34,9 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     var hasLoadedWork: Bool { get }
     var loadingWorkError: String? { get }
     func retryLoadingWork()
+    /// Carries the standalone task's top bar content to the principal toolbar item. The shell passes it down
+    /// and never reads its contents.
+    var topBar: TaskTopBarHolder { get }
     /// A single shell lifetime owns sidebar observation across expanded/collapsed composition.
     func startShellObservation()
     func stopShellObservation()

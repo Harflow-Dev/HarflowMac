@@ -23,6 +23,7 @@ import SwiftUI
 final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator {
     
     let parent: any Coordinator = DummyCoordinator()
+    let topBar = TaskTopBarHolder()
     var path: [PathDestination] { [] }
     
     var selection: MonitorDestination?

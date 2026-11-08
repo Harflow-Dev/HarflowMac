@@ -51,7 +51,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var changesTabCount: Int?
     var changesCaptureSettling = false
     var changesRevealLimits: [TaskChangesScopeID: Int] = [:]
-    func setChangesPaneOpen(_: Bool) {}
+    func setPaneOpen(_: Bool) {}
     var changesSelection: TaskChangesSelection?
     var changesDiff = TaskChangesDiffPresentation.none
     var changesTurns: TaskChangesTurnPicker?

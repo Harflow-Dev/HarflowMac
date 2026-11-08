@@ -17,7 +17,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
         #expect(rig.sut.changesCaptureSettling)
         #expect(rig.sut.changesTabCount == nil)
@@ -37,7 +37,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
         rig.script.answerFromNowOn(.snapshot(try ChangesJSON.availableListing()))
 
@@ -55,11 +55,11 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(logState: .final, reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
 
         // when
-        rig.sut.setChangesPaneOpen(false)
+        rig.sut.setPaneOpen(false)
         rig.scheduler.fireOneShot(interval: 5)
         await waitUntil { rig.script.count == 2 && rig.scheduler.oneShotIntervals == [15] }
 
@@ -70,7 +70,7 @@ extension TaskDetailVMTests {
     @Test func givenAScheduledCadence_whenTheViewDisappears_thenTheWaitCancelsAndNoReadFollows() async throws {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
 
         // when
@@ -87,7 +87,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
 
         // when: the clock passes the cap before the next result lands
@@ -104,15 +104,15 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
         rig.scheduler.advance(to: rig.scheduler.now().addingTimeInterval(TaskChangesLifecycle.settlingCap))
         rig.scheduler.fireOneShot(interval: 5)
         await waitUntil { rig.sut.changesPresentation == .settlingCapped }
 
         // when: the pane toggles and the same status is published again
-        rig.sut.setChangesPaneOpen(false)
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(false)
+        rig.sut.setPaneOpen(true)
         publishChanges(rig.scenario, to: rig)
 
         // then
@@ -132,7 +132,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
         rig.scheduler.advance(to: rig.scheduler.now().addingTimeInterval(TaskChangesLifecycle.settlingCap))
         rig.scheduler.fireOneShot(interval: 5)
@@ -162,7 +162,7 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([first])
         await waitUntil { harness.sut.task != nil }
-        harness.sut.setChangesPaneOpen(true)
+        harness.sut.setPaneOpen(true)
         await waitUntil { scheduler.oneShotIntervals == [5] }
         scheduler.advance(to: scheduler.now().addingTimeInterval(TaskChangesLifecycle.settlingCap))
         scheduler.fireOneShot(interval: 5)
@@ -183,7 +183,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
         let flag = ChangesObservationFlag()
         let sut = rig.sut
@@ -206,7 +206,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
         let flag = ChangesObservationFlag()
         let sut = rig.sut

@@ -13,9 +13,13 @@ struct TaskResourceContextView: View {
     let blockersExpanded: Bool
     let onToggleBlockers: () -> Void
     let onOpenResourceSlots: () -> Void
+    /// The standalone mount draws the card with the M05 resource card metrics; its strings are unchanged.
+    var usesM05Metrics = false
+
+    private typealias Metrics = TaskScreenStyle.ResourceCard
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: usesM05Metrics ? Metrics.gap : 8) {
             Text(context.title).font(.hf(.headline, weight: .semibold))
             Text(context.message).font(.hf(.body)).fixedSize(horizontal: false, vertical: true)
             if let detail = context.detail {
@@ -35,11 +39,19 @@ struct TaskResourceContextView: View {
                     Text("Blocking details")
                 }
             }
-            Button("Open resource slots", action: onOpenResourceSlots).buttonStyle(.link)
+            openSlotsButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color.cardFill, in: RoundedRectangle(cornerRadius: HfRadius.card))
-        .overlay(RoundedRectangle(cornerRadius: HfRadius.card).stroke(Color.cardBorder, lineWidth: 1))
+        .padding(usesM05Metrics ? Metrics.padding : 16)
+        .background(usesM05Metrics ? Metrics.fill.color : Color.cardFill,
+                    in: RoundedRectangle(cornerRadius: usesM05Metrics ? Metrics.cornerRadius : HfRadius.card))
+        .overlay(RoundedRectangle(cornerRadius: usesM05Metrics ? Metrics.cornerRadius : HfRadius.card)
+            .stroke(usesM05Metrics ? Metrics.borderColor.color : Color.cardBorder, lineWidth: usesM05Metrics ? Metrics.borderWidth : 1))
+    }
+
+    /// The standalone card tints the link; Group's button gets no tint modifier at all.
+    @ViewBuilder private var openSlotsButton: some View {
+        let button = Button("Open resource slots", action: onOpenResourceSlots).buttonStyle(.link)
+        if usesM05Metrics { button.tint(Metrics.linkColor.color) } else { button }
     }
 }

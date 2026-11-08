@@ -129,6 +129,12 @@ protocol TaskDetailUseCase: Sendable {
 protocol TaskDetailRouting: Sendable {
     func showResourceSlots()
     func selectTask(_ taskID: String)
+    /// The window top bar writer protocol (standalone mounts only): publish, clear, activate and deactivate.
+    func publishTopBar(_ content: TaskTopBarContent, tag: TaskTopBarHolder.Tag)
+    func clearTopBar(tag: TaskTopBarHolder.Tag)
+    func activateTopBar(tag: TaskTopBarHolder.Tag)
+    func deactivateTopBar(tag: TaskTopBarHolder.Tag)
+    func retryTopBarActivation(tag: TaskTopBarHolder.Tag)
     /// Writes `text` to the system pasteboard (Monitor piece 3/3's "Copy resume command"),
     /// returning whether the write succeeded. AppKit lives in the coordinator, never the VM — see
     /// `MainWindowCoordinator.chooseDirectory()` for the same pattern.
@@ -137,6 +143,11 @@ protocol TaskDetailRouting: Sendable {
 
 extension TaskDetailRouting {
     func showResourceSlots() {}
+    func publishTopBar(_: TaskTopBarContent, tag _: TaskTopBarHolder.Tag) {}
+    func clearTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func activateTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func deactivateTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func retryTopBarActivation(tag _: TaskTopBarHolder.Tag) {}
 }
 
 // MARK: - TaskDetailVM
@@ -183,6 +194,11 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// "N turns", shown next to the title once the conversation has more than one member — `nil`
     /// for a plain, never-followed-up task (settled Design point 6).
     private(set) var turnsText: String?
+    /// Top bar state: the pane state the view last reported, the normalised conversation id given at construction,
+    /// and the last content written (so an unchanged recompute writes nothing).
+    @ObservationIgnored var topBarPaneOpen = false
+    @ObservationIgnored let topBarConversationID: String
+    @ObservationIgnored var lastPublishedTopBar: TaskTopBarContent?
 
     // The properties below are written from the `+Timeline`/`+Summary`/`+Actions` extension files
     // (each in its own file, per the screen shape), so they cannot be `private(set)` — `private` is
@@ -318,7 +334,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// `chrome` has no default: it is the mount the view is built with, and decides whether the Summary entry shows.
     init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting,
          continuityHistory: any TaskContinuityHistory, chrome: TaskDetailChrome, scheduler: any Scheduling,
-         isWorkflowBuilder: Bool = false) {
+         isWorkflowBuilder: Bool = false, topBarConversationID: String? = nil) {
+        self.topBarConversationID = topBarConversationID ?? taskID
         self.scheduler = scheduler
         self.isWorkflowBuilder = isWorkflowBuilder
         self.chrome = chrome
@@ -334,6 +351,7 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     func didAppear() {
         isMounted = true
+        activateTopBar()
         // Members (and so leases) come first: the repository only has a live stream for a leased
         // task, and a publisher requested before that is an empty one that never updates.
         recomputeMembersAndLeases()
@@ -347,6 +365,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// re-acquires leases fresh.
     func didDisappear() {
         isMounted = false
+        topBarPaneOpen = false
+        releaseTopBar()
         resetChanges(keepPaneReport: false)
         useCase.stopSuccessorObservation()
         resetResourceContext()
@@ -397,22 +417,6 @@ final class TaskDetailVM: TaskDetailViewModel {
     }
 
     // MARK: - Internal Methods
-
-    private func updateCallerApprovals(task: TaskInfo) {
-        let relevant = task.raw["caller_approvals"]?.boolValue == true || task.raw["caller_write_approvals"]?.boolValue == true
-            || (task.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 || (task.awaitingDecisionCount ?? 0) > 0
-            || callerApprovalController?.hasRetainedRequests(for: task.taskID) == true
-        guard relevant else {
-            callerApprovalController?.stop()
-            callerApprovalController = nil
-            return
-        }
-        if callerApprovalController == nil, let approvalUseCase = useCase.callerApprovalUseCase() {
-            callerApprovalController = CallerApprovalController(useCase: approvalUseCase)
-        }
-        callerApprovalController?.setAwaitingDecisionCount(task.awaitingDecisionCount)
-        callerApprovalController?.start(taskID: task.taskID, polls: task.status == .running)
-    }
 
     /// The group presenter calls this only after proving that a new survivor belongs to the
     /// same actual conversation. An atomic prune/resume can introduce a member this VM never saw.
@@ -561,10 +565,12 @@ final class TaskDetailVM: TaskDetailViewModel {
         recomputeInspector(task: detail, ancestors: currentTaskAncestors, allChildren: allChildren)
         recomputeMessageBox(task: detail)
         recomputeSummary(task: detail)
+        publishTopBar()
         evaluateChangesDemand()
     }
 
     private func resetForMissingTask() {
+        clearTopBarPublication()
         resetResourceContext()
         resetChanges(keepPaneReport: true)
         timelineRevision &+= 1

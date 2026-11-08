@@ -20,8 +20,11 @@ struct TaskDetailToolbarSnapshot: Equatable, Sendable {
     let showsInspector: Bool
     /// Whether the inspector item is the standalone right pane ("right pane" wording) or the legacy events pane.
     let isRightPane: Bool
+    /// The standalone mount's trailing chips; `nil` on the other mounts, which keep the status item instead.
+    let chips: TaskTopBarChips?
 
-    @MainActor init(_ viewModel: any TaskDetailViewModel, task: TaskInfo, showsInspector: Bool, isRightPane: Bool = false) {
+    @MainActor init(_ viewModel: any TaskDetailViewModel, task: TaskInfo, showsInspector: Bool, isRightPane: Bool = false,
+                    chips: TaskTopBarChips? = nil) {
         self.ownerID = ObjectIdentifier(viewModel)
         self.conversationID = viewModel.taskID
         // TaskStatusLabel reads exactly these fields (the settled branch reads the recorded
@@ -39,6 +42,7 @@ struct TaskDetailToolbarSnapshot: Equatable, Sendable {
         self.parentID = viewModel.openParentTaskID
         self.showsInspector = showsInspector
         self.isRightPane = isRightPane
+        self.chips = chips
     }
 }
 
@@ -51,6 +55,33 @@ struct TaskDetailToolbarActions {
     let openTask: (String) -> Void
     let showRawEvents: () -> Void
     let toggleInspector: () -> Void
+    var revealContinuity: () -> Void = {}
+    var revealNotices: () -> Void = {}
+    var revealAccess: () -> Void = {}
+}
+
+// MARK: - TaskDetailToolbarFocus
+
+/// Where a closed reveal returns focus to: the chip it started from. Not part of the toolbar's equality.
+struct TaskDetailToolbarFocus {
+    let focus: FocusState<TaskPaneController.Origin?>.Binding
+    let accessibility: AccessibilityFocusState<TaskPaneController.Origin?>.Binding
+}
+
+/// Marks a chip as the focus target of one reveal origin, when the toolbar was given the bindings.
+private struct ChipFocusTarget: ViewModifier {
+    let focus: TaskDetailToolbarFocus?
+    let origin: TaskPaneController.Origin
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if let focus {
+            content
+                .focused(focus.focus, equals: origin)
+                .accessibilityFocused(focus.accessibility, equals: origin)
+        } else {
+            content
+        }
+    }
 }
 
 // MARK: - TaskDetailToolbar
@@ -61,6 +92,8 @@ struct TaskDetailToolbar: View, Equatable {
     let actions: TaskDetailToolbarActions
     /// Native regression probe; production leaves this nil. It never participates in equality.
     var onEvaluation: (() -> Void)?
+    /// Focus return targets for the chips; never part of equality.
+    var chipFocus: TaskDetailToolbarFocus?
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.snapshot == rhs.snapshot }
 
@@ -71,15 +104,43 @@ struct TaskDetailToolbar: View, Equatable {
             .toolbar { toolbarContent }
     }
 
-    /// One SDK glass capsule behind takeover/more/inspector (§3 Liquid Glass), with the status
-    /// badge kept visually separate: its own item with the shared background hidden and a fixed
-    /// spacer ahead of the group. All four `ToolbarItem` ids are unchanged; when the task is not
-    /// terminal-eligible the takeover item renders nothing, so the group is more+inspector only.
+    /// One SDK glass capsule behind takeover/more/inspector (§3 Liquid Glass). The standalone mount
+    /// publishes its status badge in the window's principal item and puts the chips ahead of the group
+    /// (each its own item, shared background hidden, present only while its condition holds); the other
+    /// mounts keep the status item behind a fixed spacer. The takeover, more and inspector ids are
+    /// unchanged; when the task is not terminal-eligible the takeover item renders nothing.
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarSpacer(.flexible)
-        ToolbarItem(id: "task-detail.status", placement: .primaryAction) { statusLabel }
-            .sharedBackgroundVisibility(.hidden)
-        ToolbarSpacer(.fixed)
+        if let chips = snapshot.chips {
+            if chips.showsContinuity {
+                ToolbarItem(id: "task-detail.chip.continuity", placement: .primaryAction) {
+                    TaskTopBarChip(icon: "arrow.clockwise", text: chips.isNarrow ? nil : TaskTopBarChips.continuityText,
+                                   help: TaskTopBarChips.continuityLabel, action: actions.revealContinuity)
+                        .modifier(ChipFocusTarget(focus: chipFocus, origin: .chipContinuity))
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+            if chips.noticeCount > 0 {
+                ToolbarItem(id: "task-detail.chip.notices", placement: .primaryAction) {
+                    TaskTopBarChip(icon: "exclamationmark.triangle", text: chips.noticesText, help: chips.noticesLabel,
+                                   action: actions.revealNotices)
+                        .modifier(ChipFocusTarget(focus: chipFocus, origin: .chipNotices))
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+            if let access = chips.accessText {
+                ToolbarItem(id: "task-detail.chip.access", placement: .primaryAction) {
+                    TaskTopBarChip(icon: "shield", text: chips.isNarrow ? nil : access, help: chips.accessLabel,
+                                   action: actions.revealAccess)
+                        .modifier(ChipFocusTarget(focus: chipFocus, origin: .chipAccess))
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+        } else {
+            ToolbarItem(id: "task-detail.status", placement: .primaryAction) { statusLabel }
+                .sharedBackgroundVisibility(.hidden)
+            ToolbarSpacer(.fixed)
+        }
         ToolbarItem(id: "task-detail.takeover", placement: .primaryAction) { takeoverButton }
         ToolbarItem(id: "task-detail.more", placement: .primaryAction) {
             Menu { menuItems } label: { Label("More actions", systemImage: "ellipsis") }

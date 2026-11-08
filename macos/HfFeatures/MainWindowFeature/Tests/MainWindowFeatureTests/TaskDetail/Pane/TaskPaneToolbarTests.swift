@@ -17,6 +17,18 @@ import Testing
 @MainActor @Suite(.serialized) struct TaskPaneToolbarTests {
     private static let conversation = "conv"
 
+    /// Does what the window shell does: maps the width to a band and writes it into the layout state on a crossing.
+    private struct BandHost<Content: View>: View {
+        @State private var layout = TopBarLayoutState()
+        let content: Content
+        init(@ViewBuilder content: () -> Content) { self.content = content() }
+        var body: some View {
+            content
+                .onGeometryChange(for: TopBarWidthBand.self) { TopBarWidthBand(width: $0.size.width) } action: { layout.setBand($0) }
+                .environment(\.topBarLayout, layout)
+        }
+    }
+
     @MainActor private final class Fixture {
         let harness = TaskDetailVMTests().makeSUT()
         let store = TaskPaneStateStore()
@@ -40,9 +52,11 @@ import Testing
             window.isReleasedWhenClosed = false
             let binding = chrome == .standalone ? TaskPaneBinding(store: store, conversationID: TaskPaneToolbarTests.conversation) : nil
             let defaults = UserDefaults(suiteName: "TaskPaneToolbar-\(UUID().uuidString)")!
-            self.controller = NSHostingController(rootView: AnyView(NavigationStack {
-                TaskDetailView(harness.sut, chrome: chrome, paneBinding: binding, transcriptStyle: .transcript,
-                               onToolbarEvaluation: { [weak self] in self?.evaluations += 1 })
+            self.controller = NSHostingController(rootView: AnyView(BandHost {
+                NavigationStack {
+                    TaskDetailView(harness.sut, chrome: chrome, paneBinding: binding, transcriptStyle: .transcript,
+                                   onToolbarEvaluation: { [weak self] in self?.evaluations += 1 })
+                }
             }
             .withPresentationContext()
             .defaultAppStorage(defaults)
@@ -106,9 +120,9 @@ import Testing
 
     // MARK: - Re-evaluation
 
-    @Test func givenTheStandaloneToolbar_whenMetadataChangesAndTheWindowResizes_thenThePresenterIsNotReevaluated() async throws {
+    @Test func givenTheStandaloneToolbar_whenMetadataChangesAndTheWindowResizesWithinABand_thenThePresenterIsNotReevaluated() async throws {
         // given
-        let fixture = Fixture(chrome: .standalone)
+        let fixture = Fixture(chrome: .standalone, width: 1200)
         defer { fixture.close() }
         await fixture.settle()
         let baseline = fixture.evaluations
@@ -126,8 +140,8 @@ import Testing
             fixture.pump()
         }
 
-        // when — the window crosses the split threshold both ways with the pane closed
-        for width in [1200.0, 700.0, 1100.0, 880.0, 1000.0] {
+        // when — the window resizes inside the 1100 to 1279 band, which the pane's 900 point threshold does not touch
+        for width in [1250.0, 1100.0, 1279.0, 1150.0, 1200.0] {
             fixture.window.setContentSize(NSSize(width: width, height: 700))
             for _ in 0 ..< 15 { fixture.pump() }
         }
@@ -135,6 +149,39 @@ import Testing
         // then
         #expect(fixture.evaluations == baseline)
         #expect(itemIDs == (fixture.window.toolbar?.items ?? []).map(ObjectIdentifier.init))
+    }
+
+    @Test func givenTheStandaloneToolbar_whenTheWindowCrossesTheNarrowEdge_thenThePresenterIsReevaluatedEachCrossing() async {
+        // given
+        let fixture = Fixture(chrome: .standalone, width: 1200)
+        defer { fixture.close() }
+        await fixture.settle()
+        var baseline = fixture.evaluations
+
+        // when — into the narrow band
+        fixture.window.setContentSize(NSSize(width: 1000, height: 700))
+        await waitUntil { fixture.pump(); return fixture.evaluations > baseline }
+
+        // then — the chips draw their narrow form
+        #expect(fixture.evaluations > baseline)
+        await fixture.settle()
+        baseline = fixture.evaluations
+
+        // when — resizes inside the narrow band
+        for width in [700.0, 900.0, 1099.0, 800.0] {
+            fixture.window.setContentSize(NSSize(width: width, height: 700))
+            for _ in 0 ..< 15 { fixture.pump() }
+        }
+
+        // then
+        #expect(fixture.evaluations == baseline)
+
+        // when — back across the edge
+        fixture.window.setContentSize(NSSize(width: 1200, height: 700))
+        await waitUntil { fixture.pump(); return fixture.evaluations > baseline }
+
+        // then
+        #expect(fixture.evaluations > baseline)
     }
 
     @Test func givenTheStandaloneToolbar_whenThePaneIsToggled_thenThePresenterIsReevaluatedEachTime() async {
@@ -155,7 +202,7 @@ import Testing
         #expect(fixture.evaluations > baseline)
     }
 
-    @Test func givenAnOpenPaneThePersonChose_whenTheWindowResizesAcrossTheThreshold_thenThePresenterIsNotReevaluated() async {
+    @Test func givenAnOpenPaneThePersonChose_whenTheWindowResizesWithinTheNarrowBand_thenThePresenterIsNotReevaluated() async {
         // given
         let fixture = Fixture(chrome: .standalone)
         defer { fixture.close() }
@@ -164,12 +211,12 @@ import Testing
         let baseline = fixture.evaluations
 
         // when
-        for width in [700.0, 1100.0, 800.0, 1000.0] {
+        for width in [700.0, 1099.0, 800.0, 1000.0] {
             fixture.window.setContentSize(NSSize(width: width, height: 700))
             for _ in 0 ..< 15 { fixture.pump() }
         }
 
-        // then — a chosen pane stays open at every width, so the toolbar's inspector state does not change
+        // then — a chosen pane stays open at every width and no band edge was crossed, so the toolbar is not re-evaluated
         #expect(fixture.evaluations == baseline)
     }
 

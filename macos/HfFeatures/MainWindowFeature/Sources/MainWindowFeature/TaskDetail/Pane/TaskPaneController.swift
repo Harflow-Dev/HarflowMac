@@ -29,6 +29,8 @@ final class TaskPaneController {
     /// The control that started a reveal, so Escape can return focus to it.
     enum Origin: Hashable, Sendable {
         case continuityDetails, notices
+        /// The top bar's chips.
+        case chipContinuity, chipNotices, chipAccess
     }
 
     /// A request to move focus into a facts group once its pane is on screen.

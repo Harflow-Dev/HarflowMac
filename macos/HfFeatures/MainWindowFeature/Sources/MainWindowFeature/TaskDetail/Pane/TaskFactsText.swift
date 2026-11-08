@@ -59,6 +59,11 @@ struct TaskSnapshotEvidence: Equatable, Sendable {
     let exitCode: Int?
     /// The observed `log.state` from the standalone (activity-enabled) observation.
     let logState: EventLogState?
+    /// The matching snapshot's `supervision.owner_state`; `nil` without a matching snapshot.
+    var ownerState: String?
+    /// The recorded duration of a settled task, from the matching snapshot only and under `TaskSettledDuration`'s
+    /// guard (terminal, exit observed, duration recorded); `nil` otherwise.
+    var settledDuration: TimeInterval?
 
     /// Whether a snapshot of the status shown is available.
     var hasMatchingSnapshot: Bool { snapshotStatus == status }
@@ -96,7 +101,10 @@ extension TaskDetailViewModel {
     var snapshotEvidence: TaskSnapshotEvidence? {
         guard let task else { return nil }
         let snapshot = inspectorModel.flatMap { $0.hasSnapshot ? $0.detail : nil }
+        let matching = snapshot.flatMap { $0.status == task.status ? $0 : nil }
         return TaskSnapshotEvidence(status: task.status, takenOver: task.takenOver, snapshotStatus: snapshot?.status,
-                                    exitCode: snapshot?.exitCode, logState: observationFrames[task.taskID]?.logState)
+                                    exitCode: snapshot?.exitCode, logState: observationFrames[task.taskID]?.logState,
+                                    ownerState: matching?.supervision?.ownerState,
+                                    settledDuration: matching.flatMap(TaskSettledDuration.seconds(for:)))
     }
 }

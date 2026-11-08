@@ -64,10 +64,14 @@ import Testing
         #expect(fixture.harness.sut.isBusy)
         // when
         baseline = fixture.evaluations
-        fixture.defaults.set(true, forKey: "monitor.inspectorVisible")
+        await waitUntil { fixture.pump(); return fixture.pressableInspector != nil }
+        let before = fixture.inspectorLabels
+        #expect(fixture.pressInspector())
         await waitUntil { fixture.pump(); return fixture.evaluations > baseline }
-        // then
-        #expect(fixture.defaults.bool(forKey: "monitor.inspectorVisible"))
+        // then the real toggle flipped the inspector and the presenter refreshed
+        await waitUntil { fixture.pump(); return fixture.inspectorLabels.contains("Show event details") }
+        #expect(before.contains("Hide event details"))
+        #expect(fixture.inspectorLabels.contains("Show event details"))
         #expect(fixture.window.toolbar?.items.first { $0.itemIdentifier.rawValue == "task-detail.inspector" }?.view != nil)
     }
 
@@ -79,8 +83,66 @@ import Testing
     var controller: NSHostingController<AnyView>!
     let window: NSWindow
     let defaults = UserDefaults(suiteName: "TaskChromeFixture-\(UUID().uuidString)")!
+    private let enhanced = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
+    private var previousEnhanced: Any?
+
+    /// The inspector toolbar item's view.
+    private var inspectorView: NSView? {
+        window.toolbar?.items.first { $0.itemIdentifier.rawValue == "task-detail.inspector" }?.view
+    }
+
+    private func label(of object: NSObject) -> String? {
+        let selector = NSSelectorFromString("accessibilityLabel")
+        guard object.responds(to: selector) else { return nil }
+        return object.perform(selector)?.takeUnretainedValue() as? String
+    }
+
+    private func role(of object: NSObject) -> NSAccessibility.Role? {
+        let selector = NSSelectorFromString("accessibilityRole")
+        guard object.responds(to: selector) else { return nil }
+        return (object.perform(selector)?.takeUnretainedValue() as? String).map(NSAccessibility.Role.init(rawValue:))
+    }
+
+    private func descendants(of root: NSObject) -> [NSObject] {
+        var result: [NSObject] = []
+        var queue: [NSObject] = [root]
+        while let next = queue.popLast(), result.count < 2000 {
+            result.append(next)
+            if let view = next as? NSView {
+                queue.append(contentsOf: view.subviews)
+                queue.append(contentsOf: view.accessibilityChildren()?.compactMap { $0 as? NSObject } ?? [])
+            } else {
+                let selector = NSSelectorFromString("accessibilityChildren")
+                if next.responds(to: selector), let children = next.perform(selector)?.takeUnretainedValue() as? [Any] {
+                    queue.append(contentsOf: children.compactMap { $0 as? NSObject })
+                }
+            }
+        }
+        return result
+    }
+
+    /// The button element inside the inspector item that can be pressed.
+    var pressableInspector: NSObject? {
+        guard let view = inspectorView else { return nil }
+        return descendants(of: view).first { role(of: $0) == .button && (label(of: $0) ?? "").contains("event details") }
+    }
+
+    /// Presses the inspector button through the public accessibility action, as a person would.
+    func pressInspector() -> Bool {
+        guard let button = pressableInspector else { return false }
+        return M04ToolbarEvidence.press(button)
+    }
+
+    /// Every label the inspector item exposes.
+    var inspectorLabels: Set<String> {
+        guard let view = inspectorView else { return [] }
+        return Set(descendants(of: view).compactMap { label(of: $0) }.filter { !$0.isEmpty })
+    }
+
     init() {
         _ = NSApplication.shared
+        self.previousEnhanced = NSApplication.shared.accessibilityAttributeValue(enhanced)
+        NSApplication.shared.accessibilitySetValue(true, forAttribute: enhanced)
         var raw = TaskDetailVMTests().task().raw
         raw["started_at"] = .string(ISO8601DateFormatter().string(from: Date().addingTimeInterval(-90)))
         harness.detailBox.value = TaskInfo(.object(raw))
@@ -153,5 +215,10 @@ import Testing
         let viewIDs: [ObjectIdentifier]
     }
 
-    func close() { harness.sut.didDisappear(); window.contentViewController = nil; window.close() }
+    func close() {
+        harness.sut.didDisappear()
+        window.contentViewController = nil
+        window.close()
+        NSApplication.shared.accessibilitySetValue(previousEnhanced, forAttribute: enhanced)
+    }
 }

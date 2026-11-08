@@ -39,14 +39,14 @@ extension TaskDetailView {
             }
             .background(PaneEscapeMonitor(isActive: isOpen, handle: handleEscape))
             .onChange(of: viewModel.snapshotEvidence?.paneDefault ?? .init(), initial: true) { _, input in pane.updateDefaultInput(input) }
-            .onChange(of: pane.isOpen, initial: true) { _, open in viewModel.setChangesPaneOpen(open) }
+            .onChange(of: pane.isOpen, initial: true) { _, open in viewModel.setPaneOpen(open) }
             .onChange(of: reduceMotion, initial: true) { _, reduced in pane.reducesMotion = reduced }
             .onChange(of: pane.focusReturn) { _, origin in returnFocus(to: origin) }
             .onChange(of: viewModel.changesSelection) { _, selection in pane.recordChangesSelection(selection) }
             .onAppear {
                 pane.touch()
                 viewModel.restoreChangesSelection(pane.changesSelection)
-                viewModel.setChangesPaneOpen(pane.isOpen)
+                viewModel.setPaneOpen(pane.isOpen)
             }
             .opensFileLinks(repoPath: task.repoPath)
     }
@@ -102,6 +102,17 @@ extension TaskDetailView {
         }
     }
 
+    /// The standalone toolbar's chips; `nil` on the other mounts.
+    func toolbarChips(_ task: TaskInfo) -> TaskTopBarChips? {
+        guard isStandalone else { return nil }
+        return TaskTopBarChips.make(task: task, model: viewModel.inspectorModel, isNarrow: topBarIsNarrow)
+    }
+
+    /// The top bar chips: each opens the pane on its facts group and returns focus to the chip when it closes.
+    func revealContinuityChip() { pane.animated { pane.revealFacts(group: .continuity, origin: .chipContinuity) } }
+    func revealNoticesChip() { pane.animated { pane.revealFacts(group: .notices, origin: .chipNotices) } }
+    func revealAccessChip() { pane.animated { pane.revealFacts(group: .enforcement, origin: .chipAccess) } }
+
     /// The overflow menu's "Events" item: opens the pane, or the legacy inspector, on the events.
     func showEvents() {
         if isStandalone {
@@ -118,5 +129,27 @@ extension TaskDetailView {
         } else {
             eventsExpanded.toggle()
         }
+    }
+}
+
+// MARK: - NoticeSummary
+
+/// The header's one-line pointer to the inspector's Notices section.
+enum NoticeSummary {
+    static func text(count: Int) -> String? {
+        count > 0 ? "\(count) notice\(count == 1 ? "" : "s")" : nil
+    }
+}
+
+// MARK: - StandaloneFocusable
+
+/// Makes a control programmatically focusable on the standalone mount only. Elsewhere it is the identity, so the
+/// group and embedded mounts keep the controls' default focus behaviour exactly.
+struct StandaloneFocusable: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled { content.focusable() } else { content }
     }
 }

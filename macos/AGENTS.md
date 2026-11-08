@@ -91,6 +91,10 @@ Keep native task-window toolbar presentation behind its own complete equality bo
 metadata and feed updates must not regenerate unchanged toolbar preferences; task identity,
 action owner, status, action availability and inspector changes must still refresh them. Keep
 live clocks and motion inside their child views, and leave activity content outside this boundary.
+The window shell's principal item follows the same rule: a standalone task's top bar content reaches it through
+an observable holder that only the principal child reads, written only when the quantised content changes, and the
+shell only writes the window width band into an observable state when the band changes and never reads it; only the
+principal and the task view's chips re-evaluate on a crossing, and the task view only when the narrow flag flips.
 
 ## Scope exceptions
 

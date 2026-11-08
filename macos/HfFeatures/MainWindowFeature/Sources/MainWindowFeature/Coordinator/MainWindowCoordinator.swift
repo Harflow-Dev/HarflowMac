@@ -42,6 +42,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     let continuityHistory: any TaskContinuityHistory = TaskContinuityHistoryStore()
     /// Side-pane choices per conversation, kept here because the task view's own state is reset on selection.
     let paneState = TaskPaneStateStore()
+    /// Carries the standalone task's top bar content to the shell's principal toolbar item.
+    public let topBar = TaskTopBarHolder()
 
     // MARK: - Public Properties
 
@@ -60,6 +62,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             }
             selectionSubject.send(selection)
             isNewSessionPresentedSubject.send(selection == .newSession)
+            topBar.setShownConversation(shownTaskConversation())
         }
     }
 
@@ -117,6 +120,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public private(set) var loadingWorkError: String?
     @ObservationIgnored private var runtimeSubscription: AnyCancellable?
     @ObservationIgnored private var listingSubscription: AnyCancellable?
+    @ObservationIgnored private var listingChangeSubscription: AnyCancellable?
 
     // MARK: - Private Properties
 
@@ -137,8 +141,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// survives even while the sidebar is unsubscribed (window closed).
     @ObservationIgnored private(set) var pendingReveal: PendingReveal?
     @ObservationIgnored private let revealSubject = PassthroughSubject<PendingReveal, Never>()
-    /// Read only to normalise `buildTaskDetailView(id:)`'s `.id()` key (Monitor piece 7, Review
-    /// round 1 item 4) — never to drive any other coordinator behaviour.
+    /// Read to normalise a task id to its conversation (`normalisedConversationID(for:)`, the task view's `.id()` key
+    /// and the top bar's shown conversation) and by the group presenter — never to drive any other behaviour.
     @ObservationIgnored @GlobalEnvironment(\.taskListRepository) private var taskListRepository
 
     // MARK: - Init
@@ -154,6 +158,9 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         self.installRepository = installRepository ?? GlobalValues.installRepository
         if let taskListRepository { self.taskListRepository = taskListRepository }
         let listing = self.taskListRepository
+        self.listingChangeSubscription = listing.tasksPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.listingChanged() }
         self.hasLoadedWork = listing.hasListed
         self.loadingWorkError = listing.listError?.message
         self.listingSubscription = listing.hasListedPublisher()
@@ -327,15 +334,34 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// with the raw `id`; it resolves the whole conversation from whichever member it is given.
     public func buildTaskDetailView(id: String) -> AnyView {
         let useCase = TaskDetailViewRepository()
+        let conversationID = normalisedConversationID(for: id)
         let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self, continuityHistory: continuityHistory, chrome: .standalone,
-                              scheduler: GlobalValues.scheduling)
-        let conversationID = WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID
-            ?? Lineage.conversationID(of: id, in: taskListRepository.tasks)
+                              scheduler: GlobalValues.scheduling, topBarConversationID: conversationID)
         let paneBinding = TaskPaneBinding(store: paneState, conversationID: conversationID)
         let view = TaskDetailView(vm, chrome: .standalone, paneBinding: paneBinding, transcriptStyle: .transcript)
         return view.id(conversationID).eraseToAnyView()
     }
     
+    /// `id` normalised to its conversation's first member: the key of the task view's `.id(...)`, its pane state and
+    /// its top bar writer. Shared by `buildTaskDetailView(id:)` and the top bar's shown conversation, so the two
+    /// never disagree about which conversation a task id belongs to.
+    func normalisedConversationID(for id: String) -> String {
+        WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID
+            ?? Lineage.conversationID(of: id, in: taskListRepository.tasks)
+    }
+
+    /// The conversation the current selection shows as a standalone task, `nil` for every other selection.
+    private func shownTaskConversation() -> String? {
+        if case .task(let id) = selection { normalisedConversationID(for: id) } else { nil }
+    }
+
+    /// The listing changed: refresh the shown conversation, unless a mounted task view is still showing under the old
+    /// id. A retention shift then keeps the title until a selection change or rebuild re-keys the view.
+    private func listingChanged() {
+        guard topBar.activeTag == nil else { return }
+        topBar.setShownConversation(shownTaskConversation())
+    }
+
     // MARK: - ViewCoordinator
     
     /// The main window's whole `NavigationSplitView`, per this dispatch's own instruction — not just
@@ -456,6 +482,24 @@ extension MainWindowCoordinator: ParallelRouting {
 // MARK: - TaskDetailRouting
 
 extension MainWindowCoordinator: TaskDetailRouting {
+    func publishTopBar(_ content: TaskTopBarContent, tag: TaskTopBarHolder.Tag) { topBar.publish(content, tag: tag) }
+    func clearTopBar(tag: TaskTopBarHolder.Tag) { topBar.clear(tag: tag) }
+    func deactivateTopBar(tag: TaskTopBarHolder.Tag) { topBar.deactivate(tag) }
+
+    /// Recomputes the selection's conversation against the current listing, so a shown conversation that went stale
+    /// while the listing loaded is corrected, then accepts the writer if its conversation is the shown one.
+    func retryTopBarActivation(tag: TaskTopBarHolder.Tag) {
+        guard topBar.activeTag == nil else { return }
+        if shownTaskConversation() == tag.conversationID { topBar.setShownConversation(tag.conversationID) }
+        topBar.activateIfVacant(tag)
+    }
+
+    func activateTopBar(tag: TaskTopBarHolder.Tag) {
+        guard topBar.activeTag != tag else { return }
+        if shownTaskConversation() == tag.conversationID { topBar.setShownConversation(tag.conversationID) }
+        topBar.activate(tag)
+    }
+
     public func copyToPasteboard(_ text: String) -> Bool {
         _ = pasteboard.clearContents()
         return pasteboard.setString(text, forType: .string)

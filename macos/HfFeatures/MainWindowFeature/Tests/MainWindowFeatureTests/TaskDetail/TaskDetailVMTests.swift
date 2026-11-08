@@ -211,6 +211,7 @@ import Testing
         given(useCase).beginTakeover(taskID: .any).willReturn()
         given(useCase).setOutcome(.any, .any).willReturn()
         given(routing).selectTask(.any).willReturn()
+        stubTopBarRouting(routing)
         // No default `copyToPasteboard` stub: Mockable matches FIFO (first-added wins on overlap),
         // so a blanket `.any` stub here would shadow any test-specific `.willReturn(false)` added
         // later (see `TaskDetailVMTests+Actions.swift`'s copy-resume-command tests, each of which
@@ -435,4 +436,13 @@ extension TaskDetailVMTests {
         for _ in 0 ..< 5 { await Task.yield() }
         #expect(approval.pageCount == beforeDisappear)
     }
+}
+
+/// Lets a standalone VM write to a strict routing mock.
+func stubTopBarRouting(_ routing: MockTaskDetailRouting) {
+    given(routing).publishTopBar(.any, tag: .any).willReturn()
+    given(routing).clearTopBar(tag: .any).willReturn()
+    given(routing).activateTopBar(tag: .any).willReturn()
+    given(routing).deactivateTopBar(tag: .any).willReturn()
+    given(routing).retryTopBarActivation(tag: .any).willReturn()
 }

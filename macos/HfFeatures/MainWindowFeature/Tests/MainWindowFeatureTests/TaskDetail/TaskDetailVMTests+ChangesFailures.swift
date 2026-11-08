@@ -17,7 +17,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: try settlingReply)
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.scheduler.oneShotIntervals == [5] }
 
         // when
@@ -39,7 +39,7 @@ extension TaskDetailVMTests {
         rig.script.whileInFlight(0) { sut.didTapRetryChanges() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.script.count == 2 }
         await waitUntil(timeout: 0.3) { rig.sut.changesTabCount != nil }
 
@@ -56,7 +56,7 @@ extension TaskDetailVMTests {
         defer { rig.sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.script.count == 1 }
         await waitUntil(timeout: 0.3) { rig.sut.changesPresentation != .loading }
 
@@ -72,7 +72,7 @@ extension TaskDetailVMTests {
         rig.script.whileInFlight(0) { sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.script.count == 1 }
         await waitUntil(timeout: 0.3) { rig.sut.changesTabCount != nil }
 
@@ -85,7 +85,7 @@ extension TaskDetailVMTests {
     @Test func givenAnOpenPane_whenTheViewDisappearsAndReappears_thenTheFirstPaneReportReadsAgain() async throws {
         // given
         let rig = try await openChangesRig(reply: .snapshot(try ChangesJSON.availableListing()))
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount == 6 }
 
         // when
@@ -96,7 +96,7 @@ extension TaskDetailVMTests {
         rig.harness.tasksSubject.send([rig.scenario.task])
         await waitUntil { rig.sut.task != nil }
         #expect(await quietCallCount(rig) == 1, "an unreported pane is not demand")
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount == 6 }
         defer { rig.sut.didDisappear() }
 
@@ -130,7 +130,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: .failure(outcome))
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { if case .note = rig.sut.changesPresentation { true } else { false } }
         rig.script.answerFromNowOn(.snapshot(try ChangesJSON.availableListing()))
 
@@ -150,7 +150,7 @@ extension TaskDetailVMTests {
         defer { rig.sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesPresentation == .note(TaskChangesFailure.unsupported.note) }
 
         // then
@@ -164,7 +164,7 @@ extension TaskDetailVMTests {
         defer { rig.sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesPresentation == .note(TaskChangesFailure.notStarted.note) }
 
         // then
@@ -178,7 +178,7 @@ extension TaskDetailVMTests {
         rig.script.answer(0, .failure(.superseded))
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount == 6 }
 
         // then
@@ -191,7 +191,7 @@ extension TaskDetailVMTests {
         defer { rig.sut.didDisappear() }
 
         // when
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesPresentation == .note(TaskChangesFailure.unavailable.note) }
 
         // then
@@ -205,7 +205,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: .snapshot(try ChangesJSON.availableListing()))
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount == 6 }
         let sut = rig.sut
         let seen = PollCounter()
@@ -223,7 +223,7 @@ extension TaskDetailVMTests {
         // given
         let rig = try await openChangesRig(reply: .snapshot(try ChangesJSON.availableListing()))
         defer { rig.sut.didDisappear() }
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount == 6 }
         let scope = TaskChangesScopeID(taskID: "t1", repository: 0, scope: "committed_range")
         rig.sut.didTapLoadMoreChangeRows(scope: scope)
@@ -282,7 +282,7 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send([first])
         await waitUntil { harness.sut.task != nil }
-        harness.sut.setChangesPaneOpen(true)
+        harness.sut.setPaneOpen(true)
         await waitUntil { harness.sut.changesTabCount == 6 }
         defer { harness.sut.didDisappear() }
 

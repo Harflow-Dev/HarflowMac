@@ -40,7 +40,7 @@ extension TaskDetailVMTests {
         harness.sut.didAppear()
         harness.tasksSubject.send(members)
         await waitUntil { harness.sut.task != nil }
-        harness.sut.setChangesPaneOpen(true)
+        harness.sut.setPaneOpen(true)
         await waitUntil { harness.sut.changesTabCount == 6 }
         return TurnRig(harness: harness, scheduler: scheduler, listing: listing, patches: patches, members: all)
     }

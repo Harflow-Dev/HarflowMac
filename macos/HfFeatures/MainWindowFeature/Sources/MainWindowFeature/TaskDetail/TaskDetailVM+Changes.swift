@@ -17,7 +17,12 @@ import MonitorCore
 extension TaskDetailVM {
 
     /// The view reports whether the pane is open. The first report after the screen appears counts as a change.
-    func setChangesPaneOpen(_ open: Bool) {
+    /// The top bar republishes on a change, since the open pane decides whether its meta shows.
+    func setPaneOpen(_ open: Bool) {
+        if topBarPaneOpen != open {
+            topBarPaneOpen = open
+            publishTopBar()
+        }
         guard changesLifecycle.paneOpen != open else { return }
         changesLifecycle.paneOpen = open
         evaluateChangesDemand()

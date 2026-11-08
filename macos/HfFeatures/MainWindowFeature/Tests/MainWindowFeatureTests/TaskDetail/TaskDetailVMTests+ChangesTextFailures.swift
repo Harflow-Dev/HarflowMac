@@ -272,7 +272,7 @@ extension TaskDetailVMTests {
         rig.sut.restoreChangesSelection(remembered)
         #expect(rig.sut.changesSelection == remembered)
         #expect(rig.patches.isEmpty, "nothing is read before the listing confirms the row")
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { isDiffShown(rig.sut) }
 
         // then
@@ -288,7 +288,7 @@ extension TaskDetailVMTests {
 
         // when
         rig.sut.restoreChangesSelection(remembered)
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesDiff != .none }
 
         // then
@@ -304,7 +304,7 @@ extension TaskDetailVMTests {
 
         // when
         rig.sut.restoreChangesSelection(TaskChangesSelection(taskID: "t1", selector: ChangesJSON.selector("gone.txt")))
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesTabCount == 6 }
 
         // then
@@ -335,7 +335,7 @@ extension TaskDetailVMTests {
 
         // when
         rig.sut.restoreChangesSelection(remembered)
-        rig.sut.setChangesPaneOpen(true)
+        rig.sut.setPaneOpen(true)
         await waitUntil { rig.sut.changesCaptureSettling }
 
         // then

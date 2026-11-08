@@ -23,14 +23,20 @@ struct TaskLoadingHeader: Equatable {
 
 struct TaskLoadingSkeleton: View {
     let header: TaskLoadingHeader?
-    var isEmbedded = false
+    /// The mount the skeleton stands in for. Standalone draws no title line (the window's top bar owns the title)
+    /// and publishes no status item.
+    var chrome = TaskDetailChrome.group
     var style = ActivityFeedStyle.standard
+
+    private var isEmbedded: Bool { chrome == .embedded }
 
     var body: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
-            title
-                .padding(.horizontal, isEmbedded ? HfRadius.Metrics.spacing16 : HfRadius.Metrics.spacing24)
-                .padding(.top, HfRadius.Metrics.spacing12)
+            if chrome != .standalone {
+                title
+                    .padding(.horizontal, isEmbedded ? HfRadius.Metrics.spacing16 : HfRadius.Metrics.spacing24)
+                    .padding(.top, HfRadius.Metrics.spacing12)
+            }
             ScrollView {
                 feed
                     .padding(.horizontal, style.horizontalPadding(standard: HfRadius.Metrics.spacing24))
@@ -46,7 +52,7 @@ struct TaskLoadingSkeleton: View {
         .background(style.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading task")
-        .modifier(LoadingToolbar(isEmbedded: isEmbedded))
+        .modifier(LoadingToolbar(chrome: chrome))
     }
 
     @ViewBuilder
@@ -222,10 +228,10 @@ struct TaskLoadingSkeleton: View {
 /// toolbar.
 private struct LoadingToolbar: ViewModifier {
     @Environment(\.hfSkeletonPlaceholderOverlay) private var isPlaceholderOverlay
-    let isEmbedded: Bool
+    let chrome: TaskDetailChrome
 
     func body(content: Content) -> some View {
-        if isEmbedded {
+        if chrome == .embedded {
             VStack(spacing: HfRadius.Metrics.zero) {
                 HStack {
                     Spacer(minLength: HfRadius.Metrics.zero)
@@ -243,9 +249,11 @@ private struct LoadingToolbar: ViewModifier {
         } else {
             content.toolbar {
                 ToolbarSpacer(.flexible)
-                ToolbarItem(id: "task-detail.status", placement: .primaryAction) { statusBlock }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarSpacer(.fixed)
+                if chrome != .standalone {
+                    ToolbarItem(id: "task-detail.status", placement: .primaryAction) { statusBlock }
+                        .sharedBackgroundVisibility(.hidden)
+                    ToolbarSpacer(.fixed)
+                }
                 ToolbarItem(id: "task-detail.takeover", placement: .primaryAction) { takeoverBlock }
                 ToolbarItem(id: "task-detail.more", placement: .primaryAction) { moreBlock }
                 ToolbarItem(id: "task-detail.inspector", placement: .primaryAction) { inspectorBlock }
@@ -312,7 +320,7 @@ private func skeletonPreview(_ header: TaskLoadingHeader?) -> some View {
 #Preview("Loading, unbroken title - embedded") {
     TaskLoadingSkeleton(
         header: TaskLoadingHeader(title: String(repeating: "LongUnbrokenTaskIdentifier", count: 8), repoName: "repo"),
-        isEmbedded: true
+        chrome: .embedded
     )
     .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
     .preferredColorScheme(.light)
@@ -320,7 +328,7 @@ private func skeletonPreview(_ header: TaskLoadingHeader?) -> some View {
 
 #Preview("Loading, unbroken title - embedded dark") {
     TaskLoadingSkeleton(
-        header: TaskLoadingHeader(title: String(repeating: "LongUnbrokenTaskIdentifier", count: 8), repoName: "repo"), isEmbedded: true
+        header: TaskLoadingHeader(title: String(repeating: "LongUnbrokenTaskIdentifier", count: 8), repoName: "repo"), chrome: .embedded
     )
     .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
     .preferredColorScheme(.dark)

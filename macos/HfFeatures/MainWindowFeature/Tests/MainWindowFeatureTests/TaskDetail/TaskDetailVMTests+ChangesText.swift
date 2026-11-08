@@ -93,7 +93,7 @@ extension TaskDetailVMTests {
             patches.serve(key, selector, fence)
         }
         if paneOpen {
-            rig.sut.setChangesPaneOpen(true)
+            rig.sut.setPaneOpen(true)
             await waitUntil { rig.sut.changesTabCount == 6 }
         }
         return TextRig(rig: rig, patches: patches)
