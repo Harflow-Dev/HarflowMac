@@ -311,6 +311,51 @@ enum ActivityFeedNativeReading {
         return old[..<index].last(where: surviving.contains) ?? old[(index + 1)...].first(where: surviving.contains)
     }
 
+    /// One old-layout entry as the fallback scans see it: its list id, the id a reading can anchor on (`nil` for
+    /// entries that never anchor), whether it is a semantic row, and its rect in the old layout.
+    struct FallbackEntry {
+        let id: String
+        let anchorID: String?
+        let isRow: Bool
+        let rect: CGRect
+    }
+
+    /// The first visible surviving anchor in `entries` (the first one that intersects `visible`, offset taken from its
+    /// old rect), restricted to rows when `rowsOnly`; `first` is the first surviving anchor of that pass, visible or not.
+    /// `entries` are the anchoring entries in list order.
+    static func visibleSurviving(entries: [FallbackEntry], visible: CGRect, surviving: Set<String>, rowsOnly: Bool)
+        -> (visible: (id: String, relativeOffset: CGFloat)?, first: (id: String, relativeOffset: CGFloat)?) {
+        var first: (id: String, relativeOffset: CGFloat)?
+        for entry in entries {
+            if rowsOnly, !entry.isRow { continue }
+            guard let id = entry.anchorID, surviving.contains(id) else { continue }
+            let capture = (id: id, relativeOffset: entry.rect.minY - visible.minY)
+            if entry.rect.maxY > visible.minY, entry.rect.minY < visible.maxY { return (capture, first ?? capture) }
+            first = first ?? capture
+        }
+        return (nil, first)
+    }
+
+    /// The reading a structural reload keeps when the captured row `captured` does not survive (callers return a
+    /// surviving capture unchanged before asking). In order:
+    /// 1. the first visible surviving row, at the offset it has in the old layout, so nothing the reader can see moves;
+    /// 2. the first visible surviving non-row anchor (tail or approval);
+    /// 3. `neighbour(of:old:surviving:)` over the row entries: the nearest preceding surviving row, else the nearest
+    ///    following one, with its offset taken from that row's old rect.
+    /// `nil` when nothing qualifies.
+    static func structuralFallback(entries: [FallbackEntry], visible: CGRect, surviving: Set<String>, captured: String)
+        -> (id: String, relativeOffset: CGFloat)? {
+        for rowsOnly in [true, false] {
+            if let hit = visibleSurviving(entries: entries, visible: visible, surviving: surviving, rowsOnly: rowsOnly).visible {
+                return hit
+            }
+        }
+        let rows = entries.filter { $0.isRow && $0.anchorID != nil }
+        guard let id = neighbour(of: captured, old: rows.compactMap(\.anchorID), surviving: surviving),
+              let rect = rows.first(where: { $0.anchorID == id })?.rect else { return nil }
+        return (id, rect.minY - visible.minY)
+    }
+
     static func anchor(index: Int, id: String, rowRect: CGRect, visibleMinY: CGFloat, shownIndex: Int)
         -> ParallelVerticalAnchor {
         ParallelVerticalAnchor(id: id, index: shownIndex, relativeOffset: rowRect.minY - visibleMinY)

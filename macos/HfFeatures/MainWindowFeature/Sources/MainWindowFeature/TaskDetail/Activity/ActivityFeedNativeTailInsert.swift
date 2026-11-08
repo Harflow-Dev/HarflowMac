@@ -66,43 +66,50 @@ extension ActivityFeedNativeList.Coordinator {
         return survivingReading(current, next: next)
     }
 
-    /// The reading a structural reload keeps. When the captured row does not survive in `next`, the nearest
-    /// surviving row before it stands in (else the nearest after it), its offset recomputed from its rect so the
-    /// viewport holds. See `ActivityFeedNativeReading.neighbour(of:old:surviving:)`.
+    /// The reading a structural reload keeps. A surviving captured row is returned as is. Otherwise
+    /// `ActivityFeedNativeReading.structuralFallback` picks, in order, the first visible surviving row (held at its
+    /// old on-screen offset, so a regrouped card that replaces the anchor moves nothing the reader can see), then the
+    /// first visible surviving tail or approval, then the nearest preceding surviving row (else the nearest following
+    /// one) with its offset recomputed from its old rect: the case of a removed entry taller than the viewport.
+    /// Scope: this is the removed-anchor fallback only. When `transferRegroupedState` hands the persisted anchor to a
+    /// replacement that shares members with the old row, `structuralReading` pins that replacement through its
+    /// persisted-anchor branch before this runs; that logical-anchor behaviour is unchanged.
     func structuralSurvivingReading(_ current: ActivityFeedNativeReadingCapture,
                                     next: [ActivityFeedNativeEntry]) -> ActivityFeedNativeReadingCapture? {
         let surviving = Set(next.map(\.id))
         if surviving.contains(current.id) { return current }
-        guard let table, let scroll else { return nil }
-        let rowIDs = entries.compactMap { entry -> String? in
-            if case .row(let row) = entry { row.row.id } else { nil }
+        guard let scroll, let entries = fallbackEntries() else { return nil }
+        return ActivityFeedNativeReading
+            .structuralFallback(entries: entries, visible: scroll.documentVisibleRect, surviving: surviving,
+                                captured: current.id)
+            .map { ActivityFeedNativeReadingCapture(id: $0.id, relativeOffset: $0.relativeOffset) }
+    }
+
+    /// The anchoring entries of the current layout in list order, with their rects, for the fallback scans.
+    private func fallbackEntries() -> [ActivityFeedNativeReading.FallbackEntry]? {
+        guard let table, let first = firstRowIndex, let last = lastRowIndex else { return nil }
+        return (first ... last).map { index in
+            ActivityFeedNativeReading.FallbackEntry(id: entries[index].id, anchorID: entries[index].anchorID,
+                                                    isRow: entries[index].isRow, rect: table.rect(ofRow: index))
         }
-        guard let id = ActivityFeedNativeReading.neighbour(of: current.id, old: rowIDs, surviving: surviving),
-              let index = entries.firstIndex(where: { $0.id == id }) else { return nil }
-        let offset = table.rect(ofRow: index).minY - scroll.documentVisibleRect.minY
-        return ActivityFeedNativeReadingCapture(id: id, relativeOffset: offset)
     }
 
     /// `current` when its entry survives in `next`; otherwise the first visible row that does, else the first
     /// surviving row. Used by the tail insert, where a reading whose entry leaves with the window run lands on the
-    /// first surviving row; the structural reload uses `structuralSurvivingReading` instead.
+    /// first surviving row; the structural reload uses `structuralSurvivingReading` instead. The visible-entry scan is
+    /// shared with it (`ActivityFeedNativeReading.visibleSurviving`); the first-surviving fallback is this path's own.
     func survivingReading(_ current: ActivityFeedNativeReadingCapture,
                           next: [ActivityFeedNativeEntry]) -> ActivityFeedNativeReadingCapture? {
         let surviving = Set(next.map(\.id))
         if surviving.contains(current.id) { return current }
-        guard let table, let scroll, let first = firstRowIndex, let last = lastRowIndex else { return nil }
+        guard let scroll, let scanned = fallbackEntries() else { return nil }
         let visible = scroll.documentVisibleRect
         for rowsOnly in [true, false] {
-            var fallback: ActivityFeedNativeReadingCapture?
-            for index in first ... last {
-                if rowsOnly, !entries[index].isRow { continue }
-                guard let id = entries[index].anchorID, surviving.contains(id) else { continue }
-                let rect = table.rect(ofRow: index)
-                let capture = ActivityFeedNativeReadingCapture(id: id, relativeOffset: rect.minY - visible.minY)
-                if rect.maxY > visible.minY, rect.minY < visible.maxY { return capture }
-                fallback = fallback ?? capture
+            let result = ActivityFeedNativeReading.visibleSurviving(entries: scanned, visible: visible,
+                                                                    surviving: surviving, rowsOnly: rowsOnly)
+            if let hit = result.visible ?? result.first {
+                return ActivityFeedNativeReadingCapture(id: hit.id, relativeOffset: hit.relativeOffset)
             }
-            if let fallback { return fallback }
         }
         return nil
     }

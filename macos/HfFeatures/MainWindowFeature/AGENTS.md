@@ -187,6 +187,13 @@ no embedded terminal anywhere in this package:
   Bound automatic short-feed filling so collapsed groups cannot drain history on mount; renewed
   upward scrolling or disclosure interaction permits more. Monitor scroll intent only for visible feeds.
   Page loading ends after the corresponding item snapshot commits, never before background folding.
+  **Structural fallback.** When a structural reload removes the captured reading row, `ActivityFeedNativeReading.structuralFallback`
+  picks, in order, the first visible surviving row (held at its old on-screen offset), the first visible surviving tail or
+  approval, then the nearest preceding surviving row (else the nearest following one) with its offset recomputed; the
+  preceding row applies only when nothing visible survives, such as a removed entry taller than the viewport. The scope is
+  the removed-anchor fallback: when `transferRegroupedState` hands the persisted anchor to a replacement that shares
+  members with the old row, the persisted-anchor branch of `structuralReading` pins that replacement (the logical anchor)
+  before the fallback runs, and that is unchanged. The tail insert keeps its own `survivingReading`.
 - `.id(name)` for `buildParallelView(name:)`'s per-group VM reset is applied at that call site,
   wrapping the whole `ParallelView(vm)` value — never inside `ParallelView.body`. `ParallelView` owns
   `@State var viewModel: VM`, and that state is tied to the view's own identity as seen by its
