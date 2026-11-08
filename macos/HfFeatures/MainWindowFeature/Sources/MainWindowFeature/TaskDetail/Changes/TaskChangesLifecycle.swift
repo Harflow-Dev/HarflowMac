@@ -59,6 +59,18 @@ struct TaskChangesLifecycle {
     var settlingResults = 0
     /// Re-reading stopped at the cap; only "Check again" or a new epoch reads again.
     var capped = false
+    /// The turn a person picked; `nil` reads the current member.
+    var selectedTurn: String?
+    /// Counts listing replacements; a patch read is bound to the value it started under.
+    var listingRevision: UInt64 = 0
+    /// The patch generation; only the latest patch read may apply.
+    var patchGeneration: UInt64 = 0
+    /// What selecting a row of the applied listing needs.
+    var rowFacts: [TaskChangesSelector: TaskChangesRowFacts] = [:]
+    /// The fingerprint of the applied listing, to tell a replaced listing from an identical one.
+    var fingerprint = 0
+    /// The applied result is a listing (not a note), the only result that can show a selected row to be absent.
+    var isDocument = false
     /// How many times a read was repeated after a runtime change superseded it.
     var supersededRetries = 0
 }

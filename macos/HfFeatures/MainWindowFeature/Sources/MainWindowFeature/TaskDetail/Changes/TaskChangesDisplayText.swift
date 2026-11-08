@@ -43,6 +43,29 @@ enum TaskChangesDisplayText {
     /// Escapes a stored path's bytes.
     static func escaped(_ path: TaskChangesPath) -> String { escaped(path.bytes) }
 
+    /// Escapes the characters of diff text that could mislead or hide, and leaves the rest as it is (backslashes, tabs and
+    /// ordinary Unicode included): C0 controls except tab and DEL as `\xNN`, and C1 controls, bidi controls, U+2028, U+2029
+    /// and every other `Cf` character as `\u{XXXX}`.
+    static func diffSafe(_ text: String) -> String {
+        var output = ""
+        for scalar in text.unicodeScalars {
+            let value = scalar.value
+            if value == 0x09 {
+                output.unicodeScalars.append(scalar)
+            } else if value < 0x20 || value == 0x7F {
+                output += hex(UInt8(value))
+            } else if (0x80 ... 0x9F).contains(value) {
+                output += unicode(value)
+            } else {
+                switch scalar.properties.generalCategory {
+                case .format, .lineSeparator, .paragraphSeparator: output += unicode(value)
+                default: output.unicodeScalars.append(scalar)
+                }
+            }
+        }
+        return output
+    }
+
     // MARK: - Private
 
     private static func hex(_ byte: UInt8) -> String {

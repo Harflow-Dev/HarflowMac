@@ -52,6 +52,17 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var changesCaptureSettling = false
     var changesRevealLimits: [TaskChangesScopeID: Int] = [:]
     func setChangesPaneOpen(_: Bool) {}
+    var changesSelection: TaskChangesSelection?
+    var changesDiff = TaskChangesDiffPresentation.none
+    var changesTurns: TaskChangesTurnPicker?
+    func didSelectChangesRow(_ selector: TaskChangesSelector) {
+        changesSelection = TaskChangesSelection(taskID: taskID, selector: selector)
+    }
+
+    func restoreChangesSelection(_ selection: TaskChangesSelection?) { changesSelection = selection }
+    func didTapRetryChangesDiff() {}
+    func didTapReloadChanges() {}
+    func didSelectChangesTurn(_: String) {}
     func didTapRetryChanges() {}
     func didTapLoadMoreChangeRows(scope: TaskChangesScopeID) {
         changesRevealLimits[scope] = (changesRevealLimits[scope] ?? TaskChangesPresentationBuilder.revealStep)

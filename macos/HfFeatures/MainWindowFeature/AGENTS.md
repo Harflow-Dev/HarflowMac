@@ -213,6 +213,30 @@ no embedded terminal anywhere in this package:
   supersedes a read is read once more, and the "does not support Changes" state offers Retry instead of clearing on its
   own. Diff and file text never reach logs, descriptions or persistence. `TaskChangesDisplayText.escaped` spells out
   invalid bytes, controls, bidi controls, `Cf` characters and backslashes in every path, name and provenance value.
+  **Changes text and turns.** Rows with a selector are buttons (`didSelectChangesRow`); a row no selector can address is dimmed
+  and disabled. A selected row's patch (`TaskDetailVM+ChangesText.swift`) is bound to (member task id, listing revision,
+  patch generation, selector) and applies only while all four match; a turn change, a replaced listing (changed row facts),
+  `didDisappear` and `resetForMissingTask` invalidate it. Rows whose content is not `available` or `truncated` select without
+  reading and show their label. The selection (member task id plus the row's `TaskChangesSelector`, never text) is
+  remembered in `TaskPaneStateStore` and handed back through `restoreChangesSelection`; it is matched against the loaded
+  listing of its member and dropped silently when the row is absent, and a note or loading listing neither confirms nor drops
+  it. `UnifiedDiffLines.classify` is hunk-aware: outside a hunk lines are meta, inside the first character decides, and a line
+  that fits neither starts the next section. `changes_entry_not_found` and `changes_cursor_expired` drop the selection, read the
+  listing again and show "This diff couldn't be read" with Reload changes; a client-bound or other failure offers Retry. The
+  turn picker (several members only) lists newest first, defaults to the current member and resets to it when a new member
+  appears or the picked one is pruned; "Turn N of M" is index-based, so it renumbers after pruning. Every applied listing
+  carries a fingerprint (per row status, counts, content and selector; per repository base, head, observation time and state;
+  per scope state and row count): a changed fingerprint replaces the listing and invalidates the patch, an identical one keeps
+  it. The diff is one read-only, selectable TextKit 1 text view (`NSViewRepresentable`) over an `NSAttributedString` built off the
+  main actor from the classified lines (`TaskChangesDiffText`); only the lines in view are laid out and drawn, with full-width
+  fills for added, removed and hunk lines, a capped height with its own scrolling and sideways scrolling instead of wrapping.
+  Accessibility: the text view is labelled "Diff of <path>" and added, removed and context lines start with `+`, `-` or a space in
+  the text itself, so the convention is the line prefix. Lines split on LF and classify on the first Unicode scalar; a trailing CR is
+  dropped from each line and "Lines end in CRLF" is noted once beside the header. Bidi controls, other `Cf` characters,
+  C1 controls, DEL and C0 controls except tab are drawn escaped (`TaskChangesDisplayText.diffSafe`); other text is unchanged.
+  Diff equality compares an identity hashed from the patch bytes, never the lines. A superseded patch read is repeated once while its
+  fence is current. Only a "Reload changes" failure survives a dropped selection, and the replacement listing clears it. Diff types
+  describe themselves without their text.
   `TaskDetailVM+Summary.swift` rebuilds `SummaryPaneModel` synchronously on every `recompute()`
   from the task's own reported fields (`TaskInfo.summary`/`notices`/`permissionDenials`/
   `enforcement`/`totalCostUSD`/`numTurns`/`raw["usage"]`) and the observed activity summaries — "Files edited"

@@ -116,7 +116,54 @@ enum TaskChangesPresentationBuilder {
         let document = TaskChangesDocument(banner: banner, repositories: repositories,
                                            caption: snapshot.hasNoChanges ? completeCaption : nil,
                                            countCaption: needsCountCaption(snapshot) ? countCaption : nil)
-        return TaskChangesBuilt(presentation: .document(document), tabCount: tabCount(snapshot), isSettling: false, wasSuperseded: false)
+        return TaskChangesBuilt(presentation: .document(document), tabCount: tabCount(snapshot), isSettling: false, wasSuperseded: false,
+                                rowFacts: rowFacts(snapshot), fingerprint: fingerprint(snapshot))
+    }
+
+    /// The fingerprint of a listing; see `TaskChangesBuilt.fingerprint`. Process-local, so it is only compared within a run.
+    static func fingerprint(_ snapshot: TaskChangesSnapshot) -> Int {
+        var hasher = Hasher()
+        hasher.combine(snapshot.taskID)
+        for entry in snapshot.repositories {
+            hasher.combine(entry.baseCommit)
+            hasher.combine(entry.headCommit)
+            hasher.combine(entry.observedAt)
+            hasher.combine(entry.state.rawValue)
+            for scope in entry.scopes {
+                hasher.combine(scope.name.rawValue)
+                hasher.combine(scope.state.rawValue)
+                hasher.combine(scope.rowCount)
+                for row in scope.rows {
+                    hasher.combine(row.status.rawValue)
+                    hasher.combine(row.additions)
+                    hasher.combine(row.deletions)
+                    hasher.combine(row.content.state.rawValue)
+                    hasher.combine(row.content.reason)
+                    hasher.combine(row.content.bytes)
+                    hasher.combine(TaskChangesSelector(repository: entry, scope: scope.name, row: row))
+                    hasher.combine(row.path.bytes)
+                }
+            }
+        }
+        return hasher.finalize()
+    }
+
+    /// The facts of every addressable row, for selecting it.
+    private static func rowFacts(_ snapshot: TaskChangesSnapshot) -> [TaskChangesSelector: TaskChangesRowFacts] {
+        var facts: [TaskChangesSelector: TaskChangesRowFacts] = [:]
+        for entry in snapshot.repositories where entry.state == .available || entry.state == .incomplete {
+            for scope in entry.scopes {
+                for row in scope.rows {
+                    guard let selector = TaskChangesSelector(repository: entry, scope: scope.name, row: row) else { continue }
+                    let state = rowState(row)
+                    facts[selector] = TaskChangesRowFacts(
+                        path: TaskChangesDisplayText.escaped(row.path), scopeTitle: scopeTitle(scope.name),
+                        hasText: [TaskChangesContentState.available, .truncated].contains(row.content.state), label: state.label,
+                        stateHelp: state.help, countsAndPatchSeparate: scope.countsAndPatchSeparate == true)
+                }
+            }
+        }
+        return facts
     }
 
     /// Under a listing of several repositories, or of a path in both scopes of one.
@@ -379,11 +426,12 @@ enum TaskChangesPresentationBuilder {
     private static func row(index: Int, entry: TaskChangesRepositoryEntry, scope: TaskChangesScope, row: TaskChangesRow) -> TaskChangesRowModel {
         let (letter, word) = status(row.status)
         let (state, help) = rowState(row)
+        let selector = TaskChangesSelector(repository: entry, scope: scope.name, row: row)
         let knownContent = [TaskChangesContentState.available, .truncated, .binary, .omittedSize, .notCaptured].contains(row.content.state)
         return TaskChangesRowModel(
             id: index, letter: letter, statusWord: word, path: TaskChangesDisplayText.escaped(row.path), state: state, stateHelp: help,
             additions: knownContent ? row.additions : nil, deletions: knownContent ? row.deletions : nil,
-            isDimmed: TaskChangesSelector(repository: entry, scope: scope.name, row: row) == nil)
+            isDimmed: selector == nil, selector: selector)
     }
 
     /// The status letter and the word read aloud.

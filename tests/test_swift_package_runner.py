@@ -423,6 +423,8 @@ SUMMARY_ENTRY_PANE_SUITE = "MainWindowFeatureTests.TaskPaneSummaryEntryHostedTes
 SUMMARY_ENTRY_CAPTURE_SUITE = "MainWindowFeatureTests.TaskPaneSummaryEntryCaptureHostedTests"
 CHANGES_TAB_SUITE = "MainWindowFeatureTests.TaskChangesTabHostedTests"
 CHANGES_CAPTURE_SUITE = "MainWindowFeatureTests.TaskChangesCaptureHostedTests"
+CHANGES_TEXT_SUITE = "MainWindowFeatureTests.TaskChangesTextHostedTests"
+CHANGES_TEXT_CAPTURE_SUITE = "MainWindowFeatureTests.TaskChangesTextCaptureHostedTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
     TAIL_INSERT_SUITE,
@@ -448,6 +450,8 @@ HOSTED_SUITE_NAMES = (
     SUMMARY_ENTRY_CAPTURE_SUITE,
     CHANGES_TAB_SUITE,
     CHANGES_CAPTURE_SUITE,
+    CHANGES_TEXT_SUITE,
+    CHANGES_TEXT_CAPTURE_SUITE,
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"

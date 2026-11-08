@@ -212,18 +212,20 @@ import Testing
 
     // MARK: Rows
 
-    @Test func givenARow_whenDrawn_thenItIsAnAccessibleLabelledElementThatIsNotAControl() async throws {
+    @Test func givenAnAddressableRow_whenPressed_thenItIsAnAccessibleButtonThatSelectsTheRow() async throws {
         // given
-        let host = await mount(ChangesPaneMocks.mock(try ChangesJSON.availableListing()))
+        let mock = ChangesPaneMocks.mock(try ChangesJSON.availableListing())
+        let host = await mount(mock)
         defer { host.close() }
 
         // when
         let row = try #require(host.page.element("modified, src/app.py, 1 added, 0 removed"))
+        #expect(host.page.press(row))
+        await host.pump()
 
         // then
-        let role = host.string(row, "accessibilityRole")
-        #expect(role != NSAccessibility.Role.button.rawValue)
-        #expect(!host.page.press(row), "rows are not interactive in this stage")
+        #expect(host.string(row, "accessibilityRole") == NSAccessibility.Role.button.rawValue)
+        #expect(mock.changesSelection != nil, "rows are interactive: pressing one selects it")
     }
 
     @Test func givenABinaryRowAndAnUntrackedRow_whenDrawn_thenTheirLabelsCarryTheStateAndOmitMissingCounts() async throws {

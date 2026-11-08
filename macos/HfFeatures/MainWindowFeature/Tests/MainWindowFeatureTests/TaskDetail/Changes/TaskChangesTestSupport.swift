@@ -116,15 +116,63 @@ enum ChangesJSON {
         return try #require(raw.objectValue.flatMap { TaskChangesPage(raw: $0, requestedLimit: 200) }).repositories
     }
 
+    // MARK: Text chunks
+
+    /// The selector of a row of `availableListing()`.
+    static func selector(
+        _ path: String = "README.md", scope: TaskChangesScopeName = .committedRange, root: String = "/workspace/repo"
+    ) -> TaskChangesSelector {
+        TaskChangesSelector(repositoryRoot: root, scope: scope, pathBytes: Data(path.utf8))!
+    }
+
+    /// One text-mode chunk of the row `selector` addresses. `bytes` is this chunk's payload, `total` the whole patch.
+    static func chunk(
+        _ selector: TaskChangesSelector, bytes: Data, offset: Int = 0, total: Int? = nil, cursor: String? = nil, state: String = "available",
+        reason: String? = nil, status: String = "modified", task: String = "t1"
+    ) -> JSONValue {
+        let whole = total ?? offset + bytes.count
+        let text = String(data: bytes, encoding: .utf8)
+        let path = String(data: selector.pathBytes, encoding: .utf8)
+        return .object([
+            "task_id": .string(task), "mode": .string("text"), "capture": .object(["state": .string("available"), "reason": .null]),
+            "repository_root": .string(selector.repositoryRoot), "scope": .string(selector.scope.rawValue),
+            "path": path.map(JSONValue.string) ?? .null,
+            "path_bytes_b64": path == nil ? .string(selector.pathBytes.base64EncodedString()) : .null,
+            "path_truncated": .bool(false), "status": .string(status), "additions": .number(1), "deletions": .number(0), "binary": .bool(false),
+            "content": .object(["state": .string(state), "reason": reason.map(JSONValue.string) ?? .null, "bytes": .number(Double(whole))]),
+            "text": text.map(JSONValue.string) ?? .null, "text_b64": text == nil ? .string(bytes.base64EncodedString()) : .null,
+            "offset": .number(Double(offset)), "returned_bytes": .number(Double(bytes.count)), "total_bytes": .number(Double(whole)),
+            "has_more": .bool(offset + bytes.count < whole), "next_cursor": cursor.map(JSONValue.string) ?? .null,
+            "observed_at": .string("2026-10-14T17:46:40+00:00")
+        ])
+    }
+
+    /// The decoded chunk, through the public type.
+    static func decodedChunk(_ raw: JSONValue) throws -> TaskChangesTextChunk {
+        try #require(raw.objectValue.flatMap(TaskChangesTextChunk.init(raw:)))
+    }
+
+    /// The whole patch of `selector`, assembled from one chunk through the public assembler.
+    static func patch(
+        _ selector: TaskChangesSelector, bytes: Data, state: String = "available", reason: String? = nil, task: String = "t1"
+    ) throws -> TaskChangesPatch {
+        var assembler = TaskChangesTextAssembler(selector: selector)
+        try assembler.append(decodedChunk(chunk(selector, bytes: bytes, state: state, reason: reason, task: task)))
+        return try assembler.finish()
+    }
+
+    /// A small valid unified diff.
+    static let sampleDiff = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1,2 @@\n x\n+y\n"
+
     // MARK: Named fixtures
 
     /// ctl-task-changes-available-listing.json (limit 2, more pages) and ctl-task-changes-listing-next-page.json (limit 200),
     /// read as one listing: committed rows README.md, docs/guide.md, src/app.py and assets/logo.png (binary); working-tree rows
     /// src/app.py and notes.txt (untracked, name only).
-    static func availableListing() throws -> TaskChangesSnapshot {
+    static func availableListing(readmeBytes: Int = 42, readmeAdditions: Int = 1) throws -> TaskChangesSnapshot {
         let first = page(task: "task-changes-available", repositories: [repository(
             committed: committed(rowCount: 4, rows: [
-                row("README.md", status: "added", additions: 1, deletions: 0, bytes: 42),
+                row("README.md", status: "added", additions: readmeAdditions, deletions: 0, bytes: readmeBytes),
                 row("docs/guide.md", status: "added", additions: 1, deletions: 0, bytes: 1323)
             ]),
             working: working(rowCount: 2))], limit: 2, cursor: "cursor-page-2")
@@ -187,6 +235,22 @@ enum ChangesJSON {
         try snapshot(page(repositories: [repository()]))
     }
 
+    /// ctl-task-changes-text-complete.json: the whole patch of src/app.py in committed_range in one chunk.
+    static let textCompleteText = "diff --git a/src/app.py b/src/app.py\nindex 1111111..2222222 100644\n--- a/src/app.py\n+++ b/src/app.py\n"
+        + "@@ -1 +1,2 @@\n print('a')\n+print('b')\n"
+
+    /// ctl-task-changes-text-chunk.json and ctl-task-changes-text-chunk-next.json: the first two chunks of docs/guide.md (1323 bytes in all).
+    static func guideChunks() throws -> (first: TaskChangesTextChunk, next: TaskChangesTextChunk, selector: TaskChangesSelector) {
+        let address = selector("docs/guide.md")
+        let line = "\n+one more line of documentation"
+        let first = Data(("diff --git a/docs/guide.md b/docs/guide.md" + String(repeating: line, count: 9)).utf8)
+        let second = Data(String(repeating: line, count: 8).utf8)
+        let one = try decodedChunk(chunk(address, bytes: first, total: 1323, cursor: "cursor-text-2", status: "added", task: "task-changes-available"))
+        let two = try decodedChunk(chunk(address, bytes: second, offset: first.count, total: 1323, cursor: "cursor-text-3", status: "added",
+                                         task: "task-changes-available"))
+        return (one, two, address)
+    }
+
     // MARK: Named refusals
 
     /// ctl-task-changes-cursor-expired.json
@@ -229,4 +293,24 @@ extension TaskChangesBuilt {
         if case .document(let document) = presentation { return document }
         return nil
     }
+}
+
+extension TaskChangesDiffModel {
+    /// The drawn lines, with their `+`, `-` or space prefix.
+    var drawnLines: [String] { text.attributed.string.components(separatedBy: "\n") }
+
+    /// The kind code (`TaskChangesDiffText.kindCode`) of each drawn line.
+    var drawnKinds: [Int] {
+        let attributed = text.attributed
+        var location = 0
+        return drawnLines.map { line in
+            defer { location += (line as NSString).length + 1 }
+            guard attributed.length > 0 else { return -1 }
+            return attributed.attribute(TaskChangesDiffText.kindKey, at: min(location, attributed.length - 1), effectiveRange: nil) as? Int ?? -1
+        }
+    }
+}
+
+extension UnifiedDiffLines.Kind {
+    var code: Int { TaskChangesDiffText.kindCode(self) }
 }

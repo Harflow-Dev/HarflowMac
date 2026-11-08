@@ -29,7 +29,7 @@ extension TaskDetailVM {
         if changesLifecycle.paneOpen == true { return true }
         // A capture that is settling keeps being read with the pane closed, until a non-settling answer or the cap.
         if changesLifecycle.appliedSettling { return true }
-        return task.status.isTerminal && observationFrames[currentTaskID]?.logState == .settling
+        return changesReadMemberStatus(task)?.isTerminal == true && observationFrames[changesReadMemberID]?.logState == .settling
     }
 
     /// Reads when a read is owed and there is demand; otherwise leaves the epoch stale for the next demand.
@@ -38,21 +38,40 @@ extension TaskDetailVM {
         startChangesRead()
     }
 
-    /// A new epoch starts when the member changes, and a stale one when its shown status or the conversation's member set changes. Both cancel what is in
-    /// flight and the cadence, start a fresh cap, and owe a read.
+    /// The member whose changes are read: the turn a person picked, else the current member.
+    var changesReadMemberID: String { changesLifecycle.selectedTurn ?? currentTaskID }
+
+    /// The shown status of the read member; `detail` is the current member's freshest record.
+    func changesReadMemberStatus(_ detail: TaskInfo) -> TaskStatus? {
+        let member = changesReadMemberID
+        return member == detail.taskID ? detail.status : conversationMembers.first { $0.taskID == member }?.status
+    }
+
+    /// A new epoch starts when the read member changes, and a stale one when its shown status or the conversation's member
+    /// set changes. Both cancel what is in flight and the cadence, start a fresh cap, and owe a read. A picked turn
+    /// resets to the current member when a new member appears or the picked one is pruned.
     func trackChangesEpoch(_ detail: TaskInfo) {
         guard chrome == .standalone else { return }
-        if changesLifecycle.memberID != detail.taskID {
-            beginChangesEpoch(member: detail.taskID, status: detail.status, showsLoading: true)
-        } else if changesLifecycle.shownStatus != detail.status || changesLifecycle.memberIDs != conversationMembers.map(\.taskID) {
-            beginChangesEpoch(member: detail.taskID, status: detail.status, showsLoading: false)
+        let ids = conversationMembers.map(\.taskID)
+        if let turn = changesLifecycle.selectedTurn,
+           !ids.contains(turn) || (!changesLifecycle.memberIDs.isEmpty && !Set(ids).isSubset(of: changesLifecycle.memberIDs)) {
+            changesLifecycle.selectedTurn = nil
         }
+        let member = changesLifecycle.selectedTurn ?? detail.taskID
+        let status = changesReadMemberStatus(detail) ?? detail.status
+        if changesLifecycle.memberID != member {
+            beginChangesEpoch(member: member, status: status, showsLoading: true)
+        } else if changesLifecycle.shownStatus != status || changesLifecycle.memberIDs != ids {
+            beginChangesEpoch(member: member, status: status, showsLoading: false)
+        }
+        let picker = TaskChangesTurnPicker.make(memberIDs: ids, selectedID: member)
+        if changesTurns != picker { changesTurns = picker }
     }
 
     /// "Retry read" and "Check again": a new epoch that reads at once.
     func didTapRetryChanges() {
         guard isMounted, chrome == .standalone, let task else { return }
-        beginChangesEpoch(member: task.taskID, status: task.status, showsLoading: true)
+        beginChangesEpoch(member: changesReadMemberID, status: changesReadMemberStatus(task) ?? task.status, showsLoading: true)
         startChangesRead()
     }
 
@@ -66,11 +85,16 @@ extension TaskDetailVM {
     /// reappearing counts as a change; a missing task keeps it, since the view is still there.
     func resetChanges(keepPaneReport: Bool) {
         cancelChangesWork()
+        cancelChangesPatch()
         let paneOpen = keepPaneReport ? changesLifecycle.paneOpen : nil
-        let generation = changesLifecycle.generation
+        let (generation, patchGeneration, revision) = (changesLifecycle.generation, changesLifecycle.patchGeneration, changesLifecycle.listingRevision)
         changesLifecycle = TaskChangesLifecycle()
         changesLifecycle.generation = generation
+        changesLifecycle.patchGeneration = patchGeneration
+        changesLifecycle.listingRevision = revision &+ 1
         changesLifecycle.paneOpen = paneOpen
+        if changesDiff != .none { changesDiff = .none }
+        if changesTurns != nil { changesTurns = nil }
         if changesPresentation != .loading { changesPresentation = .loading }
         if changesTabCount != nil { changesTabCount = nil }
         if changesCaptureSettling { changesCaptureSettling = false }
@@ -79,7 +103,7 @@ extension TaskDetailVM {
 
     // MARK: - Epochs
 
-    private func beginChangesEpoch(member: String, status: TaskStatus, showsLoading: Bool) {
+    func beginChangesEpoch(member: String, status: TaskStatus, showsLoading: Bool) {
         cancelChangesWork()
         changesLifecycle.memberID = member
         changesLifecycle.shownStatus = status
@@ -95,11 +119,19 @@ extension TaskDetailVM {
             changesLifecycle.appliedSettling = false
             if changesPresentation != .loading { changesPresentation = .loading }
             if !changesRevealLimits.isEmpty { changesRevealLimits = [:] }
+            // The old listing is gone: so is its patch, and a selection that belongs to another member.
+            changesLifecycle.rowFacts = [:]
+            changesLifecycle.isDocument = false
+            changesLifecycle.fingerprint = 0
+            changesLifecycle.listingRevision &+= 1
+            cancelChangesPatch()
+            if changesDiff != .none { changesDiff = .none }
+            if let selection = changesSelection, selection.taskID != member { changesSelection = nil }
         }
     }
 
     /// Cancels the read and the cadence and makes every earlier generation stale.
-    private func cancelChangesWork() {
+    func cancelChangesWork() {
         changesReadTask?.cancel()
         changesReadTask = nil
         changesCadenceTask?.cancel()
@@ -165,6 +197,17 @@ extension TaskDetailVM {
         if changesTabCount != built.tabCount { changesTabCount = built.tabCount }
         if changesCaptureSettling != built.isSettling { changesCaptureSettling = built.isSettling }
         changesLifecycle.appliedSettling = built.isSettling
+        // A replaced listing invalidates the outstanding and the displayed patch; the selection is matched against the new one.
+        let replaced = changesLifecycle.fingerprint != built.fingerprint || changesLifecycle.isDocument != built.isDocument
+        changesLifecycle.rowFacts = built.rowFacts
+        changesLifecycle.isDocument = built.isDocument
+        changesLifecycle.fingerprint = built.fingerprint
+        if replaced {
+            changesLifecycle.listingRevision &+= 1
+            reconcileChangesSelection()
+        }
+        // The replacement listing is here, so the "Reload changes" failure that asked for it has done its job.
+        if built.isDocument, isReloadFailure { changesDiff = .none }
         if let deadline {
             if !deadline.isCapped { scheduleSettlingRead(generation: generation, since: deadline.since, remaining: deadline.remaining) }
         } else {

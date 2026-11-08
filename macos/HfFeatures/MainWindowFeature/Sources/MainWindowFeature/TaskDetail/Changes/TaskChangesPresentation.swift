@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import MonitorCore
 
 // MARK: - TaskChangesTone
 
@@ -35,12 +36,18 @@ struct TaskChangesNote: Equatable, Sendable {
         case retryRead
         /// "Check again": settling stopped being re-read after its time cap.
         case checkAgain
+        /// "Retry": read the selected row's diff again.
+        case retryDiff
+        /// "Reload changes": the stored changes were replaced, so the list is read again.
+        case reloadChanges
 
         /// The button title.
         var title: String {
             switch self {
             case .retryRead: "Retry read"
             case .checkAgain: "Check again"
+            case .retryDiff: "Retry"
+            case .reloadChanges: "Reload changes"
             }
         }
     }
@@ -94,6 +101,8 @@ struct TaskChangesRowModel: Equatable, Identifiable, Sendable {
     let deletions: Int?
     /// True when no selector can address the row (cut path, cut repository fields, no root).
     let isDimmed: Bool
+    /// The address of the row; `nil` exactly when `isDimmed`.
+    var selector: TaskChangesSelector?
 }
 
 // MARK: - TaskChangesScopeModel
@@ -170,4 +179,14 @@ struct TaskChangesBuilt: Equatable, Sendable {
     let isSettling: Bool
     /// True when the read was superseded by a runtime change rather than failed.
     let wasSuperseded: Bool
+    /// What selecting a listed row needs, keyed by its selector; empty unless the presentation is a document.
+    var rowFacts: [TaskChangesSelector: TaskChangesRowFacts] = [:]
+    /// A hash over what a patch depends on: per row its status, counts, content and selector; per repository its base, head,
+    /// observation time and state; per scope its state and row count. `0` for a result that is not a listing.
+    var fingerprint = 0
+
+    /// Whether the presentation is a listing, the only result that can show a selected row to be absent.
+    var isDocument: Bool {
+        if case .document = presentation { true } else { false }
+    }
 }

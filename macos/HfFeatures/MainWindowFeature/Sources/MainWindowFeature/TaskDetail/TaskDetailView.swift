@@ -76,6 +76,15 @@ protocol TaskDetailViewModel: ViewModel {
     /// "Retry read" and "Check again".
     func didTapRetryChanges()
     func didTapLoadMoreChangeRows(scope: TaskChangesScopeID)
+    /// The selected row, the diff drawn for it and the turn picker (nil unless the conversation has several members).
+    var changesSelection: TaskChangesSelection? { get }
+    var changesDiff: TaskChangesDiffPresentation { get }
+    var changesTurns: TaskChangesTurnPicker? { get }
+    func didSelectChangesRow(_ selector: TaskChangesSelector)
+    func restoreChangesSelection(_ selection: TaskChangesSelection?)
+    func didTapRetryChangesDiff()
+    func didTapReloadChanges()
+    func didSelectChangesTurn(_ taskID: String)
     var summaryModel: SummaryPaneModel { get }
     /// Whether the Activity feed ends with the Summary entry, which the Events usage group then does not repeat.
     var summaryEntryShown: Bool { get }

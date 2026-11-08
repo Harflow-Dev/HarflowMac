@@ -6,6 +6,7 @@
 //  rows are plain text, not controls. The view only draws a presentation built elsewhere.
 //
 
+import MonitorCore
 import SwiftUI
 
 // MARK: - TaskChangesTabView
@@ -17,6 +18,9 @@ struct TaskChangesTabView<VM: TaskDetailViewModel>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: TaskScreenStyle.PaneBody.gap) {
+                if let turns = viewModel.changesTurns {
+                    ChangesTurnBar(turns: turns, select: { viewModel.didSelectChangesTurn($0) })
+                }
                 switch viewModel.changesPresentation {
                 case .loading:
                     ChangesNoteView(note: Self.loadingNote, perform: perform)
@@ -24,8 +28,11 @@ struct TaskChangesTabView<VM: TaskDetailViewModel>: View {
                     ChangesNoteView(note: note, perform: perform)
                 case .document(let document):
                     ChangesDocumentView(document: document, limits: viewModel.changesRevealLimits,
-                                        loadMore: { viewModel.didTapLoadMoreChangeRows(scope: $0) })
+                                        selected: viewModel.changesSelection?.selector,
+                                        loadMore: { viewModel.didTapLoadMoreChangeRows(scope: $0) },
+                                        select: { viewModel.didSelectChangesRow($0) })
                 }
+                ChangesDiffView(diff: viewModel.changesDiff, perform: perform)
             }
             .padding(TaskScreenStyle.PaneBody.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,42 +42,57 @@ struct TaskChangesTabView<VM: TaskDetailViewModel>: View {
     /// The loading state: "Reading stored changes" over a skeleton, with no count and no zero.
     static var loadingNote: TaskChangesNote { TaskChangesNote(tone: .info, title: "Reading stored changes", skeletonBars: 4) }
 
-    private func perform(_ action: TaskChangesNote.Action) { viewModel.didTapRetryChanges() }
+    private func perform(_ action: TaskChangesNote.Action) {
+        switch action {
+        case .retryRead, .checkAgain: viewModel.didTapRetryChanges()
+        case .retryDiff: viewModel.didTapRetryChangesDiff()
+        case .reloadChanges: viewModel.didTapReloadChanges()
+        }
+    }
 }
 
 // MARK: - ChangesNoteView
 
 /// `.hd-m05-panenote`: a title, detail and reason, optional placeholder bars and an action. A neutral note is a caption.
-private struct ChangesNoteView: View {
+struct ChangesNoteView: View {
     let note: TaskChangesNote
     let perform: (TaskChangesNote.Action) -> Void
 
     var body: some View {
         if note.tone == .neutral {
-            Text(verbatim: note.title)
-                .font(TaskScreenStyle.sans(size: 12))
-                .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                if !note.title.isEmpty {
+                    Text(verbatim: note.title)
+                        .font(TaskScreenStyle.sans(size: 12))
+                        .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                skeleton
+            }
         } else {
             card
+        }
+    }
+
+    /// Placeholder bars, drawn by every tone.
+    @ViewBuilder private var skeleton: some View {
+        if note.skeletonBars > 0 {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(0 ..< note.skeletonBars, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: TaskScreenStyle.Scale.radiusSmall)
+                        .fill(TaskScreenStyle.Colors.surfaceActive.color)
+                        .frame(height: 14)
+                        .scaleEffect(x: max(0.3, 0.88 - Double(index) * 0.11), anchor: .leading)
+                }
+            }
+            .accessibilityHidden(true)
         }
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 2) {
             noteText
-            if note.skeletonBars > 0 {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(0 ..< note.skeletonBars, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: TaskScreenStyle.Scale.radiusSmall)
-                            .fill(TaskScreenStyle.Colors.surfaceActive.color)
-                            .frame(height: 14)
-                            .scaleEffect(x: max(0.3, 0.88 - Double(index) * 0.11), anchor: .leading)
-                    }
-                }
-                .padding(.top, 8)
-                .accessibilityHidden(true)
-            }
+            skeleton.padding(.top, 8)
             if let action = note.action {
                 Button(action.title) { perform(action) }
                     .controlSize(.small)
@@ -118,7 +140,9 @@ private struct ChangesNoteView: View {
 private struct ChangesDocumentView: View {
     let document: TaskChangesDocument
     let limits: [TaskChangesScopeID: Int]
+    let selected: TaskChangesSelector?
     let loadMore: (TaskChangesScopeID) -> Void
+    let select: (TaskChangesSelector) -> Void
 
     var body: some View {
         if let banner = document.banner {
@@ -131,7 +155,7 @@ private struct ChangesDocumentView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         ForEach(document.repositories) { repository in
-            ChangesRepositoryView(repository: repository, limits: limits, loadMore: loadMore)
+            ChangesRepositoryView(repository: repository, limits: limits, selected: selected, loadMore: loadMore, select: select)
         }
         ForEach([document.caption, document.countCaption].compactMap(\.self), id: \.self) { caption in
             Text(verbatim: caption)
@@ -148,13 +172,18 @@ private struct ChangesDocumentView: View {
 private struct ChangesRepositoryView: View {
     let repository: TaskChangesRepositoryModel
     let limits: [TaskChangesScopeID: Int]
+    let selected: TaskChangesSelector?
     let loadMore: (TaskChangesScopeID) -> Void
+    let select: (TaskChangesSelector) -> Void
     @State private var isOpen: Bool
 
-    init(repository: TaskChangesRepositoryModel, limits: [TaskChangesScopeID: Int], loadMore: @escaping (TaskChangesScopeID) -> Void) {
+    init(repository: TaskChangesRepositoryModel, limits: [TaskChangesScopeID: Int], selected: TaskChangesSelector?,
+         loadMore: @escaping (TaskChangesScopeID) -> Void, select: @escaping (TaskChangesSelector) -> Void) {
         self.repository = repository
         self.limits = limits
+        self.selected = selected
         self.loadMore = loadMore
+        self.select = select
         _isOpen = State(initialValue: repository.startsOpen)
     }
 
@@ -211,7 +240,8 @@ private struct ChangesRepositoryView: View {
             ChangesNoteView(note: note, perform: { _ in })
         }
         ForEach(repository.scopes) { scope in
-            ChangesScopeView(scope: scope, limit: limits[scope.id] ?? TaskChangesPresentationBuilder.revealStep, loadMore: loadMore)
+            ChangesScopeView(scope: scope, limit: limits[scope.id] ?? TaskChangesPresentationBuilder.revealStep, selected: selected,
+                             loadMore: loadMore, select: select)
         }
     }
 }
@@ -222,7 +252,9 @@ private struct ChangesRepositoryView: View {
 private struct ChangesScopeView: View {
     let scope: TaskChangesScopeModel
     let limit: Int
+    let selected: TaskChangesSelector?
     let loadMore: (TaskChangesScopeID) -> Void
+    let select: (TaskChangesSelector) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -241,7 +273,9 @@ private struct ChangesScopeView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(scope.rows.prefix(limit))) { row in ChangesRowView(row: row) }
+                ForEach(Array(scope.rows.prefix(limit))) { row in
+                    ChangesRowView(row: row, isSelected: row.selector != nil && row.selector == selected, select: select)
+                }
             }
             if scope.rows.count > limit {
                 HStack(spacing: 8) {
@@ -260,13 +294,39 @@ private struct ChangesScopeView: View {
 
 // MARK: - ChangesRowView
 
-/// `.hd-file.hd-m05-file`: status letter, path, row state and counts. Not a control in this stage.
+/// `.hd-file.hd-m05-file`: status letter, path, row state and counts. A button that selects the row; a row that no
+/// selector can address is dimmed and disabled.
 private struct ChangesRowView: View {
     let row: TaskChangesRowModel
+    let isSelected: Bool
+    let select: (TaskChangesSelector) -> Void
+    @State private var isHovering = false
 
     var body: some View {
+        Button {
+            if let selector = row.selector { select(selector) }
+        } label: {
+            content
+                .background(RoundedRectangle(cornerRadius: TaskScreenStyle.ChangeRow.cornerRadius).fill(fill))
+                .contentShape(RoundedRectangle(cornerRadius: TaskScreenStyle.ChangeRow.cornerRadius))
+        }
+        .buttonStyle(.plain)
+        .disabled(row.selector == nil)
+        .onHover { isHovering = $0 }
+        .modifier(OptionalHelp(text: row.stateHelp))
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var fill: Color {
         let style = TaskScreenStyle.ChangeRow.self
-        HStack(spacing: style.gap) {
+        if isSelected { return style.selectedFill.color }
+        return isHovering && row.selector != nil ? style.hoverFill.color : .clear
+    }
+
+    private var content: some View {
+        let style = TaskScreenStyle.ChangeRow.self
+        return HStack(spacing: style.gap) {
             Text(verbatim: row.letter)
                 .font(TaskScreenStyle.mono(size: style.statusSize, weight: .semibold))
                 .foregroundStyle(statusColor.color)
@@ -300,9 +360,6 @@ private struct ChangesRowView: View {
         .padding(.horizontal, style.compactPaddingHorizontal)
         .frame(height: style.compactHeight)
         .opacity(row.isDimmed ? style.dimOpacity : 1)
-        .modifier(OptionalHelp(text: row.stateHelp))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
     }
 
     private var statusColor: TaskScreenStyle.Token {
@@ -328,7 +385,7 @@ private struct ChangesRowView: View {
 // MARK: - ChangesTagView
 
 /// `.hd-m05-tag`: 18 point high, 11 point medium.
-private struct ChangesTagView: View {
+struct ChangesTagView: View {
     let tag: TaskChangesTag
 
     var body: some View {
@@ -371,5 +428,38 @@ private struct OptionalHelp: ViewModifier {
 
     @ViewBuilder func body(content: Content) -> some View {
         if let text { content.help(text) } else { content }
+    }
+}
+
+// MARK: - ChangesTurnBar
+
+/// `.hd-m05-turnbar`: which turn's capture is shown, newest first, with the caption that turns are not added together.
+private struct ChangesTurnBar: View {
+    let turns: TaskChangesTurnPicker
+    let select: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: TaskScreenStyle.PaneBody.gap) {
+            HStack(spacing: 8) {
+                Text("Showing")
+                    .font(TaskScreenStyle.sans(size: 12))
+                    .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+                Picker("Turn", selection: Binding(get: { turns.selectedID }, set: select)) {
+                    ForEach(turns.options) { option in Text(verbatim: option.title).tag(option.id) }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                .accessibilityLabel("Turn")
+                Spacer(minLength: 0)
+                Text(verbatim: "task " + turns.shortID)
+                    .font(TaskScreenStyle.mono(size: 11))
+                    .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+            }
+            Text(verbatim: TaskChangesTurnPicker.caption)
+                .font(TaskScreenStyle.sans(size: 12))
+                .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

@@ -50,6 +50,8 @@ final class TaskPaneStateStore {
         /// The tab resolved with the open default on first show (`changes` for a terminal status, `events`
         /// otherwise), `nil` until it was resolved.
         var appliedDefaultTab: Tab?
+        /// The selected Changes row: its member task id, repository root, scope and path bytes. Never diff text.
+        var changesSelection: TaskChangesSelection?
         var expandedGroups: Set<FactsGroup> = []
         /// Whether the first-show default opens the pane at split widths; `nil` until a default was resolved.
         /// Kept so a conversation first shown closed (for example while running) stays closed when revisited.
@@ -87,6 +89,9 @@ final class TaskPaneStateStore {
     /// The tab a person chose, `nil` when none was chosen.
     func selectedTab(for conversationID: String) -> Tab? { entries[conversationID]?.selectedTab }
 
+    /// The selected Changes row, `nil` when none.
+    func changesSelection(for conversationID: String) -> TaskChangesSelection? { entries[conversationID]?.changesSelection }
+
     /// The tab resolved on first show, `nil` when none was resolved or the entry was evicted.
     func appliedDefaultTab(for conversationID: String) -> Tab? { entries[conversationID]?.appliedDefaultTab }
 
@@ -118,6 +123,12 @@ final class TaskPaneStateStore {
     /// Records the selected tab. An unchanged value writes nothing.
     func setSelectedTab(_ tab: Tab, for conversationID: String) {
         set(\.selectedTab, tab, for: conversationID)
+    }
+
+    /// Records the selected Changes row, or clears it. Entries are bounded by `capacity`, and a selection holds a root and
+    /// a path of at most 4096 bytes each.
+    func setChangesSelection(_ selection: TaskChangesSelection?, for conversationID: String) {
+        set(\.changesSelection, selection, for: conversationID)
     }
 
     /// Records the tab resolved on first show. Written once per conversation by the pane.

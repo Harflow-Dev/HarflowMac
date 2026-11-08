@@ -133,6 +133,14 @@ final class TaskPaneController {
         return Self.visibleTabs.contains(tab) ? tab : .events
     }
 
+    /// The remembered Changes row selection.
+    var changesSelection: TaskChangesSelection? { store.changesSelection(for: conversationID) }
+
+    /// Remembers the selected Changes row, or forgets it.
+    func recordChangesSelection(_ selection: TaskChangesSelection?) {
+        store.setChangesSelection(selection, for: conversationID)
+    }
+
     /// The expanded facts groups.
     var expandedGroups: Set<TaskPaneStateStore.FactsGroup> { store.expandedGroups(for: conversationID) }
 

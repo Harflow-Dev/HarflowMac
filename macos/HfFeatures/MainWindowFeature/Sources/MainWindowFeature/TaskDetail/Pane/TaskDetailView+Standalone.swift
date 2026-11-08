@@ -42,8 +42,10 @@ extension TaskDetailView {
             .onChange(of: pane.isOpen, initial: true) { _, open in viewModel.setChangesPaneOpen(open) }
             .onChange(of: reduceMotion, initial: true) { _, reduced in pane.reducesMotion = reduced }
             .onChange(of: pane.focusReturn) { _, origin in returnFocus(to: origin) }
+            .onChange(of: viewModel.changesSelection) { _, selection in pane.recordChangesSelection(selection) }
             .onAppear {
                 pane.touch()
+                viewModel.restoreChangesSelection(pane.changesSelection)
                 viewModel.setChangesPaneOpen(pane.isOpen)
             }
             .opensFileLinks(repoPath: task.repoPath)

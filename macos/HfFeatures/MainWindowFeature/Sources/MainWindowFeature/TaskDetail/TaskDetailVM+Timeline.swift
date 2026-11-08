@@ -23,6 +23,18 @@ import MonitorCore
 
 extension TaskDetailVM {
 
+    /// Every child any conversation member has started via `spawned_by` (Design point 3) — shared by
+    /// the Timeline's sub-task strip (`+Timeline.swift`) and the cancel dialog's "not cancelled by
+    /// this" listing (`+Actions.swift`'s `didTapCancel()`). One `useCase.children(ofEach:)` call
+    /// (Codex review round 1, finding 1) instead of one `children(of:)` call per member — each of
+    /// which rebuilt the whole shared `LineageIndex` from scratch. The lookup preserves
+    /// `conversationMembers`' own order (a dictionary has none), matching `flatMap`'s old behaviour
+    /// exactly.
+    func allConversationChildren() -> [TaskInfo] {
+        let childrenByMember = useCase.children(ofEach: conversationMembers.map(\.taskID))
+        return conversationMembers.flatMap { childrenByMember[$0.taskID] ?? [] }
+    }
+
     /// Only the standalone mount draws the Summary entry.
     var showsSummaryEntry: Bool { chrome == .standalone }
 
