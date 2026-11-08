@@ -157,13 +157,18 @@ private struct ReadBudget {
     mutating func admit() -> TaskChangesReadFailure? {
         guard isCurrent() else { return TaskChangesReadFailure(key: key, outcome: .superseded) }
         guard now() < deadline else {
-            return failure(.timedOut(tool: "harflow-ctl task-changes", seconds: Double(TaskChangesLimits.maxReadSeconds)))
+            return bound(.deadline)
         }
         guard requests < TaskChangesLimits.maxRequestsPerRead else {
-            return failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "task-changes read exceeded its request budget"))
+            return bound(.requestBudget)
         }
         requests += 1
         return nil
+    }
+
+    /// The read's own limit was reached, or a supersession when the fence no longer holds.
+    func bound(_ bound: TaskChangesReadFailure.ClientBound) -> TaskChangesReadFailure {
+        TaskChangesReadFailure(key: key, outcome: isCurrent() ? .clientBound(bound) : .superseded)
     }
 
     /// A tool error, or a supersession when the fence no longer holds.

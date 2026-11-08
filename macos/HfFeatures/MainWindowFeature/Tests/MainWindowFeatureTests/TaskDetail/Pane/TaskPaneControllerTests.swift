@@ -378,31 +378,31 @@ struct TaskPaneControllerTests {
 
     // MARK: - Tabs and groups
 
-    @Test func givenTheStoreDefaultTab_whenRead_thenChangesResolvesToEvents() {
+    @Test func givenNoChoiceAndNoDefault_whenRead_thenTheStoreHoldsNoTabAndEventsIsShown() {
         // given
         let (sut, store) = make()
 
         // when / then
-        #expect(store.selectedTab(for: Self.conversation) == .changes)
+        #expect(store.selectedTab(for: Self.conversation) == nil)
         #expect(sut.selectedTab == .events)
     }
 
-    @Test func givenAStoredChangesTab_whenRead_thenItStillResolvesToEvents() {
+    @Test func givenAStoredChangesTab_whenRead_thenThePersonsChoiceWins() {
         // given
         let (sut, store) = make()
         store.setSelectedTab(.artifacts, for: Self.conversation)
         store.setSelectedTab(.changes, for: Self.conversation)
 
         // when / then
-        #expect(sut.selectedTab == .events)
+        #expect(sut.selectedTab == .changes)
     }
 
-    @Test func givenTheVisibleTabs_whenListed_thenChangesIsNotAmongThem() {
+    @Test func givenTheVisibleTabs_whenListed_thenChangesComesFirst() {
         // given / when / then
-        #expect(Controller.visibleTabs == [.artifacts, .events])
+        #expect(Controller.visibleTabs == [.changes, .artifacts, .events])
     }
 
-    @Test func givenAChangesSelection_whenSelected_thenItIsIgnoredAndOpensNothing() {
+    @Test func givenAChangesSelection_whenSelected_thenItIsStoredAndOpensThePane() {
         // given
         let (sut, store) = make()
 
@@ -410,8 +410,8 @@ struct TaskPaneControllerTests {
         sut.select(.changes)
 
         // then
-        #expect(!sut.isOpen)
-        #expect(!store.hasEntry(for: Self.conversation))
+        #expect(sut.isOpen)
+        #expect(store.selectedTab(for: Self.conversation) == .changes)
     }
 
     @Test func givenAVisibleTab_whenSelected_thenItIsStoredAndThePaneOpens() {

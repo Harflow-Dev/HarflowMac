@@ -10,6 +10,16 @@ extension TaskDetailUseCase {
         .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
     }
 
+    func readChanges(key: TaskChangesKey, operationIsCurrent _: @escaping @Sendable () -> Bool)
+        async -> Result<TaskChangesRead<TaskChangesSnapshot>, TaskChangesReadFailure> {
+        .failure(TaskChangesReadFailure(key: key, outcome: .failed(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Task changes unavailable"))))
+    }
+
+    func readChangesPatch(key: TaskChangesKey, selector _: TaskChangesSelector, operationIsCurrent _: @escaping @Sendable () -> Bool)
+        async -> Result<TaskChangesRead<TaskChangesPatch>, TaskChangesReadFailure> {
+        .failure(TaskChangesReadFailure(key: key, outcome: .failed(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Task changes unavailable"))))
+    }
+
     var successorObservationError: String? { nil }
     func observeSuccessors(_: String) async throws -> Bool { false }
     func stopSuccessorObservation() {}

@@ -98,6 +98,8 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.ActivityFeedSummaryEntryHostedTests",
     "MainWindowFeatureTests.TaskPaneSummaryEntryHostedTests",
     "MainWindowFeatureTests.TaskPaneSummaryEntryCaptureHostedTests",
+    "MainWindowFeatureTests.TaskChangesTabHostedTests",
+    "MainWindowFeatureTests.TaskChangesCaptureHostedTests",
 })
 HOSTED_PACKAGE = "MainWindowFeature"
 HOSTED_RESOURCE_BUNDLE = HOSTED_PACKAGE + "_" + HOSTED_PACKAGE + ".bundle"

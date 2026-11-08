@@ -3,8 +3,8 @@
 //  MainWindowFeature
 //
 //  The standalone task screen's right pane (`aside.hd-pane`, HarflowDesign 17739e4): a 420 point column with a
-//  head (tabs, spacer, close button) over the selected tab. `Changes` is reserved ahead of Artifacts and is not
-//  drawn until it has a design. The pane is mounted only while open.
+//  head (tabs Changes, Artifacts and Events, spacer, close button) over the selected tab. The pane is mounted only while
+//  open.
 //
 
 import HfUI
@@ -45,7 +45,8 @@ struct TaskPaneView<VM: TaskDetailViewModel>: View {
         return HStack(spacing: head.gap) {
             HStack(spacing: TaskScreenStyle.PaneTab.gap) {
                 ForEach(TaskPaneController.visibleTabs, id: \.self) { tab in
-                    TaskPaneTabButton(title: Self.title(of: tab), isSelected: pane.selectedTab == tab) { pane.animated { pane.select(tab) } }
+                    TaskPaneTabButton(title: Self.title(of: tab), count: tab == .changes ? viewModel.changesTabCount : nil,
+                                      isSelected: pane.selectedTab == tab) { pane.animated { pane.select(tab) } }
                 }
             }
             Spacer(minLength: 0)
@@ -72,7 +73,9 @@ struct TaskPaneView<VM: TaskDetailViewModel>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(TaskScreenStyle.PaneBody.padding)
             }
-        case .events, .changes:
+        case .changes:
+            TaskChangesTabView(viewModel: viewModel)
+        case .events:
             TaskEventsTabView(viewModel: viewModel, pane: pane, focus: focus)
         }
     }
@@ -94,6 +97,8 @@ struct TaskPaneView<VM: TaskDetailViewModel>: View {
 /// `.hd-tab`: 30 point high, 13 point medium, `surface-active` fill while selected.
 private struct TaskPaneTabButton: View {
     let title: String
+    /// The row count beside the title, `nil` when none is drawn.
+    var count: Int?
     let isSelected: Bool
     let action: () -> Void
     @State private var isHovering = false
@@ -101,9 +106,17 @@ private struct TaskPaneTabButton: View {
     var body: some View {
         let tab = TaskScreenStyle.PaneTab.self
         Button(action: action) {
-            Text(title)
-                .font(TaskScreenStyle.sans(size: tab.fontSize).weight(tab.weight))
-                .foregroundStyle((isSelected ? tab.activeColor : tab.color).color)
+            HStack(spacing: tab.gapToCount) {
+                Text(title)
+                    .font(TaskScreenStyle.sans(size: tab.fontSize).weight(tab.weight))
+                    .foregroundStyle((isSelected ? tab.activeColor : tab.color).color)
+                if let count {
+                    Text("\(count)")
+                        .font(TaskScreenStyle.sans(size: tab.countSize))
+                        .monospacedDigit()
+                        .foregroundStyle(tab.countColor.color)
+                }
+            }
                 .padding(.horizontal, tab.paddingHorizontal)
                 .frame(height: tab.height)
                 .background(RoundedRectangle(cornerRadius: tab.cornerRadius).fill(fill))
@@ -111,6 +124,7 @@ private struct TaskPaneTabButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
+        .accessibilityLabel(count.map { "\(title), \($0)" } ?? title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

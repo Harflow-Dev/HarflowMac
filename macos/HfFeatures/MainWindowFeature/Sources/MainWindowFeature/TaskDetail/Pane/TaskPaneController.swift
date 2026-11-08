@@ -43,6 +43,9 @@ final class TaskPaneController {
         var isReady = false
         /// A done task whose snapshot observed an exit opens at split widths; every other state starts closed.
         var opensAtSplit = false
+        /// The tab shown until the person chooses: `changes` for a terminal status, `events` for a running, pending or
+        /// any other non-terminal one.
+        var tab: TaskPaneStateStore.Tab = .events
     }
 
     /// What one Escape press did.
@@ -64,8 +67,8 @@ final class TaskPaneController {
     /// Widths closer than this are one measurement.
     private static let widthTolerance: CGFloat = 0.5
 
-    /// The tabs a person can reach. `Changes` is reserved ahead of them and is not shown until it has a design.
-    static let visibleTabs: [TaskPaneStateStore.Tab] = [.artifacts, .events]
+    /// The tabs a person can reach, in the order drawn.
+    static let visibleTabs: [TaskPaneStateStore.Tab] = [.changes, .artifacts, .events]
 
     let conversationID: String
     @ObservationIgnored private let store: TaskPaneStateStore
@@ -78,6 +81,8 @@ final class TaskPaneController {
     private(set) var mode: Mode?
     /// This view's copy of the default applied on first show; the store holds the persistent one.
     @ObservationIgnored private var localAppliedDefault: Bool?
+    /// This view's copy of the default tab applied on first show, for the same reason as `localAppliedDefault`.
+    @ObservationIgnored private var localAppliedDefaultTab: TaskPaneStateStore.Tab?
     /// Whether the pane was last opened by a reveal and not since by a person's own toggle or tab choice.
     private(set) var isRevealed = false
     /// The control the current reveal started from.
@@ -104,6 +109,7 @@ final class TaskPaneController {
         self.conversationID = conversationID
         // A revisit reads the stored default; keep a view-local copy so an eviction while mounted cannot lose it.
         self.localAppliedDefault = store.appliedDefault(for: conversationID)
+        self.localAppliedDefaultTab = store.appliedDefaultTab(for: conversationID)
     }
 
     // MARK: - Reading
@@ -117,10 +123,14 @@ final class TaskPaneController {
         }
     }
 
-    /// The selected tab. A stored `Changes` (the store's default, never chosen while the tab is hidden) lands on Events.
+    /// The tab applied on first show, `nil` before it is resolved.
+    var appliedDefaultTab: TaskPaneStateStore.Tab? { store.appliedDefaultTab(for: conversationID) ?? localAppliedDefaultTab }
+
+    /// The selected tab: the person's choice, else the applied default, else Events (the fallback shown before the
+    /// default is ready).
     var selectedTab: TaskPaneStateStore.Tab {
-        let stored = store.selectedTab(for: conversationID)
-        return Self.visibleTabs.contains(stored) ? stored : .events
+        let tab = store.selectedTab(for: conversationID) ?? appliedDefaultTab ?? .events
+        return Self.visibleTabs.contains(tab) ? tab : .events
     }
 
     /// The expanded facts groups.
@@ -158,10 +168,15 @@ final class TaskPaneController {
     /// Marks the conversation as most recently used.
     func touch() { store.touch(conversationID) }
 
+    /// Resolves the open default and the default tab together, once. A pane already shown on the fallback tab keeps that
+    /// tab as its default, so it never jumps when the default becomes ready.
     private func resolveDefault() {
         guard appliedDefaultOpen == nil, defaultInput.isReady, mode != nil else { return }
+        let tab = isOpen ? selectedTab : defaultInput.tab
         localAppliedDefault = defaultInput.opensAtSplit
+        localAppliedDefaultTab = tab
         store.setAppliedDefault(defaultInput.opensAtSplit, for: conversationID)
+        store.setAppliedDefaultTab(tab, for: conversationID)
     }
 
     // MARK: - Person's choices

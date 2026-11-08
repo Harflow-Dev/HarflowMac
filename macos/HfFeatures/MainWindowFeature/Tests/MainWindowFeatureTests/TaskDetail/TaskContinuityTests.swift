@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import HfRepository
 import HfUI
 @testable import MainWindowFeature
 import MonitorCore
@@ -100,7 +101,8 @@ struct TaskContinuityTests {
         store.record(observation, for: first.taskID)
         // when: a new task-detail VM replaces the old selection
         let harness = TaskDetailVMTests().makeSUT()
-        let replacement = TaskDetailVM(taskID: first.taskID, useCase: harness.useCase, routing: harness.routing, continuityHistory: store, chrome: .group)
+        let replacement = TaskDetailVM(taskID: first.taskID, useCase: harness.useCase, routing: harness.routing, continuityHistory: store, chrome: .group,
+                                      scheduler: NullScheduling())
         var raw = first.raw
         raw["status"] = .string("completed")
         raw["supervision"] = nil

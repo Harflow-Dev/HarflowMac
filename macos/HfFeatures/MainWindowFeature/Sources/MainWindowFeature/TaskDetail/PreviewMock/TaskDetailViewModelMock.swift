@@ -47,6 +47,17 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     )
     var artifactMembers: [ArtifactMemberModel] = []
     func didLoadArtifacts(taskID _: String) {}
+    var changesPresentation = TaskChangesPresentation.loading
+    var changesTabCount: Int?
+    var changesCaptureSettling = false
+    var changesRevealLimits: [TaskChangesScopeID: Int] = [:]
+    func setChangesPaneOpen(_: Bool) {}
+    func didTapRetryChanges() {}
+    func didTapLoadMoreChangeRows(scope: TaskChangesScopeID) {
+        changesRevealLimits[scope] = (changesRevealLimits[scope] ?? TaskChangesPresentationBuilder.revealStep)
+            + TaskChangesPresentationBuilder.revealStep
+    }
+
     var summaryModel = SummaryPaneModel.empty
     var summaryEntryShown = false
     var promptText = "Fix the flaky login test."

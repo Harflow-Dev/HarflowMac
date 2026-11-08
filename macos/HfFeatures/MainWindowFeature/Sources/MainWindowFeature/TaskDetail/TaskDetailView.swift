@@ -63,6 +63,19 @@ protocol TaskDetailViewModel: ViewModel {
     var timelineModel: TimelinePaneModel { get }
     var artifactMembers: [ArtifactMemberModel] { get }
     func didLoadArtifacts(taskID: String)
+    /// What the Changes tab shows (standalone mount only).
+    var changesPresentation: TaskChangesPresentation { get }
+    /// The Changes tab count, `nil` unless the approved rule holds for the current read.
+    var changesTabCount: Int? { get }
+    /// True while the shown member's applied result is `pending` with reason `capture_settling`.
+    var changesCaptureSettling: Bool { get }
+    /// Rows revealed per scope; a scope absent from it shows the first step.
+    var changesRevealLimits: [TaskChangesScopeID: Int] { get }
+    /// The view reports whether the right pane is open; stored changes are read only while it is, or while settling.
+    func setChangesPaneOpen(_ open: Bool)
+    /// "Retry read" and "Check again".
+    func didTapRetryChanges()
+    func didTapLoadMoreChangeRows(scope: TaskChangesScopeID)
     var summaryModel: SummaryPaneModel { get }
     /// Whether the Activity feed ends with the Summary entry, which the Events usage group then does not repeat.
     var summaryEntryShown: Bool { get }

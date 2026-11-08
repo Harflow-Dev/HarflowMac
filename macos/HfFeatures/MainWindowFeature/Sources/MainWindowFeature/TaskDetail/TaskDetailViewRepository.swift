@@ -19,6 +19,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     // MARK: - Private Properties
 
     @GlobalEnvironment(\.taskArtifactRepository) private var taskArtifactRepository
+    @GlobalEnvironment(\.taskChangesRepository) private var taskChangesRepository
     private let builderRunID: String?
     private var relatedMembers: [String: TaskInfo] = [:]
     private var successorMembers: [String: TaskInfo] = [:]
@@ -52,11 +53,13 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         takeoverService: (any TakeoverService)? = nil,
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
         taskArtifactRepository: (any TaskArtifactRepository)? = nil,
+        taskChangesRepository: (any TaskChangesRepository)? = nil,
         builderRunID: String? = nil,
         workflowRepository: (any WorkflowRepository)? = nil
     ) {
         self.builderRunID = builderRunID
         if let taskArtifactRepository { self.taskArtifactRepository = taskArtifactRepository }
+        if let taskChangesRepository { self.taskChangesRepository = taskChangesRepository }
         if let workflowRepository { self.workflowRepository = workflowRepository }
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskSnapshotRepository { self.taskSnapshotRepository = taskSnapshotRepository }
@@ -68,6 +71,16 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     
     func artifactPage(taskID: String, cursor: String?) async -> Result<TaskArtifactPage, ToolError> {
         await taskArtifactRepository.page(taskID: taskID, cursor: cursor)
+    }
+
+    func readChanges(key: TaskChangesKey, operationIsCurrent: @escaping @Sendable () -> Bool)
+        async -> Result<TaskChangesRead<TaskChangesSnapshot>, TaskChangesReadFailure> {
+        await taskChangesRepository.readListing(key: key, operationIsCurrent: operationIsCurrent)
+    }
+
+    func readChangesPatch(key: TaskChangesKey, selector: TaskChangesSelector, operationIsCurrent: @escaping @Sendable () -> Bool)
+        async -> Result<TaskChangesRead<TaskChangesPatch>, TaskChangesReadFailure> {
+        await taskChangesRepository.readPatch(key: key, selector: selector, operationIsCurrent: operationIsCurrent)
     }
 
     func callerApprovalUseCase() -> (any CallerApprovalUseCase)? {

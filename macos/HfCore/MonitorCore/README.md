@@ -79,8 +79,9 @@ and cumulative-summary readers; their shared observation migration is M03-D2.
 `TaskChanges*` decodes the `task-changes.v1` listing and text chunks on `CtlClient`, with
 `TaskChangesListingBuilder` and `TaskChangesTextAssembler` merging pages and chunks. `isComplete`
 alone does not mean no changes: only `hasNoChanges` does, because a missing repository, a capture
-reason or reported conflicts all stay complete. Unknown states remain open values. There are no
-callers yet.
+reason or reported conflicts all stay complete. Unknown states remain open values. `HfRepository`
+reads them through `TaskChangesRepository`, and the task screen's Changes tab presents the listing;
+text chunks are not read by any screen yet.
 
 ## Conversation delivery adapters
 

@@ -86,8 +86,8 @@ no embedded terminal anywhere in this package:
   `MainWindowCoordinator.buildTaskDetailView`), `.group` (the default; Group's task pane) or `.embedded` (the
   workflow builder row). Only `.standalone` gets the adaptive 420 point pane; `.group` and `.embedded` keep the
   always-mounted legacy pane (320 and 280 points) with `eventsExpanded`, and never build the pane controller or
-  store (`TaskPaneHolder` creates them on first use). The pane is mounted only while open and has tabs `Artifacts`
-  and `Events` (`Changes` is reserved first and drawn once G2 lands). Logic lives in `TaskPaneController`: a
+  store (`TaskPaneHolder` creates them on first use). The pane is mounted only while open and has tabs `Changes`,
+  `Artifacts` and `Events`. Logic lives in `TaskPaneController`: a
   flexible clear layer measures the container that holds the column and the pane, and both are drawn over it, so
   the measured width never depends on the pane mode. The width itself is unobserved; only the derived `mode` is
   observed and written when it changes, so a live resize does not re-evaluate the view per frame. At 900 points
@@ -95,10 +95,13 @@ no embedded terminal anywhere in this package:
   with the popover shadow and a 1 point outer ring and the transcript width is unchanged. The pane is one view in
   both modes (only padding, shadow and ring ink change), so crossing the threshold never remounts it.
   Choices persist in `MainWindowCoordinator.paneState` (`TaskPaneStateStore`, keyed by conversation id, because
-  `.id(conversationID)` destroys view state): open or closed, selected tab, expanded facts groups, the applied
-  default, whether Technical info is expanded, and (in a separate bounded, unobserved dictionary that never creates
+  `.id(conversationID)` destroys view state): open or closed, the person's selected tab (`nil` until they choose),
+  expanded facts groups, the applied default (open and tab), whether Technical info is expanded, and (in a separate bounded, unobserved dictionary that never creates
   or evicts an entry) the Events scroll offset, so a close, tab switch or split/overlay crossing restores the
-  reading position against the same document height. The default is resolved once, on first show, and stored: a
+  reading position against the same document height. The default tab is resolved with the open default, once: `Changes` for a terminal status, `Events` for running,
+  pending or any other status, and `Events` is shown before the default is ready; a pane already shown on that fallback
+  keeps it as its default so it never jumps, and a person's selection wins from then on (`revealFacts` still forces
+  Events). The default is resolved once, on first show, and stored: a
   conversation first shown running (or taken over, or failed) stays closed when revisited after it finishes, until
   the person chooses. Only a done task whose own snapshot observed an exit is open by default, and only while the
   container is at split width (below 900 it closes again); a person's own open or closed choice wins through any
@@ -194,7 +197,22 @@ no embedded terminal anywhere in this package:
   `buildParallelView(name:)` above: applied at the coordinator call site, wrapping the whole
   `TaskDetailView(vm)` value — never inside `TaskDetailView.body`.
 - TaskDetail's summary model replaced the git-backed
-  Changes tab outright — no git guard, no poll, no `Scheduling` dependency in this package any more.
+  Changes tab outright — no git guard and no git poll. The standalone Changes tab instead presents the engine's stored
+  `task-changes.v1` listing (`TaskDetail/Changes/`, `TaskDetailVM+Changes.swift`), and `TaskDetailVM` takes an explicit
+  `scheduler: Scheduling` at every construction site, used only for the bounded settling cadence below.
+  **Changes reads.** Only the standalone chrome reads, and only between `didAppear` and `didDisappear`. Demand is the
+  pane being open (reported by the view through `setChangesPaneOpen`), or a settling condition (a terminal status whose
+  `logState` is `.settling`, or the last applied result being `pending/capture_settling`), which works with the pane
+  closed. A read starts only with demand, once per epoch (the member, a shown-status transition, a changed member set, Retry); transitions
+  without demand only mark the result stale, and reopening the pane does not re-read. Every read gets a new generation;
+  the repository's `@Sendable` fence reads it from a lock (`TaskChangesFence`), and the main actor checks it again before
+  applying. The presentation is built off the main actor by the pure `TaskChangesPresentationBuilder` and applied only
+  when it differs; the tab count (`changesTabCount`) is a separately observed field drawn only from an applied result.
+  The cadence (5 s after the first settling result, then 15 s, scheduled from the applied result so reads never overlap,
+  capped at 5 minutes of continuous settling, then "Check again") only repeats a presentation read. A runtime change that
+  supersedes a read is read once more, and the "does not support Changes" state offers Retry instead of clearing on its
+  own. Diff and file text never reach logs, descriptions or persistence. `TaskChangesDisplayText.escaped` spells out
+  invalid bytes, controls, bidi controls, `Cf` characters and backslashes in every path, name and provenance value.
   `TaskDetailVM+Summary.swift` rebuilds `SummaryPaneModel` synchronously on every `recompute()`
   from the task's own reported fields (`TaskInfo.summary`/`notices`/`permissionDenials`/
   `enforcement`/`totalCostUSD`/`numTurns`/`raw["usage"]`) and the observed activity summaries — "Files edited"

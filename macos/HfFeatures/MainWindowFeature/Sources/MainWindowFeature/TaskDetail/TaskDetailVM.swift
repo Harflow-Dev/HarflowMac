@@ -111,6 +111,12 @@ protocol TaskDetailUseCase: Sendable {
     func activity(for id: String) -> ActivityCounts
     func current(for id: String) -> TimelineItem?
     func prompt(for id: String) -> String?
+
+    /// Stored changes: every listing page, and one row's whole patch. The fence must reject superseded reads.
+    func readChanges(key: TaskChangesKey, operationIsCurrent: @escaping @Sendable () -> Bool)
+        async -> Result<TaskChangesRead<TaskChangesSnapshot>, TaskChangesReadFailure>
+    func readChangesPatch(key: TaskChangesKey, selector: TaskChangesSelector, operationIsCurrent: @escaping @Sendable () -> Bool)
+        async -> Result<TaskChangesRead<TaskChangesPatch>, TaskChangesReadFailure>
 }
 
 // MARK: - TaskDetailRouting
@@ -182,13 +188,23 @@ final class TaskDetailVM: TaskDetailViewModel {
     // (each in its own file, per the screen shape), so they cannot be `private(set)` — `private` is
     // file-scoped in Swift. They stay non-public (no external module can write them).
     var callerApprovalController: CallerApprovalController?
-    @ObservationIgnored private var isMounted = false
+    @ObservationIgnored var isMounted = false
 
     var timelineModel = TimelinePaneModel.empty
     var artifactMembers: [ArtifactMemberModel] = []
     @ObservationIgnored var artifactRequests: [String: Task<Void, Never>] = [:]
     @ObservationIgnored var artifactGeneration = UUID()
     var summaryModel = SummaryPaneModel.empty
+    /// The Changes tab's state (see `TaskDetailVM+Changes.swift`): the presentation, the separately observed tab count,
+    /// whether the applied result is settling, and the rows revealed per scope (main-actor UI state).
+    var changesPresentation = TaskChangesPresentation.loading
+    var changesTabCount: Int?
+    var changesCaptureSettling = false
+    var changesRevealLimits: [TaskChangesScopeID: Int] = [:]
+    @ObservationIgnored var changesLifecycle = TaskChangesLifecycle()
+    @ObservationIgnored let changesFence = TaskChangesFence()
+    @ObservationIgnored var changesReadTask: Task<Void, Never>?
+    @ObservationIgnored var changesCadenceTask: Task<Void, Never>?
     /// Whether the Activity feed ends with the Summary entry. Written only on change (`applyTimeline`).
     var summaryEntryShown = false
     var promptText = "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
@@ -212,6 +228,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored let chrome: TaskDetailChrome
     @ObservationIgnored let useCase: any TaskDetailUseCase
     @ObservationIgnored let routing: any TaskDetailRouting
+    /// The seam the settling cadence waits on, so tests fire it directly.
+    @ObservationIgnored let scheduler: any Scheduling
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
     @ObservationIgnored var didSubscribe = false
     @ObservationIgnored var memberLeaseAcquisition: Task<Void, Never>?
@@ -293,7 +311,9 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     /// `chrome` has no default: it is the mount the view is built with, and decides whether the Summary entry shows.
     init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting,
-         continuityHistory: any TaskContinuityHistory, chrome: TaskDetailChrome, isWorkflowBuilder: Bool = false) {
+         continuityHistory: any TaskContinuityHistory, chrome: TaskDetailChrome, scheduler: any Scheduling,
+         isWorkflowBuilder: Bool = false) {
+        self.scheduler = scheduler
         self.isWorkflowBuilder = isWorkflowBuilder
         self.chrome = chrome
         self.continuityHistory = continuityHistory
@@ -313,6 +333,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         recomputeMembersAndLeases()
         subscribeIfNeeded()
         loadConversationHistory(initial: true)
+        evaluateChangesDemand()
     }
 
     /// Idempotent teardown (root AGENTS.md rule 7): releases every member's event lease, cancels
@@ -320,6 +341,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// re-acquires leases fresh.
     func didDisappear() {
         isMounted = false
+        resetChanges(keepPaneReport: false)
         useCase.stopSuccessorObservation()
         resetResourceContext()
         callerApprovalController?.stop()
@@ -461,6 +483,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         }
         task = detail
         currentTaskID = detail.taskID
+        trackChangesEpoch(detail)
         observeRequest(conversationMembers.first?.taskID ?? currentTaskID)
         observeRecovery(currentTaskID)
         prepareResourceContext(task: detail)
@@ -532,6 +555,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         recomputeInspector(task: detail, ancestors: currentTaskAncestors, allChildren: allChildren)
         recomputeMessageBox(task: detail)
         recomputeSummary(task: detail)
+        evaluateChangesDemand()
     }
 
     /// Every child any conversation member has started via `spawned_by` (Design point 3) — shared by
@@ -548,6 +572,7 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     private func resetForMissingTask() {
         resetResourceContext()
+        resetChanges(keepPaneReport: true)
         timelineRevision &+= 1
         timelineWorker?.cancel()
         pendingTimelineInput = nil

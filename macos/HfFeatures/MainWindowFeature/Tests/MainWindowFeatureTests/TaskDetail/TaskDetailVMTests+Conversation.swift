@@ -98,7 +98,7 @@ extension TaskDetailVMTests {
     /// member's stubs to already exist before it ever appears.
     func makeConversationSUT(
         openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil, isWorkflowBuilder: Bool = false,
-        chrome: TaskDetailChrome = .group,
+        chrome: TaskDetailChrome = .group, scheduler: any Scheduling = NullScheduling(),
         eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() }
     ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
@@ -166,7 +166,7 @@ extension TaskDetailVMTests {
 
         let sut = TaskDetailVM(taskID: openedAs, useCase: useCase, routing: routing,
                                continuityHistory: TaskContinuityHistoryStore(), chrome: isWorkflowBuilder ? .embedded : chrome,
-                               isWorkflowBuilder: isWorkflowBuilder)
+                               scheduler: scheduler, isWorkflowBuilder: isWorkflowBuilder)
         return ConversationSUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, membersBox: membersBox,
             observationSubjects: observationSubjects, eventsBox: eventsBoxes, childrenBox: childrenBoxes, childrenOfEachCallCount: childrenOfEachCallCount,

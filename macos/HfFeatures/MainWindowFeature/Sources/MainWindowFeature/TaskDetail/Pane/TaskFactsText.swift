@@ -80,10 +80,11 @@ struct TaskSnapshotEvidence: Equatable, Sendable {
     /// which opens at split widths. A taken-over task is closed before the done branch; a done task waits for its
     /// snapshot.
     var paneDefault: TaskPaneController.DefaultInput {
-        if takenOver { return .init(isReady: true, opensAtSplit: false) }
-        guard status == .completed else { return .init(isReady: true, opensAtSplit: false) }
+        let tab: TaskPaneStateStore.Tab = status.isTerminal ? .changes : .events
+        if takenOver { return .init(isReady: true, opensAtSplit: false, tab: tab) }
+        guard status == .completed else { return .init(isReady: true, opensAtSplit: false, tab: tab) }
         guard hasMatchingSnapshot else { return .init() }
-        return .init(isReady: true, opensAtSplit: exitCode != nil)
+        return .init(isReady: true, opensAtSplit: exitCode != nil, tab: tab)
     }
 }
 

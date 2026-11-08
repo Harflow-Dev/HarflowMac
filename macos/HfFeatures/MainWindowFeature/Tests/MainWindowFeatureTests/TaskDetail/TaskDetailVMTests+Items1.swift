@@ -150,7 +150,8 @@ extension TaskDetailVMTests {
         given(useCase).send(.any, text: .any).willThrow(TestError.expectedError)
         given(useCase).setOutcome(.any, .any).willReturn()
         
-        let sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore(), chrome: .group)
+        let sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore(), chrome: .group,
+                                scheduler: NullScheduling())
         sut.didAppear()
         tasksSubject.send([running])
         await waitUntil { sut.task != nil }

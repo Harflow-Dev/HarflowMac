@@ -128,12 +128,19 @@ import Testing
         #expect(abs((host.columnWidth ?? 0) - 760) <= 2)
     }
 
-    @Test func givenTheTabs_whenSelected_thenTheStoreFollowsAndChangesIsNotOffered() async throws {
+    @Test func givenTheTabs_whenSelected_thenTheStoreFollowsAndChangesIsOffered() async throws {
         // given
         let store = seededStore(tab: .events)
         let host = await mount(PaneMocks.running(), store: store, width: 1000)
         defer { host.close() }
-        #expect(host.page.element("Changes") == nil)
+        #expect(host.page.element("Changes") != nil)
+
+        // when
+        try press(host, "Changes")
+        await host.page.settle { host.header("Task") == nil }
+
+        // then
+        #expect(store.selectedTab(for: Self.conversation) == .changes)
 
         // when
         try press(host, "Artifacts")

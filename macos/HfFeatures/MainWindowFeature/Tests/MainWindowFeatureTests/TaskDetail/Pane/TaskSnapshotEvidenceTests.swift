@@ -130,7 +130,7 @@ import Testing
         let input = subject.paneDefault
 
         // then
-        #expect(input == .init(isReady: true, opensAtSplit: false))
+        #expect(input == .init(isReady: true, opensAtSplit: false, tab: status.isTerminal ? .changes : .events))
     }
 
     @Test func givenADoneTaskWithoutASnapshot_whenResolvingTheDefault_thenItWaits() {
@@ -149,13 +149,13 @@ import Testing
 
     @Test func givenADoneTaskWhoseSnapshotObservedAnExit_whenResolvingTheDefault_thenItOpensAtSplit() {
         // given / when / then
-        #expect(evidence(.completed, exit: 0).paneDefault == .init(isReady: true, opensAtSplit: true))
-        #expect(evidence(.completed, exit: 1).paneDefault == .init(isReady: true, opensAtSplit: true))
+        #expect(evidence(.completed, exit: 0).paneDefault == .init(isReady: true, opensAtSplit: true, tab: .changes))
+        #expect(evidence(.completed, exit: 1).paneDefault == .init(isReady: true, opensAtSplit: true, tab: .changes))
     }
 
     @Test func givenADoneTaskWhoseSnapshotObservedNoExit_whenResolvingTheDefault_thenItIsReadyAndClosed() {
         // given / when / then
-        #expect(evidence(.completed).paneDefault == .init(isReady: true, opensAtSplit: false))
+        #expect(evidence(.completed).paneDefault == .init(isReady: true, opensAtSplit: false, tab: .changes))
     }
 
     @Test(arguments: [true, false], [Int?.none, 0])
@@ -165,7 +165,7 @@ import Testing
                                exitCode: exit, logState: .final)
 
         // when / then
-        #expect(subject.paneDefault == .init(isReady: true, opensAtSplit: false))
+        #expect(subject.paneDefault == .init(isReady: true, opensAtSplit: false, tab: .changes))
     }
 
     @Test(arguments: logStates)
@@ -175,8 +175,8 @@ import Testing
         let failed = evidence(.failed, logState: logState)
 
         // when / then
-        #expect(done.paneDefault == .init(isReady: true, opensAtSplit: true))
-        #expect(failed.paneDefault == .init(isReady: true, opensAtSplit: false))
+        #expect(done.paneDefault == .init(isReady: true, opensAtSplit: true, tab: .changes))
+        #expect(failed.paneDefault == .init(isReady: true, opensAtSplit: false, tab: .changes))
     }
 
     @Test func givenTheDefaultInput_whenCreatedEmpty_thenItIsNotReady() {
@@ -298,7 +298,7 @@ extension TaskDetailVMTests {
 
         // then
         #expect(evidence?.exitText == "0")
-        #expect(evidence?.paneDefault == .init(isReady: true, opensAtSplit: true))
+        #expect(evidence?.paneDefault == .init(isReady: true, opensAtSplit: true, tab: .changes))
     }
 
     @Test func givenAFrameOfAnotherTask_whenReadingTheSnapshotEvidence_thenItsLogStateIsIgnored() async {

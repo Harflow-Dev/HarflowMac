@@ -45,7 +45,11 @@ final class TaskPaneStateStore {
     /// The stored choices for one conversation.
     struct Entry: Equatable, Sendable {
         var openChoice: OpenChoice = .noChoice
-        var selectedTab: Tab = .changes
+        /// The person's own tab choice; `nil` means no choice, so the applied default decides.
+        var selectedTab: Tab?
+        /// The tab resolved with the open default on first show (`changes` for a terminal status, `events`
+        /// otherwise), `nil` until it was resolved.
+        var appliedDefaultTab: Tab?
         var expandedGroups: Set<FactsGroup> = []
         /// Whether the first-show default opens the pane at split widths; `nil` until a default was resolved.
         /// Kept so a conversation first shown closed (for example while running) stays closed when revisited.
@@ -80,8 +84,11 @@ final class TaskPaneStateStore {
     /// The pane's open choice, `noChoice` when none was made.
     func openChoice(for conversationID: String) -> OpenChoice { entries[conversationID]?.openChoice ?? .noChoice }
 
-    /// The selected tab, `changes` when none was chosen.
-    func selectedTab(for conversationID: String) -> Tab { entries[conversationID]?.selectedTab ?? .changes }
+    /// The tab a person chose, `nil` when none was chosen.
+    func selectedTab(for conversationID: String) -> Tab? { entries[conversationID]?.selectedTab }
+
+    /// The tab resolved on first show, `nil` when none was resolved or the entry was evicted.
+    func appliedDefaultTab(for conversationID: String) -> Tab? { entries[conversationID]?.appliedDefaultTab }
 
     /// The expanded facts groups, none when nothing was expanded.
     func expandedGroups(for conversationID: String) -> Set<FactsGroup> { entries[conversationID]?.expandedGroups ?? [] }
@@ -111,6 +118,11 @@ final class TaskPaneStateStore {
     /// Records the selected tab. An unchanged value writes nothing.
     func setSelectedTab(_ tab: Tab, for conversationID: String) {
         set(\.selectedTab, tab, for: conversationID)
+    }
+
+    /// Records the tab resolved on first show. Written once per conversation by the pane.
+    func setAppliedDefaultTab(_ tab: Tab, for conversationID: String) {
+        set(\.appliedDefaultTab, tab, for: conversationID)
     }
 
     /// Records the full set of expanded facts groups. An unchanged value writes nothing.

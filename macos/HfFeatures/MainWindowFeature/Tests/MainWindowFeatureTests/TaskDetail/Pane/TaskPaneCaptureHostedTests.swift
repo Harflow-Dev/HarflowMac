@@ -41,7 +41,8 @@ import Testing
         let id = "conv"
         switch capture {
         case .split:
-            break // the default: a done task with an observed exit opens at split width
+            // a done task with an observed exit opens at split width; its default tab is Changes, so Events is chosen here
+            store.setSelectedTab(.events, for: id)
         case .overlay:
             store.setOpenChoice(.open, for: id)
             store.setSelectedTab(.events, for: id)

@@ -131,7 +131,7 @@ struct TaskPaneControllerRevealTests {
         #expect(sut.focusRequest == nil)
     }
 
-    @Test func givenAIgnoredChangesSelection_whenARequestIsPending_thenItStays() {
+    @Test func givenAChangesSelection_whenARequestIsPending_thenTheRevealIsDropped() {
         // given
         let (sut, _) = make()
         sut.revealFacts(group: .notices, origin: .notices)
@@ -140,8 +140,9 @@ struct TaskPaneControllerRevealTests {
         sut.select(.changes)
 
         // then
-        #expect(sut.focusRequest != nil)
-        #expect(sut.isRevealed)
+        #expect(sut.focusRequest == nil)
+        #expect(!sut.isRevealed)
+        #expect(sut.selectedTab == .changes)
     }
 
     // MARK: - Escape order

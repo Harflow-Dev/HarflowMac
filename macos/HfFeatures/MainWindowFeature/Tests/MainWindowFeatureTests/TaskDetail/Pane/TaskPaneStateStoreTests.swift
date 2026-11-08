@@ -45,7 +45,8 @@ struct TaskPaneStateStoreTests {
 
         // when / then
         #expect(sut.openChoice(for: "a") == .noChoice)
-        #expect(sut.selectedTab(for: "a") == .changes)
+        #expect(sut.selectedTab(for: "a") == nil)
+        #expect(sut.appliedDefaultTab(for: "a") == nil)
         #expect(sut.expandedGroups(for: "a").isEmpty)
         #expect(!sut.hasEntry(for: "a"))
         #expect(sut.rememberedIDs.isEmpty)
@@ -109,7 +110,6 @@ struct TaskPaneStateStoreTests {
 
         // when
         sut.setOpenChoice(.noChoice, for: "a")
-        sut.setSelectedTab(.changes, for: "a")
         sut.setExpandedGroups([], for: "a")
         sut.setGroup(.task, expanded: false, for: "a")
 

@@ -38,6 +38,17 @@ public struct TaskChangesReadFailure: Error, Equatable, Sendable {
         /// The caller's fence or the selected runtime changed; the result must be dropped.
         case superseded
         case failed(ToolError)
+        /// This read stopped at its own request or time bound (see ``ClientBound``); the stored changes may be complete.
+        /// Only the read budget produces it. A per-command transport timeout stays `failed(.timedOut)`.
+        case clientBound(ClientBound)
+    }
+
+    /// Which of the read's own limits stopped it.
+    public enum ClientBound: Equatable, Sendable {
+        /// The 120 second wall-clock deadline passed before another request.
+        case deadline
+        /// The 64 request budget was spent.
+        case requestBudget
     }
 
     public let key: TaskChangesKey

@@ -14,6 +14,11 @@ private extension TaskChangesReadFailure {
 
     var isSuperseded: Bool { outcome == .superseded }
 
+    /// The client bound of a read that stopped at its own limit.
+    var clientBound: ClientBound? {
+        if case .clientBound(let bound) = outcome { bound } else { nil }
+    }
+
     /// The `unreadable` detail of a failed read.
     var detail: String? {
         if case .unreadable(_, _, let stderr)? = error { stderr } else { nil }
@@ -240,7 +245,7 @@ struct TaskChangesRepositoryTests {
         if elapsed < TaskChangesLimits.maxReadSeconds {
             #expect((try? result.get().value.totalRows) == 2 && harness.commands.count == 2)
         } else {
-            guard case .failure(let failure) = result, case .timedOut? = failure.error else { Issue.record("Deadline must time out"); return }
+            guard case .failure(let failure) = result, failure.clientBound == .deadline else { Issue.record("Deadline must stop the read"); return }
             #expect(harness.commands.count == 1 && failure.key == Self.key)
         }
     }
@@ -255,7 +260,7 @@ struct TaskChangesRepositoryTests {
         // when
         let result = await patch(harness)
         // then
-        guard case .failure(let failure) = result, case .timedOut? = failure.error else { Issue.record("Deadline must time out"); return }
+        guard case .failure(let failure) = result, failure.clientBound == .deadline else { Issue.record("Deadline must stop the read"); return }
         #expect(harness.commands.count == 2)
     }
 
@@ -277,7 +282,7 @@ struct TaskChangesRepositoryTests {
         let result = await listing(harness)
         // then
         guard case .failure(let failure) = result else { Issue.record("Request budget must stop the read"); return }
-        #expect(failure.detail == "task-changes read exceeded its request budget")
+        #expect(failure.clientBound == .requestBudget && failure.error == nil)
         #expect(harness.commands.count == TaskChangesLimits.maxRequestsPerRead)
         #expect(TaskChangesLimits.maxRequestsPerRead == 64 && TaskChangesLimits.maxReadSeconds == 120)
     }
@@ -290,7 +295,7 @@ struct TaskChangesRepositoryTests {
         let result = await patch(harness)
         // then
         guard case .failure(let failure) = result else { Issue.record("Request budget must stop the read"); return }
-        #expect(failure.detail == "task-changes read exceeded its request budget")
+        #expect(failure.clientBound == .requestBudget && failure.error == nil)
         #expect(harness.commands.count == TaskChangesLimits.maxRequestsPerRead)
     }
 

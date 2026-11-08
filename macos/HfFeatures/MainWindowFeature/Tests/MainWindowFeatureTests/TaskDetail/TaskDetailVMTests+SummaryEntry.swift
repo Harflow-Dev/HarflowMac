@@ -23,6 +23,10 @@ extension TaskDetailVMTests {
         harness.detailBox.value = scenario.task
         harness.snapshotBox.value = scenario.snapshot
         harness.observationBox.value = scenario.frame
+        // A settling log with the standalone mount reads stored changes; these tests do not examine that read.
+        given(harness.useCase).readChanges(key: .any, operationIsCurrent: .any).willProduce { key, _ in
+            .failure(TaskChangesReadFailure(key: key, outcome: .failed(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "unavailable"))))
+        }
         harness.sut.didAppear()
         harness.tasksSubject.send([scenario.task])
         await waitUntil { harness.sut.task != nil && harness.sut.timelineWorker == nil && !harness.sut.timelineModel.activityRows.isEmpty }
