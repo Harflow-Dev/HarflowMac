@@ -110,8 +110,12 @@ import Testing
         for candidate in ownedPopovers(of: window) {
             if let content = candidate.contentView, content !== host {
                 try capture(content, name: "composer-options-minimum")
+                // The popover inherits the system scroller style (nothing forces overlay there), so this checks
+                // only that the options stay in a scroll view; it no longer assumes the overlay setting.
                 let scrolls = descendants(content).compactMap { $0 as? NSScrollView }
-                #expect(scrolls.contains { $0.scrollerStyle == .overlay })
+                let systemStyle = NSScroller.preferredScrollerStyle
+                #expect(!scrolls.isEmpty)
+                #expect(scrolls.contains { $0.scrollerStyle == systemStyle })
             }
         }
     }
