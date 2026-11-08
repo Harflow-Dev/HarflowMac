@@ -452,7 +452,7 @@ extension TaskDetailVMTests {
         // task), which must pick the stored outcome up from the repository's replay alone: nothing
         // is re-sent here, so this fails if a new subscriber stopped receiving stored outcomes.
         sut.didDisappear()
-        let fresh = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore())
+        let fresh = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore(), chrome: .group)
         fresh.didAppear()
         harness.tasksSubject.send([done])
         await waitUntil { fresh.outcomeMessage != nil }

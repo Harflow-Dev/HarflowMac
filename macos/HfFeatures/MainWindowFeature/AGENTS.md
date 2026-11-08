@@ -67,6 +67,21 @@ no embedded terminal anywhere in this package:
   `MessageBoxStyle` follows the same mounts through `TaskDetailView`: `.transcript` is the solid
   `.hd-composer` surface, `.standard` keeps glass for Parallel and workflow composers. Field and actions stay
   in one row with the printed hint; the stacked form and an editor swap wait on a design for Send now and locked states.
+- **Summary entry.** The standalone transcript (`TaskDetailChrome.standalone` only, copied into
+  `TaskDetailTimelineInput.showsSummaryEntry` from the VM's explicit `chrome:` init parameter) can end with
+  `ActivityRow.summary(SummaryEntry)`: the "Summary" divider (the shared `TurnSeparatorDivider`, an accessibility
+  heading) and the reported summary as agent prose a transcript row gap below it, as the last row, before
+  approvals, the tail and the bottom sentinel. `TaskDetailSummaryEntryRule.decide` runs in
+  `TaskDetailTimelineBuilder.build`, off the main actor. Every build requires a completed task and snapshot of the
+  conversation's last member, a non-blank `TaskReportedSummary` projection (the one projection `recomputeSummary`
+  shares), no managed-workflow result error and `logState == .final`. A decision already made for the same member,
+  raw summary and observation source (`EventObservationFrame.scope`, which a source adoption or window reset
+  changes) is kept as is, whatever the currentness or drain state, and is never deduplicated again. Establishing a
+  new decision also needs `forwardDrained`, `caughtUp` and `currentness == .current`, none of the evidence-loss
+  reasons, text evidence (no text item with `hasOlder` waits for paging), and the entry is suppressed only when the
+  raw summary equals, byte for byte, the member's last `.text` item of any kind; a streaming last text never
+  suppresses. `summaryEntryShown` is part of the timeline presentation, written to the VM only on change, and makes
+  the Events usage group drop the hero and Result.
 - **Standalone right pane.** `TaskDetailView(chrome:)` takes `.standalone` (the window's task selection, built by
   `MainWindowCoordinator.buildTaskDetailView`), `.group` (the default; Group's task pane) or `.embedded` (the
   workflow builder row). Only `.standalone` gets the adaptive 420 point pane; `.group` and `.embedded` keep the
@@ -91,8 +106,8 @@ no embedded terminal anywhere in this package:
   frame's `logState`) is the pure source of the default and the exit row: a real exit code is always shown;
   "Not observed" only for done with no exit, and failed with no exit when `log.state` is `incomplete`; every other
   terminal status without an exit shows a dash. The Events tab shows facts groups (Task, What was enforced,
-  Notices, Continuity when shown, and the interim "Reported result and usage" group holding `SummaryPaneView`
-  until G1b), collapsed unless revealed, then `PublicEventsView` unchanged. `revealFacts(group:origin:)` opens
+  Notices, Continuity when shown, and the usage group holding `SummaryPaneView`: "Reported result and usage", or
+  "Reported usage" without the hero and Result while the transcript's Summary entry shows), collapsed unless revealed, then `PublicEventsView` unchanged. `revealFacts(group:origin:)` opens
   the pane, selects Events, expands the group and moves keyboard focus and the VoiceOver cursor into it. Escape
   (handled by `PaneEscapeMonitor`, a window-scoped local key monitor that works with no focused
   descendant, acts only when focus is nowhere or inside the task detail region, and passes Escape through to a field

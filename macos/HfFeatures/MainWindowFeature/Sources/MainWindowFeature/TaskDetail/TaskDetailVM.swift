@@ -189,6 +189,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     @ObservationIgnored var artifactRequests: [String: Task<Void, Never>] = [:]
     @ObservationIgnored var artifactGeneration = UUID()
     var summaryModel = SummaryPaneModel.empty
+    /// Whether the Activity feed ends with the Summary entry. Written only on change (`applyTimeline`).
+    var summaryEntryShown = false
     var promptText = "The prompt is recorded in the task's event log, which has not been read yet (or does not exist)."
     var requestReadState: TaskRequestReadState = .notRequested
     var recoveredTranscript = RecoveredTranscriptFrame()
@@ -206,6 +208,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     // MARK: - Internal Properties (shared across extensions)
 
     @ObservationIgnored let isWorkflowBuilder: Bool
+    /// The mount this VM serves, the same value its `TaskDetailView` gets. Only `.standalone` shows the Summary entry.
+    @ObservationIgnored let chrome: TaskDetailChrome
     @ObservationIgnored let useCase: any TaskDetailUseCase
     @ObservationIgnored let routing: any TaskDetailRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
@@ -287,9 +291,11 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - Init
 
+    /// `chrome` has no default: it is the mount the view is built with, and decides whether the Summary entry shows.
     init(taskID: String, useCase: any TaskDetailUseCase, routing: any TaskDetailRouting,
-         continuityHistory: any TaskContinuityHistory, isWorkflowBuilder: Bool = false) {
+         continuityHistory: any TaskContinuityHistory, chrome: TaskDetailChrome, isWorkflowBuilder: Bool = false) {
         self.isWorkflowBuilder = isWorkflowBuilder
+        self.chrome = chrome
         self.continuityHistory = continuityHistory
         self.taskID = taskID
         self.currentTaskID = taskID
@@ -564,5 +570,6 @@ final class TaskDetailVM: TaskDetailViewModel {
         inspectorModel = nil
         timelineModel = .empty
         summaryModel = .empty
+        if summaryEntryShown { summaryEntryShown = false }
     }
 }

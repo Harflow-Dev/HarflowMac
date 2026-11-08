@@ -219,7 +219,7 @@ import Testing
     }
 
     @discardableResult
-    func makeSUT(taskID: String = "abc12345", isWorkflowBuilder: Bool = false) -> SUT {
+    func makeSUT(taskID: String = "abc12345", isWorkflowBuilder: Bool = false, chrome: TaskDetailChrome = .group) -> SUT {
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
         let fixtures = Fixtures()
@@ -227,7 +227,8 @@ import Testing
         useCase.configurePagingDefaults(includeObservationDefaults: false)
 
         let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing,
-                               continuityHistory: TaskContinuityHistoryStore(), isWorkflowBuilder: isWorkflowBuilder)
+                               continuityHistory: TaskContinuityHistoryStore(), chrome: isWorkflowBuilder ? .embedded : chrome,
+                               isWorkflowBuilder: isWorkflowBuilder)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: fixtures.tasksSubject,
             hasListedSubject: fixtures.hasListedSubject, snapshotsSubject: fixtures.snapshotsSubject,

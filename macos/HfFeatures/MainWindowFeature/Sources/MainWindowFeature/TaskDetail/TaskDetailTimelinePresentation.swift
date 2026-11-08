@@ -22,6 +22,11 @@ struct TaskDetailTimelineInput: Equatable, Sendable {
     var turnsText: String?
     var previousActivitySnapshot: ActivityFeedSnapshot?
     var previousMarkdown: [String: StreamingMarkdownState] = [:]
+    /// True only for the standalone mount (`TaskDetailChrome.standalone`); the builder never decides a
+    /// Summary entry otherwise.
+    var showsSummaryEntry = false
+    /// The decision the applied presentation carried, so a transient currentness change keeps it.
+    var previousSummaryDecision: SummaryEntryDecision?
 }
 
 struct TaskDetailTimelinePresentation: Equatable, Sendable {
@@ -49,6 +54,10 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
 
     var activitySnapshot: ActivityFeedSnapshot?
     var markdown: [String: StreamingMarkdownState] = [:]
+    /// Whether `activityRows` ends with the Summary entry; the Events usage group reads it.
+    var summaryEntryShown = false
+    /// The builder's Summary decision (shown or suppressed), `nil` while undecided or withheld.
+    var summaryDecision: SummaryEntryDecision?
 
     func loadingHistory() -> Self {
         Self(rows: rows, activityRows: activityRows, children: children, start: start, stepCount: stepCount,
@@ -56,7 +65,8 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
             emptyText: emptyText, isLoading: isLoading, liveStep: liveStep, pendingMessages: pendingMessages,
             workMessages: workMessages,
             history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation),
-            activitySnapshot: activitySnapshot, markdown: markdown)
+            activitySnapshot: activitySnapshot, markdown: markdown,
+            summaryEntryShown: summaryEntryShown, summaryDecision: summaryDecision)
     }
 
     /// The history half of the no-tool proof (§4/§8); the builder separately requires a terminal task.
@@ -101,8 +111,16 @@ enum TaskDetailTimelineBuilder {
         : WorkflowNodePresentation.visibleRows(transcriptRows, tasks: Dictionary(uniqueKeysWithValues: input.members.map { ($0.task.taskID, $0.task) }))
         try Task.checkCancellation()
         let count = rows.filter { if case .item = $0.kind { return true }; return false }.count
-        let markdown = ActivityRowsBuilder.markdownSnapshot(from: rows, previous: input.previousMarkdown)
-        let activity = ActivityRowsBuilder.build(from: rows, cancellationAware: true, markdown: markdown)
+        let rowMarkdown = ActivityRowsBuilder.markdownSnapshot(from: rows, previous: input.previousMarkdown)
+        var markdown = rowMarkdown
+        var activity = ActivityRowsBuilder.build(from: rows, cancellationAware: true, markdown: rowMarkdown)
+        let (decision, summaryText) = TaskDetailSummaryEntryRule.evaluate(input)
+        if let text = summaryText {
+            let id = SummaryEntry.rowID(taskID: input.task.taskID)
+            let prepared = (input.previousMarkdown[id] ?? StreamingMarkdownState()).updating(text: text, isStreaming: false)
+            markdown[id] = prepared
+            activity.append(.summary(SummaryEntry(id: id, taskID: input.task.taskID, text: text, markdown: prepared)))
+        }
         let noTools = input.task.status.isTerminal
             && TaskDetailTimelinePresentation.noToolCallsRecorded(members: input.members, history: input.history)
         try Task.checkCancellation()
@@ -118,7 +136,9 @@ enum TaskDetailTimelineBuilder {
             pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events),
             workMessages: WorkMessageBubble.project(raw: input.snapshot?.raw ?? input.task.raw),
             history: input.history,
-            activitySnapshot: ActivityFeedSnapshot.preparing(activity, previous: input.previousActivitySnapshot), markdown: markdown)
+            activitySnapshot: ActivityFeedSnapshot.preparing(activity, previous: input.previousActivitySnapshot), markdown: markdown,
+            summaryEntryShown: summaryText != nil,
+            summaryDecision: decision)
     }
 }
 
@@ -138,6 +158,7 @@ extension TaskDetailVM {
         guard timelineWorker == nil, var input = pendingTimelineInput else { return }
         input.previousActivitySnapshot = appliedTimelinePresentation?.activitySnapshot
         input.previousMarkdown = appliedTimelinePresentation?.markdown ?? [:]
+        input.previousSummaryDecision = appliedTimelinePresentation?.summaryDecision
         pendingTimelineInput = nil
         let epoch = timelineEpoch
         let revision = timelineRevision
@@ -191,5 +212,6 @@ extension TaskDetailVM {
         timelineModel.workMessages = WorkMessageBubble.applying(value.workMessages, notes: messageNotes)
         timelineModel.onCancelQueuedMessage = { [weak self] id in self?.cancelQueuedMessage(id) }
         timelineModel.onSelectTask = { [weak self] id in self?.didTapTask(id) }
+        if summaryEntryShown != value.summaryEntryShown { summaryEntryShown = value.summaryEntryShown }
     }
 }

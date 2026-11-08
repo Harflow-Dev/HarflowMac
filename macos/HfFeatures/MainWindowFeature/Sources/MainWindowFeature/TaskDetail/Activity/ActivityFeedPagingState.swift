@@ -224,7 +224,8 @@ struct ActivityFeedNativePendingPage: Equatable {
     /// `observedLoading` is the loader's own `loading` publication seen since the request.
     func commit(by model: ActivityFeedNativeModel, observedLoading: Bool) -> Commit? {
         if model.paginationRevision != paginationRevision { return .settled }
-        if model.allRowIDs != requestedIDs, !isLiveAppend(model.allRowIDs) { return .rows }
+        let ids = SummaryEntry.withoutSummaryIDs(model.allRowIDs)
+        if ids != SummaryEntry.withoutSummaryIDs(requestedIDs), !isLiveAppend(ids) { return .rows }
         if model.history.isLoading { return nil }
         if observedLoading { return .settled }
         if model.history.error != history.error { return .settled }
@@ -234,8 +235,9 @@ struct ActivityFeedNativePendingPage: Equatable {
 
     /// A pure live append — new rows at the newest end — keeps the request outstanding.
     private func isLiveAppend(_ ids: [String]) -> Bool {
-        guard !requestedIDs.isEmpty else { return false }
-        return ids.count >= requestedIDs.count && Array(ids.prefix(requestedIDs.count)) == requestedIDs
+        let requested = SummaryEntry.withoutSummaryIDs(requestedIDs)
+        guard !requested.isEmpty else { return false }
+        return ids.count >= requested.count && Array(ids.prefix(requested.count)) == requested
     }
 }
 
@@ -283,11 +285,13 @@ enum ActivityFeedNativeRegroup {
         let members: Set<String> = switch oldRow {
         case .single(let row, _): [row.id]
         case .toolGroup(let group): Set(group.members.map(\.id))
+        case .summary(let entry): [entry.id]
         }
         return next.firstIndex { row in
             switch row {
             case .single(let value, _): members.contains(value.id)
             case .toolGroup(let group): group.members.contains { members.contains($0.id) }
+            case .summary(let entry): members.contains(entry.id)
             }
         }
     }
@@ -300,6 +304,13 @@ enum ActivityFeedNativeRegroup {
 /// distance from the viewport top, clamped so a shrunken row still keeps positive content
 /// visible (the same clamp `ParallelVerticalAnchor.offset(in:)` applies).
 enum ActivityFeedNativeReading {
+    /// The row that stands in for a reading whose row `id` leaves the list: the nearest surviving row before it in
+    /// `old` (both in list order), else the nearest one after it. `nil` when `id` is not in `old` or nothing survives.
+    static func neighbour(of id: String, old: [String], surviving: Set<String>) -> String? {
+        guard let index = old.firstIndex(of: id) else { return nil }
+        return old[..<index].last(where: surviving.contains) ?? old[(index + 1)...].first(where: surviving.contains)
+    }
+
     static func anchor(index: Int, id: String, rowRect: CGRect, visibleMinY: CGFloat, shownIndex: Int)
         -> ParallelVerticalAnchor {
         ParallelVerticalAnchor(id: id, index: shownIndex, relativeOffset: rowRect.minY - visibleMinY)

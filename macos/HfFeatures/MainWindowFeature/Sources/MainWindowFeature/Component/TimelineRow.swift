@@ -50,7 +50,7 @@ struct TimelineRow: View {
                 StartLineView(backend: started.backend, time: model.item.at, freedom: started.freedom)
             }
         case .text(let text, let streaming):
-            preparedText(text)
+            AgentProseText(text: text, markdown: model.markdown)
                 // The transcript's row gap replaces the trailing space; a streaming reply keeps it for the caret.
                 .padding(.bottom, feedStyle.isTranscript && !streaming ? 0 : HfRadius.Metrics.spacing16)
                 .overlay(alignment: .bottomLeading) {
@@ -83,21 +83,6 @@ struct TimelineRow: View {
             )
         case .finished(let status, let exitCode, _):
             finishedMarker(status: TaskStatus(status), exitCode: exitCode)
-        }
-    }
-
-    @ViewBuilder
-    private func preparedText(_ text: String) -> some View {
-        if let markdown = model.markdown {
-            ReadingMarkdownView(text: text, prepared: markdown)
-        } else {
-            // Unprepared compatibility rows have deterministic geometry in native measurement.
-            Text(text)
-.font(.hf(.reading))
-                .modifier(TranscriptProseText(isOn: feedStyle.isTranscript))
-                .lineSpacing(feedStyle.isTranscript ? TaskScreenStyle.bodyLineSpacing : 6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
         }
     }
 
@@ -136,6 +121,30 @@ struct TimelineRow: View {
         case "initial": nil
         case "injected": "Message sent to the task"
         default: "User message"
+        }
+    }
+}
+
+// MARK: - AgentProseText
+
+/// An agent message's prose: the prepared markdown when the builder supplied it, else plain text with the same
+/// metrics. Shared by `TimelineRow` and the Summary feed entry, so both measure and draw alike.
+struct AgentProseText: View {
+    let text: String
+    let markdown: StreamingMarkdownState?
+    @Environment(\.activityFeedStyle) private var feedStyle
+
+    var body: some View {
+        if let markdown {
+            ReadingMarkdownView(text: text, prepared: markdown)
+        } else {
+            // Unprepared compatibility rows have deterministic geometry in native measurement.
+            Text(text)
+                .font(.hf(.reading))
+                .modifier(TranscriptProseText(isOn: feedStyle.isTranscript))
+                .lineSpacing(feedStyle.isTranscript ? TaskScreenStyle.bodyLineSpacing : 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 }

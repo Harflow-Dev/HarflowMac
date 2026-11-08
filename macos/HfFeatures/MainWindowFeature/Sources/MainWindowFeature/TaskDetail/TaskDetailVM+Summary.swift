@@ -24,13 +24,10 @@ extension TaskDetailVM {
 
     func recomputeSummary(task: TaskInfo) {
         recomputeArtifactMembers()
-        // `summary` is a snapshot-only field (nil on a bare listing), so the freshest snapshot
-        // wins over whatever `task` itself resolved to — the same precedence the git-backed
-        // Changes pane used before it.
-        let rawSummary = useCase.snapshot(currentTaskID)?.summary ?? task.summary
-        let projectsWorkflowResult = WorkflowNodePresentation.isManaged(task) || WorkflowNodePresentation.resultError(task) != nil
-        let summary = isWorkflowBuilder ? WorkflowBuilderPresentation.summary(rawSummary)
-            : projectsWorkflowResult ? WorkflowNodePresentation.summary(rawSummary, task: task) : rawSummary
+        // The shared projection (`TaskReportedSummary`): the freshest snapshot wins over `task`, then the
+        // builder, managed workflow and malformed-output rules apply.
+        let rawSummary = TaskReportedSummary.raw(snapshot: useCase.snapshot(currentTaskID), task: task)
+        let summary = TaskReportedSummary.projected(raw: rawSummary, task: task, isWorkflowBuilder: isWorkflowBuilder)
         let members = conversationMembers
         let summaries = members.map { observationFrames[$0.taskID]?.summary ?? ObservedActivitySummary() }
         let base = SummaryPaneModel.build(task: task, summary: summary, memberEventsOldestFirst: [],

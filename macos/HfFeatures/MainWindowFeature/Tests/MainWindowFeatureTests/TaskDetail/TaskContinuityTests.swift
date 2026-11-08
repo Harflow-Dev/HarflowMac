@@ -100,7 +100,7 @@ struct TaskContinuityTests {
         store.record(observation, for: first.taskID)
         // when: a new task-detail VM replaces the old selection
         let harness = TaskDetailVMTests().makeSUT()
-        let replacement = TaskDetailVM(taskID: first.taskID, useCase: harness.useCase, routing: harness.routing, continuityHistory: store)
+        let replacement = TaskDetailVM(taskID: first.taskID, useCase: harness.useCase, routing: harness.routing, continuityHistory: store, chrome: .group)
         var raw = first.raw
         raw["status"] = .string("completed")
         raw["supervision"] = nil

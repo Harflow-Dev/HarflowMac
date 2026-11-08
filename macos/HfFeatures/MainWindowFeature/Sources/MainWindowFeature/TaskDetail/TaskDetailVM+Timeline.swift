@@ -23,6 +23,9 @@ import MonitorCore
 
 extension TaskDetailVM {
 
+    /// Only the standalone mount draws the Summary entry.
+    var showsSummaryEntry: Bool { chrome == .standalone }
+
     func activityHistory(_ members: [TaskInfo]) -> EventHistoryState {
         let states = members.map { observationFrames[$0.taskID]?.presentationHistory ?? EventHistoryState(isLoading: true) }
         return EventHistoryState(
@@ -99,7 +102,7 @@ extension TaskDetailVM {
             }, children: allChildren.map { TaskDetailTimelineChild(task: $0, title: useCase.title($0.taskID)) },
             start: conversationMembers.first?.startedAt, isBuilder: isWorkflowBuilder,
             events: eventsByMember[currentTaskID] ?? [], snapshot: useCase.snapshot(currentTaskID), history: history,
-            turnsText: turnsText)
+            turnsText: turnsText, showsSummaryEntry: showsSummaryEntry)
         enqueueTimeline(input)
         let nextEvents = observationFrames[currentTaskID]?.events ?? []
         if rawEvents != nextEvents { rawEvents = nextEvents }

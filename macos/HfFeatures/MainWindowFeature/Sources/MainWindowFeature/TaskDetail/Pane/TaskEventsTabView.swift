@@ -208,10 +208,13 @@ private extension TaskEventsTabView {
     }
 
     /// The reported result, cost and usage, permission denials and Files edited, unchanged and collapsed until
-    /// the design classifies them. Artifacts live in their own tab, so none are passed here.
+    /// the design classifies them. Artifacts live in their own tab, so none are passed here. While the transcript
+    /// ends with the Summary entry, the group drops the hero and the Result it would repeat and reads "Reported
+    /// usage"; its identity, expansion and frame are unchanged.
     var usageGroup: some View {
-        group(.usage, "Reported result and usage") {
-            SummaryPaneView(model: viewModel.summaryModel).frame(height: Self.usageHeight)
+        let entryShown = viewModel.summaryEntryShown
+        return group(.usage, entryShown ? "Reported usage" : "Reported result and usage") {
+            SummaryPaneView(model: viewModel.summaryModel, showsHeroAndResult: !entryShown).frame(height: Self.usageHeight)
         }
     }
 

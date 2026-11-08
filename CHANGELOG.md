@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- End a completed task's transcript with a Summary entry on the task screen. It shows the reported summary after the final turn once the event log is final and the history is complete, and is left out when it equals the agent's last message byte for byte. The Events tab's usage group then reads "Reported usage" and drops the headline and Result it would repeat. Group and the workflow builder are unchanged.
+
 - Replace the task screen's always-visible right column with an adaptive right pane. It has Artifacts and Events tabs, opens from the toolbar button ("Show right pane"), sits beside the conversation when the window is at least 900 points wide and over it otherwise, and remembers whether it was open per conversation. Events now begins with collapsible Task, What was enforced, Notices and Continuity sections; the notices and continuity shortcuts in the task header open them. Group and the workflow builder are unchanged.
 
 - Lower CPU use while tasks run: the streaming caret, the running tool spinner, the working indicator and the live-step pulse in the activity feed now animate in Core Animation instead of redrawing the feed each frame. Their look is unchanged, except that the streaming caret is now hidden from accessibility as decorative.

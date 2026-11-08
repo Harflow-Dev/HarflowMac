@@ -39,16 +39,27 @@ struct TurnSeparatorRow: View {
     /// `.hd-turn-sep`: the caption centred between two 1 pt rules, then the follow-up as a user bubble.
     private var transcriptBody: some View {
         VStack(alignment: .leading, spacing: TaskScreenStyle.TurnSeparator.gap) {
-            HStack(spacing: TaskScreenStyle.TurnSeparator.gap) {
-                rule
-                Text(Self.caption(timestamp: timestamp))
-                    .font(.hf(.secondary))
-                    .frame(height: TaskScreenStyle.TurnSeparator.text.lineHeight)
-                    .foregroundStyle(TaskScreenStyle.TurnSeparator.color.color)
-                    .fixedSize()
-                rule
-            }
+            TurnSeparatorDivider(label: Self.caption(timestamp: timestamp))
             PromptBubbleView(text: text)
+        }
+    }
+}
+
+// MARK: - TurnSeparatorDivider
+
+/// `.hd-turn-sep`: the label centred between two 1 pt rules. Shared by the follow-up separator and the Summary entry.
+struct TurnSeparatorDivider: View {
+    let label: String
+
+    var body: some View {
+        HStack(spacing: TaskScreenStyle.TurnSeparator.gap) {
+            rule
+            Text(label)
+                .font(.hf(.secondary))
+                .frame(height: TaskScreenStyle.TurnSeparator.text.lineHeight)
+                .foregroundStyle(TaskScreenStyle.TurnSeparator.color.color)
+                .fixedSize()
+            rule
         }
     }
 

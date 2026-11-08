@@ -64,6 +64,8 @@ protocol TaskDetailViewModel: ViewModel {
     var artifactMembers: [ArtifactMemberModel] { get }
     func didLoadArtifacts(taskID: String)
     var summaryModel: SummaryPaneModel { get }
+    /// Whether the Activity feed ends with the Summary entry, which the Events usage group then does not repeat.
+    var summaryEntryShown: Bool { get }
     var promptText: String { get }
     var requestReadState: TaskRequestReadState { get }
     var observationFrames: [String: EventObservationFrame] { get }
@@ -539,7 +541,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             .frame(height: 360)
                     }
                     DisclosureGroup("Reported result, usage and artifacts") {
-                        SummaryPaneView(model: viewModel.summaryModel, artifactMembers: viewModel.artifactMembers,
+                        SummaryPaneView(model: viewModel.summaryModel, showsHeroAndResult: true, artifactMembers: viewModel.artifactMembers,
                                         loadArtifacts: { viewModel.didLoadArtifacts(taskID: $0) })
                             .frame(height: 360)
                     }

@@ -63,6 +63,31 @@ extension ActivityFeedNativeList.Coordinator {
     /// tail and approvals are a fallback for a list in which no row survives.
     func tailInsertReading(next: [ActivityFeedNativeEntry]) -> ActivityFeedNativeReadingCapture? {
         guard let current = latestReading() else { return nil }
+        return survivingReading(current, next: next)
+    }
+
+    /// The reading a structural reload keeps. When the captured row does not survive in `next`, the nearest
+    /// surviving row before it stands in (else the nearest after it), its offset recomputed from its rect so the
+    /// viewport holds. See `ActivityFeedNativeReading.neighbour(of:old:surviving:)`.
+    func structuralSurvivingReading(_ current: ActivityFeedNativeReadingCapture,
+                                    next: [ActivityFeedNativeEntry]) -> ActivityFeedNativeReadingCapture? {
+        let surviving = Set(next.map(\.id))
+        if surviving.contains(current.id) { return current }
+        guard let table, let scroll else { return nil }
+        let rowIDs = entries.compactMap { entry -> String? in
+            if case .row(let row) = entry { row.row.id } else { nil }
+        }
+        guard let id = ActivityFeedNativeReading.neighbour(of: current.id, old: rowIDs, surviving: surviving),
+              let index = entries.firstIndex(where: { $0.id == id }) else { return nil }
+        let offset = table.rect(ofRow: index).minY - scroll.documentVisibleRect.minY
+        return ActivityFeedNativeReadingCapture(id: id, relativeOffset: offset)
+    }
+
+    /// `current` when its entry survives in `next`; otherwise the first visible row that does, else the first
+    /// surviving row. Used by the tail insert, where a reading whose entry leaves with the window run lands on the
+    /// first surviving row; the structural reload uses `structuralSurvivingReading` instead.
+    func survivingReading(_ current: ActivityFeedNativeReadingCapture,
+                          next: [ActivityFeedNativeEntry]) -> ActivityFeedNativeReadingCapture? {
         let surviving = Set(next.map(\.id))
         if surviving.contains(current.id) { return current }
         guard let table, let scroll, let first = firstRowIndex, let last = lastRowIndex else { return nil }

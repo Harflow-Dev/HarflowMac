@@ -258,8 +258,20 @@ struct SummaryPaneModel {
 
 struct SummaryPaneView: View {
     let model: SummaryPaneModel
+    /// Draws the hero and the Result section. The standalone Events usage group passes `false` while the
+    /// transcript's Summary entry shows the result; the model keeps its hero, so the Duration tile and the
+    /// metric scope text stay.
+    let showsHeroAndResult: Bool
     var artifactMembers: [ArtifactMemberModel] = []
     var loadArtifacts: (String) -> Void = { _ in }
+
+    init(model: SummaryPaneModel, showsHeroAndResult: Bool = true, artifactMembers: [ArtifactMemberModel] = [],
+         loadArtifacts: @escaping (String) -> Void = { _ in }) {
+        self.model = model
+        self.showsHeroAndResult = showsHeroAndResult
+        self.artifactMembers = artifactMembers
+        self.loadArtifacts = loadArtifacts
+    }
 
     @State private var refusalsExpanded = false
     @State private var showAllFiles = false
@@ -268,15 +280,21 @@ struct SummaryPaneView: View {
         ScrollView {
             // Redesign §6.2: hero → stat tiles → Result → Files edited → Refusals & warnings.
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing28) {
-                if let hero = model.hero { heroSection(hero) }
+                if showsHeroAndResult, let hero = model.hero { heroSection(hero) }
+
+                if !showsHeroAndResult, !model.statTiles.isEmpty, let scopeText = model.metricScopeText {
+                    Text(scopeText).font(.hf(.caption)).foregroundStyle(Color.tertiaryText)
+                }
 
                 if !model.statTiles.isEmpty { statTiles }
 
-                section("Result") {
-                    if let answer = model.finalAnswer {
-                        ReadingMarkdownView(text: answer)
-                    } else {
-                        Text(model.finalAnswerPlaceholder).font(.hf(.body)).foregroundStyle(Color.secondaryText)
+                if showsHeroAndResult {
+                    section("Result") {
+                        if let answer = model.finalAnswer {
+                            ReadingMarkdownView(text: answer)
+                        } else {
+                            Text(model.finalAnswerPlaceholder).font(.hf(.body)).foregroundStyle(Color.secondaryText)
+                        }
                     }
                 }
 

@@ -48,6 +48,7 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var artifactMembers: [ArtifactMemberModel] = []
     func didLoadArtifacts(taskID _: String) {}
     var summaryModel = SummaryPaneModel.empty
+    var summaryEntryShown = false
     var promptText = "Fix the flaky login test."
     var rawEvents: [TaskEvent] = []
     var requestReadState = TaskDetailViewModelMock.previewRequest()

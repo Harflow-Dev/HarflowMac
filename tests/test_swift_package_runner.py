@@ -418,6 +418,9 @@ LAYER_MOTION_NO_LOOP_SUITE = "MainWindowFeatureTests.LayerMotionNoLoopHostedTest
 TASK_PANE_SUITE = "MainWindowFeatureTests.TaskPaneHostedTests"
 TASK_PANE_CAPTURE_SUITE = "MainWindowFeatureTests.TaskPaneCaptureHostedTests"
 TASK_PANE_ESCAPE_SUITE = "MainWindowFeatureTests.TaskPaneEscapeHostedTests"
+SUMMARY_ENTRY_FEED_SUITE = "MainWindowFeatureTests.ActivityFeedSummaryEntryHostedTests"
+SUMMARY_ENTRY_PANE_SUITE = "MainWindowFeatureTests.TaskPaneSummaryEntryHostedTests"
+SUMMARY_ENTRY_CAPTURE_SUITE = "MainWindowFeatureTests.TaskPaneSummaryEntryCaptureHostedTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
     TAIL_INSERT_SUITE,
@@ -438,6 +441,9 @@ HOSTED_SUITE_NAMES = (
     TASK_PANE_SUITE,
     TASK_PANE_CAPTURE_SUITE,
     TASK_PANE_ESCAPE_SUITE,
+    SUMMARY_ENTRY_FEED_SUITE,
+    SUMMARY_ENTRY_PANE_SUITE,
+    SUMMARY_ENTRY_CAPTURE_SUITE,
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"

@@ -265,6 +265,9 @@ struct ActivityFeedNativeRowRoot: View {
                 actions.onDisclosure(group.id)
             }
             .hfFadeIn(animate: row.fade)
+        case .summary(let entry):
+            SummaryEntryRow(entry: entry)
+                .hfFadeIn(animate: row.fade)
         case .single(let value, let markdown):
             switch value.kind {
             case .separator(let text):

@@ -394,12 +394,7 @@ extension ActivityFeedNativeList.Coordinator {
                                              actions: actions, availableWidth: nil)
         }
         if let state {
-            let taskID: String = if case .row(let value) = box.entry {
-                switch value.row {
-                case .single(let row, _): row.taskID
-                case .toolGroup(let group): group.taskID
-                }
-            } else { box.entry.id }
+            let taskID: String = if case .row(let value) = box.entry { value.row.taskID } else { box.entry.id }
             root.disclosureContext = ActivityFeedDisclosureContext(state: state.disclosures, rowID: box.entry.id, taskID: taskID)
         }
         if reporting {
@@ -443,7 +438,7 @@ extension ActivityFeedNativeList.Coordinator {
            next.contains(where: { $0.id == anchor.id }) {
             return ActivityFeedNativeReadingCapture(id: anchor.id, relativeOffset: anchor.relativeOffset)
         }
-        return latestReading()
+        return latestReading().flatMap { structuralSurvivingReading($0, next: next) }
     }
 
     func latestReading() -> ActivityFeedNativeReadingCapture? {

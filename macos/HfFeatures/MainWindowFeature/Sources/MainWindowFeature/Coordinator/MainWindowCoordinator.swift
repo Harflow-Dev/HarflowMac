@@ -293,7 +293,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             groupName: name,
             useCase: GroupPresentationViewRepository(taskListRepository: taskListRepository),
             makeDetail: { [self] id in
-                TaskDetailVM(taskID: id, useCase: TaskDetailViewRepository(), routing: self, continuityHistory: continuityHistory)
+                TaskDetailVM(taskID: id, useCase: TaskDetailViewRepository(), routing: self, continuityHistory: continuityHistory,
+                             chrome: .group)
             },
             makeParallel: { [self] in
                 ParallelVM(groupName: name, useCase: ParallelViewRepository(), routing: self, horizontalPosition: parallelPosition(for: "group:" + name))
@@ -326,7 +327,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// with the raw `id`; it resolves the whole conversation from whichever member it is given.
     public func buildTaskDetailView(id: String) -> AnyView {
         let useCase = TaskDetailViewRepository()
-        let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self, continuityHistory: continuityHistory)
+        let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self, continuityHistory: continuityHistory, chrome: .standalone)
         let conversationID = WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID
             ?? Lineage.conversationID(of: id, in: taskListRepository.tasks)
         let paneBinding = TaskPaneBinding(store: paneState, conversationID: conversationID)

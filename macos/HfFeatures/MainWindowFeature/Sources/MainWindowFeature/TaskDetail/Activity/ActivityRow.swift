@@ -17,13 +17,47 @@ import MonitorCore
 enum ActivityRow: Equatable, Identifiable, Sendable {
     case single(ConversationTimelineRow, markdown: StreamingMarkdownState? = nil)
     case toolGroup(ToolGroup)
+    /// The standalone transcript's closing "Summary" entry (`TaskDetailTimelineBuilder` decides it).
+    case summary(SummaryEntry)
 
     var id: String {
         switch self {
         case .single(let row, _): row.id
         case .toolGroup(let group): group.id
+        case .summary(let entry): entry.id
         }
     }
+
+    /// The task the row belongs to, which keys its disclosure state.
+    var taskID: String {
+        switch self {
+        case .single(let row, _): row.taskID
+        case .toolGroup(let group): group.taskID
+        case .summary(let entry): entry.taskID
+        }
+    }
+}
+
+// MARK: - SummaryEntry
+
+/// The reported summary as a feed entry: the "Summary" divider and the prose beneath it.
+struct SummaryEntry: Equatable, Identifiable, Sendable {
+    /// `"<currentTaskID>#summary"`, the last row of the run.
+    let id: String
+    let taskID: String
+    /// The projected summary text (`TaskReportedSummary.projected`).
+    let text: String
+    /// Prepared off the main actor; also stored in the builder's markdown dictionary under `id`.
+    let markdown: StreamingMarkdownState
+
+    /// The row id of a task's summary entry.
+    nonisolated static func rowID(taskID: String) -> String { taskID + idSuffix }
+
+    /// What every Summary entry id ends with.
+    nonisolated static let idSuffix = "#summary"
+
+    /// `ids` without Summary entry ids: appending or withdrawing the entry is not older-page evidence.
+    nonisolated static func withoutSummaryIDs(_ ids: [String]) -> [String] { ids.filter { !$0.hasSuffix(idSuffix) } }
 }
 
 // MARK: - ToolBucket

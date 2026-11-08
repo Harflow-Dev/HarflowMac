@@ -210,7 +210,7 @@ import Testing
         self.fullItems = Timeline.items(from: events)
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
-        self.sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore())
+        self.sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore(), chrome: .group)
         TaskDetailVMTests().configureStubs(useCase: useCase, routing: routing, taskID: "abc12345", fixtures: fixtures)
         useCase.configurePagingDefaults(eventHistory: { [weak self] _ in self?.history ?? EventHistoryState() }, includeObservationDefaults: false)
         fixtures.detailBox.value = TaskDetailVMTests().task(status: "completed")
