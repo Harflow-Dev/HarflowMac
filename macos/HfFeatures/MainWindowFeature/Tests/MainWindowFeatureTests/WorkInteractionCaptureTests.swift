@@ -28,7 +28,7 @@ struct WorkInteractionCaptureTests {
         let fixtures: [(String, AnyView, CGSize)] = [
             ("header-combined", AnyView(TaskDetailView(combined)), CGSize(width: 1000, height: 620)),
             ("header-combined-narrow", AnyView(TaskDetailView(combined)), CGSize(width: 520, height: 620)),
-            ("header-combined-embedded", AnyView(TaskDetailView(combined, isEmbedded: true)), CGSize(width: 288, height: 620)),
+            ("header-combined-embedded", AnyView(TaskDetailView(combined, chrome: .embedded)), CGSize(width: 288, height: 620)),
             ("header-no-supplement", AnyView(TaskDetailView(none)), CGSize(width: 1000, height: 620)),
             ("header-notices", AnyView(TaskDetailView(noticeOnly)), CGSize(width: 1000, height: 620)),
             ("header-continuity", AnyView(TaskDetailView(continuityOnly)), CGSize(width: 1000, height: 620)),

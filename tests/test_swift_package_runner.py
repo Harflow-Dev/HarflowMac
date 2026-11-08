@@ -415,6 +415,9 @@ LAYER_MOTION_ANIMATION_SUITE = "MainWindowFeatureTests.LayerMotionAnimationHoste
 LAYER_MOTION_FEED_SUITE = "MainWindowFeatureTests.LayerMotionFeedHostedTests"
 LAYER_MOTION_LOOK_SUITE = "MainWindowFeatureTests.LayerMotionLookHostedTests"
 LAYER_MOTION_NO_LOOP_SUITE = "MainWindowFeatureTests.LayerMotionNoLoopHostedTests"
+TASK_PANE_SUITE = "MainWindowFeatureTests.TaskPaneHostedTests"
+TASK_PANE_CAPTURE_SUITE = "MainWindowFeatureTests.TaskPaneCaptureHostedTests"
+TASK_PANE_ESCAPE_SUITE = "MainWindowFeatureTests.TaskPaneEscapeHostedTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
     TAIL_INSERT_SUITE,
@@ -432,6 +435,9 @@ HOSTED_SUITE_NAMES = (
     LAYER_MOTION_FEED_SUITE,
     LAYER_MOTION_LOOK_SUITE,
     LAYER_MOTION_NO_LOOP_SUITE,
+    TASK_PANE_SUITE,
+    TASK_PANE_CAPTURE_SUITE,
+    TASK_PANE_ESCAPE_SUITE,
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"

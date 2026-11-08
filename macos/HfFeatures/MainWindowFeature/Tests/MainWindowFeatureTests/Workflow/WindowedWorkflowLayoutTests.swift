@@ -29,7 +29,7 @@ import Testing
         let fixture = RedesignHost(NavigationSplitView {
             SidebarView(sidebar).navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
         } detail: {
-            WorkflowView(workflow, builderTaskView: { _, _ in AnyView(TaskDetailView(task, isEmbedded: true)) })
+            WorkflowView(workflow, builderTaskView: { _, _ in AnyView(TaskDetailView(task, chrome: .embedded)) })
         }
             .frame(minWidth: 1000, minHeight: 620)
             .toolbar(removing: .title), size: size)

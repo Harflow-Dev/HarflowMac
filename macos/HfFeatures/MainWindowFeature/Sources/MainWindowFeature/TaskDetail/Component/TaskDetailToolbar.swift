@@ -18,8 +18,10 @@ struct TaskDetailToolbarSnapshot: Equatable, Sendable {
     let resumeCommand: String?
     let parentID: String?
     let showsInspector: Bool
+    /// Whether the inspector item is the standalone right pane ("right pane" wording) or the legacy events pane.
+    let isRightPane: Bool
 
-    @MainActor init(_ viewModel: any TaskDetailViewModel, task: TaskInfo, showsInspector: Bool) {
+    @MainActor init(_ viewModel: any TaskDetailViewModel, task: TaskInfo, showsInspector: Bool, isRightPane: Bool = false) {
         self.ownerID = ObjectIdentifier(viewModel)
         self.conversationID = viewModel.taskID
         // TaskStatusLabel reads exactly these fields (the settled branch reads the recorded
@@ -36,6 +38,7 @@ struct TaskDetailToolbarSnapshot: Equatable, Sendable {
         self.resumeCommand = viewModel.resumeCommand
         self.parentID = viewModel.openParentTaskID
         self.showsInspector = showsInspector
+        self.isRightPane = isRightPane
     }
 }
 
@@ -102,7 +105,9 @@ struct TaskDetailToolbar: View, Equatable {
     }
 
     private var inspectorToggle: some View {
-        let label = snapshot.showsInspector ? "Hide event details" : "Show event details"
+        let label = snapshot.isRightPane
+            ? (snapshot.showsInspector ? "Hide right pane" : "Show right pane")
+            : (snapshot.showsInspector ? "Hide event details" : "Show event details")
         return Button(action: actions.toggleInspector) { Image(systemName: "sidebar.right") }
             .buttonStyle(QuietButtonStyle(isSelected: snapshot.showsInspector))
             .help(label)

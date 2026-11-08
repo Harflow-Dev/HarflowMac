@@ -30,7 +30,7 @@ extension ActivityFeedTranscriptStyleHostedTests {
     @Test func givenTaskDetailView_whenBuiltWithoutAStyleOrEmbedded_thenItStaysStandard() async throws {
         // given / when
         let plain = TaskDetailView(TaskDetailViewModelMock())
-        let embedded = TaskDetailView(TaskDetailViewModelMock(), isEmbedded: true)
+        let embedded = TaskDetailView(TaskDetailViewModelMock(), chrome: .embedded)
         let styled = TaskDetailView(TaskDetailViewModelMock(), transcriptStyle: .transcript)
         // then
         #expect(Self.transcriptStyle(in: plain) == .standard)
@@ -46,7 +46,7 @@ extension ActivityFeedTranscriptStyleHostedTests {
             let mock = TaskDetailViewModelMock()
             mock.timelineModel = Self.timelineModel(Self.syntheticRows(done: true))
             let host = NSHostingView(rootView: AnyView(
-                TaskDetailView(mock, isEmbedded: embedded, transcriptStyle: style)
+                TaskDetailView(mock, chrome: embedded ? .embedded : .group, transcriptStyle: style)
                     .environment(\.hfReduceMotionOverride, true)))
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 620),
                                   styleMask: [.titled, .resizable], backing: .buffered, defer: false)

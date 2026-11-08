@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replace the task screen's always-visible right column with an adaptive right pane. It has Artifacts and Events tabs, opens from the toolbar button ("Show right pane"), sits beside the conversation when the window is at least 900 points wide and over it otherwise, and remembers whether it was open per conversation. Events now begins with collapsible Task, What was enforced, Notices and Continuity sections; the notices and continuity shortcuts in the task header open them. Group and the workflow builder are unchanged.
+
 - Lower CPU use while tasks run: the streaming caret, the running tool spinner, the working indicator and the live-step pulse in the activity feed now animate in Core Animation instead of redrawing the feed each frame. Their look is unchanged, except that the streaming caret is now hidden from accessibility as decorative.
 
 - Apply the approved transcript design to the task screen and Group view: a centered 696-point reading column, updated message bubbles, prose, tool rows and working row. Collapsed Edit rows now hide their diff until expanded. Parallel and the workflow builder are unchanged.

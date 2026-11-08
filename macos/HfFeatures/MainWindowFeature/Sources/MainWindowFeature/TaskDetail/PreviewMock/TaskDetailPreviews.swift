@@ -37,13 +37,13 @@ private func previewDetail(_ mock: TaskDetailViewModelMock = TaskDetailViewModel
 }
 
 #Preview("Long title - embedded") {
-    TaskDetailView(TaskDetailViewModelMock.longTitle(), isEmbedded: true)
+    TaskDetailView(TaskDetailViewModelMock.longTitle(), chrome: .embedded)
         .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
         .preferredColorScheme(.light)
 }
 
 #Preview("Long title - embedded dark") {
-    TaskDetailView(TaskDetailViewModelMock.longTitle(), isEmbedded: true)
+    TaskDetailView(TaskDetailViewModelMock.longTitle(), chrome: .embedded)
         .frame(width: HfRadius.Metrics.taskDetailNarrowPreviewWidth, height: HfRadius.Metrics.taskDetailNarrowPreviewHeight)
         .preferredColorScheme(.dark)
 }

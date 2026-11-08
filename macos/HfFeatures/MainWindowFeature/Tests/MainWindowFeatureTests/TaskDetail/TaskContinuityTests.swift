@@ -120,7 +120,7 @@ struct TaskContinuityTests {
             // 1000-point supported main window minus its 240-point sidebar leaves 760 points.
             let mock = TaskDetailViewModelMock.continuity(status: state == "completed" ? "completed" : "running", loss: state == "loss")
             let host = RedesignHost(
-                TaskDetailView(mock, isEmbedded: true).preferredColorScheme(scheme).environment(\.hfReduceMotionOverride, true),
+                TaskDetailView(mock, chrome: .embedded).preferredColorScheme(scheme).environment(\.hfReduceMotionOverride, true),
                 size: CGSize(width: 760, height: 620), appearance: scheme
             )
             defer { host.close() }

@@ -52,7 +52,7 @@ extension MainWindowCoordinator: WorkflowRouting {
         let useCase = TaskDetailViewRepository(builderRunID: runID)
         let vm = TaskDetailVM(taskID: taskID, useCase: useCase, routing: self, continuityHistory: continuityHistory, isWorkflowBuilder: true)
         let conversationID = useCase.conversationMembers(of: taskID).first?.id ?? taskID
-        return TaskDetailView(vm, isEmbedded: true).id(conversationID).eraseToAnyView()
+        return TaskDetailView(vm, chrome: .embedded).id(conversationID).eraseToAnyView()
     }
 
     func didSaveWorkflow(name: String) { selection = .workflow(name) }

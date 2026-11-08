@@ -124,27 +124,45 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     
     @State var viewModel: VM
     @State private var activityState: ParallelColumnUIState
-    private let isEmbedded: Bool
-    private let transcriptStyle: ActivityFeedStyle
+    @State var paneHolder: TaskPaneHolder
+    let chrome: TaskDetailChrome
+    let transcriptStyle: ActivityFeedStyle
     private let onToolbarEvaluation: (() -> Void)?
-    @State private var eventsExpanded = true
-    @State private var snapshotFactsExpanded = false
-    @State private var supervisionRequest = 0
-    @FocusState private var continuityDetailsFocused: Bool
+    @State var eventsExpanded = true
+    @State var snapshotFactsExpanded = false
+    @State var supervisionRequest = 0
+    /// The header control a facts reveal started from, so Escape and a closed pane can return focus to it.
+    @FocusState var originFocus: TaskPaneController.Origin?
+    @AccessibilityFocusState var originAccessibilityFocus: TaskPaneController.Origin?
+    @AccessibilityFocusState var groupAccessibilityFocus: TaskPaneStateStore.FactsGroup?
+    @FocusState var focusedGroup: TaskPaneStateStore.FactsGroup?
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var reduceMotionOverride
     
     // MARK: - Init
     
-    init(_ viewModel: VM, isEmbedded: Bool = false, activityState: ParallelColumnUIState? = nil,
-         transcriptStyle: ActivityFeedStyle = .standard, onToolbarEvaluation: (() -> Void)? = nil) {
+    /// `chrome` selects the mount: `.standalone` draws the adaptive right pane and keeps its choices through
+    /// `paneBinding` (a private store when none is given); `.group`, the default, and `.embedded` keep the
+    /// always-mounted legacy pane.
+    init(_ viewModel: VM, chrome: TaskDetailChrome = .group, paneBinding: TaskPaneBinding? = nil,
+         activityState: ParallelColumnUIState? = nil, transcriptStyle: ActivityFeedStyle = .standard,
+         onToolbarEvaluation: (() -> Void)? = nil) {
         self.transcriptStyle = transcriptStyle
         _activityState = State(initialValue: activityState ?? ParallelColumnUIState())
         self.onToolbarEvaluation = onToolbarEvaluation
-        self.isEmbedded = isEmbedded
+        self.chrome = chrome
+        let fallbackID = viewModel.taskID
+        _paneHolder = State(initialValue: TaskPaneHolder {
+            let binding = paneBinding ?? TaskPaneBinding(store: TaskPaneStateStore(), conversationID: fallbackID)
+            return TaskPaneController(store: binding.store, conversationID: binding.conversationID)
+        })
         _viewModel = State(initialValue: viewModel)
     }
+
+    private var isEmbedded: Bool { chrome == .embedded }
+    var isStandalone: Bool { chrome == .standalone }
+    var pane: TaskPaneController { paneHolder.controller }
     
     // MARK: - View Body
 
@@ -171,45 +189,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     private var realContent: some View {
         if let task = viewModel.task {
             withToolbar(task: task) {
-                HStack(spacing: HfRadius.Metrics.zero) {
-                    VStack(spacing: HfRadius.Metrics.zero) {
-                        if let backend = viewModel.harflowApprovalBackend {
-                            HStack(spacing: HfRadius.Metrics.spacing12) {
-                                Text("\(backend.capitalized) needs approval to update this canvas.")
-                                    .font(.hf(.secondary))
-.foregroundStyle(Color.warningFG)
-                                Spacer(minLength: HfRadius.Metrics.zero)
-                                Button("Always allow Harflow tools") { viewModel.didTapAllowHarflowTools() }
-                                    .buttonStyle(QuietButtonStyle())
-.disabled(viewModel.isBusy)
-                            }
-.padding(.horizontal, HfRadius.Metrics.spacing16)
-.padding(.vertical, HfRadius.Metrics.spacing8)
-                        }
-                        header(task)
-                        if let context = viewModel.resourceContext {
-                            TaskResourceContextView(context: context, blockersExpanded: viewModel.resourceBlockersExpanded,
-                                                    onToggleBlockers: viewModel.didToggleResourceBlockers,
-                                                    onOpenResourceSlots: viewModel.didOpenResourceSlots)
-                                .padding(.horizontal, HfRadius.Metrics.spacing16)
-                                .padding(.bottom, HfRadius.Metrics.spacing8)
-                        }
-                        column
-                    }
-                    .frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity, minHeight: HfRadius.Metrics.zero, maxHeight: .infinity)
-                    .background(transcriptStyle.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
-                    Divider()
-                    eventsPane
-                        .frame(width: isEmbedded ? 280 : 320)
+                if isStandalone {
+                    standaloneLayout(task)
+                } else {
+                    legacyLayout(task)
                 }
-                // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
-                // change can land outside the tap's transaction and would then not animate. Reduce
-                // Motion drops the slide (§8); the pane still appears and disappears without motion.
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: eventsExpanded)
-                .onChange(of: eventsExpanded) { wasVisible, visible in
-                    if wasVisible, !visible, supervisionRequest > 0 { continuityDetailsFocused = true }
-                }
-                .opensFileLinks(repoPath: task.repoPath)
             }
         } else if viewModel.hasListed {
             VStack(spacing: HfRadius.Metrics.spacing8) {
@@ -222,6 +206,54 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         } else {
             loadingSkeleton
         }
+    }
+
+    /// The transcript column: approval banner, header, resource card, activity and composer.
+    func columnStack(_ task: TaskInfo) -> some View {
+        VStack(spacing: HfRadius.Metrics.zero) {
+            if let backend = viewModel.harflowApprovalBackend {
+                HStack(spacing: HfRadius.Metrics.spacing12) {
+                    Text("\(backend.capitalized) needs approval to update this canvas.")
+                        .font(.hf(.secondary))
+                        .foregroundStyle(Color.warningFG)
+                    Spacer(minLength: HfRadius.Metrics.zero)
+                    Button("Always allow Harflow tools") { viewModel.didTapAllowHarflowTools() }
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(viewModel.isBusy)
+                }
+                .padding(.horizontal, HfRadius.Metrics.spacing16)
+                .padding(.vertical, HfRadius.Metrics.spacing8)
+            }
+            header(task)
+            if let context = viewModel.resourceContext {
+                TaskResourceContextView(context: context, blockersExpanded: viewModel.resourceBlockersExpanded,
+                                        onToggleBlockers: viewModel.didToggleResourceBlockers,
+                                        onOpenResourceSlots: viewModel.didOpenResourceSlots)
+                    .padding(.horizontal, HfRadius.Metrics.spacing16)
+                    .padding(.bottom, HfRadius.Metrics.spacing8)
+            }
+            column
+        }
+        .frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity, minHeight: HfRadius.Metrics.zero, maxHeight: .infinity)
+        .background(transcriptStyle.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
+    }
+
+    /// Group and embedded mounts: the column beside the always-mounted pane.
+    private func legacyLayout(_ task: TaskInfo) -> some View {
+        HStack(spacing: HfRadius.Metrics.zero) {
+            columnStack(task)
+            Divider()
+            eventsPane
+                .frame(width: isEmbedded ? 280 : 320)
+        }
+        // Keyed on the value, not a withAnimation around the tap: the flag is @AppStorage, whose
+        // change can land outside the tap's transaction and would then not animate. Reduce
+        // Motion drops the slide (§8); the pane still appears and disappears without motion.
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: eventsExpanded)
+        .onChange(of: eventsExpanded) { wasVisible, visible in
+            if wasVisible, !visible, supervisionRequest > 0 { originFocus = .continuityDetails }
+        }
+        .opensFileLinks(repoPath: task.repoPath)
     }
 
     /// Shown while the task isn't known yet, and for the deferred first frame: the skeleton that
@@ -252,7 +284,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
                     if let noticeText = NoticeSummary.text(count: viewModel.inspectorModel?.notices.count ?? 0) {
                         Button {
-                            setInspectorVisible(true)
+                            revealNotices()
                         } label: {
                             HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
                                 supplementalIcon("exclamationmark.triangle")
@@ -261,7 +293,10 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             .foregroundStyle(Color.warningFG)
                         }
                         .buttonStyle(.plain)
-                        .help("Show the notices in the inspector")
+                        .modifier(StandaloneFocusable(isEnabled: isStandalone))
+                        .focused($originFocus, equals: .notices)
+                        .accessibilityFocused($originAccessibilityFocus, equals: .notices)
+                        .help(isStandalone ? "Show the notices in the right pane" : "Show the notices in the inspector")
                     }
                     if viewModel.inspectorModel?.showsContinuity == true {
                         HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
@@ -269,13 +304,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             Text("Server restarted · Task still running")
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: HfRadius.Metrics.spacing8)
-                            Button("Details") {
-                                setInspectorVisible(true)
-                                snapshotFactsExpanded = true
-                                supervisionRequest += 1
-                            }
+                            Button("Details") { revealContinuityDetails() }
                             .buttonStyle(.plain)
-                            .focused($continuityDetailsFocused)
+                            .modifier(StandaloneFocusable(isEnabled: isStandalone))
+                            .focused($originFocus, equals: .continuityDetails)
+                            .accessibilityFocused($originAccessibilityFocus, equals: .continuityDetails)
                             .accessibilityLabel("Show supervision details")
                         }
                         .foregroundStyle(Color.secondaryText)
@@ -313,12 +346,13 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         } else {
             content().background {
                 TaskDetailToolbar(
-                    snapshot: TaskDetailToolbarSnapshot(viewModel, task: task, showsInspector: eventsExpanded),
+                    snapshot: TaskDetailToolbarSnapshot(viewModel, task: task, showsInspector: isStandalone ? pane.isOpen : eventsExpanded,
+                                                        isRightPane: isStandalone),
                     actions: TaskDetailToolbarActions(
                         takeover: viewModel.didTapTakeover, cancel: viewModel.didTapCancel,
                         copyResumeCommand: viewModel.didTapCopyResumeCommand, openTask: viewModel.didTapTask,
-                        showRawEvents: { eventsExpanded = true },
-                        toggleInspector: { eventsExpanded.toggle() }
+                        showRawEvents: showEvents,
+                        toggleInspector: toggleInspector
                     ),
                     onEvaluation: onToolbarEvaluation
                 ).equatable()
@@ -396,11 +430,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 
     /// Reduce Motion for the inspector transition: the presentation-only override wins over the
     /// system setting (`HfMotion.reduceMotion`), the same resolution shared components use.
-    private var reduceMotion: Bool {
+    var reduceMotion: Bool {
         HfMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion)
     }
 
-    private func setInspectorVisible(_ visible: Bool) {
+    func setInspectorVisible(_ visible: Bool) {
         eventsExpanded = visible
     }
 
@@ -522,5 +556,18 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
 enum NoticeSummary {
     static func text(count: Int) -> String? {
         count > 0 ? "\(count) notice\(count == 1 ? "" : "s")" : nil
+    }
+}
+
+// MARK: - StandaloneFocusable
+
+/// Makes a control programmatically focusable on the standalone mount only. Elsewhere it is the identity, so the
+/// group and embedded mounts keep the controls' default focus behaviour exactly.
+private struct StandaloneFocusable: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled { content.focusable() } else { content }
     }
 }

@@ -47,6 +47,12 @@ final class TaskPaneStateStore {
         var openChoice: OpenChoice = .noChoice
         var selectedTab: Tab = .changes
         var expandedGroups: Set<FactsGroup> = []
+        /// Whether the first-show default opens the pane at split widths; `nil` until a default was resolved.
+        /// Kept so a conversation first shown closed (for example while running) stays closed when revisited.
+        var appliedDefaultOpensAtSplit: Bool?
+        /// Whether the Events tab's nested Technical info is expanded. It changes the document height the
+        /// saved Events offset is relative to, so it persists with it.
+        var technicalInfoExpanded = false
     }
 
     // MARK: - Properties
@@ -57,6 +63,12 @@ final class TaskPaneStateStore {
     private var entries: [String: Entry] = [:]
     /// Least recently used first. Not observed: touching a key must not invalidate views.
     @ObservationIgnored private var recency: [String] = []
+    /// The Events tab's last vertical scroll offset per conversation. Not observed: the pane records it on
+    /// every scroll step and no view renders from it. Bounded on its own, so a write never creates a recency
+    /// entry, touches `entries` or evicts a conversation's choices.
+    @ObservationIgnored private var eventsOffsets: [String: CGFloat] = [:]
+    /// Offset keys, least recently written first.
+    @ObservationIgnored private var offsetOrder: [String] = []
 
     // MARK: - Lifecycle
 
@@ -79,6 +91,15 @@ final class TaskPaneStateStore {
 
     /// The remembered conversation ids, least recently used first.
     var rememberedIDs: [String] { recency }
+
+    /// The Events tab's last scroll offset, `nil` when none was recorded.
+    func eventsScrollOffset(for conversationID: String) -> CGFloat? { eventsOffsets[conversationID] }
+
+    /// The default applied on first show, `nil` when none was resolved or the entry was evicted.
+    func appliedDefault(for conversationID: String) -> Bool? { entries[conversationID]?.appliedDefaultOpensAtSplit }
+
+    /// Whether Technical info is expanded, collapsed when nothing was recorded.
+    func technicalInfoExpanded(for conversationID: String) -> Bool { entries[conversationID]?.technicalInfoExpanded ?? false }
 
     // MARK: - Writing
 
@@ -104,6 +125,27 @@ final class TaskPaneStateStore {
         setExpandedGroups(groups, for: conversationID)
     }
 
+    /// Records the Events tab's scroll offset. It is a reading anchor, so it never invalidates a view.
+    func setEventsScrollOffset(_ offset: CGFloat, for conversationID: String) {
+        eventsOffsets[conversationID] = offset
+        // Least recently written last: a rewrite moves the key to the back.
+        if offsetOrder.last != conversationID {
+            if let index = offsetOrder.firstIndex(of: conversationID) { offsetOrder.remove(at: index) }
+            offsetOrder.append(conversationID)
+        }
+        while offsetOrder.count > Self.capacity { eventsOffsets.removeValue(forKey: offsetOrder.removeFirst()) }
+    }
+
+    /// Records the default applied on first show. Written once per conversation by the pane.
+    func setAppliedDefault(_ opensAtSplit: Bool, for conversationID: String) {
+        set(\.appliedDefaultOpensAtSplit, opensAtSplit, for: conversationID)
+    }
+
+    /// Records whether Technical info is expanded. An unchanged value writes nothing.
+    func setTechnicalInfoExpanded(_ expanded: Bool, for conversationID: String) {
+        set(\.technicalInfoExpanded, expanded, for: conversationID)
+    }
+
     /// Marks the conversation as most recently used. Does nothing for a conversation without an entry.
     func touch(_ conversationID: String) {
         guard let index = recency.firstIndex(of: conversationID), index != recency.count - 1 else { return }
@@ -120,11 +162,16 @@ final class TaskPaneStateStore {
         if entry[keyPath: keyPath] != value {
             entry[keyPath: keyPath] = value
             entries[id] = entry
-            if !recency.contains(id) { recency.append(id) }
-            while recency.count > Self.capacity {
-                entries.removeValue(forKey: recency.removeFirst())
-            }
+            remember(id)
         }
         touch(id)
+    }
+
+    /// Adds the conversation to the recency list when absent and evicts the least recently used past capacity.
+    private func remember(_ id: String) {
+        if !recency.contains(id) { recency.append(id) }
+        while recency.count > Self.capacity {
+            entries.removeValue(forKey: recency.removeFirst())
+        }
     }
 }

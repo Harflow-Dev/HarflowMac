@@ -28,7 +28,7 @@ extension MessageBoxTranscriptStyleHostedTests {
         let size = CGSize(width: 1400, height: 800)
         let surface = try await token(TaskScreenStyle.Colors.surface, dark: false)
         let mock = TaskDetailViewModelMock.finished()
-        let page = fixture(TaskDetailView(mock, isEmbedded: embedded, transcriptStyle: style)
+        let page = fixture(TaskDetailView(mock, chrome: embedded ? .embedded : .group, transcriptStyle: style)
             .environment(\.hfReduceMotionOverride, true), size: size, dark: false)
         defer { page.close() }
         await page.settle { page.element("Queue a message…") != nil || Self.editableField(in: page) != nil }

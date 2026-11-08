@@ -92,6 +92,9 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.LayerMotionFeedHostedTests",
     "MainWindowFeatureTests.LayerMotionLookHostedTests",
     "MainWindowFeatureTests.LayerMotionNoLoopHostedTests",
+    "MainWindowFeatureTests.TaskPaneHostedTests",
+    "MainWindowFeatureTests.TaskPaneCaptureHostedTests",
+    "MainWindowFeatureTests.TaskPaneEscapeHostedTests",
 })
 HOSTED_PACKAGE = "MainWindowFeature"
 HOSTED_RESOURCE_BUNDLE = HOSTED_PACKAGE + "_" + HOSTED_PACKAGE + ".bundle"

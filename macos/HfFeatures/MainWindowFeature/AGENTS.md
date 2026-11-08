@@ -67,6 +67,45 @@ no embedded terminal anywhere in this package:
   `MessageBoxStyle` follows the same mounts through `TaskDetailView`: `.transcript` is the solid
   `.hd-composer` surface, `.standard` keeps glass for Parallel and workflow composers. Field and actions stay
   in one row with the printed hint; the stacked form and an editor swap wait on a design for Send now and locked states.
+- **Standalone right pane.** `TaskDetailView(chrome:)` takes `.standalone` (the window's task selection, built by
+  `MainWindowCoordinator.buildTaskDetailView`), `.group` (the default; Group's task pane) or `.embedded` (the
+  workflow builder row). Only `.standalone` gets the adaptive 420 point pane; `.group` and `.embedded` keep the
+  always-mounted legacy pane (320 and 280 points) with `eventsExpanded`, and never build the pane controller or
+  store (`TaskPaneHolder` creates them on first use). The pane is mounted only while open and has tabs `Artifacts`
+  and `Events` (`Changes` is reserved first and drawn once G2 lands). Logic lives in `TaskPaneController`: a
+  flexible clear layer measures the container that holds the column and the pane, and both are drawn over it, so
+  the measured width never depends on the pane mode. The width itself is unobserved; only the derived `mode` is
+  observed and written when it changes, so a live resize does not re-evaluate the view per frame. At 900 points
+  and above the pane is split (the column reserves 420 points of trailing padding); below, it overlays the column
+  with the popover shadow and a 1 point outer ring and the transcript width is unchanged. The pane is one view in
+  both modes (only padding, shadow and ring ink change), so crossing the threshold never remounts it.
+  Choices persist in `MainWindowCoordinator.paneState` (`TaskPaneStateStore`, keyed by conversation id, because
+  `.id(conversationID)` destroys view state): open or closed, selected tab, expanded facts groups, the applied
+  default, whether Technical info is expanded, and (in a separate bounded, unobserved dictionary that never creates
+  or evicts an entry) the Events scroll offset, so a close, tab switch or split/overlay crossing restores the
+  reading position against the same document height. The default is resolved once, on first show, and stored: a
+  conversation first shown running (or taken over, or failed) stays closed when revisited after it finishes, until
+  the person chooses. Only a done task whose own snapshot observed an exit is open by default, and only while the
+  container is at split width (below 900 it closes again); a person's own open or closed choice wins through any
+  width change. `TaskSnapshotEvidence` (fed from the VM's shown task, its matching snapshot and the observation
+  frame's `logState`) is the pure source of the default and the exit row: a real exit code is always shown;
+  "Not observed" only for done with no exit, and failed with no exit when `log.state` is `incomplete`; every other
+  terminal status without an exit shows a dash. The Events tab shows facts groups (Task, What was enforced,
+  Notices, Continuity when shown, and the interim "Reported result and usage" group holding `SummaryPaneView`
+  until G1b), collapsed unless revealed, then `PublicEventsView` unchanged. `revealFacts(group:origin:)` opens
+  the pane, selects Events, expands the group and moves keyboard focus and the VoiceOver cursor into it. Escape
+  (handled by `PaneEscapeMonitor`, a window-scoped local key monitor that works with no focused
+  descendant, acts only when focus is nowhere or inside the task detail region, and passes Escape through to a field
+  editor, a sheet, another window, another region such as the sidebar, or a Command/Option/Control/Shift key;
+  a declined result must be side-effect free. Escape typed in the composer passes through and does not close the
+  overlay, a deliberate deviation; any in-window dialog added later must be excluded from this monitor) leaves a
+  focused group, then closes an overlay, then closes a pane a reveal opened; every close of a revealed pane
+  (Escape, the close button, the toolbar toggle) returns focus and the VoiceOver cursor to the header control that
+  revealed it. Closing, opening and tab selection clear any pending focus request, and person-driven changes run
+  through `pane.animated`. The overlay pane carries the modal accessibility trait. The window toolbar's inspector
+  item keeps its identifier and reads "Show right pane"/"Hide right pane" on the standalone mount only (Group keeps
+  "Show/Hide event details"); its snapshot carries the open state and that label choice, so the equality boundary
+  is unchanged.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from
