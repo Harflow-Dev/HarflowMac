@@ -18,14 +18,44 @@ import Testing
     private static let conversation = "conv"
 
     /// Does what the window shell does: maps the width to a band and writes it into the layout state on a crossing.
+    /// The layout state is owned by the fixture, so a test can read the band the host really measured; `onWidth` reports the
+    /// width the host measured, which is what the band is derived from.
     private struct BandHost<Content: View>: View {
-        @State private var layout = TopBarLayoutState()
+        let layout: TopBarLayoutState
+        let onWidth: (CGFloat) -> Void
         let content: Content
-        init(@ViewBuilder content: () -> Content) { self.content = content() }
+        init(layout: TopBarLayoutState, onWidth: @escaping (CGFloat) -> Void, @ViewBuilder content: () -> Content) {
+            self.layout = layout
+            self.onWidth = onWidth
+            self.content = content()
+        }
+
         var body: some View {
             content
                 .onGeometryChange(for: TopBarWidthBand.self) { TopBarWidthBand(width: $0.size.width) } action: { layout.setBand($0) }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { onWidth($0) }
                 .environment(\.topBarLayout, layout)
+        }
+    }
+
+    /// Whether the real window, the host and the band the host measured agree with a requested width.
+    fileprivate struct Readiness {
+        let requested: CGFloat
+        let content: CGFloat
+        let host: CGFloat
+        let measured: TopBarWidthBand?
+        let isNarrow: Bool
+        let evaluations: Int
+
+        var expected: TopBarWidthBand { TopBarWidthBand(width: requested) }
+
+        var isReady: Bool {
+            abs(content - requested) <= 1 && abs(host - requested) <= 1 && measured == expected && isNarrow == expected.isNarrow
+        }
+
+        var summary: String {
+            "requested \(requested), window content \(content), host \(host), measured band \(String(describing: measured)) "
+                + "(expected \(expected)), isNarrow \(isNarrow), evaluations \(evaluations)"
         }
     }
 
@@ -34,6 +64,8 @@ import Testing
         let store = TaskPaneStateStore()
         let window: NSWindow
         var evaluations = 0
+        let layout = TopBarLayoutState()
+        private(set) var hostWidth: CGFloat = 0
         private var controller: NSHostingController<AnyView>!
 
         private let enhanced = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
@@ -52,7 +84,7 @@ import Testing
             window.isReleasedWhenClosed = false
             let binding = chrome == .standalone ? TaskPaneBinding(store: store, conversationID: TaskPaneToolbarTests.conversation) : nil
             let defaults = UserDefaults(suiteName: "TaskPaneToolbar-\(UUID().uuidString)")!
-            self.controller = NSHostingController(rootView: AnyView(BandHost {
+            self.controller = NSHostingController(rootView: AnyView(BandHost(layout: layout, onWidth: { [weak self] in self?.hostWidth = $0 }) {
                 NavigationStack {
                     TaskDetailView(harness.sut, chrome: chrome, paneBinding: binding, transcriptStyle: .transcript,
                                    onToolbarEvaluation: { [weak self] in self?.evaluations += 1 })
@@ -75,6 +107,23 @@ import Testing
         func pump() {
             window.layoutIfNeeded()
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
+        }
+
+        func readiness(requested width: CGFloat) -> Readiness {
+            Readiness(requested: width, content: window.contentView?.bounds.width ?? 0, host: hostWidth, measured: layout.measuredBand,
+                      isNarrow: layout.isNarrow, evaluations: evaluations)
+        }
+
+        /// Sets the requested content width explicitly, then waits until the window's content and the host's own measurement have
+        /// it and the band the host measured is the band for it. A first layout can still belong to the default band
+        /// (`regular`, with no measurement), so no count is baselined before this. Returns what it saw, for a failure message.
+        func establish(width: CGFloat) async -> Readiness {
+            window.setContentSize(NSSize(width: width, height: 700))
+            await waitUntil(timeout: 10) {
+                pump()
+                return readiness(requested: width).isReady
+            }
+            return readiness(requested: width)
         }
 
         func settle() async {
@@ -125,6 +174,9 @@ import Testing
         let fixture = Fixture(chrome: .standalone, width: 1200)
         defer { fixture.close() }
         await fixture.settle()
+        let mounted = await fixture.establish(width: 1200)
+        #expect(mounted.isReady, "the mounted window never reached its requested width and band: \(mounted.summary)")
+        await fixture.settle()
         let baseline = fixture.evaluations
         #expect(baseline > 0)
         let itemIDs = (fixture.window.toolbar?.items ?? []).map(ObjectIdentifier.init)
@@ -142,7 +194,8 @@ import Testing
 
         // when — the window resizes inside the 1100 to 1279 band, which the pane's 900 point threshold does not touch
         for width in [1250.0, 1100.0, 1279.0, 1150.0, 1200.0] {
-            fixture.window.setContentSize(NSSize(width: width, height: 700))
+            let ready = await fixture.establish(width: width)
+            #expect(ready.isReady, "the resize never reached its requested width and band: \(ready.summary)")
             for _ in 0 ..< 15 { fixture.pump() }
         }
 
@@ -156,20 +209,25 @@ import Testing
         let fixture = Fixture(chrome: .standalone, width: 1200)
         defer { fixture.close() }
         await fixture.settle()
+        let mounted = await fixture.establish(width: 1200)
+        #expect(mounted.isReady, "the mounted window never reached its requested width and band: \(mounted.summary)")
+        await fixture.settle()
         var baseline = fixture.evaluations
 
         // when — into the narrow band
-        fixture.window.setContentSize(NSSize(width: 1000, height: 700))
+        let narrowed = await fixture.establish(width: 1000)
+        #expect(narrowed.isReady, "the narrow crossing never reached its requested width and band: \(narrowed.summary)")
         await waitUntil { fixture.pump(); return fixture.evaluations > baseline }
 
         // then — the chips draw their narrow form
-        #expect(fixture.evaluations > baseline)
+        #expect(fixture.evaluations > baseline, "no re-evaluation for the crossing: \(fixture.readiness(requested: 1000).summary), baseline \(baseline)")
         await fixture.settle()
         baseline = fixture.evaluations
 
         // when — resizes inside the narrow band
         for width in [700.0, 900.0, 1099.0, 800.0] {
-            fixture.window.setContentSize(NSSize(width: width, height: 700))
+            let ready = await fixture.establish(width: width)
+            #expect(ready.isReady, "the narrow resize never reached its requested width and band: \(ready.summary)")
             for _ in 0 ..< 15 { fixture.pump() }
         }
 
@@ -177,7 +235,8 @@ import Testing
         #expect(fixture.evaluations == baseline)
 
         // when — back across the edge
-        fixture.window.setContentSize(NSSize(width: 1200, height: 700))
+        let widened = await fixture.establish(width: 1200)
+        #expect(widened.isReady, "the widening never reached its requested width and band: \(widened.summary)")
         await waitUntil { fixture.pump(); return fixture.evaluations > baseline }
 
         // then
@@ -208,11 +267,15 @@ import Testing
         defer { fixture.close() }
         fixture.store.setOpenChoice(.open, for: Self.conversation)
         await fixture.settle()
+        let mounted = await fixture.establish(width: 1000)
+        #expect(mounted.isReady, "the mounted window never reached its requested width and band: \(mounted.summary)")
+        await fixture.settle()
         let baseline = fixture.evaluations
 
         // when
         for width in [700.0, 1099.0, 800.0, 1000.0] {
-            fixture.window.setContentSize(NSSize(width: width, height: 700))
+            let ready = await fixture.establish(width: width)
+            #expect(ready.isReady, "the resize never reached its requested width and band: \(ready.summary)")
             for _ in 0 ..< 15 { fixture.pump() }
         }
 

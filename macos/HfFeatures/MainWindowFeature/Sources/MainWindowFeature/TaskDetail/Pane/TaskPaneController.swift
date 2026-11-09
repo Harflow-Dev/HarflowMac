@@ -93,6 +93,13 @@ final class TaskPaneController {
     private(set) var focusRequest: FocusRequest?
     /// A pending return of focus to the control a closed reveal started from.
     private(set) var focusReturn: Origin?
+    /// Where focus was when the current focus return was requested, read by `focusProbe` before the pane left the tree.
+    @ObservationIgnored private var returnSnapshot: PaneFocusSnapshot?
+    /// Grows with every change of the pane (close, open, tab choice, reveal), so a deferred focus return can tell it is no
+    /// longer the latest one.
+    @ObservationIgnored private(set) var returnGeneration = 0
+    /// Supplied by the mounted view: reads the live focus at the moment of a closing reveal. `nil` outside a mounted view.
+    @ObservationIgnored var focusProbe: (@MainActor () -> PaneFocusSnapshot)?
 
     /// Whether the default applied on first show opens the pane at split widths, `nil` before it is resolved. It
     /// is stored per conversation, so a conversation first shown closed stays closed when revisited. A pane opened
@@ -193,6 +200,7 @@ final class TaskPaneController {
 
     /// Opens the pane on its current tab.
     func open() {
+        returnGeneration += 1
         dismissReveal()
         focusReturn = nil
         store.setOpenChoice(.open, for: conversationID)
@@ -200,7 +208,13 @@ final class TaskPaneController {
 
     /// Closes the pane.
     func close() {
-        if isRevealed, let revealOrigin { focusReturn = revealOrigin }
+        returnGeneration += 1
+        if isRevealed, let revealOrigin {
+            returnSnapshot = focusProbe?()
+            focusReturn = revealOrigin
+        } else {
+            returnSnapshot = nil
+        }
         dismissReveal()
         store.setOpenChoice(.closed, for: conversationID)
     }
@@ -213,6 +227,7 @@ final class TaskPaneController {
     /// Selects a tab, which also opens the pane.
     func select(_ tab: TaskPaneStateStore.Tab) {
         guard Self.visibleTabs.contains(tab) else { return }
+        returnGeneration += 1
         dismissReveal()
         focusReturn = nil
         store.setSelectedTab(tab, for: conversationID)
@@ -233,6 +248,7 @@ final class TaskPaneController {
 
     /// Opens the pane on Events, expands the group and asks for focus to move into it.
     func revealFacts(group: TaskPaneStateStore.FactsGroup, origin: Origin? = nil) {
+        returnGeneration += 1
         store.setSelectedTab(.events, for: conversationID)
         store.setOpenChoice(.open, for: conversationID)
         store.setGroup(group, expanded: true, for: conversationID)
@@ -244,6 +260,15 @@ final class TaskPaneController {
 
     /// Drops a handled focus return.
     func consumeFocusReturn() { focusReturn = nil }
+
+    /// Hands over, once, where focus was when the pending focus return was requested.
+    func takeReturnSnapshot() -> PaneFocusSnapshot? {
+        defer { returnSnapshot = nil }
+        return returnSnapshot
+    }
+
+    /// Whether the focus return requested at `generation` is still the latest change and the pane is still closed.
+    func isCurrentReturn(generation: Int) -> Bool { generation == returnGeneration && !isOpen }
 
     /// Whether a deferred reveal for `token` may still act: the request is the current one, the pane is open and Events
     /// is the selected tab. The view checks this after yielding, alongside its own task cancellation.

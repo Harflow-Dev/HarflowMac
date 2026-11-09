@@ -36,7 +36,7 @@ struct TaskPaneView<VM: TaskDetailViewModel>: View {
         }
         .modifier(OverlayElevation(isOverlay: presentation == .overlay))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Task details")
+        .accessibilityLabel(TaskPaneAccessibility.paneLabel)
         .accessibilityAddTraits(presentation == .overlay ? .isModal : [])
     }
 

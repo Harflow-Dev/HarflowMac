@@ -37,6 +37,8 @@ struct TaskPaneBinding {
 final class TaskPaneHolder {
     private let make: () -> TaskPaneController
     private var built: TaskPaneController?
+    /// The live side of this mounted view's focus return to a top bar chip.
+    let chipFocus = TaskPaneChipFocusHost()
 
     init(make: @escaping () -> TaskPaneController) { self.make = make }
 

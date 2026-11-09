@@ -51,21 +51,61 @@ import Testing
         }
     }
 
-    private func texts(in window: NSWindow) -> [String] {
-        var result: [String] = []
-        var queue: [NSObject] = [window]
-        var visited = 0
-        while let next = queue.popLast(), visited < 5000 {
-            visited += 1
-            if let accessible = next as? any NSAccessibilityProtocol {
-                if let label = accessible.accessibilityLabel(), !label.isEmpty { result.append(label) }
-                if let value = accessible.accessibilityValue() as? String, !value.isEmpty { result.append(value) }
-                queue.append(contentsOf: accessible.accessibilityChildren()?.compactMap { $0 as? NSObject } ?? [])
+    /// The toolbar items AppKit draws in the bar (not the overflow menu) whose view is in `window`, has no hidden ancestor and
+    /// a positive frame inside the window. The principal is among them: it is the centered item, or the one that renders the
+    /// exact title being looked for.
+    private func visibleItems(in window: NSWindow) -> [NSToolbarItem] {
+        guard let toolbar = window.toolbar, let visible = toolbar.visibleItems else { return [] }
+        return visible.filter { item in
+            guard let view = item.view, view.window === window, !view.isHiddenOrHasHiddenAncestor else { return false }
+            let frame = window.convertToScreen(view.convert(view.bounds, to: nil))
+            return frame.width > 0 && frame.height > 0 && window.frame.insetBy(dx: -1, dy: -1).contains(frame)
+        }
+    }
+
+    /// `root` and everything reachable through accessibility children and subviews, each object once.
+    private func elements(in root: NSObject) -> [NSObject] {
+        var result: [NSObject] = []
+        var seen = Set<ObjectIdentifier>()
+        var queue: [NSObject] = [root]
+        while let next = queue.popLast(), result.count < 6000 {
+            guard seen.insert(ObjectIdentifier(next)).inserted else { continue }
+            result.append(next)
+            let children = NSSelectorFromString("accessibilityChildren")
+            if next.responds(to: children), let kids = next.perform(children)?.takeUnretainedValue() as? [NSObject] {
+                queue.append(contentsOf: kids)
             }
             if let view = next as? NSView { queue.append(contentsOf: view.subviews) }
-            if let window = next as? NSWindow, let content = window.contentView { queue.append(content) }
         }
         return result
+    }
+
+    private func strings(of element: NSObject) -> [String] {
+        ["accessibilityLabel", "accessibilityValue", "accessibilityTitle"].compactMap { name in
+            let selector = NSSelectorFromString(name)
+            return element.responds(to: selector) ? element.perform(selector)?.takeUnretainedValue() as? String : nil
+        }
+    }
+
+    /// Whether a visible toolbar item (the centered principal, or the item that draws it) renders `text` exactly as a whole
+    /// accessibility label, value or title. Nothing is substituted: not a predicted title, not the model's, not a substring.
+    private func principalRenders(_ text: String, in window: NSWindow) -> Bool {
+        let centered = window.toolbar?.centeredItemIdentifiers ?? []
+        let items = visibleItems(in: window)
+        let ordered = items.filter { centered.contains($0.itemIdentifier) } + items.filter { !centered.contains($0.itemIdentifier) }
+        return ordered.contains { item in
+            guard let view = item.view else { return false }
+            return elements(in: view).contains { strings(of: $0).contains(text) }
+        }
+    }
+
+    /// What the visible toolbar items draw, for a failure message.
+    private func principalDiagnostics(in window: NSWindow) -> String {
+        let items = visibleItems(in: window)
+        let drawn = items.map { item in
+            "\(item.itemIdentifier.rawValue): \(item.view.map { Set(elements(in: $0).flatMap(strings(of:))).sorted() } ?? [])"
+        }
+        return "toolbar items \(window.toolbar?.items.map(\.itemIdentifier.rawValue) ?? []), visible \(drawn)"
     }
 
     /// Publishes a standalone task's content for `conversation` through the holder the shell reads.
@@ -151,7 +191,7 @@ import Testing
         let title = M04ToolbarEvidence.contextTitle(mounted.coordinator)
 
         // then
-        #expect(texts(in: mounted.window).contains(title))
+        #expect(principalRenders(title, in: mounted.window), "\(principalDiagnostics(in: mounted.window))")
     }
 
     @Test(arguments: [1000.0, 1100.0, 1279.0, 1280.0, 1600.0], [false, true])
@@ -163,10 +203,10 @@ import Testing
         _ = publish(mounted, title: title, notices: 3)
 
         // when
-        await waitUntil { pump(mounted.window); return texts(in: mounted.window).contains(title) }
+        await waitUntil { pump(mounted.window); return principalRenders(title, in: mounted.window) }
 
         // then the principal drew the title, and the toolbar kept its items
-        #expect(texts(in: mounted.window).contains(title))
+        #expect(principalRenders(title, in: mounted.window), "\(principalDiagnostics(in: mounted.window))")
         #expect(mounted.window.toolbar?.visibleItems?.isEmpty == false)
     }
 
@@ -175,14 +215,14 @@ import Testing
         let mounted = await mount(width: 1300)
         defer { mounted.window.close() }
         let tag = publish(mounted, title: "Shown task title")
-        await waitUntil { pump(mounted.window); return texts(in: mounted.window).contains("Shown task title") }
+        await waitUntil { pump(mounted.window); return principalRenders("Shown task title", in: mounted.window) }
 
         // when
         mounted.coordinator.topBar.clear(tag: tag)
         let title = M04ToolbarEvidence.contextTitle(mounted.coordinator)
-        await waitUntil { pump(mounted.window); return texts(in: mounted.window).contains(title) }
+        await waitUntil { pump(mounted.window); return principalRenders(title, in: mounted.window) }
 
         // then
-        #expect(texts(in: mounted.window).contains(title))
+        #expect(principalRenders(title, in: mounted.window), "\(principalDiagnostics(in: mounted.window))")
     }
 }

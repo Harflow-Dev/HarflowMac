@@ -38,6 +38,7 @@ extension TaskDetailView {
                 if isOpen, let mode { paneView(mode) }
             }
             .background(PaneEscapeMonitor(isActive: isOpen, handle: handleEscape))
+            .background(TaskPaneFocusAnchor(host: paneHolder.chipFocus))
             .onChange(of: viewModel.snapshotEvidence?.paneDefault ?? .init(), initial: true) { _, input in pane.updateDefaultInput(input) }
             .onChange(of: pane.isOpen, initial: true) { _, open in viewModel.setPaneOpen(open) }
             .onChange(of: reduceMotion, initial: true) { _, reduced in pane.reducesMotion = reduced }
@@ -47,6 +48,11 @@ extension TaskDetailView {
                 pane.touch()
                 viewModel.restoreChangesSelection(pane.changesSelection)
                 viewModel.setPaneOpen(pane.isOpen)
+                pane.focusProbe = { [chipFocus = paneHolder.chipFocus] in chipFocus.probe() }
+            }
+            .onDisappear {
+                paneHolder.chipFocus.cancel()
+                pane.focusProbe = nil
             }
             .opensFileLinks(repoPath: task.repoPath)
     }
@@ -57,14 +63,40 @@ extension TaskDetailView {
             .transition(.move(edge: .trailing))
     }
 
-    /// Moves focus, and the VoiceOver cursor, back to the header control a reveal started from, then drops the request.
-    /// The assignment waits one turn so the group header or closing pane has released focus first; set in the same
+    /// Moves focus, and the VoiceOver cursor, back to the control a reveal started from, then drops the request.
+    /// The assignment waits a turn so the group header or closing pane has released focus first; set in the same
     /// transaction, SwiftUI can drop the new focus when the old one resigns.
-    func returnFocus(to origin: TaskPaneController.Origin?) {
+    ///
+    /// A header origin sits in this hosting view and keeps the plain deferred assignment. A chip origin lives in the window
+    /// toolbar: ALL of its assignments (the SwiftUI keyboard and accessibility bindings and the native first-responder move)
+    /// run inside one mounted request, under the same current-request, originating-window, key-window, sheet and user-input
+    /// checks, and none runs after the view disappears. A close that did not probe focus (no mounted window) returns nothing.
+    func returnFocus(to origin: TaskPaneController.Origin?, probed: PaneFocusSnapshot? = nil) {
         guard let origin else { return }
+        let generation = pane.returnGeneration
+        let wasOpen = pane.isOpen
+        // A close hands over the snapshot it took. Leaving a focused facts group keeps the pane open and takes none, so its
+        // caller passes the focus it read before clearing the group.
+        let snapshot = pane.takeReturnSnapshot() ?? probed
         pane.consumeFocusReturn()
-        Task { @MainActor in
+        if let identifier = TaskPaneChipFocus.toolbarIdentifier(for: origin) {
+            guard snapshot != nil else { return }
+            paneHolder.chipFocus.start(
+                identifier: identifier, snapshot: snapshot,
+                isCurrent: { [pane] in
+                    wasOpen ? pane.returnGeneration == generation && pane.isOpen : pane.isCurrentReturn(generation: generation)
+                },
+                applyBindings: {
+                    originFocus = origin
+                    originAccessibilityFocus = origin
+                }
+            )
+            return
+        }
+        Task { @MainActor [pane] in
             await Task.yield()
+            // A later pane change (a reopen, a new reveal, a tab choice) makes this return stale.
+            guard pane.returnGeneration == generation else { return }
             originFocus = origin
             originAccessibilityFocus = origin
         }
@@ -76,9 +108,11 @@ extension TaskDetailView {
     func handleEscape() -> Bool {
         let outcome = pane.animated { pane.handleEscape(groupFocused: focusedGroup != nil) }
         if case .leftFactsGroup(let origin) = outcome {
+            // Read where focus is before the group gives it up; the return needs that to know focus was in the pane.
+            let probed = paneHolder.chipFocus.probe()
             focusedGroup = nil
             groupAccessibilityFocus = nil
-            returnFocus(to: origin)
+            returnFocus(to: origin, probed: probed)
         }
         return outcome != .ignored
     }

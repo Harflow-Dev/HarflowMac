@@ -426,6 +426,8 @@ CHANGES_CAPTURE_SUITE = "MainWindowFeatureTests.TaskChangesCaptureHostedTests"
 CHANGES_TEXT_SUITE = "MainWindowFeatureTests.TaskChangesTextHostedTests"
 CHANGES_TEXT_CAPTURE_SUITE = "MainWindowFeatureTests.TaskChangesTextCaptureHostedTests"
 TOP_BAR_SUITE = "MainWindowFeatureTests.TaskTopBarHostedTests"
+TOP_BAR_INTEGRATED_SUITE = "MainWindowFeatureTests.TaskTopBarIntegratedHostedTests"
+TOP_BAR_CAPTURE_SUITE = "MainWindowFeatureTests.TaskTopBarCaptureHostedTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
     TAIL_INSERT_SUITE,
@@ -454,6 +456,8 @@ HOSTED_SUITE_NAMES = (
     CHANGES_TEXT_SUITE,
     CHANGES_TEXT_CAPTURE_SUITE,
     TOP_BAR_SUITE,
+    TOP_BAR_INTEGRATED_SUITE,
+    TOP_BAR_CAPTURE_SUITE,
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"

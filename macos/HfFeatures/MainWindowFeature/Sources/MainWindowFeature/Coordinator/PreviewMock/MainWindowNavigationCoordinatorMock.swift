@@ -65,7 +65,16 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
 
     func buildNewSessionView() -> AnyView { NewSessionView(composerViewModel, optionsPresented: optionsInitiallyPresented).eraseToAnyView() }
     func buildParallelView(name: String) -> AnyView { Text("Parallel: \(name)").eraseToAnyView() }
-    func buildTaskDetailView(id _: String) -> AnyView { TaskDetailView(retainedTaskViewModel).eraseToAnyView() }
+    /// Lets an integrated test mount a different task view (for example the standalone one) under the real shell.
+    @ObservationIgnored var taskDetailBuilder: (@MainActor (String) -> AnyView)?
+    func buildTaskDetailView(id: String) -> AnyView {
+        taskDetailBuilder?(id) ?? TaskDetailView(retainedTaskViewModel).eraseToAnyView()
+    }
+
+    /// Shows the shell's "Back to resource slots" toolbar item when true.
+    var resourceReturnAvailable = false
+    var canReturnToResourceSlots: Bool { resourceReturnAvailable }
+    func returnToResourceSlots() {}
     
     func start() -> AnyView { MainWindowNavigationView(self).eraseToAnyView() }
 
