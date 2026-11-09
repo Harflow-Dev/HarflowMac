@@ -7,7 +7,8 @@ import Testing
 
 // MARK: - MainWindowRuntimeSetupRenderingTests
 
-/// Geometry regressions for the main window while the managed runtime is not ready.
+/// Geometry regressions for the main window's runtime gate: setup while the managed runtime is not
+/// ready, and the "Runtime ready" first-listing screen that follows it, which share one layout.
 ///
 /// A `.fixedSize(vertical:)` text in the detail pane made `NavigationSplitView` measure the column
 /// with a character-per-line height, so the split view grew far taller than the window and was
@@ -109,6 +110,54 @@ import Testing
             #expect(fixture.text(identifier: "runtimeSetup.action") == "Retry setup")
             #expect(coordinator.sidebarViewModel.runtimeSetupTapCount == 0)
             try fixture.expectSplitViewWithinContent()
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func givenRuntimeReadyAndWorkNotListed_whenMountedAtApprovedSizes_thenListingGateMatchesSetupLayout(
+        failed: Bool
+    ) async throws {
+        // given — the first task listing is pending or has failed; synthetic state only.
+        let message = "The public task listing is unavailable."
+        let coordinator = MainWindowNavigationCoordinatorMock(runtimeIsReady: true, runtimeSetupState: .ready)
+        coordinator.hasLoadedWork = false
+        coordinator.loadingWorkError = failed ? message : nil
+        let fixture = MainWindowRuntimeSetupFixture(coordinator: coordinator, appearanceName: .aqua)
+        defer { fixture.close() }
+
+        // when
+        await fixture.waitForTitle("Runtime ready")
+        for size in [NSSize(width: 1000, height: 620), NSSize(width: 1280, height: 800)] {
+            fixture.window.setContentSize(size)
+            await fixture.waitForSize(size)
+
+            // then
+            try fixture.expectSplitViewWithinContent()
+            #expect(fixture.element(identifier: "runtime-listing") != nil)
+            #expect(fixture.text(identifier: "runtimeSetup.welcomeTitle") == "Runtime ready")
+            #expect(fixture.text(identifier: "runtimeSetup.welcomeBody") == (failed
+                    ? "Your runtime is ready. Recent work could not be loaded." : "Loading your work for the first time…"))
+            #expect(!fixture.hasProgressIndicator)
+            #expect(fixture.element(identifier: "runtimeSetup.status") == nil)
+            if failed {
+                #expect(fixture.text(identifier: "runtimeSetup.error") == message)
+                #expect(fixture.text(identifier: "runtimeSetup.action") == "Retry loading work")
+                #expect(fixture.count(identifier: "runtimeSetup.action") == 1)
+            } else {
+                #expect(fixture.element(identifier: "runtimeSetup.error") == nil)
+                #expect(fixture.element(identifier: "runtimeSetup.action") == nil)
+            }
+            try fixture.expectGateGeometry(size: size)
+        }
+        if failed {
+            let action = try #require(fixture.element(identifier: "runtimeSetup.action"))
+            let press = NSSelectorFromString("accessibilityPerformPress")
+            #expect(action.responds(to: press))
+            _ = action.perform(press)
+            await waitUntil { coordinator.listingRetryCount == 1 }
+            #expect(coordinator.listingRetryCount == 1)
+        } else {
+            #expect(coordinator.listingRetryCount == 0)
         }
     }
 
