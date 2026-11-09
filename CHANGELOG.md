@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Match the first-run main pane to the approved runtime setup design: a 26-point title, 14-point body and status text in the primary colour, a small bordered action, and the body copy for each state. The spinner is gone for checking, installing and updating; installing and updating show "Installation in progress" or "Update in progress" instead, and a failure shows its message as selectable text below the body. The status line is announced to assistive technology when it changes to a non-empty value (not on first appearance).
+
 - Remove the unused sidebar install-banner code and its view-model, repository and list-entry plumbing, and the unused setup-card spacing tokens and eyebrow and footnote text styles. No visible change; the menu bar and Settings keep their install notices.
 
 - Replace the sidebar's runtime setup card with one line, "Runtime setup required before creating or loading work.", below the title row while the managed runtime is not ready. The sidebar no longer shows setup actions, the install notice, the backend-list note or the store-attention link in that state; setup actions are in the main pane and Settings → General. The ready sidebar also no longer shows the post-install success notice or the legacy install/update banner actions; the menu bar keeps its own notice. Store attention now sits below the title row in the ready sidebar, and a legacy list error is shown as plain text instead of being hidden when it is an install need.

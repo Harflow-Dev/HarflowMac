@@ -46,11 +46,20 @@ import Testing
             #expect(fixture.text(identifier: "runtimeSetup.welcomeTitle") == expected.title)
             #expect(fixture.text(identifier: "runtimeSetup.action") == expected.action)
             #expect(fixture.count(identifier: "runtimeSetup.action") == (expected.action == nil ? 0 : 1))
-            #expect(fixture.text(identifier: expected.failure ? "runtimeSetup.error" : "runtimeSetup.welcomeBody") == state.detail)
-            #expect((fixture.element(identifier: "runtimeSetup.error") != nil) == expected.failure)
+            #expect(fixture.text(identifier: "runtimeSetup.welcomeBody") == expected.body)
+            if expected.failure {
+                #expect(fixture.text(identifier: "runtimeSetup.error") == expected.status)
+                #expect(fixture.element(identifier: "runtimeSetup.status") == nil)
+            } else {
+                #expect(fixture.element(identifier: "runtimeSetup.error") == nil)
+                #expect(fixture.text(identifier: "runtimeSetup.status") == expected.status)
+                #expect((fixture.element(identifier: "runtimeSetup.status") != nil) == (expected.status != nil))
+            }
+            #expect(!fixture.hasProgressIndicator)
             #expect(coordinator.sidebarViewModel.runtimeSetupTapCount == 0)
             #expect(coordinator.runtimeSetupState == state)
-            if state.isBusy { #expect(fixture.containsText(state.title)) }
+            try fixture.expectGateGeometry(size: size)
+            if case .installationRequired = state { try fixture.expectActionGap() }
         }
         if expected.action != nil {
             let action = try #require(fixture.element(identifier: "runtimeSetup.action"))
@@ -103,16 +112,24 @@ import Testing
         }
     }
 
-    private func expectedPresentation(_ state: RuntimeSetupState) -> (title: String, action: String?, failure: Bool) {
+    private typealias Presentation = (title: String, body: String, status: String?, action: String?, failure: Bool)
+
+    private func expectedPresentation(_ state: RuntimeSetupState) -> Presentation {
+        let installing = "Preparing and verifying the required runtime…"
         switch state {
-        case .checking: ("Checking Harflow runtime", nil, false)
-        case .installationRequired(let installed, _):
-            installed == nil ? ("Set up Harflow", "Install runtime", false) : ("Update required", "Update runtime", false)
-        case .installing: ("Installing runtime", nil, false)
-        case .updating: ("Updating runtime", nil, false)
-        case .failed: ("Setup could not finish", "Retry setup", true)
-        case .updateFailed: ("Update could not finish", "Retry setup", true)
-        case .ready: ("Runtime ready", nil, false)
+        case .checking: return ("Checking Harflow runtime", "Checking the managed runtime before loading your work.", nil, nil, false)
+        case .installationRequired(nil, _):
+            return ("Set up Harflow", "The required runtime is not installed.", nil, "Install runtime", false)
+        case .installationRequired(let installed?, let required):
+            return ("Update required", "Installed \(installed) · required \(required)", nil, "Update runtime", false)
+        case .installing: return ("Installing runtime", installing, "Installation in progress", nil, false)
+        case .updating: return ("Updating runtime", installing, "Update in progress", nil, false)
+        case .failed(let message):
+            return ("Setup could not finish", "Review the failure and retry when ready.", message, "Retry setup", true)
+        case .updateFailed(let message, _, _):
+            return ("Update could not finish", "The installed runtime was kept. Review the failure and retry when ready.",
+                    message, "Retry setup", true)
+        case .ready: return ("Runtime ready", state.detail, nil, nil, false)
         }
     }
 
@@ -200,6 +217,58 @@ import Testing
             matches += 1
         }
         return matches
+    }
+
+    var hasProgressIndicator: Bool {
+        accessibilityTree(host).contains { $0 is NSProgressIndicator }
+            || descendants(of: host).contains { $0 is NSProgressIndicator }
+            || accessibilityTree(host).contains {
+                let role = accessibilityString($0, "accessibilityRole")
+                return role == NSAccessibility.Role.progressIndicator.rawValue || role == NSAccessibility.Role.busyIndicator.rawValue
+            }
+    }
+
+    private func frame(of identifier: String) throws -> CGRect {
+        let object = try #require(element(identifier: identifier), "\(identifier) must render")
+        let screen: CGRect = try {
+            if let accessible = object as? any NSAccessibilityProtocol { return accessible.accessibilityFrame() }
+            return try #require((object.value(forKey: "accessibilityFrame") as? NSValue)?.rectValue)
+        }()
+        return window.convertFromScreen(screen)
+    }
+
+    /// Title text starts 152 pt below the content area top; the 620 pt box (derived from the title) is centred.
+    func expectGateGeometry(size: NSSize, sourceLocation: SourceLocation = #_sourceLocation) throws {
+        host.layoutSubtreeIfNeeded()
+        let title = try frame(of: "runtimeSetup.welcomeTitle")
+        let top = window.contentLayoutRect.maxY - title.maxY
+        #expect(abs(top - 152) <= 2, "title top \(top) pt below the content area, expected 152 at \(size)", sourceLocation: sourceLocation)
+        // The detail pane spans from the sidebar's trailing edge to the window edge; the split view lays
+        // the detail out beneath a translucent sidebar, so its own frame is the whole window.
+        let split = try #require(splitView, sourceLocation: sourceLocation)
+        let content = try #require(window.contentView, sourceLocation: sourceLocation)
+        let columns: [CGRect] = split.subviews.map { $0.convert($0.bounds, to: content) }
+        let fullHeight: CGFloat = content.bounds.height - 1
+        let narrow = columns.filter { (frame: CGRect) -> Bool in
+            frame.minX == 0 && frame.width < content.bounds.width && frame.height >= fullHeight
+        }
+        let sidebar = try #require(narrow.max { $0.width < $1.width }, "sidebar column", sourceLocation: sourceLocation)
+        let paneFrame = CGRect(x: sidebar.maxX, y: 0, width: content.bounds.width - sidebar.maxX, height: content.bounds.height)
+        // The box is the title inset by its 32 pt padding; the pane is wider than 620 at both sizes, so the
+        // box is 620 wide and centred.
+        #expect(paneFrame.width >= 620, "pane \(paneFrame)", sourceLocation: sourceLocation)
+        let boxMinX = title.minX - 32
+        let boxWidth = min(620, paneFrame.width)
+        #expect(abs(boxMinX + boxWidth / 2 - paneFrame.midX) <= 2, "box minX \(boxMinX) pane \(paneFrame)", sourceLocation: sourceLocation)
+        #expect(abs(boxMinX - (paneFrame.midX - 310)) <= 2, "box minX \(boxMinX) pane \(paneFrame)", sourceLocation: sourceLocation)
+    }
+
+    /// The action sits 32 pt below the body when no status line renders.
+    func expectActionGap(sourceLocation: SourceLocation = #_sourceLocation) throws {
+        let body = try frame(of: "runtimeSetup.welcomeBody")
+        let action = try frame(of: "runtimeSetup.action")
+        let gap = body.minY - action.maxY
+        #expect(abs(gap - 32) <= 2, "body to action gap \(gap) pt, expected 32", sourceLocation: sourceLocation)
     }
 
     func containsText(_ text: String) -> Bool {

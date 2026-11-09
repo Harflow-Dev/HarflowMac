@@ -271,7 +271,7 @@ struct M04StateMatrixHostedTests {
                 fixture.landmarks = ["Update required", "Update runtime"]
             case "runtime-installing":
                 coordinator.runtimeSetupState = .installing
-                fixture.landmarks = ["Installing runtime"]
+                fixture.landmarks = ["Installing runtime", "Installation in progress"]
             case "runtime-failed":
                 coordinator.runtimeSetupState = .failed("Synthetic installation failure; no installation attempted.")
                 fixture.landmarks = ["Setup could not finish", "Retry setup", coordinator.runtimeSetupState.detail]
