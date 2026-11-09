@@ -1,5 +1,56 @@
 import Foundation
 
+// MARK: - ArtifactRegisteredObservation
+
+/// Stat identity recorded at registration; absent on engines before `task-artifacts.v1` added it.
+/// The JSON model stores numbers as doubles, so integers are exact only up to 2^53. `device`, `inode`
+/// and `size` stay within that range in practice; the nanosecond modification time does not, so it is
+/// exposed only as an approximate value.
+public struct ArtifactRegisteredObservation: Equatable, Sendable {
+    public let device: Int64
+    public let inode: Int64
+    public let size: Int64
+    /// Approximate: values above 2^53 lose precision. Not for identity or equality comparisons.
+    public let approximateMtimeNS: Double
+
+    init?(raw: [String: JSONValue]) {
+        guard let device = WireFields.integer(raw["device"]), let inode = WireFields.integer(raw["inode"]),
+              let size = WireFields.integer(raw["size"]),
+              case .number(let mtime, true)? = raw["mtime_ns"], mtime.isFinite else { return nil }
+        self.device = device
+        self.inode = inode
+        self.size = size
+        approximateMtimeNS = mtime
+    }
+}
+
+// MARK: - ArtifactErrorReason
+
+/// Optional `artifact_error` reason from `task-artifacts.v1`; plain `artifact_error` refusals carry none.
+public enum ArtifactErrorReason: Equatable, Sendable {
+    case cursorInvalid, cursorStale, ownershipPreparing
+    case unrecognized(String)
+
+    init(_ raw: String) {
+        switch raw {
+        case "cursor_invalid": self = .cursorInvalid
+        case "cursor_stale": self = .cursorStale
+        case "ownership_preparing": self = .ownershipPreparing
+        default: self = .unrecognized(raw)
+        }
+    }
+}
+
+public extension ToolError {
+    /// `absent` without `data.reason` or for other refusals; `malformed` when `reason` is not a string.
+    var artifactErrorReason: WireObservation<ArtifactErrorReason> {
+        guard case .structuredRefusal(let code, _, let data) = self, code == "artifact_error",
+              let value = data["reason"] else { return .absent }
+        guard let text = value.stringValue else { return .malformed }
+        return .present(ArtifactErrorReason(text))
+    }
+}
+
 // MARK: - TaskArtifact
 
 /// Registered metadata, never evidence that a task succeeded or permission to open a file.
@@ -14,6 +65,8 @@ public struct TaskArtifact: Equatable, Sendable, Identifiable {
     public let availability: String
     public let workflow: WorkflowArtifactBinding?
     public let observedAt: String
+    /// Nil only when the key is absent; a present but damaged value rejects the item.
+    public let registeredObservation: ArtifactRegisteredObservation?
     public var id: String { taskID + ":" + artifactID }
 
     public init?(raw: [String: JSONValue], taskID: String) {
@@ -33,6 +86,12 @@ public struct TaskArtifact: Equatable, Sendable, Identifiable {
             workflow = binding
         } else {
             workflow = nil
+        }
+        if let value = raw["registered_observation"] {
+            guard let object = value.objectValue, let observation = ArtifactRegisteredObservation(raw: object) else { return nil }
+            registeredObservation = observation
+        } else {
+            registeredObservation = nil
         }
         self.artifactID = artifactID
         self.taskID = taskID
@@ -83,7 +142,8 @@ public extension CtlClient {
     func taskArtifacts(_ taskID: String, cursor: String? = nil) async -> Result<TaskArtifactPage, ToolError> {
         var options = ["--limit=20"]
         if let cursor { options.append("--cursor=\(cursor)") }
-        return await result("task-artifacts", options: options, positionals: [taskID]).flatMap { raw in
+        return await result("task-artifacts", options: options, positionals: [taskID],
+                     requiringCapability: CtlCapability.taskArtifacts).flatMap { raw in
             guard let page = TaskArtifactPage(raw: raw, taskID: taskID) else {
                 return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Malformed artifact metadata page"))
             }

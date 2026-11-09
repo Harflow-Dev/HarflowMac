@@ -56,7 +56,8 @@ struct S06ContractFixtureTests {
         #expect(info.stateRoot == home + "/.harflow")
     }
 
-    @Test(arguments: ["task-event-page", "task-prompt", "task-successors", "workflow-live-activity", "statistics-cost-model", "task-changes"])
+    @Test(arguments: ["task-event-page", "task-prompt", "task-successors", "workflow-live-activity", "statistics-cost-model", "task-changes",
+                           "task-continue", "task-artifacts", "task-continuation-stop", "task-cancel-cascade"])
     func givenMissingS05Capability_whenRequested_thenBaseDecodeSucceedsButCommandNeverDispatches(_ capability: String) async throws {
         // given
         let data = try fixture("invalid-s05-missing-\(capability).json")
@@ -121,6 +122,60 @@ struct S06ContractFixtureTests {
             }
             #expect(message.contains("a task may exist"))
         }
+    }
+
+    @Test(arguments: ["ctl-launch-continue-accepted.json", "ctl-launch-continue-refused.json", "ctl-launch-continue-unknown.json"])
+    func givenContinueLaunchFixture_whenRequiringSuccess_thenOutcomeRetainsItsClassification(_ name: String) throws {
+        // given
+        let manifest = try #require(JSONValue.parse(fixture("manifest.json"))?.objectValue)
+        let metadata = try #require(manifest["cases"]?.objectValue?[name]?.objectValue)
+        let exitCode = try #require(metadata["exit_code"]?.intValue)
+        #expect(metadata["required_capabilities"]?.arrayValue?.compactMap(\.stringValue) == [CtlCapability.taskContinue])
+
+        // when
+        let result = CtlDocument.decode(stdout: try fixture(name), stderr: "", exitCode: Int32(exitCode), command: "continue").requiringSuccess()
+
+        // then
+        switch name {
+        case "ctl-launch-continue-accepted.json":
+            guard case .success(.result(let payload)) = result else {
+                Issue.record("accepted continue did not succeed")
+                return
+            }
+            #expect(payload["task_id"]?.stringValue == "task-fixture")
+        case "ctl-launch-continue-refused.json":
+            guard case .failure(let error) = result, case .refused(let code, let message) = error else {
+                Issue.record("plain continue refusal lost its classification")
+                return
+            }
+            #expect(code == "invalid_params")
+            #expect(message == "fixture refusal")
+            #expect(error.chainStopped == nil)
+        default:
+            guard case .failure(.unknownOutcome(let message)) = result else {
+                Issue.record("uncertain continue lost unknown outcome")
+                return
+            }
+            #expect(message.contains("a task may exist"))
+        }
+    }
+
+    @Test
+    func givenChainStoppedContinueRefusal_whenDecoded_thenItIsStructuredAndReadsTypedReason() throws {
+        // given
+        let name = "ctl-continue-chain-stopped.json"
+
+        // when
+        let result = CtlDocument.decode(stdout: try fixture(name), stderr: "", exitCode: 1, command: "continue").requiringSuccess()
+
+        // then
+        guard case .failure(let error) = result, case .structuredRefusal(let code, _, let data) = error else {
+            Issue.record("chain-stopped refusal did not decode as a structured refusal")
+            return
+        }
+        #expect(code == "start_failed")
+        #expect(data["reason"]?.stringValue == "chain_stopped")
+        #expect(error.chainStopped == ChainStoppedRefusal(chainRootTaskID: "task-continuation-stop"))
     }
 
     @Test(arguments: [

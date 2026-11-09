@@ -40,9 +40,9 @@ def exact_version(value):
 def validate_runtime(path):
     data = json.loads(Path(path).read_text())
     engine = exact_version(data['engineVersion'])
-    if type(data['schema']) is not int or data['schema'] != 1 or engine != '0.0.11' or data['pythonVersion'] != '3.13.16' or data['python']['version'] != data['pythonVersion'] or not data['dependencies']:
+    if type(data['schema']) is not int or data['schema'] != 1 or engine != '0.0.12' or data['pythonVersion'] != '3.13.16' or data['python']['version'] != data['pythonVersion'] or not data['dependencies']:
         raise ReleaseError()
-    if not isinstance(data['provenance'], str) or not data['provenance'] or len({item['name'] for item in data['dependencies']}) != len(data['dependencies']) or len({item['filename'] for item in data['dependencies']}) != len(data['dependencies']):
+    if not isinstance(data['provenance'], str) or not data['provenance'] or 'PENDING-' in data['provenance'] or len({item['name'] for item in data['dependencies']}) != len(data['dependencies']) or len({item['filename'] for item in data['dependencies']}) != len(data['dependencies']):
         raise ReleaseError()
     for index, artifact in enumerate([data['python']] + data['dependencies']):
         url = urllib.parse.urlsplit(artifact['url'])

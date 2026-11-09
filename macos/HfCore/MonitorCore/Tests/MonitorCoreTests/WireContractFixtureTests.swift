@@ -33,6 +33,18 @@ struct WireContractFixtureTests {
     }
 
     @Test
+    func givenVendoredBundle_whenListed_thenEveryFileIsInTheManifestAndNothingIsMissing() throws {
+        let manifest = try #require(JSONValue.parse(fixture("manifest.json"))?.objectValue)
+        let listed = Set(try #require(manifest["files"]?.objectValue).keys)
+        let directory = try #require(Bundle.module.url(forResource: root, withExtension: nil))
+        let present = Set(try FileManager.default.contentsOfDirectory(atPath: directory.path))
+
+        #expect(listed.count == 320)
+        #expect(manifest["cases"]?.objectValue?.count == 320)
+        #expect(present.subtracting(["manifest.json", "manifest.sha256"]) == listed)
+    }
+
+    @Test
     func givenApprovalSummaryFixtures_whenDecoded_thenAwaitingCountIsAdditiveAndReservedRowsRemainPending() throws {
         let awaiting = CtlDocument.decode(
             stdout: try fixture("ctl-approval-status-awaiting.json"), stderr: "", exitCode: 0, command: "status"

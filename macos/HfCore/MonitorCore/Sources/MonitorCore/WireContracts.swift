@@ -46,6 +46,20 @@ public enum CtlCapability {
 
     /// Permits typed conversation message delivery, control and projection reads.
     public static let conversationDelivery = "conversation-delivery.v1"
+
+    /// Permits `continue`, which starts a fresh-session successor task. A consumer that gates Continue
+    /// also requires `task-successors.v1` from the same fresh handshake, for reconciliation after an
+    /// unknown outcome.
+    public static let taskContinue = "task-continue.v1"
+
+    /// Permits bounded task artifact metadata pages, including their optional error reasons.
+    public static let taskArtifacts = "task-artifacts.v1"
+
+    /// Qualifies the advisory `continuation_stop` observation on task status.
+    public static let taskContinuationStop = "task-continuation-stop.v1"
+
+    /// Qualifies the `cascade.observation` added to successful cancel results.
+    public static let taskCancelCascade = "task-cancel-cascade.v1"
 }
 
 /// Numeric semantic version with bounded components and optional build metadata; no prereleases.
@@ -53,7 +67,7 @@ public struct HarflowVersion: Equatable, Sendable {
     public let major: Int
     public let minor: Int
     public let patch: Int
-    public static let current = "0.0.11"
+    public static let current = "0.0.12"
 
     public init?(_ text: String) {
         guard text.count <= 256 else { return nil }

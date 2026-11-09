@@ -2,14 +2,14 @@
 
 The engine owns the public contracts. MonitorCore tests carry a complete,
 self-contained copy of `contracts/v1` from HarflowMCP commit
-`f304a65d9de948dfcba4c0c27c3d04f7f90971c8` (released0.0.8 immutable tag).
+`60fef2f4a593bc3781dd674c37aad57fed9ba3a0` (the 0.0.12 release commit; its tag is created separately).
 No build/test downloads fixtures or requires a sibling checkout.
 
 - Resource path: `macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1`.
-- Manifest SHA-256: `6e742e1966d2b48afbfc80268b19f27da1e3f75f046f5683a35fc671228c7ce1`.
-- Contents: 199 fixture files, `manifest.json` and `manifest.sha256`, byte-identical
+- Manifest SHA-256: `5591ad4cf52a9c0bf58e5274f1858b962d0368c6a0fa17eb2e1e6cac50a8e82f`.
+- Contents: 320 fixture files, `manifest.json` and `manifest.sha256`, byte-identical
   to the committed producer bundle. Hash verification covers every fixture.
-- Source product version: 0.0.8; historical fixture writer versions intentionally
+- Source product version: 0.0.12; historical fixture writer versions intentionally
   vary. Live compatibility is major/minor, not equality with a specimen's patch.
 - The separate `contracts/mcp-v1/tools.json` source schema inventory is agent-facing
   and is not vendored or decoded as a ctl document. Its exact Rust subset remains
@@ -33,12 +33,13 @@ a separate M03 slice.
 
 ## Runtime boundaries
 
-Fixture adoption does not change Mac's selected source runtime: its managed
-specification remains engine 0.0.7 with CPython 3.13.16 and 29 dependencies.
-This records the source pin, not an inspection of an installed runtime or owner
-state. Engine0.0.8 is published and its wheel was inspected statically; M03-C fixture
-adoption does not claim it is installed, selected or runtime-qualified. Release changes are separately
-owned and excluded from migration commits. See [S06 receipt](migration-receipts/S06.md)
+The Mac's managed specification selects engine 0.0.12 with CPython 3.13.16 and 29
+dependencies, matching the vendored bundle's product version. This records the source
+pin, not an inspection of an installed runtime or owner state; no installation or
+runtime qualification of 0.0.12 has run. The bundle adds the `task-continue.v1`,
+`task-artifacts.v1`, `task-continuation-stop.v1` and `task-cancel-cascade.v1`
+capabilities. MonitorCore decodes the additive artifact, continuation-stop, cancel-observation and chain-stopped fields; no screen uses them yet. See the [M05 receipt](migration-receipts/M05.md) for the 0.0.12 vendoring evidence.
+Release changes are separately owned and excluded from migration commits. See [S06 receipt](migration-receipts/S06.md)
 for observed validation and remaining acceptance.
 
 ## M03-C release-bundle audit
