@@ -19,14 +19,14 @@ import SwiftUI
         .preferredColorScheme(.dark)
 }
 
-#Preview("Install banner - light") {
-    SidebarView(SidebarViewModelMock(installBannerModel: installBannerPreviewModel()))
+#Preview("Runtime setup required - light") {
+    SidebarView(SidebarViewModelMock(runtimeSetupState: .installationRequired(installedVersion: nil, requiredVersion: "0.0.2")))
         .frame(width: HfRadius.Metrics.sidebarPreviewWidth, height: HfRadius.Metrics.sidebarPreviewHeight)
         .preferredColorScheme(.light)
 }
 
-#Preview("Install banner - dark") {
-    SidebarView(SidebarViewModelMock(installBannerModel: installBannerPreviewModel()))
+#Preview("Runtime setup required - dark") {
+    SidebarView(SidebarViewModelMock(runtimeSetupState: .installationRequired(installedVersion: nil, requiredVersion: "0.0.2")))
         .frame(width: HfRadius.Metrics.sidebarPreviewWidth, height: HfRadius.Metrics.sidebarPreviewHeight)
         .preferredColorScheme(.dark)
 }
@@ -200,14 +200,6 @@ private func historyState(hasMore: Bool = false, isLoading: Bool = false, error:
     state.isLoading = isLoading
     state.error = error
     return state
-}
-
-private func installBannerPreviewModel() -> InstallBanner.Model {
-    InstallBanner.Model(
-        title: "harflow isn't installed",
-        detail: "harflow-ctl wasn't found in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin.",
-        primaryTitle: "Install harflow"
-    )
 }
 
 private func threeLevelTreeRows(collapsed: Bool) -> [SidebarItem] {

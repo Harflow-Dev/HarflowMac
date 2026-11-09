@@ -38,8 +38,8 @@ protocol SidebarViewModel: ViewModel {
     /// piece 6's precedence rules — see `SidebarVM.computeEmptyStateMessage()`).
     var emptyStateMessage: String? { get }
     /// A shimmer placeholder instead of an empty list (Monitor piece 11, Plan review round 1 item
-    /// 4): true only before the first listing arrives (`hasListed == false`) with no error and no
-    /// install banner already occupying the space — see `SidebarVM.recompute()`.
+    /// 4): true only before the first listing arrives (`hasListed == false`) with no list error —
+    /// see `SidebarVM.recompute()`.
     var showsLoadingSkeleton: Bool { get }
     var isConnected: Bool { get }
     var appAppearance: AppAppearance { get }
@@ -124,6 +124,9 @@ struct SidebarView<VM: SidebarViewModel>: View {
     @State private var transitionRelay = SidebarNativeTransitionRelay()
     @State private var transitionEpoch = 0
 
+    /// The setup gate line: 13 pt on a 1.5 line height.
+    private static var setupGateText: TaskScreenStyle.TextSpec { .init(size: 13, lineHeight: 19.5) }
+
     private var reduceMotion: Bool {
         HfMotion.reduceMotion(override: reduceMotionOverride, system: systemReduceMotion)
     }
@@ -146,19 +149,21 @@ struct SidebarView<VM: SidebarViewModel>: View {
                     footer
                 }
             } else {
-                // The ScrollView owns the top safe area, so the card stays below the unified toolbar;
-                // the fixed footer stays at the bottom.
+                // Setup gate: title row, one line of text, then the shared footer. Actions live in
+                // the main pane and Settings.
                 VStack(spacing: HfRadius.Metrics.zero) {
                     header
-                    ScrollView {
-                        RuntimeSetupCard(state: viewModel.runtimeSetupState, action: viewModel.didTapRuntimeSetup)
-                            .padding(.horizontal, HfRadius.Metrics.spacing16)
-                            .padding(.top, HfRadius.Metrics.spacing16)
-                            .padding(.bottom, HfRadius.Metrics.spacing16)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    .scrollIndicators(.hidden)
-                    footer.background(.bar)
+                    Text("Runtime setup required before creating or loading work.")
+                        .font(TaskScreenStyle.sans(size: Self.setupGateText.size))
+                        .lineSpacing(TaskScreenStyle.lineSpacing(Self.setupGateText))
+                        .foregroundStyle(Color.secondaryText)
+                        .accessibilityIdentifier("sidebar-setup-gate")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, HfRadius.Metrics.spacing8)
+                        .padding(.bottom, HfRadius.Metrics.spacing24)
+                        .padding(.horizontal, HfRadius.Metrics.spacing16)
+                    Spacer(minLength: HfRadius.Metrics.zero)
+                    footer
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -173,24 +178,9 @@ struct SidebarView<VM: SidebarViewModel>: View {
 
     // MARK: - Private Views
 
-    /// Approved M04 fixed brand and navigation, with retained runtime/store diagnostics.
+    /// Fixed title row. Store attention and the catalog note follow it in the ready layout only.
     private var header: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
-            if let banner = viewModel.installBannerModel {
-                InstallBanner(model: banner, onPrimary: viewModel.didTapInstallBannerPrimary,
-                              onSecondary: viewModel.didTapInstallBannerSecondary,
-                              onDismiss: viewModel.didTapInstallBannerDismiss)
-                    .accessibilityIdentifier("sidebar-install-notice")
-            }
-            if viewModel.storeNeedsAttention {
-                SettingsLink {
-                    Label("Task store needs attention", systemImage: "exclamationmark.triangle")
-                        .font(.callout)
-.frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .help("Open Settings → General to inspect the store and review recovery")
-                .accessibilityIdentifier("sidebar-store-attention")
-            }
             HStack {
                 Text("Harflow").font(.headline)
                 Spacer()
@@ -199,11 +189,22 @@ struct SidebarView<VM: SidebarViewModel>: View {
                     .accessibilityLabel("Collapse sidebar")
             }
             .padding(.bottom, 8)
-            if let note = viewModel.catalogUnavailableNote {
-                Text(note)
-                    .font(.hf(.caption))
-                    .foregroundStyle(Color.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if viewModel.runtimeSetupState.isReady {
+                if viewModel.storeNeedsAttention {
+                    SettingsLink {
+                        Label("Task store needs attention", systemImage: "exclamationmark.triangle")
+                            .font(.callout)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .help("Open Settings → General to inspect the store and review recovery")
+                    .accessibilityIdentifier("sidebar-store-attention")
+                }
+                if let note = viewModel.catalogUnavailableNote {
+                    Text(note)
+                        .font(.hf(.caption))
+                        .foregroundStyle(Color.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .padding(.horizontal, HfRadius.Metrics.spacing16)

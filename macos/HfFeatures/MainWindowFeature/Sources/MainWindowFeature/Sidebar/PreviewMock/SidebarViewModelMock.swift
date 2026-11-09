@@ -41,6 +41,7 @@ final class SidebarViewModelMock: SidebarViewModel {
     var workflowHistoryState: HistoryLoadingState
     var workflowErrorMessage: String?
     var runtimeSetupState: RuntimeSetupState
+    var storeNeedsAttention = false
     var runtimeSetupTapCount = 0
     var newSessionTapCount = 0
     var loadOlderTasksTapCount = 0

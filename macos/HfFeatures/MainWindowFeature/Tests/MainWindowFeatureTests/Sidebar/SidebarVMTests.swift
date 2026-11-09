@@ -234,10 +234,10 @@ import Testing
     }
 
     // Moved from a `.message`-forwarding assertion (settled plan, section 7): a `notFound` error
-    // for `harflow-ctl`/`harflow-setup` is an install need, so it now shows the banner instead
-    // of the plain red `listErrorMessage`, and the banner outranks the empty state exactly as the
-    // old error did.
-    @Test func givenAListErrorThatIsAnInstallNeed_whenListed_thenTheBannerShowsInsteadOfTheRedText() async {
+    // for `harflow-ctl`/`harflow-setup` is an install need. The VM still computes its banner, but
+    // the sidebar renders none, so the plain `listErrorMessage` is kept; the error still outranks
+    // the empty state.
+    @Test func givenAListErrorThatIsAnInstallNeed_whenListed_thenThePlainErrorTextIsKept() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -259,7 +259,7 @@ import Testing
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.emptyStateMessage == nil)
         #expect(sut.isConnected == false)
-        #expect(sut.listErrorMessage == nil)
+        #expect(sut.listErrorMessage == error.message)
         #expect(sut.installBannerModel?.title == "harflow isn't installed")
         #expect(sut.installBannerModel?.detail == error.message)
         #expect(sut.installBannerModel?.primaryTitle == "Install harflow")
@@ -278,8 +278,7 @@ import Testing
         await sut.waitForPresentation()
 
         // then — before `hasListedPublisher()`'s first value, this is the shimmer's whole reason to
-        // exist: an empty list with no error and no install banner is otherwise indistinguishable
-        // from "no tasks yet".
+        // exist: an empty list with no error is otherwise indistinguishable from "no tasks yet".
         #expect(sut.showsLoadingSkeleton)
         #expect(sut.emptyStateMessage == nil, "the empty-state message never shows while the skeleton does")
     }
@@ -303,7 +302,7 @@ import Testing
     }
 
     @Test func givenAListErrorArrivesBeforeAnyListing_whenObserved_thenTheLoadingSkeletonNeverShows() async {
-        // given — the error/banner UI gates first (`computeEmptyStateMessage()`'s own precedence);
+        // given — the list error gates first (`computeEmptyStateMessage()`'s own precedence);
         // the skeleton must never draw over it.
         let harness = makeSUT()
         let sut = harness.sut
@@ -318,11 +317,9 @@ import Testing
         #expect(!sut.showsLoadingSkeleton)
     }
 
-    @Test func givenAnInstallBannerArrivesBeforeAnyListing_whenObserved_thenTheLoadingSkeletonNeverShows() async {
-        // given — Codex review round 1, finding 3: `showsLoadingSkeleton` was only ever recomputed
-        // inside `recompute()`, so a banner arriving via `installStatePublisher()` (none of
-        // `subscribeToInstallState()`'s three subscriptions call `recompute()` themselves) before the
-        // first listing left the skeleton rendering alongside the banner instead of yielding to it.
+    @Test func givenAnInstallBannerArrivesBeforeAnyListing_whenObserved_thenTheLoadingSkeletonKeepsShowing() async {
+        // given — the sidebar no longer renders the banner, so it must not suppress the skeleton:
+        // the first listing is still pending.
         let harness = makeSUT()
         let sut = harness.sut
         sut.didAppear()
@@ -334,7 +331,7 @@ import Testing
 
         // then
         await waitUntil { sut.installBannerModel != nil }
-        #expect(!sut.showsLoadingSkeleton)
+        #expect(sut.showsLoadingSkeleton)
     }
 
     // MARK: - Row metadata (F4-43)

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replace the sidebar's runtime setup card with one line, "Runtime setup required before creating or loading work.", below the title row while the managed runtime is not ready. The sidebar no longer shows setup actions, the install notice, the backend-list note or the store-attention link in that state; setup actions are in the main pane and Settings → General. The ready sidebar also no longer shows the post-install success notice or the legacy install/update banner actions; the menu bar keeps its own notice. Store attention now sits below the title row in the ready sidebar, and a legacy list error is shown as plain text instead of being hidden when it is an install need.
+
 - Remove the "Starting task…" progress row from the New Session composer. Start stays disabled and named "Starting task" while a task starts, and "Starting task…" is announced once to assistive technology; the space the row occupied is gone.
 
 - Restore focus to the originating task-toolbar chip after its revealed pane closes. Deferred keyboard and accessibility focus respect the originating window, current pane request, user input and control visibility.

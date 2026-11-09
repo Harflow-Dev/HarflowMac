@@ -11,7 +11,9 @@ import Testing
 ///
 /// A `.fixedSize(vertical:)` text in the detail pane made `NavigationSplitView` measure the column
 /// with a character-per-line height, so the split view grew far taller than the window and was
-/// centered, pushing the sidebar's setup card and footer out of view.
+/// centered, pushing the sidebar's footer out of view. The main pane owns the only setup action:
+/// install-required, update-required, failed and update-failed states render exactly one
+/// `runtimeSetup.action` in the whole window; checking, installing and updating render none.
 @MainActor @Suite(.serialized) struct MainWindowRuntimeSetupRenderingTests {
     private nonisolated static let states: [RuntimeSetupState] = [
         .checking,
@@ -43,6 +45,7 @@ import Testing
             try fixture.expectSplitViewWithinContent()
             #expect(fixture.text(identifier: "runtimeSetup.welcomeTitle") == expected.title)
             #expect(fixture.text(identifier: "runtimeSetup.action") == expected.action)
+            #expect(fixture.count(identifier: "runtimeSetup.action") == (expected.action == nil ? 0 : 1))
             #expect(fixture.text(identifier: expected.failure ? "runtimeSetup.error" : "runtimeSetup.welcomeBody") == state.detail)
             #expect((fixture.element(identifier: "runtimeSetup.error") != nil) == expected.failure)
             #expect(coordinator.sidebarViewModel.runtimeSetupTapCount == 0)
@@ -187,6 +190,16 @@ import Testing
 
     func element(identifier: String) -> NSObject? {
         accessibilityTree(host).first { accessibilityString($0, "accessibilityIdentifier") == identifier }
+    }
+
+    func count(identifier: String) -> Int {
+        var seen = Set<ObjectIdentifier>()
+        var matches = 0
+        for object in accessibilityTree(host)
+            where accessibilityString(object, "accessibilityIdentifier") == identifier && seen.insert(ObjectIdentifier(object)).inserted {
+            matches += 1
+        }
+        return matches
     }
 
     func containsText(_ text: String) -> Bool {

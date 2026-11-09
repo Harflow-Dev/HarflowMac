@@ -6,103 +6,83 @@ import SwiftUI
 import Testing
 
 @MainActor @Suite(.serialized) struct FirstRunSidebarLayoutTests {
-    @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
-    func givenRuntimeSetupRequired_whenSidebarFirstMountsAndResizes_thenSetupControlsRemainInContentLayout(
-        _ appearanceName: NSAppearance.Name
+    private static let gateText = "Runtime setup required before creating or loading work."
+    private static let catalogNote = "The backend catalog couldn't be read; filters show loaded history only."
+    private nonisolated static let notReadyStates: [RuntimeSetupState] = [
+        .checking,
+        .installationRequired(installedVersion: nil, requiredVersion: "0.0.2"),
+        .installationRequired(installedVersion: "0.0.1", requiredVersion: "0.0.2"),
+        .installing,
+        .updating(installedVersion: "0.0.1", requiredVersion: "0.0.2"),
+        .failed("The managed runtime could not be prepared."),
+        .updateFailed(message: "The update could not be applied.", installedVersion: "0.0.1", requiredVersion: "0.0.2")
+    ]
+
+    @Test(arguments: notReadyStates)
+    func givenNonReadyRuntimeState_whenSidebarMounts_thenOnlyTitleRowGateLineAndFooterRender(
+        _ state: RuntimeSetupState
     ) async throws {
+        // given — store attention and the catalog note are forced on to prove they stay hidden.
+        let viewModel = SidebarViewModelMock(catalogUnavailableNote: Self.catalogNote, runtimeSetupState: state)
+        viewModel.storeNeedsAttention = true
+        let fixture = try SidebarFirstRunWindowFixture(viewModel: viewModel, appearanceName: .aqua)
+        defer { fixture.close() }
+
+        // when
+        await fixture.waitForGate()
+
+        // then
+        try fixture.expectGateLayout()
+    }
+
+    @Test(arguments: [NSAppearance.Name.aqua, .darkAqua], [NSSize(width: 1000, height: 620), NSSize(width: 1200, height: 740)])
+    func givenRuntimeSetupRequired_whenSidebarMountsAtEachSize_thenGateLayoutHoldsInEveryAppearanceAndSize(
+        _ appearanceName: NSAppearance.Name, _ size: NSSize
+    ) async throws {
+        // given
         let state = RuntimeSetupState.installationRequired(installedVersion: nil, requiredVersion: "0.0.2")
-        let viewModel = SidebarViewModelMock(runtimeSetupState: state)
+        let viewModel = SidebarViewModelMock(catalogUnavailableNote: Self.catalogNote, runtimeSetupState: state)
+        viewModel.storeNeedsAttention = true
         let fixture = try SidebarFirstRunWindowFixture(viewModel: viewModel, appearanceName: appearanceName)
         defer { fixture.close() }
 
-        for size in [NSSize(width: 1000, height: 620), NSSize(width: 1200, height: 740)] {
-            fixture.window.setContentSize(size)
-            await fixture.waitForSetupControls()
-            let contentLayout = fixture.window.contentLayoutRect
-            let title = try #require(fixture.element(identifier: "runtimeSetup.title", label: state.title))
-            let action = try #require(fixture.element(identifier: "runtimeSetup.action", label: state.actionTitle!))
-            let footer = try #require(fixture.element(label: "Settings"))
-            let titleFrame = try #require(fixture.frame(of: title))
-            let actionFrame = try #require(fixture.frame(of: action))
-            let footerFrame = try #require(fixture.frame(of: footer))
+        // when
+        fixture.window.setContentSize(size)
+        await fixture.waitForGate()
 
-            #expect(titleFrame.isContained(in: contentLayout))
-            #expect(actionFrame.isContained(in: contentLayout))
-            #expect(footerFrame.isContained(in: contentLayout))
-        }
-    }
-
-    @Test func givenLongRuntimeFailure_whenSidebarFirstMounts_thenFailureContentHasScrollableReachability() async throws {
-        let message = String(repeating: "The managed runtime could not be prepared. ", count: 80)
-        let state = RuntimeSetupState.failed(message)
-        let viewModel = SidebarViewModelMock(runtimeSetupState: state)
-        let fixture = try SidebarFirstRunWindowFixture(viewModel: viewModel, appearanceName: .aqua)
-        defer { fixture.close() }
-
-        await fixture.waitForSetupControls()
-        await waitUntil {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-            fixture.host.layoutSubtreeIfNeeded()
-            return fixture.descendants.compactMap { $0 as? NSScrollView }.contains { scroll in
-                scroll.hasVerticalScroller || (scroll.documentView?.frame.height ?? 0) > scroll.bounds.height
-            }
-        }
-        let scrollViews = fixture.descendants.compactMap { $0 as? NSScrollView }
-        let failure = try #require(fixture.element(identifier: "runtimeSetup.error", label: state.detail))
-        let retry = try #require(fixture.element(identifier: "runtimeSetup.action", label: state.actionTitle!))
-        let footer = try #require(fixture.element(label: "Settings"))
-        let contentLayout = fixture.window.contentLayoutRect
-        let failureFrame = try #require(fixture.frame(of: failure))
-        let footerFrame = try #require(fixture.frame(of: footer))
-        let scrollView = try #require(fixture.descendants.compactMap { $0 as? NSScrollView }.first)
-
-        let geometry = scrollViews.enumerated()
-            .map { index, scroll in
-            let document = scroll.documentView?.frame.size ?? .zero
-            return "#\(index) bounds=\(scroll.bounds.size) clip=\(scroll.contentView.bounds.size) "
-                + "document=\(document) vertical=\(scroll.hasVerticalScroller) horizontal=\(scroll.hasHorizontalScroller)"
-            }
-            .joined(separator: "; ")
-        #expect(
-            scrollViews.contains { $0.hasVerticalScroller || $0.documentView?.frame.height ?? 0 > $0.bounds.height },
-            Comment(rawValue: "Expected setup content to be vertically reachable; NSScrollViews=\(scrollViews.count): \(geometry)")
-        )
-        #expect(failureFrame.intersects(contentLayout))
-        #expect(footerFrame.intersects(contentLayout), "The footer must remain visible while setup content scrolls")
-
-        let maximumOffset = max(0, (scrollView.documentView?.frame.height ?? 0) - scrollView.contentView.bounds.height)
-        scrollView.contentView.scroll(to: NSPoint(x: 0, y: maximumOffset))
-        scrollView.reflectScrolledClipView(scrollView.contentView)
-        await waitUntil {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-            fixture.host.layoutSubtreeIfNeeded()
-            guard let retryFrame = fixture.frame(of: retry) else { return false }
-            return retryFrame.intersects(fixture.window.contentLayoutRect)
-        }
-        let retryFrame = try #require(fixture.frame(of: retry))
-        let footerAfterScroll = try #require(fixture.frame(of: footer))
-        #expect(retryFrame.intersects(contentLayout), "Retry must remain reachable below a long setup error")
-        #expect(footerAfterScroll.intersects(contentLayout), "The footer must remain visible after scrolling setup content")
+        // then
+        try fixture.expectGateLayout()
     }
 
     @Test func givenRuntimeSetupRequired_whenRuntimeBecomesReady_thenSidebarReturnsToTaskList() async throws {
+        // given
         let viewModel = SidebarViewModelMock(
             runtimeSetupState: .installationRequired(installedVersion: nil, requiredVersion: "0.0.2")
         )
+        viewModel.storeNeedsAttention = true
         let fixture = try SidebarFirstRunWindowFixture(viewModel: viewModel, appearanceName: .aqua)
         defer { fixture.close() }
+        await fixture.waitForGate()
+        #expect(sidebarFixtureOutline(in: fixture.host) == nil)
+        #expect(fixture.count(identifier: "sidebar-store-attention") == 0)
 
-        await fixture.waitForSetupControls()
-        #expect(fixture.element(label: "Prepare Harflow") != nil)
-
+        // when
         viewModel.runtimeSetupState = .ready
         await waitUntil {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
             fixture.host.layoutSubtreeIfNeeded()
             return sidebarFixtureOutline(in: fixture.host) != nil
         }
-        #expect(fixture.element(label: "Prepare Harflow") == nil)
-        #expect(fixture.textField(matchingPlaceholder: "Search loaded history") == nil)
+        await waitUntil {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+            fixture.host.layoutSubtreeIfNeeded()
+            return fixture.count(identifier: "sidebar-store-attention") > 0
+        }
+
+        // then — the link is the positive control for the not-ready absence check.
+        #expect(fixture.count(identifier: "sidebar-store-attention") > 0)
+        #expect(fixture.count(identifier: "sidebar-setup-gate") == 0)
+        #expect(fixture.element(label: Self.gateText) == nil)
         #expect(sidebarFixtureOutline(in: fixture.host) != nil)
     }
 }
@@ -148,16 +128,57 @@ import Testing
 
     var descendants: [NSView] { [host] + host.subviews.flatMap(descendants(of:)) }
 
-    func waitForSetupControls() async {
+    func waitForGate() async {
         await waitUntil {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
             host.layoutSubtreeIfNeeded()
-            return element(label: "Prepare Harflow") != nil || element(label: "Setup did not finish") != nil
+            return element(identifier: "sidebar-setup-gate") != nil && element(label: "Settings") != nil
         }
     }
 
-    func textField(matching value: String) -> NSTextField? {
-        descendants.compactMap { $0 as? NSTextField }.first { $0.stringValue == value }
+    func count(identifier: String) -> Int {
+        accessibilityElements.filter { accessibilityString($0, "accessibilityIdentifier") == identifier }.count
+    }
+
+    /// The not-ready sidebar: the title row topmost and clear of the toolbar inset, the exact gate
+    /// line 24 pt below it, the footer below the gate, and nothing else.
+    func expectGateLayout(sourceLocation: SourceLocation = #_sourceLocation) throws {
+        let gateText = "Runtime setup required before creating or loading work."
+        let gate = try #require(element(identifier: "sidebar-setup-gate"), sourceLocation: sourceLocation)
+        let title = try #require(element(label: "Harflow"), sourceLocation: sourceLocation)
+        let collapse = try #require(element(label: "Collapse sidebar"), sourceLocation: sourceLocation)
+        let footer = try #require(element(label: "Settings"), sourceLocation: sourceLocation)
+        let contentLayout = window.contentLayoutRect
+        let gateFrame = try #require(frame(of: gate), sourceLocation: sourceLocation)
+        let titleFrame = try #require(frame(of: title), sourceLocation: sourceLocation)
+        let collapseFrame = try #require(frame(of: collapse), sourceLocation: sourceLocation)
+        let footerFrame = try #require(frame(of: footer), sourceLocation: sourceLocation)
+
+        #expect(accessibilityString(gate, "accessibilityLabel") == gateText
+            || accessibilityString(gate, "accessibilityValue") == gateText, sourceLocation: sourceLocation)
+        // Window coordinates grow upward. The title row sits under the toolbar inset, above the gate.
+        #expect(titleFrame.maxY <= contentLayout.maxY + 1, "Title row must clear the traffic-light inset", sourceLocation: sourceLocation)
+        #expect(titleFrame.isContained(in: contentLayout), sourceLocation: sourceLocation)
+        #expect(titleFrame.minY >= gateFrame.maxY, sourceLocation: sourceLocation)
+        #expect(gateFrame.minY >= footerFrame.maxY - 1, sourceLocation: sourceLocation)
+        #expect(gateFrame.isContained(in: contentLayout), sourceLocation: sourceLocation)
+        #expect(footerFrame.isContained(in: contentLayout), sourceLocation: sourceLocation)
+        // 24 pt from the bottom of the title row (the lower of its two controls) to the gate text.
+        let rowBottom = min(titleFrame.minY, collapseFrame.minY)
+        let gap = rowBottom - gateFrame.maxY
+        #expect(abs(gap - 24) <= 1.5, "Measured title-row to gate gap \(gap) pt, expected 24", sourceLocation: sourceLocation)
+
+        for identifier in ["runtimeSetup.card", "runtimeSetup.title", "runtimeSetup.action", "runtimeSetup.error",
+                           "sidebar-install-notice", "sidebar-store-attention", "sidebar-unified"] {
+            #expect(count(identifier: identifier) == 0, "\(identifier) must not render", sourceLocation: sourceLocation)
+        }
+        for label in ["New task", "Prepare Harflow", "Setup did not finish", "Task store needs attention",
+                      "The backend catalog couldn't be read; filters show loaded history only."] {
+            #expect(element(label: label) == nil, "\"\(label)\" must not render", sourceLocation: sourceLocation)
+        }
+        #expect(sidebarFixtureOutline(in: host) == nil, sourceLocation: sourceLocation)
+        #expect(button(matching: "Install required components") == nil, sourceLocation: sourceLocation)
+        #expect(textField(matchingPlaceholder: "Search loaded history") == nil, sourceLocation: sourceLocation)
     }
 
     func textField(matchingPlaceholder value: String) -> NSTextField? {
@@ -172,20 +193,12 @@ import Testing
         }
     }
 
-    func element(identifier: String, label: String) -> NSObject? {
-        element(identifier: identifier) ?? element(label: label)
-    }
-
-    private func element(identifier: String) -> NSObject? {
+    func element(identifier: String) -> NSObject? {
         accessibilityElements.first { accessibilityString($0, "accessibilityIdentifier") == identifier }
     }
 
     func button(matching value: String) -> NSButton? {
         descendants.compactMap { $0 as? NSButton }.first { $0.title == value }
-    }
-
-    func button(matchingAccessibilityLabel value: String) -> NSButton? {
-        descendants.compactMap { $0 as? NSButton }.first { $0.accessibilityLabel() == value }
     }
 
     func frame(of view: NSView) -> CGRect { view.convert(view.bounds, to: window.contentView) }

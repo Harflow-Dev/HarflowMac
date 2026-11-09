@@ -191,22 +191,39 @@ import Testing
         } == rowIDs)
     }
 
-    @Test func givenInstallNotice_whenRendered_thenItSitsAboveNewSessionOutsideTheOutline() async throws {
-        // given
+    @Test func givenInstallBannerModel_whenReadySidebarRenders_thenNoNoticeIsDrawn() async throws {
+        // given — the sidebar no longer renders the install notice.
         let vm = SidebarViewModelMock(installBannerModel: .init(title: "Runtime installed", detail: "Ready for sessions", canDismiss: true))
         let sut = try await present(vm)
         defer { release(sut.window) }
 
-        // when
-        let notice = try #require(elements(labelled: "Runtime installed", in: sut.host).first)
-        let button = try #require(elements(labelled: "New task", in: sut.host).first)
-        let noticeFrame = try #require(frameInWindow(notice, window: sut.window))
-        let buttonFrame = try #require(frameInWindow(button, window: sut.window))
-        let outline = try #require(outlineView(sut.host))
+        // when / then
+        #expect(elements(labelled: "Runtime installed", in: sut.host).isEmpty)
+        #expect(elements(labelled: "Ready for sessions", in: sut.host).isEmpty)
+        #expect(!accessibilityElements(sut.host).contains {
+            accessibilityString($0, "accessibilityIdentifier") == "sidebar-install-notice"
+        })
+        #expect(sidebarFixtureOutline(in: sut.host) != nil)
+    }
 
-        // then
-        #expect(noticeFrame.minY >= buttonFrame.maxY - 0.5)
-        #expect(!accessibilityElements(outline).contains { accessibilityString($0, "accessibilityLabel") == "Runtime installed" })
+    @Test func givenStoreNeedsAttention_whenReadySidebarRenders_thenTheLinkSitsBelowTheTitleRow() async throws {
+        // given
+        let vm = SidebarViewModelMock()
+        vm.storeNeedsAttention = true
+        let sut = try await present(vm)
+        defer { release(sut.window) }
+
+        // when
+        let title = try #require(elements(labelled: "Harflow", in: sut.host).first)
+        let link = try #require(accessibilityElements(sut.host).first {
+            accessibilityString($0, "accessibilityIdentifier") == "sidebar-store-attention"
+        })
+        let titleFrame = try #require(frameInWindow(title, window: sut.window))
+        let linkFrame = try #require(frameInWindow(link, window: sut.window))
+
+        // then — window coordinates grow upward: the title row is topmost, the link is below it.
+        #expect(titleFrame.minY >= linkFrame.maxY - 0.5)
+        #expect(sidebarFixtureOutline(in: sut.host) != nil)
     }
 
     // MARK: - Backend filter

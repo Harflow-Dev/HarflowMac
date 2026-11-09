@@ -225,10 +225,9 @@ extension SidebarVMTests {
         #expect(sut.installBannerModel?.primaryTitle == nil)
     }
 
-    @Test func givenASuccessBannerWithNoTasks_whenDismissed_thenTheEmptyStateMessageAppears() async {
-        // given — Code review round 1, finding 4: `emptyStateMessage` depends on `installBannerModel`
-        // (Review round 1 item 3's precedence gates on it), so a banner change — here, dismissal —
-        // must recompute it, not leave it stuck at whatever an earlier, unrelated recompute left.
+    @Test func givenASuccessBannerWithNoTasks_whenListed_thenTheEmptyStateMessageShowsAndSurvivesDismissal() async {
+        // given — the sidebar renders no banner, so the empty-state message does not wait for one
+        // to clear.
         let harness = makeSUT(installState: .installed)
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
@@ -237,11 +236,16 @@ extension SidebarVMTests {
         sut.didAppear()
         await sut.waitForPresentation()
         await waitUntil { sut.installBannerModel != nil }
+
+        // when
         hasListedSubject.send(true)
         tasksSubject.send([])
         await waitUntil { sut.isConnected }
         await sut.waitForPresentation()
-        #expect(sut.emptyStateMessage == nil, "the success banner still owns the space")
+
+        // then
+        #expect(sut.installBannerModel != nil)
+        #expect(sut.emptyStateMessage == "No tasks yet. Tasks started through harflow appear here.")
 
         // when — dismissing resets the install state to `.idle` (mirroring what
         // `InstallRepositoryImpl.reset()` really does), clearing the banner.
@@ -249,8 +253,7 @@ extension SidebarVMTests {
         installStateSubject.send(.idle)
 
         // then
-        await waitUntil { sut.emptyStateMessage != nil }
-        #expect(sut.installBannerModel == nil)
+        await waitUntil { sut.installBannerModel == nil }
         #expect(sut.emptyStateMessage == "No tasks yet. Tasks started through harflow appear here.")
     }
 
