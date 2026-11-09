@@ -121,7 +121,7 @@ struct SidebarNativeLifecycleHostedTests {
     private func presentation(items: [SidebarItem], transitionEpoch: Int = 0,
                               token: String = "lifecycle") -> SidebarListPresentation {
         SidebarListPresentation(sections: [SidebarSection(bucket: .today, items: items)], workflowTitles: [],
-                                workflowsExpanded: true, banner: nil, listError: nil, skeleton: false,
+                                workflowsExpanded: true, listError: nil, skeleton: false,
                                 taskHistory: HistoryLoadingState(), workflowHistory: HistoryLoadingState(),
                                 emptyMessage: nil, fadingIDs: [], minimumRowHeight: 0,
                                 historyRevision: 0, historyToken: token, transitionEpoch: transitionEpoch)

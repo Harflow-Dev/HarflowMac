@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HfRepository
 import MonitorCore
 
 // MARK: - Sidebar subscriptions
@@ -33,15 +34,16 @@ extension SidebarVM {
             .sink { [weak self] error in
                 guard let self else { return }
                 latestListError = error
-                currentInstallNeed = error.flatMap { useCase.installNeed(for: $0) }
                 let dedicatedError = error?.isManagedRuntimeUnavailable == true || error?.isStateRecoveryRefusal == true
                 listErrorMessage = dedicatedError ? nil : error?.message
-                recomputeInstallBanner()
+                // Refresh both immediately: `recompute()` returns early while presentation is off.
+                emptyStateMessage = computeEmptyStateMessage()
+                showsLoadingSkeleton = computeShowsLoadingSkeleton()
                 recompute()
             }
             .store(in: &cancellables)
 
-        subscribeToInstallState()
+        subscribeToRuntimeAndRecovery()
 
         useCase.hasListedPublisher()
             .receive(on: DispatchQueue.main)
@@ -79,6 +81,22 @@ extension SidebarVM {
             .store(in: &cancellables)
     }
     
+    /// Split out of `subscribeIfNeeded()` to keep that function within the lint length budget.
+    private func subscribeToRuntimeAndRecovery() {
+        if let recovery = useCase as? any SidebarStoreRecoveryObserving {
+            recovery.storeRecoveryPublisher()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] in self?.applyStoreRecovery($0) }
+                .store(in: &cancellables)
+        }
+        if let setup = useCase as? any RuntimeSetupObserving {
+            setup.runtimeSetupPublisher()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] in self?.applyRuntimeSetup($0) }
+                .store(in: &cancellables)
+        }
+    }
+
     private func subscribeToBackendCatalog() {
         useCase.backendCatalogPublisher()
             .receive(on: DispatchQueue.main)

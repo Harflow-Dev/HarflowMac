@@ -8,10 +8,6 @@ import SwiftUI
 /// of these styles through `Font.hf(_:weight:design:)` instead of hard-coding a point size, so the
 /// app reads like a native Mac app and a future size change happens in one place.
 public enum HfTextStyle: CaseIterable, Sendable {
-    /// Compact setup eyebrow text.
-    case setupEyebrow
-    /// Compact setup version and preservation text.
-    case setupFootnote
     /// Smallest text: metadata lines, status labels, section headings.
     case caption
     /// Secondary text: connection lines, footnotes, monospaced details.
@@ -32,8 +28,6 @@ public enum HfTextStyle: CaseIterable, Sendable {
     /// The point size the style renders at.
     public var pointSize: CGFloat {
         switch self {
-        case .setupEyebrow: 9
-        case .setupFootnote: 10
         case .caption: 11
         case .secondary: 12
         case .body: 13

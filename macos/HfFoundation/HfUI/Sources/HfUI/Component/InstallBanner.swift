@@ -7,10 +7,10 @@ import SwiftUI
 
 // MARK: - InstallBanner
 
-/// The install/update banner shown in the sidebar, the menu bar and Settings → Harnesses whenever
+/// The install/update banner shown in the menu bar and Settings → Harnesses whenever
 /// `InstallRepository`'s state (or a load failure) needs surfacing. Dumb component — it holds no
 /// logic beyond layout; the owning VM maps `InstallState`/`InstallNeed` to `Model` and supplies the
-/// three closures. Compact enough to sit in a sidebar list section or a 320-pt menu bar popover.
+/// three closures. Compact enough to sit in a 320-pt menu bar popover.
 public struct InstallBanner: View {
     /// Presentation data for one banner state. Built by the VM — see `macos/build/monitor-install-button-plan.md` section 5 for the state-to-`Model` mapping.
     public struct Model: Equatable {

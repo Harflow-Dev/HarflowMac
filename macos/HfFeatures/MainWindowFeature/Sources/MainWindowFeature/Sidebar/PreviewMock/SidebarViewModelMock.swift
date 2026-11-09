@@ -34,7 +34,6 @@ final class SidebarViewModelMock: SidebarViewModel {
     var catalogUnavailableNote: String?
     var searchQuery: String
     var selection: MonitorDestination?
-    var installBannerModel: InstallBanner.Model?
     /// Dummy preview inputs (Phase 1, §8): history surfaces, the workflow error line, and tap
     /// counters so render previews and tests can show and drive every state. No production data.
     var taskHistoryState: HistoryLoadingState
@@ -59,7 +58,6 @@ final class SidebarViewModelMock: SidebarViewModel {
         catalogUnavailableNote: String? = nil,
         searchQuery: String = "",
         selection: MonitorDestination? = nil,
-        installBannerModel: InstallBanner.Model? = nil,
         taskHistoryState: HistoryLoadingState = HistoryLoadingState(),
         workflowHistoryState: HistoryLoadingState = HistoryLoadingState(),
         workflowErrorMessage: String? = nil,
@@ -76,7 +74,6 @@ final class SidebarViewModelMock: SidebarViewModel {
         self.catalogUnavailableNote = catalogUnavailableNote
         self.searchQuery = searchQuery
         self.selection = selection
-        self.installBannerModel = installBannerModel
         self.taskHistoryState = taskHistoryState
         self.workflowHistoryState = workflowHistoryState
         self.workflowErrorMessage = workflowErrorMessage
@@ -125,9 +122,6 @@ final class SidebarViewModelMock: SidebarViewModel {
     func didSelect(_ destination: MonitorDestination?) { selection = destination }
     func didTapNewSession() { newSessionTapCount += 1 }
     func didTapRuntimeSetup() { runtimeSetupTapCount += 1 }
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
-    func didTapInstallBannerDismiss() {}
     func didToggleExpansion(taskID: String) {}
     func didPressMoveCommand(_ direction: MoveCommandDirection) {}
     func didTapLoadMoreTasks() { loadOlderTasksTapCount += 1 }

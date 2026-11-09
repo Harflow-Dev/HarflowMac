@@ -1,6 +1,5 @@
 import HfCommon
 import HfRepository
-import HfUI
 import MonitorCore
 
 // MARK: - SidebarListPresentation
@@ -11,7 +10,6 @@ struct SidebarListPresentation: Equatable, Sendable {
     var sections: [SidebarSection]
     var workflowTitles: [String]
     var workflowsExpanded: Bool
-    var banner: SidebarBannerPresentation?
     var listError: String?
     var skeleton: Bool
     var taskHistory: HistoryLoadingState
@@ -28,34 +26,6 @@ struct SidebarListPresentation: Equatable, Sendable {
     var role: Role = .combined
 }
 
-struct SidebarBannerPresentation: Equatable, Sendable {
-    let title: String
-    let detail: String
-    let primaryTitle: String?
-    let secondaryTitle: String?
-    let isBusy: Bool
-    let errorText: String?
-    let canDismiss: Bool
-    let footnote: String?
-
-    init(_ model: InstallBanner.Model) {
-        self.title = model.title
-        self.detail = model.detail
-        self.primaryTitle = model.primaryTitle
-        self.secondaryTitle = model.secondaryTitle
-        self.isBusy = model.isBusy
-        self.errorText = model.errorText
-        self.canDismiss = model.canDismiss
-        self.footnote = model.footnote
-    }
-
-    var model: InstallBanner.Model {
-        .init(title: title, detail: detail, primaryTitle: primaryTitle,
-              secondaryTitle: secondaryTitle, isBusy: isBusy, errorText: errorText,
-              canDismiss: canDismiss, footnote: footnote)
-    }
-}
-
 struct SidebarListEntry: Identifiable, Equatable, Sendable {
     enum Content: Equatable, Sendable {
         case navigation(SidebarNavigationEntry)
@@ -66,7 +36,6 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
         case workflowDefinition(String)
         case heading(String)
         case item(SidebarItem)
-        case banner(SidebarBannerPresentation)
         case error(String)
         case skeleton
         case history(String, HistoryLoadingState)

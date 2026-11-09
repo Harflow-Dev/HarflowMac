@@ -34,7 +34,7 @@ struct SidebarNativeAliasHostedTests {
         let presentation = SidebarListPresentation(
             sections: harness.sut.sections,
             workflowTitles: [], workflowsExpanded: true,
-            banner: nil, listError: nil, skeleton: false,
+            listError: nil, skeleton: false,
             taskHistory: HistoryLoadingState(), workflowHistory: HistoryLoadingState(),
             emptyMessage: nil, fadingIDs: [], minimumRowHeight: 0,
             historyRevision: 1, historyToken: "producer-alias"

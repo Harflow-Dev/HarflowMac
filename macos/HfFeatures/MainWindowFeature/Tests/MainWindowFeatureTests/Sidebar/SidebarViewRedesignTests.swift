@@ -191,21 +191,6 @@ import Testing
         } == rowIDs)
     }
 
-    @Test func givenInstallBannerModel_whenReadySidebarRenders_thenNoNoticeIsDrawn() async throws {
-        // given — the sidebar no longer renders the install notice.
-        let vm = SidebarViewModelMock(installBannerModel: .init(title: "Runtime installed", detail: "Ready for sessions", canDismiss: true))
-        let sut = try await present(vm)
-        defer { release(sut.window) }
-
-        // when / then
-        #expect(elements(labelled: "Runtime installed", in: sut.host).isEmpty)
-        #expect(elements(labelled: "Ready for sessions", in: sut.host).isEmpty)
-        #expect(!accessibilityElements(sut.host).contains {
-            accessibilityString($0, "accessibilityIdentifier") == "sidebar-install-notice"
-        })
-        #expect(sidebarFixtureOutline(in: sut.host) != nil)
-    }
-
     @Test func givenStoreNeedsAttention_whenReadySidebarRenders_thenTheLinkSitsBelowTheTitleRow() async throws {
         // given
         let vm = SidebarViewModelMock()

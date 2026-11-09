@@ -50,7 +50,7 @@ struct SidebarNativeEqualityTests {
 
     private func presentation(_ model: TaskRowModel) -> SidebarListPresentation {
         SidebarListPresentation(sections: [SidebarSection(bucket: .today, items: [.task(model)])],
-                                workflowTitles: [], workflowsExpanded: true, banner: nil, listError: nil,
+                                workflowTitles: [], workflowsExpanded: true, listError: nil,
                                 skeleton: false, taskHistory: HistoryLoadingState(),
                                 workflowHistory: HistoryLoadingState(), emptyMessage: nil, fadingIDs: [],
                                 minimumRowHeight: 0, historyRevision: 0, historyToken: "equality")

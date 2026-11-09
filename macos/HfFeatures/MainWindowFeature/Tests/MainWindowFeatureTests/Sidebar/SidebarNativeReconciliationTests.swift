@@ -176,7 +176,7 @@ import Testing
                            repoName: "repo", ageText: "1m"))
     ])]) -> SidebarListPresentation {
         SidebarListPresentation(sections: sections, workflowTitles: ["definition"], workflowsExpanded: true,
-                                banner: nil, listError: nil, skeleton: false,
+                                listError: nil, skeleton: false,
                                 taskHistory: HistoryLoadingState(), workflowHistory: HistoryLoadingState(),
                                 emptyMessage: nil, fadingIDs: [], minimumRowHeight: 0,
                                 historyRevision: 0, historyToken: "token")

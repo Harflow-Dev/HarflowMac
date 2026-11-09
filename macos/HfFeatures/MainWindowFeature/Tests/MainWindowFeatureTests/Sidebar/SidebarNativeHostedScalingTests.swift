@@ -136,7 +136,7 @@ struct SidebarNativeHostedScalingTests {
 
     private func presentation(rows: [TaskRowModel]) -> SidebarListPresentation {
         SidebarListPresentation(sections: [SidebarSection(bucket: .today, items: rows.map(SidebarItem.task))],
-                                workflowTitles: [], workflowsExpanded: true, banner: nil, listError: nil,
+                                workflowTitles: [], workflowsExpanded: true, listError: nil,
                                 skeleton: false, taskHistory: HistoryLoadingState(), workflowHistory: HistoryLoadingState(),
                                 emptyMessage: nil, fadingIDs: [], minimumRowHeight: 0, historyRevision: 4,
                                 historyToken: "hosted-scaling")

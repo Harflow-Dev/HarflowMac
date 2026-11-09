@@ -494,7 +494,7 @@ private final class SettlementFixture {
         coordinator.environment = environment
         let input = SidebarListPresentation(
             sections: [SidebarSection(bucket: .today, items: [])], workflowTitles: [], workflowsExpanded: true,
-            banner: nil, listError: nil, skeleton: false, taskHistory: HistoryLoadingState(),
+            listError: nil, skeleton: false, taskHistory: HistoryLoadingState(),
             workflowHistory: HistoryLoadingState(), emptyMessage: nil, fadingIDs: [],
             minimumRowHeight: 0, historyRevision: 0, historyToken: "presentation-settlement"
         )

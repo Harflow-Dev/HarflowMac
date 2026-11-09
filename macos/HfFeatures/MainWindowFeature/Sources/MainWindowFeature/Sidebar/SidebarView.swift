@@ -51,9 +51,6 @@ protocol SidebarViewModel: ViewModel {
     var selection: MonitorDestination? { get }
     /// The Needs you row's badge.
     var needsYouBadge: NeedsYouBadge { get }
-    /// The install/update banner, or `nil` when nothing needs surfacing — shown in place of the
-    /// red error section (settled plan, section 5).
-    var installBannerModel: InstallBanner.Model? { get }
     var savedWorkflows: [WorkflowRecord] { get }
     var workflowErrorMessage: String? { get }
     func didTapNewWorkflow()
@@ -67,9 +64,6 @@ protocol SidebarViewModel: ViewModel {
     func didSelectBackendFilter(_ backend: String)
     func didSelect(_ destination: MonitorDestination?)
     func didTapNewSession()
-    func didTapInstallBannerPrimary()
-    func didTapInstallBannerSecondary()
-    func didTapInstallBannerDismiss()
 
     // MARK: Collapsible tree (settled plan, Monitor piece 4)
 
@@ -232,7 +226,6 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 sections: displayedSections ?? viewModel.sections,
                 workflowTitles: viewModel.savedWorkflows.map(\.id),
                 workflowsExpanded: false,
-                banner: nil,
                 listError: viewModel.listErrorMessage,
                 skeleton: viewModel.showsLoadingSkeleton,
                 taskHistory: viewModel.taskHistoryState,
@@ -260,9 +253,6 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 }
                 actions.toggle = toggleExpansion
                 actions.newWorkflow = viewModel.didTapNewWorkflow
-                actions.primary = viewModel.didTapInstallBannerPrimary
-                actions.secondary = viewModel.didTapInstallBannerSecondary
-                actions.dismiss = viewModel.didTapInstallBannerDismiss
                 actions.loadTasks = viewModel.didTapLoadMoreTasks
                 actions.loadWorkflows = viewModel.didTapLoadMoreWorkflows
                 actions.move = { direction in

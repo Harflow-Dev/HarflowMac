@@ -13,7 +13,7 @@ import Testing
 @Suite struct NeedsYouNavigationTests {
     private func input(_ badge: NeedsYouBadge) -> SidebarListPresentation {
         SidebarListPresentation(
-            sections: [], workflowTitles: [], workflowsExpanded: true, banner: nil, listError: nil, skeleton: false,
+            sections: [], workflowTitles: [], workflowsExpanded: true, listError: nil, skeleton: false,
             taskHistory: HistoryLoadingState(), workflowHistory: HistoryLoadingState(), emptyMessage: nil, fadingIDs: [],
             minimumRowHeight: 0, historyRevision: 0, historyToken: "token", needsYouBadge: badge
         )

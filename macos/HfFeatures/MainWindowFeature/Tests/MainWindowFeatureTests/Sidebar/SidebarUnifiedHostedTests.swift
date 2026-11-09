@@ -255,7 +255,6 @@ private final class UnifiedSidebarHostedModel: SidebarViewModel {
     var catalogUnavailableNote: String?
     var searchQuery = ""
     var selection: MonitorDestination?
-    var installBannerModel: InstallBanner.Model?
     var needsYouBadge: NeedsYouBadge = .count(3, atLeast: false)
     var taskHistoryState = HistoryLoadingState()
     var workflowHistoryState = HistoryLoadingState()
@@ -282,9 +281,6 @@ private final class UnifiedSidebarHostedModel: SidebarViewModel {
     }
 
     func didTapNewSession() { newSessionTapCount += 1 }
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
-    func didTapInstallBannerDismiss() {}
     func didToggleExpansion(taskID: String) {}
     func didPressMoveCommand(_ direction: MoveCommandDirection) {}
     func didTapLoadMoreTasks() { loadMoreTasksTapCount += 1 }

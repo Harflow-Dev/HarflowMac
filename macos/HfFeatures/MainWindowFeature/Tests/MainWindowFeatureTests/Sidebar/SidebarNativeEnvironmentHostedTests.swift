@@ -109,7 +109,7 @@ import Testing
         sections: [SidebarSection(bucket: .today, items: [
             .task(TaskRowModel(id: "stable", backend: "codex", title: "Stable", status: .running,
                                repoName: "repo", ageText: "1m"))
-        ])], workflowTitles: [], workflowsExpanded: true, banner: nil, listError: nil, skeleton: false,
+        ])], workflowTitles: [], workflowsExpanded: true, listError: nil, skeleton: false,
         taskHistory: HistoryLoadingState(), workflowHistory: HistoryLoadingState(), emptyMessage: nil,
         fadingIDs: [], minimumRowHeight: 0, historyRevision: 0, historyToken: "environment")
     var font: Font?

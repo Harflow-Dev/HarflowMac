@@ -38,27 +38,6 @@ protocol SidebarUseCase: Sendable {
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never>
 
     func title(_ taskID: String) -> String
-
-    // MARK: Install (settled plan, section 5)
-
-    func installStatePublisher() -> AnyPublisher<InstallState, Never>
-    var installState: InstallState { get }
-    func lastCheckMessagePublisher() -> AnyPublisher<String?, Never>
-    var lastCheckMessage: String? { get }
-    func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never>
-    var installAnywayBlockedMessage: String? { get }
-    /// Classifies `error` against the currently located `harflow-ctl`/`harflow-setup`
-    /// presence; `nil` when `error` isn't an install need.
-    func installNeed(for error: ToolError) -> InstallNeed?
-    /// Where the next install would land, for confirmation-dialog copy only.
-    func installDestination() -> String?
-    func install() async
-    func installUvThenHarflow() async
-    func retry() async
-    func checkAgain() async
-    @discardableResult
-    func installAnyway() async -> Bool
-    func reset()
 }
 
 extension SidebarUseCase {

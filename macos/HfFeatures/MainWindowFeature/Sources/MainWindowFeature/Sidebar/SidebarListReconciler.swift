@@ -199,17 +199,13 @@ enum SidebarListReconciler {
                 entries += unifiedSectionEntries(input.sections.filter { $0.bucket != .running },
                                                  minimumHeight: input.minimumRowHeight,
                                                  excluding: fading, occurrences: &occurrences)
-                if let banner = input.banner {
-                    entries.append(.init(id: "diagnostic:banner", content: .banner(banner)))
-                } else if let error = input.listError {
+                if let error = input.listError {
                     entries.append(.init(id: "diagnostic:error", content: .error(error)))
                 }
                 entries += historyEntries(input)
             }
         } else {
-            if let banner = input.banner {
-                entries.append(.init(id: "diagnostic:banner", content: .banner(banner)))
-            } else if let error = input.listError {
+            if let error = input.listError {
                 entries.append(.init(id: "diagnostic:error", content: .error(error)))
             }
             if input.role == .running { entries.append(.init(id: "header:running", content: .heading("Running"))) }

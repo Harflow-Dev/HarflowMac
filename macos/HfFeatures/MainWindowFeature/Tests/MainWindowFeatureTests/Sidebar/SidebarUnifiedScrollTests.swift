@@ -112,7 +112,7 @@ struct SidebarUnifiedScrollTests {
 
     private func presentation(role: SidebarListPresentation.Role) -> SidebarListPresentation {
         SidebarListPresentation(sections: [], workflowTitles: ["Retained definition"], workflowsExpanded: true,
-                                banner: nil, listError: nil, skeleton: false,
+                                listError: nil, skeleton: false,
                                 taskHistory: HistoryLoadingState(), workflowHistory: HistoryLoadingState(),
                                 emptyMessage: nil, fadingIDs: [], minimumRowHeight: 0,
                                 historyRevision: 0, historyToken: "unified", role: role)

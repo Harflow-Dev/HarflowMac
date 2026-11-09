@@ -107,7 +107,7 @@ final class SidebarVM: SidebarViewModel {
         }
     }
 
-    /// The precedence-ordered empty-list message, also recomputed by the install-banner extension.
+    /// The precedence-ordered empty-list message, also written by the subscription extension.
     /// Its setter stays internal because Swift private access is file-scoped.
     @ObservationIgnored private var renderedEmptyStateMessage: String?
     var emptyStateMessage: String? {
@@ -119,8 +119,8 @@ final class SidebarVM: SidebarViewModel {
         }
     }
 
-    /// Shows a placeholder before the first listing when no error or install banner takes precedence.
-    /// Starts true to cover initial subscription setup; the install-banner extension also updates it.
+    /// Shows a placeholder before the first listing when no list error takes precedence.
+    /// Starts true to cover initial subscription setup; the list-error subscription also updates it.
     @ObservationIgnored private var renderedShowsLoadingSkeleton: Bool = true
     var showsLoadingSkeleton: Bool {
         get { access(keyPath: \.showsLoadingSkeleton); return renderedShowsLoadingSkeleton }
@@ -233,28 +233,18 @@ final class SidebarVM: SidebarViewModel {
     }
 
     @ObservationIgnored var selectionRevision = 0
-    /// The install/update banner selected by precedence rules, also written by the install-banner extension.
-    @ObservationIgnored private var renderedInstallBannerModel: InstallBanner.Model?
-    var installBannerModel: InstallBanner.Model? {
-        get { access(keyPath: \.installBannerModel); return renderedInstallBannerModel }
-        set {
-            guard renderedInstallBannerModel != newValue else { return }
-            withMutation(keyPath: \.installBannerModel) { renderedInstallBannerModel = newValue }
-            presentationWrites += 1
-        }
-    }
 
     // MARK: - Private Properties
 
-    // The properties below are read or written from `SidebarVM+InstallBanner.swift` as well as this
-    // file, so — same reasoning as `installBannerModel` above — they cannot be `private`.
+    // The properties below are read or written from the `SidebarVM` extensions as well as this
+    // file, so they cannot be `private`.
     @ObservationIgnored let useCase: any SidebarUseCase
     @ObservationIgnored let routing: any SidebarRouting
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
     @ObservationIgnored var didSubscribe = false
     // `latestTasks`/`collapsedTaskIDs`/`lastKnownSiblingsByMember` are also read/written from
     // `SidebarVM+Retention.swift` (Review round 1, item 4's "retention while open"), so — same
-    // reasoning as the install-banner properties above — they cannot be `private`.
+    // reasoning as the properties above — they cannot be `private`.
     @ObservationIgnored var latestTasks: [TaskInfo] = []
     /// Indexes from the last applied presentation; all construction runs in the worker.
     @ObservationIgnored var conversationIndex = ConversationIndex([])
@@ -266,10 +256,6 @@ final class SidebarVM: SidebarViewModel {
     private(set) var storeNeedsAttention = false
     private(set) var runtimeSetupState: RuntimeSetupState = .ready
 
-    @ObservationIgnored var installState: InstallState = .idle
-    @ObservationIgnored var lastCheckMessage: String?
-    @ObservationIgnored var installAnywayBlockedMessage: String?
-    @ObservationIgnored var currentInstallNeed: InstallNeed?
     /// Tasks the person has collapsed in the sidebar's tree — expanded by default (Design point 3).
     /// Lives for the app's lifetime (this VM is cached across window close/reopen); never mutated by
     /// an ordinary `recompute()` — only `didToggleExpansion(taskID:)` and an applied reveal touch it.
@@ -299,13 +285,9 @@ final class SidebarVM: SidebarViewModel {
         let initialSelection = routing.selection
         self.renderedSelection = initialSelection
         self.desiredSelection = initialSelection
-        self.installState = useCase.installState
         self.runtimeSetupState = (useCase as? any RuntimeSetupObserving)?.runtimeSetupState ?? .ready
-        self.lastCheckMessage = useCase.lastCheckMessage
-        self.installAnywayBlockedMessage = useCase.installAnywayBlockedMessage
         self.latestCatalog = useCase.backendCatalog
         if let recovery = useCase as? any SidebarStoreRecoveryObserving { applyStoreRecovery(recovery.storeRecoveryState) }
-        recomputeInstallBanner()
         recomputeBackendTabs()
     }
 

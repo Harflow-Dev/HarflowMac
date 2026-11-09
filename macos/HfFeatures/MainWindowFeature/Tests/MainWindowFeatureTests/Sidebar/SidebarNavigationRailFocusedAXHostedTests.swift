@@ -31,7 +31,6 @@ final class RailAppearanceCountingViewModel: SidebarViewModel {
     var selectedBackend = "all"
     var catalogUnavailableNote: String?
     var searchQuery = ""
-    var installBannerModel: InstallBanner.Model?
     var needsYouBadge: NeedsYouBadge = .count(3, atLeast: false)
 
     func didSelectAppearance(_ appearance: AppAppearance) {
@@ -45,9 +44,6 @@ final class RailAppearanceCountingViewModel: SidebarViewModel {
     func didSelectBackendFilter(_ backend: String) {}
     func didSelect(_ destination: MonitorDestination?) { selection = destination }
     func didTapNewSession() {}
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
-    func didTapInstallBannerDismiss() {}
     func didToggleExpansion(taskID: String) {}
     func didPressMoveCommand(_ direction: MoveCommandDirection) {}
 }

@@ -7,9 +7,8 @@ extension SidebarVM {
     /// list error occupies that space — same precedence order `computeEmptyStateMessage()` uses
     /// for its own first guard.
     ///
-    /// Not `private`: `SidebarVM+InstallBanner.swift`'s `recomputeInstallBanner()` calls this too,
-    /// so `showsLoadingSkeleton` is refreshed when an install event arrives before the first
-    /// listing (none of those publishers call `recompute()`).
+    /// Not `private`: the list-error subscription in `SidebarVM+Subscription.swift` calls this too,
+    /// so `showsLoadingSkeleton` is refreshed immediately even while presentation is off.
     func computeShowsLoadingSkeleton() -> Bool {
         !latestHasListed && latestListError == nil
     }
@@ -20,9 +19,8 @@ extension SidebarVM {
     /// the message entirely; a non-blank (trimmed) search always wins next; only then does the
     /// selected backend's own reported availability decide the copy.
     ///
-    /// Not `private`: `SidebarVM+InstallBanner.swift`'s `recomputeInstallBanner()` calls this too
-    /// (Code review round 1, finding 4) — `private` is file-scoped in Swift, same reasoning as
-    /// `installState`/`lastCheckMessage` etc. above.
+    /// Not `private`: the list-error subscription in `SidebarVM+Subscription.swift` calls this too —
+    /// `private` is file-scoped in Swift.
     func computeEmptyStateMessage() -> String? {
         guard latestHasListed, latestListError == nil else { return nil }
         guard sections.isEmpty else { return nil }

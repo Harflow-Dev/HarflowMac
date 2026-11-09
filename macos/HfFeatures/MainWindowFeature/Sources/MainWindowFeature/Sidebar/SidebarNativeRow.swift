@@ -11,9 +11,6 @@ import SwiftUI
     var toggle: (String) -> Void = { _ in }
     var toggleWorkflows: () -> Void = {}
     var newWorkflow: () -> Void = {}
-    var primary: () -> Void = {}
-    var secondary: () -> Void = {}
-    var dismiss: () -> Void = {}
     var loadTasks: () -> Void = {}
     var loadWorkflows: () -> Void = {}
     var move: (MoveCommandDirection) -> Void = { _ in }
@@ -27,7 +24,7 @@ import SwiftUI
 
     func reset() {
         select = { _ in }; toggle = { _ in }; toggleWorkflows = {}; newWorkflow = {}
-        primary = {}; secondary = {}; dismiss = {}; loadTasks = {}; loadWorkflows = {}
+        loadTasks = {}; loadWorkflows = {}
         move = { _ in }; mounted = { _ in }; history = { _, _ in }
         viewEvent = .constant(.none)
     }
@@ -160,9 +157,6 @@ struct SidebarNativeRow: View {
                 .allowsHitTesting(!entry.isFading)
                 .accessibilityHidden(entry.isFading)
             }
-        case .banner(let banner):
-            InstallBanner(model: banner.model, onPrimary: { actions.primary() },
-                          onSecondary: { actions.secondary() }, onDismiss: { actions.dismiss() })
         case .error(let message):
             Text(message).font(.hf(.secondary)).foregroundStyle(Color.failedRed).textSelection(.enabled)
         case .skeleton:

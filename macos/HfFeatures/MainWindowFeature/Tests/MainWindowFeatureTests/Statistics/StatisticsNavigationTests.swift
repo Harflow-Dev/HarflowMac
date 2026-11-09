@@ -11,7 +11,7 @@ import Testing
     @Test func givenSidebarReconciliation_whenBuilt_thenStatisticsHasOverviewDestination() throws {
         // given
         let input = SidebarListPresentation(
-            sections: [], workflowTitles: [], workflowsExpanded: true, banner: nil,
+            sections: [], workflowTitles: [], workflowsExpanded: true,
             listError: nil, skeleton: false, taskHistory: HistoryLoadingState(),
             workflowHistory: HistoryLoadingState(), emptyMessage: nil, fadingIDs: [],
             minimumRowHeight: 0, historyRevision: 0, historyToken: "token"

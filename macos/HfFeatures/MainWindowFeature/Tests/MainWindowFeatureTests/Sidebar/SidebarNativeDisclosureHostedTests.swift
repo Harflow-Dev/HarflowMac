@@ -190,7 +190,7 @@ struct SidebarNativeDisclosureHostedTests {
     private func presentation(items: [SidebarItem], fadingIDs: Set<String> = []) -> SidebarListPresentation {
         SidebarListPresentation(
             sections: [SidebarSection(bucket: .today, items: items)], workflowTitles: [], workflowsExpanded: true,
-            banner: nil, listError: nil, skeleton: false, taskHistory: HistoryLoadingState(),
+            listError: nil, skeleton: false, taskHistory: HistoryLoadingState(),
             workflowHistory: HistoryLoadingState(), emptyMessage: nil, fadingIDs: fadingIDs,
             minimumRowHeight: 0, historyRevision: 0, historyToken: "native-disclosure")
     }

@@ -29,20 +29,6 @@ import Testing
         var backendCatalog: BackendCatalog { .empty }
         func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { Just(.empty).eraseToAnyPublisher() }
         func title(_: String) -> String { "Task" }
-        func installStatePublisher() -> AnyPublisher<InstallState, Never> { Just(.installed).eraseToAnyPublisher() }
-        var installState: InstallState { .installed }
-        func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { Just(nil).eraseToAnyPublisher() }
-        var lastCheckMessage: String? { nil }
-        func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> { Just(nil).eraseToAnyPublisher() }
-        var installAnywayBlockedMessage: String? { nil }
-        func installNeed(for _: ToolError) -> InstallNeed? { nil }
-        func installDestination() -> String? { nil }
-        func install() async {}
-        func installUvThenHarflow() async {}
-        func retry() async {}
-        func checkAgain() async {}
-        func installAnyway() async -> Bool { false }
-        func reset() {}
         func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never> { runtimeSubject.eraseToAnyPublisher() }
         func installRuntime() async { installCount += 1 }
     }

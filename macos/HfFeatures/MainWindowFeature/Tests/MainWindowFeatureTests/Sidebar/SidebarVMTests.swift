@@ -49,12 +49,6 @@ import Testing
         let titlesSubject: PassthroughSubject<[String: String], Never>
         let titlesBox: Box<[String: String]>
         let routingSelectionBox: Box<MonitorDestination?>
-        let installStateSubject: PassthroughSubject<InstallState, Never>
-        let lastCheckMessageSubject: PassthroughSubject<String?, Never>
-        let installAnywayBlockedMessageSubject: PassthroughSubject<String?, Never>
-        let installStateBox: Box<InstallState>
-        let installNeedBox: Box<InstallNeed?>
-        let installDestinationBox: Box<String?>
         let revealSubject: PassthroughSubject<PendingReveal, Never>
         let pendingRevealBox: Box<PendingReveal?>
         let catalogSubject: PassthroughSubject<BackendCatalog, Never>
@@ -62,7 +56,7 @@ import Testing
     }
 
     func makeSUT(
-        connectionLine: String = "connecting…", installState: InstallState = .idle, catalog: BackendCatalog = .empty,
+        connectionLine: String = "connecting…", catalog: BackendCatalog = .empty,
         onSelect: ((MonitorDestination?) -> Void)? = nil, workflowUseCase: (any SidebarWorkflowUseCase)? = nil,
         visibility: FakeMonitorVisibility = FakeMonitorVisibility(), scheduler: CapturingScheduler = CapturingScheduler()
     ) -> SUT {
@@ -75,12 +69,6 @@ import Testing
         let titlesSubject = PassthroughSubject<[String: String], Never>()
         let titlesBox = Box<[String: String]>([:])
         let routingSelectionBox = Box<MonitorDestination?>(nil)
-        let installStateSubject = PassthroughSubject<InstallState, Never>()
-        let lastCheckMessageSubject = PassthroughSubject<String?, Never>()
-        let installAnywayBlockedMessageSubject = PassthroughSubject<String?, Never>()
-        let installStateBox = Box<InstallState>(installState)
-        let installNeedBox = Box<InstallNeed?>(nil)
-        let installDestinationBox = Box<String?>(nil)
         let revealSubject = PassthroughSubject<PendingReveal, Never>()
         let pendingRevealBox = Box<PendingReveal?>(nil)
         let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
@@ -102,20 +90,6 @@ import Testing
         given(routing).revealPublisher().willReturn(revealSubject.eraseToAnyPublisher())
         given(routing).consumeReveal(requestID: .any).willReturn()
 
-        given(useCase).installState.willProduce { installStateBox.value }
-        given(useCase).installStatePublisher().willReturn(installStateSubject.eraseToAnyPublisher())
-        given(useCase).lastCheckMessage.willReturn(nil)
-        given(useCase).lastCheckMessagePublisher().willReturn(lastCheckMessageSubject.eraseToAnyPublisher())
-        given(useCase).installAnywayBlockedMessage.willReturn(nil)
-        given(useCase).installAnywayBlockedMessagePublisher().willReturn(installAnywayBlockedMessageSubject.eraseToAnyPublisher())
-        given(useCase).installNeed(for: .any).willProduce { _ in installNeedBox.value }
-        given(useCase).installDestination().willProduce { installDestinationBox.value }
-        given(useCase).install().willReturn()
-        given(useCase).installUvThenHarflow().willReturn()
-        given(useCase).retry().willReturn()
-        given(useCase).checkAgain().willReturn()
-        given(useCase).installAnyway().willReturn(true)
-        given(useCase).reset().willReturn()
         stubAppearance(useCase)
 
         let sut = SidebarVM(useCase: useCase, routing: routing, workflowUseCase: workflowUseCase,
@@ -123,9 +97,7 @@ import Testing
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
             hasListedSubject: hasListedSubject, selectionSubject: selectionSubject, titlesSubject: titlesSubject,
-            titlesBox: titlesBox, routingSelectionBox: routingSelectionBox, installStateSubject: installStateSubject,
-            lastCheckMessageSubject: lastCheckMessageSubject, installAnywayBlockedMessageSubject: installAnywayBlockedMessageSubject,
-            installStateBox: installStateBox, installNeedBox: installNeedBox, installDestinationBox: installDestinationBox,
+            titlesBox: titlesBox, routingSelectionBox: routingSelectionBox,
             revealSubject: revealSubject, pendingRevealBox: pendingRevealBox, catalogSubject: catalogSubject, catalogBox: catalogBox
         )
     }
@@ -230,22 +202,17 @@ import Testing
         #expect(sut.emptyStateMessage == nil)
         #expect(sut.listErrorMessage == error.message)
         #expect(sut.isConnected == false)
-        #expect(sut.installBannerModel == nil)
     }
 
-    // Moved from a `.message`-forwarding assertion (settled plan, section 7): a `notFound` error
-    // for `harflow-ctl`/`harflow-setup` is an install need. The VM still computes its banner, but
-    // the sidebar renders none, so the plain `listErrorMessage` is kept; the error still outranks
-    // the empty state.
-    @Test func givenAListErrorThatIsAnInstallNeed_whenListed_thenThePlainErrorTextIsKept() async {
+    // A `notFound` error for `harflow-ctl` keeps the plain `listErrorMessage`, and the error still
+    // outranks the empty state.
+    @Test func givenANotFoundListError_whenListed_thenThePlainErrorTextIsKept() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
-        let useCase = harness.useCase
         let tasksSubject = harness.tasksSubject
         let listErrorSubject = harness.listErrorSubject
         let hasListedSubject = harness.hasListedSubject
-        harness.installNeedBox.value = .missing
         sut.didAppear()
         await sut.waitForPresentation()
         let error = ToolError.notFound(tool: "harflow-ctl", searched: [])
@@ -256,14 +223,10 @@ import Testing
         tasksSubject.send([])
 
         // then
-        await waitUntil { sut.installBannerModel != nil }
+        await waitUntil { sut.listErrorMessage != nil }
         #expect(sut.emptyStateMessage == nil)
         #expect(sut.isConnected == false)
         #expect(sut.listErrorMessage == error.message)
-        #expect(sut.installBannerModel?.title == "harflow isn't installed")
-        #expect(sut.installBannerModel?.detail == error.message)
-        #expect(sut.installBannerModel?.primaryTitle == "Install harflow")
-        verify(useCase).installNeed(for: .value(error)).called(1)
     }
 
     // MARK: - Loading skeleton (Monitor piece 11, Plan review round 1 item 4)
@@ -315,23 +278,6 @@ import Testing
         // then
         await waitUntil { sut.listErrorMessage != nil }
         #expect(!sut.showsLoadingSkeleton)
-    }
-
-    @Test func givenAnInstallBannerArrivesBeforeAnyListing_whenObserved_thenTheLoadingSkeletonKeepsShowing() async {
-        // given — the sidebar no longer renders the banner, so it must not suppress the skeleton:
-        // the first listing is still pending.
-        let harness = makeSUT()
-        let sut = harness.sut
-        sut.didAppear()
-        await sut.waitForPresentation()
-        #expect(sut.showsLoadingSkeleton)
-
-        // when — the install banner appears, with no listing published at all yet.
-        harness.installStateSubject.send(.needsGit)
-
-        // then
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.showsLoadingSkeleton)
     }
 
     // MARK: - Row metadata (F4-43)
