@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the "Starting task…" progress row from the New Session composer. Start stays disabled and named "Starting task" while a task starts, and "Starting task…" is announced once to assistive technology; the space the row occupied is gone.
+
 - Restore focus to the originating task-toolbar chip after its revealed pane closes. Deferred keyboard and accessibility focus respect the originating window, current pane request, user input and control visibility.
 
 - Move the standalone task screen's title and status into the window's top bar. The title, a status badge (with the running clock, or the recorded duration of a settled task) and the backend, model, repository and turns now sit in the toolbar's centre; the badge says "Running · owner lost", "Running · not verified" or "Done · exit not observed" where the engine's evidence supports it, and "taken over" after the status. Observation resumed, notices and access are chips at the right of the bar that open the matching group in the right pane; they shrink to icons or counts below 1100 points. The whole backend, model, repository and turns line hides when the window is narrow, the task is pending, the pane is open with a notices or continuity chip, or the title needs the room. The task header no longer repeats the title. Group and the workflow builder are unchanged.

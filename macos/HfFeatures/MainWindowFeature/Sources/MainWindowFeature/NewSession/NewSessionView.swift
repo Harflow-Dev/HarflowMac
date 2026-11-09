@@ -7,6 +7,7 @@
 //  success dismisses the sheet, failure stays inline.
 //
 
+import AppKit
 import HfCommon
 import HfUI
 import SwiftUI
@@ -171,6 +172,12 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             .accessibilityLabel("Task prompt")
     }
 
+    private func start() {
+        let wasStarting = viewModel.isStarting
+        viewModel.didTapStart()
+        if !wasStarting, viewModel.isStarting { StartAnnouncement.requested("Starting task…") }
+    }
+
     private func composerControls(optionsHeight: CGFloat) -> some View {
         HStack(spacing: HfRadius.Metrics.spacing8) {
             Button { optionsPresented.toggle() } label: {
@@ -219,7 +226,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             .menuIndicator(.hidden)
             .disabled(viewModel.optionsLocked)
             Spacer(minLength: HfRadius.Metrics.zero)
-            Button(action: viewModel.didTapStart) {
+            Button(action: start) {
                 Image(systemName: "arrow.up")
                     .font(.hf(.body, weight: .semibold))
                     .frame(width: HfRadius.Metrics.segmentedHeight, height: HfRadius.Metrics.segmentedHeight)
@@ -326,7 +333,6 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                     .foregroundStyle(Color.secondaryText)
                     .accessibilityIdentifier("composer-qualification-\(card.id)")
             }
-            if viewModel.isStarting { ProgressView("Starting task…") }
             if viewModel.composerState == .unknown {
                 Text("The start outcome is unknown. Review Recent work before starting another task.")
             }
@@ -407,4 +413,14 @@ extension NewSessionViewModel {
 extension NewSessionViewModel {
     var qualificationCards: [QualificationCard] { [] }
     func didTapQualification() {}
+}
+
+// MARK: - StartAnnouncement
+
+/// Announces the start once per accepted Start action; the composer shows no status row while starting.
+@MainActor private enum StartAnnouncement {
+    static func requested(_ message: String) {
+        NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                             userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+    }
 }

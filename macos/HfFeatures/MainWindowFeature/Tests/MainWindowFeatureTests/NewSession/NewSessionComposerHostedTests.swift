@@ -55,6 +55,7 @@ import Testing
         defer { NSApp.setActivationPolicy(previousActivationPolicy) }
         let model = NewSessionViewModelMock(repo: "/fixture/repository", message: "Submitted draft")
         model.composerState = state
+        model.isStarting = state == .submitting
         let host = NSHostingView(rootView: NewSessionView(model))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 620), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -74,6 +75,8 @@ import Testing
         #expect(!editor.isEditable)
         #expect(model.message == "Submitted draft")
         #expect(model.canReviewRecent == (state == .unknown))
+        #expect(!accessibilityTree(host).contains { matches($0, text: "Starting task…") })
+        #expect(!descendants(host).contains { $0 is NSProgressIndicator })
     }
 
     @Test func givenUnsupportedRequestedOptions_whenPopoverOpens_thenValuesRemainEditableAndScrollable() async throws {
