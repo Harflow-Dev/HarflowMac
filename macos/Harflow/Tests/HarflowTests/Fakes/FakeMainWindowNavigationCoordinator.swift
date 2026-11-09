@@ -25,7 +25,8 @@ final class FakeMainWindowNavigationCoordinator: MainWindowNavigationCoordinator
     
     var selection: MonitorDestination?
     var isNewSessionPresented = false
-    
+    let topBar = TaskTopBarHolder()
+
     /// Every `MonitorDestination` this fake was asked to `handle(path:)`, in order — so a test can
     /// assert both the resulting state *and* that delegation actually happened (rather than the
     /// state merely matching by coincidence).
