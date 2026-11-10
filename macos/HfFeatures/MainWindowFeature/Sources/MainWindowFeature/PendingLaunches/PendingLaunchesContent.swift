@@ -80,7 +80,7 @@ struct PendingLaunchesContent: View {
                     .accessibilityIdentifier("pending-launches-check-again")
             }
         }
-        .onAppear { focusedRow = focusRowID }
+        .onAppear { DispatchQueue.main.async { focusedRow = focusRowID } }
         .onChange(of: focusRowID) { _, id in focusedRow = id }
     }
 
@@ -105,7 +105,7 @@ struct PendingLaunchesContent: View {
     private var rows: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(presentation.rows) { row in
-                PendingLaunchRowView(row: row) { actions.select(row.id) }
+                PendingLaunchRowView(row: row, isFocused: focusedRow == row.id) { actions.select(row.id) }
                     .focused($focusedRow, equals: row.id)
             }
         }
@@ -117,11 +117,14 @@ struct PendingLaunchesContent: View {
 /// A selectable row: a button whose label is the row's visible lines.
 struct PendingLaunchRowView: View {
     let row: PendingLaunchesPresentation.Row
+    var isFocused = false
     var onSelect: () -> Void = {}
 
     var body: some View {
         Button(action: onSelect) { PendingLaunchRowLabel(row: row) }
-            .buttonStyle(PendingLaunchRowButtonStyle())
+            .buttonStyle(PendingLaunchRowButtonStyle(isFocused: isFocused))
+            .focusable()
+            .focusEffectDisabled()
             .accessibilityLabel([row.title, row.meta, row.id].compactMap(\.self).joined(separator: ", "))
             .accessibilityIdentifier("pending-launch-row")
     }
@@ -158,13 +161,16 @@ struct PendingLaunchRowLabel: View {
 
 /// The row's outline with the list-row hover and press fill.
 struct PendingLaunchRowButtonStyle: ButtonStyle {
+    var isFocused = false
+
     func makeBody(configuration: Configuration) -> some View {
-        PendingLaunchRowChrome(configuration: configuration)
+        PendingLaunchRowChrome(configuration: configuration, isFocused: isFocused)
     }
 }
 
 private struct PendingLaunchRowChrome: View {
     let configuration: ButtonStyleConfiguration
+    let isFocused: Bool
     @State private var hovering = false
 
     var body: some View {
@@ -172,6 +178,12 @@ private struct PendingLaunchRowChrome: View {
             .background(RoundedRectangle(cornerRadius: HfRadius.row)
                 .fill(hovering || configuration.isPressed ? Color.cardFill : Color.clear))
             .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.cardBorder, lineWidth: 1))
+            .overlay {
+                // The design's `:focus-visible` outline: 2px accent, 2px outside the row.
+                if isFocused {
+                    RoundedRectangle(cornerRadius: HfRadius.row + 2).stroke(Color.accentFill, lineWidth: 2).padding(-4)
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: HfRadius.row))
             .onHover { hovering = $0 }
     }

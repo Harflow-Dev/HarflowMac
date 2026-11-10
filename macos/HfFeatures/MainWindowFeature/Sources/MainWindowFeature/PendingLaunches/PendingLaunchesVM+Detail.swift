@@ -84,7 +84,7 @@ extension PendingLaunchesVM {
 
     // MARK: - Serialized owner calls
 
-    /// Checks are serialized per lease: the owner refuses a second check on the same lease while an
+    /// Checks are serialized per lease (the chain restarts with a newly acquired lease): the owner refuses a second check on the same lease while an
     /// earlier call is outstanding, so each operation awaits the previous one without cancelling it.
     /// This is ordering, not retry.
     private func enqueue(_ body: @escaping @MainActor (PendingLaunchesVM) async -> Void) {
@@ -108,6 +108,7 @@ extension PendingLaunchesVM {
             _ = await viewModel.useCase.check(selection: selection)
             guard viewModel.epoch == epoch, viewModel.selection == selection else { return }
             viewModel.reproject()
+            guard viewModel.selection != nil else { return }
             viewModel.firstCheckSettled = true
         }
     }
@@ -115,6 +116,7 @@ extension PendingLaunchesVM {
     private func finishResolve(_ result: PendingLaunchRecordedResult, selection: PendingLaunchSelection, epoch: Int, runtime: UUID?) {
         guard didSubscribe, self.epoch == epoch, self.selection == selection, useCase.snapshot.runtimeIdentity == runtime else { return }
         reproject()
+        guard self.selection != nil else { return }
         firstCheckSettled = true
         switch result {
         case .admitted(let task):

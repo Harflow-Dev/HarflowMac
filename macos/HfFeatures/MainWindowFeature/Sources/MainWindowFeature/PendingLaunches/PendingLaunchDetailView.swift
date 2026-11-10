@@ -1,3 +1,4 @@
+import Foundation
 import HfUI
 import SwiftUI
 
@@ -33,6 +34,11 @@ struct PendingLaunchDetailBody: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { titleFocused = true }
+        // The card is replaced when the state leaves the placeholder; re-assert focus on the new title.
+        .onChange(of: detail.kind) { _, _ in
+            titleFocused = false
+            DispatchQueue.main.async { titleFocused = true }
+        }
     }
 
     private func handler(for action: PendingLaunchDetailPresentation.Action) -> () -> Void {

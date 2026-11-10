@@ -154,7 +154,7 @@ invocation. The targeted read never certifies that all descendants were discover
 `PendingLaunchRepository` owns explicit public pending inventory and exact full-ID lookup separately
 from Stop invocation evidence. Acquire a read lease only while its feature is visible, bind the
 selected full ID, and synchronously clear/rebind that selection on every navigation change. Releasing
-the lease revokes delayed reads; there is no namespace polling timer. Refresh traverses from the first
+the lease revokes delayed reads and drops that lease's stored lookups (Stop attempts are kept); there is no namespace polling timer. Refresh traverses from the first
 page with at most64 requests,120 cooperative seconds and8MiB of conservatively charged response
 bytes (128KiB per request), including one cursor-expiry restart. Inventory retains at most4096 rows
 and8MiB of encoded raw payload. Incomplete/failed reads keep prior rows visibly stale; only a fresh,

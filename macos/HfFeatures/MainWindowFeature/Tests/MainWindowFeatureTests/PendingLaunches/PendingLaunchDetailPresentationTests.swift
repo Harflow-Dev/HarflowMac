@@ -75,7 +75,7 @@ import Testing
         }
     }
 
-    @Test func givenRefusedUnknownUnrecognizedOrUnrecognizedState_whenMapped_thenUnavailable() {
+    @Test func givenRefusedUnknownFutureDispositionOrFutureLaunchState_whenMapped_thenUnavailable() {
         // given / when / then
         for detail in [make(plain: "refused"), make(plain: "unknown"), make(plain: "future_disposition"),
                        make(PendingLaunchesFixture.item(id: id, state: "future_state"))] {
@@ -170,6 +170,13 @@ import Testing
         #expect(detail.facts.map(\.label) == ["Launch ID", "Resources"])
         #expect(fact("Resources", in: detail) == "None requested")
         #expect(fact("Created", in: noDate) == nil)
+    }
+
+    @Test func givenRepositoryPathWithSurroundingSpace_whenMapped_thenItIsShownUnchanged() {
+        // given / when
+        let detail = make(PendingLaunchesFixture.item(id: id, repoPath: " /projects/Harflow "))
+        // then
+        #expect(fact("Repository", in: detail) == " /projects/Harflow ")
     }
 
     @Test func givenCreatedTimestamps_whenFormatted_thenFixedShapeInTheGivenZone() {

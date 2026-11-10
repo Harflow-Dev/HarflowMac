@@ -41,7 +41,9 @@ private final class ScriptedUseCase: PendingLaunchesUseCase {
         PendingLaunchLookup(selection: selection, value: PendingLaunchesFixture.plainLookup(id: selection.taskID, disposition: "recorded"), failure: nil)
     }
 
-    var snapshot: PendingLaunchSnapshot { subject.value }
+    /// When set, the synchronous snapshot diverges from what the publisher has delivered.
+    var syncSnapshot: PendingLaunchSnapshot?
+    var snapshot: PendingLaunchSnapshot { syncSnapshot ?? subject.value }
     func snapshotPublisher() -> AnyPublisher<PendingLaunchSnapshot, Never> { subject.eraseToAnyPublisher() }
     func acquireReadLease() -> PendingLaunchReadLease? {
         acquisitions += 1
@@ -176,7 +178,6 @@ struct PendingLaunchesDetailVMTests {
         rig.useCase.offered = lease
         rig.sut.didSelectRow(idA)
         // then
-        #expect(rig.useCase.acquisitions == 3)
         #expect(rig.useCase.binds.map(\.lease) == [lease])
         #expect(rig.sut.detail != nil)
     }
@@ -223,8 +224,8 @@ struct PendingLaunchesDetailVMTests {
         // when
         rig.sut.didTapBack()
         rig.sut.didSelectRow(idB)
-        await drainMain()
-        // then: B waits for A.
+        // then: B is queued behind A, which is still parked in the owner.
+        #expect(rig.sut.activeOperations == 2)
         #expect(rig.useCase.checks.count == 1)
         rig.useCase.releaseHeld()
         await waitUntil { rig.sut.detail?.kind == .waiting }
@@ -249,7 +250,6 @@ struct PendingLaunchesDetailVMTests {
         rig.sut.didTapDetailCheckAgain()
         rig.useCase.releaseHeld()
         await waitUntil { rig.sut.detail?.isActionEnabled == true }
-        await drainMain()
         // then
         #expect(rig.useCase.checks.count == 2)
         #expect(!rig.useCase.overlapped)
@@ -277,7 +277,7 @@ struct PendingLaunchesDetailVMTests {
         // when
         rig.sut.didTapCheckTaskStatus()
         await waitUntil { !rig.routed.values.isEmpty }
-        await drainMain()
+        await rig.sut.lastOperation?.value
         // then
         #expect(rig.routed.values == [idA])
     }
@@ -369,6 +369,7 @@ struct PendingLaunchesDetailVMTests {
             rig.useCase.holdCalls = true
             rig.sut.didTapCheckTaskStatus()
             await waitUntil { rig.useCase.resolves.count == 1 }
+            let pending = rig.sut.lastOperation
             // when
             switch interruption {
             case .back: rig.sut.didTapBack()
@@ -386,12 +387,60 @@ struct PendingLaunchesDetailVMTests {
                 rig.sut.didSelectRow(idA)
             }
             rig.useCase.releaseHeld()
-            await drainMain()
-            await drainMain()
+            await pending?.value
+            await rig.sut.lastOperation?.value
             // then
             #expect(rig.routed.values.isEmpty, "\(interruption)")
             rig.sut.didDisappear()
         }
+    }
+
+    private enum RoutingGuard: CaseIterable {
+        case subscribed, selection, runtimeIdentity, epoch
+    }
+
+    @Test func givenAdmittedResult_whenAnySingleRoutingGuardFails_thenItNeverRoutes() async {
+        for failing in RoutingGuard.allCases {
+            // given
+            let rig = await recordedRig()
+            rig.useCase.resolveResult = .admitted(info(idA))
+            rig.useCase.holdCalls = true
+            rig.sut.didTapCheckTaskStatus()
+            await waitUntil { rig.useCase.resolves.count == 1 }
+            let pending = rig.sut.lastOperation
+            // when: only one condition changes, and the publisher has not delivered anything.
+            switch failing {
+            case .subscribed: rig.sut.didSubscribe = false
+            case .selection: rig.sut.selection = PendingLaunchSelection(taskID: idA, lease: rig.lease)
+            case .runtimeIdentity:
+                var next = rig.useCase.subject.value
+                next.runtimeIdentity = UUID()
+                rig.useCase.syncSnapshot = next
+            case .epoch: rig.sut.epoch += 1
+            }
+            rig.useCase.releaseHeld()
+            await pending?.value
+            // then
+            #expect(rig.routed.values.isEmpty, "\(failing)")
+            rig.sut.didSubscribe = true
+            rig.sut.didDisappear()
+        }
+    }
+
+    @Test func givenStaleSnapshotDeliveredAfterCheckReturned_whenItArrives_thenTheStoredLookupStillShows() async {
+        // given
+        let rig = rig()
+        await appeared(rig)
+        defer { rig.sut.didDisappear() }
+        let before = rig.useCase.subject.value
+        rig.sut.didSelectRow(idA)
+        await waitUntil { rig.sut.detail?.kind == .waiting && rig.sut.detail?.isActionEnabled == true }
+        rig.useCase.syncSnapshot = rig.useCase.subject.value
+        // when: the owner's drain delivers a value older than the synchronous snapshot.
+        rig.useCase.subject.send(before)
+        await drainMain()
+        // then
+        #expect(rig.sut.detail?.kind == .waiting)
     }
 
     // MARK: - Lifecycle

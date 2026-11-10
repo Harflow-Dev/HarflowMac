@@ -118,16 +118,24 @@ private func detailPreview(_ state: String, _ scheme: ColorScheme) -> some View 
     pendingPreview(PendingLaunchesFixture.inventory, detail: PendingLaunchesFixture.detail(state)).preferredColorScheme(scheme)
 }
 
-#Preview("Detail waiting light") { detailPreview("waiting", .light) }
-#Preview("Detail waiting dark") { detailPreview("waiting", .dark) }
-#Preview("Detail preparing light") { detailPreview("preparing", .light) }
-#Preview("Detail handshake light") { detailPreview("preparing-handshake", .light) }
-#Preview("Detail granted light") { detailPreview("granted", .light) }
-#Preview("Detail not started light") { detailPreview("not-started", .light) }
-#Preview("Detail unavailable light") { detailPreview("unavailable", .light) }
-#Preview("Detail missing light") { detailPreview("missing", .light) }
-#Preview("Detail recorded light") { detailPreview("recorded", .light) }
-#Preview("Detail handoff failed light") { detailPreview("handoff-failed", .light) }
-#Preview("Detail checking light") { detailPreview("checking", .light) }
-#Preview("Detail checking dark") { detailPreview("checking", .dark) }
+#Preview("Detail Waiting light") { detailPreview("waiting", .light) }
+#Preview("Detail Waiting dark") { detailPreview("waiting", .dark) }
+#Preview("Detail Preparing light") { detailPreview("preparing", .light) }
+#Preview("Detail Preparing dark") { detailPreview("preparing", .dark) }
+#Preview("Detail Handshake light") { detailPreview("preparing-handshake", .light) }
+#Preview("Detail Handshake dark") { detailPreview("preparing-handshake", .dark) }
+#Preview("Detail Granted light") { detailPreview("granted", .light) }
+#Preview("Detail Granted dark") { detailPreview("granted", .dark) }
+#Preview("Detail Not started light") { detailPreview("not-started", .light) }
+#Preview("Detail Not started dark") { detailPreview("not-started", .dark) }
+#Preview("Detail Unavailable light") { detailPreview("unavailable", .light) }
+#Preview("Detail Unavailable dark") { detailPreview("unavailable", .dark) }
+#Preview("Detail Missing light") { detailPreview("missing", .light) }
+#Preview("Detail Missing dark") { detailPreview("missing", .dark) }
+#Preview("Detail Recorded light") { detailPreview("recorded", .light) }
+#Preview("Detail Recorded dark") { detailPreview("recorded", .dark) }
+#Preview("Detail Handoff failed light") { detailPreview("handoff-failed", .light) }
+#Preview("Detail Handoff failed dark") { detailPreview("handoff-failed", .dark) }
+#Preview("Detail Checking light") { detailPreview("checking", .light) }
+#Preview("Detail Checking dark") { detailPreview("checking", .dark) }
 #endif

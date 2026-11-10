@@ -36,7 +36,7 @@ no embedded terminal anywhere in this package:
   held, calls `bindSelection` synchronously, records the owner's synchronous runtime identity and bumps a local
   epoch, then queues `check`. The detail shows only a lookup whose `selection` equals the current one; before
   one is stored it draws a copy-free placeholder, and a first check that stored nothing shows "Launch status
-  unavailable". Checks and `resolveRecorded` run through one per-lease chain that awaits (never cancels) the
+  unavailable". Checks and `resolveRecorded` run through one chain per acquired lease (a newly acquired lease starts a fresh chain) that awaits (never cancels) the
   previous call, because the owner answers `.busy` while an earlier call is outstanding; Check again and Check
   task status are disabled while any call is queued or in flight. A recorded result is routed through
   `PendingLaunchesRouting.openRecordedTask` (held weakly; the coordinator calls `selectTask`) only when it is

@@ -151,7 +151,8 @@ extension PendingLaunchDetailPresentation {
         if let backend = trimmed(launch.backend) {
             facts.append(.init(label: "Harness", value: BackendStyle.displayName(backend), isCode: false))
         }
-        if let repository = trimmed(launch.repoPath) {
+        // Trimming only detects a blank value: the delivered path is shown unchanged.
+        if let repository = launch.repoPath, trimmedText(repository) != nil {
             facts.append(.init(label: "Repository", value: repository, isCode: false))
         }
         if let created = launch.createdAt.flatMap(trimmedText).flatMap(ISODate.parse) {
@@ -188,19 +189,37 @@ extension PendingLaunchDetailPresentation {
         return "\(base) Reason: \(reason.hasSuffix(".") ? reason : reason + ".")"
     }
 
-    /// Fixed English shape `d MMM yyyy, HH:mm` in the given zone (the app is English-only).
+    /// Fixed English shape `d MMM yyyy, HH:mm` in the given zone (the app is English-only). Formatters are cached
+    /// per zone: builds run concurrently off the main actor and a configured `DateFormatter` is safe to share.
     static func createdText(_ date: Date, timeZone: TimeZone) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = timeZone
-        formatter.dateFormat = "d MMM yyyy, HH:mm"
-        return formatter.string(from: date)
+        formatters.withLock { cache in
+            if let cached = cache[timeZone.identifier] { return cached.string(from: date) }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = timeZone
+            formatter.dateFormat = "d MMM yyyy, HH:mm"
+            cache[timeZone.identifier] = formatter
+            return formatter.string(from: date)
+        }
     }
+
+    private static let formatters = FormatterCache()
 
     private static func trimmed(_ value: String?) -> String? { value.flatMap(trimmedText) }
 
     private static func trimmedText(_ value: String) -> String? {
         let result = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return result.isEmpty ? nil : result
+    }
+}
+
+// MARK: - FormatterCache
+
+private final class FormatterCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var formatters: [String: DateFormatter] = [:]
+
+    func withLock<Value>(_ body: (inout [String: DateFormatter]) -> Value) -> Value {
+        lock.withLock { body(&formatters) }
     }
 }

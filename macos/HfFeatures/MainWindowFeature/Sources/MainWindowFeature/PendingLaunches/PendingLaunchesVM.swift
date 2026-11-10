@@ -97,9 +97,15 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
     /// Checks and recorded-status calls queued or in flight for the current appearance.
     @ObservationIgnored var activeOperations = 0
     @ObservationIgnored var operationSession = UUID()
-    /// The newest queued operation. Kept across disappearance and never cancelled: the owner's busy slot
-    /// lasts until its earlier ctl call returns.
+    /// The newest queued operation of the current lease. Kept across disappearance and never cancelled, because
+    /// the owner's busy slot lasts until its earlier ctl call returns; a newly acquired lease starts a fresh chain.
     @ObservationIgnored var lastOperation: Task<Void, Never>?
+
+    /// The delivered snapshot is only a trigger: the owner's publication drain can deliver an older value after
+    /// a call returned, so the projection is always read from the synchronous owner snapshot.
+    @ObservationIgnored var source = PendingLaunchesSource(PendingLaunchSnapshot()) {
+        didSet { projection = PendingLaunchesProjection(useCase.snapshot, lease: lease) }
+    }
 
     @ObservationIgnored var projection = PendingLaunchesProjection(runtimeIdentity: UUID(), inventory: .init()) {
         didSet {
@@ -131,10 +137,7 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
             .map(PendingLaunchesSource.init)
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] source in
-                guard let self else { return }
-                projection = PendingLaunchesProjection(source, lease: lease)
-            }
+            .weakAssign(to: \.source, on: self)
             .store(in: &cancellables)
         isStarting = true
         let initial = useCase.snapshot
@@ -177,6 +180,7 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
     func acquireLease() {
         if let acquired = useCase.acquireReadLease() {
             lease = acquired
+            lastOperation = nil
             leaseRefused = false
         } else {
             leaseRefused = true
