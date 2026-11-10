@@ -160,8 +160,12 @@ no embedded terminal anywhere in this package:
   queried from the shared action repository on mount/invalidation, gated again on matching current
   Running/alive-owner evidence. It keeps the Running badge, adds the leading info notice and
   disables the transcript Stopping… action without touching the draft or send behavior. VM
-  disappearance does not clear the repository request. Settling, status-unavailable and Continue
-  launch need their separate evidence/action stages.
+  disappearance does not clear the repository request. Settling uses a separate observable
+  current-member/read-generation/local-scope qualification; never reuse the retained Changes
+  settling flag. Clear it at read start, invalid frame/scope/epoch, teardown and cadence cap.
+  Require mounted activity lease and current no-failure log state, not caught-up/drained history.
+  Preserve reconstructed-outcome priority. Status-unavailable and Continue launch remain separate
+  evidence/action stages.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

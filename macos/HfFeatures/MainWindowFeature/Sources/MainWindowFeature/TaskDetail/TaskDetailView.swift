@@ -41,6 +41,7 @@ protocol TaskDetailViewModel: ViewModel {
     var ancestorCrumbs: [AncestorCrumb] { get }
     var isBusy: Bool { get }
     var isStopping: Bool { get }
+    var isSettling: Bool { get }
     var outcomeMessage: String? { get }
     var harflowApprovalBackend: String? { get }
     func didTapAllowHarflowTools()
@@ -125,6 +126,7 @@ protocol TaskDetailViewModel: ViewModel {
 
 extension TaskDetailViewModel {
     var isStopping: Bool { false }
+    var isSettling: Bool { false }
     var requestReadState: TaskRequestReadState { .notRequested }
     var observationFrames: [String: EventObservationFrame] { [:] }
     var orderedHistoryFrames: [EventObservationFrame] { [] }

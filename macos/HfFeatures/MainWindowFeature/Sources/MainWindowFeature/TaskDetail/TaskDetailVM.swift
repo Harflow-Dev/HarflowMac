@@ -179,6 +179,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     private(set) var ancestorCrumbs: [AncestorCrumb] = []
     private(set) var isBusy = false
     private(set) var isStopping = false
+    var settlingReadEvidence: TaskSettlingReadEvidence?
     private(set) var outcomeMessage: String?
     /// Send-now refusals keyed by message id. The engine keeps the message queued and does not
     /// store the refusal on it, so the bubble reads the note from the send result.

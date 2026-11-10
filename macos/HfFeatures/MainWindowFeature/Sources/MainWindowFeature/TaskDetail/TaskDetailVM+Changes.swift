@@ -66,7 +66,8 @@ extension TaskDetailVM {
         let status = changesReadMemberStatus(detail) ?? detail.status
         if changesLifecycle.memberID != member {
             beginChangesEpoch(member: member, status: status, showsLoading: true)
-        } else if changesLifecycle.shownStatus != status || changesLifecycle.memberIDs != ids {
+        } else if changesLifecycle.shownStatus != status || changesLifecycle.memberIDs != ids
+            || changesLifecycle.observationScope != observationFrames[member]?.scope {
             beginChangesEpoch(member: member, status: status, showsLoading: false)
         }
         let picker = TaskChangesTurnPicker.make(memberIDs: ids, selectedID: member)
@@ -111,6 +112,7 @@ extension TaskDetailVM {
     func beginChangesEpoch(member: String, status: TaskStatus, showsLoading: Bool) {
         cancelChangesWork()
         changesLifecycle.memberID = member
+        changesLifecycle.observationScope = observationFrames[member]?.scope
         changesLifecycle.shownStatus = status
         changesLifecycle.memberIDs = conversationMembers.map(\.taskID)
         changesLifecycle.needsRead = true
@@ -137,6 +139,7 @@ extension TaskDetailVM {
 
     /// Cancels the read and the cadence and makes every earlier generation stale.
     func cancelChangesWork() {
+        settlingReadEvidence = nil
         changesReadTask?.cancel()
         changesReadTask = nil
         changesCadenceTask?.cancel()
@@ -149,6 +152,7 @@ extension TaskDetailVM {
 
     /// Starts one listing read in a new generation. The presentation on screen stays until the result applies.
     private func startChangesRead() {
+        settlingReadEvidence = nil
         changesReadTask?.cancel()
         changesCadenceTask?.cancel()
         changesCadenceTask = nil
@@ -158,6 +162,7 @@ extension TaskDetailVM {
         changesLifecycle.needsRead = false
         if changesTabCount != nil { changesTabCount = nil }
         let member = changesLifecycle.memberID ?? currentTaskID
+        let scope = observationFrames[member]?.scope
         let fence = changesFence
         changesReadTask = Task { [weak self, useCase] in
             let key = TaskChangesKey(taskID: member, generation: generation)
@@ -176,8 +181,10 @@ extension TaskDetailVM {
                 TaskChangesPresentationBuilder.build(taskID: member, outcome: outcome)
             }.value
             guard !Task.isCancelled, let self, changesLifecycle.generation == generation,
-                  changesLifecycle.memberID == member else { return }
+                  changesLifecycle.memberID == member, changesLifecycle.observationScope == scope,
+                  observationFrames[member]?.scope == scope else { return }
             applyChanges(built, generation: generation)
+            qualifySettlingRead(member: member, generation: generation, scope: scope, isSettling: built.isSettling)
         }
     }
 
@@ -247,6 +254,7 @@ extension TaskDetailVM {
             guard !Task.isCancelled, let self, changesLifecycle.generation == generation, isMounted else { return }
             // The cap is checked again at wake: a wake after sleep can land past the deadline.
             guard scheduler.now().timeIntervalSince(since) < TaskChangesLifecycle.settlingCap else {
+                settlingReadEvidence = nil
                 changesLifecycle.capped = true
                 if changesPresentation != .settlingCapped { changesPresentation = .settlingCapped }
                 return

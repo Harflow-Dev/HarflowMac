@@ -451,6 +451,7 @@ HOSTED_SUITE_NAMES = (
     "MainWindowFeatureTests.TaskHeaderCleanupHostedTests",
     "MainWindowFeatureTests.TaskStateTreatmentHostedTests",
     "MainWindowFeatureTests.TaskStoppingHostedTests",
+    "MainWindowFeatureTests.TaskSettlingHostedTests",
     TASK_PANE_CAPTURE_SUITE,
     TASK_PANE_ESCAPE_SUITE,
     SUMMARY_ENTRY_FEED_SUITE,

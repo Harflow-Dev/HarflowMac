@@ -13,10 +13,10 @@ struct TaskStateTreatmentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: TaskScreenStyle.Banner.gap) {
-                Image(systemName: model.kind == .stopping ? "clock" : "exclamationmark.triangle")
+                Image(systemName: isInformationNotice ? "clock" : "exclamationmark.triangle")
                     .font(TaskScreenStyle.sans(size: 14))
                     .frame(width: 14, height: 14)
-                    .foregroundStyle(model.kind == .stopping ? TaskScreenStyle.Colors.textSecondary.color : TaskScreenStyle.Colors.warning.color)
+                    .foregroundStyle(isInformationNotice ? TaskScreenStyle.Colors.textSecondary.color : TaskScreenStyle.Colors.warning.color)
                     .padding(.top, model.isLeadingNotice ? 0 : TaskScreenStyle.Banner.iconTopInset)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 0) {
@@ -51,14 +51,17 @@ struct TaskStateTreatmentView: View {
         }
     }
 
+    private var isInformationNotice: Bool { model.kind == .stopping || model.kind == .settling }
+
     private var noticeFill: Color {
-        model.kind == .stopping ? TaskScreenStyle.Colors.surfaceSunken.color : TaskScreenStyle.Colors.warningSubtle.color
+        isInformationNotice ? TaskScreenStyle.Colors.surfaceSunken.color : TaskScreenStyle.Colors.warningSubtle.color
     }
 
     private var textSpec: TaskScreenStyle.TextSpec { model.isLeadingNotice ? TaskScreenStyle.Notice.text : TaskScreenStyle.Banner.text }
 
     private var title: String {
         switch model.kind {
+        case .settling: "Settling"
         case .stopping: "Stop requested"
         case .ownerLost: "The process watching this run is gone"
         case .unverified: "Harflow can't confirm this run"
@@ -69,6 +72,7 @@ struct TaskStateTreatmentView: View {
 
     private var message: String {
         switch model.kind {
+        case .settling: "The run finished. Its last events and stored changes may still arrive."
         case .stopping: "This run has not exited yet. The status changes when Harflow records the outcome."
         case .ownerLost:
             "Captured output has stopped and no later summary is promised. The run itself may still be working. "
@@ -104,7 +108,7 @@ struct TaskStateTreatmentView: View {
             Button("Open Events", action: onOpenEvents)
 .buttonStyle(.borderless)
                 .accessibilityIdentifier("task-state-open-events")
-        case .reconstructed, .stopping: EmptyView()
+        case .reconstructed, .stopping, .settling: EmptyView()
         }
     }
 

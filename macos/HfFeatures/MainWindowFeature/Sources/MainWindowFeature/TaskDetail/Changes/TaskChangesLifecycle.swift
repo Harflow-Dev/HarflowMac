@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import HfRepository
 import MonitorCore
 
 // MARK: - TaskChangesFence
@@ -45,6 +46,8 @@ struct TaskChangesLifecycle {
     var generation: UInt64 = 0
     /// The member the current epoch reads.
     var memberID: String?
+    /// Local observation identity, not a producer transaction certificate.
+    var observationScope: EventObservationScope?
     /// The conversation's member ids when the epoch began, to recognise a changed member set.
     var memberIDs: [String] = []
     /// The shown status of that member when the epoch began, to recognise a transition.

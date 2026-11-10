@@ -142,6 +142,7 @@ extension TaskDetailVM {
     }
 
     func applyObservation(_ frame: EventObservationFrame, for id: String) {
+        if id == currentTaskID, frame.taskID != id || !frame.qualifiesForSettlingNotice { settlingReadEvidence = nil }
         observationFrames[id] = frame
         itemsByMember[id] = frame.items
         eventsByMember[id] = frame.events
@@ -149,6 +150,7 @@ extension TaskDetailVM {
     }
 
     func releaseMemberLease(_ id: String) {
+        if id == currentTaskID { settlingReadEvidence = nil }
         leases[id]?.release()
         leases[id] = nil
         memberLeaseTokens[id] = nil

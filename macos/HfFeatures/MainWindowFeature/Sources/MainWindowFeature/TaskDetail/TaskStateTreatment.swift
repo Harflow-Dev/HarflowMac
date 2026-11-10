@@ -5,7 +5,7 @@ import Foundation
 /// Snapshot-supported uncertainty shown only by the standalone task mount.
 struct TaskStateTreatment: Equatable, Sendable {
     enum Kind: String, Equatable, Sendable {
-        case ownerLost, unverified, reconstructed, unknownFailed, stopping
+        case ownerLost, unverified, reconstructed, unknownFailed, stopping, settling
     }
 
     let taskID: String
@@ -13,11 +13,11 @@ struct TaskStateTreatment: Equatable, Sendable {
     var isStopDisabled = false
     var showsCopyResumeCommand = false
 
-    var isLeadingNotice: Bool { kind == .reconstructed || kind == .stopping }
+    var isLeadingNotice: Bool { kind == .reconstructed || kind == .stopping || kind == .settling }
     var id: String { "activity-task-state-" + taskID }
 
     static func project(taskID: String, evidence: TaskSnapshotEvidence?, isBusy: Bool,
-                        canCancel: Bool, hasResumeCommand: Bool, isStopping: Bool = false) -> Self? {
+                        canCancel: Bool, hasResumeCommand: Bool, isStopping: Bool = false, isSettling: Bool = false) -> Self? {
         guard let evidence, evidence.hasMatchingSnapshot, !evidence.takenOver else { return nil }
         let kind: Kind
         switch evidence.status {
@@ -30,6 +30,7 @@ struct TaskStateTreatment: Equatable, Sendable {
             }
         case .completed where evidence.exitCode == nil: kind = .reconstructed
         case .failed where evidence.exitCode == nil && evidence.logState == .incomplete: kind = .unknownFailed
+        case let status where status.isTerminal && isSettling: kind = .settling
         default: return nil
         }
         return Self(taskID: taskID, kind: kind, isStopDisabled: isBusy || !canCancel,
@@ -42,7 +43,7 @@ extension TaskDetailViewModel {
     var stateTreatment: TaskStateTreatment? {
         guard let task else { return nil }
         return .project(taskID: task.taskID, evidence: snapshotEvidence, isBusy: isBusy,
-                        canCancel: canCancel, hasResumeCommand: resumeCommand != nil, isStopping: isStopping)
+                        canCancel: canCancel, hasResumeCommand: resumeCommand != nil, isStopping: isStopping, isSettling: isSettling)
     }
 
     func didTapRefreshState() {}

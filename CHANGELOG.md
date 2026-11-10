@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show a Settling notice only while current event and stored-change reads both support it, retaining the reported status and existing outcome warnings.
+
 - Keep an acknowledged Stop request across task navigation and show Stopping only after a fresh status read still reports Running with an alive observer.
 
 - Explain standalone task owner loss, unverified supervision and inferred outcomes using the reported snapshot, with existing Stop, Refresh, resume-copy and Events actions.

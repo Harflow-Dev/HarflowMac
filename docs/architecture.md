@@ -317,6 +317,17 @@ only when the qualified-ID set changes. The standalone VM queries on mount and i
 keeps the badge Running, places the info notice before activity and disables only the composer
 Stopping… action; send behavior and drafts are preserved. Other mounts receive no new treatment.
 
+Settling is a separate notice qualification, not the retained Changes pane flag. The standalone
+VM requires a live activity lease, a status-matching terminal snapshot, current event lifecycle
+without read failure, and a latest-generation pending/capture_settling Changes result for the
+current member under the same local observation scope. It does not require drained/caught-up
+history, which would exclude settling output. Session/source/window changes start a new Changes
+epoch; read start, cancellation, invalid event evidence, teardown and the cadence cap discard the
+notice qualification. Ordinary Changes content and its cadence remain unchanged. The notice
+precedes activity and leaves the reported badge/status intact. Completed without an observed
+exit retains the reconstruction warning if predicates overlap. Local scope binding is consumer
+freshness evidence, not an engine producer-generation certificate or atomic cross-command proof.
+
 Standalone task Stop uses the main window coordinator's mutually exclusive modal destination,
 shared with the workflow launcher. The request captures the current run ID and the existing
 client-derived earlier-turn exclusion list. Confirmation consumes the active request before
