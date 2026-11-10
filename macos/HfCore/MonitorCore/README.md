@@ -102,3 +102,19 @@ delivery. An engine error from a launch does not prove that no task exists, beca
 refused launch can leave a record behind. A launch has no idempotency key and is never
 retried automatically. Qualification is decided by the engine at launch; this package
 holds no qualification table.
+
+
+## Continue client foundation
+
+`CtlClient.continueTask(_:)` sends the base `continue SOURCE` operation after one fresh
+handshake advertises both `task-continue.v1` and `task-successors.v1`. It returns the existing
+`ConversationLaunchOutcome`; `.launched` acknowledges acceptance and may describe a launch
+still pending resources, never completion. It sends no conversation profile or optional launch
+flags. Source prefixes are resolved by the engine.
+
+The phase-aware transport retains structured engine errors and uncertainty after possible
+dispatch, including timeout or malformed responses. It never retries. A result from this
+invocation cannot clear uncertainty retained from an earlier one, and an empty recorded-successor
+page cannot establish that no pending launch exists. Launch envelopes must contain exactly one
+of result, error or unknown. There are no callers or task-screen controls yet; evidence remains
+vendored 0.0.12 fixtures and fake runners, not exact-runtime qualification.

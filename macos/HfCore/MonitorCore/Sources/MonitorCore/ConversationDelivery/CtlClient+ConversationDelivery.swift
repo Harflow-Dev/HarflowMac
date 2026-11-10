@@ -113,6 +113,21 @@ public extension CtlClient {
         }
     }
 
+    /// Requests a base Continue successor after one fresh probe advertises both
+    /// `task-continue.v1` and `task-successors.v1`. The engine resolves the unchanged source ID or prefix.
+    /// Acknowledgement may precede resource readiness; it never proves completion. No automatic
+    /// retry occurs, and a later refusal cannot clear an earlier uncertain invocation.
+    func continueTask(_ sourceID: String) async -> ConversationLaunchOutcome {
+        await conversationStart(command: "continue", options: [], positionals: [sourceID],
+                                requiredCapabilities: [CtlCapability.taskContinue, CtlCapability.taskSuccessors],
+                                validateTaskID: { id in
+                                    !id.isEmpty && id.utf8.allSatisfy {
+                                        (65 ... 90).contains($0) || (97 ... 122).contains($0) ||
+                                            (48 ... 57).contains($0) || $0 == 95 || $0 == 45
+                                    }
+                                })
+    }
+
     /// Starts a task enrolled in conversation delivery under `profile`, appended after the
     /// request's own arguments.
     ///
@@ -168,10 +183,12 @@ extension CtlClient {
         }
     }
 
-    /// Runs `run` or `resume` through the phase-tagged exchange and classifies it with the shared rules.
-    func conversationStart(command: String, options: [String], positionals: [String]) async -> ConversationLaunchOutcome {
+    /// Runs `run`, `resume` or base Continue through the phase-tagged exchange and shared classification.
+    func conversationStart(command: String, options: [String], positionals: [String],
+                           requiredCapabilities: [String] = [CtlCapability.conversationDelivery],
+                           validateTaskID: (String) -> Bool = ConversationDeliveryWire.isIdentifier) async -> ConversationLaunchOutcome {
         let exchange = await conversationExchange(command: command, options: options, positionals: positionals,
-                                                  timeout: Self.startTimeout)
+                                                  timeout: Self.startTimeout, requiredCapabilities: requiredCapabilities)
         let classified: ConversationDeliveryOutcome<ConversationLaunchMarker, String>
         switch exchange {
         case .notLaunched(let cause):
@@ -179,7 +196,7 @@ extension CtlClient {
         case .launched(let launched):
             classified = classifyConversationMutation(launched, command: command, options: options,
                                                       request: ConversationLaunchMarker(), timeout: Self.startTimeout) {
-                guard let id = $0["task_id"]?.stringValue, ConversationDeliveryWire.isIdentifier(id) else { return nil }
+                guard let id = $0["task_id"]?.stringValue, validateTaskID(id) else { return nil }
                 return id
             }
         }
@@ -193,8 +210,11 @@ extension CtlClient {
             // The classifier has validated the envelope; a validated `unknown` document at exit 3 is
             // the engine's own "owner never answered" report. Keep its message.
             if case .launched(.success(let output)) = exchange,
-               let unknown = CtlDocument.firstJSONObject(in: output.stdout)?["unknown"]?.objectValue {
-                return .uncertain(.processFailure(.unknownOutcome(message: unknown["message"]?.stringValue ?? "")))
+               let document = CtlDocument.firstJSONObject(in: output.stdout),
+               document["result"] == nil, document["error"] == nil,
+               let unknown = document["unknown"]?.objectValue,
+               let message = unknown["message"]?.stringValue {
+                return .uncertain(.processFailure(.unknownOutcome(message: message)))
             }
             return .uncertain(cause)
         case .uncertain(_, let cause): return .uncertain(cause)
@@ -227,7 +247,7 @@ extension CtlClient {
     /// The same fresh probe, capability check, argv ordering and transport metrics as `raw`,
     /// but phase-tagged. There is deliberately no supersede guard after launch.
     func conversationExchange(command: String, options: [String], positionals: [String],
-                              timeout: Double) async -> ConversationExchange {
+                              timeout: Double, requiredCapabilities: [String] = [CtlCapability.conversationDelivery]) async -> ConversationExchange {
         guard operationIsCurrent(), !Task.isCancelled else { return .notLaunched(.cancelledBeforeLaunch) }
         let probe = await VersionInfoClient(executable: executable, environment: environment,
                                             context: compatibilityContext, runner: runner).check(requiring: [.ctl])
@@ -235,8 +255,8 @@ extension CtlClient {
         case .failure(let error):
             return .notLaunched(.probeFailed(error))
         case .success(let info):
-            guard info.capabilities.contains(CtlCapability.conversationDelivery) else {
-                return .notLaunched(.missingCapability(CtlCapability.conversationDelivery))
+            for capability in requiredCapabilities where !info.capabilities.contains(capability) {
+                return .notLaunched(.missingCapability(capability))
             }
         }
         guard operationIsCurrent(), !Task.isCancelled else { return .notLaunched(.cancelledBeforeLaunch) }
@@ -270,6 +290,13 @@ extension CtlClient {
         if output.timedOut { return .uncertain(request, cause: .timedOut(seconds: timeout)) }
         if output.stdout.count > Self.conversationMutationStdoutCap {
             return .uncertain(request, cause: .outputTooLarge(bytes: output.stdout.count))
+        }
+        // Reject colliding payloads before transport or exit classification can reinterpret one.
+        if let document = CtlDocument.firstJSONObject(in: output.stdout),
+           ["result", "error", "unknown"].filter({ document[$0] != nil }).count > 1 {
+            let detail = document["result"] != nil && document["error"] != nil && document["unknown"] == nil
+                ? "both result and error" : "multiple result/error/unknown payloads"
+            return .uncertain(request, cause: .inconsistentEnvelope(exitCode: output.exitCode, detail: detail))
         }
         // Exit status 2 is not proof by itself and stderr text is never proof: the runner ignores the
         // termination reason, so a signal after durable admission can also read as 2. Only a

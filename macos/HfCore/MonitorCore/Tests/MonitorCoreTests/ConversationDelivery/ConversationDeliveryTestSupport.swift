@@ -133,6 +133,7 @@ final class ConversationRunner: ProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var calls: [[String]] = []
     private var timeouts: [Double] = []
+    private var invocations: [(String, [String: String])] = []
     private var probes = 0
     private var commands = 0
     private let probe: Probe
@@ -144,6 +145,7 @@ final class ConversationRunner: ProcessRunning, @unchecked Sendable {
         self.command = command
     }
 
+    var runtimeCalls: [(String, [String: String])] { lock.withLock { invocations } }
     var allCalls: [[String]] { lock.withLock { calls } }
     var commandCalls: [[String]] { allCalls.filter { $0 != ["version-info", "--json"] } }
     var probeCount: Int { lock.withLock { probes } }
@@ -151,6 +153,7 @@ final class ConversationRunner: ProcessRunning, @unchecked Sendable {
 
     func run(executable: String, arguments: [String], environment: [String: String], currentDirectory: String?,
              timeout: Double) async -> Result<ProcessOutput, ToolError> {
+        lock.withLock { invocations.append((executable, environment)) }
         if arguments == ["version-info", "--json"] {
             let index = lock.withLock { () -> Int in
                 probes += 1

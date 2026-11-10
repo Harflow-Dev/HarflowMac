@@ -23,6 +23,20 @@ func convRunSend(
 /// Outcome classification, one test per row of the plan's table. Rows that use a fixture say so;
 /// every other row is a SYNTHETIC runner answer, not engine output.
 struct ConversationDeliveryOutcomeTests {
+    @Test func givenResultAndUnknownCollision_whenClassified_thenUncertainBeforeReceiptDecode() {
+        // given
+        let client = conversationClient(ConversationRunner { _, _ in convRaw(exit: 0) })
+        let answer = convDocument(["result": .object([:]), "unknown": .object(["message": .string("maybe")])], exit: 0)
+        // when
+        let outcome: ConversationDeliveryOutcome<String, String> = client.classifyConversationMutation(
+            answer, command: "conversation-send", options: ["--monitor"], request: "request") { _ in
+                Issue.record("colliding payload must not decode a receipt")
+                return "accepted"
+            }
+        // then
+        #expect(outcome == .uncertain("request", cause: .inconsistentEnvelope(exitCode: 0, detail: "multiple result/error/unknown payloads")))
+    }
+
     private let parserText = "usage: harflow-ctl conversation-send [-h]\nharflow-ctl: error: unrecognized arguments: --bogus"
 
     // MARK: Accepted

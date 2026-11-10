@@ -101,7 +101,7 @@ struct ConversationLaunchMarker: Equatable, Sendable {}
 
 // MARK: - ConversationLaunchOutcome
 
-/// Evidence about one profiled launch (`run` or `resume`), and nothing else.
+/// Evidence about one profiled launch (`run` or `resume`) or base Continue, and nothing else.
 ///
 /// `.engineError` does not prove that no record exists. A refused launch can leave a task record
 /// and a process behind: the engine can fail after spawning, persist the task, then terminate the
@@ -109,7 +109,8 @@ struct ConversationLaunchMarker: Equatable, Sendable {}
 /// idempotency key, so a retry can start a second task; they are never retried automatically and
 /// no API here retries one. There is deliberately no refused case.
 public enum ConversationLaunchOutcome: Equatable, Sendable {
-    /// Exit 0, a validated envelope with a result, and a usable task id.
+    /// Exit 0, a validated acknowledgement and usable task id. Resources may still be pending;
+    /// this is not evidence of task completion.
     case launched(taskID: String)
     /// No process was launched, or the command was positively identified as a parser rejection
     /// (exit 2 with a validated envelope whose code is `usage`).
