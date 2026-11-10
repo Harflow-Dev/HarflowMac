@@ -58,9 +58,10 @@ protocol TaskDetailUseCase: Sendable {
     func refreshSnapshot(_ id: String) async
     
     // Busy / outcome
+    func isStopping(_ id: String) -> Bool
+    func stoppingChangesPublisher() -> AnyPublisher<Void, Never>
     func busyPublisher() -> AnyPublisher<Set<String>, Never>
     func outcomesPublisher() -> AnyPublisher<[String: String], Never>
-    
     // Actions
     @discardableResult func cancel(_ id: String) async throws -> Bool
     @discardableResult func send(_ id: String, text: String) async throws -> Bool
@@ -177,6 +178,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     private(set) var title = ""
     private(set) var ancestorCrumbs: [AncestorCrumb] = []
     private(set) var isBusy = false
+    private(set) var isStopping = false
     private(set) var outcomeMessage: String?
     /// Send-now refusals keyed by message id. The engine keeps the message queued and does not
     /// store the refusal on it, so the bubble reads the note from the send result.
@@ -412,10 +414,6 @@ final class TaskDetailVM: TaskDetailViewModel {
         didSubscribe = false
     }
 
-    func didTapTask(_ taskID: String) {
-        routing.selectTask(taskID)
-    }
-
     // MARK: - Internal Methods
 
     /// The group presenter calls this only after proving that a new survivor belongs to the
@@ -519,7 +517,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         // satisfy cancel-scope reachability to the current task.
         let currentTaskAncestors = useCase.ancestors(of: currentTaskID)
 
-        isBusy = latestBusy.contains(currentTaskID)
+        (isBusy, isStopping) = (latestBusy.contains(currentTaskID), stoppingPresentation(task: detail))
         outcomeMessage = latestOutcomes[currentTaskID]
 
         takenOverBannerText = detail.takenOver
@@ -583,6 +581,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         title = ""
         ancestorCrumbs = []
         isBusy = false
+        isStopping = false
         outcomeMessage = nil
         takenOverBannerText = nil
         spawnedByBannerText = nil

@@ -103,7 +103,7 @@ import Testing
             let labels: [String] = switch kind {
             case .ownerLost: ["Stop task", "Refresh"]
             case .unverified: ["Refresh", "Stop task"]
-            case .reconstructed: []
+            case .reconstructed, .stopping: []
             case .unknownFailed: ["Continue in a new session", "Copy resume command", "Open Events"]
             }
             for label in labels {

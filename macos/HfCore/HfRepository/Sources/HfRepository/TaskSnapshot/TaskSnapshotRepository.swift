@@ -4,6 +4,22 @@ import Mockable
 import MonitorCore
 import SwiftEnvironment
 
+/// Latest completed public status attempt, independent of the retained display cache.
+public struct TaskSnapshotReadOutcome: Equatable, Sendable {
+    public let revision: UInt64
+    public let task: TaskInfo?
+    public init(revision: UInt64, task: TaskInfo?) {
+        self.revision = revision
+        self.task = task
+    }
+}
+
+/// Disposable invalidation; subscribers reread the synchronous outcome snapshot.
+public enum TaskSnapshotReadChange: Sendable {
+    case updated
+    case evicted(revision: UInt64, keeping: Set<String>)
+}
+
 // MARK: - TaskSnapshotRepository
 
 /// Per-task `harflow-ctl status` snapshots, exactly as `AppModel.snapshots`/`refreshSnapshot`
@@ -11,6 +27,13 @@ import SwiftEnvironment
 /// snapshot; any other failure — including ctl not being locatable — keeps the stale snapshot.
 @Mockable
 public protocol TaskSnapshotRepository: Sendable {
+
+    /// Global clock advanced before every read attempt and eviction. Implementations must
+    /// provide this getter without taking a snapshot-state lock or invoking callbacks.
+    var readRevision: UInt64 { get }
+    /// Latest admitted completion for each retained task.
+    var readOutcomes: [String: TaskSnapshotReadOutcome] { get }
+    func readChangesPublisher() -> AnyPublisher<TaskSnapshotReadChange, Never>
 
     var snapshots: [String: TaskInfo] { get }
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never>
@@ -48,4 +71,10 @@ public extension GlobalValues {
 
     /// Global task-snapshot repository.
     @GlobalEntry var taskSnapshotRepository: any TaskSnapshotRepository = NullTaskSnapshotRepository()
+}
+
+public extension TaskSnapshotRepository {
+    var readRevision: UInt64 { 0 }
+    var readOutcomes: [String: TaskSnapshotReadOutcome] { [:] }
+    func readChangesPublisher() -> AnyPublisher<TaskSnapshotReadChange, Never> { Just(.updated).eraseToAnyPublisher() }
 }

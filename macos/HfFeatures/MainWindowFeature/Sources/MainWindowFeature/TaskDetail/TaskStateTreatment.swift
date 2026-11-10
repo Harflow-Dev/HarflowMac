@@ -5,7 +5,7 @@ import Foundation
 /// Snapshot-supported uncertainty shown only by the standalone task mount.
 struct TaskStateTreatment: Equatable, Sendable {
     enum Kind: String, Equatable, Sendable {
-        case ownerLost, unverified, reconstructed, unknownFailed
+        case ownerLost, unverified, reconstructed, unknownFailed, stopping
     }
 
     let taskID: String
@@ -13,14 +13,15 @@ struct TaskStateTreatment: Equatable, Sendable {
     var isStopDisabled = false
     var showsCopyResumeCommand = false
 
-    var isLeadingNotice: Bool { kind == .reconstructed }
+    var isLeadingNotice: Bool { kind == .reconstructed || kind == .stopping }
     var id: String { "activity-task-state-" + taskID }
 
     static func project(taskID: String, evidence: TaskSnapshotEvidence?, isBusy: Bool,
-                        canCancel: Bool, hasResumeCommand: Bool) -> Self? {
+                        canCancel: Bool, hasResumeCommand: Bool, isStopping: Bool = false) -> Self? {
         guard let evidence, evidence.hasMatchingSnapshot, !evidence.takenOver else { return nil }
         let kind: Kind
         switch evidence.status {
+        case .running where isStopping && evidence.ownerState == "alive": kind = .stopping
         case .running:
             switch evidence.ownerState {
             case "dead": kind = .ownerLost
@@ -41,7 +42,7 @@ extension TaskDetailViewModel {
     var stateTreatment: TaskStateTreatment? {
         guard let task else { return nil }
         return .project(taskID: task.taskID, evidence: snapshotEvidence, isBusy: isBusy,
-                        canCancel: canCancel, hasResumeCommand: resumeCommand != nil)
+                        canCancel: canCancel, hasResumeCommand: resumeCommand != nil, isStopping: isStopping)
     }
 
     func didTapRefreshState() {}

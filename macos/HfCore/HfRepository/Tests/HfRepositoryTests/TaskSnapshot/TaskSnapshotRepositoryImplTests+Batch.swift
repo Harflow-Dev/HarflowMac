@@ -117,6 +117,8 @@ extension TaskSnapshotRepositoryImplTests {
 
         // then — the stale snapshot is retained, exactly as a per-id failure would.
         #expect(sut.snapshot("x")?.taskID == "x")
+        #expect(sut.readOutcomes["x"]?.revision == 2)
+        #expect(sut.readOutcomes["x"]?.task == nil)
     }
 
     @Test func givenAnOlderCtlWithoutStatusBatch_whenABatchIsRequested_thenItFallsBackPerIdForTheSession() async {
@@ -138,6 +140,9 @@ extension TaskSnapshotRepositoryImplTests {
         await sut.refresh(ids: ["a", "b"])
 
         // then — the failed batch plus two per-id statuses.
+        #expect(sut.readRevision == 4)
+        #expect(sut.readOutcomes["a"]?.revision == 3)
+        #expect(sut.readOutcomes["b"]?.revision == 4)
         #expect(runner.calls.count == 3)
         #expect(runner.calls.map(\.arguments.first) == ["status-batch", "status", "status"])
         #expect(sut.snapshot("a")?.taskID == "a")
@@ -172,6 +177,10 @@ extension TaskSnapshotRepositoryImplTests {
         await sut.refresh(ids: ["a", "b"])
 
         // then
+        #expect(sut.readOutcomes["a"]?.revision == 3)
+        #expect(sut.readOutcomes["a"]?.task == nil)
+        #expect(sut.readOutcomes["b"]?.revision == 4)
+        #expect(sut.readOutcomes["b"]?.task == nil)
         #expect(sut.snapshot("a")?.taskID == "a")
         #expect(sut.snapshot("b")?.taskID == "b")
     }
@@ -203,6 +212,9 @@ extension TaskSnapshotRepositoryImplTests {
 
         // then — the newer single-refresh result wins; the stale batch entry cannot overwrite it.
         #expect(sut.snapshot("a")?.status == .completed)
+        #expect(sut.readRevision == 2)
+        #expect(sut.readOutcomes["a"]?.revision == 2)
+        #expect(sut.readOutcomes["a"]?.task?.status == .completed)
     }
 
     @Test func givenEquivalentSnapshots_whenABatchAnswers_thenNoPublicationHappens() async {

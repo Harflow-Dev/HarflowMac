@@ -17,6 +17,11 @@ public final class TaskSnapshotRepositoryImpl: TaskSnapshotRepository, @unchecke
     /// task can answer out of order — a lease's first refresh races the listing's — and a late,
     /// older answer must not replace a newer one (a stale `running` hiding a finished task's
     /// summary, Codex PR review): only the most recently started refresh may publish.
+    /// Clock access never takes the snapshot mutation lock or publishes callbacks.
+    private let revisionLock = NSLock()
+    private var revision: UInt64 = 0
+    private var outcomes: [String: TaskSnapshotReadOutcome] = [:]
+    private let readChanges = PassthroughSubject<TaskSnapshotReadChange, Never>()
     private var generations: [String: UInt64] = [:]
     /// Guards `batchStatusSupported` — flipped once (never back) when an older ctl answers
     /// `status-batch` with `unsupportedCommand`, so the rest of the session refreshes per id.
@@ -31,61 +36,54 @@ public final class TaskSnapshotRepositoryImpl: TaskSnapshotRepository, @unchecke
     public func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never> { $snapshotsValue.removeDuplicates().eraseToAnyPublisher() }
     public func snapshot(_ id: String) -> TaskInfo? { snapshotsValue[id] }
 
-    public func refresh(_ id: String) async {
-        // A ctl-not-found failure is a no-op — never clears or overwrites the stale snapshot
-        // (F4-12's "ctl-not-found is a no-op").
-        guard case .success(let client) = toolEnvironment.ctl() else { return }
-        await refresh(id, client: client)
+    public var readRevision: UInt64 { revisionLock.withLock { revision } }
+    public var readOutcomes: [String: TaskSnapshotReadOutcome] { mutationLock.withLock { outcomes } }
+    public func readChangesPublisher() -> AnyPublisher<TaskSnapshotReadChange, Never> {
+        readChanges.prepend(.updated).eraseToAnyPublisher()
     }
 
-    private func refresh(_ id: String, client: CtlClient) async {
+    public func refresh(_ id: String) async {
         let generation = beginRefresh(id)
+        guard case .success(let client) = toolEnvironment.ctl() else {
+            complete(id, generation, task: nil)
+            return
+        }
+        await refresh(id, client: client, generation: generation)
+    }
+
+    private func refresh(_ id: String, client: CtlClient, generation: UInt64? = nil) async {
+        let generation = generation ?? beginRefresh(id)
         switch await client.status(id) {
-        case .success(let info):
-            mutate(ifCurrent: id, generation) { snapshots in
-                if !snapshots[id].isEquivalent(to: info) { snapshots[id] = info }
-            }
-        case .failure(let error):
-            if error.refusalCode == "unknown_task" { mutate(ifCurrent: id, generation) { $0[id] = nil } }
+        case .success(let info): complete(id, generation, task: info)
+        case .failure(let error): complete(id, generation, task: nil, removeCached: error.refusalCode == "unknown_task")
         }
     }
 
     public func refresh(ids: [String]) async {
-        guard !ids.isEmpty else { return }
-        guard case .success(let client) = toolEnvironment.ctl() else { return }
         var seen = Set<String>()
         let bounded = Array(ids.filter { seen.insert($0).inserted }.prefix(100))
+        guard !bounded.isEmpty else { return }
         guard isBatchStatusSupported else {
-            for id in bounded { await refresh(id, client: client) }
+            for id in bounded { await refresh(id) }
             return
         }
-        // Generations are bumped before the call, so a whole-batch failure discards any older
-        // in-flight single refresh for these ids until the next pass; that is accepted.
-        let generations = Dictionary(uniqueKeysWithValues: bounded.map { ($0, beginRefresh($0)) })
+        let attempts = Dictionary(uniqueKeysWithValues: bounded.map { ($0, beginRefresh($0)) })
+        guard case .success(let client) = toolEnvironment.ctl() else {
+            for id in bounded { complete(id, attempts[id]!, task: nil) }
+            return
+        }
         switch await client.statusBatch(ids: bounded) {
         case .success(let batch):
-            applyBatch(batch, ids: bounded, generations: generations)
+            let indexed = Dictionary(batch.tasks.map { ($0.taskID, $0) }, uniquingKeysWith: { _, new in new })
+            for id in bounded {
+                complete(id, attempts[id]!, task: indexed[id], removeCached: batch.errors[id]?.code == "unknown_task")
+            }
         case .failure(let error):
             if case .unsupportedCommand = error {
                 markBatchStatusUnsupported()
-                for id in bounded { await refresh(id, client: client) }
-            }
-            // Any other whole-command failure leaves every snapshot exactly as it is.
-        }
-    }
-
-    /// Applies each id's batch outcome behind its own generation guard: a returned snapshot
-    /// stores, `unknown_task` evicts, anything else retains — exactly as `refresh(_:)`.
-    private func applyBatch(_ batch: StatusBatchResult, ids: [String], generations: [String: UInt64]) {
-        let indexed = Dictionary(batch.tasks.map { ($0.taskID, $0) }, uniquingKeysWith: { _, new in new })
-        for id in ids {
-            guard let generation = generations[id] else { continue }
-            if let info = indexed[id] {
-                mutate(ifCurrent: id, generation) { snapshots in
-                    if !snapshots[id].isEquivalent(to: info) { snapshots[id] = info }
-                }
-            } else if batch.errors[id]?.code == "unknown_task" {
-                mutate(ifCurrent: id, generation) { $0[id] = nil }
+                for id in bounded { await refresh(id) }
+            } else {
+                for id in bounded { complete(id, attempts[id]!, task: nil) }
             }
         }
     }
@@ -105,33 +103,33 @@ public final class TaskSnapshotRepositoryImpl: TaskSnapshotRepository, @unchecke
     private func beginRefresh(_ id: String) -> UInt64 {
         mutationLock.lock()
         defer { mutationLock.unlock() }
-        let next = (generations[id] ?? 0) &+ 1
+        let next = revisionLock.withLock { revision += 1; return revision }
         generations[id] = next
         return next
     }
 
-    private func mutate(ifCurrent id: String, _ generation: UInt64, _ change: (inout [String: TaskInfo]) -> Void) {
-        mutationLock.lock()
-        defer { mutationLock.unlock() }
-        guard generations[id] == generation else { return }
-        var next = snapshotsValue
-        change(&next)
-        // An equivalent update is not a change: keep the stored value (its `duration_seconds`
-        // drift carries no state for a running task with a start time) so an unchanged poll
-        // publishes nothing at all.
-        guard !next.isEquivalent(to: snapshotsValue) else { return }
-        snapshotsValue = next
+    private func complete(_ id: String, _ generation: UInt64, task: TaskInfo?, removeCached: Bool = false) {
+        let admitted = mutationLock.withLock {
+            guard generations[id] == generation else { return false }
+            outcomes[id] = TaskSnapshotReadOutcome(revision: generation, task: task)
+            var next = snapshotsValue
+            if let task {
+                if !next[id].isEquivalent(to: task) { next[id] = task }
+            } else if removeCached { next[id] = nil }
+            if !next.isEquivalent(to: snapshotsValue) { snapshotsValue = next }
+            return true
+        }
+        if admitted { readChanges.send(.updated) }
     }
 
     public func evict(keeping ids: Set<String>) {
-        mutate { snapshots in snapshots = snapshots.filter { ids.contains($0.key) } }
-    }
-
-    private func mutate(_ change: (inout [String: TaskInfo]) -> Void) {
-        mutationLock.lock()
-        defer { mutationLock.unlock() }
-        var next = snapshotsValue
-        change(&next)
-        snapshotsValue = next
+        let evictionRevision = mutationLock.withLock {
+            let next = revisionLock.withLock { revision += 1; return revision }
+            generations = generations.filter { ids.contains($0.key) }
+            outcomes = outcomes.filter { ids.contains($0.key) }
+            snapshotsValue = snapshotsValue.filter { ids.contains($0.key) }
+            return next
+        }
+        readChanges.send(.evicted(revision: evictionRevision, keeping: ids))
     }
 }

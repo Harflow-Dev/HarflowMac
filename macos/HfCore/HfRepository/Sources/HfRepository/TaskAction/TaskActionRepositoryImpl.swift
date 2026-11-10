@@ -15,6 +15,18 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
     @Subjected private var outcomesValue: [String: String] = [:]
     private let outcomeLock = NSLock()
     private let busyLock = NSRecursiveLock()
+    private struct StopRequest {
+        let baseline: UInt64
+        var applied: UInt64 = 0
+        var qualified = false
+    }
+
+    private let stoppingLock = NSLock()
+    private var stopRequests: [String: StopRequest] = [:]
+    private var latestReads: [String: TaskSnapshotReadOutcome] = [:]
+    private var conversationIndex = ConversationIndex([])
+    private let stoppingChanges = PassthroughSubject<Void, Never>()
+    private var subscriptions: Set<AnyCancellable> = []
 
     /// `TaskActionRepository → TaskListRepository + TaskSnapshotRepository` (decision 6): an
     /// accepted action refreshes both.
@@ -26,6 +38,100 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
         self.toolEnvironment = toolEnvironment
         self.taskListRepository = taskListRepository
         self.snapshotRepository = snapshotRepository
+        self.conversationIndex = ConversationIndex(taskListRepository.tasks)
+        snapshotRepository.readChangesPublisher()
+.sink { [weak self] change in
+            self?.readChanged(change)
+        }
+.store(in: &subscriptions)
+        taskListRepository.tasksPublisher()
+.sink { [weak self] tasks in
+            self?.listingChanged(tasks)
+        }
+.store(in: &subscriptions)
+    }
+
+    public func isStopping(_ taskID: String) -> Bool {
+        stoppingLock.withLock { stopRequests[taskID]?.qualified == true }
+    }
+
+    public func stoppingChangesPublisher() -> AnyPublisher<Void, Never> {
+        stoppingChanges.prepend(()).eraseToAnyPublisher()
+    }
+
+    private func currentMember(_ id: String) -> Bool {
+        conversationIndex.conversation(containing: id)?.current.taskID == id
+    }
+
+    private func listingChanged(_ tasks: [TaskInfo]) {
+        let changed = stoppingLock.withLock {
+            conversationIndex = ConversationIndex(tasks)
+            let previous = qualifiedStopIDs
+            stopRequests = stopRequests.filter { currentMember($0.key) }
+            return previous != qualifiedStopIDs
+        }
+        if changed { stoppingChanges.send(()) }
+    }
+
+    private var qualifiedStopIDs: Set<String> {
+        Set(stopRequests.compactMap { $0.value.qualified ? $0.key : nil })
+    }
+
+    private func mergeReads(_ reads: [String: TaskSnapshotReadOutcome]) {
+        for (id, read) in reads where read.revision > (latestReads[id]?.revision ?? 0) { latestReads[id] = read }
+    }
+
+    private func reconcileStop(_ id: String) {
+        guard var request = stopRequests[id], let read = latestReads[id],
+              read.revision > request.baseline, read.revision > request.applied else { return }
+        guard let task = read.task, !task.takenOver, task.status.isRunning else {
+            stopRequests[id] = nil
+            return
+        }
+        request.applied = read.revision
+        request.qualified = task.status.isRunning && task.supervision?.ownerState == "alive"
+        stopRequests[id] = request
+    }
+
+    private func readChanged(_ change: TaskSnapshotReadChange) {
+        // An update preceding acknowledgement cannot qualify it: insertion samples the global
+        // started-read clock under this same lock. Avoid copying every outcome for idle actions.
+        if case .updated = change, stoppingLock.withLock({ stopRequests.isEmpty }) { return }
+        let reads = snapshotRepository.readOutcomes
+        let changed = stoppingLock.withLock {
+            let previous = qualifiedStopIDs
+            mergeReads(reads)
+            if case .evicted(let revision, let keeping) = change {
+                stopRequests = stopRequests.filter { keeping.contains($0.key) || $0.value.baseline >= revision }
+                latestReads = latestReads.filter { keeping.contains($0.key) || $0.value.revision > revision }
+            }
+            for id in Array(stopRequests.keys) { reconcileStop(id) }
+            return previous != qualifiedStopIDs
+        }
+        if changed { stoppingChanges.send(()) }
+    }
+
+    private func acknowledgeStop(_ id: String, result: [String: JSONValue]) {
+        guard result["task_id"]?.stringValue == id,
+              let status = result["status"]?.stringValue else { return }
+        if case .other = TaskStatus(status) { return }
+        let cascade = result["cascade"]?.objectValue ?? [:]
+        for key in ["not_signalled", "refused_tasks"]
+            where cascade[key]?.arrayValue?.contains(where: { $0.stringValue == id || $0["task_id"]?.stringValue == id }) == true {
+            return
+        }
+        let reads = snapshotRepository.readOutcomes
+        let changed = stoppingLock.withLock {
+            let previous = qualifiedStopIDs
+            mergeReads(reads)
+            guard currentMember(id) else { return false }
+            // Clock-only getter: no snapshot mutation lock or callback is acquired here.
+            // Sampling and insertion share the action lock with eviction/read reconciliation.
+            stopRequests[id] = StopRequest(baseline: snapshotRepository.readRevision)
+            reconcileStop(id)
+            return previous != qualifiedStopIDs
+        }
+        if changed { stoppingChanges.send(()) }
     }
 
     public var busy: Set<String> { busyValue }
@@ -96,10 +202,12 @@ public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Se
 
     @discardableResult
     public func cancel(_ taskID: String) async throws -> Bool {
-        try await perform(taskID) { client in
+        try await perform(taskID) { [self] client in
             switch await client.cancel(taskID) {
-            case .success(let result): .success(CascadeSummary.describe(result))
-            case .failure(let error): .failure(error)
+            case .success(let result):
+                acknowledgeStop(taskID, result: result)
+                return .success(CascadeSummary.describe(result))
+            case .failure(let error): return .failure(error)
             }
         }
     }

@@ -64,6 +64,7 @@ struct MessageBoxModel {
     let buttonLabel: String
     /// Show the lock icon and `placeholder` in place of the text field.
     var isLocked = false
+    var isStopping = false
     /// Optional task-level Stop action, rendered only by the transcript composer.
     var stopAction: (@MainActor () -> Void)?
 
@@ -244,10 +245,10 @@ struct MessageBoxView: View {
 
     @ViewBuilder private var actionButtons: some View {
         if style == .transcript, let stopAction = model.stopAction {
-            Button(action: stopAction) { Label("Stop", systemImage: "stop.fill") }
+            Button(action: stopAction) { Label(model.isStopping ? "Stopping…" : "Stop", systemImage: "stop.fill") }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(model.isBusy)
+                .disabled(model.isBusy || model.isStopping)
                 .accessibilityIdentifier("task-composer.stop")
         }
         if let onSubmitNow {

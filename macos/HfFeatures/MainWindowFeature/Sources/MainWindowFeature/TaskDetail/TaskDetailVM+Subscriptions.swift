@@ -67,6 +67,8 @@ extension TaskDetailVM {
             }
             .store(in: &cancellables)
 
+        subscribeToStopping(epoch: epoch)
+
         useCase.busyPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] busy in

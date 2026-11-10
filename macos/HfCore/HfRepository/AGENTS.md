@@ -30,3 +30,11 @@ Root AGENTS.md applies (`../../AGENTS.md`). Read this module's `README.md` befor
   behaviour (the 1 s/30 s public observation cadence and readiness/preparation retries) is driven through the injected
   `Scheduling` seam by capturing and manually invoking the scheduled closure, never by waiting on a
   real timer.
+
+- Stop acknowledgement state belongs to `TaskActionRepository` for the app session, not to a
+  task VM or disk. `TaskSnapshotRepository.readRevision` uses an independent clock: its getter
+  must not acquire the snapshot-state lock or invoke callbacks, because acknowledgement samples
+  it while holding the action-state lock. New read/eviction and stopping invalidations publish
+  after their state locks release; raw snapshot/list getters stay outside the action lock.
+  Preserve per-attempt freshness, authoritative revisioned eviction and qualified-set dedup.
+  Do not infer acknowledgement from durable outcome text or signal/settlement from Stop requested.

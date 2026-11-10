@@ -102,3 +102,13 @@ publishes a separate display-only transcript and never contributes captured coun
 Every public operation retains a fresh capability handshake. Fixture adoption from
 engine0.0.8 does not select that runtime: the managed engine remains pinned to0.0.7,
 with explicit unsupported states and no private/MCP fallback or automatic acquisition.
+
+Status read outcomes carry globally ordered attempt revisions independently of retained display
+snapshots. Equivalent successes and failures invalidate outcome readers; old single/batch results
+and evicted reads are fenced. The revision getter uses an independent clock with no callbacks.
+New outcome/eviction invalidations publish outside snapshot state locks. Task actions keep
+acknowledged Stop requests for the app session across VM navigation, qualify them only with a
+post-ack Running/alive-owner read, and clear them for unavailable/non-running/taken-over/evicted
+or superseded members. They never imply signals were delivered or settlement completed. Current
+member checks use conversation continuation links. Stopping invalidations publish only qualified
+set changes; idle reads skip outcome scans when no Stop request is tracked.

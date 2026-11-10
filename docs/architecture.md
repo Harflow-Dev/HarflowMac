@@ -298,6 +298,25 @@ equality and native anchoring; callbacks retain the latest mounted actions. Othe
 no treatment. Refresh reads the member captured at invocation; Stop keeps its existing
 confirmation and stale-target guard. No new task status or Continue operation is introduced.
 
+Stopping is app-session state in `TaskActionRepository`, not VM or disk state. A successful
+cancel response must echo the full target ID with a known status and no explicit root refusal;
+this records a request, not signal delivery or settlement. The repository samples an independent
+global read/eviction clock atomically with request insertion. Only a later-started admitted status
+read reporting Running with an alive owner qualifies it. Failed reads, non-running results,
+takeover, eviction or a successor clear it; an unknown/dead/undecidable owner unqualifies it while
+preserving the request. Listing membership follows conversation continuation links.
+
+`TaskSnapshotRepository` publishes admitted read outcomes separately from the retained display
+cache, including equivalent successes and failures. Its independent clock never invokes
+callbacks or takes the snapshot-state lock. New read/eviction events and stopping invalidations
+are sent after their state locks release; consumers reread current values. Generation fences
+reject old single/batch completions and invalidate evicted reads. Authoritative eviction events
+carry their revision and keeping set, so delayed eviction cannot erase a newer acknowledgement.
+Idle updates skip the outcome scan when there is no request, and stopping publications occur
+only when the qualified-ID set changes. The standalone VM queries on mount and invalidation,
+keeps the badge Running, places the info notice before activity and disables only the composer
+Stopping… action; send behavior and drafts are preserved. Other mounts receive no new treatment.
+
 Standalone task Stop uses the main window coordinator's mutually exclusive modal destination,
 shared with the workflow launcher. The request captures the current run ID and the existing
 client-derived earlier-turn exclusion list. Confirmation consumes the active request before

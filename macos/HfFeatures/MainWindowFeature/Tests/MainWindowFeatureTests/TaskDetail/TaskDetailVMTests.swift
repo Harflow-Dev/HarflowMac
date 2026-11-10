@@ -73,6 +73,11 @@ import Testing
     /// The fixtures `makeSUT` builds before wiring up `useCase`'s stubs — split out purely to keep
     /// `makeSUT`/`configureStubs` each under the house function-length limit; no behavior change.
     struct Fixtures {
+        let stoppingQuery = Box<((String) -> Bool)?>(nil)
+        let stoppingPublisher = Box<AnyPublisher<Void, Never>?>(nil)
+        let cancelEffect = Box<((String) -> Bool)?>(nil)
+        let stopping = Box<Bool>(false)
+        let stoppingSubject = PassthroughSubject<Void, Never>()
         let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
         let hasListedSubject = PassthroughSubject<Bool, Never>()
         let titlesSubject = PassthroughSubject<[String: String], Never>()
@@ -145,6 +150,8 @@ import Testing
         given(useCase).hasListedPublisher().willReturn(fixtures.hasListedSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(fixtures.titlesSubject.eraseToAnyPublisher())
         given(useCase).snapshotsPublisher().willReturn(fixtures.snapshotsSubject.eraseToAnyPublisher())
+        given(useCase).isStopping(.any).willProduce { id in fixtures.stoppingQuery.value?(id) ?? fixtures.stopping.value }
+        given(useCase).stoppingChangesPublisher().willReturn(fixtures.stoppingPublisher.value ?? fixtures.stoppingSubject.eraseToAnyPublisher())
         given(useCase).busyPublisher().willReturn(fixtures.busySubject.eraseToAnyPublisher())
         given(useCase).outcomesPublisher().willReturn(fixtures.outcomesSubject.eraseToAnyPublisher())
         given(useCase).itemsPublisher(for: .value(taskID)).willProduce { [callOrder] _ in
@@ -200,7 +207,7 @@ import Testing
         given(useCase).current(for: .value(taskID)).willReturn(nil)
         given(useCase).prompt(for: .value(taskID)).willReturn(nil)
 
-        given(useCase).cancel(.any).willReturn(true)
+        given(useCase).cancel(.any).willProduce { fixtures.cancelEffect.value?($0) ?? true }
         given(useCase).send(.any, text: .any).willReturn(true)
         // Routing happens via `onResumed` (item 4), not the return value. Mockable producers are
         // synchronous, so the async callback runs in a Task; tests poll for its effect.
@@ -221,10 +228,9 @@ import Testing
 
     @discardableResult
     func makeSUT(taskID: String = "abc12345", isWorkflowBuilder: Bool = false, chrome: TaskDetailChrome = .group,
-                 scheduler: any Scheduling = NullScheduling()) -> SUT {
+                 scheduler: any Scheduling = NullScheduling(), fixtures: Fixtures = Fixtures()) -> SUT {
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
-        let fixtures = Fixtures()
         let lease = configureStubs(useCase: useCase, routing: routing, taskID: taskID, fixtures: fixtures)
         useCase.configurePagingDefaults(includeObservationDefaults: false)
 

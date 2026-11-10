@@ -16,6 +16,10 @@ import MonitorCore
 
 extension TaskDetailVM {
 
+    func didTapTask(_ taskID: String) {
+        routing.selectTask(taskID)
+    }
+
     /// Whether `dialogTaskID` — the task a confirmation dialog's OWN copy described, captured when
     /// it was published — is stale by the time the person confirms it (Codex review round 2,
     /// finding 1): the conversation "moved on" underneath the dialog (a follow-up resumed it) if
@@ -175,7 +179,7 @@ extension TaskDetailVM {
             hint: "Send queues; Send now requests immediate delivery when safe",
             placeholder: eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
             buttonLabel: "Send", isLocked: !eligible,
-            stopAction: stopAction
+            isStopping: isStopping, stopAction: stopAction
         )
     }
 

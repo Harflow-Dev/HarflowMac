@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 @testable import HfRepository
 import HfTestUtilities
@@ -21,6 +22,11 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         taskListRepository: MockTaskListRepository = MockTaskListRepository(),
         snapshotRepository: MockTaskSnapshotRepository = MockTaskSnapshotRepository()
     ) -> TaskActionRepositoryImpl {
+        given(taskListRepository).tasks.willReturn([])
+        given(taskListRepository).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
+        given(snapshotRepository).readRevision.willReturn(0)
+        given(snapshotRepository).readOutcomes.willReturn([:])
+        given(snapshotRepository).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         given(taskListRepository).refresh().willReturn()
         given(snapshotRepository).refresh(.any).willReturn()
         return TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: snapshotRepository)
@@ -127,7 +133,12 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         let runner = StubProcessRunner(output: actionCtl(#"{"result":{"status":"queued"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let taskListRepository = MockTaskListRepository()
+        given(taskListRepository).tasks.willReturn([])
+        given(taskListRepository).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         let snapshotRepository = MockTaskSnapshotRepository()
+        given(snapshotRepository).readRevision.willReturn(0)
+        given(snapshotRepository).readOutcomes.willReturn([:])
+        given(snapshotRepository).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         var order: [String] = []
         let lock = NSLock()
         given(taskListRepository).refresh().willProduce { lock.lock(); order.append("list"); lock.unlock() }
@@ -229,7 +240,12 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         let runner = StubProcessRunner(output: actionCtl(#"{"result":{"task_id":"newtask123"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let taskListRepository = MockTaskListRepository()
+        given(taskListRepository).tasks.willReturn([])
+        given(taskListRepository).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         let snapshotRepository = MockTaskSnapshotRepository()
+        given(snapshotRepository).readRevision.willReturn(0)
+        given(snapshotRepository).readOutcomes.willReturn([:])
+        given(snapshotRepository).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         let order = LockedBox<[String]>([])
         given(taskListRepository).refresh().willProduce { order.mutate { $0.append("list") } }
         given(snapshotRepository).refresh(.any).willProduce { _ in order.mutate { $0.append("snapshot") } }
@@ -255,7 +271,12 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         let runner = StubProcessRunner(output: actionCtl(#"{"result":{"task_id":"newtask123"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let taskListRepository = MockTaskListRepository()
+        given(taskListRepository).tasks.willReturn([])
+        given(taskListRepository).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         let snapshotRepository = MockTaskSnapshotRepository()
+        given(snapshotRepository).readRevision.willReturn(0)
+        given(snapshotRepository).readOutcomes.willReturn([:])
+        given(snapshotRepository).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         let order = LockedBox<[String]>([])
         given(taskListRepository).refresh().willProduce { order.mutate { $0.append("list") } }
         given(snapshotRepository).refresh(.any).willProduce { _ in order.mutate { $0.append("snapshot") } }
@@ -340,11 +361,13 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         let runner = StubProcessRunner(output: actionCtl(#"{"result":{"task_id":"brandnew"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let taskListRepository = MockTaskListRepository()
+        given(taskListRepository).tasks.willReturn([])
+        given(taskListRepository).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         let refreshed = LockedBox(false)
         given(taskListRepository).refreshAndWait().willProduce { refreshed.mutate { $0 = true }; return .success(()) }
         given(taskListRepository).refresh().willReturn()
         let sut = TaskActionRepositoryImpl(
-            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: MockTaskSnapshotRepository()
+            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: NullTaskSnapshotRepository()
         )
 
         // when
@@ -365,13 +388,15 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         let runner = StubProcessRunner(output: actionCtl(#"{"result":{"task_id":"brandnew"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let taskListRepository = MockTaskListRepository()
+        given(taskListRepository).tasks.willReturn([])
+        given(taskListRepository).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         let attempts = LockedBox(0)
         given(taskListRepository).refreshAndWait().willProduce {
             attempts.mutate { $0 += 1 }
             return attempts.value == 1 ? .failure(.timedOut(tool: "harflow-ctl", seconds: 5)) : .success(())
         }
         let sut = TaskActionRepositoryImpl(
-            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: MockTaskSnapshotRepository()
+            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: NullTaskSnapshotRepository()
         )
 
         // when
@@ -388,9 +413,11 @@ private func actionCtl(_ payload: String) -> ProcessOutput {
         let runner = StubProcessRunner(output: actionCtl(#"{"result":{"task_id":"brandnew-1234"}}"#))
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
         let taskListRepository = MockTaskListRepository()
+        given(taskListRepository).tasks.willReturn([])
+        given(taskListRepository).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         given(taskListRepository).refreshAndWait().willReturn(.failure(.timedOut(tool: "harflow-ctl", seconds: 5)))
         let sut = TaskActionRepositoryImpl(
-            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: MockTaskSnapshotRepository()
+            toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: NullTaskSnapshotRepository()
         )
 
         // when

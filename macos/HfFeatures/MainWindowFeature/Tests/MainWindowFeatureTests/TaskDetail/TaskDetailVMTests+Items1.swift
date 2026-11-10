@@ -123,6 +123,8 @@ extension TaskDetailVMTests {
         given(useCase).hasListedPublisher().willReturn(PassthroughSubject<Bool, Never>().eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(PassthroughSubject<[String: String], Never>().eraseToAnyPublisher())
         given(useCase).snapshotsPublisher().willReturn(PassthroughSubject<[String: TaskInfo], Never>().eraseToAnyPublisher())
+        given(useCase).isStopping(.any).willReturn(false)
+        given(useCase).stoppingChangesPublisher().willReturn(Empty().eraseToAnyPublisher())
         given(useCase).busyPublisher().willReturn(PassthroughSubject<Set<String>, Never>().eraseToAnyPublisher())
         given(useCase).outcomesPublisher().willReturn(PassthroughSubject<[String: String], Never>().eraseToAnyPublisher())
         given(useCase).itemsPublisher(for: .any).willReturn(PassthroughSubject<[TimelineItem], Never>().eraseToAnyPublisher())

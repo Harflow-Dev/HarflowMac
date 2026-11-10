@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep an acknowledged Stop request across task navigation and show Stopping only after a fresh status read still reports Running with an alive observer.
+
 - Explain standalone task owner loss, unverified supervision and inferred outcomes using the reported snapshot, with existing Stop, Refresh, resume-copy and Events actions.
 
 - Remove the standalone task’s duplicate header metadata, breadcrumbs and banners. Their actions and facts remain in the toolbar, More actions and Events; subtasks keep a compact provenance line, and action outcomes stay visible. Group and embedded headers are unchanged.

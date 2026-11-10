@@ -182,6 +182,9 @@ private func snapshotJSON(_ payload: String) -> String {
 
         // then — the late `running` answer belongs to a superseded refresh and is dropped
         #expect(sut.snapshot("task-1")?.status.isTerminal == true)
+        #expect(sut.readRevision == 2)
+        #expect(sut.readOutcomes["task-1"]?.revision == 2)
+        #expect(sut.readOutcomes["task-1"]?.task?.status == .completed)
     }
 
     @Test func givenSnapshotSubscriber_whenEqualReadsRepeat_thenDurationAndEnforcementChangesStillArrive() async {

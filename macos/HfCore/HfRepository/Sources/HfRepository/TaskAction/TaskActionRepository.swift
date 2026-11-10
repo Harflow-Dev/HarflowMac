@@ -31,6 +31,11 @@ import SwiftEnvironment
 @Mockable
 public protocol TaskActionRepository: Sendable {
 
+    /// Whether a fresh public read qualifies an acknowledged stop request.
+    func isStopping(_ taskID: String) -> Bool
+    /// Invalidation only: consumers reread `isStopping`.
+    func stoppingChangesPublisher() -> AnyPublisher<Void, Never>
+
     var busy: Set<String> { get }
     func busyPublisher() -> AnyPublisher<Set<String>, Never>
 
@@ -116,6 +121,9 @@ public extension GlobalValues {
 }
 
 public extension TaskActionRepository {
+    func isStopping(_: String) -> Bool { false }
+    func stoppingChangesPublisher() -> AnyPublisher<Void, Never> { Just(()).eraseToAnyPublisher() }
+
     func run(_: RunRequest, runtime _: QualificationRuntimeToken) async throws -> String {
         throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "run", detail: "Runtime-bound launch unavailable")
     }

@@ -114,6 +114,8 @@ extension TaskDetailVMTests {
         given(useCase).hasListedPublisher().willReturn(Just(true).eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(Empty().eraseToAnyPublisher())
         given(useCase).snapshotsPublisher().willReturn(Empty().eraseToAnyPublisher())
+        given(useCase).isStopping(.any).willReturn(false)
+        given(useCase).stoppingChangesPublisher().willReturn(Empty().eraseToAnyPublisher())
         given(useCase).busyPublisher().willReturn(Just(Set<String>()).eraseToAnyPublisher())
         given(useCase).outcomesPublisher().willReturn(Just([String: String]()).eraseToAnyPublisher())
 

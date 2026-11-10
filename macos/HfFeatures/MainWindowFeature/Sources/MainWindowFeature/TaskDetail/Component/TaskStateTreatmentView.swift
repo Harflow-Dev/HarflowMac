@@ -13,10 +13,10 @@ struct TaskStateTreatmentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: TaskScreenStyle.Banner.gap) {
-                Image(systemName: "exclamationmark.triangle")
+                Image(systemName: model.kind == .stopping ? "clock" : "exclamationmark.triangle")
                     .font(TaskScreenStyle.sans(size: 14))
                     .frame(width: 14, height: 14)
-                    .foregroundStyle(TaskScreenStyle.Colors.warning.color)
+                    .foregroundStyle(model.kind == .stopping ? TaskScreenStyle.Colors.textSecondary.color : TaskScreenStyle.Colors.warning.color)
                     .padding(.top, model.isLeadingNotice ? 0 : TaskScreenStyle.Banner.iconTopInset)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 0) {
@@ -37,7 +37,7 @@ struct TaskStateTreatmentView: View {
             .foregroundStyle(TaskScreenStyle.Colors.text.color)
             .padding(.horizontal, model.isLeadingNotice ? TaskScreenStyle.Notice.paddingHorizontal : TaskScreenStyle.Banner.paddingHorizontal)
             .padding(.vertical, model.isLeadingNotice ? TaskScreenStyle.Notice.paddingVertical : TaskScreenStyle.Banner.paddingVertical)
-            .background(TaskScreenStyle.Colors.warningSubtle.color, in: RoundedRectangle(cornerRadius: TaskScreenStyle.Banner.cornerRadius))
+            .background(noticeFill, in: RoundedRectangle(cornerRadius: TaskScreenStyle.Banner.cornerRadius))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(model.isLeadingNotice ? "Status notice" : "Warning")
             .accessibilityIdentifier("task-state-" + model.kind.rawValue)
@@ -51,10 +51,15 @@ struct TaskStateTreatmentView: View {
         }
     }
 
+    private var noticeFill: Color {
+        model.kind == .stopping ? TaskScreenStyle.Colors.surfaceSunken.color : TaskScreenStyle.Colors.warningSubtle.color
+    }
+
     private var textSpec: TaskScreenStyle.TextSpec { model.isLeadingNotice ? TaskScreenStyle.Notice.text : TaskScreenStyle.Banner.text }
 
     private var title: String {
         switch model.kind {
+        case .stopping: "Stop requested"
         case .ownerLost: "The process watching this run is gone"
         case .unverified: "Harflow can't confirm this run"
         case .reconstructed: "Reconstructed outcome"
@@ -64,6 +69,7 @@ struct TaskStateTreatmentView: View {
 
     private var message: String {
         switch model.kind {
+        case .stopping: "This run has not exited yet. The status changes when Harflow records the outcome."
         case .ownerLost:
             "Captured output has stopped and no later summary is promised. The run itself may still be working. "
                 + "Check its changes or stop it before starting a replacement."
@@ -98,7 +104,7 @@ struct TaskStateTreatmentView: View {
             Button("Open Events", action: onOpenEvents)
 .buttonStyle(.borderless)
                 .accessibilityIdentifier("task-state-open-events")
-        case .reconstructed: EmptyView()
+        case .reconstructed, .stopping: EmptyView()
         }
     }
 

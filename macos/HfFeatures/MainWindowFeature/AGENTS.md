@@ -156,8 +156,12 @@ no embedded terminal anywhere in this package:
   (included in model equality): notices before activity, banners after activity and the live
   tail, with stable per-task identity and latest action callbacks. Other mounts pass `nil`.
   Stop uses the existing confirmation; Refresh reads the member captured at invocation; Open
-  Events uses ordinary pane selection. The disabled Continue is presentation only. Stopping,
-  Settling, status-unavailable and Continue launch need their separate evidence/action stages.
+  Events uses ordinary pane selection. The disabled Continue is presentation only. Stopping is
+  queried from the shared action repository on mount/invalidation, gated again on matching current
+  Running/alive-owner evidence. It keeps the Running badge, adds the leading info notice and
+  disables the transcript Stopping… action without touching the draft or send behavior. VM
+  disappearance does not clear the repository request. Settling, status-unavailable and Continue
+  launch need their separate evidence/action stages.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

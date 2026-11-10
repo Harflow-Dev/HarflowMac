@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 @testable import HfRepository
 import HfTestUtilities
@@ -108,8 +109,13 @@ private func takeoverCtl(_ payload: String) -> ProcessOutput {
         let toolEnvironment = MockToolEnvironmentRepository()
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: StubProcessRunner(output: stdout("")))))
         let taskList = MockTaskListRepository()
+        given(taskList).tasks.willReturn([])
+        given(taskList).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         given(taskList).refresh().willProduce { order.mutate { $0.append("list") } }
         let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).readRevision.willReturn(0)
+        given(snapshots).readOutcomes.willReturn([:])
+        given(snapshots).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         given(snapshots).refresh(.any).willProduce { _ in order.mutate { $0.append("snapshot") } }
         let sut = makeSUT(actions: actions, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshots)
 
@@ -213,8 +219,13 @@ private func takeoverCtl(_ payload: String) -> ProcessOutput {
             given(toolEnvironment).ctl().willReturn(ctl)
             given(toolEnvironment).environment(toolDirectory: .any).willReturn([:])
             let taskList = MockTaskListRepository()
+        given(taskList).tasks.willReturn([])
+        given(taskList).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
             given(taskList).refresh().willReturn()
             let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).readRevision.willReturn(0)
+        given(snapshots).readOutcomes.willReturn([:])
+        given(snapshots).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
             given(snapshots).refresh(.any).willReturn()
             let actions = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshots)
             let sut = TakeoverServiceImpl(actions: actions, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshots, processRunner: runner)
@@ -260,8 +271,13 @@ private func takeoverCtl(_ payload: String) -> ProcessOutput {
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: grantingRunner)))
         given(toolEnvironment).environment(toolDirectory: .any).willReturn([:])
         let taskList = MockTaskListRepository()
+        given(taskList).tasks.willReturn([])
+        given(taskList).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         given(taskList).refresh().willReturn()
         let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).readRevision.willReturn(0)
+        given(snapshots).readOutcomes.willReturn([:])
+        given(snapshots).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         given(snapshots).refresh(.any).willReturn()
         let actions = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshots)
         let sut = TakeoverServiceImpl(
@@ -297,8 +313,13 @@ private func takeoverCtl(_ payload: String) -> ProcessOutput {
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: StubProcessRunner(output: stdout("")))))
         given(toolEnvironment).environment(toolDirectory: .any).willReturn([:])
         let taskList = MockTaskListRepository()
+        given(taskList).tasks.willReturn([])
+        given(taskList).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         given(taskList).refresh().willProduce { order.mutate { $0.append("list") } }
         let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).readRevision.willReturn(0)
+        given(snapshots).readOutcomes.willReturn([:])
+        given(snapshots).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         given(snapshots).refresh(.any).willProduce { _ in order.mutate { $0.append("snapshot") } }
         let runner = StubProcessRunner(output: ProcessOutput(exitCode: 0, stdout: Data(), stderr: "", timedOut: false))
         let sut = makeSUT(actions: actions, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshots, processRunner: runner)
@@ -331,8 +352,13 @@ private func takeoverCtl(_ payload: String) -> ProcessOutput {
         given(toolEnvironment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: StubProcessRunner(output: stdout("")))))
         given(toolEnvironment).environment(toolDirectory: .any).willReturn([:])
         let taskList = MockTaskListRepository()
+        given(taskList).tasks.willReturn([])
+        given(taskList).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         given(taskList).refresh().willProduce { events.mutate { $0.append("list") } }
         let snapshots = MockTaskSnapshotRepository()
+        given(snapshots).readRevision.willReturn(0)
+        given(snapshots).readOutcomes.willReturn([:])
+        given(snapshots).readChangesPublisher().willReturn(Just(.updated).eraseToAnyPublisher())
         given(snapshots).refresh(.any).willProduce { _ in events.mutate { $0.append("snapshot") } }
         let runner = StubProcessRunner(output: ProcessOutput(exitCode: 0, stdout: Data(), stderr: "", timedOut: false))
         var sut: TakeoverServiceImpl? = TakeoverServiceImpl(

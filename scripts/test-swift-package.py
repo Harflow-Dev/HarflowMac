@@ -95,6 +95,7 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.TaskPaneHostedTests",
     "MainWindowFeatureTests.TaskHeaderCleanupHostedTests",
     "MainWindowFeatureTests.TaskStateTreatmentHostedTests",
+    "MainWindowFeatureTests.TaskStoppingHostedTests",
     "MainWindowFeatureTests.TaskPaneCaptureHostedTests",
     "MainWindowFeatureTests.TaskPaneEscapeHostedTests",
     "MainWindowFeatureTests.ActivityFeedSummaryEntryHostedTests",

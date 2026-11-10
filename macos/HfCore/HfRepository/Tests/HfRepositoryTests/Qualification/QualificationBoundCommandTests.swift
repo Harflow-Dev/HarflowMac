@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 @testable import HfRepository
 import Mockable
@@ -35,8 +36,10 @@ struct QualificationBoundCommandTests {
         let environment = MockToolEnvironmentRepository()
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/fixture/replacement/ctl", environment: [:], runner: runner)))
         let tasks = MockTaskListRepository()
+        given(tasks).tasks.willReturn([])
+        given(tasks).tasksPublisher().willReturn(Just([]).eraseToAnyPublisher())
         let actions = TaskActionRepositoryImpl(toolEnvironment: environment, taskListRepository: tasks,
-                                              snapshotRepository: MockTaskSnapshotRepository())
+                                              snapshotRepository: NullTaskSnapshotRepository())
         // when / then
         do {
             _ = try await actions.run(RunRequest(backend: "fixture", repo: "/fixture/repo", prompt: "Fixture"),
