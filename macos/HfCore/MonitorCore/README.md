@@ -116,5 +116,5 @@ The phase-aware transport retains structured engine errors and uncertainty after
 dispatch, including timeout or malformed responses. It never retries. A result from this
 invocation cannot clear uncertainty retained from an earlier one, and an empty recorded-successor
 page cannot establish that no pending launch exists. Launch envelopes must contain exactly one
-of result, error or unknown. There are no callers or task-screen controls yet; evidence remains
-vendored 0.0.12 fixtures and fake runners, not exact-runtime qualification.
+of result, error or unknown. The shared continuation owner and standalone task screen now consume
+this client; evidence remains vendored 0.0.12 fixtures and fake runners, not exact-runtime qualification.

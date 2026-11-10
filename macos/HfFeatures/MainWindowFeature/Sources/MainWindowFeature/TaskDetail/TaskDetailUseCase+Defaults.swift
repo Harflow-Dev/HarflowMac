@@ -1,10 +1,14 @@
 import Combine
+import Foundation
 import HfRepository
 import MonitorCore
 
 // MARK: - TaskDetailUseCase Defaults
 
 extension TaskDetailUseCase {
+    func continuationOwner() -> any TaskContinuationRepository { NullTaskContinuationRepository() }
+    func continuationRuntime() -> QualificationRuntimeToken? { nil }
+    func continuationSupport(runtime _: QualificationRuntimeToken) async -> Bool { false }
     func callerApprovalUseCase() -> (any CallerApprovalUseCase)? { nil }
     func artifactPage(taskID _: String, cursor _: String?) async -> Result<TaskArtifactPage, ToolError> {
         .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
@@ -47,4 +51,40 @@ extension TaskDetailViewModel {
     var isStatusUnavailable: Bool { false }
     var hasStatusAuthority: Bool { true }
     var isSettling: Bool { false }
+}
+
+extension TaskDetailRouting {
+    func showNewTask() {}
+    func showResourceSlots() {}
+    func presentStopConfirmation(_: TaskStopConfirmation) {}
+    func publishTopBar(_: TaskTopBarContent, tag _: TaskTopBarHolder.Tag) {}
+    func clearTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func activateTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func deactivateTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func retryTopBarActivation(tag _: TaskTopBarHolder.Tag) {}
+}
+
+extension TaskDetailViewModel {
+    var requestReadState: TaskRequestReadState { .notRequested }
+    var observationFrames: [String: EventObservationFrame] { [:] }
+    var orderedHistoryFrames: [EventObservationFrame] { [] }
+    var recoveredTranscript: RecoveredTranscriptFrame { .init() }
+    var copyFeedback: String? { nil }
+    func didReadRequest(maxBytes _: Int) {}
+    func didCopyObservationText(_: String) {}
+    func didRequestObservation(_: EventObservationAction, taskID _: String) {}
+
+    var resourceContext: TaskResourceContext? { nil }
+    var resourceBlockersExpanded: Bool { false }
+    func didToggleResourceBlockers() {}
+    func didOpenResourceSlots() {}
+    var callerApprovalController: CallerApprovalController? { nil }
+    var topBarPaneOpen: Bool { false }
+}
+
+extension TaskDetailViewModel {
+    var continuationPresentation: TaskContinuationPresentation? { nil }
+    func didTapContinue(taskID _: String) {}
+    func didTapCheckContinuation(taskID _: String, attemptID _: UUID) {}
+    func didTapNewTask() {}
 }

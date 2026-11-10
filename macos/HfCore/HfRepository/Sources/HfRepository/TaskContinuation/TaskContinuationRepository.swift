@@ -26,6 +26,7 @@ public enum TaskContinuationCheck: Equatable, Sendable {
     case notChecked
     case checking
     case recorded(successorTaskIDs: [String])
+    case reachable(sourceTaskID: String)
     case inconclusive
     case failed(QualificationFailure)
 }
@@ -40,6 +41,14 @@ public struct TaskContinuationAttempt: Equatable, Sendable {
     public internal(set) var check: TaskContinuationCheck
     /// Positive healthy recorded edges survive later failed or cancelled observations.
     public internal(set) var recordedSuccessorTaskIDs: [String] = []
+    /// Positive paths established by a bounded targeted read, separately from direct edges.
+    public internal(set) var recordedReachableSourceTaskIDs: [String] = []
+
+    /// Exact recorded bridge evidence never permits repeating the original source.
+    public func permitsRecordedSource(_ fullID: String) -> Bool {
+        fullID != request.sourceTaskID &&
+            (recordedSuccessorTaskIDs.contains(fullID) || recordedReachableSourceTaskIDs.contains(fullID))
+    }
 }
 
 // MARK: - TaskContinuationAdmission
@@ -67,6 +76,7 @@ public protocol TaskContinuationRepository: Sendable {
     func changesPublisher() -> AnyPublisher<Void, Never>
     func start(_ request: TaskContinuationRequest) async -> TaskContinuationAdmission
     func check(attemptID: UUID) async
+    func check(attemptID: UUID, targetSourceTaskID: String) async
 }
 
 // MARK: - NullTaskContinuationRepository
@@ -78,6 +88,7 @@ public struct NullTaskContinuationRepository: TaskContinuationRepository {
     public func changesPublisher() -> AnyPublisher<Void, Never> { Just(()).eraseToAnyPublisher() }
     public func start(_: TaskContinuationRequest) async -> TaskContinuationAdmission { .refused(.unavailable) }
     public func check(attemptID _: UUID) async {}
+    public func check(attemptID _: UUID, targetSourceTaskID _: String) async {}
 }
 
 public extension GlobalValues {

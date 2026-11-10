@@ -20,6 +20,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
 
     @GlobalEnvironment(\.taskArtifactRepository) private var taskArtifactRepository
     @GlobalEnvironment(\.taskChangesRepository) private var taskChangesRepository
+    @GlobalEnvironment(\.taskContinuationRepository) var taskContinuationRepository
     private let builderRunID: String?
     private var relatedMembers: [String: TaskInfo] = [:]
     private var successorMembers: [String: TaskInfo] = [:]
@@ -54,10 +55,12 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
         taskArtifactRepository: (any TaskArtifactRepository)? = nil,
         taskChangesRepository: (any TaskChangesRepository)? = nil,
+        taskContinuationRepository: (any TaskContinuationRepository)? = nil,
         builderRunID: String? = nil,
         workflowRepository: (any WorkflowRepository)? = nil
     ) {
         self.builderRunID = builderRunID
+        if let taskContinuationRepository { self.taskContinuationRepository = taskContinuationRepository }
         if let taskArtifactRepository { self.taskArtifactRepository = taskArtifactRepository }
         if let taskChangesRepository { self.taskChangesRepository = taskChangesRepository }
         if let workflowRepository { self.workflowRepository = workflowRepository }
@@ -69,6 +72,12 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
     }
     
+    func continuationRuntime() -> QualificationRuntimeToken? {
+        (try? toolEnvironmentRepository.ctl().get()).map(QualificationRuntimeToken.init(client:))
+    }
+
+    func continuationClient() -> CtlClient? { try? toolEnvironmentRepository.ctl().get() }
+
     func artifactPage(taskID: String, cursor: String?) async -> Result<TaskArtifactPage, ToolError> {
         await taskArtifactRepository.page(taskID: taskID, cursor: cursor)
     }

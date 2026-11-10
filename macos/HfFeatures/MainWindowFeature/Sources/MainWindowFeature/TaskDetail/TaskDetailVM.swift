@@ -18,6 +18,9 @@ import MonitorCore
 @Mockable
 @MainActor
 protocol TaskDetailUseCase: Sendable {
+    func continuationOwner() -> any TaskContinuationRepository
+    func continuationRuntime() -> QualificationRuntimeToken?
+    func continuationSupport(runtime: QualificationRuntimeToken) async -> Bool
     func callerApprovalUseCase() -> (any CallerApprovalUseCase)?
     
     // Listing / lineage
@@ -130,6 +133,7 @@ protocol TaskDetailUseCase: Sendable {
 @Mockable
 @MainActor
 protocol TaskDetailRouting: Sendable {
+    func showNewTask()
     func showResourceSlots()
     func presentStopConfirmation(_ confirmation: TaskStopConfirmation)
     func selectTask(_ taskID: String)
@@ -142,16 +146,6 @@ protocol TaskDetailRouting: Sendable {
     /// returning whether the write succeeded. AppKit lives in the coordinator, never the VM — see
     /// `MainWindowCoordinator.chooseDirectory()` for the same pattern.
     func copyToPasteboard(_ text: String) -> Bool
-}
-
-extension TaskDetailRouting {
-    func showResourceSlots() {}
-    func presentStopConfirmation(_: TaskStopConfirmation) {}
-    func publishTopBar(_: TaskTopBarContent, tag _: TaskTopBarHolder.Tag) {}
-    func clearTopBar(tag _: TaskTopBarHolder.Tag) {}
-    func activateTopBar(tag _: TaskTopBarHolder.Tag) {}
-    func deactivateTopBar(tag _: TaskTopBarHolder.Tag) {}
-    func retryTopBarActivation(tag _: TaskTopBarHolder.Tag) {}
 }
 
 // MARK: - TaskDetailVM
@@ -209,6 +203,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     // The properties below are written from the `+Timeline`/`+Summary`/`+Actions` extension files
     // (each in its own file, per the screen shape), so they cannot be `private(set)` — `private` is
     // file-scoped in Swift. They stay non-public (no external module can write them).
+    var continuationPresentation: TaskContinuationPresentation?
+    @ObservationIgnored var continuationSession = TaskContinuationSession()
     var callerApprovalController: CallerApprovalController?
     @ObservationIgnored var isMounted = false
 
@@ -360,6 +356,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// re-acquires leases fresh.
     func didDisappear() {
         isMounted = false
+        stopContinuationPresentation()
         topBarPaneOpen = false
         releaseTopBar()
         resetChanges(keepPaneReport: false)
@@ -485,6 +482,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         task = detail
         currentTaskID = detail.taskID
         if chrome == .standalone { statusReadAvailability = latestStatusReadAvailability() }
+        prepareContinuation(task: detail)
         trackChangesEpoch(detail)
         observeRequest(conversationMembers.first?.taskID ?? currentTaskID)
         observeRecovery(currentTaskID)
@@ -531,14 +529,14 @@ final class TaskDetailVM: TaskDetailViewModel {
         } else {
             openParentTaskID = nil
         }
-        canCancel = hasStatusAuthority && !isWorkflowBuilder && detail.status.isRunning
+        canCancel = !continuationLocksActions && hasStatusAuthority && !isWorkflowBuilder && detail.status.isRunning
             && detail.raw["execution_kind"]?.stringValue != "native_subagent"
             && !WorkflowNodePresentation.isNativeControl(detail)
 
         // Read from the snapshot explicitly, not `detail` (which came from `detail(_:)` and can
         // briefly be the brief listing when statuses disagree — that shape has no `resume_command`
         // at all).
-        resumeCommand = !hasStatusAuthority || isWorkflowBuilder || WorkflowNodePresentation.isNativeControl(detail)
+        resumeCommand = continuationLocksActions || !hasStatusAuthority || isWorkflowBuilder || WorkflowNodePresentation.isNativeControl(detail)
             ? nil : useCase.snapshot(currentTaskID)?.resumeCommand
         copyResumeCommandHelp = detail.status.isRunning
         ? "Copies a command that resumes this session in your own terminal. This task is still "
@@ -558,7 +556,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     }
 
     private func recomputeTerminalPresentation(_ detail: TaskInfo) {
-        canTakeover = hasStatusAuthority && !isWorkflowBuilder && WorkflowNodePresentation.allowsTerminal(detail) && !isBusy && detail.sessionID != nil
+        canTakeover = !continuationLocksActions && hasStatusAuthority && !isWorkflowBuilder
+            && WorkflowNodePresentation.allowsTerminal(detail) && !isBusy && detail.sessionID != nil
         takeoverButtonLabel = detail.status.isRunning ? "Take over in terminal" : "Open in terminal"
         takeoverHelp = detail.sessionID == nil
         ? "The task has not reported a session yet."

@@ -539,5 +539,7 @@ extension MainWindowCoordinator: ResourceSlotsRouting {
 
     func invalidateResourceSlotsReturn() { resourceSlotsReturnDestination = nil }
 
+    func showNewTask() { openNewSession() }
+
     func showResourceSlots() { selection = .resourceSlots }
 }

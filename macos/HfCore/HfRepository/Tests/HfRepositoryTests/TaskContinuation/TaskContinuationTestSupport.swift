@@ -89,15 +89,17 @@ actor ContinuationPages {
     var answers: [Result<TaskSuccessorPage, ToolError>]
     var cursors: [String?] = []
     let latch: ContinuationLatch?
+    let latchAtRead: Int
 
-    init(_ answers: [Result<TaskSuccessorPage, ToolError>] = [], latch: ContinuationLatch? = nil) {
+    init(_ answers: [Result<TaskSuccessorPage, ToolError>] = [], latch: ContinuationLatch? = nil, latchAtRead: Int = 1) {
         self.answers = answers
         self.latch = latch
+        self.latchAtRead = latchAtRead
     }
 
     func read(_ cursor: String?) async throws -> TaskSuccessorPage {
         cursors.append(cursor)
-        await latch?.park()
+        if cursors.count == latchAtRead { await latch?.park() }
         guard !answers.isEmpty else { throw ToolError.notFound(tool: "fixture", searched: []) }
         return try answers.removeFirst().get()
     }

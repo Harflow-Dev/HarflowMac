@@ -170,7 +170,15 @@ no embedded terminal anywhere in this package:
   Compare all three states on invalidation; actual status-dependent handlers and confirmations must
   synchronously revalidate the current full ID and payload. Equivalent successful reads restore
   authority. Lock the unavailable composer while retaining its draft, and keep independent pane,
-  sidebar and caller-approval authority separate. Continue launch remains a separate stage.
+  sidebar and caller-approval authority separate. Standalone Continue uses shared attempt ownership. Offer it only after the same fresh handshake
+  qualifies Continue and successors and current matching status has an observed exit. Submitted
+  launches outlive VM teardown. Keep owner lookup separate from support-read success; a failed
+  probe must not hide uncertainty. Preserve drafts while locked, reread raw runtime/owner/status in
+  every action and retained confirmation, and bind row callbacks to the rendered full target ID.
+  Check never launches; empty/incomplete reads never prove no pending task exists. Accepted is
+  acknowledgement only. Verify real predecessor ancestry, not sorted conversation-member position,
+  before treating a later task as the acknowledged member's descendant. Caller approvals retain
+  independent authority. Generic refusal text does not interpret unqualified chain-stop diagnostics.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

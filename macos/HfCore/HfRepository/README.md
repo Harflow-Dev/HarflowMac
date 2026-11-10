@@ -23,7 +23,7 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 | `StateRecoveryRepository` | Shared structured store refusals and explicit inspection/confirmation/recovery lifecycle; single-flight operations and stale-result checks remain independent of managed acquisition. |
 | `TaskListRepository` | Bounded public task-history/status reads, titles, action refresh barriers, replaceable invalidation observation and `detail()` precedence. |
 | `FinishNotifier` | User notifications for roots that finished since the last listing. |
-| `TaskContinuationRepository` | App-session Continue attempt ownership and explicit bounded recorded-successor checks; no task-screen caller yet. |
+| `TaskContinuationRepository` | App-session Continue attempt ownership and explicit bounded recorded-successor checks consumed by the standalone task screen. |
 | `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |
 | `TakeoverService` | Opens a task's session in Terminal.app — `ctl takeover` grant → hand-off files → `open -a Terminal`; the only take-over destination the Monitor offers. |
 | `QualificationRepository` | Cached engine-owned feature requirements and explicit checks, with per-consumer cancellation, identity validation and runtime-bound launch tokens. |
@@ -119,8 +119,8 @@ set changes; idle reads skip outcome scans when no Stop request is tracked.
 
 `TaskContinuationRepository` is shared by production composition and keeps immutable invocation
 outcomes independently of later recorded-successor checks. Requests capture a selected runtime,
-conversation and full source ID. An exact loaded task identity is required; the engine still decides
-eligibility. The repository serializes per runtime/conversation and also deduplicates source aliases.
+conversation and full source ID. An exact loaded task identity or retained healthy recorded-path identity in the same runtime is
+required; the engine still decides eligibility. The repository serializes per runtime/conversation and also deduplicates source aliases.
 Generic task busy is held only during an invocation, not indefinitely while its outcome is uncertain.
 Future UI must query this owner as well as current status authority before enabling actions.
 
@@ -140,4 +140,11 @@ capacity refuses new admission instead of evicting unsafe evidence.
 
 This is app-session state, not disk persistence or relaunch recovery. Runtime tokens include the
 effective child environment and are kept in memory, not logged or persisted. The safe Null default
-never dispatches. Task-screen adoption, composer locking and launch/refusal copy remain separate.
+never dispatches. The standalone task screen consumes owner state for composer locking and launch/refusal presentation.
+
+The targeted check overload can prove a requested later source through multiple recorded hops,
+sharing the same four-page/400-row/120-second budget across the whole traversal. Each expanded
+predecessor must be healthy and complete; direct items supply edges, never related headers.
+Reachable-source proof is retained separately from direct successors and shares the 400-ID cap.
+A proof for A→B→C permits an explicit C operation without launching B or attributing C to A's
+invocation. The targeted read never certifies that all descendants were discovered.

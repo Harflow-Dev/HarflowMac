@@ -352,11 +352,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             }
         }
 
-        // MARK: Update entry point
-
-        func update(model: ActivityFeedNativeModel, state: ParallelColumnUIState, environment: EnvironmentValues,
-                    actions: ActivityFeedNativeActions) {
-            // Callbacks are refreshed on every SwiftUI update, including input-equal ones.
+        private func refreshActions(_ actions: ActivityFeedNativeActions) {
             self.actions.onLoadMore = actions.onLoadMore
             self.actions.onDisclosure = actions.onDisclosure
             self.actions.onSelectChildTask = actions.onSelectChildTask
@@ -366,10 +362,21 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             self.actions.onCancelQueuedMessage = actions.onCancelQueuedMessage
             self.actions.onApprovalFocusAcknowledged = actions.onApprovalFocusAcknowledged
             self.actions.onApprovalScrollAcknowledged = actions.onApprovalScrollAcknowledged
+            self.actions.onStateContinue = actions.onStateContinue
+            self.actions.onStateCheck = actions.onStateCheck
+            self.actions.onStateNewTask = actions.onStateNewTask
             self.actions.onStateStop = actions.onStateStop
             self.actions.onStateRefresh = actions.onStateRefresh
             self.actions.onStateCopyResumeCommand = actions.onStateCopyResumeCommand
             self.actions.onStateOpenEvents = actions.onStateOpenEvents
+        }
+
+        // MARK: Update entry point
+
+        func update(model: ActivityFeedNativeModel, state: ParallelColumnUIState, environment: EnvironmentValues,
+                    actions: ActivityFeedNativeActions) {
+            // Callbacks are refreshed on every SwiftUI update, including input-equal ones.
+            refreshActions(actions)
             let previous = self.model
             let stateChanged = self.state !== state
             // The supported public inherited environment is stored on every update: a change that

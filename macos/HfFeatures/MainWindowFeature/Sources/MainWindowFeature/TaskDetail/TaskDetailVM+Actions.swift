@@ -75,7 +75,12 @@ extension TaskDetailVM {
     /// than cancelling whatever the conversation's new current member is if it moved on first.
     func didTapRefreshState() {
         let capturedID = currentTaskID
-        Task { [useCase] in await useCase.refreshSnapshot(capturedID) }
+        continuationReadPulse()
+        Task { [weak self, useCase] in
+            await useCase.refreshSnapshot(capturedID)
+            guard let self, isMounted, currentTaskID == capturedID else { return }
+            recompute()
+        }
     }
 
     func didTapCancel() {
@@ -172,7 +177,7 @@ extension TaskDetailVM {
 
     /// The engine owns authorization; a non-live task can still queue a follow-up.
     func recomputeMessageBox(task: TaskInfo) {
-        let eligible = !task.takenOver && !isStatusUnavailable
+        let eligible = !task.takenOver && !isStatusUnavailable && !continuationLocksActions
         let stopAction: (@MainActor () -> Void)? = if chrome == .standalone, canCancel, eligible {
             { [weak self] in self?.didTapCancel() }
         } else {
@@ -183,6 +188,7 @@ extension TaskDetailVM {
             label: isWorkflowBuilder ? "Message the workflow builder" : "Message this task",
             hint: isStatusUnavailable ? "" : "Send queues; Send now requests immediate delivery when safe",
             placeholder: isStatusUnavailable ? "Unavailable until status can be read"
+                : continuationLocksActions ? continuationPlaceholder
                 : eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
             buttonLabel: "Send", isLocked: !eligible,
             isStopping: isStopping, stopAction: stopAction,

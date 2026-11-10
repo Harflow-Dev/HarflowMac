@@ -45,4 +45,4 @@ Root AGENTS.md applies (`../../AGENTS.md`). Read this module's `README.md` befor
   acknowledged is not completed. Keep unsafe records across navigation/runtime changes, no automatic
   launch retry, no engine-private fallback, no lock held across dependency calls/await/publication.
   Busy is shared only during invocation; future UI must consume the separate owner state. Bounds
-  refuse admission rather than forgetting unsafe evidence. This owner has no task-screen callers yet.
+  refuse admission rather than forgetting unsafe evidence. The standalone task caller must combine owner state with fresh current-target status authority.

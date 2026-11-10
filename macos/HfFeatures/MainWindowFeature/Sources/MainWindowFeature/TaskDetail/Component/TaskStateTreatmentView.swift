@@ -5,12 +5,23 @@ import SwiftUI
 /// Approved M05 uncertainty treatments (HarflowDesign 17739e4, m05-proposal.js).
 struct TaskStateTreatmentView: View {
     let model: TaskStateTreatment
+    var onContinue: (String) -> Void = { _ in }
+    var onCheck: (String, UUID) -> Void = { _, _ in }
+    var onNewTask: () -> Void = {}
     var onStop: () -> Void = {}
     var onRefresh: () -> Void = {}
     var onCopyResumeCommand: () -> Void = {}
     var onOpenEvents: () -> Void = {}
 
     var body: some View {
+        if let continuation = model.continuation {
+            TaskContinuationBanner(model: continuation, showsCopyResumeCommand: model.showsCopyResumeCommand,
+                                   onContinue: onContinue, onCheck: onCheck, onNewTask: onNewTask,
+                                   onCopyResumeCommand: onCopyResumeCommand)
+        } else { legacyBody }
+    }
+
+    private var legacyBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: TaskScreenStyle.Banner.gap) {
                 Image(systemName: isInformationNotice ? "clock" : "exclamationmark.triangle")

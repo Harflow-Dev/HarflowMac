@@ -10,10 +10,14 @@ struct TaskStateTreatment: Equatable, Sendable {
 
     let taskID: String
     let kind: Kind
+    var continuation: TaskContinuationPresentation?
     var isStopDisabled = false
     var showsCopyResumeCommand = false
 
-    var isLeadingNotice: Bool { kind == .statusUnavailable || kind == .reconstructed || kind == .stopping || kind == .settling }
+    var isLeadingNotice: Bool {
+        continuation?.phase == .accepted || kind == .statusUnavailable || kind == .reconstructed || kind == .stopping || kind == .settling
+    }
+
     var id: String { "activity-task-state-" + taskID }
 
     static func project(taskID: String, evidence: TaskSnapshotEvidence?, isBusy: Bool,
@@ -44,6 +48,10 @@ extension TaskDetailViewModel {
     /// Projection belongs to the presentation boundary; repository and use-case values stay domain-only.
     var stateTreatment: TaskStateTreatment? {
         guard let task else { return nil }
+        if !isStatusUnavailable, let continuationPresentation {
+            return TaskStateTreatment(taskID: task.taskID, kind: .unknownFailed, continuation: continuationPresentation,
+                                      showsCopyResumeCommand: resumeCommand != nil)
+        }
         return .project(taskID: task.taskID, evidence: snapshotEvidence, isBusy: isBusy,
                         canCancel: canCancel, hasResumeCommand: resumeCommand != nil, isStopping: isStopping,
                         isSettling: isSettling, isStatusUnavailable: isStatusUnavailable)

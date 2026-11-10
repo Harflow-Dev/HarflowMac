@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Wire standalone Continue controls to shared attempt ownership, with accepted/pending and uncertain states, explicit successor checks, retained drafts and stale-target action guards.
+
 - Retain Continue attempt outcomes across navigation and runtime selection, with explicit bounded successor checks and no automatic replay. Task-screen adoption remains deferred.
 
 - Add a capability-gated Continue client with typed launch outcomes. Task-screen controls and reconciliation remain deferred.

@@ -26,6 +26,8 @@ extension TaskDetailVM {
     /// Actual commands reread metadata synchronously, even before queued presentation invalidations arrive.
     func latestActionTask() -> TaskInfo? {
         guard chrome == .standalone else { return task }
+        if let captured = continuationSession.runtime, useCase.continuationRuntime() != captured { return nil }
+        guard !continuationLocksActionsFresh else { return nil }
         guard let displayed = task, displayed.taskID == currentTaskID else { return nil }
         guard let fresh = useCase.statusReadOutcome(currentTaskID)?.task, fresh.taskID == currentTaskID else { return nil }
         let listed = useCase.task(currentTaskID) ?? displayed
@@ -45,7 +47,11 @@ extension TaskDetailVM {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self, timelineEpoch == epoch, didSubscribe else { return }
-                guard latestStatusReadAvailability() != statusReadAvailability else { return }
+                let revision = useCase.statusReadOutcome(currentTaskID)?.revision
+                let retryContinuation = continuationPresentation?.locksActions == true && revision != continuationSession.statusRevision
+                continuationSession.statusRevision = revision
+                guard latestStatusReadAvailability() != statusReadAvailability || retryContinuation else { return }
+                if retryContinuation { continuationReadPulse() }
                 recompute()
             }
             .store(in: &cancellables)

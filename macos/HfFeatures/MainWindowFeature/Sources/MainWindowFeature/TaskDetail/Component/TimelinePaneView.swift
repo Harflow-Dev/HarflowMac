@@ -115,6 +115,9 @@ struct TimelinePaneView: View {
     var isCancelDisabled = false
     var style = ActivityFeedStyle.standard
     var stateTreatment: TaskStateTreatment?
+    var onStateContinue: (String) -> Void = { _ in }
+    var onStateCheck: (String, UUID) -> Void = { _, _ in }
+    var onStateNewTask: () -> Void = {}
     var onStateStop: () -> Void = {}
     var onStateRefresh: () -> Void = {}
     var onStateCopyResumeCommand: () -> Void = {}
@@ -123,10 +126,15 @@ struct TimelinePaneView: View {
 
     init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil,
          isCancelDisabled: Bool = false, style: ActivityFeedStyle = .standard,
-         stateTreatment: TaskStateTreatment? = nil, onStateStop: @escaping () -> Void = {},
+         stateTreatment: TaskStateTreatment? = nil,
+         onStateContinue: @escaping (String) -> Void = { _ in },
+         onStateCheck: @escaping (String, UUID) -> Void = { _, _ in }, onStateNewTask: @escaping () -> Void = {}, onStateStop: @escaping () -> Void = {},
          onStateRefresh: @escaping () -> Void = {}, onStateCopyResumeCommand: @escaping () -> Void = {},
          onStateOpenEvents: @escaping () -> Void = {}) {
         self.stateTreatment = stateTreatment
+        self.onStateContinue = onStateContinue
+        self.onStateCheck = onStateCheck
+        self.onStateNewTask = onStateNewTask
         self.onStateStop = onStateStop
         self.onStateRefresh = onStateRefresh
         self.onStateCopyResumeCommand = onStateCopyResumeCommand
@@ -201,7 +209,8 @@ struct TimelinePaneView: View {
                          onApprovalFocusAcknowledged: { approvalController?.acknowledgeFocus(requestID: $0, token: $1) },
                          onApprovalScrollAcknowledged: { approvalController?.acknowledgeScroll(requestID: $0, token: $1) },
                          onCancelQueuedMessage: model.onCancelQueuedMessage,
-                         stateTreatment: stateTreatment, onStateStop: onStateStop, onStateRefresh: onStateRefresh,
+                         stateTreatment: stateTreatment, onStateContinue: onStateContinue, onStateCheck: onStateCheck,
+                         onStateNewTask: onStateNewTask, onStateStop: onStateStop, onStateRefresh: onStateRefresh,
                          onStateCopyResumeCommand: onStateCopyResumeCommand, onStateOpenEvents: onStateOpenEvents)
         .readingColumn()
     }

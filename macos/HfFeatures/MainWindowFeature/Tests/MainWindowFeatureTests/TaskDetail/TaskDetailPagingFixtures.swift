@@ -10,7 +10,13 @@ import Testing
 extension MockTaskDetailUseCase {
     func configurePagingDefaults(eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() },
                                  observationSubjects: [String: PassthroughSubject<EventObservationFrame, Never>] = [:],
-                                 includeObservationDefaults: Bool = true) {
+                                 includeObservationDefaults: Bool = true, includeContinuationDefaults: Bool = true,
+                                 successorObservation: @escaping (String) throws -> Bool = { _ in false }) {
+        if includeContinuationDefaults {
+            given(self).continuationOwner().willReturn(NullTaskContinuationRepository())
+            given(self).continuationRuntime().willReturn(nil)
+            given(self).continuationSupport(runtime: .any).willReturn(false)
+        }
         if includeObservationDefaults {
         given(self).observation(for: .any).willProduce { [weak self] id in
             guard let self else { return FeatureObservationFixture.frame(id: id) }
@@ -47,7 +53,7 @@ extension MockTaskDetailUseCase {
         }
         given(self).callerApprovalUseCase().willReturn(nil)
         given(self).successorObservationError.willReturn(nil)
-        given(self).observeSuccessors(.any).willReturn(false)
+        given(self).observeSuccessors(.any).willProduce(successorObservation)
         given(self).stopSuccessorObservation().willReturn()
         given(self).resolveTask(.any).willReturn(nil)
         given(self).conversationHistory(sessionID: .any, cursor: .any).willReturn(nil)

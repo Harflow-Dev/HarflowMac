@@ -73,6 +73,12 @@ import Testing
     /// The fixtures `makeSUT` builds before wiring up `useCase`'s stubs — split out purely to keep
     /// `makeSUT`/`configureStubs` each under the house function-length limit; no behavior change.
     struct Fixtures {
+        let successorObservationEffect = Box<((String) throws -> Bool)?>(nil)
+        let continuationOwner = Box<any TaskContinuationRepository>(NullTaskContinuationRepository())
+        let continuationRuntime = Box<QualificationRuntimeToken?>(nil)
+        let continuationSupport = Box<Bool>(false)
+        let newTaskCount = Box<Int>(0)
+        let conversationMembersProvider = Box<((String) -> [TaskInfo])?>(nil)
         let taskProvider = Box<((String) -> TaskInfo?)?>(nil)
         let statusReadProvider = Box<((String) -> TaskSnapshotReadOutcome?)?>(nil)
         let statusReadSubject = PassthroughSubject<Void, Never>()
@@ -150,6 +156,7 @@ import Testing
     func configureStubs(useCase: MockTaskDetailUseCase, routing: MockTaskDetailRouting, taskID: String, fixtures: Fixtures) -> MockEventStreamLease {
         configureObservationStubs(useCase: useCase, taskID: taskID, fixtures: fixtures)
         configureStatusReadStubs(useCase: useCase, taskID: taskID, fixtures: fixtures)
+        configureContinuationStubs(useCase: useCase, routing: routing, fixtures: fixtures)
         given(useCase).tasksPublisher().willReturn(fixtures.tasksSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(fixtures.hasListedSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(fixtures.titlesSubject.eraseToAnyPublisher())
@@ -182,7 +189,9 @@ import Testing
         // existing (pre-piece-7) test already sets up via `detailBox`, so every property that now
         // resolves through `conversationMembers` reduces to the old single-task behaviour unless a
         // test overrides this stub for its own multi-member scenario.
-        given(useCase).conversationMembers(of: .value(taskID)).willProduce { _ in fixtures.detailBox.value.map { [$0] } ?? [] }
+        given(useCase).conversationMembers(of: .value(taskID)).willProduce { id in
+            fixtures.conversationMembersProvider.value?(id) ?? fixtures.detailBox.value.map { [$0] } ?? []
+        }
         // Default: no earlier-turn child is ever outside scope — a singleton conversation's cancel
         // scope is just the task itself, unless a test overrides this for its own scenario.
         given(useCase).cancelScope(of: .any).willProduce { [$0] }
@@ -221,13 +230,20 @@ import Testing
         }
         given(useCase).beginTakeover(taskID: .any).willReturn()
         given(useCase).setOutcome(.any, .any).willReturn()
-        given(routing).selectTask(.any).willReturn()
         stubTopBarRouting(routing)
         // No default `copyToPasteboard` stub: Mockable matches FIFO (first-added wins on overlap),
         // so a blanket `.any` stub here would shadow any test-specific `.willReturn(false)` added
         // later (see `TaskDetailVMTests+Actions.swift`'s copy-resume-command tests, each of which
         // stubs it explicitly for the outcome it needs).
         return lease
+    }
+
+    private func configureContinuationStubs(useCase: MockTaskDetailUseCase, routing: MockTaskDetailRouting, fixtures: Fixtures) {
+        given(useCase).continuationOwner().willProduce { fixtures.continuationOwner.value }
+        given(useCase).continuationRuntime().willProduce { fixtures.continuationRuntime.value }
+        given(useCase).continuationSupport(runtime: .any).willProduce { _ in fixtures.continuationSupport.value }
+        given(routing).showNewTask().willProduce { fixtures.newTaskCount.value += 1 }
+        given(routing).selectTask(.any).willReturn()
     }
 
     private func configureStatusReadStubs(useCase: MockTaskDetailUseCase, taskID: String, fixtures: Fixtures) {
@@ -250,7 +266,8 @@ import Testing
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
         let lease = configureStubs(useCase: useCase, routing: routing, taskID: taskID, fixtures: fixtures)
-        useCase.configurePagingDefaults(includeObservationDefaults: false)
+        useCase.configurePagingDefaults(includeObservationDefaults: false, includeContinuationDefaults: false,
+                                       successorObservation: { try fixtures.successorObservationEffect.value?($0) ?? false })
 
         let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing,
                                continuityHistory: TaskContinuityHistoryStore(), chrome: isWorkflowBuilder ? .embedded : chrome,

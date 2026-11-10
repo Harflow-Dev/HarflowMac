@@ -42,6 +42,9 @@ struct ActivityFeedView: View {
     var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
     var onCancelQueuedMessage: ((String) -> Void)?
     var stateTreatment: TaskStateTreatment?
+    var onStateContinue: (String) -> Void = { _ in }
+    var onStateCheck: (String, UUID) -> Void = { _, _ in }
+    var onStateNewTask: () -> Void = {}
     var onStateStop: () -> Void
     var onStateRefresh: () -> Void
     var onStateCopyResumeCommand: () -> Void
@@ -57,9 +60,14 @@ struct ActivityFeedView: View {
          onApprovalFocusAcknowledged: ((String, UUID) -> Void)? = nil,
          onApprovalScrollAcknowledged: ((String, UUID) -> Void)? = nil,
          onCancelQueuedMessage: ((String) -> Void)? = nil, stateTreatment: TaskStateTreatment? = nil,
+         onStateContinue: @escaping (String) -> Void = { _ in },
+         onStateCheck: @escaping (String, UUID) -> Void = { _, _ in }, onStateNewTask: @escaping () -> Void = {},
          onStateStop: @escaping () -> Void = {}, onStateRefresh: @escaping () -> Void = {},
          onStateCopyResumeCommand: @escaping () -> Void = {}, onStateOpenEvents: @escaping () -> Void = {}) {
         self.stateTreatment = stateTreatment
+        self.onStateContinue = onStateContinue
+        self.onStateCheck = onStateCheck
+        self.onStateNewTask = onStateNewTask
         self.onStateStop = onStateStop
         self.onStateRefresh = onStateRefresh
         self.onStateCopyResumeCommand = onStateCopyResumeCommand
@@ -148,6 +156,9 @@ struct ActivityFeedView: View {
         actions.onApprovalFocusAcknowledged = { onApprovalFocusAcknowledged?($0, $1) }
         actions.onApprovalScrollAcknowledged = { onApprovalScrollAcknowledged?($0, $1) }
         actions.onCancelQueuedMessage = { onCancelQueuedMessage?($0) }
+        actions.onStateContinue = onStateContinue
+        actions.onStateCheck = onStateCheck
+        actions.onStateNewTask = onStateNewTask
         actions.onStateStop = onStateStop
         actions.onStateRefresh = onStateRefresh
         actions.onStateCopyResumeCommand = onStateCopyResumeCommand

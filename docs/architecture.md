@@ -27,7 +27,7 @@ Each selected task-detail repository owns its bounded successor inventory separa
 conversation and full source identity, serializes admission, shares task busy only during the command,
 and retains invocation uncertainty across navigation and runtime selection. Explicit bounded successor
 checks supply independent recorded-edge evidence; empty/incomplete reads never prove that no pending
-launch exists. No task-screen caller exists yet. See the [repository guide](../macos/HfCore/HfRepository/README.md#continue-attempt-ownership)
+launch exists. Standalone task controls consume the owner through their view repository. See the [repository guide](../macos/HfCore/HfRepository/README.md#continue-attempt-ownership)
 for admission, bridging and retention bounds.
 
 ## Store recovery
@@ -359,3 +359,14 @@ different conversation, modal replacement, runtime loss or dismissal invalidates
 sheet leaves the underlying task view and composer draft mounted. The composer shows Stop only
 for an eligible standalone running task that has not been taken over, and disables it while busy.
 Group, embedded and Parallel controls keep their existing confirmation behavior.
+
+
+Standalone Continue presentation binds a captured runtime/conversation/full source and uses fresh
+paired support evidence separately from retained owner state. Actual handlers revalidate current
+status, runtime and owner state even before rendering invalidations arrive. Submitted operations
+outlive view teardown; view-owned support and successor reads remain generation-fenced. Native
+feed callbacks carry the rendered target/attempt, so a retained row cannot retarget a new member.
+An accepted task may be pending; unknown or incomplete reads cannot reopen messaging or replay a
+launch. Adopted descendants need positive owner path proof and actual predecessor ancestry through
+the acknowledged member. Generic engine refusal text is displayed without interpreting diagnostic
+data whose capability provenance is absent. Independent caller approvals keep their own checks.

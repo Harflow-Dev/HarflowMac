@@ -36,7 +36,7 @@ public final class TaskContinuationRepositoryImpl: TaskContinuationRepository, @
 
     public func start(_ request: TaskContinuationRequest) async -> TaskContinuationAdmission {
         guard !request.conversationID.isEmpty, !request.sourceTaskID.isEmpty,
-              taskList.task(request.sourceTaskID)?.taskID == request.sourceTaskID else { return .refused(.missingIdentity) }
+              hasSourceIdentity(request) else { return .refused(.missingIdentity) }
         let admission = reserve(request)
         guard case .started(let id) = admission else { return admission }
         changes.send(())
@@ -63,6 +63,13 @@ public final class TaskContinuationRepositoryImpl: TaskContinuationRepository, @
         return admission
     }
 
+    private func hasSourceIdentity(_ request: TaskContinuationRequest) -> Bool {
+        if let loaded = taskList.task(request.sourceTaskID) { return loaded.taskID == request.sourceTaskID }
+        return lock.withLock {
+            records.contains { $0.request.runtime == request.runtime && $0.permitsRecordedSource(request.sourceTaskID) }
+        }
+    }
+
     private func matches(_ lhs: TaskContinuationRequest, _ rhs: TaskContinuationRequest) -> Bool {
         lhs.runtime == rhs.runtime && (lhs.conversationID == rhs.conversationID || lhs.sourceTaskID == rhs.sourceTaskID)
     }
@@ -81,7 +88,7 @@ public final class TaskContinuationRepositoryImpl: TaskContinuationRepository, @
                 return .existing(sameSource.id)
             }
             if let previous = matching.last, !unsafe.isEmpty, previous.request.sourceTaskID != request.sourceTaskID,
-               !previous.recordedSuccessorTaskIDs.contains(request.sourceTaskID) { return .existing(previous.id) }
+               !previous.permitsRecordedSource(request.sourceTaskID) { return .existing(previous.id) }
             guard records.count < 256 else { return .refused(.capacity) }
             let id = UUID()
             records.append(TaskContinuationAttempt(id: id, request: request, outcome: nil, check: .notChecked))
@@ -99,6 +106,14 @@ public final class TaskContinuationRepositoryImpl: TaskContinuationRepository, @
     }
 
     public func check(attemptID: UUID) async {
+        await check(attemptID: attemptID, target: nil)
+    }
+
+    public func check(attemptID: UUID, targetSourceTaskID: String) async {
+        await check(attemptID: attemptID, target: targetSourceTaskID)
+    }
+
+    private func check(attemptID: UUID, target: String?) async {
         let readID = UUID()
         let captured: TaskContinuationAttempt? = lock.withLock {
             guard reads[attemptID] == nil, let index = records.firstIndex(where: { $0.id == attemptID }),
@@ -110,15 +125,28 @@ public final class TaskContinuationRepositoryImpl: TaskContinuationRepository, @
         }
         guard let captured else { return }
         changes.send(())
-        let evidence = await observe(captured.request)
+        let evidence: TaskContinuationCheck = if let target {
+            await TaskContinuationReachability(taskList: taskList, now: now)
+                .observe(captured.request, target: target)
+        } else {
+            await observe(captured.request)
+        }
         let changed = lock.withLock {
             guard reads[attemptID] == readID, let index = records.firstIndex(where: { $0.id == attemptID }) else { return false }
             reads.removeValue(forKey: attemptID)
             records[index].check = Task.isCancelled ? captured.check : evidence
             if !Task.isCancelled, case .recorded(let ids) = evidence {
                 let combined = Set(records[index].recordedSuccessorTaskIDs + ids)
-                if combined.count <= 400 {
+                if combined.union(records[index].recordedReachableSourceTaskIDs).count <= 400 {
                     records[index].recordedSuccessorTaskIDs = combined.sorted()
+                } else {
+                    records[index].check = .inconclusive
+                }
+            }
+            if !Task.isCancelled, case .reachable(let source) = evidence {
+                let combined = Set(records[index].recordedReachableSourceTaskIDs + [source])
+                if combined.union(records[index].recordedSuccessorTaskIDs).count <= 400 {
+                    records[index].recordedReachableSourceTaskIDs = combined.sorted()
                 } else {
                     records[index].check = .inconclusive
                 }

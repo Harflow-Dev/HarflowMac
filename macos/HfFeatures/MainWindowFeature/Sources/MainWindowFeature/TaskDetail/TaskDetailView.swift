@@ -40,6 +40,10 @@ protocol TaskDetailViewModel: ViewModel {
     var title: String { get }
     var ancestorCrumbs: [AncestorCrumb] { get }
     var isBusy: Bool { get }
+    var continuationPresentation: TaskContinuationPresentation? { get }
+    func didTapContinue(taskID: String)
+    func didTapCheckContinuation(taskID: String, attemptID: UUID)
+    func didTapNewTask()
     var isStopping: Bool { get }
     var isStatusUnavailable: Bool { get }
     var hasStatusAuthority: Bool { get }
@@ -124,24 +128,6 @@ protocol TaskDetailViewModel: ViewModel {
     @discardableResult func submitMessage(_ text: String) -> Bool
     @discardableResult func submitMessageNow(_ text: String) -> Bool
     func cancelQueuedMessage(_ messageID: String)
-}
-
-extension TaskDetailViewModel {
-    var requestReadState: TaskRequestReadState { .notRequested }
-    var observationFrames: [String: EventObservationFrame] { [:] }
-    var orderedHistoryFrames: [EventObservationFrame] { [] }
-    var recoveredTranscript: RecoveredTranscriptFrame { .init() }
-    var copyFeedback: String? { nil }
-    func didReadRequest(maxBytes _: Int) {}
-    func didCopyObservationText(_: String) {}
-    func didRequestObservation(_: EventObservationAction, taskID _: String) {}
-
-    var resourceContext: TaskResourceContext? { nil }
-    var resourceBlockersExpanded: Bool { false }
-    func didToggleResourceBlockers() {}
-    func didOpenResourceSlots() {}
-    var callerApprovalController: CallerApprovalController? { nil }
-    var topBarPaneOpen: Bool { false }
 }
 
 // MARK: - TaskDetailView
@@ -564,8 +550,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
             if let feedback = viewModel.copyFeedback { Text(feedback).font(.hf(.caption)).textSelection(.enabled) }
             TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
-                             isCancelDisabled: viewModel.isBusy || (chrome == .standalone && !viewModel.hasStatusAuthority), style: transcriptStyle,
+                             isCancelDisabled: viewModel.continuationPresentation?.locksActions == true || viewModel.isBusy
+                                 || (chrome == .standalone && !viewModel.hasStatusAuthority), style: transcriptStyle,
                              stateTreatment: isStandalone ? viewModel.stateTreatment : nil,
+                             onStateContinue: viewModel.didTapContinue,
+                             onStateCheck: viewModel.didTapCheckContinuation, onStateNewTask: viewModel.didTapNewTask,
                              onStateStop: viewModel.didTapCancel, onStateRefresh: viewModel.didTapRefreshState,
                              onStateCopyResumeCommand: viewModel.didTapCopyResumeCommand,
                              onStateOpenEvents: { pane.animated { pane.select(.events) } })

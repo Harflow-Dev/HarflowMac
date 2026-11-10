@@ -96,6 +96,9 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var onCancelQueuedMessage: (String) -> Void = { _ in }
     var onApprovalFocusAcknowledged: (String, UUID) -> Void = { _, _ in }
     var onApprovalScrollAcknowledged: (String, UUID) -> Void = { _, _ in }
+    var onStateContinue: (String) -> Void = { _ in }
+    var onStateCheck: (String, UUID) -> Void = { _, _ in }
+    var onStateNewTask: () -> Void = {}
     var onStateStop: () -> Void = {}
     var onStateRefresh: () -> Void = {}
     var onStateCopyResumeCommand: () -> Void = {}
@@ -113,6 +116,9 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         onCancelQueuedMessage = { _ in }
         onApprovalFocusAcknowledged = { _, _ in }
         onApprovalScrollAcknowledged = { _, _ in }
+        onStateContinue = { _ in }
+        onStateCheck = { _, _ in }
+        onStateNewTask = {}
         onStateStop = {}
         onStateRefresh = {}
         onStateCopyResumeCommand = {}
@@ -248,7 +254,9 @@ struct ActivityFeedNativeRowRoot: View {
                                       onFocusAcknowledged: onHostedHeight == nil ? nil : { actions.onApprovalFocusAcknowledged(card.id, $0) },
                                       isFocusReady: approvalFocusReady)
         case .taskState(let treatment, _):
-            TaskStateTreatmentView(model: treatment, onStop: { actions.onStateStop() },
+            TaskStateTreatmentView(model: treatment,
+                                   onContinue: { actions.onStateContinue($0) },
+                                   onCheck: { actions.onStateCheck($0, $1) }, onNewTask: { actions.onStateNewTask() }, onStop: { actions.onStateStop() },
                                    onRefresh: { actions.onStateRefresh() },
                                    onCopyResumeCommand: { actions.onStateCopyResumeCommand() },
                                    onOpenEvents: { actions.onStateOpenEvents() })
