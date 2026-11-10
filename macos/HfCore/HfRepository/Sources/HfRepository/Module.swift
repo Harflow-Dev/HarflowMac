@@ -72,7 +72,7 @@ public final class Module: HfModule {
             .environment(\.modelCatalogRepository, ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.workflowRepository, workflows)
 
-        registerPublicReaders(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery, taskList: taskList, actions: taskAction)
+        registerPublicReaders(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery, taskList: taskList, actions: taskAction, runtime: runtime)
         let shared = NeedsYouDependencies(scheduler: scheduler, visibility: visibility, settings: settings, install: install)
         registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode)
     }
@@ -89,8 +89,12 @@ public final class Module: HfModule {
     }
 
     private func registerPublicReaders(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: any StateRecoveryRepository,
-                                       taskList: any TaskListRepository, actions: any TaskActionRepository) {
+                                       taskList: any TaskListRepository, actions: any TaskActionRepository, runtime: ManagedRuntimeCoordinator) {
+        let pendingLaunch = PendingLaunchRepositoryImpl(tooling: toolEnvironment, taskList: taskList, actions: actions,
+                                                        recovery: stateRecovery, now: { .now })
+        pendingLaunch.bindRuntimeChanges(runtime.statePublisher())
         GlobalValues
+            .environment(\.pendingLaunchRepository, pendingLaunch)
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskChangesRepository, TaskChangesRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery, now: { .now }))

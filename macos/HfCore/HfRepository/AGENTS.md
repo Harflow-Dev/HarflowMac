@@ -46,3 +46,23 @@ Root AGENTS.md applies (`../../AGENTS.md`). Read this module's `README.md` befor
   launch retry, no engine-private fallback, no lock held across dependency calls/await/publication.
   Busy is shared only during invocation; future UI must consume the separate owner state. Bounds
   refuse admission rather than forgetting unsafe evidence. The standalone task caller must combine owner state with fresh current-target status authority.
+
+- Pending launch discovery/lookup are read-only evidence, distinct from retained Stop invocation
+  evidence. Never fabricate task status or clear Continue state from them. Visible leases and
+  selected-detail gates must revoke synchronously, including runtime ABA transitions. No automatic
+  namespace polling or mutation retry. Recorded handoff requires fresh same-ID ordinary status and
+  the narrow shared-gate history admission, never legacy `resolve`. No dependency callbacks or
+  publications under admission/state locks. Confirmed Stop belongs to the shared owner beyond VM
+  teardown; preserve phase-aware errors/uncertainty and refuse bounded admission rather than evicting
+  unsafe records. Match retained attempts to snapshot current runtime/fullID before presentation.
+
+- Pending snapshot and task-history publication channels use nonblocking drains: mutate synchronous
+  raw state first, request the latest wave, send outside owner/state/admission locks. Reentrant and
+  cross-thread requests must never wait for subscriber callbacks; task-history revisions reject old
+  captured payloads. Preserve immediate raw listing visibility at successful refresh/run barriers.
+  These two channels intentionally use CurrentValueSubject directly to avoid wrapper callback locks.
+- Recorded pending handoff qualifies the whole actual conversation ancestry before one atomic
+  insertion: continuation-of first, parent-task fallback, never spawned-by; maximum32 sequential
+  public status operations/120 cooperative seconds/8MiB encoded rows. Missing/pruned/unqualified
+  ancestry, cycle, bounds or inconsistent root ordering is an explicit conservative admission
+  failure, never a fabricated root or partial history/title insertion. Legacy resolve stays separate.

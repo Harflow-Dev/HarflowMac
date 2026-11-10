@@ -13,7 +13,10 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     let scheduler: any Scheduling
     let visibility: any MonitorVisibility
 
-    @Subjected var tasksValue: [TaskInfo] = []
+    let historyPublication = TaskHistoryPublication()
+    var tasksValue: [TaskInfo] { historyPublication.value }
+    private var historyPublicationRevision: UInt64 = 0
+    var recordedPublicationBarrier: (@Sendable () async -> Void)?
     @Subjected var listErrorValue: ToolError?
     @Subjected private var hasListedValue = false
     @Subjected private var titlesValue: [String: String] = [:]
@@ -104,7 +107,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     public var hasListed: Bool { hasListedValue }
     public var titles: [String: String] { titlesValue }
 
-    public func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { $tasksValue.eraseToAnyPublisher() }
+    public func tasksPublisher() -> AnyPublisher<[TaskInfo], Never> { historyPublication.publisher() }
     public func listErrorPublisher() -> AnyPublisher<ToolError?, Never> { $listErrorValue.removeDuplicates().eraseToAnyPublisher() }
     public func hasListedPublisher() -> AnyPublisher<Bool, Never> { $hasListedValue.removeDuplicates().eraseToAnyPublisher() }
     public func titlesPublisher() -> AnyPublisher<[String: String], Never> { $titlesValue.removeDuplicates().eraseToAnyPublisher() }
@@ -346,22 +349,18 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         }
     }
 
-    private func publishHistory() {
+    private func captureHistoryPublication() -> (UInt64, [TaskInfo]) {
         historyLock.withLock {
-            let next = historyTasks.values.sorted {
-                let lhs = $0.startedAt ?? .distantPast
-                let rhs = $1.startedAt ?? .distantPast
-                return lhs == rhs ? $0.taskID > $1.taskID : lhs > rhs
-            }
-            // An unchanged poll — same count, same order (both sorted with this rule), every entry
-            // equivalent (`duration_seconds` drift on a running task with a start time is the only
-            // difference an unchanged poll produces) — publishes nothing; consumers with
-            // time-derived text tick on their own presentation clock instead.
-            let unchanged = next.count == tasksValue.count
-                && zip(next, tasksValue).allSatisfy { $0.isEquivalent(to: $1) }
-            guard !unchanged else { return }
-            tasksValue = next
+            historyPublicationRevision += 1
+            return (historyPublicationRevision, PendingRecordedTaskReader.sorted(Array(historyTasks.values)))
         }
+    }
+
+    private func publishHistory() {
+        let (revision, next) = captureHistoryPublication()
+        // Preserve equivalent-poll quietness (including duration drift). Concurrent/reentrant
+        // work updates raw visibility immediately and drains its newer revision after this wave.
+        historyPublication.submit(next, revision: revision)
         publishCounts()
     }
 
@@ -457,15 +456,7 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
 
     public func resolve(_ id: String) async -> TaskInfo? {
         guard let client = try? toolEnvironment.ctl().get() else { return task(id) }
-        var current: String? = id
-        var visited: Set<String> = []
-        var resolved: [TaskInfo] = []
-        while let target = current, visited.count < 32, visited.insert(target).inserted {
-            let fetched: TaskInfo? = if target != id, let existing = task(target) { existing } else { try? await client.status(target).get() }
-            guard let item = fetched else { break }
-            resolved.append(item)
-            current = item.parentTaskID ?? item.spawnedBy
-        }
+        let resolved = await PendingRecordedTaskReader.legacyResolve(id, client: client, cached: { self.task($0) })
         historyLock.withLock {
             for item in resolved { historyTasks[item.taskID] = item }
         }
@@ -474,12 +465,32 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         return task(id)
     }
 
-    public func successorPage(predecessorTaskID: String, cursor: String?, runtime: QualificationRuntimeToken) async throws -> TaskSuccessorPage {
-        let client = try runtime.boundClient(tooling: toolEnvironment)
-        let page = try await client.taskSuccessorPage(predecessorTaskID: predecessorTaskID, cursor: cursor).get()
-        guard !Task.isCancelled, client.operationIsCurrent() else { throw QualificationSessionError.runtimeChanged }
+    public func admitRecorded(_ id: String, runtime: QualificationRuntimeToken, gate: PendingLaunchAdmissionGate) async throws -> TaskInfo {
+        let rows = try await PendingRecordedTaskReader.readAncestry(id, runtime: runtime, tooling: toolEnvironment, gate: gate, now: { .now })
         _ = try runtime.boundClient(tooling: toolEnvironment)
-        return page
+        let captured = gate.withCurrent { historyLock.withLock {
+            for item in rows { historyTasks[item.taskID] = item }
+            return captureHistoryPublication()
+        } }
+        guard let (revision, next) = captured else { throw QualificationSessionError.runtimeChanged }
+        if let barrier = recordedPublicationBarrier { await barrier() }
+        guard gate.isCurrent else { throw QualificationSessionError.runtimeChanged }
+        _ = try runtime.boundClient(tooling: toolEnvironment)
+        historyPublication.submit(next, revision: revision)
+        guard gate.isCurrent else { throw QualificationSessionError.runtimeChanged }
+        publishRecordedTitles(rows)
+        publishCounts()
+        return rows[0]
+    }
+
+    private func publishRecordedTitles(_ rows: [TaskInfo]) {
+        var titles = titlesLock.withLock { titlesValue }
+        for item in rows {
+            if let title = item.raw["title"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                titles[item.taskID] = title
+            }
+        }
+        if titlesValue != titles { titlesValue = titles }
     }
 
     public func conversationPage(sessionID: String, cursor: String?, limit: Int = 100) async throws -> TaskHistoryPage {
@@ -553,18 +564,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             return listed
         }
         return snapshotRepository.snapshot(id) ?? task(id)
-    }
-
-    public func runningInSubtrees(of ids: [String]) -> [String] {
-        var result: [String] = []
-        var frontier = ids
-        var seen = Set<String>()
-        while let id = frontier.popLast() {
-            guard seen.insert(id).inserted else { continue }
-            if task(id)?.status.isRunning == true { result.append(id) }
-            frontier.append(contentsOf: Lineage.children(of: id, in: tasksValue).map(\.taskID))
-        }
-        return result
     }
 
     public var runningCount: Int {

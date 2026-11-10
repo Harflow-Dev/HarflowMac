@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add shared pending-launch read and Stop ownership, retaining uncertain outcomes across navigation and admitting recorded tasks only after fresh bounded ancestry reads. Native screen adoption follows separately.
+
 - Add typed pending-launch inventory and exact-ID reads, plus capability-paired cancellation evidence. Native screen adoption follows separately; engine version pins are unchanged.
 
 - Wire standalone Continue controls to shared attempt ownership, with accepted/pending and uncertain states, explicit successor checks, retained drafts and stale-target action guards.

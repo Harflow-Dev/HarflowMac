@@ -30,6 +30,22 @@ checks supply independent recorded-edge evidence; empty/incomplete reads never p
 launch exists. Standalone task controls consume the owner through their view repository. See the [repository guide](../macos/HfCore/HfRepository/README.md#continue-attempt-ownership)
 for admission, bridging and retention bounds.
 
+## Pending-launch ownership
+
+`PendingLaunchRepository` owns visible read leases, full-ID selection gates, bounded inventory and
+exact lookup evidence, and app-session Stop invocations. Runtime changes synchronously revoke old
+reads and prepared confirmations, including A→B→A transitions. Confirmed commands outlive view
+teardown; invocation outcomes remain separate from discovery. No timer or mutation retry is added.
+
+Recorded handoff uses `TaskListRepository.admitRecorded`, never legacy `resolve`. It reads fresh
+same-runtime target and retained conversation ancestry before one gated insertion, following
+`continuationOfTaskID ?? parentTaskID`, with 32-read/120-second/8-MiB bounds. Missing, pruned,
+unqualified, cyclic or bounded ancestry fails without partial admission. No invented root is used.
+Normal task history and admission share a revisioned nonblocking publication drain; raw listing
+visibility updates synchronously, and subscriber callbacks run outside owner locks. See the
+[repository guide](../macos/HfCore/HfRepository/README.md) for bounds and action semantics.
+This foundation has no native pending-launch screen caller yet; engine pins are unchanged.
+
 ## Store recovery
 
 `Module` constructs one `StateRecoveryRepositoryImpl` from the qualified tool environment and injects it into task-list and workflow repositories. Their structured store refusals update a shared, equality-deduplicated readiness snapshot without changing managed-runtime acquisition state. MonitorCore owns only typed public-command models and transport; the repository owns single-flight operations, exact inspection/confirmation binding and generation checks. No consumer writes state files. Settings General consumes the same repository through its use-case adapter and VM, and the sidebar exposes a settings attention entry. Exact inspection values bind inline confirmation and cancellation. Recovery completion rechecks listing and observation through `runtimeBecameReady()` without invalidating the durable completion receipt; later failures retain the last receipt separately from current recovery state. Finder reveal accepts only that engine-returned completed receipt.

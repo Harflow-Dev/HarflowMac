@@ -148,3 +148,56 @@ predecessor must be healthy and complete; direct items supply edges, never relat
 Reachable-source proof is retained separately from direct successors and shares the 400-ID cap.
 A proof for A→B→C permits an explicit C operation without launching B or attributing C to A's
 invocation. The targeted read never certifies that all descendants were discovered.
+
+## Pending launches
+
+`PendingLaunchRepository` owns explicit public pending inventory and exact full-ID lookup separately
+from Stop invocation evidence. Acquire a read lease only while its feature is visible, bind the
+selected full ID, and synchronously clear/rebind that selection on every navigation change. Releasing
+the lease revokes delayed reads; there is no namespace polling timer. Refresh traverses from the first
+page with at most64 requests,120 cooperative seconds and8MiB of conservatively charged response
+bytes (128KiB per request), including one cursor-expiry restart. Inventory retains at most4096 rows
+and8MiB of encoded raw payload. Incomplete/failed reads keep prior rows visibly stale; only a fresh,
+fully understood complete traversal replaces them. Empty lookup or inventory never proves settlement.
+Unsupported future rows preserve healthy neighbors and prevent a completed-check claim.
+
+A recorded lookup only presents record-found evidence. Explicit `resolveRecorded` performs a fresh
+same-full-ID ordinary status read and uses `TaskListRepository.admitRecorded` with a shared synchronous
+selection/runtime admission gate before history insertion. It reads the retained conversation chain
+through `continuation_of_task_id`, falling back to `parent_task_id`; unrelated `spawned_by` is not a
+conversation link. The entire chain must qualify in the same captured runtime before atomic insertion:
+at most32 sequential public status operations,120 cooperative seconds and8MiB encoded row evidence.
+Each operation retains the existing public status handshake/fallback behavior. These are read bounds,
+not a preemptive timeout. Missing/pruned/unqualified ancestors, cycles, bounds or inconsistent root
+ordering return explicit `PendingRecordedAdmissionFailure`; no partial target/ancestor insertion or
+fabricated recovered root occurs. This conservatively refuses handoff when retained ancestry cannot
+establish the existing conversation namespace. It never invokes legacy `resolve` or uses cached task
+status for routing. The caller must also recheck its selected context before navigation.
+
+Pending snapshots and task-history listings use nonblocking publication drains. Synchronous raw
+snapshots/list getters update before a successful refresh returns; serialized whole delivery waves
+run outside owner/state/admission locks. Nested or concurrent publication requests update the next
+wave instead of recursively delivering it. Task history rejects captured publications older than its
+accepted revision, so a delayed handoff cannot overwrite newer normal-refresh rows/status. A subscriber
+holding a delivery callback open can delay the next delivery wave, while current raw getters remain
+available for action/routing guards. Equivalent task polls still publish nothing. These two channels
+use CurrentValueSubject directly rather than adding wrapper locks around subscriber callbacks.
+
+Stop preparation mints a single-use confirmation with captured runtime/fullID/launch generation.
+Submitting transfers ownership to the repository; subsequent navigation cannot cancel that request.
+Fresh pending preflight and the client's paired pending/cancel capability handshake precede ordinary
+full-ID cancel. A record found during preflight invalidates the pending operation. A spawn after
+preflight can race that ordinary cancel; this is not an atomic generation-conditioned mutation.
+Generic task busy excludes other commands only during invocation. Accepted, uncertain and engine-error
+evidence survives independently of later reads and runtime changes; acknowledgement never proves
+stopped, and observed settlement differs from positive never-started evidence. Continue state is untouched.
+
+Read leases are capped at8, in-flight inventory traversals at2 (including revoked readers), and exact
+reads at8 globally/one per lease. Lookup cache is capped at128 entries/2MiB encoded payload, and retained Stop attempts
+at256 records/16MiB payload including captured identity. Stop admission reserves one maximum1MiB result
+and a32KiB diagnostic capsule before dispatch, then releases unused reservation to the actual retained
+payload cost. Capacity refuses rather than evicting unsafe evidence. Structured engine reasons and raw
+receipts stay verbatim; shortened unstructured diagnostics carry both a textual marker and the
+`diagnosticsTruncated` flag. These are bounded payload budgets, not measured heap ceilings. Bind runtime
+notifications inline so A→B→A revokes old work. Snapshot `currentRuntime` is an in-memory comparison
+binding only; filter retained attempts by it and full ID, and never display or log its environment.
