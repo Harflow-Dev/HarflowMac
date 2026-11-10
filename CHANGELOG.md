@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Move the standalone task’s terminal action into More actions, with task ID, parent and repository shortcuts. Events stays in the right pane; Group and embedded controls are unchanged.
+
 - Select HarflowMCP 0.0.12 as the paired managed runtime and vendor its contract bundle (320 fixtures). MonitorCore gains capability flags for the new engine features and decoders for artifact registration details and error reasons, continuation-stop status, cancel observations and the chain-stopped refusal, and gates the artifact read on `task-artifacts.v1`; no screen changes yet. Installation and runtime qualification of 0.0.12 are pending.
 
 - Match the "Runtime ready" screen shown while the first task listing loads to the runtime setup screen, so the pane no longer shifts when setup finishes. It uses the same 26-point title and 14-point body, drops the spinner, and a failed listing shows its message as selectable text below the body with a small "Retry loading work" button.

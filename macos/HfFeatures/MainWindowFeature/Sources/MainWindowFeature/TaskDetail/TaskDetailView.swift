@@ -384,6 +384,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                         copyResumeCommand: viewModel.didTapCopyResumeCommand, openTask: viewModel.didTapTask,
                         showRawEvents: showEvents,
                         toggleInspector: toggleInspector,
+                        copyTaskID: viewModel.didTapCopyTaskID,
+                        openRepository: { openURL(URL(fileURLWithPath: task.repoPath, isDirectory: true)) },
+                        copyRepoPath: viewModel.didTapCopyRepoPath,
                         revealContinuity: revealContinuityChip, revealNotices: revealNoticesChip, revealAccess: revealAccessChip
                     ),
                     onEvaluation: onToolbarEvaluation,

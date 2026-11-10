@@ -17,6 +17,8 @@ struct TaskDetailToolbarSnapshot: Equatable, Sendable {
     let canCancel: Bool
     let resumeCommand: String?
     let parentID: String?
+    let parentTitle: String?
+    let repoPath: String?
     let showsInspector: Bool
     /// Whether the inspector item is the standalone right pane ("right pane" wording) or the legacy events pane.
     let isRightPane: Bool
@@ -40,6 +42,8 @@ struct TaskDetailToolbarSnapshot: Equatable, Sendable {
         self.canCancel = viewModel.canCancel
         self.resumeCommand = viewModel.resumeCommand
         self.parentID = viewModel.openParentTaskID
+        self.parentTitle = isRightPane ? viewModel.ancestorCrumbs.first { $0.id == viewModel.openParentTaskID }?.title : nil
+        self.repoPath = isRightPane ? task.repoPath : nil
         self.showsInspector = showsInspector
         self.isRightPane = isRightPane
         self.chips = chips
@@ -55,6 +59,9 @@ struct TaskDetailToolbarActions {
     let openTask: (String) -> Void
     let showRawEvents: () -> Void
     let toggleInspector: () -> Void
+    var copyTaskID: () -> Void = {}
+    var openRepository: () -> Void = {}
+    var copyRepoPath: () -> Void = {}
     var revealContinuity: () -> Void = {}
     var revealNotices: () -> Void = {}
     var revealAccess: () -> Void = {}
@@ -104,11 +111,11 @@ struct TaskDetailToolbar: View, Equatable {
             .toolbar { toolbarContent }
     }
 
-    /// One SDK glass capsule behind takeover/more/inspector (§3 Liquid Glass). The standalone mount
+    /// One SDK glass capsule behind more/inspector (§3 Liquid Glass). The standalone mount
     /// publishes its status badge in the window's principal item and puts the chips ahead of the group
     /// (each its own item, shared background hidden, present only while its condition holds); the other
-    /// mounts keep the status item behind a fixed spacer. The takeover, more and inspector ids are
-    /// unchanged; when the task is not terminal-eligible the takeover item renders nothing.
+    /// mounts keep the status item behind a fixed spacer and their separate takeover button.
+    /// Standalone takeover is offered inside More actions with the same eligibility and help.
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarSpacer(.flexible)
         if let chips = snapshot.chips {
@@ -141,11 +148,14 @@ struct TaskDetailToolbar: View, Equatable {
                 .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.fixed)
         }
-        ToolbarItem(id: "task-detail.takeover", placement: .primaryAction) { takeoverButton }
+        if !snapshot.isRightPane {
+            ToolbarItem(id: "task-detail.takeover", placement: .primaryAction) { takeoverButton }
+        }
         ToolbarItem(id: "task-detail.more", placement: .primaryAction) {
             Menu { menuItems } label: { Label("More actions", systemImage: "ellipsis") }
                 .menuIndicator(.hidden)
 .help("More actions")
+.accessibilityLabel("More actions")
         }
         ToolbarItem(id: "task-detail.inspector", placement: .primaryAction) { inspectorToggle }
     }
@@ -176,12 +186,41 @@ struct TaskDetailToolbar: View, Equatable {
     }
 
     @ViewBuilder private var menuItems: some View {
-        if snapshot.canCancel { Button("Cancel", role: .destructive, action: actions.cancel).disabled(snapshot.isBusy) }
-        if snapshot.resumeCommand != nil { Button("Copy resume command", action: actions.copyResumeCommand) }
-        if let parentID = snapshot.parentID { Button("Open parent") { actions.openTask(parentID) } }
-        Divider()
-        Button("Events", action: actions.showRawEvents)
+        if snapshot.isRightPane {
+            standaloneMenuItems
+        } else {
+            if snapshot.canCancel { Button("Cancel", role: .destructive, action: actions.cancel).disabled(snapshot.isBusy) }
+            if snapshot.resumeCommand != nil { Button("Copy resume command", action: actions.copyResumeCommand) }
+            if let parentID = snapshot.parentID { Button("Open parent") { actions.openTask(parentID) } }
+            Divider()
+            Button("Events", action: actions.showRawEvents)
+        }
     }
+
+    @ViewBuilder private var standaloneMenuItems: some View {
+        if snapshot.canCancel { Button("Stop task…", role: .destructive, action: actions.cancel).disabled(snapshot.isBusy) }
+        if snapshot.allowsTerminal {
+            Button(snapshot.takeoverLabel, action: actions.takeover)
+                .disabled(!snapshot.canTakeover)
+                .help(snapshot.takeoverHelp)
+        }
+        if let parentID = snapshot.parentID {
+            Button(action: { actions.openTask(parentID) }) {
+                Text("Open parent task")
+                if let title = snapshot.parentTitle { Text("Started by \(title)") }
+            }
+        }
+        if snapshot.resumeCommand != nil { Button("Copy resume command", action: actions.copyResumeCommand) }
+        Button("Copy task ID", action: actions.copyTaskID)
+        if let repoPath = snapshot.repoPath {
+            Divider()
+            Section(Format.repoName(repoPath)) {
+                Button("Open in Finder", action: actions.openRepository)
+                Button("Copy path", action: actions.copyRepoPath)
+            }
+        }
+    }
+
 }
 
 #if DEBUG

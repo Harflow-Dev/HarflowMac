@@ -42,6 +42,29 @@ import Testing
         }
     }
 
+    @Test func givenStandaloneOverflow_whenRepositoryOrMatchingParentTitleChanges_thenOnlyRenderedInputsRefresh() throws {
+        // given
+        let vm = TaskDetailViewModelMock()
+        let task = try #require(vm.task)
+        vm.openParentTaskID = "parent"
+        vm.ancestorCrumbs = [AncestorCrumb(id: "parent", title: "Original parent")]
+        let standalone = TaskDetailToolbarSnapshot(vm, task: task, showsInspector: false, isRightPane: true)
+        let legacy = TaskDetailToolbarSnapshot(vm, task: task, showsInspector: false)
+        // when / then
+        vm.ancestorCrumbs = [AncestorCrumb(id: "parent", title: "Renamed parent")]
+        #expect(standalone != TaskDetailToolbarSnapshot(vm, task: task, showsInspector: false, isRightPane: true))
+        #expect(legacy == TaskDetailToolbarSnapshot(vm, task: task, showsInspector: false))
+        vm.ancestorCrumbs = [AncestorCrumb(id: "other", title: "Unrelated")]
+        #expect(TaskDetailToolbarSnapshot(vm, task: task, showsInspector: false, isRightPane: true).parentTitle == nil)
+        var raw = task.raw
+        raw["repo_path"] = .string("/tmp/changed-repository")
+        let changed = try #require(TaskInfo(.object(raw)))
+        vm.ancestorCrumbs = [AncestorCrumb(id: "parent", title: "Original parent")]
+        #expect(standalone.repoPath == task.repoPath)
+        #expect(standalone != TaskDetailToolbarSnapshot(vm, task: changed, showsInspector: false, isRightPane: true))
+        #expect(legacy == TaskDetailToolbarSnapshot(vm, task: changed, showsInspector: false))
+    }
+
     @Test func givenStatusProjection_whenBuilt_thenItCarriesTheObservedExitTheSettledDurationReads() throws {
         // given — a settled task with an observed exit and a recorded duration, plus duplicate feed
         // fields the badge never reads.

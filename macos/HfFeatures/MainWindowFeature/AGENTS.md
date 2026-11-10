@@ -273,7 +273,8 @@ no embedded terminal anywhere in this package:
   (backed by `EventStreamRepository`) carry the tailer's `loading`/`available`/`unavailable` state
   so an empty edit list is never confused with "the log couldn't be read".
 - Take over (`TaskDetailVM+Actions.swift`'s `didTapTakeover()`, `ParallelVM`'s `didTapTakeover(taskID:)`)
-  is a plain button, never a menu — there is exactly one destination. The confirmation dialog says the
+  is an entry in the standalone task overflow, and a plain button in Group, embedded and Parallel
+  views. There is exactly one destination. The confirmation dialog says the
   session opens in Terminal.app; the actual hand-off (`ctl takeover` grant → hand-off files →
   `open -a Terminal`) lives entirely in `HfRepository.TakeoverServiceImpl`, which this package only
   calls through `TaskDetailUseCase.beginTakeover(taskID:)`/`ParallelUseCase.beginTakeover(taskID:)`.

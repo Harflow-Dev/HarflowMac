@@ -181,11 +181,11 @@ struct TopBarExpectedItem {
 
 extension TopBarIntegratedFixture {
 
-    /// Everything the scenario must draw: Take over, the chips in `chips`, and the resource return when offered. The
+    /// Everything the scenario must draw: More actions, the chips in `chips`, and the resource return when offered. The
     /// labels come from the product's own chip rules applied to `content`, but whether each control exists is decided
     /// only by what the toolbar renders, never by the published content.
     func expectedItems(chips: [TopBarChip], content: TaskTopBarContent) -> [TopBarExpectedItem] {
-        var result = [TopBarExpectedItem(name: "Take over", identifier: Self.takeover, label: harness.sut.takeoverButtonLabel)]
+        var result = [TopBarExpectedItem(name: "More actions", identifier: Self.more, label: "More actions")]
         result += chips.map { TopBarExpectedItem(name: $0.header + " chip", identifier: $0.identifier, label: $0.label(for: content)) }
         if config.resourceReturn {
             result.append(TopBarExpectedItem(name: "Back to resource slots", identifier: nil, label: "Back to resource slots"))

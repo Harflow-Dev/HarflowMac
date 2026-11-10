@@ -15,7 +15,7 @@ import Testing
 extension TaskTopBarIntegratedHostedTests {
 
     private static let retainedIdentifiers = [
-        Fixture.takeover, Fixture.more, Fixture.inspector,
+        Fixture.more, Fixture.inspector,
         "task-detail.chip.continuity", "task-detail.chip.notices", "task-detail.chip.access"
     ]
 
