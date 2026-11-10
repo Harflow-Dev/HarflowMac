@@ -73,6 +73,32 @@ private final class LockedBox<Value>: @unchecked Sendable {
         verify(snapshots).refresh(.value("abc123")).called(1)
     }
     
+    @Test func givenReadOutcomeChanges_whenInvalidated_thenAdapterReadsLatestEvenWithEquivalentSnapshot() {
+        // given
+        let snapshots = MockTaskSnapshotRepository()
+        let outcomes = LockedBox<[String: TaskSnapshotReadOutcome]>([:])
+        let changes = PassthroughSubject<TaskSnapshotReadChange, Never>()
+        given(snapshots).readOutcomes.willProduce { outcomes.value }
+        given(snapshots).readChangesPublisher().willReturn(changes.eraseToAnyPublisher())
+        let sut = TaskDetailViewRepository(taskSnapshotRepository: snapshots)
+        var invalidations = 0
+        let subscription = sut.statusReadChangesPublisher().sink { invalidations += 1 }
+        let task = task(id: "read", spawnedBy: nil)
+        // when / then
+        #expect(sut.statusReadOutcome("read") == nil)
+        for outcome in [TaskSnapshotReadOutcome(revision: 1, task: task),
+                        TaskSnapshotReadOutcome(revision: 2, task: nil),
+                        TaskSnapshotReadOutcome(revision: 3, task: task)] {
+            outcomes.mutate { $0["read"] = outcome }
+            changes.send(.updated)
+            #expect(sut.statusReadOutcome("read") == outcome)
+        }
+        outcomes.mutate { $0.removeAll() }
+        changes.send(.evicted(revision: 4, keeping: []))
+        #expect(sut.statusReadOutcome("read") == nil && invalidations == 4)
+        withExtendedLifetime(subscription) {}
+    }
+
     @Test func givenActionCalls_whenDispatched_thenTheyForwardToTaskActionRepository() async throws {
         // given
         let actions = MockTaskActionRepository()

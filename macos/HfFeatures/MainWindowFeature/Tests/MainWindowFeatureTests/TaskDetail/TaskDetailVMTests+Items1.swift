@@ -130,6 +130,9 @@ extension TaskDetailVMTests {
         given(useCase).itemsPublisher(for: .any).willReturn(PassthroughSubject<[TimelineItem], Never>().eraseToAnyPublisher())
         
         let running = task(status: "running", repoPath: "", liveInput: true)
+        // This action fixture represents a completed successful status read.
+        given(useCase).statusReadOutcome(.any).willReturn(TaskSnapshotReadOutcome(revision: 1, task: running))
+        given(useCase).statusReadChangesPublisher().willReturn(Empty().eraseToAnyPublisher())
         given(useCase).detail(.any).willReturn(running)
         given(useCase).title(.any).willReturn("Task abc12345")
         given(useCase).ancestors(of: .any).willReturn([])

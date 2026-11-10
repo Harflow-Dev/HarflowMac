@@ -41,6 +41,8 @@ protocol TaskDetailViewModel: ViewModel {
     var ancestorCrumbs: [AncestorCrumb] { get }
     var isBusy: Bool { get }
     var isStopping: Bool { get }
+    var isStatusUnavailable: Bool { get }
+    var hasStatusAuthority: Bool { get }
     var isSettling: Bool { get }
     var outcomeMessage: String? { get }
     var harflowApprovalBackend: String? { get }
@@ -125,8 +127,6 @@ protocol TaskDetailViewModel: ViewModel {
 }
 
 extension TaskDetailViewModel {
-    var isStopping: Bool { false }
-    var isSettling: Bool { false }
     var requestReadState: TaskRequestReadState { .notRequested }
     var observationFrames: [String: EventObservationFrame] { [:] }
     var orderedHistoryFrames: [EventObservationFrame] { [] }
@@ -564,7 +564,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
             if let feedback = viewModel.copyFeedback { Text(feedback).font(.hf(.caption)).textSelection(.enabled) }
             TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
-                             isCancelDisabled: viewModel.isBusy, style: transcriptStyle,
+                             isCancelDisabled: viewModel.isBusy || (chrome == .standalone && !viewModel.hasStatusAuthority), style: transcriptStyle,
                              stateTreatment: isStandalone ? viewModel.stateTreatment : nil,
                              onStateStop: viewModel.didTapCancel, onStateRefresh: viewModel.didTapRefreshState,
                              onStateCopyResumeCommand: viewModel.didTapCopyResumeCommand,

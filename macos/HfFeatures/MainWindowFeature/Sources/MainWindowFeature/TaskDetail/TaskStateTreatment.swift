@@ -5,7 +5,7 @@ import Foundation
 /// Snapshot-supported uncertainty shown only by the standalone task mount.
 struct TaskStateTreatment: Equatable, Sendable {
     enum Kind: String, Equatable, Sendable {
-        case ownerLost, unverified, reconstructed, unknownFailed, stopping, settling
+        case statusUnavailable, ownerLost, unverified, reconstructed, unknownFailed, stopping, settling
     }
 
     let taskID: String
@@ -13,11 +13,13 @@ struct TaskStateTreatment: Equatable, Sendable {
     var isStopDisabled = false
     var showsCopyResumeCommand = false
 
-    var isLeadingNotice: Bool { kind == .reconstructed || kind == .stopping || kind == .settling }
+    var isLeadingNotice: Bool { kind == .statusUnavailable || kind == .reconstructed || kind == .stopping || kind == .settling }
     var id: String { "activity-task-state-" + taskID }
 
     static func project(taskID: String, evidence: TaskSnapshotEvidence?, isBusy: Bool,
-                        canCancel: Bool, hasResumeCommand: Bool, isStopping: Bool = false, isSettling: Bool = false) -> Self? {
+                        canCancel: Bool, hasResumeCommand: Bool, isStopping: Bool = false,
+                        isSettling: Bool = false, isStatusUnavailable: Bool = false) -> Self? {
+        if isStatusUnavailable { return Self(taskID: taskID, kind: .statusUnavailable) }
         guard let evidence, evidence.hasMatchingSnapshot, !evidence.takenOver else { return nil }
         let kind: Kind
         switch evidence.status {
@@ -43,7 +45,8 @@ extension TaskDetailViewModel {
     var stateTreatment: TaskStateTreatment? {
         guard let task else { return nil }
         return .project(taskID: task.taskID, evidence: snapshotEvidence, isBusy: isBusy,
-                        canCancel: canCancel, hasResumeCommand: resumeCommand != nil, isStopping: isStopping, isSettling: isSettling)
+                        canCancel: canCancel, hasResumeCommand: resumeCommand != nil, isStopping: isStopping,
+                        isSettling: isSettling, isStatusUnavailable: isStatusUnavailable)
     }
 
     func didTapRefreshState() {}

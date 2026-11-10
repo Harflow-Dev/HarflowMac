@@ -12,6 +12,16 @@ import HfRepository
 import MonitorCore
 
 extension TaskDetailVM {
+    func didAppear() {
+        isMounted = true
+        activateTopBar()
+        // Members (and so leases) come first: the repository only has a live stream for a leased
+        // task, and a publisher requested before that is an empty one that never updates.
+        recomputeMembersAndLeases()
+        subscribeIfNeeded()
+        loadConversationHistory(initial: true)
+        evaluateChangesDemand()
+    }
 
     func subscribeIfNeeded() {
         guard !didSubscribe else { return }
@@ -68,6 +78,7 @@ extension TaskDetailVM {
             .store(in: &cancellables)
 
         subscribeToStopping(epoch: epoch)
+        subscribeToStatusReads(epoch: epoch)
 
         useCase.busyPublisher()
             .receive(on: DispatchQueue.main)

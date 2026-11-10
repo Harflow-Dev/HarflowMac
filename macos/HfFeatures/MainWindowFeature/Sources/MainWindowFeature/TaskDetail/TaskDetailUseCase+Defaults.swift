@@ -39,3 +39,12 @@ extension TaskDetailUseCase {
 
     func eventSummaryPublisher(for id: String) -> AnyPublisher<EventSummary, Never> { Just(eventSummary(for: id)).eraseToAnyPublisher() }
 }
+
+// MARK: - TaskDetailViewModel Defaults
+
+extension TaskDetailViewModel {
+    var isStopping: Bool { false }
+    var isStatusUnavailable: Bool { false }
+    var hasStatusAuthority: Bool { true }
+    var isSettling: Bool { false }
+}

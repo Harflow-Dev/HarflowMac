@@ -132,6 +132,11 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never> { taskSnapshotRepository.snapshotsPublisher() }
     func refreshSnapshot(_ id: String) async { await taskSnapshotRepository.refresh(id) }
     
+    func statusReadOutcome(_ id: String) -> TaskSnapshotReadOutcome? { taskSnapshotRepository.readOutcomes[id] }
+    func statusReadChangesPublisher() -> AnyPublisher<Void, Never> {
+        taskSnapshotRepository.readChangesPublisher().map { _ in () }.eraseToAnyPublisher()
+    }
+
     func isStopping(_ id: String) -> Bool { taskActionRepository.isStopping(id) }
     func stoppingChangesPublisher() -> AnyPublisher<Void, Never> { taskActionRepository.stoppingChangesPublisher() }
     func busyPublisher() -> AnyPublisher<Set<String>, Never> { taskActionRepository.busyPublisher() }

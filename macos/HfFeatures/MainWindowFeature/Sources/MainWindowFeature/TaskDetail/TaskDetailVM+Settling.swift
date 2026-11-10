@@ -17,7 +17,7 @@ extension EventObservationFrame {
 
 extension TaskDetailVM {
     var isSettling: Bool {
-        guard isMounted, chrome == .standalone, let task, task.status.isTerminal, !task.takenOver,
+        guard !isStatusUnavailable, isMounted, chrome == .standalone, let task, task.status.isTerminal, !task.takenOver,
               leases[currentTaskID] != nil, changesReadMemberID == currentTaskID,
               let snapshot = useCase.snapshot(currentTaskID), snapshot.taskID == currentTaskID,
               snapshot.status == task.status, !snapshot.takenOver,

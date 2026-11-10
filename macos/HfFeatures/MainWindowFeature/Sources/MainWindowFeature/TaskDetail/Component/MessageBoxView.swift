@@ -68,6 +68,10 @@ struct MessageBoxModel {
     /// Optional task-level Stop action, rendered only by the transcript composer.
     var stopAction: (@MainActor () -> Void)?
 
+    /// Allows retaining an editable draft while submission waits for current status authority.
+    var allowsDraftEditing = false
+    var canEditDraft: Bool { canSend || canContinue || allowsDraftEditing }
+
     /// The printed hint under an enabled composer: the guaranteed shortcut, after the model's hint when it has one.
     var printedHint: String { hint.isEmpty ? "⌘↩ to send" : hint + " · ⌘↩ to send" }
 
@@ -382,7 +386,7 @@ struct MessageBoxView: View {
                     }
                 }
             .foregroundStyle(composer.inputColor.color)
-            .disabled(!isEnabled)
+            .disabled(!model.canEditDraft)
             .onSubmit(submit)
             .padding(.vertical, composer.inputPaddingVertical)
             .frame(minHeight: composer.inputMinHeight)
@@ -411,7 +415,7 @@ struct MessageBoxView: View {
                 .accessibilityHint(model.hint)
                 .lineLimit(1 ... 6)
                 .textFieldStyle(.plain)
-                .disabled(!isEnabled)
+                .disabled(!model.canEditDraft)
                 .onSubmit(submit)
                 .padding(.vertical, HfRadius.Metrics.spacing4)
         }

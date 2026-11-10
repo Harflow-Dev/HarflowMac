@@ -62,6 +62,9 @@ struct TaskBadgeModel: Equatable, Sendable {
         return ["pending", "queued"].contains(raw.lowercased())
     }
 
+    static let statusUnavailable = TaskBadgeModel(icon: .symbol(Symbols.alert), tone: .neutral,
+                                                  label: "Status unavailable", clock: .none, suffix: nil)
+
     // MARK: - Mapping
 
     /// The badge for `evidence`. Precedence: taken over, owner warnings, inferred exit qualifiers, plain status.

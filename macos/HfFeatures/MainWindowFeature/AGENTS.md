@@ -142,15 +142,15 @@ no embedded terminal anywhere in this package:
   which re-evaluate only when it flips). Group and embedded keep the `task-detail.status` item,
   the full header and `contextTitle`. The standalone toolbar's chips (`task-detail.chip.continuity`, `.notices`,
   `.access`) are separate trailing items that appear only while their condition holds; they reveal the matching facts
-  group and return focus to the chip where AppKit accepts it. The badge is derived only from `TaskSnapshotEvidence`
+  group and return focus to the chip where AppKit accepts it. The ordinary badge is derived from `TaskSnapshotEvidence`
   (`ownerState`, `settledDuration` and the exit come from the matching snapshot); HfUI `StatusBadge` is unchanged. On
   the standalone mount the legacy header is absent: the toolbar, its chips and More actions own its former
   metadata and shortcuts. Only a present outcome keeps a compact feedback row. The short subtask provenance
   line follows Original request, while Events Task facts preserve the full first-member routing sentence and
   takeover note (including the prior banner fallback). Group/embedded retain the legacy header and controls.
   No explicit toolbar id may be reused or duplicated.
-- **Standalone state treatments.** `TaskStateTreatment` requires status-matching snapshot evidence
-  and suppresses all treatments for taken-over tasks. Only running + owner `dead` claims capture
+- **Standalone state treatments.** Snapshot-derived `TaskStateTreatment` cases require status-matching snapshot evidence
+  and suppress those treatments for taken-over tasks. Only running + owner `dead` claims capture
   loss; `undecidable` keeps uncertainty. Completed without an exit is reconstructed; failed
   without an exit also requires an incomplete log. The native feed receives an optional value
   (included in model equality): notices before activity, banners after activity and the live
@@ -164,8 +164,13 @@ no embedded terminal anywhere in this package:
   current-member/read-generation/local-scope qualification; never reuse the retained Changes
   settling flag. Clear it at read start, invalid frame/scope/epoch, teardown and cadence cap.
   Require mounted activity lease and current no-failure log state, not caught-up/drained history.
-  Preserve reconstructed-outcome priority. Status-unavailable and Continue launch remain separate
-  evidence/action stages.
+  Preserve reconstructed-outcome priority. Status-unavailable overrides all snapshot treatments:
+  derive unread/available/unavailable from the latest admitted current-member read outcome, not the
+  retained snapshot. Missing/evicted is unread without an error notice but grants no action authority.
+  Compare all three states on invalidation; actual status-dependent handlers and confirmations must
+  synchronously revalidate the current full ID and payload. Equivalent successful reads restore
+  authority. Lock the unavailable composer while retaining its draft, and keep independent pane,
+  sidebar and caller-approval authority separate. Continue launch remains a separate stage.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

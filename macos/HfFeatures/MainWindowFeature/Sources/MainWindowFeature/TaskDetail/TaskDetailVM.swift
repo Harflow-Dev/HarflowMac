@@ -53,6 +53,8 @@ protocol TaskDetailUseCase: Sendable {
     func artifactPage(taskID: String, cursor: String?) async -> Result<TaskArtifactPage, ToolError>
 
     // Snapshot
+    func statusReadOutcome(_ id: String) -> TaskSnapshotReadOutcome?
+    func statusReadChangesPublisher() -> AnyPublisher<Void, Never>
     func snapshot(_ id: String) -> TaskInfo?
     func snapshotsPublisher() -> AnyPublisher<[String: TaskInfo], Never>
     func refreshSnapshot(_ id: String) async
@@ -179,6 +181,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     private(set) var ancestorCrumbs: [AncestorCrumb] = []
     private(set) var isBusy = false
     private(set) var isStopping = false
+    var statusReadAvailability = TaskStatusReadAvailability.unread
     var settlingReadEvidence: TaskSettlingReadEvidence?
     private(set) var outcomeMessage: String?
     /// Send-now refusals keyed by message id. The engine keeps the message queued and does not
@@ -352,17 +355,6 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     // MARK: - TaskDetailViewModel Methods
 
-    func didAppear() {
-        isMounted = true
-        activateTopBar()
-        // Members (and so leases) come first: the repository only has a live stream for a leased
-        // task, and a publisher requested before that is an empty one that never updates.
-        recomputeMembersAndLeases()
-        subscribeIfNeeded()
-        loadConversationHistory(initial: true)
-        evaluateChangesDemand()
-    }
-
     /// Idempotent teardown (root AGENTS.md rule 7): releases every member's event lease, cancels
     /// every subscription, and resets `didSubscribe` so a reappearing screen subscribes and
     /// re-acquires leases fresh.
@@ -492,6 +484,7 @@ final class TaskDetailVM: TaskDetailViewModel {
         }
         task = detail
         currentTaskID = detail.taskID
+        if chrome == .standalone { statusReadAvailability = latestStatusReadAvailability() }
         trackChangesEpoch(detail)
         observeRequest(conversationMembers.first?.taskID ?? currentTaskID)
         observeRecovery(currentTaskID)
@@ -532,24 +525,20 @@ final class TaskDetailVM: TaskDetailViewModel {
             spawnedByBannerText = nil
         }
 
-        canTakeover = !isWorkflowBuilder && WorkflowNodePresentation.allowsTerminal(detail) && !isBusy && detail.sessionID != nil
-        takeoverButtonLabel = detail.status.isRunning ? "Take over in terminal" : "Open in terminal"
-        takeoverHelp = detail.sessionID == nil
-        ? "The task has not reported a session yet."
-        : "Stop the headless run and resume the session interactively."
+        recomputeTerminalPresentation(detail)
         if let parent = firstMember.spawnedBy, useCase.task(parent) != nil {
             openParentTaskID = parent
         } else {
             openParentTaskID = nil
         }
-        canCancel = !isWorkflowBuilder && detail.status.isRunning
+        canCancel = hasStatusAuthority && !isWorkflowBuilder && detail.status.isRunning
             && detail.raw["execution_kind"]?.stringValue != "native_subagent"
             && !WorkflowNodePresentation.isNativeControl(detail)
 
         // Read from the snapshot explicitly, not `detail` (which came from `detail(_:)` and can
         // briefly be the brief listing when statuses disagree — that shape has no `resume_command`
         // at all).
-        resumeCommand = isWorkflowBuilder || WorkflowNodePresentation.isNativeControl(detail)
+        resumeCommand = !hasStatusAuthority || isWorkflowBuilder || WorkflowNodePresentation.isNativeControl(detail)
             ? nil : useCase.snapshot(currentTaskID)?.resumeCommand
         copyResumeCommandHelp = detail.status.isRunning
         ? "Copies a command that resumes this session in your own terminal. This task is still "
@@ -568,7 +557,16 @@ final class TaskDetailVM: TaskDetailViewModel {
         evaluateChangesDemand()
     }
 
+    private func recomputeTerminalPresentation(_ detail: TaskInfo) {
+        canTakeover = hasStatusAuthority && !isWorkflowBuilder && WorkflowNodePresentation.allowsTerminal(detail) && !isBusy && detail.sessionID != nil
+        takeoverButtonLabel = detail.status.isRunning ? "Take over in terminal" : "Open in terminal"
+        takeoverHelp = detail.sessionID == nil
+        ? "The task has not reported a session yet."
+        : "Stop the headless run and resume the session interactively."
+    }
+
     private func resetForMissingTask() {
+        statusReadAvailability = .unread
         clearTopBarPublication()
         resetResourceContext()
         resetChanges(keepPaneReport: true)

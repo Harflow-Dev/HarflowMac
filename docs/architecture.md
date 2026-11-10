@@ -328,6 +328,22 @@ precedes activity and leaves the reported badge/status intact. Completed without
 exit retains the reconstruction warning if predicates overlap. Local scope binding is consumer
 freshness evidence, not an engine producer-generation certificate or atomic cross-command proof.
 
+Standalone status availability comes from the latest admitted `TaskSnapshotReadOutcome`, not
+from the retained display cache. Missing/evicted metadata is unread; an admitted nil or wrong-ID
+result is unavailable; a matching result is available. Only the latter grants status-dependent
+action authority. Invalidation rereads the current member and recomputes only when this three-state
+value changes. Actual Stop, takeover, resume-copy, send/send-now and queued-message cancellation
+also reread metadata synchronously, retaining list-owned workflow restrictions, including confirmations, so delayed main-queue rendering
+cannot reopen stale actions. Retry captures the current member and restores authority only on
+admitted success, including an equivalent success that does not republish the cached snapshot.
+
+Unavailable overrides snapshot-derived warnings with a static badge and leading Retry read notice.
+The composer retains its draft while locked; More keeps read-only identity/repository actions.
+Unread metadata locks status-dependent actions without inventing a read error. Group/embedded
+mounts retain their behavior. Independent history, Changes, sidebar and caller-approval reads are
+not declared failed by a status failure; caller approvals keep their own current-request authority.
+No task status, engine contract or persistent state is added.
+
 Standalone task Stop uses the main window coordinator's mutually exclusive modal destination,
 shared with the workflow launcher. The request captures the current run ID and the existing
 client-derived earlier-turn exclusion list. Confirmation consumes the active request before

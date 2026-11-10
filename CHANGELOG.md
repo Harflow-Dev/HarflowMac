@@ -4,6 +4,8 @@
 
 - Add a capability-gated Continue client with typed launch outcomes. Task-screen controls and reconciliation remain deferred.
 
+- Show Status unavailable after a failed current-task read, with Retry read, retained content and draft, and status-dependent actions locked until recovery.
+
 - Show a Settling notice only while current event and stored-change reads both support it, retaining the reported status and existing outcome warnings.
 
 - Keep an acknowledged Stop request across task navigation and show Stopping only after a fresh status read still reports Running with an alive observer.

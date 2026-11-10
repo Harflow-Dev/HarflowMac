@@ -31,6 +31,11 @@ struct TaskStateTreatmentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                if model.kind == .statusUnavailable {
+                    Button("Retry read", action: onRefresh)
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("task-state-refresh")
+                }
             }
             .font(TaskScreenStyle.sans(size: textSpec.size))
             .lineSpacing(TaskScreenStyle.lineSpacing(textSpec))
@@ -61,6 +66,7 @@ struct TaskStateTreatmentView: View {
 
     private var title: String {
         switch model.kind {
+        case .statusUnavailable: "Current status unavailable"
         case .settling: "Settling"
         case .stopping: "Stop requested"
         case .ownerLost: "The process watching this run is gone"
@@ -72,6 +78,7 @@ struct TaskStateTreatmentView: View {
 
     private var message: String {
         switch model.kind {
+        case .statusUnavailable: "The engine did not answer. Everything below was read earlier and may be out of date."
         case .settling: "The run finished. Its last events and stored changes may still arrive."
         case .stopping: "This run has not exited yet. The status changes when Harflow records the outcome."
         case .ownerLost:
@@ -108,7 +115,7 @@ struct TaskStateTreatmentView: View {
             Button("Open Events", action: onOpenEvents)
 .buttonStyle(.borderless)
                 .accessibilityIdentifier("task-state-open-events")
-        case .reconstructed, .stopping, .settling: EmptyView()
+        case .statusUnavailable, .reconstructed, .stopping, .settling: EmptyView()
         }
     }
 

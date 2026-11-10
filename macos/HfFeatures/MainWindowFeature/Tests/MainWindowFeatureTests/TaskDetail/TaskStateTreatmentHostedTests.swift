@@ -101,6 +101,7 @@ import Testing
             #expect(abs(root.fittingSize.height - table.rect(ofRow: index).height) < 3,
                     "native row clips or reserves stale height: \(root.fittingSize.height) / \(table.rect(ofRow: index).height)")
             let labels: [String] = switch kind {
+            case .statusUnavailable: ["Retry read"]
             case .ownerLost: ["Stop task", "Refresh"]
             case .unverified: ["Refresh", "Stop task"]
             case .reconstructed, .stopping, .settling: []

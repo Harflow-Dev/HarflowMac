@@ -40,8 +40,9 @@ extension TaskDetailVM {
     /// round 2, finding 1): if the conversation moved on while the dialog was open, this refuses
     /// rather than silently taking over whatever the new current member turned out to be.
     func didTapTakeover() {
-        guard !isWorkflowBuilder, WorkflowNodePresentation.allowsTerminal(task) else { return }
-        guard let task else { return }
+        guard !isWorkflowBuilder, let task = latestActionTask(),
+              WorkflowNodePresentation.allowsTerminal(task),
+              chrome != .standalone || (!isBusy && task.sessionID != nil) else { return }
         let dialogTaskID = currentTaskID
         let isRunning = task.status.isRunning
         let title = isRunning ? "Take over this task?" : "Continue this session in a terminal?"
@@ -56,6 +57,8 @@ extension TaskDetailVM {
             AlertAction(title: buttonTitle) { [weak self] in
                 guard let self else { return }
                 guard !refuseIfConversationMovedOn(from: dialogTaskID) else { return }
+                guard let fresh = latestActionTask(), WorkflowNodePresentation.allowsTerminal(fresh),
+                      chrome != .standalone || (!isBusy && fresh.sessionID != nil) else { return }
                 useCase.beginTakeover(taskID: dialogTaskID)
             }
             AlertAction(title: "Cancel", role: .cancel)
@@ -97,13 +100,13 @@ extension TaskDetailVM {
     }
 
     private func presentStandaloneStopConfirmation() {
-        guard canCancel, !isBusy else { return }
+        guard allowsFreshStop() else { return }
         let capturedID = currentTaskID
         routing.presentStopConfirmation(TaskStopConfirmation(
             conversationID: topBarConversationID, taskID: capturedID,
             notStoppedTitles: notCancelledByThisTitles(), confirm: { [weak self] in
                 guard let self, !self.refuseIfConversationMovedOn(from: capturedID),
-                      canCancel, !self.isBusy else { return }
+                      allowsFreshStop() else { return }
                 Task { [useCase = self.useCase] in try? await useCase.cancel(capturedID) }
             }
         ))
@@ -134,7 +137,9 @@ extension TaskDetailVM {
     /// through `TaskActionRepository.setOutcome` (the durable channel Cancel/Send/Resume already
     /// use) — never only this VM's `outcomeMessage`, which the next `recompute()` would overwrite.
     func didTapCopyResumeCommand() {
-        guard let resumeCommand else { return }
+        guard let fresh = latestActionTask(), !isWorkflowBuilder,
+              !WorkflowNodePresentation.isNativeControl(fresh),
+              let resumeCommand = chrome == .standalone ? fresh.resumeCommand : resumeCommand else { return }
         let succeeded = routing.copyToPasteboard(resumeCommand)
         let text = if !succeeded {
             "Couldn't copy to the clipboard."
@@ -167,19 +172,21 @@ extension TaskDetailVM {
 
     /// The engine owns authorization; a non-live task can still queue a follow-up.
     func recomputeMessageBox(task: TaskInfo) {
-        let eligible = !task.takenOver
+        let eligible = !task.takenOver && !isStatusUnavailable
         let stopAction: (@MainActor () -> Void)? = if chrome == .standalone, canCancel, eligible {
             { [weak self] in self?.didTapCancel() }
         } else {
             nil
         }
         messageBoxModel = MessageBoxModel(
-            canSend: eligible, canContinue: false, isBusy: isBusy,
+            canSend: eligible && hasStatusAuthority, canContinue: false, isBusy: isBusy,
             label: isWorkflowBuilder ? "Message the workflow builder" : "Message this task",
-            hint: "Send queues; Send now requests immediate delivery when safe",
-            placeholder: eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
+            hint: isStatusUnavailable ? "" : "Send queues; Send now requests immediate delivery when safe",
+            placeholder: isStatusUnavailable ? "Unavailable until status can be read"
+                : eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
             buttonLabel: "Send", isLocked: !eligible,
-            isStopping: isStopping, stopAction: stopAction
+            isStopping: isStopping, stopAction: stopAction,
+            allowsDraftEditing: chrome == .standalone && statusReadAvailability == .unread && !task.takenOver
         )
     }
 
@@ -195,7 +202,7 @@ extension TaskDetailVM {
 
     private func dispatchMessage(_ text: String, now: Bool) -> Bool {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let task, !task.takenOver, !isBusy else { return false }
+              let task = latestActionTask(), !task.takenOver, !isBusy else { return false }
         let capturedUseCase = useCase
         let id = currentTaskID
         // The queue path must not capture `self`: Continue stays in flight after the view model
@@ -228,6 +235,7 @@ extension TaskDetailVM {
     }
 
     func cancelQueuedMessage(_ messageID: String) {
+        guard chrome != .standalone || (latestActionTask() != nil && !isBusy) else { return }
         let capturedUseCase = useCase
         let id = currentTaskID
         Task {

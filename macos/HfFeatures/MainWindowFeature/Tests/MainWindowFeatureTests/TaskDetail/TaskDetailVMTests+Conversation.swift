@@ -90,6 +90,16 @@ extension TaskDetailVMTests {
         return (box, childrenForID)
     }
 
+    private func stubConversationStatus(useCase: MockTaskDetailUseCase, membersBox: Box<[TaskInfo]>,
+                                        provider: ((String) -> TaskSnapshotReadOutcome?)?) {
+        // Existing conversation action tests model successful status reads from their current detail.
+        given(useCase).statusReadOutcome(.any).willProduce { id in
+            if let provider { return provider(id) }
+            return membersBox.value.first { $0.taskID == id }.map { TaskSnapshotReadOutcome(revision: 1, task: $0) }
+        }
+        given(useCase).statusReadChangesPublisher().willReturn(Empty().eraseToAnyPublisher())
+    }
+
     /// Wires a fresh `TaskDetailVM` over a conversation whose members are `initialMembers` (oldest
     /// first), built for `openedAs` (any member id — Design point 6). Every member in
     /// `stubbedMembers` (defaults to `initialMembers`) gets its own lease/events/availability stubs
@@ -99,7 +109,8 @@ extension TaskDetailVMTests {
     func makeConversationSUT(
         openedAs: String, initialMembers: [TaskInfo], stubbedMembers: [TaskInfo]? = nil, isWorkflowBuilder: Bool = false,
         chrome: TaskDetailChrome = .group, scheduler: any Scheduling = NullScheduling(),
-        eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() }
+        eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() },
+        statusReadProvider: ((String) -> TaskSnapshotReadOutcome?)? = nil
     ) -> ConversationSUT {
         let useCase = MockTaskDetailUseCase()
         let routing = MockTaskDetailRouting()
@@ -110,6 +121,7 @@ extension TaskDetailVMTests {
         let observationSubjects = Dictionary(uniqueKeysWithValues: initialMembers.map { ($0.taskID, PassthroughSubject<EventObservationFrame, Never>()) })
         useCase.configurePagingDefaults(eventHistory: eventHistory, observationSubjects: observationSubjects)
 
+        stubConversationStatus(useCase: useCase, membersBox: membersBox, provider: statusReadProvider)
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(Just(true).eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(Empty().eraseToAnyPublisher())

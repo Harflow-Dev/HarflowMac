@@ -73,6 +73,9 @@ import Testing
     /// The fixtures `makeSUT` builds before wiring up `useCase`'s stubs — split out purely to keep
     /// `makeSUT`/`configureStubs` each under the house function-length limit; no behavior change.
     struct Fixtures {
+        let taskProvider = Box<((String) -> TaskInfo?)?>(nil)
+        let statusReadProvider = Box<((String) -> TaskSnapshotReadOutcome?)?>(nil)
+        let statusReadSubject = PassthroughSubject<Void, Never>()
         let stoppingQuery = Box<((String) -> Bool)?>(nil)
         let stoppingPublisher = Box<AnyPublisher<Void, Never>?>(nil)
         let cancelEffect = Box<((String) -> Bool)?>(nil)
@@ -146,6 +149,7 @@ import Testing
     @discardableResult
     func configureStubs(useCase: MockTaskDetailUseCase, routing: MockTaskDetailRouting, taskID: String, fixtures: Fixtures) -> MockEventStreamLease {
         configureObservationStubs(useCase: useCase, taskID: taskID, fixtures: fixtures)
+        configureStatusReadStubs(useCase: useCase, taskID: taskID, fixtures: fixtures)
         given(useCase).tasksPublisher().willReturn(fixtures.tasksSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(fixtures.hasListedSubject.eraseToAnyPublisher())
         given(useCase).titlesPublisher().willReturn(fixtures.titlesSubject.eraseToAnyPublisher())
@@ -161,7 +165,7 @@ import Testing
         given(useCase).eventsAvailabilityPublisher(for: .value(taskID)).willReturn(fixtures.eventsAvailabilitySubject.eraseToAnyPublisher())
 
         given(useCase).detail(.value(taskID)).willProduce { _ in fixtures.detailBox.value }
-        given(useCase).task(.any).willProduce { id in id == taskID ? fixtures.detailBox.value : nil }
+
         given(useCase).title(.any).willProduce { id in
             fixtures.recomputeCountEffect.value?()
             return "Task \(id.prefix(8))"
@@ -224,6 +228,20 @@ import Testing
         // later (see `TaskDetailVMTests+Actions.swift`'s copy-resume-command tests, each of which
         // stubs it explicitly for the outcome it needs).
         return lease
+    }
+
+    private func configureStatusReadStubs(useCase: MockTaskDetailUseCase, taskID: String, fixtures: Fixtures) {
+        given(useCase).task(.any).willProduce { id in
+            if let provider = fixtures.taskProvider.value { return provider(id) }
+            return id == taskID ? fixtures.detailBox.value : nil
+        }
+        // Action-focused fixtures explicitly model an admitted successful status read by default.
+        // Failure/unread tests replace the provider without overlapping Mockable stubs.
+        given(useCase).statusReadOutcome(.any).willProduce { id in
+            if let provider = fixtures.statusReadProvider.value { return provider(id) }
+            return fixtures.detailBox.value.map { TaskSnapshotReadOutcome(revision: 1, task: $0) }
+        }
+        given(useCase).statusReadChangesPublisher().willReturn(fixtures.statusReadSubject.eraseToAnyPublisher())
     }
 
     @discardableResult

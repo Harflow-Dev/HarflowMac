@@ -17,7 +17,7 @@ extension TaskDetailVM {
 
     func stoppingPresentation(task: TaskInfo) -> Bool {
         let snapshot = useCase.snapshot(currentTaskID)
-        return chrome == .standalone && task.status == .running && !task.takenOver
+        return !isStatusUnavailable && chrome == .standalone && task.status == .running && !task.takenOver
             && snapshot?.taskID == currentTaskID && snapshot?.status == .running
             && snapshot?.supervision?.ownerState == "alive" && snapshot?.takenOver == false
             && useCase.isStopping(currentTaskID)

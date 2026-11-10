@@ -35,7 +35,7 @@ struct TaskDetailToolbarSnapshot: Equatable, Sendable {
         let statusKeys: Set = ["task_id", "status", "started_at", "duration_seconds", "exit_code", "taken_over"]
         self.statusTask = TaskInfo(.object(task.raw.filter { statusKeys.contains($0.key) })) ?? task
         self.isBusy = viewModel.isBusy
-        self.allowsTerminal = WorkflowNodePresentation.allowsTerminal(viewModel.task)
+        self.allowsTerminal = (!isRightPane || viewModel.hasStatusAuthority) && WorkflowNodePresentation.allowsTerminal(viewModel.task)
         self.canTakeover = viewModel.canTakeover
         self.takeoverLabel = viewModel.takeoverButtonLabel
         self.takeoverHelp = viewModel.takeoverHelp

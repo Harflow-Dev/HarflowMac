@@ -92,7 +92,7 @@ extension TaskDetailViewModel {
         if let turnsText { parts.append(turnsText) }
         return TaskTopBarContent(
             title: title,
-            badge: TaskBadgeModel.make(evidence: evidence, startedAt: task.startedAt),
+            badge: isStatusUnavailable ? .statusUnavailable : TaskBadgeModel.make(evidence: evidence, startedAt: task.startedAt),
             metaParts: parts.filter { !$0.isEmpty },
             isBusy: isBusy,
             isPending: isPending,
