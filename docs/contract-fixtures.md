@@ -2,12 +2,12 @@
 
 The engine owns the public contracts. MonitorCore tests carry a complete,
 self-contained copy of `contracts/v1` from HarflowMCP commit
-`60fef2f4a593bc3781dd674c37aad57fed9ba3a0` (the 0.0.12 release commit; its tag is created separately).
+`6cb13afa729660f631b3069a45a4154c06ec5fa9` (additive pending-launch source contract; no release claim).
 No build/test downloads fixtures or requires a sibling checkout.
 
 - Resource path: `macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1`.
-- Manifest SHA-256: `5591ad4cf52a9c0bf58e5274f1858b962d0368c6a0fa17eb2e1e6cac50a8e82f`.
-- Contents: 320 fixture files, `manifest.json` and `manifest.sha256`, byte-identical
+- Manifest SHA-256: `f86fbe421ac3dc467265e8ce77756f0b6b70b63c008edd13b4ac1ae03aa65ff9`.
+- Contents: 334 fixture files, `manifest.json` and `manifest.sha256`, byte-identical
   to the committed producer bundle. Hash verification covers every fixture.
 - Source product version: 0.0.12; historical fixture writer versions intentionally
   vary. Live compatibility is major/minor, not equality with a specimen's patch.

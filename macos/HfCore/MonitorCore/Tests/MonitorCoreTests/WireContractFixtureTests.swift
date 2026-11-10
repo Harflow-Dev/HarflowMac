@@ -39,8 +39,8 @@ struct WireContractFixtureTests {
         let directory = try #require(Bundle.module.url(forResource: root, withExtension: nil))
         let present = Set(try FileManager.default.contentsOfDirectory(atPath: directory.path))
 
-        #expect(listed.count == 320)
-        #expect(manifest["cases"]?.objectValue?.count == 320)
+        #expect(listed.count == 334)
+        #expect(manifest["cases"]?.objectValue?.count == 334)
         #expect(present.subtracting(["manifest.json", "manifest.sha256"]) == listed)
     }
 

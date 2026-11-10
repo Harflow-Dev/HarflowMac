@@ -20,6 +20,8 @@ public enum WireContract: String, Sendable, CaseIterable {
 
 /// Capabilities that qualify individual ctl operations beyond the base wire contract.
 public enum CtlCapability {
+    /// Bounded direct-human pending launch inventory and exact lookup.
+    public static let taskPendingLaunch = "task-pending-launch.v1"
     /// Permits bounded task event pages with independent lifecycle evidence.
     public static let taskEventPage = "task-event-page.v1"
 

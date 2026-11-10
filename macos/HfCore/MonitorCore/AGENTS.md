@@ -15,3 +15,8 @@ belongs in the packages above it, never here.
   `task-continue.v1` and `task-successors.v1`. Keep pre-dispatch refusal separate from uncertain
   post-dispatch evidence. Acknowledgement can mean pending resources; no automatic launch retry
   or inference from an empty recorded-successor page. This client foundation has no UI callers.
+
+- Pending-launch reads stay public, single-page/exact-ID and fresh-capability gated.
+  Never fabricate TaskInfo/TaskStatus, clear Continue uncertainty from absence, or grant
+  permission from metadata. Stop requires pending-launch and cancel-cascade capabilities
+  together and the phase-aware adapter; generic cancel cannot establish dispatch evidence.

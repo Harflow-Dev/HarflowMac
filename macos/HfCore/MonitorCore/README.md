@@ -118,3 +118,25 @@ invocation cannot clear uncertainty retained from an earlier one, and an empty r
 page cannot establish that no pending launch exists. Launch envelopes must contain exactly one
 of result, error or unknown. The shared continuation owner and standalone task screen now consume
 this client; evidence remains vendored 0.0.12 fixtures and fake runners, not exact-runtime qualification.
+
+## Pending-launch client foundation
+
+`taskPendingPage(limit:cursor:)` and `taskPendingStatus(taskID:)` read bounded public
+pending-launch evidence after a fresh `task-pending-launch.v1` handshake. Each read
+checks the 128 KiB document ceiling before parsing; this does not bound process stdout
+capture. Single-page metadata never becomes task status, cancellation permission,
+settlement or safe replay. Unknown states/dispositions retain diagnostic evidence
+without trusted labels. `hasUnsupportedObservations` keeps client comprehension
+separate from producer coverage: a producer-complete page can retain future values
+and healthy neighbors while remaining ineligible to complete a comprehended inventory.
+Recorded lookup requires a later ordinary status read.
+
+`stopPendingLaunch(_:)` requires both pending-launch and cancel-cascade capabilities
+in one fresh handshake. It uses the phase-aware mutation transport without retry;
+engine errors and post-dispatch failures retain uncertainty. A successful receipt
+requires a valid matching identity and cascade observation; corrupt/missing observations
+remain uncertain. Raw cascade diagnostics are retained without logging. Only qualified
+complete, untruncated target evidence with a stopped state and settlement/not-started
+basis proves stopped. Acknowledgement alone does not. Same-ID spawn races use ordinary
+cancel semantics, without an atomic generation precondition. These clients have no UI
+or inventory owner and do not change the selected engine pin or certify runtime support.

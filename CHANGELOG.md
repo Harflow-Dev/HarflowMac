@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add typed pending-launch inventory and exact-ID reads, plus capability-paired cancellation evidence. Native screen adoption follows separately; engine version pins are unchanged.
+
 - Wire standalone Continue controls to shared attempt ownership, with accepted/pending and uncertain states, explicit successor checks, retained drafts and stale-target action guards.
 
 - Retain Continue attempt outcomes across navigation and runtime selection, with explicit bounded successor checks and no automatic replay. Task-screen adoption remains deferred.
