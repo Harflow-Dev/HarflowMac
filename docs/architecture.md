@@ -23,6 +23,13 @@ Composer request revision, full requested values and runtime identity fence prep
 
 Each selected task-detail repository owns its bounded successor inventory separately from session-related records and global task history. It resolves observed successor detail without requiring the row to enter Recent. A complete healthy fresh traversal reconciles successor-owned observations; incomplete or failed reads retain earlier observations and label the health. Candidate inventory is limited to 400 rows and retained successor inventory to 800; overflow remains incomplete. Selection/runtime changes, cancellation and disposal fence stale results. Changed scoped inventories trigger presentation updates; unchanged polling does not republish them. Discovery follows public reads and acknowledged continuation without replaying the mutation or changing its captured target. Recorded-task absence never proves that a launch or reservation does not exist.
 
+`TaskContinuationRepository` separately owns app-session Continue invocations. It captures runtime,
+conversation and full source identity, serializes admission, shares task busy only during the command,
+and retains invocation uncertainty across navigation and runtime selection. Explicit bounded successor
+checks supply independent recorded-edge evidence; empty/incomplete reads never prove that no pending
+launch exists. No task-screen caller exists yet. See the [repository guide](../macos/HfCore/HfRepository/README.md#continue-attempt-ownership)
+for admission, bridging and retention bounds.
+
 ## Store recovery
 
 `Module` constructs one `StateRecoveryRepositoryImpl` from the qualified tool environment and injects it into task-list and workflow repositories. Their structured store refusals update a shared, equality-deduplicated readiness snapshot without changing managed-runtime acquisition state. MonitorCore owns only typed public-command models and transport; the repository owns single-flight operations, exact inspection/confirmation binding and generation checks. No consumer writes state files. Settings General consumes the same repository through its use-case adapter and VM, and the sidebar exposes a settings attention entry. Exact inspection values bind inline confirmation and cancellation. Recovery completion rechecks listing and observation through `runtimeBecameReady()` without invalidating the durable completion receipt; later failures retain the last receipt separately from current recovery state. Finder reveal accepts only that engine-returned completed receipt.

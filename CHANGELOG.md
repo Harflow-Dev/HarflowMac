@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Retain Continue attempt outcomes across navigation and runtime selection, with explicit bounded successor checks and no automatic replay. Task-screen adoption remains deferred.
+
 - Add a capability-gated Continue client with typed launch outcomes. Task-screen controls and reconciliation remain deferred.
 
 - Show Status unavailable after a failed current-task read, with Retry read, retained content and draft, and status-dependent actions locked until recovery.

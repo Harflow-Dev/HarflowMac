@@ -23,6 +23,7 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 | `StateRecoveryRepository` | Shared structured store refusals and explicit inspection/confirmation/recovery lifecycle; single-flight operations and stale-result checks remain independent of managed acquisition. |
 | `TaskListRepository` | Bounded public task-history/status reads, titles, action refresh barriers, replaceable invalidation observation and `detail()` precedence. |
 | `FinishNotifier` | User notifications for roots that finished since the last listing. |
+| `TaskContinuationRepository` | App-session Continue attempt ownership and explicit bounded recorded-successor checks; no task-screen caller yet. |
 | `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |
 | `TakeoverService` | Opens a task's session in Terminal.app — `ctl takeover` grant → hand-off files → `open -a Terminal`; the only take-over destination the Monitor offers. |
 | `QualificationRepository` | Cached engine-owned feature requirements and explicit checks, with per-consumer cancellation, identity validation and runtime-bound launch tokens. |
@@ -112,3 +113,31 @@ post-ack Running/alive-owner read, and clear them for unavailable/non-running/ta
 or superseded members. They never imply signals were delivered or settlement completed. Current
 member checks use conversation continuation links. Stopping invalidations publish only qualified
 set changes; idle reads skip outcome scans when no Stop request is tracked.
+
+
+## Continue attempt ownership
+
+`TaskContinuationRepository` is shared by production composition and keeps immutable invocation
+outcomes independently of later recorded-successor checks. Requests capture a selected runtime,
+conversation and full source ID. An exact loaded task identity is required; the engine still decides
+eligibility. The repository serializes per runtime/conversation and also deduplicates source aliases.
+Generic task busy is held only during an invocation, not indefinitely while its outcome is uncertain.
+Future UI must query this owner as well as current status authority before enabling actions.
+
+An acknowledged or uncertain source is not launched again during this app session. Navigation and
+runtime A→B→A retain its evidence. A different source needs a healthy recorded direct-successor
+bridge from the previous admitted source when earlier unsafe evidence exists. This permits an
+explicit next-turn operation without rewriting the older outcome or claiming which invocation
+created a successor. Multiple successors are returned as evidence; none is selected automatically.
+
+Checks are explicit and use only the runtime-bound public successor API. A traversal admits at most
+four pages/400 rows, including related headers, with cursor/duplicate checks and a 120-second
+monotonic budget checked before and after each page await. This is not a preemptive deadline for
+a suspended dependency. Only direct items establish bridges. Empty, incomplete, unknown-readiness,
+failed or bounded reads cannot prove that no pending launch exists. Prior healthy edges survive
+later failed/cancelled checks. At most 400 proof IDs per attempt and 256 attempts are retained;
+capacity refuses new admission instead of evicting unsafe evidence.
+
+This is app-session state, not disk persistence or relaunch recovery. Runtime tokens include the
+effective child environment and are kept in memory, not logged or persisted. The safe Null default
+never dispatches. Task-screen adoption, composer locking and launch/refusal copy remain separate.

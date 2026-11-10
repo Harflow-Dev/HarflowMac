@@ -72,7 +72,7 @@ public final class Module: HfModule {
             .environment(\.modelCatalogRepository, ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.workflowRepository, workflows)
 
-        registerPublicReaders(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery)
+        registerPublicReaders(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery, taskList: taskList, actions: taskAction)
         let shared = NeedsYouDependencies(scheduler: scheduler, visibility: visibility, settings: settings, install: install)
         registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode)
     }
@@ -88,12 +88,15 @@ public final class Module: HfModule {
         return recovery
     }
 
-    private func registerPublicReaders(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: any StateRecoveryRepository) {
+    private func registerPublicReaders(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: any StateRecoveryRepository,
+                                       taskList: any TaskListRepository, actions: any TaskActionRepository) {
         GlobalValues
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskChangesRepository, TaskChangesRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery, now: { .now }))
             .environment(\.qualificationRepository, QualificationRepositoryImpl(tooling: toolEnvironment, recovery: stateRecovery))
+            .environment(\.taskContinuationRepository, TaskContinuationRepositoryImpl(tooling: toolEnvironment, taskList: taskList,
+                                                                                       actions: actions, now: { .now }))
             .environment(\.statisticsRepository, StatisticsRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
     }
 

@@ -38,3 +38,11 @@ Root AGENTS.md applies (`../../AGENTS.md`). Read this module's `README.md` befor
   after their state locks release; raw snapshot/list getters stay outside the action lock.
   Preserve per-attempt freshness, authoritative revisioned eviction and qualified-set dedup.
   Do not infer acknowledgement from durable outcome text or signal/settlement from Stop requested.
+
+- Continue attempts belong to the shared `TaskContinuationRepository`, scoped by captured runtime,
+  conversation and full source ID, with source-alias deduplication. Preserve invocation outcome
+  independently of recorded-successor evidence. Empty/failed/incomplete reads never clear unknown;
+  acknowledged is not completed. Keep unsafe records across navigation/runtime changes, no automatic
+  launch retry, no engine-private fallback, no lock held across dependency calls/await/publication.
+  Busy is shared only during invocation; future UI must consume the separate owner state. Bounds
+  refuse admission rather than forgetting unsafe evidence. This owner has no task-screen callers yet.
