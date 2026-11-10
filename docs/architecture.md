@@ -48,22 +48,23 @@ The native "Pending launches" screen is the first caller. `PendingLaunchesVM` ac
 `didAppear` (the owner starts a fresh read), releases it in `didDisappear`, and projects each snapshot to
 `(runtimeIdentity, inventory, the lookup stored for its own lease)`; other leases' lookups and Stop attempts
 never rebuild. Presentations (the inventory and the selected launch's detail) are built off the main actor
-with a generation token. The mapping also uses a read-observed flag (set once this appearance has seen a read
-in flight): an idle inventory with no result after that shows the failed state instead of an endless
+with a generation token. The mapping also uses a read-observed flag (set once this appearance has seen a
+read in flight): an idle inventory with no result after that shows the failed state instead of an endless
 skeleton. A refused lease shows the failed state; "Check again" sits below the rows; there is no polling.
 
 Selecting a row binds the owner selection synchronously, then runs `check` for that selection. The detail
 shows only a stored lookup whose selection equals the current one, so nothing from an earlier selection
 appears. The owner refuses a second check on a lease while an earlier call is outstanding, even across
-rebinds, so the VM serializes checks and recorded-status calls in one chain per acquired lease (a newly acquired lease starts a new chain): each awaits the previous call
-without cancelling it, and a call queued for a selection that was replaced is skipped. "Check task status"
-calls `resolveRecorded` and opens the task only for an admitted result whose ID is the selected ID, while the
-screen is on view, the selection, the owner's synchronous runtime identity and a local epoch are unchanged;
-every other outcome leaves the detail in place. A failed status read or admission shows "Task status
-unavailable" only while the stored lookup is still recorded; a stored failed read shows "Launch status
-unavailable". The synchronous owner snapshot, not the delivered publication, is projected after every call,
-because the owner's publication drain can deliver an older value late. Back unbinds synchronously. A runtime change, disappearance or reappearance returns to the
-inventory. `releaseReadLease` drops the lookups stored for that lease, so appearances do not accumulate
+rebinds, so the VM serializes checks and recorded-status calls in one chain per acquired lease (a newly
+acquired lease starts a new chain): each awaits the previous call without cancelling it, and a call queued
+for a selection that was replaced is skipped. "Check task status" calls `resolveRecorded` and opens the task
+only for an admitted result whose ID is the selected ID, while the screen is on view, the selection, the
+owner's synchronous runtime identity and a local epoch are unchanged; every other outcome leaves the detail
+in place. A failed status read or admission shows "Task status unavailable" only while the stored lookup is
+still recorded; a stored failed read shows "Launch status unavailable". The synchronous owner snapshot, not
+the delivered publication, is projected after every call, because the owner's publication drain can deliver
+an older value late. Back unbinds synchronously. A runtime change, disappearance or reappearance returns to
+the inventory. `releaseReadLease` drops the lookups stored for that lease, so appearances do not accumulate
 lookups against the owner's bound; Stop attempts are kept. Stop, composer draft retention and the engine pin
 are unchanged.
 

@@ -435,10 +435,16 @@ struct PendingLaunchesDetailVMTests {
         let before = rig.useCase.subject.value
         rig.sut.didSelectRow(idA)
         await waitUntil { rig.sut.detail?.kind == .waiting && rig.sut.detail?.isActionEnabled == true }
-        rig.useCase.syncSnapshot = rig.useCase.subject.value
+        // The synchronous snapshot carries a real change, so a build is guaranteed to follow the delivery.
+        var current = rig.useCase.subject.value
+        current.inventory.isStale = true
+        rig.useCase.syncSnapshot = current
+        let processed = Counter()
+        rig.sut.didProcessBuild = { _ in processed.add("build") }
         // when: the owner's drain delivers a value older than the synchronous snapshot.
         rig.useCase.subject.send(before)
-        await drainMain()
+        await waitUntil { !processed.values.isEmpty }
+        await rig.sut.lastOperation?.value
         // then
         #expect(rig.sut.detail?.kind == .waiting)
     }

@@ -34,8 +34,10 @@ struct PendingLaunchDetailBody: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { titleFocused = true }
-        // The card is replaced when the state leaves the placeholder; re-assert focus on the new title.
-        .onChange(of: detail.kind) { _, _ in
+        // The card is replaced when the state leaves the placeholder; re-assert focus on the new title. Other
+        // state changes keep focus where it is (for example on a pressed action).
+        .onChange(of: detail.kind) { old, _ in
+            guard old == .checking else { return }
             titleFocused = false
             DispatchQueue.main.async { titleFocused = true }
         }

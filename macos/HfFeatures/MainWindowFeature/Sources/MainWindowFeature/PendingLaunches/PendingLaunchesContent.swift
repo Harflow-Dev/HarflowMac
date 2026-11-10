@@ -105,8 +105,7 @@ struct PendingLaunchesContent: View {
     private var rows: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(presentation.rows) { row in
-                PendingLaunchRowView(row: row, isFocused: focusedRow == row.id) { actions.select(row.id) }
-                    .focused($focusedRow, equals: row.id)
+                PendingLaunchRowView(row: row, focus: $focusedRow) { actions.select(row.id) }
             }
         }
     }
@@ -117,14 +116,16 @@ struct PendingLaunchesContent: View {
 /// A selectable row: a button whose label is the row's visible lines.
 struct PendingLaunchRowView: View {
     let row: PendingLaunchesPresentation.Row
-    var isFocused = false
+    var focus: FocusState<String?>.Binding
     var onSelect: () -> Void = {}
 
     var body: some View {
+        // Focus lives on the button itself, so Space and Return activate it and the outline follows it.
         Button(action: onSelect) { PendingLaunchRowLabel(row: row) }
-            .buttonStyle(PendingLaunchRowButtonStyle(isFocused: isFocused))
+            .buttonStyle(PendingLaunchRowButtonStyle(isFocused: focus.wrappedValue == row.id))
             .focusable()
             .focusEffectDisabled()
+            .focused(focus, equals: row.id)
             .accessibilityLabel([row.title, row.meta, row.id].compactMap(\.self).joined(separator: ", "))
             .accessibilityIdentifier("pending-launch-row")
     }
@@ -181,7 +182,7 @@ private struct PendingLaunchRowChrome: View {
             .overlay {
                 // The design's `:focus-visible` outline: 2px accent, 2px outside the row.
                 if isFocused {
-                    RoundedRectangle(cornerRadius: HfRadius.row + 2).stroke(Color.accentFill, lineWidth: 2).padding(-4)
+                    RoundedRectangle(cornerRadius: HfRadius.row + 2).strokeBorder(Color.accentFill, lineWidth: 2).padding(-4)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: HfRadius.row))

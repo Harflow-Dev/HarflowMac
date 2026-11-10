@@ -193,12 +193,12 @@ extension PendingLaunchDetailPresentation {
     /// per zone: builds run concurrently off the main actor and a configured `DateFormatter` is safe to share.
     static func createdText(_ date: Date, timeZone: TimeZone) -> String {
         formatters.withLock { cache in
-            if let cached = cache[timeZone.identifier] { return cached.string(from: date) }
+            if let cached = cache[timeZone] { return cached.string(from: date) }
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = timeZone
             formatter.dateFormat = "d MMM yyyy, HH:mm"
-            cache[timeZone.identifier] = formatter
+            cache[timeZone] = formatter
             return formatter.string(from: date)
         }
     }
@@ -217,9 +217,9 @@ extension PendingLaunchDetailPresentation {
 
 private final class FormatterCache: @unchecked Sendable {
     private let lock = NSLock()
-    private var formatters: [String: DateFormatter] = [:]
+    private var formatters: [TimeZone: DateFormatter] = [:]
 
-    func withLock<Value>(_ body: (inout [String: DateFormatter]) -> Value) -> Value {
+    func withLock<Value>(_ body: (inout [TimeZone: DateFormatter]) -> Value) -> Value {
         lock.withLock { body(&formatters) }
     }
 }
