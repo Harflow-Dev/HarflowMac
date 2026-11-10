@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add the "Pending launches" navigation item (clock icon, last in the sidebar and rail) and a read-only list of launches that have no task record yet, approved at HarflowDesign `83d820f`. The list shows checking, empty, failed, incomplete ("More launches may exist") and populated states over the shared pending-launch owner, with rows of title, harness, repository, state and full ID, a locked composer, and "Check again" for a full re-check. Rows are not selectable yet; detail, Check status, Stop and draft retention follow.
+- Add the "Pending launches" navigation item (clock icon, last in the sidebar and rail) and a read-only list of launches that have no task record yet, approved at HarflowDesign `83d820f`. The list shows checking, empty, failed, incomplete ("More launches may exist") and populated states over the shared pending-launch owner, with rows of title, harness, repository, state and full ID, a locked composer, and "Check again" (below the rows) for a full re-check. Rows are not selectable yet; detail, Check status, Stop and draft retention follow. The screen requires an engine advertising `task-pending-launch.v1`; the currently pinned 0.0.12 does not, so against it the screen shows the failed state until the engine pin moves.
 
 - Add shared pending-launch read and Stop ownership, retaining uncertain outcomes across navigation and admitting recorded tasks only after fresh bounded ancestry reads. Native screen adoption follows separately.
 

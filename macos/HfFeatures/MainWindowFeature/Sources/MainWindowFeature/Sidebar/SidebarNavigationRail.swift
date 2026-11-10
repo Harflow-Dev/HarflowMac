@@ -103,6 +103,7 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
                         in: RoundedRectangle(cornerRadius: 8))
             .help(title)
             .accessibilityLabel(title)
+            .accessibilityAddTraits(viewModel.selection == destination ? .isSelected : [])
             .disabled(!viewModel.runtimeSetupState.isReady)
     }
 }

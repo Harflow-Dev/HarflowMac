@@ -68,6 +68,7 @@ struct SidebarNavigationRailFocusedAXHostedTests {
         // given — the production rail over a counting VM whose runtime is ready and 3 items pend.
         let fixture = hostRail()
         defer { fixture.teardown() }
+        fixture.viewModel.selection = .pendingLaunches
 
         // when — native layout and accessibility bridging settle in the mounted window.
         await waitUntil(timeout: 5) {
@@ -75,6 +76,7 @@ struct SidebarNavigationRailFocusedAXHostedTests {
             fixture.host.layoutSubtreeIfNeeded()
             fixture.host.displayIfNeeded()
             return tree(fixture.window).contains { matches($0, title: "Expand sidebar") }
+                && tree(fixture.window).contains { matches($0, title: "Pending launches") && isSelected($0) == true }
         }
 
         // then — explicit labels cover every rail control; help text never stands alone.
@@ -83,6 +85,9 @@ struct SidebarNavigationRailFocusedAXHostedTests {
             #expect(tree(fixture.window).contains { matches($0, title: title) },
                     "Missing rail accessible name: \(title)")
         }
+        // then — only the selected destination exposes the selected state.
+        #expect(tree(fixture.window).contains { matches($0, title: "Pending launches") && isSelected($0) == true })
+        #expect(!tree(fixture.window).contains { matches($0, title: "Statistics") && isSelected($0) == true })
     }
 
     @Test
@@ -217,6 +222,13 @@ struct SidebarNavigationRailFocusedAXHostedTests {
         ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { key in
             accessibilityString(object, key) == title
         }
+    }
+
+    private func isSelected(_ object: NSObject) -> Bool? {
+        let selector = NSSelectorFromString("isAccessibilitySelected")
+        guard object.responds(to: selector) else { return nil }
+        typealias Selected = @convention(c) (AnyObject, Selector) -> Bool
+        return unsafeBitCast(object.method(for: selector), to: Selected.self)(object, selector)
     }
 
     private func role(of object: NSObject) -> String? {

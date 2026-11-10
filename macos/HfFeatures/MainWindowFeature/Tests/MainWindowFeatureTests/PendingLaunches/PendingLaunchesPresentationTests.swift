@@ -1,5 +1,5 @@
 import Foundation
-import HfRepository
+@testable import HfRepository
 @testable import MainWindowFeature
 import MonitorCore
 import Testing
@@ -122,19 +122,42 @@ import Testing
         #expect(make(.init(), refused: false).kind == .loading)
     }
 
-    @Test func givenOnlyLookupAndAttemptsDiffer_whenProjecting_thenProjectionIsEqual() {
+    @Test func givenIdleAfterObservedRead_whenNoResultExists_thenFailedInsteadOfLoadingForever() {
+        // given: the owner finished a read as superseded and left inventory idle with no evidence.
+        let idle = PendingLaunchesProjection(runtimeIdentity: UUID(), inventory: .init())
+        // when
+        let before = PendingLaunchesPresentation.make(idle, leaseRefused: false, didObserveRead: false)
+        let after = PendingLaunchesPresentation.make(idle, leaseRefused: false, didObserveRead: true)
+        let rereading = PendingLaunchesPresentation.make(
+            .init(runtimeIdentity: idle.runtimeIdentity, inventory: .init(isRefreshing: true)), leaseRefused: false, didObserveRead: true
+        )
+        // then
+        #expect(before == .loading)
+        #expect(after.kind == .failed && after.rows.isEmpty && after.checkAction == .enabled)
+        #expect(rereading == .loading)
+    }
+
+    @Test func givenLookupAndAttemptActivity_whenProjecting_thenOnlyIdentityAndInventoryAreCompared() throws {
         // given
         let identity = UUID()
-        var first = PendingLaunchSnapshot(runtimeIdentity: identity, inventory: .init(rows: [rowA], completedCheck: true))
-        var second = first
-        first.lookups = []
-        second.currentRuntime = nil
-        second.attempts = []
+        let base = PendingLaunchSnapshot(runtimeIdentity: identity, inventory: .init(rows: [rowA], completedCheck: true))
+        var busy = base
+        let selection = PendingLaunchSelection(taskID: "20261110-093000-a17c92", lease: PendingLaunchReadLease())
+        busy.lookups = [PendingLaunchLookup(selection: selection, value: nil, failure: .unavailable)]
+        let confirmation = PendingLaunchStopConfirmation(
+            id: UUID(), taskID: selection.taskID, generation: String(repeating: "a", count: 32),
+            runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])), epoch: UUID()
+        )
+        busy.attempts = [PendingLaunchStopAttempt(id: UUID(), confirmation: confirmation, isExecuting: true)]
+        busy.currentRuntime = confirmation.runtime
+        try #require(busy != base)
         // when
-        let changed = PendingLaunchSnapshot(runtimeIdentity: UUID(), inventory: first.inventory)
+        let changedInventory = PendingLaunchSnapshot(runtimeIdentity: identity, inventory: .init(rows: [rowA, rowB], completedCheck: true))
+        let changedIdentity = PendingLaunchSnapshot(runtimeIdentity: UUID(), inventory: base.inventory)
         // then
-        #expect(PendingLaunchesProjection(first) == PendingLaunchesProjection(second))
-        #expect(PendingLaunchesProjection(first) != PendingLaunchesProjection(changed))
+        #expect(PendingLaunchesProjection(base) == PendingLaunchesProjection(busy))
+        #expect(PendingLaunchesProjection(base) != PendingLaunchesProjection(changedInventory))
+        #expect(PendingLaunchesProjection(base) != PendingLaunchesProjection(changedIdentity))
     }
 
     // MARK: - Rows
@@ -158,6 +181,16 @@ import Testing
             id: "a1", backend: "codex", repoPath: "/Users/synthetic/work/Project/"
         ))
         // then
+        #expect(row.meta == "Codex · Project · Waiting for resources")
+    }
+
+    @Test func givenPaddedValues_whenMapped_thenTrimmedValuesAreDisplayed() {
+        // given / when
+        let row = PendingLaunchesPresentation.row(PendingLaunchesFixture.item(
+            id: "a1", title: "  Padded title \n", backend: " codex ", repoPath: "/work/ Project \n"
+        ))
+        // then
+        #expect(row.title == "Padded title")
         #expect(row.meta == "Codex · Project · Waiting for resources")
     }
 

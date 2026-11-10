@@ -21,6 +21,14 @@ no embedded terminal anywhere in this package:
   `.task`/`.group`/`.newSession` straight onto `MainWindowCoordinator.handle(path:)` for the
   URL/notification/Cmd-N paths it owns; there is no app-target `Selection` enum, no `AppModel`, and no
   mirroring layer.
+- `MonitorDestination.pendingLaunches` selects `PendingLaunches/`: a read-only list over the shared
+  `PendingLaunchRepository`. `PendingLaunchesVM` holds one read lease between `didAppear` and
+  `didDisappear`, subscribes to the snapshot projected to `(runtimeIdentity, inventory)` with
+  `removeDuplicates()`, and builds `PendingLaunchesPresentation` in a detached task applied only for the
+  current generation. `PendingLaunchesViewRepository` only forwards. A refused lease overrides the snapshot
+  with the failed state; "Check again" refreshes the held lease or reacquires one. `.capacity` and every
+  other failure show the failed copy; `.incomplete`, `.requestBudget` and `.deadline` show the incomplete copy.
+  An idle inventory with no result after a read was observed in this appearance (a superseded read) shows the failed state; "Check again" is shown below the rows and is disabled, not hidden, during a re-read. Rows are static until detail selection is added.
 - `HfUI.withPresentationContext()` is applied exactly **once**, at `MainWindowNavigationView`'s own
   root. Every screen under the navigation view, including the New Session sheet, shares that
   one `@Environment(\.viewEvent)` through the presenting view's environment.
@@ -322,14 +330,6 @@ no embedded terminal anywhere in this package:
   their legacy dialogs.
 - `.define("MOCKING", .when(configuration: .debug))` on the main target; `.define("MOCKING")`
   (unconditional) on the test target.
-- `MonitorDestination.pendingLaunches` selects `PendingLaunches/`: a read-only list over the shared
-  `PendingLaunchRepository`. `PendingLaunchesVM` holds one read lease between `didAppear` and
-  `didDisappear`, subscribes to the snapshot projected to `(runtimeIdentity, inventory)` with
-  `removeDuplicates()`, and builds `PendingLaunchesPresentation` in a detached task applied only for the
-  current generation. `PendingLaunchesViewRepository` only forwards. A refused lease overrides the snapshot
-  with the failed state; "Check again" refreshes the held lease or reacquires one. `.capacity` and every
-  other failure show the failed copy; `.incomplete`, `.requestBudget` and `.deadline` show the incomplete copy.
-  Rows are static until detail selection is added.
 - Tests use Swift Testing (`givenX_whenY_thenZ`, `// given / when / then`), Mockable-generated
   `Mock*` types, and `waitUntil` from `HfTestUtilities`. Re-stubbing the same Mockable member twice in
   one test is FIFO/unreliable — see `ParallelVMTests`'s `Box` note and

@@ -1,3 +1,4 @@
+import AppKit
 import HfUI
 import SwiftUI
 
@@ -24,6 +25,12 @@ struct PendingLaunchesContent: View {
                     } else if !presentation.rows.isEmpty {
                         rows
                     }
+                    if presentation.checkAction != .hidden {
+                        Button("Check again", action: onCheckAgain)
+                            .buttonStyle(.bordered)
+                            .disabled(presentation.checkAction == .disabled)
+                            .accessibilityIdentifier("pending-launches-check-again")
+                    }
                 }
                 .frame(maxWidth: 720, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -33,7 +40,17 @@ struct PendingLaunchesContent: View {
             PendingLaunchesLockedComposer()
         }
         .background(Color.windowBG)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(presentation.title)
         .accessibilityIdentifier("pending-launches")
+        .onChange(of: presentation.kind) { _, _ in announce() }
+    }
+
+    /// Only a change of presented state is announced; identical rebuilds never reach here.
+    private func announce() {
+        NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                             userInfo: [.announcement: "\(presentation.title). \(presentation.message)",
+                                        .priority: NSAccessibilityPriorityLevel.medium.rawValue])
     }
 
     private var card: some View {
@@ -47,13 +64,6 @@ struct PendingLaunchesContent: View {
                 .lineSpacing(4)
                 .foregroundStyle(Color.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
-            if presentation.checkAction != .hidden {
-                Button("Check again", action: onCheckAgain)
-                    .buttonStyle(.bordered)
-                    .disabled(presentation.checkAction == .disabled)
-                    .padding(.top, 8)
-                    .accessibilityIdentifier("pending-launches-check-again")
-            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -131,9 +141,9 @@ struct PendingLaunchesSkeletonRows: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(0 ..< 2, id: \.self) { _ in
+            ForEach(0 ..< 2, id: \.self) { index in
                 VStack(alignment: .leading, spacing: 6) {
-                    bar(width: 190, height: 12)
+                    bar(width: index == 0 ? 190 : 140, height: 12)
                     bar(width: 190, height: 10)
                     bar(width: 140, height: 10)
                 }
