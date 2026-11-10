@@ -130,66 +130,6 @@ import Testing
         #expect(store.openChoice(for: "A") == .closed)
     }
 
-    @Test(arguments: [("1 notice", TaskPaneStateStore.FactsGroup.notices, "Notices"),
-                      ("Show supervision details", .continuity, "Continuity")])
-    func givenARevealWithFocusInTheGroup_whenEscapeIsPressedTwice_thenTheFirstLeavesTheGroupForTheOriginAndTheNextClosesThePane(
-        origin: String, group: TaskPaneStateStore.FactsGroup, title: String
-    ) async throws {
-        for width in [1280.0, 800.0] {
-            // given
-            let store = seededStore(open: .closed, tab: .artifacts)
-            let host = await mount(PaneMocks.continuity(notices: ["A notice."]), store: store, width: width)
-            defer { host.close() }
-            await activate(host)
-            try press(host, origin)
-            await host.page.settle { host.focusedLabel?.hasPrefix(title) == true }
-            let context = "local monitor at \(width)"
-            #expect(store.expandedGroups(for: Self.conversation).contains(group), "\(context)")
-            #expect(host.focusedLabel?.hasPrefix(title) == true, "\(context)")
-
-            // when — first Escape
-            host.sendEscape(via: .application)
-
-            // then — focus leaves the group and lands on the control that revealed it; the pane stays
-            let landed = await focusLands(on: origin, host)
-            #expect(landed, "\(context): \(state(of: host)); focus is \(String(describing: host.focusedLabel)), expected \(origin)")
-            #expect(host.hasPane, "\(context)")
-            #expect(store.openChoice(for: Self.conversation) == .open, "\(context)")
-            #expect(store.expandedGroups(for: Self.conversation).contains(group), "\(context)")
-
-            // when — second Escape
-            host.sendEscape(via: .application)
-            await host.page.settle { !host.hasPane }
-
-            // then — the revealed pane closes and focus is back on the origin
-            #expect(!host.hasPane, "\(context): \(state(of: host))")
-            #expect(store.openChoice(for: Self.conversation) == .closed, "\(context)")
-            let stayed = await focusLands(on: origin, host)
-            #expect(stayed, "\(context): after the close focus is \(String(describing: host.focusedLabel)), expected \(origin)")
-        }
-    }
-
-    @Test(arguments: [("1 notice", "Notices"), ("Show supervision details", "Continuity")])
-    func givenARevealedPane_whenClosedWithTheCloseButton_thenFocusLandsOnTheOrigin(origin: String, title: String) async throws {
-        // given
-        let store = seededStore(open: .closed, tab: .artifacts)
-        let host = await mount(PaneMocks.continuity(notices: ["A notice."]), store: store, width: 1280)
-        defer { host.close() }
-        await activate(host)
-        try press(host, origin)
-        await host.page.settle { host.focusedLabel?.hasPrefix(title) == true }
-        #expect(host.focusedLabel?.hasPrefix(title) == true)
-
-        // when
-        try press(host, "Close right pane")
-        await host.page.settle { !host.hasPane }
-
-        // then
-        #expect(!host.hasPane)
-        let landed = await focusLands(on: origin, host)
-        #expect(landed, "after the close button focus is \(String(describing: host.focusedLabel)), expected \(origin)")
-    }
-
     // MARK: - The window path passes through
 
     @Test func givenAnOverlayWithNothingFocused_whenEscapeIsSentStraightToTheWindow_thenItPassesThroughAndThePaneStays() async {

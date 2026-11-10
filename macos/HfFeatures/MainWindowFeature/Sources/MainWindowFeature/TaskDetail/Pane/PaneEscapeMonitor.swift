@@ -21,12 +21,14 @@ import SwiftUI
 /// Invariant: `handle` must have no side effects when it returns `false`, so a declined event costs nothing.
 struct PaneEscapeMonitor: NSViewRepresentable {
     let isActive: Bool
+    var toolbarOriginIdentifier: String?
     let handle: () -> Bool
 
     func makeNSView(context: Context) -> MonitorView { MonitorView() }
 
     func updateNSView(_ view: MonitorView, context: Context) {
         view.handle = handle
+        view.toolbarOriginIdentifier = toolbarOriginIdentifier
         view.setActive(isActive)
     }
 
@@ -39,6 +41,7 @@ struct PaneEscapeMonitor: NSViewRepresentable {
         /// Set on every update and cleared when the monitor goes inactive or is dismantled. A detached or inactive view
         /// never reaches it: the monitor callback checks `wantsMonitor` and the window first.
         var handle: () -> Bool = { false }
+        var toolbarOriginIdentifier: String?
         private var token: Any?
 
         isolated deinit {
@@ -53,11 +56,15 @@ struct PaneEscapeMonitor: NSViewRepresentable {
         func setActive(_ active: Bool) {
             wantsMonitor = active
             reconcile()
-            if !active { handle = { false } }
+            if !active {
+                handle = { false }
+                toolbarOriginIdentifier = nil
+            }
         }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if window == nil { toolbarOriginIdentifier = nil }
             reconcile()
         }
 
@@ -85,11 +92,18 @@ struct PaneEscapeMonitor: NSViewRepresentable {
         /// Whether focus is nowhere in particular or inside the task detail region this view fills. A text editor is
         /// excluded before this. A first responder that contains this view (the hosting view, where SwiftUI keeps its own
         /// focus) is allowed, because AppKit cannot tell which SwiftUI region is focused; any other view must lie within
-        /// this view's bounds, so a focused sidebar control keeps its Escape.
+        /// this view's bounds, so a focused sidebar control keeps its Escape. The current reveal origin is the sole
+        /// toolbar exception: first Escape can return keyboard focus to that visible item before a second closes the pane.
         private func ownsFocus(in window: NSWindow) -> Bool {
             guard let responder = window.firstResponder, responder !== window else { return true }
             guard let view = responder as? NSView else { return false }
             if isDescendant(of: view) { return true }
+            if let identifier = toolbarOriginIdentifier,
+               let item = window.toolbar?.visibleItems?.first(where: { $0.itemIdentifier.rawValue == identifier }),
+               let origin = item.view, origin.window === window, !origin.isHiddenOrHasHiddenAncestor,
+               !view.isHiddenOrHasHiddenAncestor, view === origin || view.isDescendant(of: origin) {
+                return true
+            }
             let region = convert(bounds, to: nil)
             let frame = view.convert(view.bounds, to: nil)
             return region.contains(CGPoint(x: frame.midX, y: frame.midY))

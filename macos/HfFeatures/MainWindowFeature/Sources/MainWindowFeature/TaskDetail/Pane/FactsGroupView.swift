@@ -81,6 +81,7 @@ struct FactsGroupView<Content: View>: View {
             return .handled
         }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(TaskPaneAccessibility.factsHeaderIdentifier(for: group))
         .accessibilityAddTraits(.isButton)
         .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
         .accessibilityAction { setExpanded(!isExpanded) }

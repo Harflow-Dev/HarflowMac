@@ -15,6 +15,36 @@ import SwiftUI
 
 extension TaskDetailView {
 
+    /// Durable operation feedback occupies space only while the VM supplies a message.
+    @ViewBuilder var standaloneOutcomeFeedback: some View {
+        if let message = viewModel.outcomeMessage {
+            Text(message)
+                .font(.hf(.secondary))
+                .foregroundStyle(OutcomeColor.of(message))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, HfRadius.Metrics.spacing24)
+                .padding(.vertical, HfRadius.Metrics.spacing8)
+                .readingColumn()
+        }
+    }
+
+    /// Approved M05 provenance line; the VM owns the first conversation member's provenance.
+    @ViewBuilder var standaloneProvenanceLine: some View {
+        if isStandalone, viewModel.spawnedByBannerText != nil {
+            HStack(spacing: HfRadius.Metrics.spacing6) {
+                Image(systemName: "arrow.triangle.branch").accessibilityHidden(true)
+                Text("Sub-task started by another agent")
+            }
+            .font(TaskScreenStyle.sans(size: 12))
+            .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, TaskScreenStyle.Transcript.paddingHorizontal)
+            .padding(.bottom, HfRadius.Metrics.spacing16)
+            .readingColumn()
+        }
+    }
+
     /// The standalone mount. The measuring view is a flexible clear layer that the column and pane are drawn over,
     /// never inside, so the width it reports cannot depend on whether the pane is split, overlaid or closed.
     func standaloneLayout(_ task: TaskInfo) -> some View {
@@ -29,15 +59,18 @@ extension TaskDetailView {
     func standaloneBody(_ task: TaskInfo) -> some View {
         let isOpen = pane.isOpen
         let mode = pane.mode
+        let selectedTab = pane.selectedTab
         let reserved = isOpen && mode == .split ? TaskScreenStyle.PaneHead.width : HfRadius.Metrics.zero
         return columnStack(task)
             .padding(.trailing, reserved)
             // The reserved band lies outside the column's own background, so paint it too: a slide never shows the window.
             .background(transcriptStyle.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
             .overlay(alignment: .trailing) {
-                if isOpen, let mode { paneView(mode) }
+                if isOpen, let mode { paneView(mode, selectedTab: selectedTab) }
             }
-            .background(PaneEscapeMonitor(isActive: isOpen, handle: handleEscape))
+            .background(PaneEscapeMonitor(isActive: isOpen,
+                                          toolbarOriginIdentifier: pane.revealOrigin.flatMap(TaskPaneChipFocus.toolbarIdentifier(for:)),
+                                          handle: { handleEscape() }))
             .background(TaskPaneFocusAnchor(host: paneHolder.chipFocus))
             .onChange(of: viewModel.snapshotEvidence?.paneDefault ?? .init(), initial: true) { _, input in pane.updateDefaultInput(input) }
             .onChange(of: pane.isOpen, initial: true) { _, open in viewModel.setPaneOpen(open) }
@@ -57,8 +90,8 @@ extension TaskDetailView {
             .opensFileLinks(repoPath: task.repoPath)
     }
 
-    func paneView(_ mode: TaskPaneController.Mode) -> some View {
-        TaskPaneView(viewModel: viewModel, pane: pane, presentation: mode,
+    func paneView(_ mode: TaskPaneController.Mode, selectedTab: TaskPaneStateStore.Tab) -> some View {
+        TaskPaneView(viewModel: viewModel, pane: pane, presentation: mode, selectedTab: selectedTab,
                      focus: TaskPaneFocus(group: $focusedGroup, accessibilityGroup: $groupAccessibilityFocus))
             .transition(.move(edge: .trailing))
     }
@@ -106,10 +139,12 @@ extension TaskDetailView {
     /// Escape returns focus through the controller's focus return, exactly like the close button and the toolbar toggle.
     /// Returns whether the key was used, so the monitor consumes only an Escape that dismissed something.
     func handleEscape() -> Bool {
-        let outcome = pane.animated { pane.handleEscape(groupFocused: focusedGroup != nil) }
+        let probed = paneHolder.chipFocus.probe()
+        let groupFocused = focusedGroup != nil || groupAccessibilityFocus != nil ||
+            (pane.revealOrigin != nil && pane.selectedTab == .events && probed.axFocusOnFactsHeader)
+        let outcome = pane.animated { pane.handleEscape(groupFocused: groupFocused) }
         if case .leftFactsGroup(let origin) = outcome {
-            // Read where focus is before the group gives it up; the return needs that to know focus was in the pane.
-            let probed = paneHolder.chipFocus.probe()
+            // Use the snapshot from before the group gave up focus.
             focusedGroup = nil
             groupAccessibilityFocus = nil
             returnFocus(to: origin, probed: probed)
@@ -117,23 +152,15 @@ extension TaskDetailView {
         return outcome != .ignored
     }
 
-    /// Opens the standalone pane on a facts group, or the legacy inspector for the other mounts.
+    /// Opens the legacy inspector from the Group or embedded header.
     func revealNotices() {
-        if isStandalone {
-            pane.animated { pane.revealFacts(group: .notices, origin: .notices) }
-        } else {
-            setInspectorVisible(true)
-        }
+        setInspectorVisible(true)
     }
 
     func revealContinuityDetails() {
-        if isStandalone {
-            pane.animated { pane.revealFacts(group: .continuity, origin: .continuityDetails) }
-        } else {
-            setInspectorVisible(true)
-            snapshotFactsExpanded = true
-            supervisionRequest += 1
-        }
+        setInspectorVisible(true)
+        snapshotFactsExpanded = true
+        supervisionRequest += 1
     }
 
     /// The standalone toolbar's chips; `nil` on the other mounts.

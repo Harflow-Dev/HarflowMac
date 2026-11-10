@@ -113,12 +113,13 @@ no embedded terminal anywhere in this package:
   "Reported usage" without the hero and Result while the transcript's Summary entry shows), collapsed unless revealed, then `PublicEventsView` unchanged. `revealFacts(group:origin:)` opens
   the pane, selects Events, expands the group and moves keyboard focus and the VoiceOver cursor into it. Escape
   (handled by `PaneEscapeMonitor`, a window-scoped local key monitor that works with no focused
-  descendant, acts only when focus is nowhere or inside the task detail region, and passes Escape through to a field
+  descendant, acts only when focus is nowhere, inside the task detail region, or in the current visible
+  reveal-origin toolbar chip, and passes Escape through to a field
   editor, a sheet, another window, another region such as the sidebar, or a Command/Option/Control/Shift key;
   a declined result must be side-effect free. Escape typed in the composer passes through and does not close the
   overlay, a deliberate deviation; any in-window dialog added later must be excluded from this monitor) leaves a
   focused group, then closes an overlay, then closes a pane a reveal opened; every close of a revealed pane
-  (Escape, the close button, the toolbar toggle) returns focus and the VoiceOver cursor to the header control that
+  (Escape, the close button, the toolbar toggle) returns focus and the VoiceOver cursor to the originating control that
   revealed it. Closing, opening and tab selection clear any pending focus request, and person-driven changes run
   through `pane.animated`. The overlay pane carries the modal accessibility trait. The window toolbar's inspector
   item keeps its identifier and reads "Show right pane"/"Hide right pane" on the standalone mount only (Group keeps
@@ -143,8 +144,11 @@ no embedded terminal anywhere in this package:
   `.access`) are separate trailing items that appear only while their condition holds; they reveal the matching facts
   group and return focus to the chip where AppKit accepts it. The badge is derived only from `TaskSnapshotEvidence`
   (`ownerState`, `settledDuration` and the exit come from the matching snapshot); HfUI `StatusBadge` is unchanged. On
-  the standalone mount the header drops its title line and the breadcrumbs their trailing title; the meta row, banners
-  and the notices and continuity shortcuts stay until D2. No explicit toolbar id may be reused or duplicated.
+  the standalone mount the legacy header is absent: the toolbar, its chips and More actions own its former
+  metadata and shortcuts. Only a present outcome keeps a compact feedback row. The short subtask provenance
+  line follows Original request, while Events Task facts preserve the full first-member routing sentence and
+  takeover note (including the prior banner fallback). Group/embedded retain the legacy header and controls.
+  No explicit toolbar id may be reused or duplicated.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

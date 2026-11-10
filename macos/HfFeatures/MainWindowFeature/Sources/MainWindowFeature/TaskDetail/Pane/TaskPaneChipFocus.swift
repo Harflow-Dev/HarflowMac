@@ -19,6 +19,16 @@ import SwiftUI
 /// The pane's accessibility label, shared by the pane and the focus probe that recognises it in the accessibility tree.
 enum TaskPaneAccessibility {
     static let paneLabel = "Task details"
+
+    static func factsHeaderIdentifier(for group: TaskPaneStateStore.FactsGroup) -> String {
+        switch group {
+        case .task: "task-detail.facts-header.task"
+        case .enforcement: "task-detail.facts-header.enforcement"
+        case .notices: "task-detail.facts-header.notices"
+        case .continuity: "task-detail.facts-header.continuity"
+        case .usage: "task-detail.facts-header.usage"
+        }
+    }
 }
 
 // MARK: - PaneFocusSnapshot
@@ -34,6 +44,8 @@ struct PaneFocusSnapshot {
     weak var window: NSWindow?
     /// The timestamp of the event being dispatched at the close; only input after it counts as the person moving on.
     var inputGate: TimeInterval = 0
+    /// Focus is on an exact facts header in the currently mounted pane, rather than an arbitrary pane control.
+    var axFocusOnFactsHeader = false
 
     /// Focus was in the pane or the task detail, so the close displaced it and it should come back.
     var worthReturning: Bool { axFocusInPane || nativeFocusInDetail }
@@ -191,6 +203,36 @@ enum TaskPaneChipFocus {
         var window: @MainActor (NSObject) -> NSObject?
         /// Every pane-labelled element reachable from the originating window's own accessibility tree.
         var panesInOwner: @MainActor () -> [NSObject]
+        var identifier: @MainActor (NSObject) -> String? = { _ in nil }
+        var children: @MainActor (NSObject) -> [NSObject] = { _ in [] }
+    }
+
+    /// Recognises only the focused header itself, with a live pane in the owner's rooted tree.
+    /// A detached pane reporting its old window is insufficient for this Escape decision.
+    static func focusIsOnOwnedFactsHeader(_ reader: AccessibilityReader, owner: NSObject, region: CGRect) -> Bool {
+        guard let focused = reader.focused(), let identifier = reader.identifier(focused),
+              TaskPaneStateStore.FactsGroup.allCases.contains(where: { TaskPaneAccessibility.factsHeaderIdentifier(for: $0) == identifier }),
+              let headerFrame = reader.frame(focused), headerFrame.width > 0, headerFrame.height > 0,
+              region.insetBy(dx: -1, dy: -1).contains(headerFrame),
+              focusIsInOwnedPane(reader, owner: owner, region: region) else { return false }
+        var element = focused
+        for _ in 0 ..< 40 {
+            if reader.label(element) == TaskPaneAccessibility.paneLabel {
+                guard let paneFrame = reader.frame(element), paneFrame.insetBy(dx: -1, dy: -1).contains(headerFrame),
+                      reader.panesInOwner().contains(where: { $0 === element || $0.isEqual(element) }) else { return false }
+                var queue = reader.children(element)
+                var seen = Set<ObjectIdentifier>()
+                while let child = queue.popLast(), seen.count < 6000 {
+                    guard seen.insert(ObjectIdentifier(child)).inserted else { continue }
+                    if child === focused || child.isEqual(focused) { return true }
+                    queue.append(contentsOf: reader.children(child))
+                }
+                return false
+            }
+            guard let parent = reader.parent(element) else { return false }
+            element = parent
+        }
+        return false
     }
 
     /// Whether the accessibility focus is inside THE pane of the mounted task view, not merely inside some element called
@@ -253,9 +295,12 @@ final class TaskPaneChipFocusHost {
             return PaneFocusSnapshot(axFocusInPane: false, nativeFocusInDetail: false, window: nil, inputGate: gate)
         }
         let region = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        let axInPane = TaskPaneChipFocus.focusIsInOwnedPane(Self.liveReader(window: window), owner: window, region: region)
+        let reader = Self.liveReader(window: window)
+        let axInPane = TaskPaneChipFocus.focusIsInOwnedPane(reader, owner: window, region: region)
         let native = classify(window: window, chip: nil) == .detailHost
-        return PaneFocusSnapshot(axFocusInPane: axInPane, nativeFocusInDetail: native, window: window, inputGate: gate)
+        let axHeader = TaskPaneChipFocus.focusIsOnOwnedFactsHeader(reader, owner: window, region: region)
+        return PaneFocusSnapshot(axFocusInPane: axInPane, nativeFocusInDetail: native, window: window,
+                                 inputGate: gate, axFocusOnFactsHeader: axHeader)
     }
 
     /// The real accessibility tree of this process, with the pane search rooted in `window`'s own content.
@@ -266,7 +311,9 @@ final class TaskPaneChipFocusHost {
             parent: { object($0, "accessibilityParent") },
             frame: { frame(of: $0) },
             window: { object($0, "accessibilityWindow") },
-            panesInOwner: { panes(in: window) }
+            panesInOwner: { panes(in: window) },
+            identifier: { object($0, "accessibilityIdentifier") as? String },
+            children: { children(of: $0) }
         )
     }
 
@@ -281,6 +328,16 @@ final class TaskPaneChipFocusHost {
         guard element.responds(to: NSSelectorFromString("accessibilityFrame")),
               let value = element.value(forKey: "accessibilityFrame") as? NSValue else { return nil }
         return value.rectValue
+    }
+
+    private static func children(of element: NSObject) -> [NSObject] {
+        var result: [NSObject] = []
+        let selector = NSSelectorFromString("accessibilityChildren")
+        if element.responds(to: selector), let children = element.perform(selector)?.takeUnretainedValue() as? [NSObject] {
+            result.append(contentsOf: children)
+        }
+        if let view = element as? NSView { result.append(contentsOf: view.subviews) }
+        return result
     }
 
     /// Pane-labelled elements reachable from the window's content through accessibility children and subviews, bounded.

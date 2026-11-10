@@ -2,9 +2,8 @@
 //  TaskDetailView.swift
 //  MainWindowFeature
 //
-//  Ported from the app target's `TaskDetailView.swift`/`TaskDetailContent`/`MessageBox`. The
-//  redesign (§6.2) restyles the header (title 18 semibold, agent/repo/turns/access meta line)
-//  and keeps every action, route and guard unchanged. `.id(taskID)`
+//  The standalone task uses the native top bar, compact feedback and transcript provenance.
+//  Group and embedded mounts retain their legacy header and actions. `.id(taskID)`
 //  (F4-35) is applied by the caller (`MainWindowCoordinator.buildTaskDetailView`),
 //  never inside this view's own body — see that method's header comment and the phase-4 brief's
 //  binding Lesson.
@@ -239,7 +238,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }
     }
 
-    /// The transcript column: approval banner, header, resource card, activity and composer.
+    /// The transcript column: approval banner, optional feedback, resource card, activity and composer.
     func columnStack(_ task: TaskInfo) -> some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             if let backend = viewModel.harflowApprovalBackend {
@@ -255,7 +254,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 .padding(.horizontal, HfRadius.Metrics.spacing16)
                 .padding(.vertical, HfRadius.Metrics.spacing8)
             }
-            header(task)
+            if isStandalone {
+                standaloneOutcomeFeedback
+            } else {
+                legacyHeader(task)
+            }
             if let context = viewModel.resourceContext {
                 TaskResourceContextView(context: context, blockersExpanded: viewModel.resourceBlockersExpanded,
                                         onToggleBlockers: viewModel.didToggleResourceBlockers,
@@ -297,7 +300,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     // MARK: Header
 
     @ViewBuilder
-    private func header(_ task: TaskInfo) -> some View {
+    private func legacyHeader(_ task: TaskInfo) -> some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
             if !viewModel.ancestorCrumbs.isEmpty { breadcrumbs }
             titleBlock(task)
@@ -324,10 +327,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             .foregroundStyle(Color.warningFG)
                         }
                         .buttonStyle(.plain)
-                        .modifier(StandaloneFocusable(isEnabled: isStandalone))
                         .focused($originFocus, equals: .notices)
                         .accessibilityFocused($originAccessibilityFocus, equals: .notices)
-                        .help(isStandalone ? "Show the notices in the right pane" : "Show the notices in the inspector")
+                        .help("Show the notices in the inspector")
                     }
                     if viewModel.inspectorModel?.showsContinuity == true {
                         HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
@@ -337,7 +339,6 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                             Spacer(minLength: HfRadius.Metrics.spacing8)
                             Button("Details") { revealContinuityDetails() }
                             .buttonStyle(.plain)
-                            .modifier(StandaloneFocusable(isEnabled: isStandalone))
                             .focused($originFocus, equals: .continuityDetails)
                             .accessibilityFocused($originAccessibilityFocus, equals: .continuityDetails)
                             .accessibilityLabel("Show supervision details")
@@ -396,38 +397,33 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         }
     }
 
-    /// The standalone mount's top bar carries the title, so its crumbs end at the last ancestor.
+    /// Breadcrumbs for the unchanged Group and embedded header.
     private var breadcrumbs: some View {
         HStack(spacing: HfRadius.Metrics.spacing4) {
             ForEach(viewModel.ancestorCrumbs) { crumb in
                 Button(crumb.title) { viewModel.didTapTask(crumb.id) }
                     .buttonStyle(.link)
                     .lineLimit(1)
-                if !isStandalone || crumb.id != viewModel.ancestorCrumbs.last?.id {
-                    Text("›").foregroundStyle(Color.secondaryText)
-                }
+                Text("›").foregroundStyle(Color.secondaryText)
             }
-            if !isStandalone { Text(viewModel.title).foregroundStyle(Color.secondaryText).lineLimit(1) }
+            Text(viewModel.title).foregroundStyle(Color.secondaryText).lineLimit(1)
         }
         .font(.hf(.secondary))
     }
 
     /// The redesign's title block (§6.2): the page title at `.title` semibold in primary text, over
     /// a meta line of the agent label · repository menu · conversation turns · access — every value
-    /// the header already carried, now all in one line. The standalone mount draws the title in the
-    /// window's top bar instead (stage D1) and keeps the meta line until the header moves (D2).
+    /// the legacy header carries, now all in one line.
     @ViewBuilder
     private func titleBlock(_ task: TaskInfo) -> some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            if !isStandalone {
-                Text(viewModel.title)
-                    .font(.hf(.title, weight: .semibold))
-                    .foregroundStyle(Color.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .help(viewModel.title)
-            }
+            Text(viewModel.title)
+                .font(.hf(.title, weight: .semibold))
+                .foregroundStyle(Color.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .help(viewModel.title)
             HStack(spacing: HfRadius.Metrics.spacing6) {
                 BackendLabel(backend: task.backend)
                 repoMenu(task)
@@ -555,6 +551,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         VStack(spacing: 0) {
             StoredRequestView(state: viewModel.requestReadState, read: viewModel.didReadRequest, copy: viewModel.didCopyObservationText)
                 .padding(16)
+            standaloneProvenanceLine
             ForEach(viewModel.orderedHistoryFrames, id: \.taskID) { frame in
                 ObservationHistoryView(frame: frame) { viewModel.didRequestObservation($0, taskID: frame.taskID) }
                     .padding(.horizontal, 16)

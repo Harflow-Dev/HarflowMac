@@ -285,7 +285,7 @@ window; redraws and remounts cannot replay consumed or cancelled intents. Collap
 removal and unavailable/integrity-failed states cancel pending target focus. Ordinary
 publications preserve selection and do not manufacture focus requests.
 
-The standalone task toolbar places the existing terminal handoff in More actions, alongside task and repository actions. Its equality boundary includes the rendered repository path and matched parent title; action closures keep using the current view model. Group, embedded and Parallel mounts retain their existing controls. The task header remains until the remaining header facts move to their approved destinations.
+The standalone task toolbar places the existing terminal handoff in More actions, alongside task and repository actions. Its equality boundary includes the rendered repository path and matched parent title; action closures keep using the current view model. Group, embedded and Parallel mounts retain their existing controls. The standalone task omits the legacy header. Outcomes retain their existing durable text in a compact row. Subtasks show the approved short provenance line beneath Original request; Events → Task retains the full first-member routing sentence and the takeover note, including the prior missing-note fallback. The legacy header remains on Group and embedded mounts.
 
 Standalone task Stop uses the main window coordinator's mutually exclusive modal destination,
 shared with the workflow launcher. The request captures the current run ID and the existing

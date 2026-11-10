@@ -333,6 +333,8 @@ struct TaskPaneChipFocusTests {
     /// A scripted accessibility tree of plain objects: labels, parents, frames and windows by node.
     @MainActor private final class Tree {
         var labels: [ObjectIdentifier: String] = [:]
+        var identifiers: [ObjectIdentifier: String] = [:]
+        var nodes: [ObjectIdentifier: NSObject] = [:]
         var parents: [ObjectIdentifier: NSObject] = [:]
         var frames: [ObjectIdentifier: CGRect] = [:]
         var windows: [ObjectIdentifier: NSObject] = [:]
@@ -342,6 +344,7 @@ struct TaskPaneChipFocusTests {
         func node(_ label: String?, parent: NSObject? = nil, frame: CGRect? = nil, window: NSObject? = nil) -> NSObject {
             let node = NSObject()
             let id = ObjectIdentifier(node)
+            nodes[id] = node
             if let label { labels[id] = label }
             if let parent { parents[id] = parent }
             if let frame { frames[id] = frame }
@@ -356,7 +359,11 @@ struct TaskPaneChipFocusTests {
                 parent: { [self] in parents[ObjectIdentifier($0)] },
                 frame: { [self] in frames[ObjectIdentifier($0)] },
                 window: { [self] in windows[ObjectIdentifier($0)] },
-                panesInOwner: { [self] in ownedPanes }
+                panesInOwner: { [self] in ownedPanes },
+                identifier: { [self] in identifiers[ObjectIdentifier($0)] },
+                children: { [self] parent in
+                    parents.compactMap { id, value in value === parent ? nodes[id] : nil }
+                }
             )
         }
     }
@@ -463,96 +470,50 @@ struct TaskPaneChipFocusTests {
         #expect(!Focus.focusIsInOwnedPane(empty.reader, owner: owner, region: Self.region))
     }
 
-    private final class Focusable: NSView {
-        override var acceptsFirstResponder: Bool { true }
-    }
-
-    @Test func givenAHiddenParentAboveAnUnhiddenChipAndResponder_whenResolved_thenThereIsNoTarget() {
-        // given the chip and its responder are unhidden themselves, but an ancestor outside the entry is hidden
-        let parent = NSView()
-        parent.isHidden = true
-        let chip = NSView()
-        chip.addSubview(Focusable())
-        parent.addSubview(chip)
-
-        // then
-        #expect(!chip.isHidden && Focus.uniqueResponder(in: chip) == nil)
-    }
-
-    @Test func givenAHiddenContainerWithAnUnhiddenFocusableChild_whenResolved_thenThereIsNoTarget() {
-        // given the child's own isHidden is false, but its container is hidden: it is not visible
-        let chip = NSView()
-        let container = NSView()
-        container.isHidden = true
-        container.addSubview(Focusable())
-        chip.addSubview(container)
-
-        // then
-        #expect(Focus.uniqueResponder(in: chip) == nil)
-    }
-
-    @Test func givenAHiddenChipRoot_whenResolved_thenThereIsNoTarget() {
+    @Test func givenAnExactOwnedFactsHeader_whenChecked_thenOnlyTheHeaderItselfQualifies() throws {
         // given
-        let chip = Focusable()
-        chip.isHidden = true
+        let owner = NSObject()
+        let tree = ownedFocus(window: owner)
+        let header = try #require(tree.focused)
+        tree.identifiers[ObjectIdentifier(header)] = TaskPaneAccessibility.factsHeaderIdentifier(for: .notices)
+        tree.frames[ObjectIdentifier(header)] = CGRect(x: 700, y: 700, width: 380, height: 30)
 
         // then
-        #expect(Focus.uniqueResponder(in: chip) == nil)
+        #expect(Focus.focusIsOnOwnedFactsHeader(tree.reader, owner: owner, region: Self.region))
+        let originalFrame = tree.frames[ObjectIdentifier(header)]
+        tree.frames[ObjectIdentifier(header)] = CGRect(x: 2000, y: 100, width: 100, height: 30)
+        #expect(!Focus.focusIsOnOwnedFactsHeader(tree.reader, owner: owner, region: Self.region))
+        tree.frames[ObjectIdentifier(header)] = originalFrame
+        tree.nodes.removeValue(forKey: ObjectIdentifier(header))
+        #expect(!Focus.focusIsOnOwnedFactsHeader(tree.reader, owner: owner, region: Self.region))
+        tree.nodes[ObjectIdentifier(header)] = header
+
+        // when — a control below the header, or any ordinary pane control, holds focus.
+        tree.focused = tree.node("Copy", parent: header, window: owner)
+
+        // then — neither an ancestor's identifier nor mere pane ownership counts.
+        #expect(Focus.focusIsInOwnedPane(tree.reader, owner: owner, region: Self.region))
+        #expect(!Focus.focusIsOnOwnedFactsHeader(tree.reader, owner: owner, region: Self.region))
+        tree.focused = header
+        tree.identifiers.removeAll()
+        #expect(!Focus.focusIsOnOwnedFactsHeader(tree.reader, owner: owner, region: Self.region))
     }
 
-    @Test func givenAHiddenSiblingBesideTheOnlyVisibleResponder_whenResolved_thenTheVisibleOneIsTheTarget() {
+    @Test func givenTheSameFactsIdentifierInAnotherWindowOrADetachedPane_whenChecked_thenItDoesNotQualify() throws {
         // given
-        let chip = NSView()
-        let hidden = NSView()
-        hidden.isHidden = true
-        hidden.addSubview(Focusable())
-        let visible = Focusable()
-        chip.addSubview(hidden)
-        chip.addSubview(visible)
+        let owner = NSObject()
+        let foreign = ownedFocus(window: NSObject())
+        let detached = ownedFocus(window: owner, listedByOwner: false)
+        let unidentified = ownedFocus(window: nil, listedByOwner: false)
 
-        // then
-        #expect(Focus.uniqueResponder(in: chip) === visible)
+        for tree in [foreign, detached, unidentified] {
+            let header = try #require(tree.focused)
+            tree.identifiers[ObjectIdentifier(header)] = TaskPaneAccessibility.factsHeaderIdentifier(for: .notices)
+            tree.frames[ObjectIdentifier(header)] = CGRect(x: 700, y: 700, width: 380, height: 30)
+
+            // then — even a detached pane's old reported window is insufficient.
+            #expect(!Focus.focusIsOnOwnedFactsHeader(tree.reader, owner: owner, region: Self.region))
+        }
     }
 
-    // MARK: - Target (single responder)
-
-    @Test func givenAChipView_whenOneDescendantAcceptsFocus_thenThatOneIsTheTarget() {
-        // given
-        let chip = NSView()
-        let inner = NSView()
-        let target = Focusable()
-        chip.addSubview(inner)
-        inner.addSubview(target)
-        inner.addSubview(NSView())
-
-        // then
-        #expect(Focus.uniqueResponder(in: chip) === target)
-    }
-
-    @Test func givenTheChipViewItselfAcceptsFocus_whenNoDescendantDoes_thenItIsTheTarget() {
-        // given
-        let chip = Focusable()
-        chip.addSubview(NSView())
-
-        // then
-        #expect(Focus.uniqueResponder(in: chip) === chip)
-    }
-
-    @Test func givenNoOrSeveralOrOnlyHiddenResponders_whenResolved_thenThereIsNoTarget() {
-        // given
-        let none = NSView()
-        none.addSubview(NSView())
-        let several = NSView()
-        several.addSubview(Focusable())
-        several.addSubview(Focusable())
-        let hidden = NSView()
-        let hiddenTarget = Focusable()
-        hiddenTarget.isHidden = true
-        hidden.addSubview(hiddenTarget)
-
-        // then
-        #expect(Focus.uniqueResponder(in: none) == nil)
-        #expect(Focus.uniqueResponder(in: several) == nil, "an ambiguous item is not guessed at")
-        #expect(Focus.uniqueResponder(in: hidden) == nil)
-    }
 }

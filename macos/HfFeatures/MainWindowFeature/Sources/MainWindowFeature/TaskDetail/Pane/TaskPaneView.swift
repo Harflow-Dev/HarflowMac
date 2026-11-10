@@ -19,6 +19,7 @@ struct TaskPaneView<VM: TaskDetailViewModel>: View {
     let viewModel: VM
     let pane: TaskPaneController
     let presentation: TaskPaneController.Mode
+    let selectedTab: TaskPaneStateStore.Tab
     let focus: TaskPaneFocus
 
     var body: some View {
@@ -46,7 +47,7 @@ struct TaskPaneView<VM: TaskDetailViewModel>: View {
             HStack(spacing: TaskScreenStyle.PaneTab.gap) {
                 ForEach(TaskPaneController.visibleTabs, id: \.self) { tab in
                     TaskPaneTabButton(title: Self.title(of: tab), count: tab == .changes ? viewModel.changesTabCount : nil,
-                                      isSelected: pane.selectedTab == tab) { pane.animated { pane.select(tab) } }
+                                      isSelected: selectedTab == tab) { pane.animated { pane.select(tab) } }
                 }
             }
             Spacer(minLength: 0)
@@ -66,7 +67,7 @@ struct TaskPaneView<VM: TaskDetailViewModel>: View {
     }
 
     @ViewBuilder private var tabBody: some View {
-        switch pane.selectedTab {
+        switch selectedTab {
         case .artifacts:
             ScrollView {
                 TaskArtifactsView(members: viewModel.artifactMembers, load: { viewModel.didLoadArtifacts(taskID: $0) })

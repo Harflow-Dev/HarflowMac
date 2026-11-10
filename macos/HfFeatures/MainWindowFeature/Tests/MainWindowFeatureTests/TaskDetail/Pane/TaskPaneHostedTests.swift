@@ -374,45 +374,4 @@ import Testing
         host.page.window.makeKey()
     }
 
-    @Test func givenTheNoticesHeader_whenPressed_thenThePaneOpensOnEventsWithNoticesExpandedAndFocused() async throws {
-        // given
-        let store = seededStore(open: .closed, tab: .artifacts)
-        let host = await mount(PaneMocks.running(notices: ["Checkout is on the default branch."]), store: store, width: 1280)
-        defer { host.close() }
-        #expect(!host.hasPane)
-        activate(host)
-
-        // when
-        try press(host, "1 notice")
-        await host.page.settle { host.headerValue("Notices") == "Expanded" && host.focusedLabel?.hasPrefix("Notices") == true }
-
-        // then
-        #expect(host.hasPane)
-        #expect(store.openChoice(for: Self.conversation) == .open)
-        #expect(store.selectedTab(for: Self.conversation) == .events)
-        #expect(store.expandedGroups(for: Self.conversation).contains(.notices))
-        #expect(host.headerValue("Notices") == "Expanded")
-        let header = try #require(host.header("Notices"))
-        #expect(host.page.frame(header) != nil)
-        #expect(host.focusedLabel?.hasPrefix("Notices") == true, "focus is on the Notices header, not \(String(describing: host.focusedLabel))")
-    }
-
-    @Test func givenTheContinuityDetailsControl_whenPressed_thenThePaneOpensOnEventsWithContinuityExpanded() async throws {
-        // given
-        let store = seededStore(open: .closed, tab: .artifacts)
-        let host = await mount(PaneMocks.continuity(), store: store, width: 1280)
-        defer { host.close() }
-        activate(host)
-
-        // when
-        try press(host, "Show supervision details")
-        await host.page.settle { host.headerValue("Continuity") == "Expanded" && host.focusedLabel?.hasPrefix("Continuity") == true }
-
-        // then
-        #expect(host.hasPane)
-        #expect(store.selectedTab(for: Self.conversation) == .events)
-        #expect(store.expandedGroups(for: Self.conversation).contains(.continuity))
-        #expect(host.headerValue("Continuity") == "Expanded")
-        #expect(host.focusedLabel?.hasPrefix("Continuity") == true, "focus is on the Continuity header, not \(String(describing: host.focusedLabel))")
-    }
 }

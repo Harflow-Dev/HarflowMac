@@ -112,7 +112,12 @@ private extension TaskEventsTabView {
                         factsRow("Started", Format.time(task.startedAt))
                         if let model = viewModel.inspectorModel { factsRow("Started by", model.startedBy) }
                         taskIDRow(task)
-                        if let note = task.takenOverNote { factsRow("Taken over", note) }
+                        if let note = task.takenOverNote ?? viewModel.takenOverBannerText { factsRow("Taken over", note) }
+                    }
+                    if let provenance = viewModel.spawnedByBannerText {
+                        Text(provenance)
+                            .foregroundStyle(TaskScreenStyle.Colors.text.color)
+                            .textSelection(.enabled)
                     }
                     if viewModel.resumeCommand != nil {
                         Button("Copy resume command", action: viewModel.didTapCopyResumeCommand)

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the standalone task’s duplicate header metadata, breadcrumbs and banners. Their actions and facts remain in the toolbar, More actions and Events; subtasks keep a compact provenance line, and action outcomes stay visible. Group and embedded headers are unchanged.
+
 - Add the standalone task’s Stop confirmation sheet and composer Stop button. Both entry points share the captured current-run target; the sheet labels earlier-turn tasks outside the request and preserves the message draft when dismissed.
 
 - Move the standalone task’s terminal action into More actions, with task ID, parent and repository shortcuts. Events stays in the right pane; Group and embedded controls are unchanged.
