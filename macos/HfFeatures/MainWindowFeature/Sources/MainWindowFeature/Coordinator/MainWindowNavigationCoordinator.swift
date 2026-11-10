@@ -11,6 +11,8 @@ public enum MainWindowSheet: String, Identifiable {
     case newSession
     /// Chooses and launches a saved workflow.
     case workflowRunner
+    /// Confirms stopping a captured standalone task.
+    case stopTask
 
     /// Stable identity for the presented destination.
     public var id: String { rawValue }
@@ -57,6 +59,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     var isWorkflowRunnerPresented: Bool { get set }
     /// Builds the saved-workflow chooser and launch sheet.
     func buildWorkflowRunnerView() -> AnyView
+    /// Builds the captured standalone Stop confirmation.
+    func buildStopConfirmationView() -> AnyView
     /// Builds the retained saved-workflow chooser as a navigation destination.
     func buildWorkflowLibraryView() -> AnyView
 
@@ -100,6 +104,7 @@ public extension MainWindowNavigationCoordinator {
     func buildStartScreenView() -> AnyView { AnyView(EmptyView()) }
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
 
+    func buildStopConfirmationView() -> AnyView { AnyView(EmptyView()) }
     func buildStatisticsView() -> AnyView { AnyView(EmptyView()) }
     func buildResourceSlotsView() -> AnyView { AnyView(EmptyView()) }
     var canReturnToResourceSlots: Bool { false }

@@ -62,12 +62,15 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             }
             selectionSubject.send(selection)
             isNewSessionPresentedSubject.send(selection == .newSession)
+            discardStopConfirmationIfConversationChanged()
             topBar.setShownConversation(shownTaskConversation())
         }
     }
 
     public var presentedSheet: MainWindowSheet? {
         didSet {
+            if presentedSheet != .stopTask { stopConfirmation = nil }
+            if presentedSheet == .stopTask, stopConfirmation == nil { presentedSheet = nil; return }
             if presentedSheet == .newSession {
                 presentedSheet = nil
                 openNewSession()
@@ -102,6 +105,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     public func presentWorkflowRunner() { openWorkflowRunner(name: nil) }
 
+    var stopConfirmation: TaskStopConfirmation?
     var initialWorkflowRunnerName: String?
 
     func openWorkflowRunner(name: String?) {
@@ -351,7 +355,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     }
 
     /// The conversation the current selection shows as a standalone task, `nil` for every other selection.
-    private func shownTaskConversation() -> String? {
+    func shownTaskConversation() -> String? {
         if case .task(let id) = selection { normalisedConversationID(for: id) } else { nil }
     }
 

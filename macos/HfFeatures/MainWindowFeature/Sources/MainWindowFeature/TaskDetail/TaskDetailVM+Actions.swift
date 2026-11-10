@@ -68,6 +68,10 @@ extension TaskDetailVM {
     /// than cancelling whatever the conversation's new current member is if it moved on first.
     func didTapCancel() {
         guard !isWorkflowBuilder, !WorkflowNodePresentation.isNativeControl(task) else { return }
+        if chrome == .standalone {
+            presentStandaloneStopConfirmation()
+            return
+        }
         let dialogTaskID = currentTaskID
         var description = "harflow stops the run and, best-effort, every live sub-task it started."
         let notCancelled = notCancelledByThisTitles()
@@ -81,6 +85,19 @@ extension TaskDetailVM {
                 Task { [useCase] in try? await useCase.cancel(dialogTaskID) }
             }
         }
+    }
+
+    private func presentStandaloneStopConfirmation() {
+        guard canCancel, !isBusy else { return }
+        let capturedID = currentTaskID
+        routing.presentStopConfirmation(TaskStopConfirmation(
+            conversationID: topBarConversationID, taskID: capturedID,
+            notStoppedTitles: notCancelledByThisTitles(), confirm: { [weak self] in
+                guard let self, !self.refuseIfConversationMovedOn(from: capturedID),
+                      canCancel, !self.isBusy else { return }
+                Task { [useCase = self.useCase] in try? await useCase.cancel(capturedID) }
+            }
+        ))
     }
 
     /// Titles of every still-running task reachable from an EARLIER conversation turn that
@@ -142,12 +159,18 @@ extension TaskDetailVM {
     /// The engine owns authorization; a non-live task can still queue a follow-up.
     func recomputeMessageBox(task: TaskInfo) {
         let eligible = !task.takenOver
+        let stopAction: (@MainActor () -> Void)? = if chrome == .standalone, canCancel, eligible {
+            { [weak self] in self?.didTapCancel() }
+        } else {
+            nil
+        }
         messageBoxModel = MessageBoxModel(
             canSend: eligible, canContinue: false, isBusy: isBusy,
             label: isWorkflowBuilder ? "Message the workflow builder" : "Message this task",
             hint: "Send queues; Send now requests immediate delivery when safe",
             placeholder: eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
-            buttonLabel: "Send", isLocked: !eligible
+            buttonLabel: "Send", isLocked: !eligible,
+            stopAction: stopAction
         )
     }
 

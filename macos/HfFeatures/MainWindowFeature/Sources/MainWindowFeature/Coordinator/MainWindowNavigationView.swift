@@ -64,9 +64,13 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             .sharedBackgroundVisibility(.hidden)
         }
         .sheet(item: Binding(get: {
-            coordinator.presentedSheet == .workflowRunner ? MainWindowSheet.workflowRunner : nil
-        }, set: { coordinator.presentedSheet = $0 })) { _ in
-            coordinator.buildWorkflowRunnerView()
+            coordinator.presentedSheet == .newSession ? nil : coordinator.presentedSheet
+        }, set: { coordinator.presentedSheet = $0 })) { sheet in
+            switch sheet {
+            case .workflowRunner: coordinator.buildWorkflowRunnerView()
+            case .stopTask: coordinator.buildStopConfirmationView()
+            case .newSession: EmptyView()
+            }
         }
         .frame(minWidth: 1000, minHeight: 620)
         .toolbar(removing: .title)

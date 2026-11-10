@@ -103,6 +103,7 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.TaskChangesTextHostedTests",
     "MainWindowFeatureTests.TaskChangesTextCaptureHostedTests",
     "MainWindowFeatureTests.TaskDetailOverflowHostedTests",
+    "MainWindowFeatureTests.TaskStopConfirmationHostedTests",
     "MainWindowFeatureTests.TaskTopBarHostedTests",
     "MainWindowFeatureTests.TaskTopBarIntegratedHostedTests",
     "MainWindowFeatureTests.TaskTopBarCaptureHostedTests",

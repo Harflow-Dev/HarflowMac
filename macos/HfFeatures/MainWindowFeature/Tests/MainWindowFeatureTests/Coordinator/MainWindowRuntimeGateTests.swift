@@ -40,6 +40,25 @@ import Testing
         func reset() {}
     }
 
+    @Test func givenPendingStop_whenRuntimeQualificationIsLost_thenRequestIsDiscarded() async {
+        // given
+        let install = InstallFixture(.ready)
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: install)
+        sut.selection = .task("task")
+        var confirmations = 0
+        let request = TaskStopConfirmation(conversationID: "task", taskID: "task", notStoppedTitles: []) { confirmations += 1 }
+        sut.presentStopConfirmation(request)
+        #expect(sut.presentedSheet == .stopTask)
+        // when
+        install.setupSubject.send(.checking)
+        await waitUntil { !sut.runtimeIsReady }
+        sut.confirmStop(requestID: request.id)
+        // then
+        #expect(sut.presentedSheet == nil)
+        #expect(sut.stopConfirmation == nil)
+        #expect(confirmations == 0)
+    }
+
     @Test func givenRuntimeIsNotReady_whenPresentingOrRoutingCreation_thenCreationIsBlocked() {
         let install = InstallFixture(.installationRequired(installedVersion: nil, requiredVersion: "0.0.2"))
         let parent = MockCoordinator()

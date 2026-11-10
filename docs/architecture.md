@@ -286,3 +286,12 @@ removal and unavailable/integrity-failed states cancel pending target focus. Ord
 publications preserve selection and do not manufacture focus requests.
 
 The standalone task toolbar places the existing terminal handoff in More actions, alongside task and repository actions. Its equality boundary includes the rendered repository path and matched parent title; action closures keep using the current view model. Group, embedded and Parallel mounts retain their existing controls. The task header remains until the remaining header facts move to their approved destinations.
+
+Standalone task Stop uses the main window coordinator's mutually exclusive modal destination,
+shared with the workflow launcher. The request captures the current run ID and the existing
+client-derived earlier-turn exclusion list. Confirmation consumes the active request before
+calling the VM's captured-target check and existing public cancel operation; navigation to a
+different conversation, modal replacement, runtime loss or dismissal invalidates it. The native
+sheet leaves the underlying task view and composer draft mounted. The composer shows Stop only
+for an eligible standalone running task that has not been taken over, and disables it while busy.
+Group, embedded and Parallel controls keep their existing confirmation behavior.

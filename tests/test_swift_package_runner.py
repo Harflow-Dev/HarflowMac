@@ -425,6 +425,7 @@ CHANGES_TAB_SUITE = "MainWindowFeatureTests.TaskChangesTabHostedTests"
 CHANGES_CAPTURE_SUITE = "MainWindowFeatureTests.TaskChangesCaptureHostedTests"
 CHANGES_TEXT_SUITE = "MainWindowFeatureTests.TaskChangesTextHostedTests"
 CHANGES_TEXT_CAPTURE_SUITE = "MainWindowFeatureTests.TaskChangesTextCaptureHostedTests"
+TASK_STOP_SUITE = "MainWindowFeatureTests.TaskStopConfirmationHostedTests"
 TASK_OVERFLOW_SUITE = "MainWindowFeatureTests.TaskDetailOverflowHostedTests"
 TOP_BAR_SUITE = "MainWindowFeatureTests.TaskTopBarHostedTests"
 TOP_BAR_INTEGRATED_SUITE = "MainWindowFeatureTests.TaskTopBarIntegratedHostedTests"
@@ -457,6 +458,7 @@ HOSTED_SUITE_NAMES = (
     CHANGES_TEXT_SUITE,
     CHANGES_TEXT_CAPTURE_SUITE,
     TASK_OVERFLOW_SUITE,
+    TASK_STOP_SUITE,
     TOP_BAR_SUITE,
     TOP_BAR_INTEGRATED_SUITE,
     TOP_BAR_CAPTURE_SUITE,

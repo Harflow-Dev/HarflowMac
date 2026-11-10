@@ -128,8 +128,8 @@ protocol TaskDetailUseCase: Sendable {
 @MainActor
 protocol TaskDetailRouting: Sendable {
     func showResourceSlots()
+    func presentStopConfirmation(_ confirmation: TaskStopConfirmation)
     func selectTask(_ taskID: String)
-    /// The window top bar writer protocol (standalone mounts only): publish, clear, activate and deactivate.
     func publishTopBar(_ content: TaskTopBarContent, tag: TaskTopBarHolder.Tag)
     func clearTopBar(tag: TaskTopBarHolder.Tag)
     func activateTopBar(tag: TaskTopBarHolder.Tag)
@@ -143,6 +143,7 @@ protocol TaskDetailRouting: Sendable {
 
 extension TaskDetailRouting {
     func showResourceSlots() {}
+    func presentStopConfirmation(_: TaskStopConfirmation) {}
     func publishTopBar(_: TaskTopBarContent, tag _: TaskTopBarHolder.Tag) {}
     func clearTopBar(tag _: TaskTopBarHolder.Tag) {}
     func activateTopBar(tag _: TaskTopBarHolder.Tag) {}
@@ -192,7 +193,6 @@ final class TaskDetailVM: TaskDetailViewModel {
     private(set) var resumeCommand: String?
     private(set) var copyResumeCommandHelp = ""
     /// "N turns", shown next to the title once the conversation has more than one member — `nil`
-    /// for a plain, never-followed-up task (settled Design point 6).
     private(set) var turnsText: String?
     /// Top bar state: the pane state the view last reported, the normalised conversation id given at construction,
     /// and the last content written (so an unchanged recompute writes nothing).

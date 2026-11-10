@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the standalone task’s Stop confirmation sheet and composer Stop button. Both entry points share the captured current-run target; the sheet labels earlier-turn tasks outside the request and preserves the message draft when dismissed.
+
 - Move the standalone task’s terminal action into More actions, with task ID, parent and repository shortcuts. Events stays in the right pane; Group and embedded controls are unchanged.
 
 - Select HarflowMCP 0.0.12 as the paired managed runtime and vendor its contract bundle (320 fixtures). MonitorCore gains capability flags for the new engine features and decoders for artifact registration details and error reasons, continuation-stop status, cancel observations and the chain-stopped refusal, and gates the artifact read on `task-artifacts.v1`; no screen changes yet. Installation and runtime qualification of 0.0.12 are pending.

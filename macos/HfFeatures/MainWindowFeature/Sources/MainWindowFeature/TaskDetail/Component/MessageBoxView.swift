@@ -64,6 +64,8 @@ struct MessageBoxModel {
     let buttonLabel: String
     /// Show the lock icon and `placeholder` in place of the text field.
     var isLocked = false
+    /// Optional task-level Stop action, rendered only by the transcript composer.
+    var stopAction: (@MainActor () -> Void)?
 
     /// The printed hint under an enabled composer: the guaranteed shortcut, after the model's hint when it has one.
     var printedHint: String { hint.isEmpty ? "⌘↩ to send" : hint + " · ⌘↩ to send" }
@@ -241,6 +243,13 @@ struct MessageBoxView: View {
     }
 
     @ViewBuilder private var actionButtons: some View {
+        if style == .transcript, let stopAction = model.stopAction {
+            Button(action: stopAction) { Label("Stop", systemImage: "stop.fill") }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.isBusy)
+                .accessibilityIdentifier("task-composer.stop")
+        }
         if let onSubmitNow {
             sendNowButton(onSubmitNow)
         }

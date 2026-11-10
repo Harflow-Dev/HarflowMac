@@ -278,6 +278,14 @@ no embedded terminal anywhere in this package:
   session opens in Terminal.app; the actual hand-off (`ctl takeover` grant → hand-off files →
   `open -a Terminal`) lives entirely in `HfRepository.TakeoverServiceImpl`, which this package only
   calls through `TaskDetailUseCase.beginTakeover(taskID:)`/`ParallelUseCase.beginTakeover(taskID:)`.
+- Standalone task Stop uses the coordinator-owned `.stopTask` sheet, shared by the overflow and
+  transcript composer. Its request captures the current run and client-derived earlier-turn
+  exclusions. Confirm consumes only the active request once, then checks the captured current
+  member before cancelling. Dismissal, a different conversation, runtime loss or modal replacement
+  clears the request. Native sheet modality owns Escape; the right-pane monitor must leave it
+  alone. The composer offers Stop only on an eligible standalone task that is not taken over,
+  independently of a message draft, and disables it while busy. Group, embedded and Parallel retain
+  their legacy dialogs.
 - `.define("MOCKING", .when(configuration: .debug))` on the main target; `.define("MOCKING")`
   (unconditional) on the test target.
 - Tests use Swift Testing (`givenX_whenY_thenZ`, `// given / when / then`), Mockable-generated
