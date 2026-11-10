@@ -287,6 +287,17 @@ publications preserve selection and do not manufacture focus requests.
 
 The standalone task toolbar places the existing terminal handoff in More actions, alongside task and repository actions. Its equality boundary includes the rendered repository path and matched parent title; action closures keep using the current view model. Group, embedded and Parallel mounts retain their existing controls. The standalone task omits the legacy header. Outcomes retain their existing durable text in a compact row. Subtasks show the approved short provenance line beneath Original request; Events → Task retains the full first-member routing sentence and the takeover note, including the prior missing-note fallback. The legacy header remains on Group and embedded mounts.
 
+Standalone task state treatments are display-only projections of a status-matching snapshot.
+Taken-over suppresses them. Running with a dead owner shows the owner-loss warning; an
+undecidable owner shows uncertainty without claiming capture stopped. Completed without an
+observed exit shows the reconstructed-outcome notice; failed without an exit and with an
+incomplete log shows the inferred-outcome banner. Plain listing rows and mismatched snapshots
+support none of these claims. The optional treatment travels by value into the native feed:
+notices precede activity and banners follow activity and the live tail. It participates in model
+equality and native anchoring; callbacks retain the latest mounted actions. Other mounts pass
+no treatment. Refresh reads the member captured at invocation; Stop keeps its existing
+confirmation and stale-target guard. No new task status or Continue operation is introduced.
+
 Standalone task Stop uses the main window coordinator's mutually exclusive modal destination,
 shared with the workflow launcher. The request captures the current run ID and the existing
 client-derived earlier-turn exclusion list. Confirmation consumes the active request before

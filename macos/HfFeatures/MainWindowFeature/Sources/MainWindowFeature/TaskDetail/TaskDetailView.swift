@@ -107,6 +107,7 @@ protocol TaskDetailViewModel: ViewModel {
     func didDisappear()
     func didTapTask(_ taskID: String)
     func didTapTakeover()
+    func didTapRefreshState()
     func didTapCancel()
     func didTapCopyResumeCommand()
     /// Copies the current run's task id, recording the outcome like "Copy resume command" does.
@@ -559,7 +560,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
             if let feedback = viewModel.copyFeedback { Text(feedback).font(.hf(.caption)).textSelection(.enabled) }
             TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
-                             isCancelDisabled: viewModel.isBusy, style: transcriptStyle)
+                             isCancelDisabled: viewModel.isBusy, style: transcriptStyle,
+                             stateTreatment: isStandalone ? viewModel.stateTreatment : nil,
+                             onStateStop: viewModel.didTapCancel, onStateRefresh: viewModel.didTapRefreshState,
+                             onStateCopyResumeCommand: viewModel.didTapCopyResumeCommand,
+                             onStateOpenEvents: { pane.animated { pane.select(.events) } })
         }
     }
 

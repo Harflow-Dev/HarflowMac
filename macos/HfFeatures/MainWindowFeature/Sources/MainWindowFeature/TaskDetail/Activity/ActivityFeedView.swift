@@ -41,6 +41,11 @@ struct ActivityFeedView: View {
     var onApprovalFocusAcknowledged: ((String, UUID) -> Void)?
     var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
     var onCancelQueuedMessage: ((String) -> Void)?
+    var stateTreatment: TaskStateTreatment?
+    var onStateStop: () -> Void
+    var onStateRefresh: () -> Void
+    var onStateCopyResumeCommand: () -> Void
+    var onStateOpenEvents: () -> Void
 
     init(rows: [ActivityRow], activitySnapshot: ActivityFeedSnapshot? = nil, start: Date?, history: EventHistoryState, isLoading: Bool,
          tailValue: ActivityFeedTail = ActivityFeedTail(), paginationRevision: Int = 0, isVisible: Bool = true,
@@ -51,7 +56,14 @@ struct ActivityFeedView: View {
          onApprovalToggle: ((String) -> Void)? = nil, onApprovalLoadMore: (() -> Void)? = nil,
          onApprovalFocusAcknowledged: ((String, UUID) -> Void)? = nil,
          onApprovalScrollAcknowledged: ((String, UUID) -> Void)? = nil,
-         onCancelQueuedMessage: ((String) -> Void)? = nil) {
+         onCancelQueuedMessage: ((String) -> Void)? = nil, stateTreatment: TaskStateTreatment? = nil,
+         onStateStop: @escaping () -> Void = {}, onStateRefresh: @escaping () -> Void = {},
+         onStateCopyResumeCommand: @escaping () -> Void = {}, onStateOpenEvents: @escaping () -> Void = {}) {
+        self.stateTreatment = stateTreatment
+        self.onStateStop = onStateStop
+        self.onStateRefresh = onStateRefresh
+        self.onStateCopyResumeCommand = onStateCopyResumeCommand
+        self.onStateOpenEvents = onStateOpenEvents
         self.rows = rows
         self.activitySnapshot = activitySnapshot
         self.start = start
@@ -117,7 +129,7 @@ struct ActivityFeedView: View {
             visible: isVisible,
             loading: isLoading,
             approvalReveal: approvalReveal,
-            activitySnapshot: activitySnapshot
+            activitySnapshot: activitySnapshot, stateTreatment: stateTreatment
         )
     }
 
@@ -136,6 +148,10 @@ struct ActivityFeedView: View {
         actions.onApprovalFocusAcknowledged = { onApprovalFocusAcknowledged?($0, $1) }
         actions.onApprovalScrollAcknowledged = { onApprovalScrollAcknowledged?($0, $1) }
         actions.onCancelQueuedMessage = { onCancelQueuedMessage?($0) }
+        actions.onStateStop = onStateStop
+        actions.onStateRefresh = onStateRefresh
+        actions.onStateCopyResumeCommand = onStateCopyResumeCommand
+        actions.onStateOpenEvents = onStateOpenEvents
         return actions
     }
 }

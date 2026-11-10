@@ -66,6 +66,11 @@ extension TaskDetailVM {
     /// Same staleness guard as `didTapTakeover()` (Codex review round 2, finding 1): `dialogTaskID`
     /// captures the task this dialog's own copy described, and the confirm action refuses rather
     /// than cancelling whatever the conversation's new current member is if it moved on first.
+    func didTapRefreshState() {
+        let capturedID = currentTaskID
+        Task { [useCase] in await useCase.refreshSnapshot(capturedID) }
+    }
+
     func didTapCancel() {
         guard !isWorkflowBuilder, !WorkflowNodePresentation.isNativeControl(task) else { return }
         if chrome == .standalone {

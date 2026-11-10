@@ -36,6 +36,7 @@ struct ActivityFeedNativeModel: Equatable {
     var loading: Bool
     var approvalReveal: CallerApprovalReveal?
     var activitySnapshot: ActivityFeedSnapshot?
+    var stateTreatment: TaskStateTreatment?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         let rowsEqual: Bool = if let left = lhs.activitySnapshot, let right = rhs.activitySnapshot {
@@ -46,7 +47,7 @@ struct ActivityFeedNativeModel: Equatable {
         }
         return rowsEqual && lhs.start == rhs.start && lhs.emptyText == rhs.emptyText
             && lhs.horizontalPadding == rhs.horizontalPadding && lhs.showsPromptBubble == rhs.showsPromptBubble
-            && lhs.style == rhs.style
+            && lhs.style == rhs.style && lhs.stateTreatment == rhs.stateTreatment
             && lhs.expandedGroups == rhs.expandedGroups && lhs.tailPresentation == rhs.tailPresentation
             && lhs.history == rhs.history && lhs.paginationRevision == rhs.paginationRevision
             && lhs.visible == rhs.visible && lhs.loading == rhs.loading && lhs.approvalReveal == rhs.approvalReveal
@@ -73,13 +74,18 @@ enum ActivityFeedNativeEntries {
         let style = model.style
         let hasHeader = header != nil
         if let header { entries.append(.header(header)) }
+        let hasNotice = model.stateTreatment?.isLeadingNotice == true
+        if let treatment = model.stateTreatment, hasNotice {
+            entries.append(.taskState(treatment, topSpacing: style.spacing(first: entries.isEmpty,
+                standardFirst: HfRadius.Metrics.spacing12, standardBetween: HfRadius.Metrics.spacing20)))
+        }
         let showsEmpty = model.emptyText != nil && model.shownRows.isEmpty
         if showsEmpty, let emptyText = model.emptyText {
             entries.append(.empty(emptyText, topSpacing: style.spacing(
-                first: !hasHeader, standardFirst: HfRadius.Metrics.spacing12, standardBetween: HfRadius.Metrics.spacing20)))
+                first: !hasHeader && !hasNotice, standardFirst: HfRadius.Metrics.spacing12, standardBetween: HfRadius.Metrics.spacing20)))
         }
         for row in model.shownRows {
-            let isFirst = !hasHeader && !showsEmpty && row.id == model.shownRows.first?.id
+            let isFirst = !hasHeader && !hasNotice && !showsEmpty && row.id == model.shownRows.first?.id
             entries.append(.row(ActivityFeedNativeEntry.Row(
                 row: row,
                 isExpanded: isExpanded(row: row, expandedGroups: model.expandedGroups),
@@ -95,7 +101,7 @@ enum ActivityFeedNativeEntries {
                     : HfRadius.Metrics.spacing12))
             }
         }
-        let hasContent = hasHeader || showsEmpty || !model.shownRows.isEmpty || (style.isTranscript && !entries.isEmpty)
+        let hasContent = hasHeader || hasNotice || showsEmpty || !model.shownRows.isEmpty || (style.isTranscript && !entries.isEmpty)
         let hasTail = hasTail(model)
         if hasTail {
             var tail = model.tailPresentation
@@ -105,6 +111,10 @@ enum ActivityFeedNativeEntries {
             }
             entries.append(.tail(tail, topSpacing: style.spacing(
                 first: !hasContent, standardFirst: HfRadius.Metrics.spacing12, standardBetween: HfRadius.Metrics.spacing20)))
+        }
+        if let treatment = model.stateTreatment, !treatment.isLeadingNotice {
+            entries.append(.taskState(treatment, topSpacing: style.spacing(first: entries.isEmpty,
+                standardFirst: HfRadius.Metrics.spacing12, standardBetween: HfRadius.Metrics.spacing20)))
         }
         entries.append(.bottom(topSpacing: 0))
         return entries

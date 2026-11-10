@@ -366,6 +366,10 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             self.actions.onCancelQueuedMessage = actions.onCancelQueuedMessage
             self.actions.onApprovalFocusAcknowledged = actions.onApprovalFocusAcknowledged
             self.actions.onApprovalScrollAcknowledged = actions.onApprovalScrollAcknowledged
+            self.actions.onStateStop = actions.onStateStop
+            self.actions.onStateRefresh = actions.onStateRefresh
+            self.actions.onStateCopyResumeCommand = actions.onStateCopyResumeCommand
+            self.actions.onStateOpenEvents = actions.onStateOpenEvents
             let previous = self.model
             let stateChanged = self.state !== state
             // The supported public inherited environment is stored on every update: a change that

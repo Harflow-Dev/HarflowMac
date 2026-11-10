@@ -114,10 +114,23 @@ struct TimelinePaneView: View {
     var approvalController: CallerApprovalController?
     var isCancelDisabled = false
     var style = ActivityFeedStyle.standard
+    var stateTreatment: TaskStateTreatment?
+    var onStateStop: () -> Void = {}
+    var onStateRefresh: () -> Void = {}
+    var onStateCopyResumeCommand: () -> Void = {}
+    var onStateOpenEvents: () -> Void = {}
     @State private var state: ParallelColumnUIState
 
     init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil,
-         isCancelDisabled: Bool = false, style: ActivityFeedStyle = .standard) {
+         isCancelDisabled: Bool = false, style: ActivityFeedStyle = .standard,
+         stateTreatment: TaskStateTreatment? = nil, onStateStop: @escaping () -> Void = {},
+         onStateRefresh: @escaping () -> Void = {}, onStateCopyResumeCommand: @escaping () -> Void = {},
+         onStateOpenEvents: @escaping () -> Void = {}) {
+        self.stateTreatment = stateTreatment
+        self.onStateStop = onStateStop
+        self.onStateRefresh = onStateRefresh
+        self.onStateCopyResumeCommand = onStateCopyResumeCommand
+        self.onStateOpenEvents = onStateOpenEvents
         self.style = style
         self.approvalController = approvalController
         self.isCancelDisabled = isCancelDisabled
@@ -187,7 +200,9 @@ struct TimelinePaneView: View {
                          onApprovalLoadMore: { approvalController?.requestRefresh(loadMore: approvalController?.nextCursor != nil) },
                          onApprovalFocusAcknowledged: { approvalController?.acknowledgeFocus(requestID: $0, token: $1) },
                          onApprovalScrollAcknowledged: { approvalController?.acknowledgeScroll(requestID: $0, token: $1) },
-                         onCancelQueuedMessage: model.onCancelQueuedMessage)
+                         onCancelQueuedMessage: model.onCancelQueuedMessage,
+                         stateTreatment: stateTreatment, onStateStop: onStateStop, onStateRefresh: onStateRefresh,
+                         onStateCopyResumeCommand: onStateCopyResumeCommand, onStateOpenEvents: onStateOpenEvents)
         .readingColumn()
     }
 }

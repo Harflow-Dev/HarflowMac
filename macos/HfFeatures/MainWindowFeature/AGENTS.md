@@ -149,6 +149,15 @@ no embedded terminal anywhere in this package:
   line follows Original request, while Events Task facts preserve the full first-member routing sentence and
   takeover note (including the prior banner fallback). Group/embedded retain the legacy header and controls.
   No explicit toolbar id may be reused or duplicated.
+- **Standalone state treatments.** `TaskStateTreatment` requires status-matching snapshot evidence
+  and suppresses all treatments for taken-over tasks. Only running + owner `dead` claims capture
+  loss; `undecidable` keeps uncertainty. Completed without an exit is reconstructed; failed
+  without an exit also requires an incomplete log. The native feed receives an optional value
+  (included in model equality): notices before activity, banners after activity and the live
+  tail, with stable per-task identity and latest action callbacks. Other mounts pass `nil`.
+  Stop uses the existing confirmation; Refresh reads the member captured at invocation; Open
+  Events uses ordinary pane selection. The disabled Continue is presentation only. Stopping,
+  Settling, status-unavailable and Continue launch need their separate evidence/action stages.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

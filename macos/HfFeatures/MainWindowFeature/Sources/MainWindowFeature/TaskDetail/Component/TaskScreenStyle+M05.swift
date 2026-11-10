@@ -4,8 +4,8 @@
 //
 //  The M05 task screen's additional tokens and metrics, read from HarflowDesign commit 17739e4
 //  (`v2/styles/tokens.css`, `v2/styles/bundle.css` and `v2/styles/m05-proposal.css`). Every group below
-//  cites that commit and the CSS rule each value comes from. The M05 design is a proposal, not an
-//  approved design. Nothing renders from these values yet.
+//  cites that commit and the CSS rule each value comes from. Approved M05 slices consume these
+//  values; the migration receipt records the accepted scope.
 //  No colour here equals an existing `Palette` value in both appearances, so none reuses one.
 //
 //  Rules not mapped (not needed by the groups below): `.hd-m05-panenote`, `.hd-m05-artifact`,

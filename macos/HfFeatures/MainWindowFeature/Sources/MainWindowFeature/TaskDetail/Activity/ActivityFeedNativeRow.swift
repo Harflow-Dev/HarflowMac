@@ -31,6 +31,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     case approval(CallerApprovalCardModel, topSpacing: CGFloat)
     /// The bottom sentinel and the feed's closing spacing.
     case bottom(topSpacing: CGFloat)
+    case taskState(TaskStateTreatment, topSpacing: CGFloat)
 
     enum Header: Equatable {
         case loading
@@ -56,6 +57,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         case .tail: "activity-feed-tail"
         case .approval(let card, _): "activity-approval-" + card.id
         case .bottom: "activity-feed-bottom"
+        case .taskState(let treatment, _): treatment.id
         }
     }
 
@@ -63,7 +65,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var topSpacing: CGFloat {
         switch self {
         case .header: HfRadius.Metrics.spacing12
-        case .empty(_, let spacing), .tail(_, let spacing), .approval(_, let spacing), .bottom(let spacing): spacing
+        case .empty(_, let spacing), .tail(_, let spacing), .approval(_, let spacing), .taskState(_, let spacing), .bottom(let spacing): spacing
         case .row(let row): row.topSpacing
         }
     }
@@ -72,7 +74,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var anchorID: String? {
         switch self {
         case .row(let row): row.row.id
-        case .tail, .approval: id
+        case .tail, .approval, .taskState: id
         default: nil
         }
     }
@@ -94,6 +96,10 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var onCancelQueuedMessage: (String) -> Void = { _ in }
     var onApprovalFocusAcknowledged: (String, UUID) -> Void = { _, _ in }
     var onApprovalScrollAcknowledged: (String, UUID) -> Void = { _, _ in }
+    var onStateStop: () -> Void = {}
+    var onStateRefresh: () -> Void = {}
+    var onStateCopyResumeCommand: () -> Void = {}
+    var onStateOpenEvents: () -> Void = {}
     var retry: () -> Void = {}
     var openURL = EnvironmentValues().openURL
 
@@ -107,6 +113,10 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         onCancelQueuedMessage = { _ in }
         onApprovalFocusAcknowledged = { _, _ in }
         onApprovalScrollAcknowledged = { _, _ in }
+        onStateStop = {}
+        onStateRefresh = {}
+        onStateCopyResumeCommand = {}
+        onStateOpenEvents = {}
         retry = {}
         openURL = EnvironmentValues().openURL
     }
@@ -237,6 +247,11 @@ struct ActivityFeedNativeRowRoot: View {
                                       toggle: { actions.onApprovalToggle(card.id) },
                                       onFocusAcknowledged: onHostedHeight == nil ? nil : { actions.onApprovalFocusAcknowledged(card.id, $0) },
                                       isFocusReady: approvalFocusReady)
+        case .taskState(let treatment, _):
+            TaskStateTreatmentView(model: treatment, onStop: { actions.onStateStop() },
+                                   onRefresh: { actions.onStateRefresh() },
+                                   onCopyResumeCommand: { actions.onStateCopyResumeCommand() },
+                                   onOpenEvents: { actions.onStateOpenEvents() })
         case .bottom:
             Color.clear
                 .frame(height: HfRadius.Metrics.spacing16)
