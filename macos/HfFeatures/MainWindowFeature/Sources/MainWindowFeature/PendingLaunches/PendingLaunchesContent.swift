@@ -2,34 +2,41 @@ import AppKit
 import HfUI
 import SwiftUI
 
+// MARK: - PendingLaunchesActions
+
+/// The screen's user actions; defaults make previews and captures inert.
+struct PendingLaunchesActions {
+    var checkAgain: () -> Void = {}
+    var select: (String) -> Void = { _ in }
+    var back: () -> Void = {}
+    var detailCheckAgain: () -> Void = {}
+    var checkTaskStatus: () -> Void = {}
+}
+
 // MARK: - PendingLaunchesContent
 
-/// The read-only list: a status card, the launch rows and a locked composer, in every state.
+/// The list or the selected launch's detail, above a locked composer that stays in every state.
 struct PendingLaunchesContent: View {
     let presentation: PendingLaunchesPresentation
-    let onCheckAgain: () -> Void
+    var detail: PendingLaunchDetailPresentation?
+    var focusRowID: String?
+    var actions = PendingLaunchesActions()
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var motionOverride
     @Environment(\.shimmerReduceMotionOverride) private var shimmerOverride
+    @FocusState private var focusedRow: String?
 
     private var reduceMotion: Bool { motionOverride ?? shimmerOverride ?? systemReduceMotion }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    card
-                    if presentation.kind == .loading {
-                        PendingLaunchesSkeletonRows(reduceMotion: reduceMotion)
-                    } else if !presentation.rows.isEmpty {
-                        rows
-                    }
-                    if presentation.checkAction != .hidden {
-                        Button("Check again", action: onCheckAgain)
-                            .buttonStyle(.bordered)
-                            .disabled(presentation.checkAction == .disabled)
-                            .accessibilityIdentifier("pending-launches-check-again")
+                Group {
+                    if let detail {
+                        PendingLaunchDetailBody(detail: detail, reduceMotion: reduceMotion, actions: actions)
+                    } else {
+                        inventory
                     }
                 }
                 .frame(maxWidth: 720, alignment: .leading)
@@ -41,16 +48,40 @@ struct PendingLaunchesContent: View {
         }
         .background(Color.windowBG)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(presentation.title)
+        .accessibilityLabel(detail?.title ?? presentation.title)
         .accessibilityIdentifier("pending-launches")
-        .onChange(of: presentation.kind) { _, _ in announce() }
+        .onChange(of: presentation.kind) { _, _ in
+            if detail == nil { announce(presentation.title, presentation.message) }
+        }
+        .onChange(of: detail?.kind) { _, kind in
+            if let detail, kind != nil { announce(detail.title, detail.message) }
+        }
     }
 
     /// Only a change of presented state is announced; identical rebuilds never reach here.
-    private func announce() {
+    private func announce(_ title: String, _ message: String) {
         NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
-                             userInfo: [.announcement: "\(presentation.title). \(presentation.message)",
+                             userInfo: [.announcement: message.isEmpty ? title : "\(title). \(message)",
                                         .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+    }
+
+    private var inventory: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            card
+            if presentation.kind == .loading {
+                PendingLaunchesSkeletonRows(reduceMotion: reduceMotion)
+            } else if !presentation.rows.isEmpty {
+                rows
+            }
+            if presentation.checkAction != .hidden {
+                Button("Check again", action: actions.checkAgain)
+                    .buttonStyle(.bordered)
+                    .disabled(presentation.checkAction == .disabled)
+                    .accessibilityIdentifier("pending-launches-check-again")
+            }
+        }
+        .onAppear { focusedRow = focusRowID }
+        .onChange(of: focusRowID) { _, id in focusedRow = id }
     }
 
     private var card: some View {
@@ -74,7 +105,8 @@ struct PendingLaunchesContent: View {
     private var rows: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(presentation.rows) { row in
-                PendingLaunchRowView(row: row)
+                PendingLaunchRowView(row: row) { actions.select(row.id) }
+                    .focused($focusedRow, equals: row.id)
             }
         }
     }
@@ -82,8 +114,22 @@ struct PendingLaunchesContent: View {
 
 // MARK: - PendingLaunchRowView
 
-/// A static row in this slice; selection arrives with the detail view.
+/// A selectable row: a button whose label is the row's visible lines.
 struct PendingLaunchRowView: View {
+    let row: PendingLaunchesPresentation.Row
+    var onSelect: () -> Void = {}
+
+    var body: some View {
+        Button(action: onSelect) { PendingLaunchRowLabel(row: row) }
+            .buttonStyle(PendingLaunchRowButtonStyle())
+            .accessibilityLabel([row.title, row.meta, row.id].compactMap(\.self).joined(separator: ", "))
+            .accessibilityIdentifier("pending-launch-row")
+    }
+}
+
+// MARK: - PendingLaunchRowLabel
+
+struct PendingLaunchRowLabel: View {
     let row: PendingLaunchesPresentation.Row
 
     var body: some View {
@@ -100,12 +146,34 @@ struct PendingLaunchRowView: View {
                 .font(.hf(.secondary, design: .monospaced))
                 .foregroundStyle(Color.primaryText)
         }
+        .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.cardBorder, lineWidth: 1))
-        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - PendingLaunchRowButtonStyle
+
+/// The row's outline with the list-row hover and press fill.
+struct PendingLaunchRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        PendingLaunchRowChrome(configuration: configuration)
+    }
+}
+
+private struct PendingLaunchRowChrome: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var hovering = false
+
+    var body: some View {
+        configuration.label
+            .background(RoundedRectangle(cornerRadius: HfRadius.row)
+                .fill(hovering || configuration.isPressed ? Color.cardFill : Color.clear))
+            .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.cardBorder, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: HfRadius.row))
+            .onHover { hovering = $0 }
     }
 }
 
@@ -143,9 +211,9 @@ struct PendingLaunchesSkeletonRows: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(0 ..< 2, id: \.self) { index in
                 VStack(alignment: .leading, spacing: 6) {
-                    bar(width: index == 0 ? 190 : 140, height: 12)
-                    bar(width: 190, height: 10)
-                    bar(width: 140, height: 10)
+                    PendingLaunchSkeletonBar(width: index == 0 ? 190 : 140, height: 12, reduceMotion: reduceMotion)
+                    PendingLaunchSkeletonBar(width: 190, height: 10, reduceMotion: reduceMotion)
+                    PendingLaunchSkeletonBar(width: 140, height: 10, reduceMotion: reduceMotion)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -156,8 +224,16 @@ struct PendingLaunchesSkeletonRows: View {
         .accessibilityHidden(true)
         .allowsHitTesting(false)
     }
+}
 
-    @ViewBuilder private func bar(width: CGFloat, height: CGFloat) -> some View {
+// MARK: - PendingLaunchSkeletonBar
+
+struct PendingLaunchSkeletonBar: View {
+    let width: CGFloat
+    let height: CGFloat
+    let reduceMotion: Bool
+
+    var body: some View {
         let shape = RoundedRectangle(cornerRadius: 5).fill(Color.neutralFill).frame(width: width, height: height)
         if reduceMotion {
             shape

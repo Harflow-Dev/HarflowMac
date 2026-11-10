@@ -3,21 +3,45 @@ import HfRepository
 import HfUI
 import MonitorCore
 
+// MARK: - PendingLaunchesSource
+
+/// What the subscription forwards: everything the screen reads except Stop attempts, so attempt activity
+/// is dropped before the main-queue hop.
+struct PendingLaunchesSource: Equatable, Sendable {
+    var runtimeIdentity: UUID
+    var inventory: PendingLaunchInventory
+    var lookups: [PendingLaunchLookup]
+
+    init(_ snapshot: PendingLaunchSnapshot) {
+        self.runtimeIdentity = snapshot.runtimeIdentity
+        self.inventory = snapshot.inventory
+        self.lookups = snapshot.lookups
+    }
+}
+
 // MARK: - PendingLaunchesProjection
 
-/// The only snapshot fields the list reads. Lookup and Stop activity publishes distinct full
-/// snapshots with an unchanged projection, which must not rebuild the presentation.
+/// The only snapshot fields the screen reads: runtime identity, the inventory and the lookup stored for
+/// this view model's own lease. Other leases' lookups and attempts publish
+/// distinct full snapshots with an unchanged projection, which must not rebuild the presentation.
 struct PendingLaunchesProjection: Equatable, Sendable {
     var runtimeIdentity: UUID
     var inventory: PendingLaunchInventory
+    var lookup: PendingLaunchLookup?
 
-    init(runtimeIdentity: UUID, inventory: PendingLaunchInventory) {
+    init(runtimeIdentity: UUID, inventory: PendingLaunchInventory, lookup: PendingLaunchLookup? = nil) {
         self.runtimeIdentity = runtimeIdentity
         self.inventory = inventory
+        self.lookup = lookup
     }
 
-    init(_ snapshot: PendingLaunchSnapshot) {
-        self.init(runtimeIdentity: snapshot.runtimeIdentity, inventory: snapshot.inventory)
+    init(_ source: PendingLaunchesSource, lease: PendingLaunchReadLease?) {
+        self.init(runtimeIdentity: source.runtimeIdentity, inventory: source.inventory,
+                  lookup: lease.flatMap { lease in source.lookups.first { $0.selection.lease == lease } })
+    }
+
+    init(_ snapshot: PendingLaunchSnapshot, lease: PendingLaunchReadLease? = nil) {
+        self.init(PendingLaunchesSource(snapshot), lease: lease)
     }
 }
 

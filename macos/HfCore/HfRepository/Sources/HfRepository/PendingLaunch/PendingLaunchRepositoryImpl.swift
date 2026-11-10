@@ -99,6 +99,9 @@ public final class PendingLaunchRepositoryImpl: PendingLaunchRepository, @unchec
         _ = bindSelection(taskID: nil, lease: lease)
         let gate: PendingLaunchAdmissionGate? = lock.withLock {
             leases.remove(lease)
+            // A released lease can never be bound again, so its stored lookups are unreachable;
+            // keeping them would exhaust the lookup bound across appearances. Attempts are kept.
+            value.lookups.removeAll { $0.selection.lease == lease }
             guard leases.isEmpty else { return nil }
             let gate = inventoryGate
             inventoryGate = nil

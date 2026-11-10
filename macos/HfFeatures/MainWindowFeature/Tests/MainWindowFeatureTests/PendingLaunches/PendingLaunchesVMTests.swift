@@ -24,10 +24,10 @@ struct PendingLaunchesVMTests {
         _ useCase: MockPendingLaunchesUseCase, builds: LockedValue<[PendingLaunchesProjection]>? = nil,
         gate: (@Sendable (PendingLaunchesProjection) async -> Void)? = nil
     ) -> PendingLaunchesVM {
-        PendingLaunchesVM(useCase: useCase, builder: { projection, refused, observed in
-            builds?.value.append(projection)
-            await gate?(projection)
-            return PendingLaunchesPresentation.make(projection, leaseRefused: refused, didObserveRead: observed)
+        PendingLaunchesVM(useCase: useCase, builder: { input in
+            builds?.value.append(input.projection)
+            await gate?(input.projection)
+            return PendingLaunchesBuildOutput.make(input)
         })
     }
 
@@ -338,6 +338,13 @@ private final class SuspendingRefreshUseCase: PendingLaunchesUseCase {
     func snapshotPublisher() -> AnyPublisher<PendingLaunchSnapshot, Never> { subject.eraseToAnyPublisher() }
     func acquireReadLease() -> PendingLaunchReadLease? { lease }
     func releaseReadLease(_: PendingLaunchReadLease) {}
+
+    func bindSelection(taskID _: String?, lease _: PendingLaunchReadLease) -> PendingLaunchSelection? { nil }
+    func check(selection: PendingLaunchSelection) async -> PendingLaunchLookup {
+        PendingLaunchLookup(selection: selection, value: nil, failure: .unavailable)
+    }
+
+    func resolveRecorded(selection _: PendingLaunchSelection) async -> PendingLaunchRecordedResult { .failed(.unavailable) }
 
     func refresh(lease _: PendingLaunchReadLease) async {
         started += 1

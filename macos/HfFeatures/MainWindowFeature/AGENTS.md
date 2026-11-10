@@ -21,17 +21,30 @@ no embedded terminal anywhere in this package:
   `.task`/`.group`/`.newSession` straight onto `MainWindowCoordinator.handle(path:)` for the
   URL/notification/Cmd-N paths it owns; there is no app-target `Selection` enum, no `AppModel`, and no
   mirroring layer.
-- `MonitorDestination.pendingLaunches` selects `PendingLaunches/`: a read-only list over the shared
-  `PendingLaunchRepository`. `PendingLaunchesVM` holds one read lease between `didAppear` and
-  `didDisappear`, subscribes to the snapshot projected to `(runtimeIdentity, inventory)` with
-  `removeDuplicates()`, and builds `PendingLaunchesPresentation` in a detached task applied only for the
-  current generation. `PendingLaunchesViewRepository` only forwards. A refused lease overrides the snapshot
-  with the failed state; "Check again" refreshes the held lease or reacquires one, and the VM never cancels
-  the owner's refresh task. `.capacity` and every other failure show the failed copy; `.incomplete`,
-  `.requestBudget` and `.deadline` show the incomplete copy. An idle inventory with no result after a read
-  was observed in this appearance (a superseded read) shows the failed state. "Check again" sits below the
-  rows and is disabled, not hidden, during a re-read; the empty state never shows the action. Rows are
-  static until detail selection is added.
+- `MonitorDestination.pendingLaunches` selects `PendingLaunches/`: the pending launches list and the selected
+  launch's detail over the shared `PendingLaunchRepository`. `PendingLaunchesVM` holds one read lease between
+  `didAppear` and `didDisappear`, subscribes to the snapshot reduced to `(runtimeIdentity, inventory, lookups)`
+  with `removeDuplicates()`, projects it to the inventory plus the lookup stored for its own lease, and builds
+  `PendingLaunchesPresentation` and `PendingLaunchDetailPresentation` together in a detached task applied only
+  for the current generation. `PendingLaunchesViewRepository` only forwards. A refused lease overrides the
+  snapshot with the failed state; "Check again" refreshes the held lease or reacquires one, and the VM never
+  cancels the owner's refresh task. `.capacity` and every other failure show the failed copy; `.incomplete`,
+  `.requestBudget` and `.deadline` show the incomplete copy. An idle inventory with no result after a read was
+  observed in this appearance (a superseded read) shows the failed state. "Check again" sits below the rows and
+  is disabled, not hidden, during a re-read; the empty state never shows the action.
+- Selected launch (`PendingLaunchesVM+Detail`): rows are buttons. Selecting one acquires a lease if none is
+  held, calls `bindSelection` synchronously, records the owner's synchronous runtime identity and bumps a local
+  epoch, then queues `check`. The detail shows only a lookup whose `selection` equals the current one; before
+  one is stored it draws a copy-free placeholder, and a first check that stored nothing shows "Launch status
+  unavailable". Checks and `resolveRecorded` run through one per-lease chain that awaits (never cancels) the
+  previous call, because the owner answers `.busy` while an earlier call is outstanding; Check again and Check
+  task status are disabled while any call is queued or in flight. A recorded result is routed through
+  `PendingLaunchesRouting.openRecordedTask` (held weakly; the coordinator calls `selectTask`) only when it is
+  `.admitted` for the selected ID and the screen, selection, runtime identity and epoch are unchanged; busy,
+  capacity, superseded and changed results are inert, any other failure sets the handoff failure for the
+  current selection. Back, disappearance, a runtime change and reappearance clear the selection and show the
+  inventory; in-flight owner calls are never cancelled and their results fail the epoch check. Stop is not
+  drawn (slice 3).
 - `HfUI.withPresentationContext()` is applied exactly **once**, at `MainWindowNavigationView`'s own
   root. Every screen under the navigation view, including the New Session sheet, shares that
   one `@Environment(\.viewEvent)` through the presenting view's environment.

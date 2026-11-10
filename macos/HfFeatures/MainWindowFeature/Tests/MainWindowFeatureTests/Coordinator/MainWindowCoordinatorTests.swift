@@ -442,6 +442,20 @@ import Testing
         #expect(sut.selection == .task("def456"))
     }
 
+    @Test func givenPendingLaunchesRouting_whenOpeningARecordedTask_thenSelectsItAndRequestsReveal() {
+        // given
+        let parent = MockCoordinator()
+        let sut = MainWindowCoordinator(parent: parent)
+        let routing: any PendingLaunchesRouting = sut
+
+        // when
+        routing.openRecordedTask("abc123")
+
+        // then
+        #expect(sut.selection == .task("abc123"))
+        #expect(sut.pendingReveal?.taskID == "abc123")
+    }
+
     // MARK: - TaskDetailRouting.copyToPasteboard (Monitor piece 3/3, pasteboard seam)
 
     @MainActor

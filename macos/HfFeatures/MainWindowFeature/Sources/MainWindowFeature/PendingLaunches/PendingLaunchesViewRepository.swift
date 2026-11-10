@@ -14,4 +14,12 @@ final class PendingLaunchesViewRepository: PendingLaunchesUseCase {
     func acquireReadLease() -> PendingLaunchReadLease? { repository.acquireReadLease() }
     func releaseReadLease(_ lease: PendingLaunchReadLease) { repository.releaseReadLease(lease) }
     func refresh(lease: PendingLaunchReadLease) async { await repository.refresh(lease: lease) }
+    func bindSelection(taskID: String?, lease: PendingLaunchReadLease) -> PendingLaunchSelection? {
+        repository.bindSelection(taskID: taskID, lease: lease)
+    }
+
+    func check(selection: PendingLaunchSelection) async -> PendingLaunchLookup { await repository.check(selection: selection) }
+    func resolveRecorded(selection: PendingLaunchSelection) async -> PendingLaunchRecordedResult {
+        await repository.resolveRecorded(selection: selection)
+    }
 }

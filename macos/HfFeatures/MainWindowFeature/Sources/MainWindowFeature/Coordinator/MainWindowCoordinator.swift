@@ -243,7 +243,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     }
 
     public func buildPendingLaunchesView() -> AnyView {
-        let vm = pendingLaunchesVM ?? PendingLaunchesVM(useCase: PendingLaunchesViewRepository())
+        let vm = pendingLaunchesVM ?? PendingLaunchesVM(useCase: PendingLaunchesViewRepository(), routing: self)
         pendingLaunchesVM = vm
         return PendingLaunchesView(vm).eraseToAnyView()
     }
@@ -488,6 +488,13 @@ extension MainWindowCoordinator: ParallelRouting {
         selection = .task(logicalID)
         requestReveal(taskID: logicalID)
     }
+}
+
+// MARK: - PendingLaunchesRouting
+
+extension MainWindowCoordinator: PendingLaunchesRouting {
+    /// Opens the ordinary task screen for an ID the owner admitted through a fresh status read.
+    func openRecordedTask(_ taskID: String) { selectTask(taskID) }
 }
 
 // MARK: - TaskDetailRouting

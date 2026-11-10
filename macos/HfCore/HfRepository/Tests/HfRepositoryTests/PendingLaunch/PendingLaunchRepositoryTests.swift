@@ -196,6 +196,29 @@ import Testing
         #expect(await harness.runner.calls.allSatisfy { $0.first != "task-pending-status" })
     }
 
+    @Test func givenStoredLookups_whenOneLeaseReleased_thenOnlyItsLookupsAreRemovedAndLaterLeasesCanStore() async throws {
+        // given
+        let harness = PendingLaunchHarness()
+        let (first, firstSelection) = try await selected(harness)
+        let second = try #require(harness.owner.acquireReadLease())
+        let secondSelection = try #require(harness.owner.bindSelection(taskID: "target", lease: second))
+        _ = await harness.owner.check(selection: firstSelection)
+        _ = await harness.owner.check(selection: secondSelection)
+        #expect(harness.owner.snapshot.lookups.count == 2)
+        // when
+        harness.owner.releaseReadLease(first)
+        // then
+        #expect(harness.owner.snapshot.lookups.map(\.selection.lease) == [second])
+        for _ in 0 ..< 130 {
+            let lease = try #require(harness.owner.acquireReadLease())
+            let selection = try #require(harness.owner.bindSelection(taskID: "target", lease: lease))
+            let result = await harness.owner.check(selection: selection)
+            #expect(result.failure == nil)
+            harness.owner.releaseReadLease(lease)
+        }
+        #expect(harness.owner.snapshot.lookups.map(\.selection.lease) == [second])
+    }
+
     @Test func givenLookupAlreadyInFlight_whenCheckedAgain_thenReadAdmissionIsBoundedWithoutExtraCommand() async throws {
         // given
         let harness = PendingLaunchHarness()
