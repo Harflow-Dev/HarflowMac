@@ -44,7 +44,11 @@ unqualified, cyclic or bounded ancestry fails without partial admission. No inve
 Normal task history and admission share a revisioned nonblocking publication drain; raw listing
 visibility updates synchronously, and subscriber callbacks run outside owner locks. See the
 [repository guide](../macos/HfCore/HfRepository/README.md) for bounds and action semantics.
-This foundation has no native pending-launch screen caller yet; engine pins are unchanged.
+The native "Pending launches" list is the first screen caller. `PendingLaunchesVM` acquires one read lease in
+`didAppear` (the owner starts a fresh read), releases it in `didDisappear`, and maps only
+`(runtimeIdentity, inventory)` to an `Equatable` presentation built off the main actor with a generation
+token. A refused lease shows the failed state; there is no polling. Detail, Stop and recorded handoff
+callers are not wired yet; engine pins are unchanged.
 
 ## Store recovery
 

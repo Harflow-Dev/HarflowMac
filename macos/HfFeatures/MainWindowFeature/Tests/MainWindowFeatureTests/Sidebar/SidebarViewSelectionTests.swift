@@ -171,9 +171,9 @@ import Testing
             rows.append(row)
             if let destination = entry.destination { destinations.append(destination) }
         }
-        // then — the five approved M04 navigation rows, each with its real destination.
-        #expect(rows.count == 5)
-        #expect(destinations == [.newSession, .needsYou(itemID: nil), .workflowLibrary, .resourceSlots, .statistics])
+        // then — the six navigation rows, each with its real destination.
+        #expect(rows.count == 6)
+        #expect(destinations == [.newSession, .needsYou(itemID: nil), .workflowLibrary, .resourceSlots, .statistics, .pendingLaunches])
 
         // when — select each through AppKit's own selection.
         for (row, destination) in zip(rows, destinations) {

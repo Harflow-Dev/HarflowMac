@@ -30,8 +30,8 @@ struct SidebarUnifiedHostedTests {
         #expect(scroll.verticalScroller?.controlSize == .small)
         #expect(scroll.hasVerticalScroller)
         let ids = fixture.entryIDs
-        #expect(Array(ids.prefix(5)) == ["navigation:new-task", "navigation:needs-you", "navigation:workflows",
-                                        "navigation:resources", "navigation:statistics"])
+        #expect(Array(ids.prefix(6)) == ["navigation:new-task", "navigation:needs-you", "navigation:workflows",
+                                        "navigation:resources", "navigation:statistics", "navigation:pending-launches"])
         #expect(ids.contains("header:running") && ids.contains("header:recent"))
         #expect(ids.filter { $0 == "history:sentinel" }.count == 1)
         #expect(ids.last == "history:sentinel")
@@ -88,7 +88,7 @@ struct SidebarUnifiedHostedTests {
         #expect(fixture.model.selection == nil)
         #expect(fixture.model.didSelectDestinations.isEmpty)
 
-        // when — keyboard selection walks Statistics down through Running into Recent work.
+        // when — keyboard selection walks Statistics down through Pending launches and Running into Recent work.
         let statisticsRow = try #require(fixture.row(for: "navigation:statistics"))
         outline.selectRowIndexes(IndexSet(integer: statisticsRow), byExtendingSelection: false)
         await waitUntil(timeout: 5) {
@@ -96,6 +96,11 @@ struct SidebarUnifiedHostedTests {
                 && fixture.model.selection == .statistics
         }
         await fixture.drain(cycles: 2)
+        try await fixture.pressDown()
+        await waitUntil(timeout: 5) {
+            fixture.model.selection == .pendingLaunches
+                && outline.selectedRowIndexes == IndexSet(integer: fixture.row(for: "navigation:pending-launches") ?? -1)
+        }
         try await fixture.pressDown()
         await waitUntil(timeout: 5) {
             fixture.model.selection == .task("run-a")

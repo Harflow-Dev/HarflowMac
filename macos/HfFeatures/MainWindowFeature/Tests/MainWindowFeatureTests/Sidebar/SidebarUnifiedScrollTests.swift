@@ -26,14 +26,14 @@ struct SidebarUnifiedScrollTests {
         let entries = SidebarListReconciler.reconcile(input, previous: []).entries
         let ids = entries.map(\.id)
         // then
-        #expect(Array(ids.prefix(5)) == ["navigation:new-task", "navigation:needs-you", "navigation:workflows",
-                                        "navigation:resources", "navigation:statistics"])
+        #expect(Array(ids.prefix(6)) == ["navigation:new-task", "navigation:needs-you", "navigation:workflows",
+                                        "navigation:resources", "navigation:statistics", "navigation:pending-launches"])
         #expect(entries.filter(\.isHeading).map(\.content) == [.heading("Running"), .heading("Recent work")])
-        #expect(ids.firstIndex(of: "header:running") == 5)
-        #expect(ids.firstIndex(of: "task:run-a") == 6)
-        #expect(ids.firstIndex(of: "header:recent") == 8)
-        #expect(ids.firstIndex(of: "task:today-a") == 9)
-        #expect(ids.firstIndex(of: "task:root") == 10)
+        #expect(ids.firstIndex(of: "header:running") == 6)
+        #expect(ids.firstIndex(of: "task:run-a") == 7)
+        #expect(ids.firstIndex(of: "header:recent") == 9)
+        #expect(ids.firstIndex(of: "task:today-a") == 10)
+        #expect(ids.firstIndex(of: "task:root") == 11)
         #expect(entries.last?.content == .sentinel)
         #expect(entries.filter { $0.content == .sentinel }.count == 1)
         #expect(!ids.contains { $0.hasPrefix("overview:") || $0.hasPrefix("definition:") || $0 == "header:workflows" })
@@ -46,21 +46,21 @@ struct SidebarUnifiedScrollTests {
         input.needsYouBadge = .count(3, atLeast: false)
         // when
         let entries = SidebarListReconciler.reconcile(input, previous: []).entries
-        let navigation = entries.prefix(5).map { entry -> SidebarNavigationEntry? in
+        let navigation = entries.prefix(6).map { entry -> SidebarNavigationEntry? in
             guard case .navigation(let navigation) = entry.content else { return nil }
             return navigation
         }
         // then
-        #expect(navigation.compactMap(\.self).count == 5)
+        #expect(navigation.compactMap(\.self).count == 6)
         let typed = navigation.compactMap(\.self)
-        #expect(typed.map(\.title) == ["New task", "Needs you", "Workflows", "Resources", "Statistics"])
-        #expect(typed.map(\.artwork) == [.plus, .hand, .workflow, .gauge, .chart])
-        #expect(typed.map(\.badge.capsuleText) == [nil, "3", nil, nil, nil])
-        #expect(typed.map(\.shortcut) == ["⌘N", nil, nil, nil, nil])
-        #expect(entries.prefix(5).enumerated().allSatisfy { index, entry in
+        #expect(typed.map(\.title) == ["New task", "Needs you", "Workflows", "Resources", "Statistics", "Pending launches"])
+        #expect(typed.map(\.artwork) == [.plus, .hand, .workflow, .gauge, .chart, .clock])
+        #expect(typed.map(\.badge.capsuleText) == [nil, "3", nil, nil, nil, nil])
+        #expect(typed.map(\.shortcut) == ["⌘N", nil, nil, nil, nil, nil])
+        #expect(entries.prefix(6).enumerated().allSatisfy { index, entry in
             entry.destination == typed[index].destination
         })
-        #expect(typed.map(\.destination) == [.newSession, .needsYou(itemID: nil), .workflowLibrary, .resourceSlots, .statistics])
+        #expect(typed.map(\.destination) == [.newSession, .needsYou(itemID: nil), .workflowLibrary, .resourceSlots, .statistics, .pendingLaunches])
         if case .navigation(let needsYou) = entries[1].content {
             #expect(needsYou.badge.accessibilityLabel == "Needs you, 3 pending")
         }
@@ -101,7 +101,7 @@ struct SidebarUnifiedScrollTests {
         let entries = SidebarListReconciler.reconcile(input, previous: []).entries
         // then — the skeleton replaces content and history, including the sentinel.
         #expect(entries.map(\.id) == ["navigation:new-task", "navigation:needs-you", "navigation:workflows",
-                                       "navigation:resources", "navigation:statistics", "diagnostic:skeleton"])
+                                       "navigation:resources", "navigation:statistics", "navigation:pending-launches", "diagnostic:skeleton"])
         #expect(!entries.contains { $0.content == .sentinel })
     }
 

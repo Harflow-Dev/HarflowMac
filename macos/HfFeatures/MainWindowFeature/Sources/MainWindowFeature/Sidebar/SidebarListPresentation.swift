@@ -98,7 +98,7 @@ struct SidebarNavigationEntry: Equatable, Sendable {
     var badge: NeedsYouBadge = .none
     var shortcut: String?
 
-    /// The unified scroll's navigation order: New task, Needs you, Workflows, Resources, Statistics.
+    /// The unified scroll's navigation order: New task, Needs you, Workflows, Resources, Statistics, Pending launches.
     static func unifiedEntries(badge: NeedsYouBadge) -> [SidebarNavigationEntry] {
         [
             .init(id: "navigation:new-task", title: "New task", artwork: .plus,
@@ -110,7 +110,9 @@ struct SidebarNavigationEntry: Equatable, Sendable {
             .init(id: "navigation:resources", title: "Resources", artwork: .gauge,
                   destination: .resourceSlots),
             .init(id: "navigation:statistics", title: "Statistics", artwork: .chart,
-                  destination: .statistics)
+                  destination: .statistics),
+            .init(id: "navigation:pending-launches", title: "Pending launches", artwork: .clock,
+                  destination: .pendingLaunches)
         ]
     }
 }

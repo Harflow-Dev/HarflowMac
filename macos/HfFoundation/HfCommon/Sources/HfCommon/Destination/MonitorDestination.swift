@@ -20,6 +20,8 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
     case statistics
     /// Open read-only resource inventory and phase slot observations.
     case resourceSlots
+    /// Open the read-only list of launches that have no task record yet.
+    case pendingLaunches
     /// Open Needs you, optionally revealing one request by its stable item id.
     case needsYou(itemID: String?)
     /// Open a saved workflow in the canvas editor.
@@ -41,6 +43,7 @@ public enum MonitorDestination: PathDestination, Hashable, Sendable {
         case .group(let name): "group:\(name)"
         case .statistics: "statistics"
         case .resourceSlots: "resourceSlots"
+        case .pendingLaunches: "pendingLaunches"
         case .needsYou(let itemID): "needsYou:\(itemID ?? "")"
         case .workflow(let name): "workflow:\(name)"
         case .workflowLibrary: "workflowLibrary"

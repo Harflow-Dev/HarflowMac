@@ -86,6 +86,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             switch coordinator.selection {
             case .statistics: coordinator.buildStatisticsView()
             case .resourceSlots: coordinator.buildResourceSlotsView()
+            case .pendingLaunches: coordinator.buildPendingLaunchesView()
             case .needsYou(let id): coordinator.buildNeedsYouView(itemID: id)
             case .task(let id): coordinator.buildTaskDetailView(id: id)
             case .group(let name): coordinator.buildParallelView(name: name)
@@ -108,6 +109,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
         switch coordinator.selection {
         case .statistics: return "Harflow · Statistics"
         case .resourceSlots: return "Harflow · Resources"
+        case .pendingLaunches: return "Harflow · Pending launches"
         case .needsYou: return "Harflow · Needs you"
         case .workflow, .workflowLibrary, .newWorkflow, .workflowRun: return "Harflow · Workflows"
         case .task, .group: return "Harflow · Work"

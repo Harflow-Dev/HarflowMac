@@ -62,7 +62,7 @@ final class FakeMainWindowNavigationCoordinator: MainWindowNavigationCoordinator
         onHandle?(destination)
         handledDestinations.append(destination)
         switch destination {
-        case .task, .group, .workflow, .workflowLibrary, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .needsYou:
+        case .task, .group, .workflow, .workflowLibrary, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .pendingLaunches, .needsYou:
             selection = destination
         case .newSession: isNewSessionPresented = true
         case .openWindow: parent.handle(path: destination)

@@ -79,7 +79,7 @@ struct SidebarNavigationRailFocusedAXHostedTests {
 
         // then — explicit labels cover every rail control; help text never stands alone.
         for title in ["Expand sidebar", "New task", "Needs you, 3 pending", "Workflows",
-                      "Resources", "Statistics", "Settings", "Change appearance"] {
+                      "Resources", "Statistics", "Pending launches", "Settings", "Change appearance"] {
             #expect(tree(fixture.window).contains { matches($0, title: title) },
                     "Missing rail accessible name: \(title)")
         }

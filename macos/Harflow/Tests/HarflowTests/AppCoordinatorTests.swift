@@ -115,6 +115,21 @@ import Testing
         #expect(fakeMainWindow.handledDestinations == [.task("abc123"), .group("release"), .newSession])
     }
 
+    @Test func givenPendingLaunchesDestination_whenHandled_thenItIsForwardedToTheMainWindowWithoutOpeningIt() {
+        // given
+        let (sut, fakeMainWindow, _, _) = makeSUT()
+        var openerCallCount = 0
+        sut.registerWindowOpener { openerCallCount += 1 }
+
+        // when
+        sut.handle(path: MonitorDestination.pendingLaunches)
+
+        // then
+        #expect(fakeMainWindow.selection == .pendingLaunches)
+        #expect(fakeMainWindow.handledDestinations == [.pendingLaunches])
+        #expect(openerCallCount == 0)
+    }
+
     @Test func givenNewSessionDestination_whenHandled_thenActivateRunsBeforeTheOpenerWhichRunsBeforeForwarding() {
         // given — a shared event log proves the full ordering (F4-24 plus decision 5's ordering),
         // not just the end state: `activate` (via `activateApp`), then the captured opener, then the

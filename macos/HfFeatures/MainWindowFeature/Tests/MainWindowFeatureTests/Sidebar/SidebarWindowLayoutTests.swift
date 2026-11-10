@@ -20,7 +20,7 @@ import Testing
 
     private static let requiredIDs: Set<String> = [
         "navigation:new-task", "navigation:needs-you", "navigation:workflows", "navigation:resources",
-        "navigation:statistics", "header:running", "header:recent", "history:sentinel",
+        "navigation:statistics", "navigation:pending-launches", "header:running", "header:recent", "history:sentinel",
         "task:running-0", "task:running-19", "task:recent-0", "task:recent-29"
     ]
 
@@ -137,7 +137,7 @@ import Testing
             if case .item = box.entry.content { workRowCount += 1 }
         }
         #expect(Self.requiredIDs.isSubset(of: ids))
-        #expect(navRowCount == 5)
+        #expect(navRowCount == 6)
         #expect(workRowCount == 50)
     }
 

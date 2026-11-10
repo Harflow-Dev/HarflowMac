@@ -136,6 +136,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored private var newSessionVM: NewSessionVM?
     @ObservationIgnored private var statisticsVM: StatisticsVM?
     @ObservationIgnored private var resourceSlotsVM: ResourceSlotsVM?
+    @ObservationIgnored private var pendingLaunchesVM: PendingLaunchesVM?
     private var resourceSlotsReturnDestination: MonitorDestination?
     @ObservationIgnored private var needsYouVM: NeedsYouVM?
     @ObservationIgnored private let pasteboard: any PasteboardWriting
@@ -208,7 +209,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).
             requestReveal(taskID: id)
-        case .group, .workflow, .workflowLibrary, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .needsYou: selection = destination
+        case .group, .workflow, .workflowLibrary, .newWorkflow, .workflowRun, .statistics, .resourceSlots, .pendingLaunches, .needsYou: selection = destination
         case .newSession: openNewSession()
         case .openWindow: parent.handle(path: destination)
         }
@@ -239,6 +240,12 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         let vm = resourceSlotsVM ?? ResourceSlotsVM(useCase: ResourceSlotsViewRepository(), routing: self)
         resourceSlotsVM = vm
         return ResourceSlotsView(vm).eraseToAnyView()
+    }
+
+    public func buildPendingLaunchesView() -> AnyView {
+        let vm = pendingLaunchesVM ?? PendingLaunchesVM(useCase: PendingLaunchesViewRepository())
+        pendingLaunchesVM = vm
+        return PendingLaunchesView(vm).eraseToAnyView()
     }
 
     public var canReturnToResourceSlots: Bool {

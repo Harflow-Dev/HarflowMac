@@ -322,6 +322,14 @@ no embedded terminal anywhere in this package:
   their legacy dialogs.
 - `.define("MOCKING", .when(configuration: .debug))` on the main target; `.define("MOCKING")`
   (unconditional) on the test target.
+- `MonitorDestination.pendingLaunches` selects `PendingLaunches/`: a read-only list over the shared
+  `PendingLaunchRepository`. `PendingLaunchesVM` holds one read lease between `didAppear` and
+  `didDisappear`, subscribes to the snapshot projected to `(runtimeIdentity, inventory)` with
+  `removeDuplicates()`, and builds `PendingLaunchesPresentation` in a detached task applied only for the
+  current generation. `PendingLaunchesViewRepository` only forwards. A refused lease overrides the snapshot
+  with the failed state; "Check again" refreshes the held lease or reacquires one. `.capacity` and every
+  other failure show the failed copy; `.incomplete`, `.requestBudget` and `.deadline` show the incomplete copy.
+  Rows are static until detail selection is added.
 - Tests use Swift Testing (`givenX_whenY_thenZ`, `// given / when / then`), Mockable-generated
   `Mock*` types, and `waitUntil` from `HfTestUtilities`. Re-stubbing the same Mockable member twice in
   one test is FIFO/unreliable — see `ParallelVMTests`'s `Box` note and

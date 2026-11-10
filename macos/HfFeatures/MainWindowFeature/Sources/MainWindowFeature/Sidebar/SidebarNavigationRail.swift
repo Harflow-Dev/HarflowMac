@@ -46,6 +46,9 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
             navigation("Statistics", icon: .chart, destination: .statistics) {
                 viewModel.didSelect(.statistics)
             }
+            navigation("Pending launches", icon: .clock, destination: .pendingLaunches) {
+                viewModel.didSelect(.pendingLaunches)
+            }
             Spacer(minLength: 8)
             Menu {
                 Picker(selection: appearanceSelection) {

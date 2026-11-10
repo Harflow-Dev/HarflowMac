@@ -85,7 +85,7 @@ import Testing
         try assertNavigationNames(in: outline, badgeName: harness.sut.needsYouBadge.accessibilityLabel)
         let navigation: [(String, MonitorDestination)] = [
             ("navigation:workflows", .workflowLibrary), ("navigation:resources", .resourceSlots),
-            ("navigation:statistics", .statistics)
+            ("navigation:statistics", .statistics), ("navigation:pending-launches", .pendingLaunches)
         ]
 
         // when — select each real native row using the public accessibility table API.
@@ -103,9 +103,9 @@ import Testing
             #expect(outline.selectedRowIndexes == IndexSet(integer: row))
         }
 
-        // then — all five navigation rows are present, without restoring removed controls.
-        #expect(Array(rowIDs.prefix(5)) == ["navigation:new-task", "navigation:needs-you",
-                                          "navigation:workflows", "navigation:resources", "navigation:statistics"])
+        // then — all six navigation rows are present, without restoring removed controls.
+        #expect(Array(rowIDs.prefix(6)) == ["navigation:new-task", "navigation:needs-you",
+                                          "navigation:workflows", "navigation:resources", "navigation:statistics", "navigation:pending-launches"])
         #expect(!elements.contains { ["Collapse workflows", "Expand workflows", "New workflow", "Search loaded history"].contains(label(of: $0) ?? "") })
         #expect(!nativeViews(in: host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
         #expect((0 ..< outline.numberOfRows).compactMap {
@@ -115,7 +115,7 @@ import Testing
 
     private func assertNavigationNames(in outline: NSOutlineView, badgeName: String) throws {
         let expectedNames = ["New task", badgeName,
-                             "Workflows", "Resources", "Statistics"]
+                             "Workflows", "Resources", "Statistics", "Pending launches"]
         let axRows = try #require((outline as any NSAccessibilityProtocol).accessibilityRows())
         #expect(axRows.count == outline.numberOfRows)
         for (index, name) in expectedNames.enumerated() {

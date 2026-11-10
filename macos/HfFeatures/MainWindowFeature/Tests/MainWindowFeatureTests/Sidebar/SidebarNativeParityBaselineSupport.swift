@@ -14,12 +14,12 @@ import AppKit
 /// The keyboard probes the unified baseline sends to the native outline, each selecting its own
 /// anchor row first through its unified entry id, never a hard-coded outline index.
 enum KeyboardProbe: String, CaseIterable, Hashable {
-    case up, down, home, end, pageUp, pageDown, commandA, `return`, space, letter, runningUp, statisticsDown
+    case up, down, home, end, pageUp, pageDown, commandA, `return`, space, letter, runningUp, pendingLaunchesDown
 
     var characters: String {
         switch self {
         case .up, .runningUp: String(UnicodeScalar(0xF700)!)
-        case .down, .statisticsDown: String(UnicodeScalar(0xF701)!)
+        case .down, .pendingLaunchesDown: String(UnicodeScalar(0xF701)!)
         case .home: String(UnicodeScalar(0xF729)!)
         case .end: String(UnicodeScalar(0xF72B)!)
         case .pageUp: String(UnicodeScalar(0xF72C)!)
@@ -34,7 +34,7 @@ enum KeyboardProbe: String, CaseIterable, Hashable {
     var keyCode: UInt16 {
         switch self {
         case .up, .runningUp: 126
-        case .down, .statisticsDown: 125
+        case .down, .pendingLaunchesDown: 125
         case .home: 115
         case .end: 119
         case .pageUp: 116
@@ -49,11 +49,11 @@ enum KeyboardProbe: String, CaseIterable, Hashable {
     var modifiers: NSEvent.ModifierFlags { self == .commandA ? .command : [] }
 
     /// The unified entry id each probe selects before sending its key: the Recent anchor for the
-    /// ten original probes, the Running task for `runningUp`, and Statistics for `statisticsDown`.
+    /// ten original probes, the Running task for `runningUp`, and Pending launches for `pendingLaunchesDown`.
     var anchorEntryID: String {
         switch self {
         case .runningUp: "task:abc123"
-        case .statisticsDown: "navigation:statistics"
+        case .pendingLaunchesDown: "navigation:pending-launches"
         default: "task:def456"
         }
     }

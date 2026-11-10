@@ -6,7 +6,7 @@ import SwiftUI
 
 /// Artwork copied without geometry changes from the approved v2 design.
 enum SidebarNavigationArtwork: String, CaseIterable {
-    case sidebar, plus, hand, workflow, gauge, chart, settings, sun, moon, monitor
+    case sidebar, plus, hand, workflow, gauge, chart, clock, settings, sun, moon, monitor
 
     @MainActor private static let images: [Self: NSImage] = Dictionary(
         uniqueKeysWithValues: allCases.compactMap { artwork in artwork.load().map { (artwork, $0) } }

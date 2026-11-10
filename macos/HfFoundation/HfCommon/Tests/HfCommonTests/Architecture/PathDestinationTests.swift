@@ -30,6 +30,15 @@ private struct CompositeFeatureDestination: CompositeDestination {
         #expect(library != definition)
     }
     
+    @Test func givenPendingLaunchesNavigation_whenComparedWithOtherDestinations_thenItHasItsOwnPathIdentity() {
+        // given / when
+        let pending = MonitorDestination.pendingLaunches
+        // then
+        #expect(pending.pathId == "pendingLaunches")
+        #expect(pending != MonitorDestination.resourceSlots)
+        #expect(pending.pathId != MonitorDestination.workflow("pendingLaunches").pathId)
+    }
+
     @Test func givenADestinationType_whenCheckingIsPartOfItsOwnInstance_thenReturnsTrue() {
         // given
         let destination = FakeDestination(pathId: "x")

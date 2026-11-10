@@ -244,7 +244,7 @@ import Testing
         // when / then — catalog size cannot restore removed controls or crowd navigation.
         #expect(elements(labelled: "Harness filter", in: sut.host).isEmpty)
         #expect(!descendants(sut.host).compactMap { $0 as? NSTextField }.contains { $0.placeholderString == "Search loaded history" })
-        for title in ["New task", "Workflows", "Resources", "Statistics"] {
+        for title in ["New task", "Workflows", "Resources", "Statistics", "Pending launches"] {
             let element = try #require(elements(labelled: title, in: sut.host).first)
             let frame = try #require(frameInWindow(element, window: sut.window))
             #expect(frame.minX >= 0)

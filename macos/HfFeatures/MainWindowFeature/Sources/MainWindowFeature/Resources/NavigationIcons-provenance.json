@@ -73,6 +73,13 @@
       "pdf": "monitor.pdf",
       "pdfSHA256": "497fdfd7e140d257a9baaaf376f06dd13675cce0cc14f6e50315cfdb644ff330",
       "source": "monitor.svg"
+    },
+    {
+      "selector": ".hd-i-clock",
+      "sha256": "ac61a20482e35decb4a4b139fbab4388ca1867cc717a8d1cd3eb138f8a1b0955",
+      "pdf": "clock.pdf",
+      "pdfSHA256": "1e4d2044eee0b6cf615e728f4a9d26d0f55be8f433bd044be4970233958a4e5c",
+      "source": "clock.svg"
     }
   ],
   "export": "Vector PDF format conversion only: offscreen WKWebView, nonpersistent data store, JavaScript disabled, inline exact source SVG, transparent 24px HTML/body/SVG, WKPDFConfiguration rect 24x24 and allowTransparentBackground=true. Source geometry and strokes unchanged."

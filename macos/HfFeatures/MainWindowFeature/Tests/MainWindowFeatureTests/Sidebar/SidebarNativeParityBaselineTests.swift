@@ -32,7 +32,7 @@ import Testing
         fixture.write(baseline)
 
         // then — missing public accessibility is a baseline issue, never an empty pass.
-        #expect(baseline.rows.count == 15, "The unified baseline must contain exactly fifteen rows")
+        #expect(baseline.rows.count == 16, "The unified baseline must contain exactly sixteen rows")
         #expect(baseline.rows.allSatisfy { !$0.accessibility.isEmpty },
                 "Every unified baseline row must expose an accessibility element")
         #expect(baseline.missingAccessibility.isEmpty,
@@ -42,9 +42,9 @@ import Testing
         // pinned unified entry order holds, and the semantic probes' rows are pinned indices.
         #expect(SidebarNativeBaselineFixture.unifiedOutlines(in: fixture.controller.view).count == 1)
         #expect(SidebarNativeBaselineFixture.entryIDs(in: fixture.outline) == SidebarNativeBaselineFixture.unifiedEntryIDs)
-        #expect(fixture.anchorRow == 10 && fixture.groupRow == 8)
-        #expect(fixture.workflowAliasRow == 11 && fixture.shortcutAliasRow == 12)
-        #expect(SidebarNativeBaselineFixture.row(of: "task:abc123", in: fixture.outline) == 6)
+        #expect(fixture.anchorRow == 11 && fixture.groupRow == 9)
+        #expect(fixture.workflowAliasRow == 12 && fixture.shortcutAliasRow == 13)
+        #expect(SidebarNativeBaselineFixture.row(of: "task:abc123", in: fixture.outline) == 7)
         #expect(SidebarNativeBaselineFixture.row(of: "navigation:statistics", in: fixture.outline) == 4)
 
         // Stable public control settings, fixed chrome, shared viewport and semantic row geometry.
@@ -63,7 +63,7 @@ import Testing
         #expect(baseline.promptFocus.selectionAfter == baseline.promptFocus.selectionBefore)
 
         // The workflow and shortcut aliases of one logical destination stay programmatically
-        // selectable together at their pinned unified indices (11 and 12).
+        // selectable together at their pinned unified indices (12 and 13).
         #expect(baseline.aliasSelection == [fixture.workflowAliasRow, fixture.shortcutAliasRow])
 
         // Keyboard across nav, Running and Recent, anchored by entry id; AppKit skips the
@@ -80,25 +80,25 @@ import Testing
         }
     }
 
-    /// Reviewed unified geometry (native outline coordinates): five navigation rows tile into a
-    /// 160-point block followed by a 13-point section gap, the Running heading opens at 173, Recent work at 350, the sentinel at 574.
+    /// Reviewed unified geometry (native outline coordinates): six navigation rows tile into a
+    /// 192-point block followed by a 13-point section gap, the Running heading opens at 205, Recent work at 382, the sentinel at 606.
     private func assertUnifiedRowGeometry(_ baseline: Baseline, fixture: SidebarNativeBaselineFixture) {
         #expect(baseline.rows.first?.rect.minY == 0)
         #expect(zip(baseline.rows, baseline.rows.dropFirst()).enumerated().allSatisfy { index, pair in
-            pair.1.rect.minY - pair.0.rect.maxY == ([4, 8].contains(index) ? 13 : 0)
+            pair.1.rect.minY - pair.0.rect.maxY == ([5, 9].contains(index) ? 13 : 0)
         })
-        #expect(baseline.rows[5].rect.minY == 173 && baseline.rows[5].rect.maxY == 187)
-        #expect(baseline.rows[9].rect.minY == 350 && baseline.rows[9].rect.maxY == 364)
-        #expect(baseline.rows[14].rect.minY == 574 && baseline.rows[14].rect.maxY == 575)
+        #expect(baseline.rows[6].rect.minY == 205 && baseline.rows[6].rect.maxY == 219)
+        #expect(baseline.rows[10].rect.minY == 382 && baseline.rows[10].rect.maxY == 396)
+        #expect(baseline.rows[15].rect.minY == 606 && baseline.rows[15].rect.maxY == 607)
         // Headings, Running content, the Recent content rows and the sentinel have exact heights.
-        #expect(Array(baseline.rows.map(\.rect.height).dropFirst(5)) == [14, 48, 48, 54, 14, 48, 48, 66, 48, 1])
+        #expect(Array(baseline.rows.map(\.rect.height).dropFirst(6)) == [14, 48, 48, 54, 14, 48, 48, 66, 48, 1])
         // Each navigation row fits 32 points; section gaps remain outside native row rects.
-        #expect(baseline.rows[0 ... 4].allSatisfy { $0.fittingHeight == 32 })
-        #expect(baseline.rows[0 ... 4].map(\.rect.height).reduce(0, +) == 160)
+        #expect(baseline.rows[0 ... 5].allSatisfy { $0.fittingHeight == 32 })
+        #expect(baseline.rows[0 ... 5].map(\.rect.height).reduce(0, +) == 192)
         // The group disclosure retains its observed 54-point slot.
         #expect(baseline.rows[fixture.groupRow].fittingHeight == 54)
         // Content never clips its hosted fit, and every row stays inside the shared viewport.
-        let contentRows = baseline.rows.filter { ![5, 9, 14].contains($0.index) }
+        let contentRows = baseline.rows.filter { ![6, 10, 15].contains($0.index) }
         #expect(contentRows.allSatisfy { $0.rect.height >= $0.fittingHeight - 1 })
         let visible = fixture.outline.visibleRect
         #expect(baseline.rows.allSatisfy { $0.rect.minY >= visible.minY && $0.rect.maxY <= visible.maxY })
@@ -113,7 +113,7 @@ import Testing
         #expect(baseline.effectiveViewportTop == 716)
         #expect(baseline.scrollFrame.minY == 61 && baseline.scrollFrame.maxY == 716)
         #expect(baseline.scrollFrame.maxY - baseline.scrollFrame.minY == 655)
-        #expect(baseline.navigationFrame.maxY - baseline.navigationFrame.minY == 160)
+        #expect(baseline.navigationFrame.maxY - baseline.navigationFrame.minY == 192)
         #expect(baseline.navigationFrame.maxY == baseline.effectiveViewportTop)
         #expect(baseline.firstRowFrame.maxY == baseline.effectiveViewportTop)
     }
@@ -146,7 +146,7 @@ import Testing
     /// same observed public semantics as the old List baseline; `end`, `pageUp`, `pageDown`,
     /// `commandA`, `return`, `space` and the type-select letter also keep the anchor. The two
     /// cross-section probes pin navigation ↔ Running travel: `runningUp` walks from the Running
-    /// task up onto the Statistics navigation row, and `statisticsDown` walks back down, skipping
+    /// task up onto the Pending launches navigation row, and `pendingLaunchesDown` walks back down, skipping
     /// the destinationless Running heading, onto the Running task.
     private func expectedUnifiedKeyboardSelection(_ fixture: SidebarNativeBaselineFixture) -> [KeyboardProbe: [Int]] {
         let anchor = fixture.anchorRow
@@ -154,15 +154,15 @@ import Testing
             .up: [fixture.groupRow], .down: [fixture.workflowAliasRow, fixture.shortcutAliasRow],
             .home: [anchor], .end: [anchor], .pageUp: [anchor], .pageDown: [anchor],
             .commandA: [anchor], .return: [anchor], .space: [anchor], .letter: [anchor],
-            .runningUp: [4], .statisticsDown: [6]
+            .runningUp: [5], .pendingLaunchesDown: [7]
         ]
     }
 
-    /// Each probe's pinned before-selection: the Recent anchor (10) for the ten original probes,
-    /// the Running task (6) for `runningUp`, and Statistics (4) for `statisticsDown`.
+    /// Each probe's pinned before-selection: the Recent anchor (11) for the ten original probes,
+    /// the Running task (7) for `runningUp`, and Pending launches (5) for `pendingLaunchesDown`.
     private func expectedUnifiedKeyboardAnchors(_ fixture: SidebarNativeBaselineFixture) -> [KeyboardProbe: [Int]] {
         Dictionary(uniqueKeysWithValues: KeyboardProbe.allCases.map { probe in
-            (probe, [probe == .runningUp ? 6 : probe == .statisticsDown ? 4 : fixture.anchorRow])
+            (probe, [probe == .runningUp ? 7 : probe == .pendingLaunchesDown ? 5 : fixture.anchorRow])
         })
     }
 
@@ -205,5 +205,6 @@ private let expectedRunningAXSignatures: [[String]] = [
 
 private let expectedUnifiedAXSignatures: [[String]] = [
     ["AXStaticText||New task|"], ["AXStaticText||Needs you, 3 pending|"],
-    ["AXStaticText||Workflows|"], ["AXStaticText||Resources|"], ["AXStaticText||Statistics|"]
+    ["AXStaticText||Workflows|"], ["AXStaticText||Resources|"], ["AXStaticText||Statistics|"],
+    ["AXStaticText||Pending launches|"]
 ] + expectedRunningAXSignatures + expectedRecentAXSignatures

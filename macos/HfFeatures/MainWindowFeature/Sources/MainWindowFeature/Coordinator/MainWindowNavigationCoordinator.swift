@@ -68,6 +68,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     func buildStatisticsView() -> AnyView
     /// Builds read-only resource slots, retaining its reading and disclosure state.
     func buildResourceSlotsView() -> AnyView
+    /// Builds the read-only pending launches list.
+    func buildPendingLaunchesView() -> AnyView
     /// A narrow return action for the owner destination opened by Resource slots.
     var canReturnToResourceSlots: Bool { get }
     func returnToResourceSlots()
@@ -107,6 +109,7 @@ public extension MainWindowNavigationCoordinator {
     func buildStopConfirmationView() -> AnyView { AnyView(EmptyView()) }
     func buildStatisticsView() -> AnyView { AnyView(EmptyView()) }
     func buildResourceSlotsView() -> AnyView { AnyView(EmptyView()) }
+    func buildPendingLaunchesView() -> AnyView { AnyView(EmptyView()) }
     var canReturnToResourceSlots: Bool { false }
     func returnToResourceSlots() {}
     func buildNeedsYouView(itemID: String?) -> AnyView { AnyView(EmptyView()) }

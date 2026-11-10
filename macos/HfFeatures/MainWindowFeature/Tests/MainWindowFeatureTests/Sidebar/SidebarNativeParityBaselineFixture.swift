@@ -23,12 +23,12 @@ import Testing
     private let previousEnhancedInterface: Any?
     private let previousActivationPolicy: NSApplication.ActivationPolicy
 
-    /// The unified surface's exact entry order: five navigation rows, the Running section, its
+    /// The unified surface's exact entry order: six navigation rows, the Running section, its
     /// travelled Recent work, and the admission sentinel. Discovery is ID-based — the single
     /// outline that owns the `navigation:new-task` entry.
     static let unifiedEntryIDs = [
         "navigation:new-task", "navigation:needs-you", "navigation:workflows", "navigation:resources",
-        "navigation:statistics", "header:running", "task:abc123", "task:abc123-child", "group:review-bot",
+        "navigation:statistics", "navigation:pending-launches", "header:running", "task:abc123", "task:abc123-child", "group:review-bot",
         "header:recent", "task:def456", "workflow:baseline-workflow",
         "workflow-shortcut:baseline-parent:baseline-workflow", "task:ghi789", "history:sentinel"
     ]
