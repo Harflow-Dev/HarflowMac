@@ -26,9 +26,12 @@ no embedded terminal anywhere in this package:
   `didDisappear`, subscribes to the snapshot projected to `(runtimeIdentity, inventory)` with
   `removeDuplicates()`, and builds `PendingLaunchesPresentation` in a detached task applied only for the
   current generation. `PendingLaunchesViewRepository` only forwards. A refused lease overrides the snapshot
-  with the failed state; "Check again" refreshes the held lease or reacquires one. `.capacity` and every
-  other failure show the failed copy; `.incomplete`, `.requestBudget` and `.deadline` show the incomplete copy.
-  An idle inventory with no result after a read was observed in this appearance (a superseded read) shows the failed state; "Check again" is shown below the rows and is disabled, not hidden, during a re-read. Rows are static until detail selection is added.
+  with the failed state; "Check again" refreshes the held lease or reacquires one, and the VM never cancels
+  the owner's refresh task. `.capacity` and every other failure show the failed copy; `.incomplete`,
+  `.requestBudget` and `.deadline` show the incomplete copy. An idle inventory with no result after a read
+  was observed in this appearance (a superseded read) shows the failed state. "Check again" sits below the
+  rows and is disabled, not hidden, during a re-read; the empty state never shows the action. Rows are
+  static until detail selection is added.
 - `HfUI.withPresentationContext()` is applied exactly **once**, at `MainWindowNavigationView`'s own
   root. Every screen under the navigation view, including the New Session sheet, shares that
   one `@Environment(\.viewEvent)` through the presenting view's environment.

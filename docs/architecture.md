@@ -47,7 +47,9 @@ visibility updates synchronously, and subscriber callbacks run outside owner loc
 The native "Pending launches" list is the first screen caller. `PendingLaunchesVM` acquires one read lease in
 `didAppear` (the owner starts a fresh read), releases it in `didDisappear`, and maps only
 `(runtimeIdentity, inventory)` to an `Equatable` presentation built off the main actor with a generation
-token. A refused lease shows the failed state; there is no polling. Detail, Stop and recorded handoff
+token. The mapping also uses a read-observed flag (set once this appearance has seen a read in flight): an
+idle inventory with no result after that shows the failed state instead of an endless skeleton. A refused
+lease shows the failed state; "Check again" sits below the rows; there is no polling. Detail, Stop and recorded handoff
 callers are not wired yet; engine pins are unchanged.
 
 ## Store recovery

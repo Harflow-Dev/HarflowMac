@@ -22,11 +22,11 @@ struct PendingLaunchesVMTests {
 
     private func makeSUT(
         _ useCase: MockPendingLaunchesUseCase, builds: LockedValue<[PendingLaunchesProjection]>? = nil,
-        gate: (@Sendable (PendingLaunchesProjection) -> Void)? = nil
+        gate: (@Sendable (PendingLaunchesProjection) async -> Void)? = nil
     ) -> PendingLaunchesVM {
         PendingLaunchesVM(useCase: useCase, builder: { projection, refused, observed in
             builds?.value.append(projection)
-            gate?(projection)
+            await gate?(projection)
             return PendingLaunchesPresentation.make(projection, leaseRefused: refused, didObserveRead: observed)
         })
     }
@@ -253,30 +253,102 @@ struct PendingLaunchesVMTests {
         #expect(builds.value.count == baseline + 1)
     }
 
-    @Test func givenSlowerOlderBuild_whenNewerBuildCompletesFirst_thenOlderResultIsDropped() async {
-        // given: the build for a one-row inventory is held open on a semaphore.
-        let hold = DispatchSemaphore(value: 0)
-        let heldFinished = LockedValue(false)
+    @Test func givenOlderBuildFinishesAfterNewerOne_whenProcessed_thenItNeverOverwritesTheNewerPresentation() async throws {
+        // given: the build for a one-row inventory is held open on a continuation gate.
+        let gate = BuildGate()
+        let processed = LockedValue<[Bool]>([])
         let (useCase, subject) = makeUseCase()
         let sut = makeSUT(useCase, gate: { projection in
-            guard projection.inventory.rows.count == 1 else { return }
-            hold.wait()
-            heldFinished.value = true
+            if projection.inventory.rows.count == 1 { await gate.wait() }
         })
+        sut.didProcessBuild = { processed.value.append($0) }
         sut.didAppear()
         defer { sut.didDisappear() }
         let identity = subject.value.runtimeIdentity
         subject.send(snapshot(identity: identity, inventory: .init(rows: rows, completedCheck: true)))
         await drainMain()
 
-        // when: a newer build completes while the older one is still held, then the older one is released.
+        // when: a newer build completes while the older one is held, then the older one is released.
         subject.send(snapshot(identity: identity, inventory: .init(completedCheck: true)))
         await waitUntil { sut.presentation.kind == .empty }
-        hold.signal()
-        await waitUntil { heldFinished.value }
-        await drainMain()
+        try #require(sut.presentation.kind == .empty)
+        let processedBefore = processed.value.count
+        await gate.release()
+        await waitUntil { processed.value.count > processedBefore }
+
+        // then: the older result was processed, dropped, and the newer presentation stands.
+        try #require(processed.value.count > processedBefore, "the older build result was never processed")
+        #expect(processed.value.last == false)
+        #expect(sut.presentation.kind == .empty)
+    }
+
+    @Test func givenCheckAgainTappedTwiceDuringRefresh_whenRefreshesComplete_thenNeitherIsCancelled() async throws {
+        // given
+        let useCase = SuspendingRefreshUseCase(snapshot: snapshot(inventory: .init(rows: rows, completedCheck: true)))
+        let sut = PendingLaunchesVM(useCase: useCase)
+        sut.didAppear()
+        defer { sut.didDisappear() }
+        await waitUntil { sut.presentation.checkAction == .enabled }
+        try #require(sut.presentation.checkAction == .enabled)
+
+        // when
+        sut.didTapCheckAgain()
+        await waitUntil { useCase.started == 1 }
+        sut.didTapCheckAgain()
+        await waitUntil { useCase.started == 2 }
+        try #require(useCase.started == 2)
+        useCase.releaseAll()
+        await waitUntil { useCase.finished == 2 }
 
         // then
-        #expect(sut.presentation.kind == .empty)
+        try #require(useCase.finished == 2)
+        #expect(useCase.cancelled == 0)
+    }
+}
+
+private actor BuildGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isOpen = false
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func release() {
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+/// A use case whose refreshes suspend until released, recording whether each was cancelled.
+@MainActor
+private final class SuspendingRefreshUseCase: PendingLaunchesUseCase {
+    private let subject: CurrentValueSubject<PendingLaunchSnapshot, Never>
+    private let lease = PendingLaunchReadLease()
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private(set) var started = 0
+    private(set) var finished = 0
+    private(set) var cancelled = 0
+
+    init(snapshot: PendingLaunchSnapshot) { self.subject = CurrentValueSubject(snapshot) }
+
+    var snapshot: PendingLaunchSnapshot { subject.value }
+    func snapshotPublisher() -> AnyPublisher<PendingLaunchSnapshot, Never> { subject.eraseToAnyPublisher() }
+    func acquireReadLease() -> PendingLaunchReadLease? { lease }
+    func releaseReadLease(_: PendingLaunchReadLease) {}
+
+    func refresh(lease _: PendingLaunchReadLease) async {
+        started += 1
+        await withCheckedContinuation { waiting.append($0) }
+        if Task.isCancelled { cancelled += 1 }
+        finished += 1
+    }
+
+    func releaseAll() {
+        let pending = waiting
+        waiting = []
+        pending.forEach { $0.resume() }
     }
 }

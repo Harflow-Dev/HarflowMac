@@ -24,7 +24,7 @@ protocol PendingLaunchesUseCase: Sendable {
 @MainActor
 final class PendingLaunchesVM: PendingLaunchesViewModel {
     /// Builds a presentation off the main actor; injectable so a test can control build ordering.
-    typealias Builder = @Sendable (PendingLaunchesProjection, Bool, Bool) -> PendingLaunchesPresentation
+    typealias Builder = @Sendable (PendingLaunchesProjection, Bool, Bool) async -> PendingLaunchesPresentation
 
     private(set) var presentation = PendingLaunchesPresentation.loading
 
@@ -53,11 +53,18 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
         }
     }
 
-    init(useCase: any PendingLaunchesUseCase, builder: @escaping Builder = { projection, refused, observed in
-        PendingLaunchesPresentation.make(projection, leaseRefused: refused, didObserveRead: observed)
-    }) {
+    /// Called on the main actor after each build result is processed; `true` when it was applied.
+    @ObservationIgnored var didProcessBuild: (@MainActor (Bool) -> Void)?
+
+    init(useCase: any PendingLaunchesUseCase, builder: @escaping Builder) {
         self.useCase = useCase
         self.builder = builder
+    }
+
+    convenience init(useCase: any PendingLaunchesUseCase) {
+        self.init(useCase: useCase, builder: { projection, refused, observed in
+            PendingLaunchesPresentation.make(projection, leaseRefused: refused, didObserveRead: observed)
+        })
     }
 
     func didAppear() {
@@ -70,7 +77,9 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
             .weakAssign(to: \.projection, on: self)
             .store(in: &cancellables)
         isStarting = true
-        projection = PendingLaunchesProjection(useCase.snapshot)
+        let initial = useCase.snapshot
+        projection = PendingLaunchesProjection(initial)
+        if initial.inventory.isRefreshing { didObserveRead = true }
         acquireLease()
         isStarting = false
         rebuild()
@@ -99,7 +108,7 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
             acquireLease()
             return
         }
-        refreshRequest?.cancel()
+        // Never cancel the previous handle: that would cancel the owner's in-flight traversal.
         let useCase = useCase
         refreshRequest = Task { await useCase.refresh(lease: lease) }
     }
@@ -123,9 +132,11 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
         let observed = didObserveRead
         let builder = builder
         build = Task { [weak self] in
-            let result = await Task.detached(priority: .userInitiated) { builder(input, refused, observed) }.value
-            guard let self, didSubscribe, !Task.isCancelled, generation == token else { return }
-            if presentation != result { presentation = result }
+            let result = await Task.detached(priority: .userInitiated) { await builder(input, refused, observed) }.value
+            guard let self else { return }
+            let applies = didSubscribe && !Task.isCancelled && generation == token
+            if applies, presentation != result { presentation = result }
+            didProcessBuild?(applies)
         }
     }
 }
