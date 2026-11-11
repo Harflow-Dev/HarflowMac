@@ -641,7 +641,18 @@ def test_appkit_partition_nonzero_host_exit_with_receipt_reports_only_the_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     result, _ = _run_fake_host_partition(monkeypatch, tmp_path, host_returncode=1)
+    assert not result.ok
+    assert any("exited with 1" in failure for failure in result.failures), result.failures
     assert [failure for failure in result.failures if "defaults" in failure or "persisted" in failure] == []
+
+
+def test_appkit_partition_timeout_without_receipt_fails_with_both_reasons(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, _ = _run_fake_host_partition(monkeypatch, tmp_path, host_timed_out=True, defaults_line=None)
+    assert not result.ok
+    assert any("timed out" in failure for failure in result.failures), result.failures
+    assert any("no defaults receipt" in failure for failure in result.failures), result.failures
 
 
 def test_appkit_partition_nonzero_host_exit_remains_failure_with_valid_evidence(
@@ -841,17 +852,19 @@ def test_prepare_appkit_host_rejects_activation_readiness_and_nonzero_setup(
 
 
 @pytest.mark.parametrize(
-    ("defaults", "message"),
+    ("defaults", "returncode", "message"),
     [
-        (None, "no defaults receipt"),
-        ("APPKIT_DEFAULTS persistent=non-empty keys=X", "host persisted settings"),
+        (None, 0, "no defaults receipt"),
+        ("APPKIT_DEFAULTS persistent=non-empty keys=X", 1, "host persisted settings"),
+        ("APPKIT_DEFAULTS effective=invalid K is unset, expected true", 1, "host defaults check failed"),
     ],
 )
 def test_prepare_appkit_host_requires_the_activation_defaults_receipt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defaults: str | None, message: str,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defaults: str | None, returncode: int, message: str,
 ) -> None:
     root = tmp_path / "activation-defaults"
-    swift, package, _ = _fake_host_setup_environment(root, monkeypatch, activation_defaults=defaults)
+    swift, package, _ = _fake_host_setup_environment(
+        root, monkeypatch, activation_defaults=defaults, activation_returncode=returncode)
     (root / "logs").mkdir()
     with pytest.raises(runner.RunnerError, match=message):
         runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, {})

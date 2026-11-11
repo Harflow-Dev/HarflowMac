@@ -826,6 +826,13 @@ def prepare_appkit_host(swift: str, package: str, output_dir: str,
         evidence[name] = {"argv": argv, "stdout_log": stdout, "stderr_log": stderr,
                           "returncode": code, "timed_out": timed_out, "duration_seconds": elapsed}
         if code != 0 or timed_out:
+            if name == "host-activation":
+                # A dirty defaults domain makes the self-test exit non-zero: name that cause.
+                specific = [failure for failure in validate_host_defaults_receipt(
+                    _read_text(stderr, strict=False), "activation self-test stderr")
+                    if failure.startswith(("host persisted settings", "host defaults check failed"))]
+                if specific:
+                    raise RunnerError(f"AppKit host activation self-test: {specific[0]}; logs: {stdout} {stderr}")
             raise RunnerError(f"AppKit host {name} failed; logs: {stdout} {stderr}")
         return _read_text(stdout, strict=True).strip()
 

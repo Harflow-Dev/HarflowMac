@@ -28,7 +28,8 @@ PATTERNS = {
 
 # The AppKit test host must never write to any defaults domain: its settings go through the volatile
 # argument domain. Receiver-independent on purpose (an alias such as `let d = UserDefaults.standard`
-# must not slip through). Applies to scripts/support only, not to macos/, where the app writes its own.
+# must not slip through). It deliberately also matches non-defaults calls such as `NSColor.set()`, and
+# string literals and comments. Applies to scripts/support only, not to macos/, where the app writes its own.
 HOST_SCAN_ROOT = "scripts/support"
 HOST_PATTERNS = {
     "host defaults set": re.compile(r"\.\s*set\s*\("),

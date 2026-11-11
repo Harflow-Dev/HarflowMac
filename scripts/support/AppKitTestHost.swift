@@ -71,9 +71,10 @@ private func verifyHostDefaultsAtExit() -> Bool {
     func report(_ line: String) {
         FileHandle.standardError.write(Data((line + "\n").utf8))
     }
+    var clean = true
     if let problem = effectiveDefaultsProblem() {
         report("APPKIT_DEFAULTS effective=invalid \(problem)")
-        return false
+        clean = false
     }
     guard let identifier = Bundle.main.bundleIdentifier else {
         report("APPKIT_DEFAULTS persistent=unknown no bundle identifier")
@@ -83,6 +84,7 @@ private func verifyHostDefaultsAtExit() -> Bool {
         report("APPKIT_DEFAULTS persistent=non-empty keys=\(domain.keys.sorted().joined(separator: ","))")
         return false
     }
+    guard clean else { return false }
     report("APPKIT_DEFAULTS persistent=empty")
     return true
 }
