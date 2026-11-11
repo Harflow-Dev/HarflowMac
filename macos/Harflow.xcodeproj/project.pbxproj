@@ -27,7 +27,7 @@
   A00000000000000000000012 = {isa = PBXBuildFile; fileRef = A00000000000000000000017;};
   A00000000000000000000013 = {isa = PBXBuildFile; fileRef = A00000000000000000000018;};
   A00000000000000000000014 = {isa = PBXBuildFile; fileRef = A00000000000000000000019;};
-  A00000000000000000000015 = {isa = XCLocalSwiftPackageReference; relativePath = Harflow;};
+  A00000000000000000000015 = {isa = XCLocalSwiftPackageReference; relativePath = HfFeatures/Harflow;};
   A00000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarflowHost/HarflowHost.swift; sourceTree = "<group>";};
   A00000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = image.icns; path = HarflowHost/AppIcon.icns; sourceTree = "<group>";};
   A00000000000000000000018 = {isa = PBXFileReference; lastKnownFileType = image.png; path = HarflowHost/menubarTemplate.png; sourceTree = "<group>";};

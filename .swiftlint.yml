@@ -3,14 +3,13 @@ included:
   - macos/HfFoundation
   - macos/HfCore
   - macos/HfFeatures
-  - macos/Harflow
   - macos/HarflowHost
   - scripts/support
 
 excluded:
   - macos/build
-  - macos/Harflow/.vscode-build
-  - macos/Harflow/.build
+  - macos/HfFeatures/Harflow/.vscode-build
+  - macos/HfFeatures/Harflow/.build
   - macos/HfFoundation/HfUtilities/.build
   - macos/HfFoundation/HfCommon/.build
   - macos/HfFoundation/HfUI/.build

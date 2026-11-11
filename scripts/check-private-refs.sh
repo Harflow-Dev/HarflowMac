@@ -16,7 +16,7 @@ words="(${name}|${account}|${phrase})"
 token="(^|[^[:alnum:]_])${prefix}([A-Z][[:alnum:]_]*|([^[:alnum:]_]|$))"
 
 # Build output and untracked caches are never committed; local notes live in .claude/.
-excludes=(':!macos/build' ':!.claude' ':!macos/Harflow/.vscode-build' ':!**/.build/**')
+excludes=(':!macos/build' ':!.claude' ':!macos/HfFeatures/Harflow/.vscode-build' ':!**/.build/**')
 
 status=0
 
@@ -37,7 +37,7 @@ fi
 
 paths=$( { git ls-files -z; git ls-files -z -o --exclude-standard; } \
     | tr '\0' '\n' \
-    | grep -v -E '^(macos/build/|\.claude/|macos/Harflow/\.vscode-build/)' \
+    | grep -v -E '^(macos/build/|\.claude/|macos/HfFeatures/Harflow/\.vscode-build/)' \
     | grep -v -E '(^|/)\.build/' )
 if matches=$(printf '%s\n' "$paths" | grep -i -E "$words"); then
     echo "$matches" >&2

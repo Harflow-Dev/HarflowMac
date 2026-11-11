@@ -10,13 +10,13 @@ let package = Package(
     dependencies: [
         // MARK: Local Dependencies
 
-        .package(path: "../HfCore/MonitorCore"),
-        .package(path: "../HfCore/HfRepository"),
-        .package(path: "../HfFoundation/HfUtilities"),
-        .package(path: "../HfFoundation/HfCommon"),
-        .package(path: "../HfFeatures/SettingsFeature"),
-        .package(path: "../HfFeatures/MenuBarFeature"),
-        .package(path: "../HfFeatures/MainWindowFeature"),
+        .package(path: "../../HfCore/MonitorCore"),
+        .package(path: "../../HfCore/HfRepository"),
+        .package(path: "../../HfFoundation/HfUtilities"),
+        .package(path: "../../HfFoundation/HfCommon"),
+        .package(path: "../SettingsFeature"),
+        .package(path: "../MenuBarFeature"),
+        .package(path: "../MainWindowFeature"),
 
         // MARK: Remote Dependencies
 

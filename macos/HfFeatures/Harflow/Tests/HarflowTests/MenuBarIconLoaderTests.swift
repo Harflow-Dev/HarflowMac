@@ -16,8 +16,9 @@ import Testing
 
     @Test func givenTheSourceResourcesBundle_whenLoadingTheMenuBarIcon_thenItReturnsATemplateImageWithBothRepresentations() throws {
         // given — Tests/HarflowTests/MenuBarIconLoaderTests.swift → Tests/HarflowTests →
-        // Tests → Harflow → macos → HarflowHost, which holds `menubarTemplate.png`/`@2x.png` directly.
+        // Tests → Harflow → HfFeatures → macos → HarflowHost, which holds `menubarTemplate.png`/`@2x.png` directly.
         let hostURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()

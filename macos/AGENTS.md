@@ -1,7 +1,7 @@
 # Harflow — architecture rules
 
 This is the shared rulebook for every package under `macos/` (`HfCore/*`, `HfFoundation/*`,
-`HfFeatures/*`, and the root `Harflow` app). Per-module `AGENTS.md` files point back here
+and `HfFeatures/*`, including the `Harflow` app shell). Per-module `AGENTS.md` files point back here
 rather than repeating it.
 
 ## The chain
@@ -104,7 +104,7 @@ a behaviour change. These are intentional deviations, not oversights.
 ## Language modes
 
 Every package targets tools 6.2 / macOS 26. Every package **except** `MonitorCore` builds in Swift 6
-mode, including the root `Harflow` package. **`MonitorCore` uses
+mode, including the `Harflow` app-shell package. **`MonitorCore` uses
 `swiftLanguageModes: [.v5]`** — its tailing/process-table internals do not compile under Swift 6's
 strict concurrency checking; migrating it is separate work. Swift 6 app code requires appropriate
 isolation, including: an `@MainActor`-isolated conformance clause
@@ -116,7 +116,7 @@ escaping closure boundary — see `App.swift`'s own header comments for exactly 
 
 `MonitorCore` is the bottom layer (dependency-free values and I/O) — any package may import it.
 Above it, dependencies point only downward: Foundation (`HfUtilities`/`HfCommon`/`HfUI`) ← Core
-(`MonitorCore`/`HfRepository`) ← Features (`HfFeatures/*`) ← app (`Harflow`). Every target
+(`MonitorCore`/`HfRepository`) ← Features (every `HfFeatures` package except the `Harflow` shell) ← app shell (`HfFeatures/Harflow`) ← `HarflowHost`; feature packages must not depend on the shell. Every target
 declares every product it imports — no `@_exported` re-exports, ever.
 
 ## Before finishing a change
@@ -129,7 +129,7 @@ declares every product it imports — no `@_exported` re-exports, ever.
 2. `scripts/check-private-refs.sh` must pass.
 3. The guarded per-package Swift Testing loop and `macos/build-app.sh` must pass. Run
    `python3 scripts/test-swift-package.py --package <package> --mode suites` for
-   `HfFeatures/MainWindowFeature` with `HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1` and `--mode aggregate` for every other package (repo-root
+   `HfFeatures/MainWindowFeature` with `HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1` and `--mode aggregate` for every other package, including the `HfFeatures/Harflow` shell (repo-root
    Commands section documents the loop; MonitorCore also requires `HARFLOW_NATIVE_BENCHMARK=1`) — the runner fail-closed validates identity coverage,
    event streams, summaries and XCTest silence; a bare `swift test` exit is not evidence.
 4. The headless smoke (pre-seed a temporary `HOME` through the real managed installer with constructor-injected local acquisitions, launch the built binary against its qualified runtime, then check the first `list`, a public-poll-driven second `list`, and that the app stays alive) is a

@@ -17,8 +17,9 @@ import Testing
     @Test func givenTheSourceInfoPlist_whenRead_thenLSUIElementIsAbsentAndTheIconFileIsSet() throws {
         // given — navigate from this test file up to `macos/HarflowHost/Info.plist`:
         // Tests/HarflowTests/InfoPlistContractTests.swift → Tests/HarflowTests →
-        // Tests → Harflow → macos → HarflowHost/Info.plist.
+        // Tests → Harflow → HfFeatures → macos → HarflowHost/Info.plist.
         let infoPlistURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()

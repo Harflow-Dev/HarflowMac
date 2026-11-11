@@ -37,7 +37,7 @@ scripts/check-private-refs.sh                  # private-reference guard
 python3 -m pytest tests/test_swift_package_runner.py tests/test_monitor_profile.py tests/ci
 macos/build-app.sh                             # build macos/build/Harflow.app (build only)
 HARFLOW_NATIVE_SIDEBAR_BENCHMARK=1 python3 scripts/test-swift-package.py --package macos/HfFeatures/MainWindowFeature --mode suites
-for p in macos/HfFoundation/* macos/HfCore/* macos/HfFeatures/MenuBarFeature macos/HfFeatures/SettingsFeature macos/Harflow; do HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package "$p" --mode aggregate || exit 1; done
+for p in macos/HfFoundation/* macos/HfCore/* macos/HfFeatures/MenuBarFeature macos/HfFeatures/SettingsFeature macos/HfFeatures/Harflow; do HARFLOW_NATIVE_BENCHMARK=1 python3 scripts/test-swift-package.py --package "$p" --mode aggregate || exit 1; done
 ```
 
 Build on macOS 26 or later. Run package tests one at a time, never concurrently, and only through
@@ -66,7 +66,7 @@ a temporary HOME pre-seeded through the production `ManagedRuntimeInstaller`, as
 ## Architecture
 
 The app is a set of SwiftPM packages wired by path: `macos/HfFoundation/`, `macos/HfCore/`,
-`macos/HfFeatures/` and `macos/Harflow/` (app shell only). `macos/AGENTS.md` is the shared
+`macos/HfFeatures/` (which also holds the app shell package `macos/HfFeatures/Harflow/`, app shell only). The Xcode app target's folder is `macos/HarflowHost/`. `macos/AGENTS.md` is the shared
 architecture rulebook, including background computation, main-actor application and rendering
 publisher equality; each package's own `AGENTS.md` says what that package owns.
 `docs/architecture.md` describes runtime composition.

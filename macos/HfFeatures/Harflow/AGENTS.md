@@ -1,9 +1,9 @@
 # Harflow
 
-Root AGENTS.md applies (`../AGENTS.md`).
+Root AGENTS.md applies (`../../AGENTS.md`).
 
 The importable SwiftPM app-shell library: startup, lifecycle, and the root of the coordinator tree.
-The thin `../HarflowHost/HarflowHost.swift` Xcode host owns the only `@main` and delegates to public
+The thin `../../HarflowHost/HarflowHost.swift` Xcode host owns the only `@main` and delegates to public
 `HarflowEntryPoint.main()`. The library handles the sole packaged-startup diagnostic before
 `HarflowApp.main()`; do not initialize modules, repositories or runtime acquisition before it.
 The Xcode target owns app identity/resources/signing and links this library; never compile these

@@ -57,13 +57,13 @@ def test_xcode_compiles_only_the_single_entry_wrapper(project):
     assert len(re.findall(r"@main\b", wrappers[0].read_text())) == 1
     assert "import Harflow" in wrappers[0].read_text()
     assert not any(re.search(r"@main\b", path.read_text())
-                   for path in (MACOS / "Harflow/Sources").rglob("*.swift"))
+                   for path in (MACOS / "HfFeatures/Harflow/Sources").rglob("*.swift"))
     assert not any(project[key]["isa"] == "PBXShellScriptBuildPhase"
                    for key in app_target(project)["buildPhases"])
 
 
 def test_shell_is_a_library_with_its_existing_test_target():
-    manifest = (MACOS / "Harflow/Package.swift").read_text()
+    manifest = (MACOS / "HfFeatures/Harflow/Package.swift").read_text()
     assert re.search(r'\.library\s*\(\s*name:\s*"Harflow"', manifest)
     assert not re.search(r"\.(?:executable|executableTarget)\s*\(", manifest)
     assert re.search(r'\.testTarget\s*\(\s*name:\s*"HarflowTests"', manifest)
@@ -76,7 +76,7 @@ def test_xcode_links_the_local_shell_product(project):
     assert dependencies[0]["productName"] == "Harflow"
     package = project[dependencies[0]["package"]]
     assert package["isa"] == "XCLocalSwiftPackageReference"
-    assert (MACOS / package["relativePath"]).resolve() == (MACOS / "Harflow").resolve()
+    assert (MACOS / package["relativePath"]).resolve() == (MACOS / "HfFeatures/Harflow").resolve()
     framework_phases = [project[key] for key in app_target(project)["buildPhases"]
                         if project[key]["isa"] == "PBXFrameworksBuildPhase"]
     linked = [project[key].get("productRef") for phase in framework_phases
