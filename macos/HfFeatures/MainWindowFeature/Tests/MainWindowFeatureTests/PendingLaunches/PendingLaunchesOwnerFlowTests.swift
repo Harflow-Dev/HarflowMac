@@ -18,6 +18,16 @@ private actor PendingFlowCtl: ProcessRunning {
     var statusLatch: HostedContinuationLatch?
     var statusFails = false
     private(set) var pendingCalls = 0
+    /// `not_started` (proven), `settled` (ran, then stopped), `error` (exit 1 `invalid_params`).
+    var cancelMode = "not_started"
+    var cancelLatch: HostedContinuationLatch?
+    var cascadeCapability = true
+    private(set) var cancelCalls: [[String]] = []
+
+    func setCancelMode(_ value: String) { cancelMode = value }
+    func setCancelLatch(_ value: HostedContinuationLatch?) { cancelLatch = value }
+    func setCascadeCapability(_ value: Bool) { cascadeCapability = value }
+    func setDisposition(_ id: String, _ value: String) { dispositions[id] = value }
 
     init(dispositions: [String: String]) { self.dispositions = dispositions }
 
@@ -35,6 +45,10 @@ private actor PendingFlowCtl: ProcessRunning {
             let id = target(arguments)
             await pendingLatch?.park()
             return .success(envelope(lookup(id)))
+        case "cancel":
+            cancelCalls.append(arguments)
+            await cancelLatch?.park()
+            return .success(cancel(arguments.last ?? ""))
         case "status":
             await statusLatch?.park()
             if statusFails { return .success(refusal()) }
@@ -78,6 +92,21 @@ private actor PendingFlowCtl: ProcessRunning {
         return ProcessOutput(exitCode: 0, stdout: Data(JSONValue.object(raw).rendered().utf8), stderr: "")
     }
 
+    private func cancel(_ id: String) -> ProcessOutput {
+        if cancelMode == "error" {
+            var raw = base()
+            raw["error"] = .object(["code": .string("invalid_params"), "message": .string("workflow controls\nthis launch")])
+            return ProcessOutput(exitCode: 1, stdout: Data(JSONValue.object(raw).rendered().utf8), stderr: "")
+        }
+        let observation: [String: JSONValue] = [
+            "scope": .string("recorded_tasks_and_pending_launches"), "observed_at": .string("fixture"),
+            "coverage": .string("complete"), "truncated": .bool(false),
+            "items": .array([.object(["task_id": .string(id), "state": .string("stopped"), "status": .string("cancelled"),
+                                      "basis": .string(cancelMode == "settled" ? "observed_settlement" : "proven_not_started")])])
+        ]
+        return envelope(["task_id": .string(id), "status": .string("cancelled"), "cascade": .object(["observation": .object(observation)])])
+    }
+
     private func refusal() -> ProcessOutput {
         var raw = base()
         raw["error"] = .object(["code": .string("refused"), "message": .string("status unavailable")])
@@ -93,7 +122,8 @@ private actor PendingFlowCtl: ProcessRunning {
                 "ctl": .object(["format": .string("harflow.ctl"), "v": .number(1)]),
                 "setup": .object(["format": .string("harflow.setup"), "v": .number(1)]),
                 "events": .object(["format": .string("harflow.event"), "v": .number(1)])]),
-            "capabilities": .array(["ctl.v1", "setup.v1", "events.v1", "task-pending-launch.v1"].map(JSONValue.string)),
+            "capabilities": .array((["ctl.v1", "setup.v1", "events.v1", "task-pending-launch.v1"]
+                    + (cascadeCapability ? [CtlCapability.taskCancelCascade] : [])).map(JSONValue.string)),
             "os": .string("darwin"), "architecture": .string("arm64")]
         return ProcessOutput(exitCode: 0, stdout: Data(JSONValue.object(raw).rendered().utf8), stderr: "")
     }
@@ -118,6 +148,16 @@ private struct OwnerUseCase: PendingLaunchesUseCase {
     func resolveRecorded(selection: PendingLaunchSelection) async -> PendingLaunchRecordedResult {
         await owner.resolveRecorded(selection: selection)
     }
+
+    func prepareStop(selection: PendingLaunchSelection) async -> PendingLaunchStopPreparation { await owner.prepareStop(selection: selection) }
+    func submitStop(confirmation: PendingLaunchStopConfirmation) -> PendingLaunchStopAdmission { owner.submitStop(confirmation: confirmation) }
+}
+
+private final class PresentedRequests: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [PendingLaunchStopRequest] = []
+    var values: [PendingLaunchStopRequest] { lock.withLock { stored } }
+    func add(_ value: PendingLaunchStopRequest) { lock.withLock { stored.append(value) } }
 }
 
 private final class RoutedIDs: @unchecked Sendable {
@@ -141,6 +181,7 @@ struct PendingLaunchesOwnerFlowTests {
         let routed: RoutedIDs
         /// The VM holds routing weakly.
         let routing: MockPendingLaunchesRouting
+        let requests: PresentedRequests
     }
 
     /// The real owner and the real task list (recorded admission) over one fake public ctl boundary.
@@ -161,10 +202,12 @@ struct PendingLaunchesOwnerFlowTests {
         let routed = RoutedIDs()
         let routing = MockPendingLaunchesRouting()
         given(routing).openRecordedTask(.any).willProduce { routed.add($0) }
+        let requests = PresentedRequests()
+        given(routing).presentPendingLaunchStop(.any).willProduce { requests.add($0) }
         let sut = PendingLaunchesVM(useCase: OwnerUseCase(owner: owner), routing: routing)
         sut.didAppear()
         await waitUntil { sut.presentation.kind == .inventory }
-        return Flow(ctl: ctl, owner: owner, sut: sut, routed: routed, routing: routing)
+        return Flow(ctl: ctl, owner: owner, sut: sut, routed: routed, routing: routing, requests: requests)
     }
 
     private func selectRecorded(_ flow: Flow) async {
@@ -296,5 +339,128 @@ struct PendingLaunchesOwnerFlowTests {
         #expect(flow.sut.detail?.kind == .recorded)
         #expect(flow.sut.detail?.facts.first?.value == idB)
         #expect(flow.owner.snapshot.lookups.map(\.selection.taskID) == [idB])
+    }
+
+    // MARK: - Stop
+
+    private func selectPending(_ flow: Flow) async {
+        flow.sut.didSelectRow(idA)
+        await waitUntil { flow.sut.detail?.stop == .enabled }
+    }
+
+    /// Select, Stop, Request Stop.
+    private func stop(_ flow: Flow) async {
+        await selectPending(flow)
+        flow.sut.didTapStop()
+        await waitUntil { !flow.requests.values.isEmpty }
+        flow.requests.values.last?.confirm()
+    }
+
+    @Test func givenProvenNotStarted_whenStopConfirmed_thenCancelDispatchedOnceAndDidNotStartShows() async {
+        // given
+        let flow = await flow([idA: "pending"])
+        defer { flow.sut.didDisappear() }
+        // when
+        await stop(flow)
+        await waitUntil { flow.sut.detail?.kind == .stopDidNotStart }
+        // then
+        #expect(await flow.ctl.cancelCalls.count == 1)
+        #expect(await flow.ctl.cancelCalls.first?.last == idA)
+        #expect(flow.sut.detail?.title == "Did not start")
+    }
+
+    @Test func givenSettlementAfterRunning_whenStopConfirmed_thenStopRequested() async {
+        // given
+        let flow = await flow([idA: "pending"])
+        defer { flow.sut.didDisappear() }
+        await flow.ctl.setCancelMode("settled")
+        // when
+        await stop(flow)
+        await waitUntil { flow.sut.detail?.kind == .stopRequested }
+        // then
+        #expect(flow.sut.detail?.notes == [PendingLaunchDetailPresentation.unconfirmedNote])
+    }
+
+    @Test func givenEngineRefusal_whenStopConfirmed_thenRefusedWithNormalizedReason() async {
+        // given
+        let flow = await flow([idA: "pending"])
+        defer { flow.sut.didDisappear() }
+        await flow.ctl.setCancelMode("error")
+        // when
+        await stop(flow)
+        await waitUntil { flow.sut.detail?.kind == .stopRefused }
+        // then
+        #expect(flow.sut.detail?.message == "The engine refused Stop. The launch or task may still be active. Reason: workflow controls this launch.")
+    }
+
+    @Test func givenRuntimeWithoutCascadeCapability_whenStopConfirmed_thenNotSentAndStopAvailableAgain() async {
+        // given
+        let flow = await flow([idA: "pending"])
+        defer { flow.sut.didDisappear() }
+        await flow.ctl.setCascadeCapability(false)
+        // when
+        await stop(flow)
+        await waitUntil { flow.sut.detail?.notes.first == PendingLaunchDetailPresentation.notSentNote }
+        // then
+        #expect(await flow.ctl.cancelCalls.isEmpty)
+        #expect(flow.sut.detail?.kind == .waiting)
+        #expect(flow.sut.detail?.stop == .enabled)
+    }
+
+    @Test func givenCancelParked_whenDisappearAndReselect_thenSendingThenOutcomeAfterRelease() async {
+        // given
+        let flow = await flow([idA: "pending"])
+        let latch = HostedContinuationLatch()
+        await flow.ctl.setCancelLatch(latch)
+        await stop(flow)
+        await waitUntil { latch.arrived.value }
+        // when
+        flow.sut.didDisappear()
+        flow.sut.didAppear()
+        defer { flow.sut.didDisappear() }
+        await waitUntil { flow.sut.presentation.kind == .inventory }
+        flow.sut.didSelectRow(idA)
+        await waitUntil { flow.sut.detail?.kind == .waiting && flow.sut.detail?.stop == .disabled }
+        // then: sending shows the current card with Stop disabled.
+        #expect(flow.sut.detail?.stop == .disabled)
+        await latch.release()
+        await waitUntil { flow.sut.detail?.kind == .stopDidNotStart }
+        #expect(await flow.ctl.cancelCalls.count == 1)
+    }
+
+    @Test func givenCancelParked_whenCheckAgain_thenCheckRunsAndStoresALookup() async {
+        // given
+        let flow = await flow([idA: "pending"])
+        defer { flow.sut.didDisappear() }
+        let latch = HostedContinuationLatch()
+        await flow.ctl.setCancelLatch(latch)
+        await stop(flow)
+        await waitUntil { latch.arrived.value }
+        let calls = await flow.ctl.pendingCalls
+        // when
+        flow.sut.didTapDetailCheckAgain()
+        await waitUntil { flow.sut.activeOperations == 1 }
+        await waitUntil { flow.sut.activeOperations == 0 }
+        #expect(await flow.ctl.pendingCalls == calls + 1)
+        // then
+        #expect(flow.owner.snapshot.lookups.first?.failure == nil)
+        await latch.release()
+        await waitUntil { flow.sut.detail?.kind == .stopDidNotStart }
+    }
+
+    @Test func givenLaunchBecameATaskBeforeSend_whenStopConfirmed_thenTaskRecordFoundAndNothingDispatched() async {
+        // given
+        let flow = await flow([idA: "pending"])
+        defer { flow.sut.didDisappear() }
+        await selectPending(flow)
+        flow.sut.didTapStop()
+        await waitUntil { !flow.requests.values.isEmpty }
+        await flow.ctl.setDisposition(idA, "recorded")
+        // when
+        flow.requests.values.last?.confirm()
+        await waitUntil { flow.sut.detail?.kind == .recorded }
+        // then
+        #expect(await flow.ctl.cancelCalls.isEmpty)
+        #expect(flow.sut.detail?.title == "Task record found")
     }
 }

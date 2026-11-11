@@ -106,8 +106,37 @@ extension PendingLaunchesFixture {
         case "missing": evidence = .value(plainLookup(id: id, disposition: "not_found"))
         default: evidence = .value(plainLookup(id: id, disposition: "recorded"))
         }
-        return .make(taskID: id, evidence: evidence, flags: flags)
+        return .make(taskID: id, evidence: evidence, flags: flags, runtimeKnown: true)
     }
+
+    static let stopGeneration = String(repeating: "a", count: 32)
+
+    /// A selected launch after a Stop attempt, as the mapping produces it. States: `sending`, `not-sent`, `requested`,
+    /// `uncertain`, `refused`, `did-not-start`, `unresolved-status` (an acknowledged request over its status card)
+    /// and `unresolved-missing` (the same over "Launch not found").
+    static func stopDetail(_ state: String) -> PendingLaunchDetailPresentation {
+        let phase: PendingLaunchStopEvidence.Phase = switch state {
+        case "sending": .sending
+        case "not-sent": .notSent
+        case "uncertain": .uncertain
+        case "refused": .refused(reason: PendingLaunchStopEvidence.reason(from: "workflow run is paused and owns this launch"))
+        case "did-not-start": .didNotStart
+        default: .requested
+        }
+        let evidence = PendingLaunchStopEvidence(attemptID: UUID(), taskID: detailID, generation: stopGeneration, phase: phase)
+        let acknowledged = state.hasPrefix("unresolved")
+        let lookupEvidence: PendingLaunchDetailPresentation.Evidence = state == "unresolved-missing"
+            ? .value(plainLookup(id: detailID, disposition: "not_found"))
+            : .value(lookup(item(id: detailID, resources: ["Claude slots", "Shared checkout"])))
+        return .make(
+            taskID: detailID, evidence: lookupEvidence,
+            flags: .init(firstCheckSettled: true, acknowledgedAttempt: acknowledged),
+            stop: PendingLaunchStopProjection([evidence], taskID: detailID), runtimeKnown: true
+        )
+    }
+
+    static let stopDetailStates = ["sending", "not-sent", "requested", "uncertain", "refused", "did-not-start", "unresolved-status",
+                                   "unresolved-missing"]
 
     static let detailStates = ["checking", "waiting", "preparing", "preparing-handshake", "granted", "not-started",
                                "unavailable", "missing", "recorded", "handoff-failed"]
@@ -118,6 +147,19 @@ private func detailPreview(_ state: String, _ scheme: ColorScheme) -> some View 
     pendingPreview(PendingLaunchesFixture.inventory, detail: PendingLaunchesFixture.detail(state)).preferredColorScheme(scheme)
 }
 
+@MainActor
+private func stopPreview(_ state: String, _ scheme: ColorScheme) -> some View {
+    pendingPreview(PendingLaunchesFixture.inventory, detail: PendingLaunchesFixture.stopDetail(state)).preferredColorScheme(scheme)
+}
+
+#Preview("Stop sending light") { stopPreview("sending", .light) }
+#Preview("Stop not sent light") { stopPreview("not-sent", .light) }
+#Preview("Stop requested light") { stopPreview("requested", .light) }
+#Preview("Stop requested dark") { stopPreview("requested", .dark) }
+#Preview("Stop unknown light") { stopPreview("uncertain", .light) }
+#Preview("Stop refused light") { stopPreview("refused", .light) }
+#Preview("Stop did not start light") { stopPreview("did-not-start", .light) }
+#Preview("Stop unresolved light") { stopPreview("unresolved-status", .light) }
 #Preview("Detail Waiting light") { detailPreview("waiting", .light) }
 #Preview("Detail Waiting dark") { detailPreview("waiting", .dark) }
 #Preview("Detail Preparing light") { detailPreview("preparing", .light) }

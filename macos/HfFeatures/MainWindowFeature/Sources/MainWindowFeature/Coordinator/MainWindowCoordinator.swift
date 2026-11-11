@@ -63,12 +63,16 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             selectionSubject.send(selection)
             isNewSessionPresentedSubject.send(selection == .newSession)
             discardStopConfirmationIfConversationChanged()
+            if selection != .pendingLaunches { endPendingStop(reason: .discard, closeSheet: true) }
             topBar.setShownConversation(shownTaskConversation())
         }
     }
 
     public var presentedSheet: MainWindowSheet? {
         didSet {
+            // Leaving the pending-launch Stop sheet by any route other than its own buttons discards the request.
+            if presentedSheet != .stopPendingLaunch { endPendingStop(reason: .discard) }
+            if presentedSheet == .stopPendingLaunch, pendingStopRequest == nil { presentedSheet = nil; return }
             if presentedSheet != .stopTask { stopConfirmation = nil }
             if presentedSheet == .stopTask, stopConfirmation == nil { presentedSheet = nil; return }
             if presentedSheet == .newSession {
@@ -106,6 +110,10 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public func presentWorkflowRunner() { openWorkflowRunner(name: nil) }
 
     var stopConfirmation: TaskStopConfirmation?
+    /// The pending-launch Stop request whose sheet is shown; see `MainWindowCoordinator+PendingStop`.
+    var pendingStopRequest: PendingLaunchStopRequest?
+    /// Requests whose sheet was closed and whose native dismissal callback has not arrived yet.
+    var awaitingStopDismissal: [PendingLaunchStopRequest] = []
     var initialWorkflowRunnerName: String?
 
     func openWorkflowRunner(name: String?) {
@@ -495,6 +503,9 @@ extension MainWindowCoordinator: ParallelRouting {
 extension MainWindowCoordinator: PendingLaunchesRouting {
     /// Opens the ordinary task screen for an ID the owner admitted through a fresh status read.
     func openRecordedTask(_ taskID: String) { selectTask(taskID) }
+
+    func presentPendingLaunchStop(_ request: PendingLaunchStopRequest) { presentPendingStop(request) }
+    func dismissPendingLaunchStop() { endPendingStop(reason: .discard, closeSheet: true) }
 }
 
 // MARK: - TaskDetailRouting

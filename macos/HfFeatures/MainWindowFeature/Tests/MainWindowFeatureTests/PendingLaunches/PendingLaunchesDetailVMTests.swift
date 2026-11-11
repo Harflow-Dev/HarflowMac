@@ -76,6 +76,9 @@ private final class ScriptedUseCase: PendingLaunchesUseCase {
         return resolveResult
     }
 
+    func prepareStop(selection _: PendingLaunchSelection) async -> PendingLaunchStopPreparation { .failed(.unavailable) }
+    func submitStop(confirmation _: PendingLaunchStopConfirmation) -> PendingLaunchStopAdmission { .refused(.unavailable) }
+
     private func enter() async {
         inFlight += 1
         if inFlight > 1 { overlapped = true }

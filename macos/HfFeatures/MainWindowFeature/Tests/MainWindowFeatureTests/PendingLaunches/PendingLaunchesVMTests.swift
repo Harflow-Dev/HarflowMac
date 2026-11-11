@@ -345,6 +345,8 @@ private final class SuspendingRefreshUseCase: PendingLaunchesUseCase {
     }
 
     func resolveRecorded(selection _: PendingLaunchSelection) async -> PendingLaunchRecordedResult { .failed(.unavailable) }
+    func prepareStop(selection _: PendingLaunchSelection) async -> PendingLaunchStopPreparation { .failed(.unavailable) }
+    func submitStop(confirmation _: PendingLaunchStopConfirmation) -> PendingLaunchStopAdmission { .refused(.unavailable) }
 
     func refresh(lease _: PendingLaunchReadLease) async {
         started += 1

@@ -8,14 +8,25 @@ extension PendingLaunchesVM {
         selection.map {
             PendingLaunchDetailInput(
                 selection: $0,
-                flags: .init(firstCheckSettled: firstCheckSettled, handoffFailed: handoffFailed, isBusy: activeOperations > 0)
+                flags: .init(
+                    firstCheckSettled: firstCheckSettled, handoffFailed: handoffFailed, isBusy: activeOperations > 0,
+                    stopPrepareNotSent: stopPrepareNotSent,
+                    acknowledgedAttempt: projection.stop.map { acknowledgedAttempts.contains($0.latest.attemptID) } ?? false,
+                    notSentCleared: notSentCleared
+                )
             )
         }
     }
 
+    /// The projection of the synchronous owner snapshot for this lease and the selected ID.
+    func makeProjection() -> PendingLaunchesProjection {
+        PendingLaunchesProjection(useCase.snapshot, lease: lease, selectedTaskID: selection?.taskID)
+    }
+
     /// Re-projects from the synchronous owner snapshot, so a result is never judged against a stale copy.
     func reproject() {
-        projection = PendingLaunchesProjection(useCase.snapshot, lease: lease)
+        projection = makeProjection()
+        pruneStopBookkeeping()
     }
 
     func didSelectRow(_ id: String) {
@@ -30,6 +41,7 @@ extension PendingLaunchesVM {
         focusRowID = nil
         detail = .checking(taskID: id)
         enqueueCheck()
+        reproject()
         rebuild()
     }
 
@@ -45,7 +57,11 @@ extension PendingLaunchesVM {
     func didTapDetailCheckAgain() {
         guard didSubscribe, selection != nil, activeOperations == 0 else { return }
         handoffFailed = false
-        enqueueCheck()
+        // Both not-sent lines clear here. A resolved attempt is acknowledged only if this check stores a fresh lookup.
+        stopPrepareNotSent = false
+        notSentCleared = true
+        let latest = makeProjection().stop?.latest
+        enqueueCheck(acknowledging: latest.flatMap { $0.phase.isResolvedOutcome ? $0.attemptID : nil })
         rebuild()
     }
 
@@ -73,6 +89,8 @@ extension PendingLaunchesVM {
         firstCheckSettled = false
         handoffFailed = false
         detail = nil
+        discardStopState()
+        if projection.stop != nil { projection.stop = nil }
     }
 
     func resetSelectionForDisappearance() {
@@ -87,7 +105,7 @@ extension PendingLaunchesVM {
     /// Checks are serialized per lease (the chain restarts with a newly acquired lease): the owner refuses a second check on the same lease while an
     /// earlier call is outstanding, so each operation awaits the previous one without cancelling it.
     /// This is ordering, not retry.
-    private func enqueue(_ body: @escaping @MainActor (PendingLaunchesVM) async -> Void) {
+    func enqueue(_ body: @escaping @MainActor (PendingLaunchesVM) async -> Void) {
         let previous = lastOperation
         let session = operationSession
         activeOperations += 1
@@ -101,12 +119,17 @@ extension PendingLaunchesVM {
         }
     }
 
-    private func enqueueCheck() {
+    /// Queues one check. `acknowledging` is a resolved Stop attempt that the check hides once it stores a lookup.
+    func enqueueCheck(acknowledging attemptID: UUID? = nil) {
         let epoch = epoch
+        noteCheckQueued()
         enqueue { viewModel in
             guard viewModel.epoch == epoch, let selection = viewModel.selection else { return }
-            _ = await viewModel.useCase.check(selection: selection)
+            let lookup = await viewModel.useCase.check(selection: selection)
             guard viewModel.epoch == epoch, viewModel.selection == selection else { return }
+            if let attemptID, lookup.selection == selection, lookup.failure == nil, lookup.value != nil {
+                viewModel.acknowledgedAttempts.insert(attemptID)
+            }
             viewModel.reproject()
             guard viewModel.selection != nil else { return }
             viewModel.firstCheckSettled = true

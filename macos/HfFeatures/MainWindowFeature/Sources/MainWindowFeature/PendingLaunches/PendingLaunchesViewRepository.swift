@@ -22,4 +22,12 @@ final class PendingLaunchesViewRepository: PendingLaunchesUseCase {
     func resolveRecorded(selection: PendingLaunchSelection) async -> PendingLaunchRecordedResult {
         await repository.resolveRecorded(selection: selection)
     }
+
+    func prepareStop(selection: PendingLaunchSelection) async -> PendingLaunchStopPreparation {
+        await repository.prepareStop(selection: selection)
+    }
+
+    func submitStop(confirmation: PendingLaunchStopConfirmation) -> PendingLaunchStopAdmission {
+        repository.submitStop(confirmation: confirmation)
+    }
 }

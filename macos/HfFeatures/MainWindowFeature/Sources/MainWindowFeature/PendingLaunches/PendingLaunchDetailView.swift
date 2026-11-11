@@ -8,9 +8,12 @@ import SwiftUI
 struct PendingLaunchDetailBody: View {
     let detail: PendingLaunchDetailPresentation
     let reduceMotion: Bool
+    let stopFocusRequest: Int
+    let titleFocusRequest: Int
     let actions: PendingLaunchesActions
 
     @AccessibilityFocusState private var titleFocused: Bool
+    @FocusState private var stopFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -22,24 +25,56 @@ struct PendingLaunchDetailBody: View {
                 card
             }
             facts
-            if let action = detail.action {
-                Button(action == .checkTaskStatus ? "Check task status" : "Check again", action: handler(for: action))
-                    .buttonStyle(.bordered)
-                    .disabled(!detail.isActionEnabled)
-                    .accessibilityIdentifier("pending-launch-detail-action")
-            }
+            actionsAndNotes
             Text(PendingLaunchDetailPresentation.note)
                 .font(.hf(.secondary))
                 .foregroundStyle(Color.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { titleFocused = true }
+        .onChange(of: stopFocusRequest) { _, _ in
+            // Only a Stop that is shown and enabled can take focus; otherwise nothing is forced.
+            if detail.stop == .enabled { DispatchQueue.main.async { stopFocused = true } }
+        }
+        .onChange(of: titleFocusRequest) { _, _ in
+            titleFocused = false
+            DispatchQueue.main.async { titleFocused = true }
+        }
         // The card is replaced when the state leaves the placeholder; re-assert focus on the new title. Other
         // state changes keep focus where it is (for example on a pressed action).
         .onChange(of: detail.kind) { old, _ in
             guard old == .checking else { return }
             titleFocused = false
             DispatchQueue.main.async { titleFocused = true }
+        }
+    }
+
+    /// Stop (left) and the read action in one row, then the notes in drawn order.
+    private var actionsAndNotes: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if detail.stop != nil || detail.action != nil {
+                HStack(spacing: 8) {
+                    if let stop = detail.stop {
+                        Button("Stop…", role: .destructive, action: actions.stop)
+                            .buttonStyle(.bordered)
+                            .disabled(stop == .disabled)
+                            .focused($stopFocused)
+                            .accessibilityIdentifier("pending-launch-stop")
+                    }
+                    if let action = detail.action {
+                        Button(action == .checkTaskStatus ? "Check task status" : "Check again", action: handler(for: action))
+                            .buttonStyle(.bordered)
+                            .disabled(!detail.isActionEnabled)
+                            .accessibilityIdentifier("pending-launch-detail-action")
+                    }
+                }
+            }
+            ForEach(Array(detail.notes.enumerated()), id: \.offset) { _, note in
+                Text(note)
+                    .font(.hf(.secondary))
+                    .foregroundStyle(Color.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

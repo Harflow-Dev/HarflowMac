@@ -24,8 +24,9 @@ no embedded terminal anywhere in this package:
 - `MonitorDestination.pendingLaunches` selects `PendingLaunches/`: the pending launches list and the
   selected launch's detail over the shared `PendingLaunchRepository`. `PendingLaunchesVM` holds one read
   lease between `didAppear` and `didDisappear`, subscribes to the snapshot reduced to `(runtimeIdentity,
-  inventory, lookups)` with `removeDuplicates()`, projects it to the inventory plus the lookup stored for
-  its own lease, and builds `PendingLaunchesPresentation` and `PendingLaunchDetailPresentation` together in
+  runtimeKnown, inventory, lookups, a Stop attempt fingerprint)` with `removeDuplicates()` (the fingerprint only
+  triggers a reproject), projects the synchronous owner snapshot to the inventory, the lookup stored for its own lease
+  and the selected ID's Stop evidence, and builds `PendingLaunchesPresentation` and `PendingLaunchDetailPresentation` together in
   a detached task applied only for the current generation. `PendingLaunchesViewRepository` only forwards. A
   refused lease overrides the snapshot with the failed state; "Check again" refreshes the held lease or
   reacquires one, and the VM never cancels the owner's refresh task. `.capacity` and every other failure
@@ -45,8 +46,33 @@ no embedded terminal anywhere in this package:
   is `.admitted` for the selected ID and the screen, selection, runtime identity and epoch are unchanged;
   busy, capacity, superseded and changed results are inert, any other failure sets the handoff failure for
   the current selection. Back, disappearance, a runtime change and reappearance clear the selection and show
-  the inventory; in-flight owner calls are never cancelled and their results fail the epoch check. Stop is
-  not drawn (slice 3).
+  the inventory; in-flight owner calls are never cancelled and their results fail the epoch check.
+- Stop for a pending launch (`PendingLaunchesVM+Stop`, `PendingLaunchStopEvidence`, `PendingLaunchDetailPresentation+Stop`).
+  The subscription source also carries token-free `PendingLaunchStopEvidence` for attempts of the engine's current
+  runtime (matched by runtime token equality, so returning to an earlier runtime restores its attempts; none while the
+  runtime is unknown); the projection keeps the selected ID's `latest` attempt, its unsafe generations and its
+  unconfirmed (requested or uncertain) generations. Classification is total and conservative: sending, not sent
+  (any local refusal or nothing dispatched), preflight changed, did not start (only `targetIsProvenNotStarted`),
+  requested (any other acceptance, including settlement after running), uncertain, refused (the engine message with
+  whitespace collapsed, capped at 1024 characters, then escaped with `TaskChangesDisplayText.diffSafe`). Stop shows
+  only for Waiting, Preparing and Launch granted with `cancelSupport == .supported`, no unsupported observation and
+  a known runtime (`stopEligibility`, shared by the mapping and the VM), is disabled while any check, resolve or
+  preparation is queued or in flight and while an attempt for the generation is sending, and is hidden once an
+  attempt for that generation is unsafe (no re-offer after any resolved attempt, including a transient refusal).
+  Outcome cards win over the checking placeholder until the latest attempt is acknowledged by a Check again that
+  stored a lookup; selecting the row again never acknowledges it. The unconfirmed note shows on every status card of
+  the ID while a requested or uncertain attempt exists, except an eligible card of a newer generation. `didTapStop`
+  prepares through the same serialized chain as checks (inert unless the freshly computed detail offers an enabled
+  Stop), and presents a confirmation only if the reprojected lookup is still pending for the same generation and
+  eligible. The coordinator owns the `.stopPendingLaunch` sheet: every non-confirm exit (Cancel, Escape, binding set
+  to nil, replacement by another sheet, leaving the destination, runtime loss, Back/disappearance through
+  `dismissPendingLaunchStop`, a rejected presentation) reaches the single `endPendingStop` once, which cancels the
+  request (`.userCancel` returns focus to Stop after the sheet is gone, `.discard` does not); Request Stop releases the
+  request first and calls `confirm` once, and the title takes accessibility focus after the sheet is gone. Focus is requested from the sheet's native
+  `onDismiss` (`pendingLaunchStopSheetDidDismiss`), scoped to the dismissed confirmation's ID, never synchronously when
+  `presentedSheet` is cleared; a refused submit also requests Stop focus, which lands only if Stop is enabled when the dismissal arrives (best effort after `.refused(.changed)`, whose refresh check is usually still running). `submitStop`
+  runs only from `confirmStop` and `prepareStop` only from `didTapStop`: nothing is ever retried. A Check again also
+  clears both "Stop was not sent" sources, and a preflight-changed attempt queues exactly one read.
 - `HfUI.withPresentationContext()` is applied exactly **once**, at `MainWindowNavigationView`'s own
   root. Every screen under the navigation view, including the New Session sheet, shares that
   one `@Environment(\.viewEvent)` through the presenting view's environment.

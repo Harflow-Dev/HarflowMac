@@ -19,6 +19,10 @@ protocol PendingLaunchesUseCase: Sendable {
     func bindSelection(taskID: String?, lease: PendingLaunchReadLease) -> PendingLaunchSelection?
     func check(selection: PendingLaunchSelection) async -> PendingLaunchLookup
     func resolveRecorded(selection: PendingLaunchSelection) async -> PendingLaunchRecordedResult
+    /// Reads the launch again and, when Stop is still offered, mints a single-use confirmation for it.
+    func prepareStop(selection: PendingLaunchSelection) async -> PendingLaunchStopPreparation
+    /// Hands a confirmed Stop to the owner, which then owns the command whatever the screen does.
+    func submitStop(confirmation: PendingLaunchStopConfirmation) -> PendingLaunchStopAdmission
 }
 
 // MARK: - PendingLaunchesRouting
@@ -29,6 +33,29 @@ protocol PendingLaunchesUseCase: Sendable {
 protocol PendingLaunchesRouting: AnyObject {
     /// Opens the ordinary task screen for a task the owner admitted through a fresh status read.
     func openRecordedTask(_ taskID: String)
+    /// Presents the Stop confirmation for a captured launch. A request that cannot be presented is cancelled with `.discard`.
+    func presentPendingLaunchStop(_ request: PendingLaunchStopRequest)
+    /// Closes the confirmation if one is shown (reporting `.discard`); a no-op otherwise.
+    func dismissPendingLaunchStop()
+}
+
+// MARK: - PendingLaunchStopRequest
+
+/// Why a Stop confirmation ended without a request. Only the user's own Cancel returns focus to Stop.
+enum PendingLaunchStopCancelReason: Equatable, Sendable {
+    case userCancel, discard
+}
+
+/// One confirmation the coordinator presents. The closures are bound to the confirmation's ID and held weakly by
+/// the view model; the coordinator reaches exactly one of `confirm` or `cancel`, then `didDismiss` once the sheet is gone.
+struct PendingLaunchStopRequest: Sendable {
+    let id: UUID
+    let taskID: String
+    let confirm: @MainActor () -> Void
+    let cancel: @MainActor (PendingLaunchStopCancelReason) -> Void
+    /// Called from the sheet's native dismissal callback with this request's ID, so focus is requested only once the
+    /// sheet is really gone.
+    let didDismiss: @MainActor (UUID) -> Void
 }
 
 // MARK: - Builder values
@@ -49,7 +76,9 @@ struct PendingLaunchesBuildOutput: Equatable, Sendable {
     static func make(_ input: PendingLaunchesBuildInput) -> Self {
         .init(
             presentation: .make(input.projection, leaseRefused: input.leaseRefused, didObserveRead: input.didObserveRead),
-            detail: input.detail.map { .make(lookup: input.projection.lookup, input: $0) }
+            detail: input.detail.map {
+                .make(lookup: input.projection.lookup, input: $0, stop: input.projection.stop, runtimeKnown: input.projection.runtimeKnown)
+            }
         )
     }
 }
@@ -101,10 +130,34 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
     /// the owner's busy slot lasts until its earlier ctl call returns; a newly acquired lease starts a fresh chain.
     @ObservationIgnored var lastOperation: Task<Void, Never>?
 
+    // MARK: Stop state (see PendingLaunchesVM+Stop)
+
+    /// The prepared confirmation shown in the sheet, with the selection and epoch it was captured for.
+    @ObservationIgnored var stopConfirmation: ActiveStop?
+    /// Preparation or submission was refused locally for the current selection.
+    @ObservationIgnored var stopPrepareNotSent = false
+    /// Check again was tapped since the last not-sent attempt.
+    @ObservationIgnored var notSentCleared = false
+    /// Resolved attempts hidden by an explicit Check again that stored a fresh lookup. Kept across disappearance
+    /// (the coordinator caches this view model) and pruned to attempts still in the owner's snapshot.
+    @ObservationIgnored var acknowledgedAttempts = Set<UUID>()
+    /// Attempts whose "preflight changed" refresh check has been queued (or was covered by a later check).
+    @ObservationIgnored var refreshedPreflightAttempts = Set<UUID>()
+    /// The confirmation whose native dismissal should move focus, and where focus goes.
+    @ObservationIgnored var dismissFocusID: UUID?
+    @ObservationIgnored var focusStopAfterDismiss = false
+    @ObservationIgnored var focusTitleAfterDismiss = false
+    /// Tokens the detail view consumes: Stop regains focus after a user cancel, the card title after Request Stop.
+    var stopFocusRequest = 0
+    var titleFocusRequest = 0
+
     /// The delivered snapshot is only a trigger: the owner's publication drain can deliver an older value after
     /// a call returned, so the projection is always read from the synchronous owner snapshot.
     @ObservationIgnored var source = PendingLaunchesSource(PendingLaunchSnapshot()) {
-        didSet { projection = PendingLaunchesProjection(useCase.snapshot, lease: lease) }
+        didSet {
+            projection = makeProjection()
+            pruneStopBookkeeping()
+        }
     }
 
     @ObservationIgnored var projection = PendingLaunchesProjection(runtimeIdentity: UUID(), inventory: .init()) {
@@ -113,6 +166,7 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
             if projection.runtimeIdentity != oldValue.runtimeIdentity { didObserveRead = false }
             if projection.inventory.isRefreshing { didObserveRead = true }
             if selection != nil, useCase.snapshot.runtimeIdentity != selectedRuntime { clearSelection() }
+            queuePreflightRefreshIfNeeded()
             rebuild()
         }
     }
@@ -141,7 +195,7 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
             .store(in: &cancellables)
         isStarting = true
         let initial = useCase.snapshot
-        projection = PendingLaunchesProjection(initial)
+        projection = makeProjection()
         if initial.inventory.isRefreshing { didObserveRead = true }
         acquireLease()
         isStarting = false

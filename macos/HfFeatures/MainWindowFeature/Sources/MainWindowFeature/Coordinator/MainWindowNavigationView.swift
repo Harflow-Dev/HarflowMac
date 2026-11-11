@@ -65,10 +65,11 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
         }
         .sheet(item: Binding(get: {
             coordinator.presentedSheet == .newSession ? nil : coordinator.presentedSheet
-        }, set: { coordinator.presentedSheet = $0 })) { sheet in
+        }, set: { coordinator.presentedSheet = $0 }), onDismiss: { coordinator.pendingLaunchStopSheetDidDismiss() }) { sheet in
             switch sheet {
             case .workflowRunner: coordinator.buildWorkflowRunnerView()
             case .stopTask: coordinator.buildStopConfirmationView()
+            case .stopPendingLaunch: coordinator.buildPendingLaunchStopView()
             case .newSession: EmptyView()
             }
         }

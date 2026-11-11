@@ -59,6 +59,51 @@ import Testing
         #expect(confirmations == 0)
     }
 
+    private func pendingStopRequest(cancels: @escaping @MainActor (PendingLaunchStopCancelReason) -> Void,
+                                    confirms: @escaping @MainActor () -> Void) -> PendingLaunchStopRequest {
+        PendingLaunchStopRequest(id: UUID(), taskID: "20261110-093000-a17c92", confirm: confirms, cancel: cancels, didDismiss: { _ in })
+    }
+
+    @Test func givenRuntimeIsNotReady_whenPendingStopIsPresented_thenRejectedWithDiscardOnce() {
+        // given
+        let install = InstallFixture(.installationRequired(installedVersion: nil, requiredVersion: "0.0.2"))
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: install)
+        sut.selection = .pendingLaunches
+        var cancels: [PendingLaunchStopCancelReason] = []
+        var confirms = 0
+        // when
+        sut.presentPendingLaunchStop(pendingStopRequest(cancels: { cancels.append($0) }, confirms: { confirms += 1 }))
+        // then
+        #expect(cancels == [.discard])
+        #expect(confirms == 0)
+        #expect(sut.presentedSheet == nil)
+        #expect(sut.pendingStopRequest == nil)
+    }
+
+    @Test func givenPendingStopSheet_whenRuntimeQualificationIsLost_thenDiscardedOnceAndALateConfirmIsInert() async {
+        // given
+        let install = InstallFixture(.ready)
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: install)
+        sut.selection = .pendingLaunches
+        var cancels: [PendingLaunchStopCancelReason] = []
+        var confirms = 0
+        let request = pendingStopRequest(cancels: { cancels.append($0) }, confirms: { confirms += 1 })
+        sut.presentPendingLaunchStop(request)
+        #expect(sut.presentedSheet == .stopPendingLaunch)
+        // when
+        install.setupSubject.send(.checking)
+        await waitUntil { !sut.runtimeIsReady }
+        #expect(!sut.runtimeIsReady)
+        sut.confirmPendingStop(requestID: request.id)
+        sut.cancelPendingStop(requestID: request.id)
+        sut.dismissPendingLaunchStop()
+        // then: readiness and the sheet are cleared together, so a confirmation cannot reach the view model.
+        #expect(cancels == [.discard])
+        #expect(confirms == 0)
+        #expect(sut.presentedSheet == nil)
+        #expect(sut.pendingStopRequest == nil)
+    }
+
     @Test func givenRuntimeIsNotReady_whenPresentingOrRoutingCreation_thenCreationIsBlocked() {
         let install = InstallFixture(.installationRequired(installedVersion: nil, requiredVersion: "0.0.2"))
         let parent = MockCoordinator()

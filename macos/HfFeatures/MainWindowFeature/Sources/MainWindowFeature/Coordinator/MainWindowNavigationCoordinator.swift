@@ -13,6 +13,8 @@ public enum MainWindowSheet: String, Identifiable {
     case workflowRunner
     /// Confirms stopping a captured standalone task.
     case stopTask
+    /// Confirms stopping a pending launch that has no task yet.
+    case stopPendingLaunch
 
     /// Stable identity for the presented destination.
     public var id: String { rawValue }
@@ -61,6 +63,10 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     func buildWorkflowRunnerView() -> AnyView
     /// Builds the captured standalone Stop confirmation.
     func buildStopConfirmationView() -> AnyView
+    /// Builds the captured pending-launch Stop confirmation.
+    func buildPendingLaunchStopView() -> AnyView
+    /// The sheet's native dismissal callback; moves focus once a pending-launch Stop sheet is really gone.
+    func pendingLaunchStopSheetDidDismiss()
     /// Builds the retained saved-workflow chooser as a navigation destination.
     func buildWorkflowLibraryView() -> AnyView
 
@@ -107,6 +113,8 @@ public extension MainWindowNavigationCoordinator {
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
 
     func buildStopConfirmationView() -> AnyView { AnyView(EmptyView()) }
+    func buildPendingLaunchStopView() -> AnyView { AnyView(EmptyView()) }
+    func pendingLaunchStopSheetDidDismiss() {}
     func buildStatisticsView() -> AnyView { AnyView(EmptyView()) }
     func buildResourceSlotsView() -> AnyView { AnyView(EmptyView()) }
     func buildPendingLaunchesView() -> AnyView { AnyView(EmptyView()) }

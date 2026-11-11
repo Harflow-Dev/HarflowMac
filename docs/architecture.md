@@ -65,8 +65,13 @@ still recorded; a stored failed read shows "Launch status unavailable". The sync
 the delivered publication, is projected after every call, because the owner's publication drain can deliver
 an older value late. Back unbinds synchronously. A runtime change, disappearance or reappearance returns to
 the inventory. `releaseReadLease` drops the lookups stored for that lease, so appearances do not accumulate
-lookups against the owner's bound; Stop attempts are kept. Stop, composer draft retention and the engine pin
-are unchanged.
+lookups against the owner's bound; Stop attempts are kept.
+
+Stop is offered on Waiting, Preparing and Launch granted. The projection carries token-free evidence of the
+selected ID's attempts for the current runtime; the VM prepares a confirmation through the same serialized chain,
+the coordinator owns the confirmation sheet with a single exit for every non-confirm path, and Request Stop hands
+the command to the owner, which keeps it across navigation. A resolved attempt is never offered or sent again for
+its launch generation, and nothing is retried. Composer draft retention and the engine pin are unchanged.
 
 ## Store recovery
 

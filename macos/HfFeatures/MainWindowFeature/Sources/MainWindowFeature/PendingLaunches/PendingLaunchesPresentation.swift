@@ -5,43 +5,71 @@ import MonitorCore
 
 // MARK: - PendingLaunchesSource
 
-/// What the subscription forwards: everything the screen reads except Stop attempts, so attempt activity
-/// is dropped before the main-queue hop.
+/// What the subscription forwards. It is only a trigger: the view model re-reads the synchronous owner snapshot
+/// to project. Stop attempts appear as a cheap fingerprint (identity and lifecycle, no engine text and no runtime
+/// token), so a change in an attempt still triggers a reproject while the conversion to evidence happens only for
+/// the selected ID, at projection time.
 struct PendingLaunchesSource: Equatable, Sendable {
+    struct AttemptFingerprint: Equatable, Sendable {
+        let id: UUID
+        let isExecuting: Bool
+        let hasFailure: Bool
+        let hasOutcome: Bool
+    }
+
     var runtimeIdentity: UUID
+    var runtimeKnown: Bool
     var inventory: PendingLaunchInventory
     var lookups: [PendingLaunchLookup]
+    var attempts: [AttemptFingerprint]
 
     init(_ snapshot: PendingLaunchSnapshot) {
         self.runtimeIdentity = snapshot.runtimeIdentity
+        self.runtimeKnown = snapshot.currentRuntime != nil
         self.inventory = snapshot.inventory
         self.lookups = snapshot.lookups
+        self.attempts = snapshot.attempts.map {
+            AttemptFingerprint(id: $0.id, isExecuting: $0.isExecuting, hasFailure: $0.preflightFailure != nil, hasOutcome: $0.outcome != nil)
+        }
     }
 }
 
 // MARK: - PendingLaunchesProjection
 
-/// The only snapshot fields the screen reads: runtime identity, the inventory and the lookup stored for
-/// this view model's own lease. Other leases' lookups and attempts publish
-/// distinct full snapshots with an unchanged projection, which must not rebuild the presentation.
+/// The only snapshot fields the screen reads: runtime identity, whether the engine's runtime is known, the
+/// inventory, the lookup stored for this view model's own lease and the selected ID's Stop attempts. Other
+/// leases' lookups and attempts for other IDs publish distinct full snapshots with an unchanged projection,
+/// which must not rebuild the presentation.
 struct PendingLaunchesProjection: Equatable, Sendable {
     var runtimeIdentity: UUID
+    var runtimeKnown: Bool
     var inventory: PendingLaunchInventory
     var lookup: PendingLaunchLookup?
+    var stop: PendingLaunchStopProjection?
 
-    init(runtimeIdentity: UUID, inventory: PendingLaunchInventory, lookup: PendingLaunchLookup? = nil) {
+    init(runtimeIdentity: UUID, runtimeKnown: Bool = false, inventory: PendingLaunchInventory, lookup: PendingLaunchLookup? = nil,
+         stop: PendingLaunchStopProjection? = nil) {
         self.runtimeIdentity = runtimeIdentity
+        self.runtimeKnown = runtimeKnown
         self.inventory = inventory
         self.lookup = lookup
+        self.stop = stop
     }
 
-    init(_ source: PendingLaunchesSource, lease: PendingLaunchReadLease?) {
-        self.init(runtimeIdentity: source.runtimeIdentity, inventory: source.inventory,
-                  lookup: lease.flatMap { lease in source.lookups.first { $0.selection.lease == lease } })
-    }
-
-    init(_ snapshot: PendingLaunchSnapshot, lease: PendingLaunchReadLease? = nil) {
-        self.init(PendingLaunchesSource(snapshot), lease: lease)
+    /// Attempts are filtered to the engine's current runtime (matched by token equality, so returning to an earlier
+    /// runtime restores its attempts; none while it is unknown) and to the selected ID before they are converted to
+    /// token-free evidence. The token is never stored, displayed or logged.
+    init(_ snapshot: PendingLaunchSnapshot, lease: PendingLaunchReadLease? = nil, selectedTaskID: String? = nil) {
+        let evidence: [PendingLaunchStopEvidence] = if let selectedTaskID, let current = snapshot.currentRuntime {
+            snapshot.attempts
+                .filter { $0.confirmation.taskID == selectedTaskID && $0.confirmation.runtime == current }
+                .map(PendingLaunchStopEvidence.init)
+        } else {
+            []
+        }
+        self.init(runtimeIdentity: snapshot.runtimeIdentity, runtimeKnown: snapshot.currentRuntime != nil, inventory: snapshot.inventory,
+                  lookup: lease.flatMap { lease in snapshot.lookups.first { $0.selection.lease == lease } },
+                  stop: selectedTaskID.flatMap { PendingLaunchStopProjection(evidence, taskID: $0) })
     }
 }
 

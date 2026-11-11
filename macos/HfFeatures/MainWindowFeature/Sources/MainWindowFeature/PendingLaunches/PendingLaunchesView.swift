@@ -10,6 +10,9 @@ protocol PendingLaunchesViewModel: ViewModel {
     var detail: PendingLaunchDetailPresentation? { get }
     /// The inventory row that takes keyboard focus after Back.
     var focusRowID: String? { get }
+    /// Bumped when Stop should regain focus (after a user cancel) or the card title should (after Request Stop).
+    var stopFocusRequest: Int { get }
+    var titleFocusRequest: Int { get }
     func didAppear()
     func didDisappear()
     func didTapCheckAgain()
@@ -17,6 +20,7 @@ protocol PendingLaunchesViewModel: ViewModel {
     func didTapBack()
     func didTapDetailCheckAgain()
     func didTapCheckTaskStatus()
+    func didTapStop()
 }
 
 // MARK: - PendingLaunchesView
@@ -30,9 +34,11 @@ struct PendingLaunchesView<VM: PendingLaunchesViewModel>: View {
     var body: some View {
         PendingLaunchesContent(
             presentation: viewModel.presentation, detail: viewModel.detail, focusRowID: viewModel.focusRowID,
+            stopFocusRequest: viewModel.stopFocusRequest, titleFocusRequest: viewModel.titleFocusRequest,
             actions: .init(
                 checkAgain: viewModel.didTapCheckAgain, select: viewModel.didSelectRow, back: viewModel.didTapBack,
-                detailCheckAgain: viewModel.didTapDetailCheckAgain, checkTaskStatus: viewModel.didTapCheckTaskStatus
+                detailCheckAgain: viewModel.didTapDetailCheckAgain, checkTaskStatus: viewModel.didTapCheckTaskStatus,
+                stop: viewModel.didTapStop
             )
         )
             .onAppear { viewModel.didAppear() }
@@ -47,6 +53,8 @@ final class PendingLaunchesPreviewMock: PendingLaunchesViewModel {
     var presentation: PendingLaunchesPresentation
     var detail: PendingLaunchDetailPresentation?
     var focusRowID: String?
+    var stopFocusRequest = 0
+    var titleFocusRequest = 0
     init(presentation: PendingLaunchesPresentation = PendingLaunchesFixture.inventory, detail: PendingLaunchDetailPresentation? = nil) {
         self.presentation = presentation
         self.detail = detail
@@ -59,6 +67,7 @@ final class PendingLaunchesPreviewMock: PendingLaunchesViewModel {
     func didTapBack() {}
     func didTapDetailCheckAgain() {}
     func didTapCheckTaskStatus() {}
+    func didTapStop() {}
 }
 
 #Preview { PendingLaunchesView(PendingLaunchesPreviewMock()).frame(width: 850, height: 700) }

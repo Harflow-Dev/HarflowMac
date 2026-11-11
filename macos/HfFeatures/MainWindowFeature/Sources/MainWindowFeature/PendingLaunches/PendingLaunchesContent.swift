@@ -11,6 +11,7 @@ struct PendingLaunchesActions {
     var back: () -> Void = {}
     var detailCheckAgain: () -> Void = {}
     var checkTaskStatus: () -> Void = {}
+    var stop: () -> Void = {}
 }
 
 // MARK: - PendingLaunchesContent
@@ -20,6 +21,9 @@ struct PendingLaunchesContent: View {
     let presentation: PendingLaunchesPresentation
     var detail: PendingLaunchDetailPresentation?
     var focusRowID: String?
+    /// Bumped by the view model: Stop takes focus after a user cancel, the card title after Request Stop.
+    var stopFocusRequest = 0
+    var titleFocusRequest = 0
     var actions = PendingLaunchesActions()
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -34,7 +38,8 @@ struct PendingLaunchesContent: View {
             ScrollView {
                 Group {
                     if let detail {
-                        PendingLaunchDetailBody(detail: detail, reduceMotion: reduceMotion, actions: actions)
+                        PendingLaunchDetailBody(detail: detail, reduceMotion: reduceMotion, stopFocusRequest: stopFocusRequest,
+                                                titleFocusRequest: titleFocusRequest, actions: actions)
                     } else {
                         inventory
                     }

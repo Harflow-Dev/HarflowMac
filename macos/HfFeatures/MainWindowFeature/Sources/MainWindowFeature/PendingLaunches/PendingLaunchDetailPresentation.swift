@@ -17,8 +17,14 @@ struct PendingLaunchDetailFlags: Equatable, Sendable {
     /// True once the first check for this selection has finished (even when it stored nothing).
     var firstCheckSettled = false
     var handoffFailed = false
-    /// A check or recorded-status call is in flight or queued on the lease.
+    /// A check, recorded-status call or Stop preparation is in flight or queued on the lease.
     var isBusy = false
+    /// Stop preparation or submission was refused locally for the selection ("Stop was not sent").
+    var stopPrepareNotSent = false
+    /// The latest Stop attempt was acknowledged by an explicit Check again that stored a fresh lookup.
+    var acknowledgedAttempt = false
+    /// Check again was tapped since the last not-sent attempt, so the not-sent line is not repeated.
+    var notSentCleared = false
 }
 
 // MARK: - PendingLaunchDetailPresentation
@@ -28,6 +34,12 @@ struct PendingLaunchDetailPresentation: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
         case checking, waiting, preparing, preparingHandshake, granted, notStarted
         case unavailable, missing, recorded, handoffFailed
+        /// Outcome cards of a Stop attempt.
+        case stopRequested, stopUncertain, stopRefused, stopDidNotStart
+    }
+
+    enum StopControl: Equatable, Sendable {
+        case enabled, disabled
     }
 
     enum Action: Equatable, Sendable {
@@ -49,6 +61,10 @@ struct PendingLaunchDetailPresentation: Equatable, Sendable {
     /// Nil only for the checking placeholder, which offers no action.
     let action: Action?
     let isActionEnabled: Bool
+    /// The Stop button; nil hides it.
+    var stop: StopControl?
+    /// Lines between the action row and the detail note, in drawn order.
+    var notes: [String] = []
 
     static let note = "Harflow has not confirmed a running task yet. Messages and activity remain unavailable."
     static let checkingLabel = "Checking launch status"
@@ -58,7 +74,7 @@ struct PendingLaunchDetailPresentation: Equatable, Sendable {
         .init(kind: .checking, title: checkingLabel, message: "", facts: [selectedID(taskID)], action: nil, isActionEnabled: false)
     }
 
-    private static func selectedID(_ taskID: String) -> Fact { .init(label: "Selected ID", value: taskID, isCode: true) }
+    static func selectedID(_ taskID: String) -> Fact { .init(label: "Selected ID", value: taskID, isCode: true) }
 }
 
 // MARK: - Mapping
@@ -72,26 +88,31 @@ extension PendingLaunchDetailPresentation {
 
     /// Only a lookup whose selection equals the current one is evidence; anything else is ignored.
     static func make(
-        lookup: PendingLaunchLookup?, input: PendingLaunchDetailInput, timeZone: TimeZone = .autoupdatingCurrent
+        lookup: PendingLaunchLookup?, input: PendingLaunchDetailInput, stop: PendingLaunchStopProjection? = nil,
+        runtimeKnown: Bool = false, timeZone: TimeZone = .autoupdatingCurrent
     ) -> Self {
         let evidence: Evidence = if let lookup, lookup.selection == input.selection {
             lookup.failure == nil ? lookup.value.map(Evidence.value) ?? .failed : .failed
         } else {
             .none
         }
-        return make(taskID: input.selection.taskID, evidence: evidence, flags: input.flags, timeZone: timeZone)
+        return make(taskID: input.selection.taskID, evidence: evidence, flags: input.flags, stop: stop, runtimeKnown: runtimeKnown,
+                    timeZone: timeZone)
     }
 
     /// Total mapping from the exactly-matching evidence. Unrecognized or contradictory inputs never
     /// upgrade to a more confident state.
     static func make(
-        taskID: String, evidence: Evidence, flags: PendingLaunchDetailFlags, timeZone: TimeZone = .autoupdatingCurrent
+        taskID: String, evidence: Evidence, flags: PendingLaunchDetailFlags, stop: PendingLaunchStopProjection? = nil,
+        runtimeKnown: Bool = false, timeZone: TimeZone = .autoupdatingCurrent
     ) -> Self {
-        switch evidence {
+        let status: Self = switch evidence {
         case .none: flags.firstCheckSettled ? unavailable(taskID, flags) : checking(taskID: taskID)
         case .failed: unavailable(taskID, flags)
         case .value(let value): make(taskID: taskID, item: value.item, flags: flags, timeZone: timeZone)
         }
+        return withStop(status, taskID: taskID, evidence: evidence,
+                        context: .init(flags: flags, stop: stop, runtimeKnown: runtimeKnown, timeZone: timeZone))
     }
 
     private static func make(taskID: String, item: TaskPendingLaunchItem, flags: PendingLaunchDetailFlags, timeZone: TimeZone) -> Self {
@@ -146,7 +167,7 @@ extension PendingLaunchDetailPresentation {
         return .init(kind: kind, title: title, message: message, facts: facts, action: .checkAgain, isActionEnabled: !flags.isBusy)
     }
 
-    private static func qualifiedFacts(_ launch: TaskPendingLaunchMetadata, taskID: String, timeZone: TimeZone) -> [Fact] {
+    static func qualifiedFacts(_ launch: TaskPendingLaunchMetadata, taskID: String, timeZone: TimeZone) -> [Fact] {
         var facts = [Fact(label: "Launch ID", value: taskID, isCode: true)]
         if let backend = trimmed(launch.backend) {
             facts.append(.init(label: "Harness", value: BackendStyle.displayName(backend), isCode: false))
@@ -167,8 +188,8 @@ extension PendingLaunchDetailPresentation {
         simple(.unavailable, "Launch status unavailable", "Harflow could not check this launch. Its outcome is unknown.", taskID, flags)
     }
 
-    private static func simple(_ kind: Kind, _ title: String, _ message: String, _ taskID: String, _ flags: PendingLaunchDetailFlags,
-                               action: Action = .checkAgain) -> Self {
+    static func simple(_ kind: Kind, _ title: String, _ message: String, _ taskID: String, _ flags: PendingLaunchDetailFlags,
+                       action: Action = .checkAgain) -> Self {
         .init(kind: kind, title: title, message: message, facts: [selectedID(taskID)], action: action, isActionEnabled: !flags.isBusy)
     }
 
@@ -186,7 +207,12 @@ extension PendingLaunchDetailPresentation {
     static func notStartedMessage(_ reason: String?) -> String {
         let base = "The engine recorded that this launch did not start."
         guard let reason = trimmed(reason) else { return base }
-        return "\(base) Reason: \(reason.hasSuffix(".") ? reason : reason + ".")"
+        return base + reasonSentence(reason)
+    }
+
+    /// " Reason: {reason}." with a single terminal period.
+    static func reasonSentence(_ reason: String) -> String {
+        " Reason: \(reason.hasSuffix(".") || reason.hasSuffix("…") ? reason : reason + ".")"
     }
 
     /// Fixed English shape `d MMM yyyy, HH:mm` in the given zone (the app is English-only). Formatters are cached
