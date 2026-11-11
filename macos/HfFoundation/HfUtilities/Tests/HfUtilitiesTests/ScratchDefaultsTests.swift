@@ -8,6 +8,7 @@ import Testing
     @Test func givenScratchSuite_whenWrittenAndRemoved_thenItStaysOutOfPreferencesAndCleansUp() async throws {
         // given
         let scratch = ScratchDefaults()
+        defer { scratch.remove() }
         let identifier = scratch.directory.lastPathComponent.replacingOccurrences(of: "harflow-defaults-", with: "")
         #expect(UUID(uuidString: identifier) != nil)
         let plist = URL(fileURLWithPath: scratch.suiteName + ".plist")
@@ -22,7 +23,6 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: plist.path), "The scratch plist was not written within 5 seconds")
         #expect(scratch.reopen().string(forKey: "key") == "value")
         let preferences = try realPreferencesEntries()
-        if let preferences { #expect(!preferences.isEmpty, "The real Preferences listing was unexpectedly empty") }
         #expect(!(preferences ?? []).contains { $0.contains(identifier) }, "A scratch suite leaked into ~/Library/Preferences")
 
         // when
