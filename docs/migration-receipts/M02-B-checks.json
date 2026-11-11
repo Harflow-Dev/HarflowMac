@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-11",
+  "start_commit": "98ec18b",
+  "commits": [
+    "4598f88",
+    "365c209",
+    "bfb6cc4",
+    "ccaa888"
+  ],
+  "xcode": "26.6 (17F113)",
+  "pins_unchanged": true,
+  "checks": [
+    {
+      "name": "pytest tests/ci",
+      "step": "1",
+      "result": "111 passed, 30 subtests",
+      "exit": 0
+    },
+    {
+      "name": "pytest tests/ci",
+      "step": "2",
+      "result": "111 passed, 30 subtests",
+      "exit": 0
+    },
+    {
+      "name": "pytest tests/ci",
+      "step": "3",
+      "result": "113 passed, 30 subtests",
+      "exit": 0
+    },
+    {
+      "name": "pytest tests/ci tests/test_swift_package_runner.py tests/test_monitor_profile.py",
+      "step": "4",
+      "result": "511 passed, 30 subtests",
+      "exit": 0
+    },
+    {
+      "name": "build-app.sh release",
+      "step": "1/2/3",
+      "exit": 0,
+      "inventory_equal_to_baseline": true
+    },
+    {
+      "name": "build-app.sh debug",
+      "step": "3",
+      "exit": 0,
+      "inventory_equal_to_release_except_executable": true
+    },
+    {
+      "name": "release.py bundle/source/unsigned",
+      "step": "1/3",
+      "exit": 0
+    },
+    {
+      "name": "guarded runner HfFeatures/Harflow aggregate",
+      "step": "final",
+      "exit": 0,
+      "tests": "120/120",
+      "suites": 13,
+      "ids_equal_baseline": true
+    },
+    {
+      "name": "guarded runner MainWindowFeature suites",
+      "step": "final",
+      "exit": 1,
+      "partitions": "351/353",
+      "tests": "3193/3203",
+      "failing": [
+        "M04StateMatrixHostedTests (passed on rerun)",
+        "NewSessionComposerHostedTests (fails identically at 98ec18b sources)"
+      ]
+    },
+    {
+      "name": "xcodebuild build-for-testing, nine package schemes",
+      "step": "4",
+      "exit": 0
+    },
+    {
+      "name": "xcodebuild test per package scheme",
+      "step": "4",
+      "results": {
+        "HfUtilities": "19 pass",
+        "HfCommon": "19 pass",
+        "HfUI": "239 pass",
+        "MonitorCore": "876 pass",
+        "HfRepository": "674 pass",
+        "MenuBarFeature": "88 pass",
+        "Harflow": "120 pass",
+        "SettingsFeature": "87 tests, passed 2 of 5 runs (Xcode-only flake in GeneralSettingsRecoveryTests)"
+      }
+    },
+    {
+      "name": "HarflowHost buildForTesting gate (scratch bundle id, no URL types)",
+      "step": "4",
+      "exit": 0,
+      "app_built": false,
+      "launchservices_changed": false
+    },
+    {
+      "name": "HarflowHost test plan, MainWindowFeatureTests disabled",
+      "step": "4",
+      "exit": 0,
+      "targets_passed": 8
+    },
+    {
+      "name": "swiftformat --lint / swiftlint --strict / legacy / private-refs",
+      "step": "all",
+      "exit": 0
+    },
+    {
+      "name": "plutil -lint project, xmllint schemes, test plan JSON",
+      "step": "3/4",
+      "exit": 0
+    }
+  ],
+  "launchservices": {
+    "dev.harflow.mac_paths_before": 9,
+    "dev.harflow.mac_paths_after": 9,
+    "new_entries": []
+  },
+  "deviation": "Per-suite skips not honored by Xcode 26.6; MainWindowFeatureTests target disabled in plan and scheme instead."
+}
