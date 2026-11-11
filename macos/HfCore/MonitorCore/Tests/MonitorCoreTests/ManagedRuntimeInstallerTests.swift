@@ -164,8 +164,9 @@ struct ManagedRuntimeInstallerTests {
         return (installer, selectedDownloader, selectedRunner)
     }
 
-    @Test(arguments: ["", "unknown", "0.0.9", "0.0.13", "1.0.0", "0.0.10-dev", "v0.0.10", " 0.0.10", "0.0.10 ",
-                      "0.0.12-dev", "v0.0.12", " 0.0.12", "0.0.12 "])
+    @Test(arguments: ["", "unknown", "0.0.9", "0.0.14", "1.0.0", "0.0.10-dev", "v0.0.10", " 0.0.10", "0.0.10 ",
+                      "0.0.12-dev", "v0.0.12", " 0.0.12", "0.0.12 ",
+                      "0.0.13-dev", "v0.0.13", " 0.0.13", "0.0.13 "])
     func givenUnsupportedEngineVersion_whenPreparingOrChecking_thenItFailsBeforeAcquisitionOrExecution(_ version: String) async throws {
         // given
         let home = try makeTempDir("managed-runtime-unsupported-version")
