@@ -30,6 +30,68 @@ private func exceptionSelfTestTerminationHandler(_ signalNumber: CInt) {
     raise(signalNumber)
 }
 
+// MARK: - Host defaults
+
+/// The two settings that disable state restoration, applied through the volatile argument domain.
+/// That domain outranks every persistent domain and is never written to disk, so the host leaves
+/// no `dev.harflow.testhost.<id>.plist` behind in the real Preferences folder (the scratch HOME
+/// does not redirect cfprefsd).
+private let hostDefaultsOverrides: [(key: String, value: Bool)] = [
+    ("ApplePersistenceIgnoreState", true),
+    ("NSQuitAlwaysKeepsWindows", false)
+]
+
+/// Merges the overrides into the existing argument domain; never replaces it.
+private func applyHostDefaultsOverrides() {
+    let defaults = UserDefaults.standard
+    var domain = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+    for override in hostDefaultsOverrides {
+        domain[override.key] = override.value
+    }
+    defaults.setVolatileDomain(domain, forName: UserDefaults.argumentDomain)
+}
+
+/// The first effective value that differs from the override, or nil when all hold.
+private func effectiveDefaultsProblem() -> String? {
+    let defaults = UserDefaults.standard
+    for override in hostDefaultsOverrides {
+        let effective = defaults.object(forKey: override.key) as? Bool
+        if effective != override.value {
+            return "\(override.key) is \(effective.map(String.init(describing:)) ?? "unset"), expected \(override.value)"
+        }
+    }
+    return nil
+}
+
+/// Verifies the NSUserDefaults layer at the end of a run: the effective overrides still hold and the
+/// host's own persistent domain is empty or nil. Prints the single receipt line the runner requires
+/// on stderr, or a distinct failure line, and returns whether the host may exit successfully. AppKit
+/// reads that bypass NSUserDefaults are not covered by this check.
+private func verifyHostDefaultsAtExit() -> Bool {
+    func report(_ line: String) {
+        FileHandle.standardError.write(Data((line + "\n").utf8))
+    }
+    if let problem = effectiveDefaultsProblem() {
+        report("APPKIT_DEFAULTS effective=invalid \(problem)")
+        return false
+    }
+    guard let identifier = Bundle.main.bundleIdentifier else {
+        report("APPKIT_DEFAULTS persistent=unknown no bundle identifier")
+        return false
+    }
+    if let domain = UserDefaults.standard.persistentDomain(forName: identifier), !domain.isEmpty {
+        report("APPKIT_DEFAULTS persistent=non-empty keys=\(domain.keys.sorted().joined(separator: ","))")
+        return false
+    }
+    report("APPKIT_DEFAULTS persistent=empty")
+    return true
+}
+
+private func fail(_ message: String) -> Never {
+    FileHandle.standardError.write(Data("AppKit test host: \(message)\n".utf8))
+    exit(1)
+}
+
 // MARK: - AppKitTestHostDelegate
 
 @MainActor
@@ -69,8 +131,11 @@ private final class AppKitTestHostDelegate: NSObject, NSApplicationDelegate {
             options.eventStreamOutputPath = arguments[4]
             options.eventStreamSchemaVersion = "6.3.0"
             let code: CInt = await Testing.__swiftPMEntryPoint(passing: options)
+            // After the entry point returns, on passing and failing runs alike: a leftover setting
+            // fails the run even when every test passed.
+            let defaultsClean = verifyHostDefaultsAtExit()
             fflush(nil)
-            exit(code)
+            exit(code != 0 ? code : (defaultsClean ? 0 : 1))
         }
     }
 
@@ -93,8 +158,10 @@ private final class AppKitTestHostDelegate: NSObject, NSApplicationDelegate {
                 try? await Task.sleep(for: .milliseconds(20))
             }
             print("APPKIT_ACTIVATION active=\(NSApp.isActive) key=\(window.isKeyWindow)")
+            let activated = NSApp.isActive && window.isKeyWindow
+            let defaultsClean = verifyHostDefaultsAtExit()
             fflush(nil)
-            exit(NSApp.isActive && window.isKeyWindow ? 0 : 1)
+            exit(activated && defaultsClean ? 0 : 1)
         }
     }
 
@@ -142,11 +209,6 @@ private final class AppKitTestHostDelegate: NSObject, NSApplicationDelegate {
             exit(3)
         }
     }
-
-    private func fail(_ message: String) -> Never {
-        FileHandle.standardError.write(Data("AppKit test host: \(message)\n".utf8))
-        exit(1)
-    }
 }
 
 // MARK: - AppKitTestHost
@@ -159,8 +221,10 @@ private struct AppKitTestHost {
         // a hosted test terminates the process immediately with its own backtrace instead of
         // corrupting the async executor state and crashing later elsewhere.
         UserDefaults.standard.register(defaults: ["NSApplicationCrashOnExceptions": true])
-        UserDefaults.standard.set(false, forKey: "NSQuitAlwaysKeepsWindows")
-        UserDefaults.standard.set(true, forKey: "ApplePersistenceIgnoreState")
+        applyHostDefaultsOverrides()
+        if let problem = effectiveDefaultsProblem() {
+            fail("effective defaults differ from the host overrides: \(problem)")
+        }
         let application = NSApplication.shared
         application.setActivationPolicy(.regular)
         let delegate = AppKitTestHostDelegate()

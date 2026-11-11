@@ -26,6 +26,25 @@ PATTERNS = {
 }
 
 
+# The AppKit test host must never write to any defaults domain: its settings go through the volatile
+# argument domain. Receiver-independent on purpose (an alias such as `let d = UserDefaults.standard`
+# must not slip through). Applies to scripts/support only, not to macos/, where the app writes its own.
+HOST_SCAN_ROOT = "scripts/support"
+HOST_PATTERNS = {
+    "host defaults set": re.compile(r"\.\s*set\s*\("),
+    "host defaults setValue": re.compile(r"\.\s*setValue\s*\("),
+    "host defaults setObject": re.compile(r"\.\s*setObject\s*\("),
+    "host defaults removeObject": re.compile(r"\.\s*removeObject\s*\("),
+    "host defaults removePersistentDomain": re.compile(r"\.\s*removePersistentDomain\s*\("),
+}
+
+
+def host_violations(text):
+    """Names of the host-only forbidden writes found in Swift source text."""
+    normalised = text.replace("\r\n", "\n").replace("\r", "\n")
+    return sorted(name for name, pattern in HOST_PATTERNS.items() if pattern.search(normalised))
+
+
 def violations(text):
     """Names of the forbidden patterns found in Swift source text."""
     normalised = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -55,6 +74,17 @@ def test_no_named_defaults_suites_outside_the_scratch_helper():
         if found:
             offenders[relative] = found
     assert not offenders, f"Use ScratchDefaults from HfTestUtilities instead: {offenders}"
+
+
+def test_the_appkit_test_host_never_writes_defaults():
+    files = [path for path in swift_files() if path.relative_to(ROOT).as_posix().startswith(HOST_SCAN_ROOT + "/")]
+    assert any(path.name == "AppKitTestHost.swift" for path in files), "The scan did not include the test host"
+    offenders = {
+        path.relative_to(ROOT).as_posix(): found
+        for path in files
+        if (found := host_violations(path.read_text(encoding="utf-8", errors="replace")))
+    }
+    assert not offenders, f"The test host must use the volatile argument domain only: {offenders}"
 
 
 def test_the_allowlisted_helper_exists():
@@ -93,3 +123,31 @@ def test_each_forbidden_pattern_fires(source, expected):
 )
 def test_clean_sources_pass(source):
     assert violations(source) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ('UserDefaults.standard.set(false, forKey: "k")', "host defaults set"),
+        ('let d = UserDefaults.standard\nd.set(true, forKey: "k")', "host defaults set"),
+        ('defaults\n    .set(\n        true, forKey: "k")', "host defaults set"),
+        ('d.setValue(1, forKey: "k")', "host defaults setValue"),
+        ('d.setObject(1, forKey: "k")', "host defaults setObject"),
+        ('d.removeObject(forKey: "k")', "host defaults removeObject"),
+        ('d.removePersistentDomain(forName: "x")', "host defaults removePersistentDomain"),
+    ],
+)
+def test_each_host_write_pattern_fires(source, expected):
+    assert expected in host_violations(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'd.setVolatileDomain(domain, forName: UserDefaults.argumentDomain)',
+        'UserDefaults.standard.register(defaults: ["a": true])',
+        'let value = d.object(forKey: "k")',
+    ],
+)
+def test_clean_host_sources_pass(source):
+    assert host_violations(source) == []

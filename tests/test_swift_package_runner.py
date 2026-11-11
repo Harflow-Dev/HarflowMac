@@ -549,6 +549,7 @@ def _run_fake_host_partition(
     event_lines: list[str] | None = None,
     host_returncode: int = 0,
     host_timed_out: bool = False,
+    defaults_line: str | None = runner.HOST_DEFAULTS_RECEIPT,
 ) -> tuple[runner.PartitionResult, list[tuple[list[str], float]]]:
     package = tmp_path / runner.HOSTED_PACKAGE
     package.mkdir()
@@ -568,10 +569,10 @@ def _run_fake_host_partition(
             Path(stderr_path).write_text("legacy stderr\n", encoding="utf-8")
             return 0, False, 0.01
         Path(stdout_path).write_text("host stdout is intentionally separate\n", encoding="utf-8")
+        summary = (host_stderr if host_stderr is not None else
+                   "Test run with 2 tests in 1 suites passed after 0.1 seconds.\n")
         Path(stderr_path).write_text(
-            host_stderr if host_stderr is not None else
-            "Test run with 2 tests in 1 suites passed after 0.1 seconds.\n",
-            encoding="utf-8",
+            summary + (defaults_line + "\n" if defaults_line is not None else ""), encoding="utf-8",
         )
         Path(argv[-1]).write_text("\n".join(events) + "\n", encoding="utf-8")
         return host_returncode, host_timed_out, 0.02
@@ -618,6 +619,31 @@ def test_appkit_partition_fails_closed_for_probe_summary_identity_and_skip_error
     assert any(expected in failure for failure in result.failures), result.failures
 
 
+@pytest.mark.parametrize(
+    ("defaults_line", "expected", "unexpected"),
+    [
+        (None, "no defaults receipt", "host persisted settings"),
+        ("APPKIT_DEFAULTS persistent=non-empty keys=NSQuitAlwaysKeepsWindows", "host persisted settings", "no defaults receipt"),
+        ("APPKIT_DEFAULTS effective=invalid ApplePersistenceIgnoreState is unset, expected true",
+         "host defaults check failed", "no defaults receipt"),
+    ],
+)
+def test_appkit_partition_requires_the_defaults_receipt_even_when_tests_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defaults_line: str | None, expected: str, unexpected: str,
+) -> None:
+    result, _ = _run_fake_host_partition(monkeypatch, tmp_path, defaults_line=defaults_line)
+    assert not result.ok
+    assert any(expected in failure for failure in result.failures), result.failures
+    assert not any(unexpected in failure for failure in result.failures), result.failures
+
+
+def test_appkit_partition_nonzero_host_exit_with_receipt_reports_only_the_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, _ = _run_fake_host_partition(monkeypatch, tmp_path, host_returncode=1)
+    assert [failure for failure in result.failures if "defaults" in failure or "persisted" in failure] == []
+
+
 def test_appkit_partition_nonzero_host_exit_remains_failure_with_valid_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -648,6 +674,7 @@ def _fake_host_setup_environment(
     selected_swift_mismatch: bool = False,
     activation_receipt: str = "APPKIT_ACTIVATION active=true key=true",
     activation_returncode: int = 0,
+    activation_defaults: str | None = runner.HOST_DEFAULTS_RECEIPT,
     exception_receipt: str = "APPKIT_EXCEPTION name=NSInvalidArgumentException reason=AppKitTestHost exception self-test",
     exception_returncode: int = -6,
     exception_timed_out: bool = False,
@@ -712,7 +739,10 @@ def _fake_host_setup_environment(
             Path(stderr_path).write_text(exception_receipt + "\n", encoding="utf-8")
             return exception_returncode, exception_timed_out, 0.01
         Path(stdout_path).write_text(text + ("\n" if text else ""), encoding="utf-8")
-        Path(stderr_path).write_text("", encoding="utf-8")
+        Path(stderr_path).write_text(
+            (activation_defaults + "\n") if "--activation-self-test" in argv and activation_defaults else "",
+            encoding="utf-8",
+        )
         return (activation_returncode if "--activation-self-test" in argv else 0), False, 0.01
 
     monkeypatch.setattr(runner, "run_process", fake_run_process)
@@ -805,6 +835,23 @@ def test_prepare_appkit_host_rejects_activation_readiness_and_nonzero_setup(
     swift, package, _ = _fake_host_setup_environment(
         root, monkeypatch, activation_receipt=receipt, activation_returncode=returncode,
     )
+    (root / "logs").mkdir()
+    with pytest.raises(runner.RunnerError, match=message):
+        runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, {})
+
+
+@pytest.mark.parametrize(
+    ("defaults", "message"),
+    [
+        (None, "no defaults receipt"),
+        ("APPKIT_DEFAULTS persistent=non-empty keys=X", "host persisted settings"),
+    ],
+)
+def test_prepare_appkit_host_requires_the_activation_defaults_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defaults: str | None, message: str,
+) -> None:
+    root = tmp_path / "activation-defaults"
+    swift, package, _ = _fake_host_setup_environment(root, monkeypatch, activation_defaults=defaults)
     (root / "logs").mkdir()
     with pytest.raises(runner.RunnerError, match=message):
         runner.prepare_appkit_host(swift, str(package), str(root / "logs"), time.monotonic() + 10, {})

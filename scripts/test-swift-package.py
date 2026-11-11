@@ -896,6 +896,10 @@ def prepare_appkit_host(swift: str, package: str, output_dir: str,
     receipt = stage("host-activation", [executable, "--activation-self-test"], environment)
     if receipt != "APPKIT_ACTIVATION active=true key=true":
         raise RunnerError("AppKit host activation self-test did not produce the required receipt")
+    activation_defaults = validate_host_defaults_receipt(
+        _read_text(evidence["host-activation"]["stderr_log"], strict=False), "activation self-test stderr")
+    if activation_defaults:
+        raise RunnerError(f"AppKit host activation self-test: {activation_defaults[0]}")
     exception_stdout = os.path.join(output_dir, "host-exception.stdout.log")
     exception_stderr = os.path.join(output_dir, "host-exception.stderr.log")
     exception_argv = [executable, "--exception-self-test"]
@@ -945,6 +949,29 @@ def validate_host_summary(text: str, tests: int, suites: int | None) -> list[str
     # Reuse the existing exact summary checks without introducing synthetic evidence.
     return [failure.replace("stdout", "host stderr") for failure in
             validate_stdout(text, tests, suites) if "XCTest" not in failure]
+
+
+HOST_DEFAULTS_RECEIPT = "APPKIT_DEFAULTS persistent=empty"
+HOST_DEFAULTS_PREFIX = "APPKIT_DEFAULTS "
+
+
+def validate_host_defaults_receipt(text: str, label: str = "host stderr") -> list[str]:
+    """Require the host's end-of-run defaults receipt; report leftover settings distinctly.
+
+    The receipt means the host's own NSUserDefaults persistent domain was empty or nil at exit. It
+    does not prove that no preferences file exists, nor does it cover AppKit reads that bypass
+    NSUserDefaults.
+    """
+    lines = [line.strip() for line in text.splitlines()]
+    persisted = [line for line in lines if line.startswith(HOST_DEFAULTS_PREFIX + "persistent=non-empty")]
+    if persisted:
+        return [f"host persisted settings: {persisted[0]}"]
+    problems = [line for line in lines if line.startswith(HOST_DEFAULTS_PREFIX) and line != HOST_DEFAULTS_RECEIPT]
+    if problems:
+        return [f"host defaults check failed: {problems[0]}"]
+    if HOST_DEFAULTS_RECEIPT not in lines:
+        return [f"{label} has no defaults receipt ({HOST_DEFAULTS_RECEIPT})"]
+    return []
 
 
 def _execute_partition(
@@ -1031,7 +1058,9 @@ def _execute_partition(
     result.skipped = validation.skipped
     result.failures.extend(validation.failures)
     if hosted:
-        result.failures.extend(validate_host_summary(_read_text(stderr_log, strict=False), len(partition.ids), result.suites))
+        host_stderr = _read_text(stderr_log, strict=False)
+        result.failures.extend(validate_host_summary(host_stderr, len(partition.ids), result.suites))
+        result.failures.extend(validate_host_defaults_receipt(host_stderr))
     else:
         result.failures.extend(
             validate_stdout(stdout_text, expected_tests=len(partition.ids), expected_suites=result.suites)
