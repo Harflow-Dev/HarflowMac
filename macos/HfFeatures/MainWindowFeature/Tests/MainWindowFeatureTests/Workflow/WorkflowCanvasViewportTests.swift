@@ -22,10 +22,10 @@ import Testing
         vm.definition = definition
         if mode != "Editor" { vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("canvas-fixture"), "name": .string("Canvas fixture"),
                                              "status": .string("running"), "definition": .object(definition)]) }
-        let domain = "harflow-canvas-fixture-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: domain))
+        let scratch = ScratchDefaults(label: "harflow-canvas-fixture")
+        let defaults = scratch.defaults
         defaults.set(mode, forKey: "workflowViewMode")
-        defer { defaults.removePersistentDomain(forName: domain) }
+        defer { scratch.remove() }
         let host = NSHostingView(rootView: NavigationSplitView(columnVisibility: Binding(
             get: { layout.visibility }, set: { layout.visibility = $0 }
         )) {

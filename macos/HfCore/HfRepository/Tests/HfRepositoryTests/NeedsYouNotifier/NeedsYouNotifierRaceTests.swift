@@ -80,7 +80,9 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
         let events = PassthroughSubject<NeedsYouEvent, Never>()
         let repository = MockNeedsYouRepository()
         given(repository).eventsPublisher().willReturn(events.eraseToAnyPublisher())
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let center = GatedCenter()
         let scheduler = CapturingScheduler()
         let sut = NeedsYouNotifierImpl(repository: repository, settings: settings, center: center, scheduler: scheduler,

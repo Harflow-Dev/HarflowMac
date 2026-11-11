@@ -10,7 +10,9 @@ import Testing
 
     @Test func givenABareSwiftRunBinary_whenNotifying_thenNothingIsSent() async {
         // given — F4-25: no `.app` bundle, no bundle id.
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let center = MockNotificationCentering()
         given(center).requestAuthorization(options: .any).willReturn(true)
         let sut = FinishNotifierImpl(settings: settings, center: center, bundleIdentifier: { nil }, isAppBundle: { false })
@@ -25,7 +27,9 @@ import Testing
 
     @Test func givenNotifyOnFinishIsOff_whenNotifying_thenNothingIsSent() async {
         // given
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         settings.setNotifyOnFinish(false)
         let center = MockNotificationCentering()
         given(center).requestAuthorization(options: .any).willReturn(true)
@@ -41,7 +45,9 @@ import Testing
 
     @Test func givenNoFinishedTasks_whenNotifying_thenNothingIsSent() async {
         // given
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let center = MockNotificationCentering()
         given(center).requestAuthorization(options: .any).willReturn(true)
         let sut = FinishNotifierImpl(settings: settings, center: center, bundleIdentifier: { "dev.harflow.mac" }, isAppBundle: { true })
@@ -57,7 +63,9 @@ import Testing
     @Test func givenAFinishedRoot_whenNotified_thenTheIdentifierTitleBodyAndUserInfoMatch() async {
         // given — F4-25's exact copy: identifier `finished-<id>`, title "<status.label>: <title>",
         // body "<backend> · <repo>", userInfo carries task_id.
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let center = MockNotificationCentering()
         given(center).requestAuthorization(options: .any).willReturn(true)
         let addedRequests = LockedBox<[UNNotificationRequest]>([])

@@ -34,13 +34,14 @@ import Testing
 
     @Test func givenPersistedDelivery_whenRestarting_thenReplayIsDeduplicatedAndNewAnswerIsEligible() async {
         // given
-        let suite = UUID().uuidString
-        let ledger = InteractionNotificationLedger(defaults: UserDefaults(suiteName: suite)!, stateRoot: "/fixture/state", now: 100)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let ledger = InteractionNotificationLedger(defaults: scratch.defaults, stateRoot: "/fixture/state", now: 100)
         let delivered = event()
         #expect(await !ledger.contains(delivered))
         // when
         await ledger.record(delivered)
-        let restarted = InteractionNotificationLedger(defaults: UserDefaults(suiteName: suite)!, stateRoot: "/fixture/state", now: 300)
+        let restarted = InteractionNotificationLedger(defaults: scratch.reopen(), stateRoot: "/fixture/state", now: 300)
         // then
         #expect(await restarted.contains(delivered))
         #expect(await !restarted.contains(event("new-answer", at: 250)))
@@ -71,11 +72,12 @@ import Testing
 
     @Test func givenAnotherStateRoot_whenReadingDeduplication_thenDeliveryDoesNotLeakAcrossRoots() async {
         // given
-        let suite = UUID().uuidString
-        let first = InteractionNotificationLedger(defaults: UserDefaults(suiteName: suite)!, stateRoot: "/fixture/first", now: 100)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let first = InteractionNotificationLedger(defaults: scratch.defaults, stateRoot: "/fixture/first", now: 100)
         await first.record(event())
         // when
-        let second = InteractionNotificationLedger(defaults: UserDefaults(suiteName: suite)!, stateRoot: "/fixture/second", now: 100)
+        let second = InteractionNotificationLedger(defaults: scratch.reopen(), stateRoot: "/fixture/second", now: 100)
         // then
         #expect(await !second.contains(event()))
     }

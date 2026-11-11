@@ -9,7 +9,9 @@ import Testing
     @Test func givenNoLoginPathYet_whenProbing_thenTheProbeRunsWithHomeAsCwdAndAnEightSecondTimeout() async {
         // given — F4-02
         let runner = StubProcessRunner(output: stdout("/usr/bin:/bin\n"))
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: "/Users/fixture", baseEnvironment: [:], runner: runner, settings: settings)
 
         // when
@@ -33,7 +35,9 @@ import Testing
             if call.arguments.first == "tool" { return .success(stdout("/tool/bin\n")) }
             return .success(stdout(""))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: home, baseEnvironment: [:], runner: runner, settings: settings)
 
         // when
@@ -46,7 +50,9 @@ import Testing
     @Test func givenALocatedBinary_whenBuildingItsClient_thenItsOwnFolderIsOnThePath() {
         // given — F4-04
         let home = "/Users/fixture"
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         settings.setToolDirectory(home + "/toolbin")
         let sut = ToolEnvironmentRepositoryImpl(
             home: home, baseEnvironment: [:], runner: StubProcessRunner(output: stdout("")), settings: settings
@@ -62,7 +68,9 @@ import Testing
     @Test func givenToolDirectorySettingChanges_whenLocatorIsRead_thenOnlyTheOverrideIsReReadNotTheProbes() async {
         // given — decision 11 / F4-05: changing the Settings override re-reads live; the login-PATH
         // and uv probes never rerun.
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let runner = StubProcessRunner(output: stdout("/usr/bin\n"))
         let sut = ToolEnvironmentRepositoryImpl(home: "/Users/fixture", baseEnvironment: [:], runner: runner, settings: settings)
         _ = await sut.discoverEnvironment()
@@ -78,7 +86,9 @@ import Testing
 
     @Test func givenCtlCannotBeLocated_whenAskedForACtlClient_thenItFailsWithNotFound() {
         // given
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(
             home: "/nonexistent-\(UUID().uuidString)", baseEnvironment: [:],
             runner: StubProcessRunner(output: stdout("")), settings: settings
@@ -102,7 +112,9 @@ import Testing
         let runner = StubProcessRunner { call in
             .success(stdout(call.arguments.first == "tool" ? bin.value : path.value))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: "/fixture", baseEnvironment: [:], runner: runner,
                                                settings: settings, isExecutable: { _ in true })
         let received = LockedBox<[DiscoveryResult]>([])

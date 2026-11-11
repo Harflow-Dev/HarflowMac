@@ -1,15 +1,17 @@
 import Combine
 import Foundation
 @testable import HfRepository
+import HfTestUtilities
 import MonitorCore
 import Testing
 
 @Suite struct AgentUsageRepositoryImplTests {
-    private func defaults() -> UserDefaults { UserDefaults(suiteName: "HfRepository.AgentUsage.\(UUID().uuidString)")! }
 
     @Test func givenAcknowledgementIsRecordedTwice_whenRepositoryRecords_thenItCountsOnceAndPersists() async {
         // given
-        let store = defaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let store = scratch.defaults
         let sut = AgentUsageRepositoryImpl(defaults: store)
         let identity = AgentUsageIdentity(backend: "claude", model: "sonnet")
 
@@ -26,7 +28,9 @@ import Testing
 
     @Test func givenConcurrentSubmissions_whenRecorded_thenNoIncrementsAreLostAndAckNamespaceIsGlobal() async {
         // given
-        let sut = AgentUsageRepositoryImpl(defaults: defaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let sut = AgentUsageRepositoryImpl(defaults: scratch.defaults)
         let identity = AgentUsageIdentity(backend: "codex", model: nil)
 
         // when — the same acknowledgement is deliberately submitted by two surfaces.
@@ -42,7 +46,9 @@ import Testing
 
     @Test func givenInvalidOrEmptyIdentity_whenRecorded_thenSnapshotRemainsEmpty() async {
         // given
-        let sut = AgentUsageRepositoryImpl(defaults: defaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let sut = AgentUsageRepositoryImpl(defaults: scratch.defaults)
 
         // when
         await sut.record(AgentUsageIdentity(backend: "", model: "x"), acknowledgementID: "bad")
@@ -71,7 +77,9 @@ import Testing
 
     @Test func givenPublisher_whenEqualSnapshotRepeats_thenItEmitsInitialAndChangesOnly() async {
         // given
-        let sut = AgentUsageRepositoryImpl(defaults: defaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let sut = AgentUsageRepositoryImpl(defaults: scratch.defaults)
         var received: [AgentUsageSnapshot] = []
         let token = sut.snapshotPublisher().sink { received.append($0) }
 

@@ -17,7 +17,9 @@ extension ToolEnvironmentRepositoryImplTests {
             if call.executable == LaunchEnvironment.loginPathArgv[0] { return .success(stdout("/usr/bin:/home/.local/bin\n")) }
             return .success(stdout(""))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: "/home", baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { _ in false })
 
         // when
@@ -34,7 +36,9 @@ extension ToolEnvironmentRepositoryImplTests {
             if call.executable == LaunchEnvironment.loginPathArgv[0] { return .success(stdout("/usr/bin\n")) }
             return .success(stdout(""))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: "/home", baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { _ in false })
 
         // when
@@ -65,7 +69,9 @@ extension ToolEnvironmentRepositoryImplTests {
             if call.executable == fixedUv { return .success(stdout("/fixed/bin\n")) }
             return .success(stdout("/login/bin\n"))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(
             home: home, baseEnvironment: [:], runner: runner, settings: settings,
             isExecutable: { $0 == fixedUv || $0 == loginOnlyUv }
@@ -87,7 +93,9 @@ extension ToolEnvironmentRepositoryImplTests {
             if call.executable == LaunchEnvironment.loginPathArgv[0] { return .success(stdout("/some/other/dir\n")) }
             return .success(stdout("/login/bin\n"))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(
             home: home, baseEnvironment: [:], runner: runner, settings: settings,
             isExecutable: { $0 == loginOnlyUv }
@@ -115,7 +123,9 @@ extension ToolEnvironmentRepositoryImplTests {
             probeCalls.mutate { $0 += 1 }
             return .success(ProcessOutput(exitCode: 1, stdout: Data(), stderr: "", timedOut: false))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(
             home: home, baseEnvironment: [:], runner: runner, settings: settings,
             isExecutable: { $0 == uvPath }
@@ -140,7 +150,9 @@ extension ToolEnvironmentRepositoryImplTests {
             }
             return .success(stdout(""))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: home, baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { _ in false })
 
         // when
@@ -158,7 +170,9 @@ extension ToolEnvironmentRepositoryImplTests {
             if call.executable == LaunchEnvironment.loginPathArgv[0] { return .success(stdout("/usr/bin\n")) }
             return .success(ProcessOutput(exitCode: 0, stdout: Data("/tool/bin\n".utf8), stderr: "", timedOut: true))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: home, baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { $0 == uvPath })
 
         // when
@@ -178,7 +192,9 @@ extension ToolEnvironmentRepositoryImplTests {
             if call.executable == LaunchEnvironment.loginPathArgv[0] { return .success(stdout("/usr/bin\n")) }
             return .success(stdout("/tool/bin\n"))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: home, baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { _ in shouldFindUv.value })
         _ = await sut.discoverEnvironment()
         #expect(sut.discovery.uv != nil)
@@ -211,7 +227,9 @@ extension ToolEnvironmentRepositoryImplTests {
             }
             return .success(stdout("/tool/bin-pass\(passCount.value)\n"))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: home, baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { $0 == uvPath })
 
         // when
@@ -252,7 +270,9 @@ extension ToolEnvironmentRepositoryImplTests {
             }
             return .success(stdout("/tool/bin-pass\(passCount.value)\n"))
         }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let sut = ToolEnvironmentRepositoryImpl(home: home, baseEnvironment: [:], runner: runner, settings: settings, isExecutable: { $0 == uvPath })
 
         // when — "startup discovery" starts first and is slow; "install-triggered" discovery arrives

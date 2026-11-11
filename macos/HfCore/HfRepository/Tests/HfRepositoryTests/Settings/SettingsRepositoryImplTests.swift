@@ -1,17 +1,15 @@
 import Foundation
 @testable import HfRepository
+import HfTestUtilities
 import Testing
 
 @Suite struct SettingsRepositoryImplTests {
 
-    private func freshDefaults() -> UserDefaults {
-        let suite = "HfRepositoryTests.\(UUID().uuidString)"
-        return UserDefaults(suiteName: suite)!
-    }
-
     @Test func givenNoStoredValue_whenRead_thenTheDefaultIsToolDirectoryEmptyAndTogglesTrue() {
         // given
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
 
         // when
         let sut = SettingsRepositoryImpl(defaults: defaults)
@@ -26,7 +24,9 @@ import Testing
 
     @Test func givenAnInvalidAppearanceValue_whenConstructed_thenSystemIsUsedAndOtherSettingsSurvive() {
         // given
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         defaults.set("unsupported", forKey: SettingsRepositoryImpl.appAppearanceKey)
         defaults.set(false, forKey: SettingsRepositoryImpl.notifyOnFinishKey)
 
@@ -40,7 +40,9 @@ import Testing
 
     @Test func givenAppearanceSubscribers_whenValuesRepeat_thenInitialAndChangedValuesRemain() {
         // given
-        let sut = SettingsRepositoryImpl(defaults: freshDefaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let sut = SettingsRepositoryImpl(defaults: scratch.defaults)
         var values: [AppAppearance] = []
         let token = sut.appAppearancePublisher().sink { values.append($0) }
 
@@ -56,7 +58,9 @@ import Testing
 
     @Test func givenAppearanceWasPersisted_whenRepositoryRestarts_thenItIsReconstructed() {
         // given
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         SettingsRepositoryImpl(defaults: defaults).setAppAppearance(.dark)
 
         // when
@@ -74,7 +78,9 @@ import Testing
         // suite within one process, so an earlier test's `register(defaults:)` call can already be
         // visible on a brand-new suite. What matters, and what is asserted below, is what
         // `SettingsRepositoryImpl` itself reads back — never the naive `false`.
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
 
         // when
         let sut = SettingsRepositoryImpl(defaults: defaults)
@@ -85,7 +91,9 @@ import Testing
 
     @Test func givenAWrite_whenRead_thenItIsImmediateAndPersistedToUserDefaults() {
         // given
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         let sut = SettingsRepositoryImpl(defaults: defaults)
 
         // when
@@ -98,7 +106,9 @@ import Testing
 
     @Test func givenASettingWrite_whenObservedFromTwoReaders_thenBothSeeItLive() async {
         // given
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         let sut = SettingsRepositoryImpl(defaults: defaults)
         var seenByReaderA: [Bool] = []
         var seenByReaderB: [Bool] = []
@@ -116,7 +126,9 @@ import Testing
 
     @Test func givenToolDirectoryAlreadyStored_whenConstructed_thenItReadsTheStoredValueNotTheDefault() {
         // given
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         defaults.set("/usr/local/bin", forKey: SettingsRepositoryImpl.toolDirectoryKey)
 
         // when
@@ -128,7 +140,9 @@ import Testing
 
     @Test func givenSettingsSubscribers_whenIdenticalValuesRepeat_thenInitialAndChangedValuesRemain() {
         // given
-        let defaults = freshDefaults()
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         let sut = SettingsRepositoryImpl(defaults: defaults)
         var directories: [String] = []
         var openings: [Bool] = []
@@ -154,7 +168,9 @@ import Testing
 
     @Test func givenNoStoredValue_whenReadingNeedsYouNotification_thenDefaultsOnAndPersists() {
         // given
-        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         let sut = SettingsRepositoryImpl(defaults: defaults)
         // when / then
         #expect(sut.notifyOnNeedsYou)

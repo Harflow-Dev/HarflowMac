@@ -65,6 +65,7 @@ import Testing
         let window: NSWindow
         var evaluations = 0
         let layout = TopBarLayoutState()
+        private let scratch = ScratchDefaults(label: "TaskPaneToolbar")
         private(set) var hostWidth: CGFloat = 0
         private var controller: NSHostingController<AnyView>!
 
@@ -83,7 +84,7 @@ import Testing
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             let binding = chrome == .standalone ? TaskPaneBinding(store: store, conversationID: TaskPaneToolbarTests.conversation) : nil
-            let defaults = UserDefaults(suiteName: "TaskPaneToolbar-\(UUID().uuidString)")!
+            let defaults = scratch.defaults
             self.controller = NSHostingController(rootView: AnyView(BandHost(layout: layout, onWidth: { [weak self] in self?.hostWidth = $0 }) {
                 NavigationStack {
                     TaskDetailView(harness.sut, chrome: chrome, paneBinding: binding, transcriptStyle: .transcript,
@@ -102,6 +103,7 @@ import Testing
             window.contentViewController = nil
             window.close()
             NSApplication.shared.accessibilitySetValue(previousEnhanced, forAttribute: enhanced)
+            scratch.remove()
         }
 
         func pump() {

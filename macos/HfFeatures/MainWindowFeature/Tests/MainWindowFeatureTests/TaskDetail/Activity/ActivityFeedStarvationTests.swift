@@ -36,7 +36,9 @@ import Testing
         timer.resume()
         defer { timer.cancel() }
         let fixture = try ShortHistoryFixture(shortFill: shortFill)
-        let defaults = try #require(UserDefaults(suiteName: "ShortActivityStarvation-\(UUID().uuidString)"))
+        let scratch = ScratchDefaults(label: "ShortActivityStarvation")
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         let controller = NSHostingController(rootView: NavigationStack {
             TaskDetailView(fixture.sut)
         }
@@ -89,7 +91,9 @@ import Testing
         let harness = TaskDetailVMTests().makeSUT()
         harness.detailBox.value = TaskDetailVMTests().task(status: "completed")
         harness.eventsAvailabilityBox.value = .loading
-        let defaults = try #require(UserDefaults(suiteName: "ActivityStarvation-\(UUID().uuidString)"))
+        let scratch = ScratchDefaults(label: "ActivityStarvation")
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
         let controller = NSHostingController(rootView: NavigationStack {
             TaskDetailView(harness.sut)
         }

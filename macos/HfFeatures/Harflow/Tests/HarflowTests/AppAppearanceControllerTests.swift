@@ -7,11 +7,11 @@ import Testing
 
 @MainActor
 @Suite struct AppAppearanceControllerTests {
-    private func defaults() -> UserDefaults { UserDefaults(suiteName: "Harflow.Appearance.\(UUID().uuidString)")! }
-
     @Test func givenPersistedDarkAppearance_whenControllerStarts_thenItAppliesDarkBeforeUpdates() {
         // given
-        let settings = SettingsRepositoryImpl(defaults: defaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         settings.setAppAppearance(.dark)
         var applied: [String] = []
 
@@ -26,7 +26,9 @@ import Testing
 
     @Test func givenControllerIsAlive_whenSettingChanges_thenLightDarkAndSystemApplyInOrder() async {
         // given
-        let settings = SettingsRepositoryImpl(defaults: defaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         var applied: [String] = []
         let controller = AppAppearanceController(settingsRepository: settings) { appearance in
             applied.append(appearance?.name.rawValue ?? "system")
@@ -45,7 +47,9 @@ import Testing
 
     @Test func givenRepeatedAppearanceValue_whenSet_thenControllerDoesNotReapplyIt() async {
         // given
-        let settings = SettingsRepositoryImpl(defaults: defaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         var applied = 0
         let controller = AppAppearanceController(settingsRepository: settings) { _ in applied += 1 }
 
@@ -62,7 +66,9 @@ import Testing
     @Test func givenTwoWindowsAndASheet_whenAppearanceChanges_thenAllCurrentAndFutureWindowsFollow() async {
         // given
         _ = NSApplication.shared
-        let settings = SettingsRepositoryImpl(defaults: defaults())
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let previous = NSApp.appearance
         defer { NSApp.appearance = previous }
         let windowA = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 160, height: 100), styleMask: [.titled], backing: .buffered, defer: false)

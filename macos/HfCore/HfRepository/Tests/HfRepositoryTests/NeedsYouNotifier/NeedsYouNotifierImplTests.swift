@@ -31,7 +31,9 @@ import Testing
         given(center).registerCategory(.any).willReturn()
         given(center).add(.any).willProduce { request in added.mutate { $0.append(request) } }
         given(center).removeDeliveredNotifications(withIdentifiers: .any).willProduce { ids in removed.mutate { $0 += ids } }
-        let settings = SettingsRepositoryImpl(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         settings.setNotifyOnNeedsYou(notify)
         let scheduler = CapturingScheduler()
         let sut = NeedsYouNotifierImpl(repository: repository, settings: settings, center: center, scheduler: scheduler,

@@ -82,7 +82,8 @@ import Testing
     var evaluations = 0
     var controller: NSHostingController<AnyView>!
     let window: NSWindow
-    let defaults = UserDefaults(suiteName: "TaskChromeFixture-\(UUID().uuidString)")!
+    private let scratch = ScratchDefaults(label: "TaskChromeFixture")
+    var defaults: UserDefaults { scratch.defaults }
     private let enhanced = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
     private var previousEnhanced: Any?
 
@@ -220,5 +221,6 @@ import Testing
         window.contentViewController = nil
         window.close()
         NSApplication.shared.accessibilitySetValue(previousEnhanced, forAttribute: enhanced)
+        scratch.remove()
     }
 }

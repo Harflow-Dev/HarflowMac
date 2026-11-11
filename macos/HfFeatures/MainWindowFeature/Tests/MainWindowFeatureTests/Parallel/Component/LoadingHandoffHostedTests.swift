@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import HfTestUtilities
 @testable import HfUI
 @testable import MainWindowFeature
 import Mockable
@@ -129,13 +130,13 @@ import Testing
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
-        let suite = "LoadingHandoffHostedTests-" + UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let scratch = ScratchDefaults(label: "LoadingHandoffHostedTests")
+        let defaults = scratch.defaults
         defaults.set(mode, forKey: "workflowViewMode")
         vm.initialLoadingKind = "run"
         let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(defaults).environment(\.hfReduceMotionOverride, true),
                                    size: CGSize(width: 1000, height: 700))
-        defer { fixture.close(); vm.didDisappear(); defaults.removePersistentDomain(forName: suite) }
+        defer { fixture.close(); vm.didDisappear(); scratch.remove() }
         await fixture.settle { fixture.descendants.contains { ($0 as? NSSplitView)?.isVertical == true } }
         let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
         #expect(split.arrangedSubviews.count == 2)

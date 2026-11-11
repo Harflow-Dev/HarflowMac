@@ -77,6 +77,7 @@ import Testing
     let harness: TaskDetailVMTests.SUT
     let coordinator = MainWindowNavigationCoordinatorMock()
     let store = TaskPaneStateStore()
+    private let scratch = ScratchDefaults(label: "TopBarIntegrated")
     let window: NSWindow
     private(set) var content: TaskTopBarContent?
     private let tag = TopBarFixtures.tag(TopBarFixtures.Writer(), TopBarIntegratedFixture.conversation)
@@ -121,7 +122,7 @@ import Testing
                 .eraseToAnyView()
         }
         let root = MainWindowNavigationView(coordinator, sidebarCollapsed: config.collapsed)
-            .defaultAppStorage(UserDefaults(suiteName: "TopBarIntegrated-\(UUID().uuidString)")!)
+            .defaultAppStorage(scratch.defaults)
             .environment(\.hfReduceMotionOverride, true)
         let controller = NSHostingController(rootView: AnyView(root))
         controller.sceneBridgingOptions = .all
@@ -145,6 +146,7 @@ import Testing
         window.close()
         NSApplication.shared.accessibilitySetValue(previousEnhanced, forAttribute: enhanced)
         controller = nil
+        scratch.remove()
     }
 
     // MARK: Driving

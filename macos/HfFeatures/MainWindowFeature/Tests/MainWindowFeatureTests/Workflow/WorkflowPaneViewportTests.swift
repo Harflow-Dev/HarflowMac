@@ -71,10 +71,10 @@ import Testing
         // given
         _ = NSApplication.shared
         let state = ViewportEnvironmentState()
-        let domain = "harflow-host-fixture-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: domain))
+        let scratch = ScratchDefaults(label: "harflow-host-fixture")
+        let defaults = scratch.defaults
         defaults.set(42, forKey: "fixture-value")
-        defer { defaults.removePersistentDomain(forName: domain) }
+        defer { scratch.remove() }
         let host = NSHostingView(rootView: ViewportEnvironmentFixture(state: state).defaultAppStorage(defaults))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
