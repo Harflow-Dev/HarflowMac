@@ -22,9 +22,9 @@ Run Swift Testing through `scripts/test-swift-package.py`, which validates suppo
 
 ## Xcode project, schemes and test plan
 
-`macos/Harflow.xcodeproj` is opened directly. Its navigator shows `HarflowHost` (the app target's folder), `Configuration`, and the `HfFeatures`, `HfCore` and `HfFoundation` group folders; each package under a group folder appears as a local package, so no `XCLocalSwiftPackageReference` is declared. The shared `HarflowHost` scheme builds the app and defaults to `macos/Configuration/Harflow-UnitTests.xctestplan`, which runs all nine package test targets serially. Its build entry has `buildForTesting` off, so running the plan does not build or register an app copy. Each package also has a shared scheme named after it that builds the package and runs its tests (Product > Test).
+`macos/Harflow.xcodeproj` is opened directly. Its navigator shows `HarflowHost` (the app target's folder), `Configuration`, and the `HfFeatures`, `HfCore` and `HfFoundation` group folders; each package under a group folder appears as a local package, so no `XCLocalSwiftPackageReference` is declared. The shared `HarflowHost` scheme builds the app and defaults to `macos/Configuration/Harflow-UnitTests.xctestplan`, which lists all nine package test targets and runs eight of them serially (`MainWindowFeatureTests` is disabled, see below). Its build entry has `buildForTesting` off, so running the plan does not build or register an app copy. Each package also has a shared scheme named after it that builds the package and runs its tests (Product > Test).
 
-These Xcode entry points are a local convenience. MainWindowFeature holds every suite that the guarded runner hosts in its dedicated AppKit process (`HOSTED_SUITES` in `scripts/test-swift-package.py`); those suites need the runner's scratch HOME and AppKit host and must never run in Xcode's process against the real home folder. Xcode 26.6 does not honor per-suite skips (test plan `skippedTests` or scheme `SkippedTests`) for these Swift Testing targets, so the whole `MainWindowFeatureTests` target is disabled in the test plan and marked skipped in the MainWindowFeature scheme; the guarded runner (`--mode suites`) is the only route for that package. Do not re-enable it in Xcode. The guarded runner stays the authority for CI and releases. Xcode 26 or later is required for the synchronized folders.
+These Xcode entry points are a local convenience. MainWindowFeature holds every suite that the guarded runner hosts in its dedicated AppKit process (`HOSTED_SUITES` in `scripts/test-swift-package.py`); those suites need the runner's scratch HOME and AppKit host and must never run in Xcode's process against the real home folder. Xcode 26.6 does not honor per-suite skips (test plan `skippedTests` or scheme `SkippedTests`) for these Swift Testing targets, so the whole `MainWindowFeatureTests` target is disabled in the test plan and marked skipped in the MainWindowFeature scheme; the guarded runner (`--mode suites`) is the only route for that package. Do not re-enable it in Xcode, and never run individual MainWindowFeature tests from Xcode (test navigator, gutter diamonds) or with `xcodebuild -only-testing`: hosted suites would run under the real HOME. Use the guarded runner. The guarded runner stays the authority for CI and releases. Xcode 26 or later is required for the synchronized folders.
 
 Adding a package: create it one level inside `HfFoundation`, `HfCore` or `HfFeatures` (never at a group root, or it is not discovered), add its shared scheme and its test target to the test plan, and add it to the CI loop in `.github/workflows/macos.yml`; `tests/ci/test_app_host.py` checks each of these.
 
@@ -44,17 +44,16 @@ MainWindowFeature uses suite isolation as an AppKit fixture policy. The cause of
 exit remains unresolved, and suite isolation does not validate shared-process ordering or state
 leakage. An incomplete isolated suite still fails.
 
-The exact `MainWindowFeatureTests.ActivityFeedApprovalHostedTests` and
-`MainWindowFeatureTests.ObservationHostedTests` suites each run in a separate temporary,
+Each suite named in `HOSTED_SUITES` in `scripts/test-swift-package.py` (all in MainWindowFeature) runs in a separate temporary,
 ad-hoc signed AppKit application process with a synchronous main function and a retained application
 delegate. Its main thread runs `NSApplication.run()` throughout testing. Before loading the actual
 built test bundle, a separate bare application activation check must become active with a key
 fixture window. The host loads the original test bundle locally and invokes the selected toolchain's
 Testing entrypoint with the original anchored suite filter; it never invokes the bundle entrypoint.
-The runner admits only those two exact suite identities in MainWindowFeature with their own exact
-anchored filters. Aggregate selections, mixed hosted/ordinary tests, and combinations of both hosted
+The runner admits only those exact suite identities with their own exact
+anchored filters. Aggregate selections, mixed hosted/ordinary tests, and combinations of several hosted
 suites in one partition are rejected; `--mode suites` keeps their processes isolated.
-The runner stably places these two admitted suites first immediately after activation preflight,
+The runner stably places the admitted hosted suites first immediately after activation preflight,
 preserving their relative order and the canonical order of ordinary partitions. This reduces the
 activation-to-suite delay; it does not guarantee a shorter unlocked-desktop window. The desktop
 must remain available throughout native execution.

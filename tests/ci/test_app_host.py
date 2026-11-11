@@ -177,16 +177,16 @@ def load_runner():
 
 def scheme_buildables(scheme_path):
     root = ET.parse(scheme_path).getroot()
-    entries = [(ref.attrib["BlueprintName"], ref.attrib["ReferencedContainer"])
+    entries = [(ref.attrib["BlueprintIdentifier"], ref.attrib["BlueprintName"], ref.attrib["ReferencedContainer"])
                for ref in root.findall("./BuildAction/BuildActionEntries/BuildActionEntry/BuildableReference")]
-    testables = [(ref.attrib["BlueprintName"], ref.attrib["ReferencedContainer"])
+    testables = [(ref.attrib["BlueprintIdentifier"], ref.attrib["BlueprintName"], ref.attrib["ReferencedContainer"])
                  for ref in root.findall("./TestAction/Testables/TestableReference/BuildableReference")]
     return root, entries, testables
 
 
 def test_host_scheme_builds_only_the_app_without_building_for_testing_and_defaults_to_the_test_plan():
     root, entries, testables = scheme_buildables(PROJECT / "xcshareddata/xcschemes/HarflowHost.xcscheme")
-    assert entries == [("HarflowHost", "container:Harflow.xcodeproj")]
+    assert entries == [("A00000000000000000000001", "HarflowHost", "container:Harflow.xcodeproj")]
     assert testables == []
     entry = root.find("./BuildAction/BuildActionEntries/BuildActionEntry")
     assert entry.attrib["buildForTesting"] == "NO"
@@ -203,15 +203,15 @@ def test_every_package_has_its_own_shared_scheme_building_it_and_testing_its_tes
     for group, package in packages:
         _, entries, testables = scheme_buildables(PROJECT / f"xcshareddata/xcschemes/{package}.xcscheme")
         container = f"container:{group}/{package}"
-        assert entries == [(package, container)]
-        assert testables == [(f"{package}Tests", container)]
+        assert entries == [(package, package, container)]
+        assert testables == [(f"{package}Tests", f"{package}Tests", container)]
 
 
 def test_plan_runs_every_package_test_target_serially_and_disables_only_the_runner_hosted_one():
     plan = json.loads((MACOS / "Configuration/Harflow-UnitTests.xctestplan").read_text())
     targets = plan["testTargets"]
-    assert {(entry["target"]["containerPath"], entry["target"]["name"]) for entry in targets} == {
-        (f"container:{group}/{package}", f"{package}Tests") for group, package in discovered_packages()}
+    assert {(entry["target"]["containerPath"], entry["target"]["identifier"], entry["target"]["name"]) for entry in targets} == {
+        (f"container:{group}/{package}", f"{package}Tests", f"{package}Tests") for group, package in discovered_packages()}
     assert len(targets) == len(discovered_packages())
     assert all(entry["parallelizable"] is False for entry in targets)
     # Xcode 26.6 does not honor per-suite skips for these Swift Testing targets, so the only
