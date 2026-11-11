@@ -74,6 +74,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
         let events: PassthroughSubject<NeedsYouEvent, Never>
         let center: GatedCenter
         let scheduler: CapturingScheduler
+        let scratch: ScratchDefaults
     }
 
     private func rig() -> Rig {
@@ -81,14 +82,13 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
         let repository = MockNeedsYouRepository()
         given(repository).eventsPublisher().willReturn(events.eraseToAnyPublisher())
         let scratch = ScratchDefaults()
-        defer { scratch.remove() }
         let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         let center = GatedCenter()
         let scheduler = CapturingScheduler()
         let sut = NeedsYouNotifierImpl(repository: repository, settings: settings, center: center, scheduler: scheduler,
                                        bundleIdentifier: { "dev.harflow.mac" }, isAppBundle: { true })
         sut.start()
-        return Rig(sut: sut, events: events, center: center, scheduler: scheduler)
+        return Rig(sut: sut, events: events, center: center, scheduler: scheduler, scratch: scratch)
     }
 
     private func item(_ id: String) -> NeedsYouItem {
@@ -100,6 +100,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
     func givenResolutionDuringAuthorizationOrCategory_whenDelivering_thenTheResolvedItemIsNeverPosted(gate: GatedCenter.Gate) async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         rig.center.hold(gate)
         rig.events.send(.appeared(item("input:a:1"), sourceBaseline: false))
         rig.events.send(.appeared(item("input:a:2"), sourceBaseline: false))
@@ -116,6 +117,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
     @Test func givenResolutionDuringThePost_whenDelivering_thenTheNotificationIsRemovedAfterwards() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         rig.center.hold(.add)
         rig.events.send(.appeared(item("input:a:1"), sourceBaseline: false))
         rig.scheduler.fireFirstOneShot()
@@ -131,6 +133,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
     @Test func givenEveryRequestResolvedDuringAuthorization_whenDelivering_thenNoNotificationRemains() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         let ids = (1 ... 4).map { "input:a:\($0)" }
         rig.center.hold(.authorization)
         for id in ids { rig.events.send(.appeared(item(id), sourceBaseline: false)) }
@@ -147,6 +150,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
     @Test func givenRequestsResolvedDuringIndividualPost_whenAllResolve_thenEveryNotificationIsCleared() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         let ids = (1 ... 4).map { "input:a:\($0)" }
         rig.center.hold(.add)
         for id in ids { rig.events.send(.appeared(item(id), sourceBaseline: false)) }

@@ -7,6 +7,7 @@ ScratchDefaults helper uses absolute-path suite names instead, which are stored 
 
 from pathlib import Path
 import re
+import subprocess
 
 import pytest
 
@@ -17,6 +18,7 @@ ALLOWED = {"macos/HfFoundation/HfUtilities/Sources/HfTestUtilities/ScratchDefaul
 
 PATTERNS = {
     "suite initializer": re.compile(r"\b(?:NS)?UserDefaults\s*(?:\.\s*init)?\s*\(\s*suiteName"),
+    "implicit initializer": re.compile(r"(?<![\w.])\.init\s*\(\s*suiteName"),
     "addSuite": re.compile(r"\baddSuite\s*\(\s*named"),
     "setPersistentDomain": re.compile(r"\bsetPersistentDomain\s*\("),
     "CFPreferencesSet": re.compile(r"\bCFPreferencesSet"),
@@ -31,16 +33,21 @@ def violations(text):
 
 
 def swift_files():
-    for base in SCAN_ROOTS:
-        for path in sorted((ROOT / base).rglob("*.swift")):
-            if "/.build/" in path.as_posix():
-                continue
-            yield path
+    """Tracked or addable Swift files under the scan roots; build output and checkouts are ignored."""
+    listing = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", *SCAN_ROOTS],
+        cwd=ROOT, capture_output=True, check=True,
+    ).stdout.decode("utf-8")
+    return [ROOT / name for name in sorted(listing.split("\0")) if name.endswith(".swift") and (ROOT / name).is_file()]
 
 
 def test_no_named_defaults_suites_outside_the_scratch_helper():
+    files = swift_files()
+    visited = {path.relative_to(ROOT).as_posix() for path in files}
+    assert len(visited) > 200, f"The scan visited only {len(visited)} Swift files"
+    assert ALLOWED <= visited, "The scan did not include the allowlisted helper"
     offenders = {}
-    for path in swift_files():
+    for path in files:
         relative = path.relative_to(ROOT).as_posix()
         if relative in ALLOWED:
             continue
@@ -63,6 +70,7 @@ def test_the_allowlisted_helper_exists():
         ('let d = UserDefaults\n    .init(suiteName: "x")', "suite initializer"),
         ('let d = UserDefaults . init ( suiteName: name)', "suite initializer"),
         ('let d = NSUserDefaults(suiteName: "x")', "suite initializer"),
+        ('let d: UserDefaults? = .init(suiteName: "x")', "implicit initializer"),
         ('let d = UserDefaults(\r\n  suiteName: "x")', "suite initializer"),
         ('UserDefaults.standard.addSuite(named: "x")', "addSuite"),
         ('UserDefaults.standard.addSuite(\n  named: "x")', "addSuite"),

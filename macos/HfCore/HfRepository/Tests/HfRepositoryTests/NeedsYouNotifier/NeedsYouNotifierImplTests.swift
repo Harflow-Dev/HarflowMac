@@ -18,6 +18,7 @@ import Testing
         let added: LockedBox<[UNNotificationRequest]>
         let removed: LockedBox<[String]>
         let settings: SettingsRepositoryImpl
+        let scratch: ScratchDefaults
     }
 
     private func rig(notify: Bool = true, app: Bool = true) -> Rig {
@@ -32,14 +33,13 @@ import Testing
         given(center).add(.any).willProduce { request in added.mutate { $0.append(request) } }
         given(center).removeDeliveredNotifications(withIdentifiers: .any).willProduce { ids in removed.mutate { $0 += ids } }
         let scratch = ScratchDefaults()
-        defer { scratch.remove() }
         let settings = SettingsRepositoryImpl(defaults: scratch.defaults)
         settings.setNotifyOnNeedsYou(notify)
         let scheduler = CapturingScheduler()
         let sut = NeedsYouNotifierImpl(repository: repository, settings: settings, center: center, scheduler: scheduler,
                                        bundleIdentifier: { app ? "dev.harflow.mac" : nil }, isAppBundle: { app })
         sut.start()
-        return Rig(sut: sut, events: events, center: center, scheduler: scheduler, added: added, removed: removed, settings: settings)
+        return Rig(sut: sut, events: events, center: center, scheduler: scheduler, added: added, removed: removed, settings: settings, scratch: scratch)
     }
 
     private func item(_ id: String, ended: Bool = false, kind: NeedsYouItem.Kind = .question) -> NeedsYouItem {
@@ -51,6 +51,7 @@ import Testing
     @Test func givenBaselineItem_whenAppeared_thenNothingIsNotified() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         // when
         rig.events.send(.appeared(item("input:a:1"), sourceBaseline: true))
         rig.scheduler.fireFirstOneShot()
@@ -62,6 +63,7 @@ import Testing
     @Test func givenNewItem_whenFlushed_thenIdentifierTitleSubtitleBodyAndUserInfoMatch() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         // when
         rig.events.send(.appeared(item("input:a:1", ended: true), sourceBaseline: false))
         rig.scheduler.fireFirstOneShot()
@@ -79,6 +81,7 @@ import Testing
     @Test func givenMoreThanThreeItems_whenFlushed_thenEveryRequestIsPostedIndividually() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         let ids = (1 ... 4).map { "input:a:\($0)" }
         // when
         for id in ids { rig.events.send(.appeared(item(id), sourceBaseline: false)) }
@@ -91,6 +94,7 @@ import Testing
     @Test func givenResolvedItem_whenEventArrives_thenDeliveredNotificationIsRemoved() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         // when
         rig.events.send(.resolved("input:a:1"))
         await waitUntil { !rig.removed.value.isEmpty }
@@ -101,6 +105,7 @@ import Testing
     @Test func givenItemResolvedBeforeFlush_whenFlushed_thenItIsNotNotified() {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         rig.events.send(.appeared(item("input:a:1"), sourceBaseline: false))
         // when
         rig.events.send(.resolved("input:a:1"))
@@ -112,6 +117,7 @@ import Testing
     @Test func givenSettingOff_whenFlushed_thenNothingIsNotified() {
         // given
         let rig = rig(notify: false)
+        defer { rig.scratch.remove() }
         // when
         rig.events.send(.appeared(item("input:a:1"), sourceBaseline: false))
         rig.scheduler.fireFirstOneShot()
@@ -122,6 +128,7 @@ import Testing
     @Test func givenBareBinary_whenFlushed_thenNothingIsNotified() {
         // given
         let rig = rig(app: false)
+        defer { rig.scratch.remove() }
         // when
         rig.events.send(.appeared(item("input:a:1"), sourceBaseline: false))
         rig.scheduler.fireFirstOneShot()
@@ -132,6 +139,7 @@ import Testing
     @Test func givenApprovalWithCommand_whenFlushed_thenBodyNamesOnlyTheToolAndHidesPreviews() async {
         // given
         let rig = rig()
+        defer { rig.scratch.remove() }
         var approvalItem = item("approval:t1:r1", kind: .approval)
         approvalItem.text = "Bash: rm -rf /secret/path"
         approvalItem.approval = approval(command: "rm -rf /secret/path")

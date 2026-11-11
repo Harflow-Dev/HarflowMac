@@ -27,7 +27,11 @@ public final class ScratchDefaults: @unchecked Sendable {
             base = URL(fileURLWithPath: NSTemporaryDirectory()).absoluteURL.standardizedFileURL
         }
         let directory = base.appendingPathComponent("harflow-defaults-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            preconditionFailure("Could not create scratch defaults directory at \(directory.path): \(error)")
+        }
         let name = directory.appendingPathComponent(label).path
         precondition(name.hasPrefix("/"), "Scratch suite name must be an absolute path")
         self.directory = directory
