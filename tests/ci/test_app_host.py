@@ -158,6 +158,97 @@ def test_every_app_configuration_preserves_identity_and_single_binary(project):
     assert all(buildable.attrib["BlueprintIdentifier"] in target_keys for buildable in buildables)
 
 
+def discovered_packages():
+    """Return {(group, package)} for every Package.swift one level below a package group."""
+    return {(group, manifest.parent.name)
+            for group in PACKAGE_GROUPS
+            for manifest in (MACOS / group).glob("*/Package.swift")}
+
+
+def load_runner():
+    import importlib.util
+    path = ROOT / "scripts/test-swift-package.py"
+    spec = importlib.util.spec_from_file_location("swift_package_runner_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def scheme_buildables(scheme_path):
+    root = ET.parse(scheme_path).getroot()
+    entries = [(ref.attrib["BlueprintName"], ref.attrib["ReferencedContainer"])
+               for ref in root.findall("./BuildAction/BuildActionEntries/BuildActionEntry/BuildableReference")]
+    testables = [(ref.attrib["BlueprintName"], ref.attrib["ReferencedContainer"])
+                 for ref in root.findall("./TestAction/Testables/TestableReference/BuildableReference")]
+    return root, entries, testables
+
+
+def test_host_scheme_builds_only_the_app_without_building_for_testing_and_defaults_to_the_test_plan():
+    root, entries, testables = scheme_buildables(PROJECT / "xcshareddata/xcschemes/HarflowHost.xcscheme")
+    assert entries == [("HarflowHost", "container:Harflow.xcodeproj")]
+    assert testables == []
+    entry = root.find("./BuildAction/BuildActionEntries/BuildActionEntry")
+    assert entry.attrib["buildForTesting"] == "NO"
+    assert root.find("./TestAction").attrib["shouldAutocreateTestPlan"] == "NO"
+    plans = root.findall("./TestAction/TestPlans/TestPlanReference")
+    assert [(plan.attrib["reference"], plan.attrib.get("default")) for plan in plans] == [
+        ("container:Configuration/Harflow-UnitTests.xctestplan", "YES")]
+
+
+def test_every_package_has_its_own_shared_scheme_building_it_and_testing_its_test_target():
+    packages = discovered_packages()
+    schemes = {path.stem for path in (PROJECT / "xcshareddata/xcschemes").glob("*.xcscheme")}
+    assert schemes == {"HarflowHost"} | {package for _, package in packages}
+    for group, package in packages:
+        _, entries, testables = scheme_buildables(PROJECT / f"xcshareddata/xcschemes/{package}.xcscheme")
+        container = f"container:{group}/{package}"
+        assert entries == [(package, container)]
+        assert testables == [(f"{package}Tests", container)]
+
+
+def test_plan_runs_every_package_test_target_serially_and_disables_only_the_runner_hosted_one():
+    plan = json.loads((MACOS / "Configuration/Harflow-UnitTests.xctestplan").read_text())
+    targets = plan["testTargets"]
+    assert {(entry["target"]["containerPath"], entry["target"]["name"]) for entry in targets} == {
+        (f"container:{group}/{package}", f"{package}Tests") for group, package in discovered_packages()}
+    assert len(targets) == len(discovered_packages())
+    assert all(entry["parallelizable"] is False for entry in targets)
+    # Xcode 26.6 does not honor per-suite skips for these Swift Testing targets, so the only
+    # target holding runner-hosted suites is disabled as a whole; nothing else is.
+    disabled = {entry["target"]["name"] for entry in targets if entry.get("enabled") is False}
+    assert disabled == {"MainWindowFeatureTests"}
+    assert all("skippedTests" not in entry and "selectedTests" not in entry for entry in targets)
+
+
+def test_hosted_suites_all_live_in_the_disabled_main_window_target():
+    hosted = {name.split(".", 1)[0] for name in load_runner().HOSTED_SUITES}
+    assert hosted == {"MainWindowFeatureTests"}
+
+
+def test_main_window_scheme_skips_its_test_target_and_no_other_scheme_skips_tests():
+    for path in (PROJECT / "xcshareddata/xcschemes").glob("*.xcscheme"):
+        root = ET.parse(path).getroot()
+        skipped = [ref.attrib["skipped"] for ref in root.findall(".//TestableReference")]
+        assert not root.findall(".//SkippedTests"), path.name
+        assert skipped == (["YES"] if path.stem == "MainWindowFeature" else (["NO"] if skipped else [])), path.name
+
+
+def test_ci_covers_every_package_exactly_once():
+    import glob
+    workflow = (ROOT / ".github/workflows/macos.yml").read_text()
+    suites = re.findall(r"--package (macos/\S+) --mode suites", workflow)
+    assert suites == ["macos/HfFeatures/MainWindowFeature"]
+    loop = re.search(r"for package in ([^;]+); do", workflow).group(1).split()
+    covered = list(suites)
+    for entry in loop:
+        covered.extend(sorted(glob.glob(str(ROOT / entry))) if "*" in entry else [str(ROOT / entry)])
+    covered = [str(Path(entry).resolve().relative_to(ROOT.resolve())) if Path(entry).is_absolute() else entry
+               for entry in covered]
+    expected = sorted(f"macos/{group}/{package}" for group, package in discovered_packages())
+    assert sorted(covered) == expected
+
+
 @pytest.fixture
 def build_harness(tmp_path, monkeypatch):
     """Run only the wrapper in a scratch tree; all platform tools are inert fakes."""

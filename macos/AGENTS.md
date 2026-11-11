@@ -119,6 +119,10 @@ Above it, dependencies point only downward: Foundation (`HfUtilities`/`HfCommon`
 (`MonitorCore`/`HfRepository`) ← Features (every `HfFeatures` package except the `Harflow` shell) ← app shell (`HfFeatures/Harflow`) ← `HarflowHost`; feature packages must not depend on the shell. Every target
 declares every product it imports — no `@_exported` re-exports, ever.
 
+## Xcode project
+
+`Harflow.xcodeproj` is the single entry point. `HarflowHost/`, `Configuration/`, `HfFoundation/`, `HfCore/` and `HfFeatures/` are synchronized folders: packages must sit exactly one level below a package group (`HfFeatures/<Package>/Package.swift`) to be discovered. Adding a package means creating it in a group folder, adding its shared scheme under `Harflow.xcodeproj/xcshareddata/xcschemes`, adding its test target to `Configuration/Harflow-UnitTests.xctestplan` and adding it to the CI loop. Any file placed in `HarflowHost/` joins the app bundle (only `Info.plist` is excluded), so keep that folder to the entry wrapper, `Info.plist` and the app icons. The `MainWindowFeatureTests` target holds the runner-hosted suites (`HOSTED_SUITES`) and is disabled in the test plan and skipped in its scheme (Xcode does not honor per-suite skips here); never re-enable it in Xcode. The guarded runner remains the test authority.
+
 ## Before finishing a change
 
 1. `swiftformat macos && swiftlint lint` from the repo root must report nothing to format and 0

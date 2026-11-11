@@ -1,0 +1,86 @@
+{
+  "configurations" : [
+    {
+      "id" : "6F2C1B1A-3D0E-4C55-9B7A-1A2B3C4D5E6F",
+      "name" : "Default",
+      "options" : {}
+    }
+  ],
+  "defaultOptions" : {},
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfFoundation\/HfUtilities",
+        "identifier" : "HfUtilitiesTests",
+        "name" : "HfUtilitiesTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfFoundation\/HfCommon",
+        "identifier" : "HfCommonTests",
+        "name" : "HfCommonTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfFoundation\/HfUI",
+        "identifier" : "HfUITests",
+        "name" : "HfUITests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfCore\/MonitorCore",
+        "identifier" : "MonitorCoreTests",
+        "name" : "MonitorCoreTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfCore\/HfRepository",
+        "identifier" : "HfRepositoryTests",
+        "name" : "HfRepositoryTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfFeatures\/MenuBarFeature",
+        "identifier" : "MenuBarFeatureTests",
+        "name" : "MenuBarFeatureTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfFeatures\/SettingsFeature",
+        "identifier" : "SettingsFeatureTests",
+        "name" : "SettingsFeatureTests"
+      }
+    },
+    {
+      "enabled" : false,
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfFeatures\/MainWindowFeature",
+        "identifier" : "MainWindowFeatureTests",
+        "name" : "MainWindowFeatureTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:HfFeatures\/Harflow",
+        "identifier" : "HarflowTests",
+        "name" : "HarflowTests"
+      }
+    }
+  ],
+  "version" : 1
+}

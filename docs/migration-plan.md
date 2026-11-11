@@ -5,7 +5,7 @@ Revised 2026-11-04. Governing [revision 3](../../HARFLOW_MIGRATION_PLAN_V3.md),
 
 HarflowMac remains the product. Reuse sound SwiftUI/AppKit/domain/repository code;
 apply approved v2 with native adaptations, then switch its public adapter to Rust.
-The requested Xcode app host + SwiftPM modules is planned, not implemented.
+The requested Xcode app host + SwiftPM modules was delivered in M02 and restructured in M02-B (one project, grouped local packages, per-package schemes).
 
 - [x] B0-MA-01/02/03 S02 bounded baseline, captures and coupling inventory delivered.
 - [ ] C0-MA-01/02 Accept S06 exact fixture/decoder/fallback evidence; three MainWindow
@@ -13,7 +13,7 @@ The requested Xcode app host + SwiftPM modules is planned, not implemented.
 - [ ] M01 Scope/code-to-design inventory, missing-state M01-Gxx receipts and native
   performance/accessibility budgets; resolve relevant Proposed/Undecided rows.
 - [ ] M02 Thin .xcodeproj app target and SwiftPM modules: decide shell/test ownership,
-  preserve identity/resources/Bundle.module/CI/packaged-startup/release pipeline.
+  preserve identity/resources/Bundle.module/CI/packaged-startup/release pipeline; M02-B restructure recorded.
 - [ ] M03 Pin/qualify intended Python 0.0.8; migrate direct event/state reads/watches
   to bounded public operations. Eliminate private persistence coupling before Rust.
 - [ ] M04–M07 Native shell/composer, task transcript/right-pane/capture/history,
