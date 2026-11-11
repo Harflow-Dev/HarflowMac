@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "source": "13f823dbe57316f61db429893ad9d83b856980d3",
+  "engine_version": "0.0.13",
+  "engine_wheel_sha256": "1363c549e8d701efb9a0d6f00197f725a262f5fdecca6ff2964f5331d60c8424",
+  "sdist_sha256": "db2f86831ce09690a5365cf7d3f178a29705498a6affeb9ea366a2fe8808675a",
+  "specification_identity": {"0.0.12": "a04b3ae1ac587a7ba29e401e4856b1dfd2f4a88ad45454c8b561cdb7e671238d", "0.0.13": "1c50608c03f9e05f52bd6bf531614a49adcf05620d796c82b6b59835cba5ec49"},
+  "inputs": {
+    "ManagedRuntime-0.0.13.json": "f9b0b14d0f9f943c8f6a5a3b77e8081f91c62b3ed4b5cfcde075500bbd6c29e2",
+    "ManagedRuntime-0.0.12.json": "4860754b2bbb103d51f1825c8f628767bf4352a44772ed834656cac572c5eae7",
+    "pypi-0.0.13.json": "92dd0e3e58bd19cc14e2077f93efe12740182d2122af59aebbd6ed408e583e78",
+    "pypi-0.0.12.json": "eb59784ec4d45b529f252bfdb5f918d700b7fd7f42a8c9138f46a8f4f15248ca",
+    "harflow_mcp-0.0.12-py3-none-any.whl": "91f350abae800db5cfeb32602451eaad4a08ff085f107da6bafce3e9e5440cfb"
+  },
+  "other_inputs": "30 interpreter/dependency artifacts verified by size and SHA-256 against the specification; full list in scratch evidence inputs-manifest.json",
+  "runtime_reports": [
+    {"operation": "baseline-install-0.0.12", "downloads": 32, "processes": 9, "result": "ready"},
+    {"operation": "baseline-check", "downloads": 0, "processes": 6, "result": "ready"},
+    {"operation": "baseline-prepare-offline", "downloads": 0, "processes": 6, "result": "ready"},
+    {"operation": "upgrade-0.0.13", "downloads": 32, "processes": 9, "result": "ready"},
+    {"operation": "check-0.0.13", "downloads": 0, "processes": 6, "result": "ready"},
+    {"operation": "prepare-offline-0.0.13", "downloads": 0, "processes": 6, "result": "ready"},
+    {"operation": "corrupt-flip", "downloads": 32, "processes": 0, "result": "refused size/sha"},
+    {"operation": "corrupt-truncate", "downloads": 32, "processes": 0, "result": "refused size/sha"},
+    {"operation": "check-0.0.12-after-failure", "downloads": 0, "processes": 6, "result": "ready"},
+    {"operation": "prepare-offline-0.0.12-after-failure", "downloads": 0, "processes": 6, "result": "ready"},
+    {"operation": "check-0.0.13-after-failure", "downloads": 0, "processes": 0, "result": "requiresInstallation installed=0.0.12"}
+  ],
+  "prior_generation_entries_identical": 4942,
+  "runtime_tree_identical_after_refusals": 4950,
+  "seed_record_files_identical_after_reads": 8,
+  "app_smoke": {"ready_connected": true, "pending_launches_screen": "not exercised", "isolation_verified": true, "survivors": 0}
+}
