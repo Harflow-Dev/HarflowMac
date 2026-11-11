@@ -27,7 +27,7 @@ _spec.loader.exec_module(preflight)
 Commands = preflight.Commands
 ReleaseError = preflight.PreflightError
 RUNTIME_PATH = Path('macos/HfCore/MonitorCore/Sources/MonitorCore/Resources/ManagedRuntime.json')
-PLIST_PATH = Path('macos/Harflow/Resources/Info.plist')
+PLIST_PATH = Path('macos/HarflowHost/Info.plist')
 PACKAGED_RUNTIME_PATH = Path('Contents/Resources/MonitorCore_MonitorCore.bundle/Contents/Resources/ManagedRuntime.json')
 
 

@@ -1,6 +1,6 @@
 # Architecture
 
-The Swift packages preserve the coordinator → navigation view → view → view model → use case → repository chain. Shared UI and utilities are in HfFoundation; domain transport remains MonitorCore; repository implementations are in HfCore; feature composition is in HfFeatures. The importable Harflow SwiftPM library assembles the application and retains its shell tests. A thin HarflowHost Xcode application target in `macos/Harflow.xcodeproj` owns the single process entry point and app product. It calls the library dispatcher, which handles the sole packaged-startup diagnostic before invoking SwiftUI application startup.
+The Swift packages preserve the coordinator → navigation view → view → view model → use case → repository chain. Shared UI and utilities are in HfFoundation; domain transport remains MonitorCore; repository implementations are in HfCore; feature composition is in HfFeatures. The importable Harflow SwiftPM library assembles the application and retains its shell tests. A thin HarflowHost Xcode application target in `macos/Harflow.xcodeproj` (its entry wrapper, Info.plist and icons live in `macos/HarflowHost/`) owns the single process entry point and app product. It calls the library dispatcher, which handles the sole packaged-startup diagnostic before invoking SwiftUI application startup.
 
 User-facing terminology and retained public compatibility names are documented in
 [the terminology guide](terminology.md).

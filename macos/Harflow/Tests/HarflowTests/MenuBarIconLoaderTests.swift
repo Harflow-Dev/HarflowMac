@@ -3,7 +3,7 @@
 //  HarflowTests
 //
 //  Decision 8 ("Menu bar icon uses the P logo"): `loadMenuBarIcon(from:)` against the real source
-//  `Resources/` folder (via `#filePath`, the same navigation `InfoPlistContractTests` uses) and
+//  `HarflowHost/` folder (via `#filePath`, the same navigation `InfoPlistContractTests` uses) and
 //  against an empty bundle standing in for "the resource isn't there".
 //
 
@@ -16,13 +16,14 @@ import Testing
 
     @Test func givenTheSourceResourcesBundle_whenLoadingTheMenuBarIcon_thenItReturnsATemplateImageWithBothRepresentations() throws {
         // given — Tests/HarflowTests/MenuBarIconLoaderTests.swift → Tests/HarflowTests →
-        // Tests → Harflow → Resources, which holds `menubarTemplate.png`/`@2x.png` directly.
-        let resourcesURL = URL(fileURLWithPath: #filePath)
+        // Tests → Harflow → macos → HarflowHost, which holds `menubarTemplate.png`/`@2x.png` directly.
+        let hostURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Resources")
-        let bundle = try #require(Bundle(url: resourcesURL))
+            .deletingLastPathComponent()
+            .appendingPathComponent("HarflowHost")
+        let bundle = try #require(Bundle(url: hostURL))
 
         // when
         let icon = loadMenuBarIcon(from: bundle)

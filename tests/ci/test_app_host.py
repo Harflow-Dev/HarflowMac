@@ -51,7 +51,7 @@ def phase_paths(objects, phase_kind):
 def test_xcode_compiles_only_the_single_entry_wrapper(project):
     paths = phase_paths(project, "PBXSourcesBuildPhase")
     assert len(paths) == 1
-    wrappers = list((MACOS / "AppHost").rglob("*.swift"))
+    wrappers = list((MACOS / "HarflowHost").rglob("*.swift"))
     assert len(wrappers) == 1
     assert Path(paths[0]).name == wrappers[0].name
     assert len(re.findall(r"@main\b", wrappers[0].read_text())) == 1
@@ -105,7 +105,7 @@ def test_every_app_configuration_preserves_identity_and_single_binary(project):
         assert float(settings["MACOSX_DEPLOYMENT_TARGET"]) == 26
         assert settings["ARCHS"] in ("arm64", ["arm64"])
         plist_path = MACOS / settings["INFOPLIST_FILE"]
-        assert plist_path.resolve() == (MACOS / "Harflow/Resources/Info.plist").resolve()
+        assert plist_path.resolve() == (MACOS / "HarflowHost/Info.plist").resolve()
         with plist_path.open("rb") as stream:
             plist = plistlib.load(stream)
         assert plist["CFBundleIdentifier"] == "dev.harflow.mac"
