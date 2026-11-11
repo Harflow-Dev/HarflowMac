@@ -64,6 +64,7 @@ struct M04StateMatrixHostedTests {
 
             // when — layout readiness is observed, never inferred from a delay.
             await waitUntil(timeout: 5) {
+                scrollHistoryFooterIntoViewIfNeeded(state, host: host)
                 host.layoutSubtreeIfNeeded()
                 host.displayIfNeeded()
                 return NSApp.isActive && (window.isKeyWindow || window.isMainWindow)
@@ -81,10 +82,35 @@ struct M04StateMatrixHostedTests {
             let context = HostedState(state: state, size: size, dark: dark,
                                       originalComposer: originalComposer, originalTask: originalTask)
             try assertState(context, window: window, host: host, fixture: fixture)
+            // Captures keep the state's natural (top) scroll position, as before the footer scroll.
+            restoreSidebarScrollToTop(state, host: host)
+            host.layoutSubtreeIfNeeded()
+            host.displayIfNeeded()
+            await DisplayFrames.waitForPresentedFrame()
             let name = context.name
             try await capture(host, name: name, window: window)
             try await captureOptions(fixture, existing: existing, window: window, name: name)
         }
+    }
+
+    /// With the sixth navigation row ("Pending launches") the history footer rows sit below the
+    /// fold of the single scrolling sidebar outline at the 1000x620 minimum size, so NSOutlineView
+    /// does not realize them. Reachability is asserted by scrolling the footer row into view.
+    private func scrollHistoryFooterIntoViewIfNeeded(_ state: String, host: NSView) {
+        guard state == "history-older" || state == "history-error",
+              let outline = sidebarUnifiedFixtureOutline(in: host),
+              let row = (0 ..< outline.numberOfRows).first(where: {
+                  (outline.item(atRow: $0) as? SidebarNativeItemBox)?.entry.id == "history:tasks"
+              }) else { return }
+        outline.scrollRowToVisible(row)
+    }
+
+    private func restoreSidebarScrollToTop(_ state: String, host: NSView) {
+        guard state == "history-older" || state == "history-error",
+              let outline = sidebarUnifiedFixtureOutline(in: host),
+              let scroll = outline.enclosingScrollView else { return }
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     private func sidebarLayoutIsReady(_ fixture: Fixture, host: NSView) -> Bool {
