@@ -1,6 +1,6 @@
 # Mac releases
 
-The release workflow uses `macos/build-app.sh` and the shared Harflow Xcode scheme to build one arm64 Harflow.app for macOS 26 and checks its bundle identifier `dev.harflow.mac`, version, build, resources, managed-runtime specification and ad-hoc signature before packaging. The release tag must be strict `vX.Y.Z` and equal the app plist version; checkout, event SHA and tag commit must agree. The engine version is independently validated against the bundled supported runtime specification. App and engine versions need not remain equal. No engine, interpreter or sibling checkout is embedded or consulted.
+The release workflow uses `macos/build-app.sh` and the shared HarflowHost Xcode scheme to build one arm64 Harflow.app for macOS 26 and checks its bundle identifier `dev.harflow.mac`, version, build, resources, managed-runtime specification and ad-hoc signature before packaging. The release tag must be strict `vX.Y.Z` and equal the app plist version; checkout, event SHA and tag commit must agree. The engine version is independently validated against the bundled supported runtime specification. App and engine versions need not remain equal. No engine, interpreter or sibling checkout is embedded or consulted.
 
 The Xcode host compiles only the entry wrapper and links the Harflow SwiftPM shell library; package tests remain in their existing guarded runner. Xcode owns resource packaging and signing settings. Both Debug and Release disable a separate debug dylib; unexpected embedded executable code remains a validation failure.
 

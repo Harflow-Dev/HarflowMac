@@ -15,7 +15,7 @@ esac
 # The native target is the only product and packaging authority. SwiftPM owns its
 # importable shell and dependency resources; Xcode embeds those resource bundles.
 rm -rf "$app"
-xcodebuild -project "$here/Harflow.xcodeproj" -scheme Harflow \
+xcodebuild -project "$here/Harflow.xcodeproj" -scheme HarflowHost \
     -configuration "$config" -destination 'generic/platform=macOS' \
     -derivedDataPath "$out/DerivedData" \
     -onlyUsePackageVersionsFromResolvedFile \

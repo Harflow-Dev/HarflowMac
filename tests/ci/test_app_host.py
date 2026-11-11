@@ -36,30 +36,57 @@ def app_target(objects):
     return targets[0]
 
 
-def phase_paths(objects, phase_kind):
+def target_phase_files(objects, phase_kind):
     target = app_target(objects)
-    paths = []
+    files = []
     for key in target["buildPhases"]:
         phase = objects[key]
         if phase["isa"] == phase_kind:
-            for item in phase.get("files", []):
-                reference = objects[objects[item]["fileRef"]]
-                paths.append(reference["path"])
-    return paths
+            files.extend(phase.get("files", []))
+    return files
 
 
-def test_xcode_compiles_only_the_single_entry_wrapper(project):
-    paths = phase_paths(project, "PBXSourcesBuildPhase")
-    assert len(paths) == 1
-    wrappers = list((MACOS / "HarflowHost").rglob("*.swift"))
-    assert len(wrappers) == 1
-    assert Path(paths[0]).name == wrappers[0].name
+def synchronized_groups(objects):
+    return {key: obj for key, obj in objects.items()
+            if obj.get("isa") == "PBXFileSystemSynchronizedRootGroup"}
+
+
+def main_group_children(objects):
+    root = next(obj for obj in objects.values() if obj.get("isa") == "PBXProject")
+    return objects[root["mainGroup"]]["children"]
+
+
+HOST_FILES = {"HarflowHost.swift", "Info.plist", "AppIcon.icns",
+              "menubarTemplate.png", "menubarTemplate@2x.png"}
+PACKAGE_GROUPS = ("HfFoundation", "HfCore", "HfFeatures")
+
+
+def test_project_lists_no_explicit_sources_resources_or_script_phases(project):
+    assert target_phase_files(project, "PBXSourcesBuildPhase") == []
+    assert target_phase_files(project, "PBXResourcesBuildPhase") == []
+    assert not any(project[key]["isa"] == "PBXShellScriptBuildPhase"
+                   for key in app_target(project)["buildPhases"])
+    groups = synchronized_groups(project)
+    target_groups = [groups[key]["path"] for key in app_target(project)["fileSystemSynchronizedGroups"]]
+    assert target_groups == ["HarflowHost"]
+
+
+def test_host_folder_holds_exactly_the_wrapper_plist_and_branding_with_plist_excluded(project):
+    folder = MACOS / "HarflowHost"
+    assert {path.name for path in folder.iterdir() if not path.name.startswith(".")} == HOST_FILES
+    wrappers = list(folder.rglob("*.swift"))
+    assert [path.name for path in wrappers] == ["HarflowHost.swift"]
     assert len(re.findall(r"@main\b", wrappers[0].read_text())) == 1
     assert "import Harflow" in wrappers[0].read_text()
     assert not any(re.search(r"@main\b", path.read_text())
                    for path in (MACOS / "HfFeatures/Harflow/Sources").rglob("*.swift"))
-    assert not any(project[key]["isa"] == "PBXShellScriptBuildPhase"
-                   for key in app_target(project)["buildPhases"])
+    group = synchronized_groups(project)[app_target(project)["fileSystemSynchronizedGroups"][0]]
+    exceptions = [project[key] for key in group["exceptions"]]
+    assert len(exceptions) == 1
+    assert exceptions[0]["isa"] == "PBXFileSystemSynchronizedBuildFileExceptionSet"
+    assert exceptions[0]["membershipExceptions"] == ["Info.plist"]
+    target_keys = {key for key, value in project.items() if value is app_target(project)}
+    assert exceptions[0]["target"] in target_keys
 
 
 def test_shell_is_a_library_with_its_existing_test_target():
@@ -70,25 +97,36 @@ def test_shell_is_a_library_with_its_existing_test_target():
     assert re.search(r'\.target\s*\(\s*name:\s*"Harflow"', manifest)
 
 
-def test_xcode_links_the_local_shell_product(project):
+def test_xcode_links_the_shell_product_by_name_only_without_package_references(project):
     dependencies = [project[key] for key in app_target(project)["packageProductDependencies"]]
     assert len(dependencies) == 1
     assert dependencies[0]["productName"] == "Harflow"
-    package = project[dependencies[0]["package"]]
-    assert package["isa"] == "XCLocalSwiftPackageReference"
-    assert (MACOS / package["relativePath"]).resolve() == (MACOS / "HfFeatures/Harflow").resolve()
+    assert "package" not in dependencies[0]
+    assert not any(obj.get("isa") == "XCLocalSwiftPackageReference" for obj in project.values())
+    assert not any(obj.get("isa") == "XCRemoteSwiftPackageReference" for obj in project.values())
+    assert not any("packageReferences" in obj for obj in project.values() if obj.get("isa") == "PBXProject")
     framework_phases = [project[key] for key in app_target(project)["buildPhases"]
                         if project[key]["isa"] == "PBXFrameworksBuildPhase"]
     linked = [project[key].get("productRef") for phase in framework_phases
               for key in phase.get("files", [])]
-    assert app_target(project)["packageProductDependencies"][0] in linked
+    assert linked == [app_target(project)["packageProductDependencies"][0]]
 
 
-def test_app_owns_branding_but_not_loose_runtime_metadata(project):
-    resources = phase_paths(project, "PBXResourcesBuildPhase")
-    assert {Path(path).name for path in resources} == {
-        "AppIcon.icns", "menubarTemplate.png", "menubarTemplate@2x.png",
-    }
+def test_synchronized_roots_are_the_host_configuration_and_three_package_groups(project):
+    groups = synchronized_groups(project)
+    assert sorted(group["path"] for group in groups.values()) == sorted(
+        ["HarflowHost", "Configuration", *PACKAGE_GROUPS])
+    assert set(groups) <= set(main_group_children(project))
+    for name in PACKAGE_GROUPS:
+        manifests = sorted(path.relative_to(MACOS / name).parts
+                           for path in (MACOS / name).rglob("Package.swift")
+                           if ".build" not in path.parts)
+        assert manifests, name
+        assert all(len(parts) == 2 for parts in manifests), (name, manifests)
+
+
+def test_wrapper_workspace_does_not_exist():
+    assert not (MACOS / "Harflow.xcworkspace").exists()
 
 
 def test_every_app_configuration_preserves_identity_and_single_binary(project):
@@ -113,7 +151,7 @@ def test_every_app_configuration_preserves_identity_and_single_binary(project):
         assert plist["CFBundleShortVersionString"] == "0.0.9"
         assert plist["CFBundleVersion"] == "1"
         assert plist["CFBundleURLTypes"][0]["CFBundleURLSchemes"] == ["harflow"]
-    scheme = ET.parse(PROJECT / "xcshareddata/xcschemes/Harflow.xcscheme")
+    scheme = ET.parse(PROJECT / "xcshareddata/xcschemes/HarflowHost.xcscheme")
     buildables = scheme.findall(".//BuildableReference")
     assert buildables
     target_keys = {key for key, value in project.items() if value is target}
@@ -180,7 +218,7 @@ def test_build_wrapper_uses_one_native_build_and_signs_exact_output(build_harnes
     assert len(builds) == 1
     args = builds[0]
     assert args[args.index("-project") + 1] == str(host / "Harflow.xcodeproj")
-    assert args[args.index("-scheme") + 1] == "Harflow"
+    assert args[args.index("-scheme") + 1] == "HarflowHost"
     assert args[args.index("-configuration") + 1] == expected
     assert "-onlyUsePackageVersionsFromResolvedFile" in args
     assert "ARCHS=arm64" in args

@@ -66,7 +66,7 @@ a temporary HOME pre-seeded through the production `ManagedRuntimeInstaller`, as
 ## Architecture
 
 The app is a set of SwiftPM packages wired by path: `macos/HfFoundation/`, `macos/HfCore/`,
-`macos/HfFeatures/` (which also holds the app shell package `macos/HfFeatures/Harflow/`, app shell only). The Xcode app target's folder is `macos/HarflowHost/`. `macos/AGENTS.md` is the shared
+`macos/HfFeatures/` (which also holds the app shell package `macos/HfFeatures/Harflow/`, app shell only). The Xcode app target's folder is `macos/HarflowHost/`; open `macos/Harflow.xcodeproj` directly and use the `HarflowHost` scheme. `macos/AGENTS.md` is the shared
 architecture rulebook, including background computation, main-actor application and rendering
 publisher equality; each package's own `AGENTS.md` says what that package owns.
 `docs/architecture.md` describes runtime composition.

@@ -1,6 +1,6 @@
 # Development
 
-Build with Xcode 26.6 on macOS 26 or later. Open `macos/Harflow.xcworkspace` and select the shared Harflow scheme. The thin HarflowHost Xcode application target owns the sole entry point, packaging and signing; the Harflow SwiftPM library retains coordination/lifecycle code and its guarded tests. `macos/build-app.sh` produces `macos/build/Harflow.app` without installing or launching it.
+Build with Xcode 26.6 on macOS 26 or later. Open `macos/Harflow.xcodeproj` directly (there is no wrapper workspace) and select the shared HarflowHost scheme. The thin HarflowHost Xcode application target owns the sole entry point, packaging and signing; the Harflow SwiftPM library retains coordination/lifecycle code and its guarded tests. `macos/build-app.sh` produces `macos/build/Harflow.app` without installing or launching it.
 
 Use [the terminology guide](terminology.md) for user-facing copy and compatibility mappings.
 
