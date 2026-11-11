@@ -143,6 +143,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     @State var viewModel: VM
     @State private var activityState: ParallelColumnUIState
     @State var paneHolder: TaskPaneHolder
+    /// The standalone mount's draft home. Held in `@State` so a rebuild of this view for the same conversation
+    /// never swaps the composer's binding mid-typing; the store rebinds it itself when membership changes.
+    @State private var draftMount: TaskDraftMount?
     let chrome: TaskDetailChrome
     let transcriptStyle: ActivityFeedStyle
     private let onToolbarEvaluation: (() -> Void)?
@@ -163,11 +166,13 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     
     /// `chrome` selects the mount: `.standalone` draws the adaptive right pane and keeps its choices through
     /// `paneBinding` (a private store when none is given); `.group`, the default, and `.embedded` keep the
-    /// always-mounted legacy pane.
+    /// always-mounted legacy pane. `draft` keeps the standalone composer's text across navigation and is ignored
+    /// by the other mounts, whose composers keep a local draft.
     init(_ viewModel: VM, chrome: TaskDetailChrome = .group, paneBinding: TaskPaneBinding? = nil,
          activityState: ParallelColumnUIState? = nil, transcriptStyle: ActivityFeedStyle = .standard,
-         onToolbarEvaluation: (() -> Void)? = nil) {
+         onToolbarEvaluation: (() -> Void)? = nil, draft: TaskDraftMount? = nil) {
         self.transcriptStyle = transcriptStyle
+        _draftMount = State(initialValue: chrome == .standalone ? draft : nil)
         _activityState = State(initialValue: activityState ?? ParallelColumnUIState())
         self.onToolbarEvaluation = onToolbarEvaluation
         self.chrome = chrome
@@ -533,7 +538,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         VStack(spacing: HfRadius.Metrics.zero) {
             content
             MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow,
-                           style: transcriptStyle.isTranscript ? .transcript : .standard) { text in viewModel.submitMessage(text) }
+                           style: transcriptStyle.isTranscript ? .transcript : .standard,
+                           text: isStandalone ? draftMount?.text : nil) { text in viewModel.submitMessage(text) }
                 .readingColumn()
         }
     }

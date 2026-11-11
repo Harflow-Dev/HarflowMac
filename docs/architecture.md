@@ -30,6 +30,34 @@ checks supply independent recorded-edge evidence; empty/incomplete reads never p
 launch exists. Standalone task controls consume the owner through their view repository. See the [repository guide](../macos/HfCore/HfRepository/README.md#continue-attempt-ownership)
 for admission, bridging and retention bounds.
 
+## Task draft retention
+
+The standalone task composer keeps its unsent message across navigation that unmounts the task view (Task, Pending
+launches, Task). `MainWindowCoordinator` owns a `TaskDraftStore`, a plain main-actor class whose maps are not
+observable, so reading it from the view builder or a listing callback invalidates nothing. A draft is a
+`TaskDraftCell` holding only its text, stored only while nonempty (whitespace-only text counts as nonempty and is
+kept byte for byte). The builder resolves a read-only `TaskDraftMount` for the conversation, held in the task view's
+`@State`, and the composer receives only a text binding (`MessageBoxView.text`); without it the composer keeps its
+text locally, as the Group, Parallel, workflow and New task mounts do. The text clears only when the view model
+accepts the send locally (an asynchronous engine refusal afterwards loses it, as before). Drafts are app-session state: nothing is written to disk or sent to the engine.
+
+A conversation's key and members come from one function, `conversationKeyAndMembers(for:)`, with the same rules as
+the task view's identity: orchestrator and harness-session membership first, else the qualified continuation and
+parent links of `Lineage`, never `spawned_by`. Each stored draft remembers the task ids it was written under (its
+known members) and the current task of the mounted view model at the last edit (its owner). These are draft
+ownership aliases only and nothing else reads them: not an action target, an engine identity, Continue proof or
+routing. On every listing change the coordinator reconciles the store against a member to conversation map built
+once per listing: known members are unioned with the current members of the conversation holding them (so a
+continuation that appeared while the task was closed, or an earliest member pruned later, still finds the draft),
+and mounted composers follow the conversation (a mount's membership is the current conversation's, replaced from the
+listing each time; it rebinds to its own conversation's draft or a fresh one if its draft is homed elsewhere or hidden). When a draft's known members now sit in several conversations (a
+branch split) it stays with the one holding its owner task, else the one holding the oldest surviving known member,
+the rule the sidebar and an open task view use to follow a pruned conversation. When two or more stored drafts end
+up in one conversation (a join) they are never merged: the one whose owner is in the conversation, then the most
+recently edited, is shown; the others stay stored but hidden, are never shown again automatically and are never
+deleted. There is no cap or eviction. A draft whose known members are all pruned in one update stays in memory,
+attached to nothing, until the app quits.
+
 ## Pending-launch ownership
 
 `PendingLaunchRepository` owns visible read leases, full-ID selection gates, bounded inventory and

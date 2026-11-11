@@ -136,9 +136,20 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     func didTapCopyTaskID() {}
     func didTapCopyRepoPath() {}
     var loadingHeader: TaskLoadingHeader? = TaskLoadingHeader(title: "Fix the login bug", repoName: "repo")
-    func submitMessageNow(_ text: String) -> Bool { !text.isEmpty }
+    /// Whether a submitted message is admitted (the composer clears) or refused (it keeps its text).
+    var acceptsMessages = true
+    /// Every message handed to `submitMessage` / `submitMessageNow`, in order.
+    private(set) var submitted: [String] = []
+    func submitMessageNow(_ text: String) -> Bool {
+        submitted.append(text)
+        return acceptsMessages && !text.isEmpty
+    }
+
     func cancelQueuedMessage(_ messageID: String) {}
-    @discardableResult func submitMessage(_: String) -> Bool { true }
+    @discardableResult func submitMessage(_ text: String) -> Bool {
+        submitted.append(text)
+        return acceptsMessages
+    }
 
     /// A finished task: "Open in terminal", the composer offering a follow-up, no cancel.
     static func finished() -> TaskDetailViewModelMock {

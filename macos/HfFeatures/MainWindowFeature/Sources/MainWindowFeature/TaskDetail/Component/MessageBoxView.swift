@@ -5,7 +5,8 @@
 //  Ported from the app target's `TaskDetailView.swift` (`MessageBox`). The submit decision (which
 //  action is eligible, and whether the field clears) lives in `TaskDetailVM.submitMessage(_:)` —
 //  this component only owns its own text field, per the screen shape's "components may hold local
-//  @State" allowance.
+//  @State" allowance. A caller that must keep the draft across navigation passes `text`, an external binding
+//  (the standalone task's `TaskDraftStore`); without it the draft stays in local @State, as before.
 //
 
 import HfUI
@@ -153,16 +154,22 @@ struct TranscriptComposerSurface: View {
 /// a border, two shadow layers and a `TaskScreenStyle` send button). The submit decision and every guard stay
 /// with the VM; this component still owns only its own text field. The printed hint is the guaranteed ⌘↩
 /// shortcut the send button already declares — it must not imply a new key behavior.
+///
+/// The draft lives in local @State unless the caller passes `text`: then every read and write (typing, both submit
+/// paths, the clear after an admitted send) goes through that binding and nothing is kept locally.
 struct MessageBoxView: View {
     let model: MessageBoxModel
     var onSubmitNow: ((String) -> Bool)?
     var isCompact = false
     var style: MessageBoxStyle = .standard
+    /// An external home for the draft; `nil` keeps it in local state.
+    var text: Binding<String>?
     let onSubmit: (String) -> Bool
-    @State private var text = ""
+    @State private var localText = ""
     @State private var isHoveringSend = false
     @FocusState private var fieldFocused: Bool
     private var isEnabled: Bool { model.canSend || model.canContinue }
+    private var draft: Binding<String> { text ?? $localText }
 
     var body: some View {
         switch style {
@@ -212,7 +219,7 @@ struct MessageBoxView: View {
     }
 
     private var canSubmit: Bool {
-        isEnabled && !model.isBusy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isEnabled && !model.isBusy && !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     @ViewBuilder private var controls: some View {
@@ -269,13 +276,13 @@ struct MessageBoxView: View {
     private func sendNowButton(_ onSubmitNow: @escaping (String) -> Bool) -> some View {
         switch style {
         case .standard:
-            Button("Send now") { if onSubmitNow(text) { text = "" } }
+            Button("Send now") { if onSubmitNow(draft.wrappedValue) { draft.wrappedValue = "" } }
                 .buttonStyle(.plain)
                 .foregroundStyle(sendNowColor)
                 .disabled(!canSubmit)
                 .help("Ask for immediate delivery; an engine refusal keeps the message queued")
         case .transcript:
-            Button("Send now") { if onSubmitNow(text) { text = "" } }
+            Button("Send now") { if onSubmitNow(draft.wrappedValue) { draft.wrappedValue = "" } }
                 .buttonStyle(UndimmedButtonStyle())
                 .font(TaskScreenStyle.sans(size: MessageBoxStyle.sendNowSize))
                 .foregroundStyle(sendNowColor)
@@ -367,7 +374,7 @@ struct MessageBoxView: View {
             // `Composer.placeholderColor`. The title is empty; VoiceOver gets the placeholder as the label.
             // No `.lineSpacing`: it has no effect on a vertical-axis `TextField` (measured 17 pt per line,
             // not the design's 22), a recorded deviation pending an editor swap.
-            TextField("", text: $text, axis: .vertical)
+            TextField("", text: draft, axis: .vertical)
                 .focused($fieldFocused)
                 .scrollChromeScope()
                 .accessibilityLabel(model.placeholder)
@@ -376,7 +383,7 @@ struct MessageBoxView: View {
                 .textFieldStyle(.plain)
                 .font(TaskScreenStyle.sans(size: composer.inputText.size))
                 .overlay(alignment: .topLeading) {
-                    if text.isEmpty {
+                    if draft.wrappedValue.isEmpty {
                         Text(model.placeholder)
                             .font(TaskScreenStyle.sans(size: composer.inputText.size))
                             .foregroundStyle(composer.placeholderColor.color)
@@ -406,7 +413,7 @@ struct MessageBoxView: View {
             .padding(.vertical, HfRadius.Metrics.spacing4)
             .accessibilityElement(children: .combine)
         } else {
-            TextField(model.placeholder, text: $text, axis: .vertical)
+            TextField(model.placeholder, text: draft, axis: .vertical)
                 .focused($fieldFocused)
                 // Bounded scope (§6.2): the multiline composer's own dedicated scroll view, when
                 // one exists, carries thin overlay chrome; a field with none stays a quiet no-op,
@@ -422,7 +429,7 @@ struct MessageBoxView: View {
     }
 
     private func submit() {
-        if onSubmit(text) { text = "" }
+        if onSubmit(draft.wrappedValue) { draft.wrappedValue = "" }
     }
 }
 

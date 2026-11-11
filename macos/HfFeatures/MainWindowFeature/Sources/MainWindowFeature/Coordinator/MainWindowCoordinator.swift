@@ -44,6 +44,9 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     let paneState = TaskPaneStateStore()
     /// Carries the standalone task's top bar content to the shell's principal toolbar item.
     public let topBar = TaskTopBarHolder()
+    /// Unsent messages of standalone tasks, kept across navigation. Not observable: see `TaskDraftStore`.
+    let draftStore = TaskDraftStore()
+    @ObservationIgnored var draftPartitionCache = TaskDraftPartition.empty
 
     // MARK: - Public Properties
 
@@ -156,7 +159,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored private let revealSubject = PassthroughSubject<PendingReveal, Never>()
     /// Read to normalise a task id to its conversation (`normalisedConversationID(for:)`, the task view's `.id()` key
     /// and the top bar's shown conversation) and by the group presenter — never to drive any other behaviour.
-    @ObservationIgnored @GlobalEnvironment(\.taskListRepository) private var taskListRepository
+    @ObservationIgnored @GlobalEnvironment(\.taskListRepository) var taskListRepository
 
     // MARK: - Init
 
@@ -348,16 +351,19 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// The `.id()` key is `id` normalised to its conversation's first member (Monitor piece 7,
     /// Review round 1 item 4), never the raw `id` this was called with: `id` may be any member (a
     /// URL/notification/breadcrumb can carry a non-first one), and two different members of the
-    /// SAME conversation must keep the identical VM instance — its own message
-    /// draft — rather than rebuilding on every such navigation. `TaskDetailVM` itself is still built
+    /// SAME conversation must keep the identical VM instance rather than rebuilding on every such navigation. `TaskDetailVM` itself is still built
     /// with the raw `id`; it resolves the whole conversation from whichever member it is given.
+    ///
+    /// Leaving the task for another destination unmounts this view, so the composer's unsent text does not live in
+    /// it: it lives in `draftStore`, which this method writes nothing observable to, and survives the unmount.
     public func buildTaskDetailView(id: String) -> AnyView {
         let useCase = TaskDetailViewRepository()
-        let conversationID = normalisedConversationID(for: id)
+        let (conversationID, members) = conversationKeyAndMembers(for: id)
         let vm = TaskDetailVM(taskID: id, useCase: useCase, routing: self, continuityHistory: continuityHistory, chrome: .standalone,
                               scheduler: GlobalValues.scheduling, topBarConversationID: conversationID)
         let paneBinding = TaskPaneBinding(store: paneState, conversationID: conversationID)
-        let view = TaskDetailView(vm, chrome: .standalone, paneBinding: paneBinding, transcriptStyle: .transcript)
+        let draft = draftMount(key: conversationID, members: members) { [weak vm] in vm?.currentTaskID ?? id }
+        let view = TaskDetailView(vm, chrome: .standalone, paneBinding: paneBinding, transcriptStyle: .transcript, draft: draft)
         return view.id(conversationID).eraseToAnyView()
     }
     
@@ -365,8 +371,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// its top bar writer. Shared by `buildTaskDetailView(id:)` and the top bar's shown conversation, so the two
     /// never disagree about which conversation a task id belongs to.
     func normalisedConversationID(for id: String) -> String {
-        WorkflowOrchestratorConversation.members(containing: id, in: taskListRepository.tasks)?.first?.taskID
-            ?? Lineage.conversationID(of: id, in: taskListRepository.tasks)
+        conversationKeyAndMembers(for: id).key
     }
 
     /// The conversation the current selection shows as a standalone task, `nil` for every other selection.
@@ -377,6 +382,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// The listing changed: refresh the shown conversation, unless a mounted task view is still showing under the old
     /// id. A retention shift then keeps the title until a selection change or rebuild re-keys the view.
     private func listingChanged() {
+        reconcileDrafts()
         guard topBar.activeTag == nil else { return }
         topBar.setShownConversation(shownTaskConversation())
     }

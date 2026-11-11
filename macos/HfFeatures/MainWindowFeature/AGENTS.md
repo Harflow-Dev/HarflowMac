@@ -73,6 +73,19 @@ no embedded terminal anywhere in this package:
   `presentedSheet` is cleared; a refused submit also requests Stop focus, which lands only if Stop is enabled when the dismissal arrives (best effort after `.refused(.changed)`, whose refresh check is usually still running). `submitStop`
   runs only from `confirmStop` and `prepareStop` only from `didTapStop`: nothing is ever retried. A Check again also
   clears both "Stop was not sent" sources, and a preflight-changed attempt queues exactly one read.
+- **Task draft retention** (`TaskDetail/TaskDraftStore.swift`, `Coordinator/MainWindowCoordinator+Drafts.swift`). The standalone
+  task composer's unsent text lives in a coordinator-owned, non-observable `TaskDraftStore`, not in the task view
+  (which the coordinator rebuilds on every mount). Scope: the standalone mount only; Group, embedded, Parallel,
+  workflow-activity and New task composers keep local state. `buildTaskDetailView` writes nothing observable to the store
+  (`draftMount(key:members:currentTaskID:)`); `TaskDetailView` keeps the resulting `TaskDraftMount` in `@State` and gives
+  `MessageBoxView` only `mount.text`, a store-mediated binding. Writes happen on edits; ownership and conflicts are
+  decided only in `reconcileDrafts()` (run from every listing change before anything else, skipped while the store
+  is idle). Membership comes from `conversationKeyAndMembers(for:)`, the single source shared with
+  `normalisedConversationID`, and the listing-wide `TaskDraftPartition`; qualified continuation/parent links and
+  session buckets only, never `spawnedBy`. **Authority rule:** a draft's known members and owner task are draft
+  ownership only; no code outside the store's resolution and reconciliation reads them, and they are never an
+  action target, engine identity, Continue proof or routing. A join never merges or deletes (the loser is
+  shadowed), nothing is capped or evicted, nothing is persisted. Do not add a second reader of the maps.
 - `HfUI.withPresentationContext()` is applied exactly **once**, at `MainWindowNavigationView`'s own
   root. Every screen under the navigation view, including the New Session sheet, shares that
   one `@Environment(\.viewEvent)` through the presenting view's environment.
