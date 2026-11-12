@@ -64,6 +64,9 @@ import Testing
         sut.fixture.element(Self.metaIdentifier).flatMap { sut.fixture.frame($0) }?.width ?? 0
     }
 
+    /// A dropped meta leaves its dot: 16 points and the gap before it.
+    private var dotSlot: CGFloat { TopBarMetaDotView.side + TopBarPrincipalLayout.spacing }
+
     /// The sentence's ideal single-line width at the principal's meta font.
     private func idealMetaWidth() -> CGFloat {
         NSHostingView(rootView: Text(Self.sentence).font(.hf(.secondary)).lineLimit(1).fixedSize()).fittingSize.width
@@ -80,7 +83,8 @@ import Testing
         // then
         let dropped = await principal(detailWidth: 736)
         defer { dropped.close() }
-        #expect(drawnWidth(sut) - drawnWidth(dropped) >= 300, "meta dropped at detail width \(detailWidth): \(drawnWidth(sut)) vs \(drawnWidth(dropped))")
+        #expect(drawnWidth(sut) - drawnWidth(dropped) >= idealMetaWidth() - dotSlot - 1,
+                "meta dropped at detail width \(detailWidth): \(drawnWidth(sut)) vs \(drawnWidth(dropped))")
         #expect(drawnWidth(sut) <= GroupTopBarBudget.cap(detailWidth: detailWidth) + 1)
         #expect(abs(metaFrameWidth(sut) - idealMetaWidth()) <= 2, "the meta element is drawn at its ideal width: \(metaFrameWidth(sut))")
         #expect(sut.fixture.element("Review preload bridge") != nil)
@@ -95,7 +99,8 @@ import Testing
         // then
         let wide = await principal(detailWidth: 1016)
         defer { wide.close() }
-        #expect(drawnWidth(wide) - drawnWidth(sut) >= 300, "the meta is dropped, not shortened: \(drawnWidth(sut)) vs \(drawnWidth(wide))")
+        #expect(drawnWidth(wide) - drawnWidth(sut) >= idealMetaWidth() - dotSlot - 1,
+                "the meta is dropped, not shortened: \(drawnWidth(sut)) vs \(drawnWidth(wide))")
         #expect(drawnWidth(sut) <= GroupTopBarBudget.cap(detailWidth: 736) + 1)
         #expect(metaFrameWidth(sut) <= 1, "the dropped meta element has no drawn width: \(metaFrameWidth(sut))")
         #expect(sut.fixture.element("Review preload bridge") != nil)

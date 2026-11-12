@@ -125,6 +125,8 @@ struct TopBarPrincipalLayout: Layout {
     /// What a subview is, set with `topBarRole(_:)`.
     enum Role: Hashable {
         case title, badge, busy, meta, status
+        /// The marker that stands in for a dropped group meta; it takes no width unless the meta was dropped.
+        case dot
     }
 
     struct RoleKey: LayoutValueKey {
@@ -173,7 +175,8 @@ struct TopBarPrincipalLayout: Layout {
     /// (never shortened), and shown only while the title keeps at least its floor. Task content keeps the defaults.
     nonisolated static func solve(titleIdeal: CGFloat, metaIdeal: CGFloat?, fixed: [CGFloat], cap: CGFloat,
                                   badgeIndex: Int? = nil, badgeMinimum: CGFloat = 0,
-                                  titleFloor customFloor: CGFloat? = nil, metaMayTruncate: Bool = true) -> Solution {
+                                  titleFloor customFloor: CGFloat? = nil, metaMayTruncate: Bool = true,
+                                  dotWidth: CGFloat? = nil) -> Solution {
         let fixedWidth = fixed.reduce(0, +)
         func remaining(withMeta: Bool) -> CGFloat {
             let parts = fixed.count + 1 + (withMeta ? 1 : 0)
@@ -191,7 +194,9 @@ struct TopBarPrincipalLayout: Layout {
         if !metaMayTruncate, let metaIdeal {
             let titleRoom = withMeta - metaIdeal
             if titleRoom >= floor { return Solution(titleWidth: min(titleIdeal, titleRoom), metaWidth: metaIdeal, metaDropped: false, badgeWidth: nil) }
-            return Solution(titleWidth: max(0, min(titleIdeal, alone)), metaWidth: nil, metaDropped: true, badgeWidth: nil)
+            // A dropped meta leaves its dot: the title gives up the dot's slot, and its gap, to it.
+            let dotRoom = dotWidth.map { $0 + spacing } ?? 0
+            return Solution(titleWidth: max(0, min(titleIdeal, alone - dotRoom)), metaWidth: nil, metaDropped: true, badgeWidth: nil)
         }
         if alone < floor {
             return overBudget(titleIdeal: titleIdeal, dropsMeta: metaIdeal != nil, fixed: fixed, cap: cap,
@@ -235,6 +240,7 @@ struct TopBarPrincipalLayout: Layout {
     private struct Ideals {
         var title: CGSize = .zero
         var meta: CGSize?
+        var dot: CGSize?
         var fixed: [CGSize] = []
         var badgeIndex: Int?
         /// The badge's narrowest drawing: indicator, clock, suffix and padding, with the label truncated.
@@ -249,6 +255,7 @@ struct TopBarPrincipalLayout: Layout {
             switch subview[RoleKey.self] {
             case .title: result.title = size
             case .meta: result.meta = size
+            case .dot: result.dot = size
             case .badge:
                 result.badgeIndex = result.fixed.count
                 result.badgeMinimum = subview.sizeThatFits(ProposedViewSize(width: 0, height: nil)).width
@@ -262,16 +269,20 @@ struct TopBarPrincipalLayout: Layout {
     private func solution(_ ideals: Ideals) -> Solution {
         Self.solve(titleIdeal: ideals.title.width, metaIdeal: ideals.meta?.width, fixed: ideals.fixed.map(\.width), cap: cap,
                    badgeIndex: ideals.badgeIndex, badgeMinimum: ideals.badgeMinimum, titleFloor: titleFloor,
-                   metaMayTruncate: metaMayTruncate)
+                   metaMayTruncate: metaMayTruncate, dotWidth: ideals.dot?.width)
     }
+
+    /// Whether the dot takes its slot: only where a meta exists and was dropped.
+    private func showsDot(_ ideals: Ideals, _ solution: Solution) -> Bool { ideals.dot != nil && solution.metaDropped }
 
     func sizeThatFits(proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
         let ideals = ideals(subviews)
         let solution = solution(ideals)
         var fixedWidth = ideals.fixed.map(\.width).reduce(0, +)
         if let index = ideals.badgeIndex, let badge = solution.badgeWidth { fixedWidth += badge - ideals.fixed[index].width }
-        let count = ideals.fixed.count + 1 + (solution.metaWidth == nil ? 0 : 1)
-        let width = fixedWidth + solution.titleWidth + (solution.metaWidth ?? 0) + Self.spacing * CGFloat(count - 1)
+        let dotWidth = showsDot(ideals, solution) ? ideals.dot?.width : nil
+        let count = ideals.fixed.count + 1 + (solution.metaWidth == nil ? 0 : 1) + (dotWidth == nil ? 0 : 1)
+        let width = fixedWidth + solution.titleWidth + (solution.metaWidth ?? 0) + (dotWidth ?? 0) + Self.spacing * CGFloat(count - 1)
         return CGSize(width: width, height: ideals.height)
     }
 
@@ -290,6 +301,11 @@ struct TopBarPrincipalLayout: Layout {
             case .meta: solution.metaWidth ?? 0
             case .badge: solution.badgeWidth ?? size.width
             case .busy, .status: size.width
+            case .dot: showsDot(ideals, solution) ? size.width : 0
+            }
+            if role == .dot, !showsDot(ideals, solution) {
+                subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: 0, height: 0))
+                continue
             }
             if role == .meta, solution.metaWidth == nil {
                 subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: 0, height: 0))

@@ -84,4 +84,71 @@ import Testing
         #expect(GroupTopBarBudget.reservedButtons > GroupTopBarBudget.viewPromptWidth + GroupTopBarBudget.cancelAllWidth)
         #expect(GroupTopBarBudget.cancelAllWidth > GroupTopBarBudget.viewPromptWidth - 40)
     }
+
+    // MARK: - The dot of a dropped meta
+
+    @Test func givenADroppedMeta_whenADotIsReserved_thenItsSlotIsSixteenAndATitleThatFitsKeepsItsWidth() {
+        // given — the meta cannot fit; the 120 pt title fits with or without the dot's 16 pt and its gap
+        let cap: CGFloat = 90 + 24 + 200 + Layout.spacing * 2
+
+        // when
+        let plain = Layout.solve(titleIdeal: 120, metaIdeal: 300, fixed: [90, 24], cap: cap, badgeIndex: 0,
+                                 titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false)
+        let withDot = Layout.solve(titleIdeal: 120, metaIdeal: 300, fixed: [90, 24], cap: cap, badgeIndex: 0,
+                                   titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false, dotWidth: TopBarMetaDotView.side)
+
+        // then
+        #expect(TopBarMetaDotView.side == 16)
+        #expect(plain.metaDropped && withDot.metaDropped)
+        #expect(plain.titleWidth == 120 && withDot.titleWidth == 120)
+    }
+
+    @Test func givenADroppedMetaAndATightBudget_whenADotIsReserved_thenTheTitleYieldsExactlyTheDotsSlot() {
+        // given
+        let cap: CGFloat = 90 + 24 + 150 + Layout.spacing * 2
+
+        // when
+        let plain = Layout.solve(titleIdeal: 400, metaIdeal: 300, fixed: [90, 24], cap: cap, badgeIndex: 0,
+                                 titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false)
+        let withDot = Layout.solve(titleIdeal: 400, metaIdeal: 300, fixed: [90, 24], cap: cap, badgeIndex: 0,
+                                   titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false, dotWidth: 16)
+
+        // then
+        #expect(plain.titleWidth - withDot.titleWidth == 16 + Layout.spacing)
+    }
+
+    @Test func givenAWholeMeta_whenADotIsPassed_thenNothingChanges() {
+        // given
+        let cap: CGFloat = 90 + 24 + 300 + 160 + Layout.spacing * 3
+
+        // when
+        let plain = Layout.solve(titleIdeal: 200, metaIdeal: 300, fixed: [90, 24], cap: cap, badgeIndex: 0,
+                                 titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false)
+        let withDot = Layout.solve(titleIdeal: 200, metaIdeal: 300, fixed: [90, 24], cap: cap, badgeIndex: 0,
+                                   titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false, dotWidth: 16)
+
+        // then
+        #expect(plain == withDot)
+    }
+
+    // MARK: - The dot's popover rules
+
+    @Test func givenHoverAndFocus_whenEscapeDismisses_thenThePopoverStaysHiddenUntilBothLeaveAndOneReturns() {
+        // given
+        var state = TopBarMetaDotState()
+        state.setFocused(true)
+        #expect(state.showsPopover)
+
+        // when
+        state.dismiss()
+        state.setHovering(true)
+        state.setHovering(false)
+
+        // then — focus is still there, so it stays dismissed
+        #expect(state.showsPopover == false)
+        state.setFocused(false)
+        #expect(state.showsPopover == false)
+        state.setHovering(true)
+        #expect(state.showsPopover, "it returns once both left and one came back")
+    }
 }

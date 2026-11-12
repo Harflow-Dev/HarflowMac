@@ -26,6 +26,7 @@ struct TaskTopBarPrincipal: View {
     /// Whether meta is hidden: before the first layout pass (so a dropped meta never flashes) and whenever the solver
     /// dropped it. Taken from the solver's explicit result through the probe, never from a measured width.
     @State private var metaHidden = true
+    @State private var groupMetaCollapsed = true
     @State private var probe = TopBarLayoutProbe()
 
     private typealias Metrics = TaskScreenStyle.TopBar
@@ -76,7 +77,10 @@ struct TaskTopBarPrincipal: View {
 .topBarRole(.meta)
             } else {
                 if let badge = group.badge { TaskStatusBadge(model: badge).topBarRole(.badge) }
-                if let meta = group.meta { groupMeta(meta).topBarRole(.meta) }
+                if let meta = group.meta {
+                    groupMeta(meta).topBarRole(.meta)
+                    TopBarMetaDot(sentence: meta).topBarRole(.dot)
+                }
             }
             status.topBarRole(.status)
         }
@@ -96,9 +100,12 @@ struct TaskTopBarPrincipal: View {
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .clipped()
             // One element for the frame itself, so its accessibility frame is the drawn width (zero when dropped).
+            // A dropped meta (no drawn width) is spoken by the dot, once. Derived from the drawn width, so it cannot go stale.
+            .accessibilityHidden(groupMetaCollapsed)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(meta)
             .accessibilityIdentifier("group-top-bar.meta")
+            .onGeometryChange(for: Bool.self) { $0.size.width < 1 } action: { groupMetaCollapsed = $0 }
     }
 
     @ViewBuilder private func titleText(_ content: TaskTopBarContent?) -> some View {

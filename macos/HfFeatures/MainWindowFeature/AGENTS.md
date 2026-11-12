@@ -296,7 +296,7 @@ no embedded terminal anywhere in this package:
 - Parallel keeps complete group membership for summaries and actions, but acquires activity leases
   only for members of viewport-intersecting conversations; do not prefetch neighboring columns.
   Lanes are 360 points wide at minimum (`ParallelLayout.minimumColumnWidth`, HarflowDesign `2934681`) with a
-  1 point separator, so a minimum-size window (736 point detail area) shows two whole lanes plus a 14 point peek,
+  1 point separator, so a minimum-size window shows two whole lanes plus a narrow peek (the detail column is 736 points, but the lanes start at the floating sidebar's edge, 8 points further in, so the measured peek in the shell is 6 points, not the drawn 14),
   and the peek lane is intersecting, hence resident and leased (every member of each visible conversation holds a
   lease). `ParallelColumnModel.chrome` (`.lane`, set from the VM role) selects the v2 lane surface (`--bg`, no status
   strip, `--border` separators, head/body/foot frames); the Graph inspector's VM sets `.inspector`, and
@@ -307,6 +307,11 @@ no embedded terminal anywhere in this package:
   viewport, becomes resident and the next Tab or Shift-Tab can continue. Pointer focus never scrolls the row, a lane
   already shown that way does not move it, and a reveal that finds the row's layout not ready is kept and applied when
   the document's frame next changes. Residency stays geometry-driven.
+  A group whose enforcement sentence does not fit at the principal's width draws `TopBarMetaDot` in its place (the layout's
+  `.dot` role: a 16 x 16 focusable target around a 6 point dot, given width only while the meta is dropped; the title yields its
+  slot): the dot's accessibility label is the sentence (the dropped meta's own element is hidden, so it is exposed once), a popover
+  with the sentence appears on hover or focus without taking key focus, and Escape dismisses it until hover and focus have both left.
+  There is no `.help`, and no dot while loading or for an empty group.
   The standalone group and workflow Parallel view share the measured horizontal viewport surface. A horizontal lane row measures
   its offset and viewport inside its scroll view's content insets (the detail column's safe area under a floating sidebar), so offset
   0 is lane 1 at the sidebar edge and a changed inset keeps the logical position (`ParallelViewport+Horizontal.swift`).
