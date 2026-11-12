@@ -32,7 +32,7 @@ final class ParallelScrollObservationView: NSView {
     private var restorationGeneration = 0
     private var cancelledGeneration: Int?
     private var wheelMonitor: Any?
-    private var liveUserScroll = false
+    var liveUserScroll = false
     private var reevaluatingRestoration = false
     weak var observedScrollView: NSScrollView?
     private weak var observedDocument: NSView?
@@ -40,25 +40,28 @@ final class ParallelScrollObservationView: NSView {
     private var documentSubscription: AnyCancellable?
     var horizontalPosition: ParallelViewportPosition?
     var explicitNavigationID: String?
-    private var preservedHorizontalOffset: CGFloat?
+    var preservedHorizontalOffset: CGFloat?
     private var configuredHorizontalPosition = false
     var focusReveal = ParallelFocusReveal()
     private var previousNavigationID: String?
     func cancelHorizontalMovement() { pendingOffset = nil; preservedHorizontalOffset = nil }
     var ids: [String] = []
     var stride: CGFloat = 0
-    private var pendingOffset: CGFloat?
-    private var applyingRestoration = false
+    var pendingOffset: CGFloat?
+    var applyingRestoration = false
     private var nativeAnchorTarget: CGFloat?
     private weak var nativeAnchorTargetProvider: ParallelScrollAnchorProvider?
     private var requestedOffset: CGFloat?
     private var restorationActive = false
     private var configuredAxis: ParallelScrollObserver.Axis?
     private var pendingPositionAcknowledgement = false
-    private var lastOffset: CGFloat = 0
+    var lastOffset: CGFloat = 0
     private var lastReported: CGRect?
     private var lastViewportSize: CGSize?
     private var lastOuterScrollWidth: CGFloat?
+    /// The leading content inset the previous report saw, so a change (a floating sidebar showing or hiding) keeps the
+    /// reader's logical position instead of the raw clip origin.
+    var lastLeadingInset: CGFloat?
     /// Scoped native identity owns attachment, never an enclosing scroll view.
     var usesNativeIdentity = false
     /// The most recently delivered scoped identity, kept even while it cannot attach yet (a
@@ -165,6 +168,7 @@ final class ParallelScrollObservationView: NSView {
         observedDocument = nil
         lastViewportSize = nil
         lastOuterScrollWidth = nil
+        lastLeadingInset = nil
     }
 
     /// Keep adopted List scroll insets zero across layout reports, retaining the original
@@ -253,6 +257,7 @@ final class ParallelScrollObservationView: NSView {
             lastReported = nil
             lastViewportSize = nil
             lastOuterScrollWidth = nil
+            lastLeadingInset = nil
         } else { DispatchQueue.main.async { [weak self] in self?.reattach() } }
     }
 
@@ -485,23 +490,6 @@ final class ParallelScrollObservationView: NSView {
         return providerTarget
     }
 
-    func applyRestorationTarget(_ target: CGFloat, scroll: NSScrollView, document: NSView,
-                                geometry: (length: CGFloat, viewport: CGFloat, visible: CGRect)) {
-        let (length, viewport, visible) = geometry
-        diagnose("apply target=\(target) visible=\(visible.minY) height=\(length) viewport=\(viewport) before")
-        pendingOffset = nil
-        let clamped = min(max(0, target), max(0, length - viewport))
-        var point = scroll.contentView.bounds.origin
-        if axis == .horizontal { point.x = clamped } else { point.y = document.isFlipped ? clamped : max(0, document.bounds.maxY - viewport - clamped) }
-        if abs((axis == .horizontal ? point.x : point.y) - (axis == .horizontal ? visible.minX : visible.minY)) > 0.5 {
-            applyingRestoration = true
-            scroll.contentView.scroll(to: point)
-            scroll.reflectScrolledClipView(scroll.contentView)
-            applyingRestoration = false
-        }
-        diagnose("apply after target=\(target)")
-    }
-
     func reevaluateAnchorProvider(_ provider: ParallelScrollAnchorProvider) {
         guard !reevaluatingRestoration, anchorProvider === provider, provider.isAnchorRestorationActive,
               observedScrollView?.documentView === observedDocument else { return }
@@ -510,7 +498,7 @@ final class ParallelScrollObservationView: NSView {
         report(documentGeometryChanged: true)
     }
 
-    private func diagnose(_ event: @autoclosure () -> String) {
+    func diagnose(_ event: @autoclosure () -> String) {
         guard let restorationDiagnostic else { return }
         let scroll = observedScrollView
         restorationDiagnostic(event() + " native=\(String(describing: scroll.map { ObjectIdentifier($0) }))"
@@ -539,13 +527,6 @@ final class ParallelScrollObservationView: NSView {
         }
     }
 
-    private func clampHorizontalOffset(scroll: NSScrollView, document: NSView, length: CGFloat, viewport: CGFloat) {
-        guard axis == .horizontal, !liveUserScroll, !applyingRestoration, viewport > 0,
-              scroll.contentView.bounds.minX > max(0, length - viewport) + 0.5 else { return }
-        applyRestorationTarget(max(0, length - viewport), scroll: scroll, document: document,
-                               geometry: (length, viewport, scroll.documentVisibleRect))
-    }
-
     func report(observeExternalMovement: Bool = false, documentGeometryChanged: Bool = false) {
         guard !isTornDown, let scroll = observedScrollView, let document = scroll.documentView else { return }
         // Native targets re-assert the zero-inset contract on every report, so a later resize or
@@ -553,7 +534,10 @@ final class ParallelScrollObservationView: NSView {
         if usesNativeIdentity { enforceNativeInsets(on: scroll) }
         diagnose("report geometry=\(documentGeometryChanged) external=\(observeExternalMovement) live=\(liveUserScroll)")
         let visible = scroll.documentVisibleRect
-        let viewportSize = scroll.contentView.bounds.size
+        let insets = horizontalInsets(of: scroll)
+        var viewportSize = scroll.contentView.bounds.size
+        viewportSize.width = max(0, viewportSize.width - insets.leading - insets.trailing)
+        noteLeadingInset(insets.leading)
         reportViewportSize(viewportSize, scroll: scroll)
         let length = axis == .horizontal ? document.bounds.width : document.bounds.height
         let viewport = axis == .horizontal ? viewportSize.width : viewportSize.height
@@ -581,7 +565,8 @@ final class ParallelScrollObservationView: NSView {
         }
         if horizontalLayoutReady { clampHorizontalOffset(scroll: scroll, document: document, length: length, viewport: viewport) }
         let updated = scroll.documentVisibleRect
-        lastOffset = axis == .horizontal ? updated.minX : (document.isFlipped ? updated.minY : document.bounds.maxY - updated.maxY)
+        lastOffset = axis == .horizontal ? updated.minX + insets.leading
+            : (document.isFlipped ? updated.minY : document.bounds.maxY - updated.maxY)
         if axis == .horizontal, horizontalLayoutReady, viewport > 0, pendingOffset == nil {
             horizontalPosition?.offset = max(0, lastOffset)
             preservedHorizontalOffset = preservedHorizontalOffset.map { _ in max(0, lastOffset) }

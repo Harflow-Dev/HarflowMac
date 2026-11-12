@@ -310,6 +310,60 @@ import Testing
         #expect(beforeWidth == afterWidth)
     }
 
+    // MARK: Lane placement in the shell
+
+    private struct LanePlacement {
+        /// The first lane's leading edge when the row is scrolled to its start, and the document's trailing edge.
+        let documentFrame: CGRect
+        /// The part of the scroll view that shows lanes: its clip view inside the scroll view's content insets.
+        let contentFrame: CGRect
+        /// Where the detail pane's content may begin: the sidebar's edge while it is shown, else the pane's own edge.
+        let leadingEdge: CGFloat
+        let contentWidth: CGFloat
+    }
+
+    private func allViews(_ root: NSView) -> [NSView] { [root] + root.subviews.flatMap(allViews) }
+
+    private func lanePlacement(_ window: NSWindow) -> LanePlacement? {
+        guard let content = window.contentView else { return nil }
+        let views = allViews(content)
+        guard let scroll = views.compactMap({ $0 as? NSScrollView }).first(where: { $0.hasHorizontalScroller && ($0.documentView?.frame.height ?? 0) > 300 }),
+              let document = scroll.documentView, let split = views.compactMap({ $0 as? NSSplitView }).first else { return nil }
+        let sidebar = split.arrangedSubviews.first
+        let sidebarShown = sidebar.map { !split.isSubviewCollapsed($0) } ?? false
+        let leadingEdge = sidebarShown ? (sidebar.map { $0.convert($0.bounds, to: nil).maxX } ?? 0)
+            : split.convert(split.bounds, to: nil).minX
+        let clip = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
+        let insets = scroll.contentInsets
+        return LanePlacement(documentFrame: document.convert(document.bounds, to: nil),
+                             contentFrame: CGRect(x: clip.minX + insets.left, y: clip.minY,
+                                                  width: clip.width - insets.left - insets.right, height: clip.height),
+                             leadingEdge: leadingEdge, contentWidth: content.bounds.width)
+    }
+
+    @Test(arguments: [(CGFloat(1280), CGFloat(800), false), (1280, 800, true), (1000, 620, false), (1000, 620, true)])
+    func givenTheGroupScreenInTheShell_whenMounted_thenTheLanesStartAtTheSidebarEdgeAndFillToTheTrailingEdge(
+        size: (CGFloat, CGFloat, Bool)
+    ) async throws {
+        // given / when
+        let mounted = await shell(width: size.0, height: size.1, collapsed: size.2)
+        defer { mounted.close() }
+        let placement = try #require(lanePlacement(mounted.window), "no lane scroll view at \(size)")
+
+        // then — nothing of the lanes sits under the sidebar, and they run to the detail pane's trailing edge
+        #expect(size.2 ? placement.leadingEdge < 100 : placement.leadingEdge > 200, "leading edge \(placement.leadingEdge) at \(size)")
+        #expect(abs(placement.documentFrame.minX - placement.leadingEdge) <= 0.5,
+                "lane 1 starts at \(placement.documentFrame.minX), not at the leading edge \(placement.leadingEdge) at \(size)")
+        #expect(abs(placement.contentFrame.minX - placement.leadingEdge) <= 0.5,
+                "the lanes' viewport starts at \(placement.contentFrame.minX), not at \(placement.leadingEdge) at \(size)")
+        #expect(abs(placement.contentFrame.maxX - placement.contentWidth) <= 0.5,
+                "the lanes' viewport ends at \(placement.contentFrame.maxX), not at \(placement.contentWidth) at \(size)")
+        if size.0 == 1280 {
+            #expect(abs(placement.documentFrame.maxX - placement.contentWidth) <= 1.5,
+                    "the lanes fill to \(placement.documentFrame.maxX) of \(placement.contentWidth)")
+        }
+    }
+
     // MARK: Group screen actions
 
     @Test func givenAnEmptyGroup_whenMounted_thenViewPromptIsDisabledAndThereIsNoCancelAll() async throws {

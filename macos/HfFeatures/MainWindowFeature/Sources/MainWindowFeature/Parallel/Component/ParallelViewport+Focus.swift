@@ -95,7 +95,10 @@ extension ParallelScrollObservationView {
     /// Scrolls the lane into view. False only while the row's layout is not ready for lane geometry.
     private func revealLane(_ index: Int, scroll: NSScrollView, document: NSView) -> Bool {
         let length = document.bounds.width
-        let visible = scroll.documentVisibleRect
+        let raw = scroll.documentVisibleRect
+        let insets = horizontalInsets(of: scroll)
+        // The lane row's own viewport: inside the content insets a floating sidebar leaves.
+        let visible = CGRect(x: raw.minX + insets.leading, y: raw.minY, width: raw.width - insets.leading - insets.trailing, height: raw.height)
         guard visible.width > 0, abs(length - CGFloat(ids.count) * stride) < 2 else { return false }
         let laneMin = CGFloat(index) * stride
         let laneMax = laneMin + stride - ParallelLayout.dividerWidth
@@ -113,7 +116,7 @@ extension ParallelScrollObservationView {
         target = min(max(0, target), max(0, length - visible.width))
         guard abs(target - visible.minX) > 0.5 else { return true }
         cancelHorizontalMovement()
-        applyRestorationTarget(target, scroll: scroll, document: document, geometry: (length, visible.width, visible))
+        applyRestorationTarget(target, scroll: scroll, document: document, geometry: (length, visible.width, raw))
         report()
         return true
     }
