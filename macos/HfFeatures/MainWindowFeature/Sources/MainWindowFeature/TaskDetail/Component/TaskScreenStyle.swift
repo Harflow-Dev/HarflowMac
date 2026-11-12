@@ -107,6 +107,13 @@ enum TaskScreenStyle {
         static let gap = Scale.space4
     }
 
+    /// `.hd-lane__body`: `padding: 16px`, `gap: 12px`.
+    enum Lane {
+        static let paddingHorizontal = Scale.space4
+        static let paddingTop = Scale.space4
+        static let rowGap = Scale.space3
+    }
+
     /// `.hd-msg-user`: right-aligned, `max-width: 80%`, `surface-active` fill, `radius-lg`,
     /// `padding: 10px 14px`, 14/22.
     enum UserBubble {

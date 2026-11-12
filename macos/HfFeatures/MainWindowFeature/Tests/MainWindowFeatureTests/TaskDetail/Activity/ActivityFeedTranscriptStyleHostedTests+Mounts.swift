@@ -62,7 +62,7 @@ extension ActivityFeedTranscriptStyleHostedTests {
         }
     }
 
-    @Test func givenMountedGroupDetail_whenPromotedToParallel_thenDetailIsTranscriptAndParallelColumnsAreStandard() async throws {
+    @Test func givenMountedGroupDetail_whenPromotedToParallel_thenDetailIsTranscriptAndParallelLanesAreLane() async throws {
         // given
         let first = Self.task("first", status: "completed", session: "shared")
         let second = Self.task("second", status: "running", session: "new")
@@ -117,10 +117,10 @@ extension ActivityFeedTranscriptStyleHostedTests {
         try #require(sut.parallelVM === parallelHarness.sut)
         await waitUntil(timeout: 8) { Self.tables(host).first?.owner?.model != nil }
 
-        // then — Parallel feeds keep the standard style.
+        // then — Parallel lanes use the lane style (the transcript metrics at lane insets).
         let parallelTables = Self.tables(host)
         try #require(!parallelTables.isEmpty, "no Parallel feed table mounted")
-        for table in parallelTables { #expect(table.owner?.model?.style == .standard) }
+        for table in parallelTables { #expect(table.owner?.model?.style == .lane) }
 
         // then — where the paused anchor sits in the Parallel column's own feed once it has positioned.
         await waitUntil(timeout: 8) { retainedState.viewportPositioned }

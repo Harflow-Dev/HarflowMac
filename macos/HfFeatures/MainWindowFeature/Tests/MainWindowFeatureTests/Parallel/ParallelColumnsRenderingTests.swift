@@ -61,7 +61,7 @@ import Testing
         let laneWidth = ParallelLayout.columnWidth(memberCount: 2, availableWidth: width)
         #expect(laneWidth == ParallelLayout.minimumColumnWidth)
         #expect(ParallelLayout.dividerWidth == 1)
-        let y = image.pixelsHigh / 2
+        let y = image.pixelsHigh - 3
         let border = try render(TaskScreenStyle.Colors.border.color.frame(width: 4, height: 4), scheme: scheme)
         let expectedBorder = try #require(border.colorAt(x: 1, y: 1))
         let separator = try #require(image.colorAt(x: Int(laneWidth), y: y))

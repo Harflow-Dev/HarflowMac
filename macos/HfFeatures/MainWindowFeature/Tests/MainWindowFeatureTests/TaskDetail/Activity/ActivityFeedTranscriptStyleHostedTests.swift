@@ -171,7 +171,7 @@ private enum StyleReloadSpy {
 
     // MARK: Measured against displayed
 
-    @Test(arguments: [ActivityFeedStyle.standard, .transcript])
+    @Test(arguments: [ActivityFeedStyle.standard, .transcript, .lane])
     func givenStyledPane_whenEveryRowKindIsRealized_thenEachSlotMatchesTheDisplayedHostHeightCollapsedAndExpanded(
         style: ActivityFeedStyle
     ) async throws {
@@ -214,7 +214,7 @@ private enum StyleReloadSpy {
         return heights
     }
 
-    @Test(arguments: [ActivityFeedStyle.standard, .transcript])
+    @Test(arguments: [ActivityFeedStyle.standard, .transcript, .lane])
     func givenStyledPane_whenAToolRowIsExpandedInPlace_thenItsSlotGrowsToTheDisplayedHeight(style: ActivityFeedStyle) async throws {
         // given
         let state = ParallelColumnUIState()

@@ -156,14 +156,15 @@ struct ParallelColumnView: View {
                 }
                 .padding(.horizontal, HfRadius.Metrics.spacing16)
                 .padding(.top, HfRadius.Metrics.spacing16)
+                // The feed fills the body edge to edge and supplies its own 16 pt insets through `.lane`.
                 SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
                     SkeletonRows(count: 4, showsBadge: false)
                         .padding(.top, HfRadius.Metrics.spacing4)
+                        .padding(.horizontal, HfRadius.Metrics.spacing16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } content: {
                     feed
                 }
-                .padding(.horizontal, HfRadius.Metrics.spacing16)
             }
             .frame(maxHeight: .infinity, alignment: .top)
             laneHairline
@@ -331,9 +332,13 @@ struct ParallelColumnView: View {
 
     // MARK: Feed
 
+    /// Lanes use the transcript metrics at lane insets; the inspector keeps the standard feed.
+    private var feedStyle: ActivityFeedStyle { model.chrome == .lane ? .lane : .standard }
+
     private var feed: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
-            if model.stepCountText != nil || model.noToolCallsText != nil {
+            // The lane drops the count line (Simplify); the inspector keeps it.
+            if model.chrome == .inspector, model.stepCountText != nil || model.noToolCallsText != nil {
                 HStack(spacing: HfRadius.Metrics.spacing8) {
                     if let stepCountText = model.stepCountText {
                         Text(stepCountText).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText)
@@ -347,11 +352,12 @@ struct ParallelColumnView: View {
             ActivityFeedView(rows: model.activityRows, activitySnapshot: model.activitySnapshot, start: model.start, history: model.history,
                              isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages),
                              paginationRevision: model.paginationRevision, isVisible: model.isVisible,
-                             emptyText: model.emptyText, showsPromptBubble: false, state: state, onLoadMore: model.onLoadMore,
+                             emptyText: model.emptyText, horizontalPadding: feedStyle.horizontalPadding(standard: HfRadius.Metrics.zero),
+                             showsPromptBubble: false, style: feedStyle, state: state, onLoadMore: model.onLoadMore,
                              tailPresentation: .standard(.init(
                                 pendingMessages: model.pendingMessages,
                                 workMessages: model.workMessages,
-                                liveStep: model.liveStep.map { .init(text: $0.text, indicator: .threeDots) },
+                                liveStep: model.liveStep.map { .init(text: $0.text, indicator: model.chrome == .lane ? .singleDot : .threeDots) },
                                 cancel: model.onCancelMessage == nil ? .hidden : (model.isBusy ? .disabled : .enabled)
                              )), onSelectChildTask: model.onSelectTask,
                              onCancelQueuedMessage: model.onCancelMessage)

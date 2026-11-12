@@ -560,10 +560,10 @@ private extension ParallelViewportTests {
         await awaitResizedReadingPosition(host: fixture.host, scroll: scroll, state: state,
                                           expectation: ResizeExpectation(
                                             previousDocumentHeight: wideDocumentHeight,
-                                            expectedAnchor: wideAnchor, widthMatches: { $0 < 400 }))
+                                            expectedAnchor: wideAnchor, widthMatches: { $0 < 500 }))
         let restoredRelativeOffset = try expectRestoredReadingPosition(
             scroll: scroll, state: state, expectedAnchor: wideAnchor,
-            previousDocumentHeight: wideDocumentHeight, widthMatches: { $0 < 400 })
+            previousDocumentHeight: wideDocumentHeight, widthMatches: { $0 < 500 })
         #expect(!state.followLive.isFollowing)
 
         let startOffset = scroll.documentVisibleRect.minY

@@ -127,8 +127,12 @@ no embedded terminal anywhere in this package:
   `activityFeedStyle` environment value set by the row root, so measurement and display agree. A style
   change is part of the feed's root-inputs key and remeasures through the structural route. On for the
   standalone task (`MainWindowCoordinator.buildTaskDetailView`) and Group
-  (`GroupPresentationView`) mounts; off for the builder mount (`isEmbedded`), Parallel columns and
-  workflow surfaces. Tool bodies are unbounded in height (no 220 point cap): a recorded deviation pending owner review.
+  (`GroupPresentationView`) mounts; off for the builder mount (`isEmbedded`) and the workflow surfaces.
+  `.lane` is the same transcript metrics (`isTranscript` is true for both, so every row view follows) at the
+  lane's insets: 16 point side padding, 16 point top padding, 12 point row gap, no 760 column (the feed fills
+  its lane; `ParallelColumnView` passes `style.horizontalPadding` and the lane body adds none around the feed),
+  the single-dot working row, and no "N activity items" line. Parallel lanes (`ParallelColumnChrome.lane`, group
+  and workflow run) use it; the Graph inspector's column stays `.standard` with the three-dot live step. Tool bodies are unbounded in height (no 220 point cap): a recorded deviation pending owner review.
   `MessageBoxStyle` follows the same mounts through `TaskDetailView`: `.transcript` is the solid
   `.hd-composer` surface, `.standard` keeps glass for Parallel and workflow composers. Field and actions stay
   in one row with the printed hint; the stacked form and an editor swap wait on a design for Send now and locked states.

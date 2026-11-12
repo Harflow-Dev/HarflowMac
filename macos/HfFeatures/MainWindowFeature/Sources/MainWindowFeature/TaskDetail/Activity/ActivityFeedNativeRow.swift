@@ -237,7 +237,7 @@ struct ActivityFeedNativeRowRoot: View {
     /// The entry's top spacing. The header always opens the feed, so the transcript style gives it the
     /// feed's top padding; every other entry carries its resolved spacing.
     private var topSpacing: CGFloat {
-        if case .header = entry, style.isTranscript { return TaskScreenStyle.Transcript.paddingTop }
+        if case .header = entry, style.isTranscript { return style.topPadding }
         return entry.topSpacing
     }
 
@@ -322,7 +322,7 @@ struct ActivityFeedNativeTailContent: View {
             Text(text)
         case .standard(let standard):
             VStack(alignment: .leading,
-                   spacing: style.isTranscript ? TaskScreenStyle.Transcript.gap : HfRadius.Metrics.spacing20) {
+                   spacing: style.isTranscript ? style.rowGap : HfRadius.Metrics.spacing20) {
                 if let strip = standard.subTaskStrip {
                     SubTaskStripView(model: SubTaskStripModel(
                         children: strip.children.map { SubTaskEntry(task: $0.task, title: $0.title) }, start: strip.start,

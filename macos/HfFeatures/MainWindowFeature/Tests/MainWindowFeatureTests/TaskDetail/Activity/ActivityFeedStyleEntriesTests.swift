@@ -74,6 +74,39 @@ struct ActivityFeedStyleEntriesTests {
         #expect(ActivityFeedStyle.transcript.isTranscript)
     }
 
+    @Test func givenLaneStyle_whenAskedForSpacing_thenItUsesTheLaneBodyMetrics() {
+        // given / when / then — `.hd-lane__body`: padding 16, gap 12; the transcript's row views otherwise.
+        #expect(ActivityFeedStyle.lane.spacing(first: true, standardFirst: 12, standardBetween: 20) == 16)
+        #expect(ActivityFeedStyle.lane.spacing(first: false, standardFirst: 12, standardBetween: 20) == 12)
+        #expect(ActivityFeedStyle.lane.horizontalPadding(standard: 24) == 16)
+        #expect(ActivityFeedStyle.lane.rowGap == 12)
+        #expect(ActivityFeedStyle.lane.topPadding == 16)
+        #expect(ActivityFeedStyle.lane.isTranscript && ActivityFeedStyle.lane.isLane)
+        #expect(ActivityFeedStyle.transcript.rowGap == 16 && ActivityFeedStyle.transcript.topPadding == 24)
+        #expect(ActivityFeedStyle.lane.pillFill == ActivityFeedStyle.transcript.pillFill)
+        #expect(ActivityFeedStyle.lane.ruleColor == ActivityFeedStyle.transcript.ruleColor)
+    }
+
+    @Test func givenLaneRowsWithoutHeader_whenBuilt_thenFirstIsSixteenAndGapIsTwelve() {
+        // given / when
+        let entries = build(rows(1 ... 4), style: .lane)
+        // then — four rows and the bottom sentinel.
+        #expect(spacings(entries) == [16, 12, 12, 12, 0])
+    }
+
+    @Test func givenLaneTailAndApprovals_whenBuilt_thenTheyFollowAtTheLaneGap() {
+        // given / when
+        let after = build(rows(1 ... 2), style: .lane, tail: liveTail())
+        // then — the live tail is a row gap below the last row.
+        #expect(spacings(after) == [16, 12, 12, 0])
+    }
+
+    @Test func givenStyleChange_whenModelsCompared_thenStandardAndLaneModelsDiffer() {
+        // given / when / then — a style change is part of the model, so it remeasures through the structural route.
+        #expect(model(rows(1 ... 2), style: .standard) != model(rows(1 ... 2), style: .lane))
+        #expect(model(rows(1 ... 2), style: .transcript) != model(rows(1 ... 2), style: .lane))
+    }
+
     @Test func givenTranscriptMetrics_whenRead_thenTheyMatchTheApprovedTranscript() {
         // given / when / then — `.hd-transcript`: 760 column, padding 24 32 16, gap 16, so 696 of text.
         #expect(TaskScreenStyle.Transcript.maxWidth == 760)

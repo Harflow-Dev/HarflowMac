@@ -5,7 +5,8 @@
 //  The activity feed's presentation style. `.standard` is the look every surface had before the task
 //  screen's transcript metrics: it is the default everywhere and renders unchanged. `.transcript` applies
 //  `TaskScreenStyle`'s transcript, prose, bubble, tool-row and working-row metrics, and is requested only
-//  by the standalone task and Group mounts of the task detail.
+//  by the standalone task and Group mounts of the task detail. `.lane` is the transcript's row metrics inside
+//  a Parallel lane: the same prose, tool and working rows with a 16 pt inset, a 12 pt row gap and no 760 column.
 //
 
 import AppKit
@@ -16,20 +17,33 @@ import SwiftUI
 enum ActivityFeedStyle: Equatable, Sendable {
     case standard
     case transcript
+    case lane
 
-    var isTranscript: Bool { self == .transcript }
+    /// True for `.transcript` and `.lane`: every row view reads the transcript metrics through this.
+    var isTranscript: Bool { self == .transcript || self == .lane }
+    var isLane: Bool { self == .lane }
 
     /// The feed's horizontal padding for a caller whose standard padding is `standard`.
     func horizontalPadding(standard: CGFloat) -> CGFloat {
-        isTranscript ? TaskScreenStyle.Transcript.paddingHorizontal : standard
+        switch self {
+        case .standard: standard
+        case .transcript: TaskScreenStyle.Transcript.paddingHorizontal
+        case .lane: TaskScreenStyle.Lane.paddingHorizontal
+        }
     }
+
+    /// The gap between the transcript's rows: 16 in the task transcript, 12 in a lane (`.hd-lane__body`).
+    var rowGap: CGFloat { isLane ? TaskScreenStyle.Lane.rowGap : TaskScreenStyle.Transcript.gap }
+
+    /// The padding above the feed's first entry.
+    var topPadding: CGFloat { isLane ? TaskScreenStyle.Lane.paddingTop : TaskScreenStyle.Transcript.paddingTop }
 
     /// The top spacing of an entry that follows other content (`gap`) or opens the feed (`first`).
     /// The standard values are the feed's established 20 and 12.
     func spacing(first: Bool, standardFirst: CGFloat, standardBetween: CGFloat) -> CGFloat {
         switch self {
         case .standard: first ? standardFirst : standardBetween
-        case .transcript: first ? TaskScreenStyle.Transcript.paddingTop : TaskScreenStyle.Transcript.gap
+        case .transcript, .lane: first ? topPadding : rowGap
         }
     }
 }
