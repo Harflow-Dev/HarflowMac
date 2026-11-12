@@ -158,11 +158,21 @@ final class GroupPresentationVM: GroupPresentationViewModel {
         routing?.clearTopBar(tag: topBarTag)
     }
 
+    /// An empty group keeps its own name in the bar (no badge, no meta) under the loading content's tag; one conversation
+    /// releases the bar to the task screen; several are taken over by the Parallel VM under the same tag.
+    private func settleTopBar(conversationCount: Int) {
+        if conversationCount == 0 {
+            routing?.publishTopBar(GroupTopBarContent(title: groupName, badge: nil, meta: nil, isLoading: false), tag: topBarTag)
+        } else if conversationCount == 1 {
+            releaseTopBar()
+        }
+    }
+
     private func apply(_ value: GroupMembershipPresentation) {
         isClassified = true
         // Promotion is one-way until the selected group is torn down, retaining visited lanes.
         if parallelVM != nil { return }
-        if value.conversations.count <= 1 { releaseTopBar() }
+        settleTopBar(conversationCount: value.conversations.count)
         if value.conversations.count > 1 {
             let parallel = makeParallel()
             // The Parallel VM writes under this VM's identity, so the loading content is replaced in place.

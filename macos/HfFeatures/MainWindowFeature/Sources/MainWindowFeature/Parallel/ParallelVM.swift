@@ -75,10 +75,8 @@ final class ParallelVM: ParallelViewModel {
         history.update(conversations: orderedConversations, visible: visibleIDs, states: uiStates)
     })
     @ObservationIgnored var uiStates: [String: ParallelColumnUIState] = [:]
-    /// View prompt: stored first requests by prompt task, their subscriptions and the lease generation each was read in.
-    @ObservationIgnored var requestStates: [String: TaskRequestReadState] = [:]
-    @ObservationIgnored var requestSubscriptions: [String: AnyCancellable] = [:]
-    @ObservationIgnored var requestReadGenerations: [String: UUID] = [:]
+    /// View prompt: stored first requests by prompt task, their subscriptions, read generations and copy feedback.
+    @ObservationIgnored let requests = ParallelRequestStore()
     @ObservationIgnored var descriptors: [String: ParallelColumnPresentation] = [:]
     @ObservationIgnored var presentations: [String: ParallelColumnPresentation] = [:]
     @ObservationIgnored var completedInputs: [String: ParallelColumnInput] = [:]

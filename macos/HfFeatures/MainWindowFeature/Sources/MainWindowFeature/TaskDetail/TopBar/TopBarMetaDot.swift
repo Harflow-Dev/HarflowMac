@@ -17,16 +17,29 @@ import SwiftUI
 struct TopBarMetaDotState: Equatable {
     private(set) var isHovering = false
     private(set) var isFocused = false
+    /// A press through accessibility: shows the popover without hover, until focus leaves or it is dismissed.
+    private(set) var isPressed = false
     private(set) var isDismissed = false
 
-    var showsPopover: Bool { (isHovering || isFocused) && !isDismissed }
+    var showsPopover: Bool { (isHovering || isFocused || isPressed) && !isDismissed }
 
     mutating func setHovering(_ value: Bool) { isHovering = value; settle() }
-    mutating func setFocused(_ value: Bool) { isFocused = value; settle() }
-    /// Escape: hides the popover until hover and focus have both left.
-    mutating func dismiss() { isDismissed = true }
+    mutating func setFocused(_ value: Bool) {
+        isFocused = value
+        if !value { isPressed = false }
+        settle()
+    }
 
-    private mutating func settle() { if !isHovering, !isFocused { isDismissed = false } }
+    /// An accessibility press: a transient show (it never sets hover, which only the pointer clears).
+    mutating func press() { isPressed = true; isDismissed = false }
+
+    /// Escape: hides the popover until hover, focus and press have all left.
+    mutating func dismiss() { isDismissed = true; isPressed = false; settle() }
+
+    /// The dot was hidden or left its window: nothing is hovered, focused or pressed any more.
+    mutating func reset() { self = TopBarMetaDotState() }
+
+    private mutating func settle() { if !isHovering, !isFocused, !isPressed { isDismissed = false } }
 }
 
 // MARK: - TopBarMetaDotView
@@ -120,13 +133,24 @@ final class TopBarMetaDotView: NSView {
     }
 
     override func accessibilityPerformPress() -> Bool {
-        state.setHovering(true)
+        // Focus is what ends the press: taking it here means moving focus away closes the popover.
+        _ = window?.makeFirstResponder(self)
+        state.press()
         refreshPopover()
         return true
     }
 
-    override func viewDidHide() { super.viewDidHide(); closePopover() }
-    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { closePopover() } }
+    override func viewDidHide() { super.viewDidHide(); state.reset(); closePopover() }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { state.reset(); closePopover() }
+    }
+
+    override func layout() {
+        super.layout()
+        // The toolbar can move the dot after the popover opened: keep it anchored to the dot.
+        if let popover, popover.isShown { popover.positioningRect = bounds }
+    }
 
     // MARK: Popover
 

@@ -28,6 +28,12 @@ enum ActivityRow: Equatable, Identifiable, Sendable {
         }
     }
 
+    /// The end-of-run marker ("Finished", "Failed · exit 1").
+    var isFinishedMarker: Bool {
+        guard case let .single(row, _) = self, case let .item(item) = row.kind, case .finished = item.body else { return false }
+        return true
+    }
+
     /// The task the row belongs to, which keys its disclosure state.
     var taskID: String {
         switch self {

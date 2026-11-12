@@ -47,6 +47,8 @@ struct ParallelColumnModel: Identifiable {
     var request: TaskRequestReadState?
     var onReadRequest: ((Int) -> Void)?
     var onCopyRequest: ((String) -> Void)?
+    /// "Copied", or the fallback hint after a failed copy.
+    var requestFeedback: String?
     /// Raw timeline items and separators for the complete step count.
     let rows: [ConversationTimelineRow]
     /// What the feed renders: `rows` with adjacent tool calls folded into cards.
@@ -237,17 +239,18 @@ struct ParallelColumnView: View {
                 StoredRequestView(state: request, read: { model.onReadRequest?($0) }, copy: { model.onCopyRequest?($0) },
                                   initiallyExpanded: true)
                     .accessibilityIdentifier("parallel-lane-request")
+                if let feedback = model.requestFeedback {
+                    Text(feedback).font(TaskScreenStyle.sans(size: 12)).foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+                }
             }
             laneHistoryBoundary
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        if laneBodyHeight > 0, leadingBlockHeight > 0 {
-            ScrollView { block.onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { leadingBlockHeight = $0 } }
-                .background(ActivityScrollChrome())
-                .frame(height: min(leadingBlockHeight, laneBodyHeight * 0.4))
-        } else {
-            block.onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { leadingBlockHeight = $0 }
-        }
+        // One structure whatever is measured, so the first measurement never rebuilds the block (and loses request or
+        // notice focus state): a scroll view whose height is the block's natural height up to 40% of the lane body.
+        ScrollView { block.onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { leadingBlockHeight = $0 } }
+            .background(ActivityScrollChrome())
+            .frame(height: min(leadingBlockHeight, laneBodyHeight > 0 ? laneBodyHeight * 0.4 : .infinity))
     }
 
     private var laneHairline: some View {
@@ -479,6 +482,14 @@ struct ParallelColumnView: View {
         return hasLeadingBlock ? .laneAfterBlock : .lane
     }
 
+    /// The lane's rows: with the settled end row shown, the feed's own trailing "Finished" marker is dropped, so a settled lane
+    /// ends with the end row only. The task screen and the inspector keep it.
+    private var laneActivityRows: [ActivityRow] {
+        guard model.chrome == .lane, !laneFeedIsLoading, ParallelLaneStatus.settledLine(current: model.task, status: model.laneStatus) != nil,
+              model.activityRows.last?.isFinishedMarker == true else { return model.activityRows }
+        return Array(model.activityRows.dropLast())
+    }
+
     private var feed: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
             // The lane drops the count line (Simplify); the inspector keeps it.
@@ -493,7 +504,7 @@ struct ParallelColumnView: View {
                     Spacer()
                 }
             }
-            ActivityFeedView(rows: model.activityRows, activitySnapshot: model.activitySnapshot, start: model.start, history: model.history,
+            ActivityFeedView(rows: laneActivityRows, activitySnapshot: model.activitySnapshot, start: model.start, history: model.history,
                              isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages),
                              paginationRevision: model.paginationRevision, isVisible: model.isVisible,
                              emptyText: model.emptyText, horizontalPadding: feedStyle.horizontalPadding(standard: HfRadius.Metrics.zero),

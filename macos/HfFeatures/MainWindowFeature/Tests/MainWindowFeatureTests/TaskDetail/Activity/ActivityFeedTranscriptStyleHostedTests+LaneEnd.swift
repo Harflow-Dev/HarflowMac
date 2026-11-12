@@ -98,4 +98,25 @@ extension ActivityFeedTranscriptStyleHostedTests {
         #expect(ActivityFeedTailPresentation.standard(.init(settled: .init(text: "Done", tone: .success, symbol: nil)))
             .isVisible(with: ActivityFeedTail()))
     }
+
+    @Test func givenASettledLaneWithAFinishedRow_whenMounted_thenOnlyTheEndRowEndsTheFeed() async throws {
+        // given — the feed's own trailing "Finished" marker would duplicate the end row
+        var model = endModel()
+        let finished = ConversationTimelineRow(id: "end#finished", taskID: model.task.taskID, timestamp: nil,
+                                               kind: .item(PreviewFixtures.finishedItem(seq: 9)), live: false)
+        let rows = model.rows + [finished]
+        model = ParallelColumnModel(id: model.id, task: model.task, title: "End", subtitle: "", isBusy: false, outcomeMessage: nil,
+                                    showPrompt: false, rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
+                                    isLoading: false, summary: nil, onTapTakeover: nil, onTapOpenTask: {})
+        model.status = ParallelLaneStatus.make(current: model.task, snapshot: nil, frame: nil)
+
+        // when
+        let fixture = await mountEnd(model)
+        defer { fixture.close() }
+        await fixture.settle { fixture.element("Done · 04:51") != nil }
+
+        // then
+        #expect(fixture.element("Finished") == nil, "no second end marker in a lane")
+        #expect(model.activityRows.last?.isFinishedMarker == true, "the model still carries it; only a lane's drawing drops it")
+    }
 }

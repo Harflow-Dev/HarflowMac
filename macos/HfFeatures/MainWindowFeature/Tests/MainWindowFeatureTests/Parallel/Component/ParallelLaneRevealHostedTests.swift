@@ -35,13 +35,16 @@ import Testing
         }
     }
 
-    private func mount() async throws -> Mounted {
+    private func mount(sidebarInset: CGFloat = 0) async throws -> Mounted {
         let tests = ParallelVMTests()
         let harness = tests.makeSUT()
         let tasks = (0 ..< 5).map { tests.task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
-        let fixture = RedesignHost(ParallelView(harness.sut, initiallyPrepared: true),
-                                   size: CGSize(width: Self.detailWidth, height: 620))
+        // A leading safe-area inset stands in for the floating sidebar the shell puts over the detail column.
+        let content = ParallelView(harness.sut, initiallyPrepared: true).safeAreaInset(edge: .leading, spacing: 0) {
+            Color.clear.frame(width: sidebarInset)
+        }
+        let fixture = RedesignHost(content, size: CGSize(width: Self.detailWidth + sidebarInset, height: 620))
         harness.tasksSubject.send(tasks)
         let mounted = Mounted(fixture: fixture, harness: harness)
         await fixture.settle {
@@ -121,6 +124,29 @@ import Testing
         await mounted.fixture.settle { mounted.harness.sut.residentColumnCount == 4 && mounted.harness.sut.isPresentationSettled }
         #expect(mounted.harness.sut.residentColumnCount == 4)
         #expect(mounted.harness.sut.leasedMemberCount == 4)
+    }
+
+    @Test func givenAFloatingSidebarInset_whenThePeekLaneTakesFocus_thenItIsRevealedInsideTheInset() async throws {
+        // given — a 272 pt leading inset (the shell's sidebar) over a 736 pt lane viewport
+        let inset: CGFloat = 272
+        let mounted = try await mount(sidebarInset: inset)
+        defer { close(mounted) }
+        let scroll = try #require(mounted.horizontalScroll)
+        let stride = ParallelTestGeometry.laneStride
+        #expect(abs(scroll.contentInsets.left - inset) < 0.5, "the scroll view carries the inset: \(scroll.contentInsets)")
+        #expect(abs(scroll.documentVisibleRect.minX + inset) < 1, "offset 0 is lane 1 at the inset")
+
+        // when
+        mounted.window.makeKeyAndOrderFront(nil)
+        #expect(focus(mounted.fields[2]))
+        let laneMax = 3 * stride - ParallelLayout.dividerWidth
+        await mounted.fixture.settle { scroll.documentVisibleRect.maxX >= laneMax - 0.5 }
+
+        // then — the lane is whole inside the inset, not under it: its leading edge is at or past the logical origin
+        let visible = scroll.documentVisibleRect
+        let logicalMin = visible.minX + inset
+        #expect(logicalMin <= 2 * stride + 0.5 && visible.maxX >= laneMax, "lane 3 is whole: \(visible), inset \(inset)")
+        #expect(abs(visible.maxX - (laneMax + ParallelLayout.dividerWidth + 1)) < 1, "scrolled just far enough: \(visible)")
     }
 
     @Test func givenFocusStaysInALane_whenTheUserScrollsAwayAndTheViewRerenders_thenThePositionHolds() async throws {

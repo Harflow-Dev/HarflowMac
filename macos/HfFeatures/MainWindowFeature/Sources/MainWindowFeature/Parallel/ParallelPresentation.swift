@@ -244,6 +244,7 @@ struct ParallelColumnRenderValue: Equatable {
     var hasMessageCancellation = false
     var chrome = ParallelColumnChrome.lane
     var request: TaskRequestReadState?
+    var requestFeedback: String?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         let left = lhs.presentation
@@ -264,6 +265,7 @@ struct ParallelColumnRenderValue: Equatable {
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
             && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
             && lhs.chrome == rhs.chrome && lhs.request == rhs.request
+            && lhs.requestFeedback == rhs.requestFeedback
     }
 }
 
@@ -287,6 +289,6 @@ extension ParallelColumnModel {
         value.cachedHistoryNotice = cachedHistoryNotice
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
                                         hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil,
-                                        chrome: chrome, request: request)
+                                        chrome: chrome, request: request, requestFeedback: requestFeedback)
     }
 }

@@ -151,4 +151,52 @@ import Testing
         state.setHovering(true)
         #expect(state.showsPopover, "it returns once both left and one came back")
     }
+
+    @Test func givenAnAccessibilityPress_whenFocusLeaves_thenThePopoverCloses() {
+        // given
+        var state = TopBarMetaDotState()
+        state.setFocused(true)
+        state.press()
+        #expect(state.showsPopover)
+
+        // when
+        state.setFocused(false)
+
+        // then — a press never set hover, so nothing keeps the popover open
+        #expect(state.isHovering == false)
+        #expect(state.showsPopover == false)
+    }
+
+    @Test func givenAPress_whenEscapeDismissesIt_thenARefocusShowsItAgain() {
+        // given
+        var state = TopBarMetaDotState()
+        state.setFocused(true)
+        state.press()
+
+        // when
+        state.dismiss()
+        #expect(state.showsPopover == false)
+        state.setFocused(false)
+        state.setFocused(true)
+
+        // then
+        #expect(state.showsPopover)
+    }
+
+    @Test func givenAHoveredAndFocusedDot_whenItIsHidden_thenNothingStaysSet() {
+        // given
+        var state = TopBarMetaDotState()
+        state.setHovering(true)
+        state.setFocused(true)
+        state.press()
+
+        // when
+        state.reset()
+
+        // then
+        #expect(state == TopBarMetaDotState())
+        #expect(state.showsPopover == false)
+        state.setFocused(true)
+        #expect(state.showsPopover, "it shows again after a fresh focus")
+    }
 }

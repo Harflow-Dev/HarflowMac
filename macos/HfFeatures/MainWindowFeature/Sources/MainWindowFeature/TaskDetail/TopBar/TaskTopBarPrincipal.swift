@@ -69,12 +69,7 @@ struct TaskTopBarPrincipal: View {
             if group.isLoading {
                 // Membership is unknown: a 150 pt badge block and a 300 pt meta block (dropped when it does not fit).
                 SkeletonBlock(width: 150, height: 12).topBarRole(.badge)
-                SkeletonBlock(width: 300, height: 12)
-.fixedSize()
-.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                    .clipped()
-.accessibilityHidden(true)
-.topBarRole(.meta)
+                loadingMetaBlock.topBarRole(.meta)
             } else {
                 if let badge = group.badge { TaskStatusBadge(model: badge).topBarRole(.badge) }
                 if let meta = group.meta {
@@ -85,6 +80,11 @@ struct TaskTopBarPrincipal: View {
             status.topBarRole(.status)
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private var loadingMetaBlock: some View {
+        let block = SkeletonBlock(width: 300, height: 12).fixedSize()
+        return block.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).clipped().accessibilityHidden(true)
     }
 
     /// Whole at its ideal width. A dropped meta is placed with a zero width, so the clipped frame draws nothing; it stays

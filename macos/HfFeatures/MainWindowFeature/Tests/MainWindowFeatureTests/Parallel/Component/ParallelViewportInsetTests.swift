@@ -91,12 +91,19 @@ import Testing
         await waitUntil { host.layoutSubtreeIfNeeded(); return abs(position.width - 500) < 2 }
         let scroll = try #require(scrollView(in: host))
 
+        // at a scrolled logical offset of 300 (raw origin 200 under the 100 inset)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+        scroll.contentView.scroll(to: CGPoint(x: 200, y: 0))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
+        await waitUntil { abs(position.offset - 300) < 2 }
+
         // when
         host.rootView = Row(ids: ["a", "b", "c", "d"], margin: 0, position: position)
         await waitUntil { host.layoutSubtreeIfNeeded(); return abs(position.width - 600) < 2 }
 
-        // then — still at the first lane, now at raw origin 0
-        #expect(abs(position.offset) < 0.5)
-        #expect(abs(scroll.contentView.bounds.minX) < 0.5, "raw origin \(scroll.contentView.bounds.minX)")
+        // then — the same logical offset, now at raw origin 300 (the position is kept in points, not lanes)
+        #expect(abs(position.offset - 300) < 2, "logical offset \(position.offset)")
+        #expect(abs(scroll.contentView.bounds.minX - 300) < 2, "raw origin \(scroll.contentView.bounds.minX)")
     }
 }

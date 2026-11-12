@@ -65,9 +65,8 @@ import Testing
         guard let scroll = all.compactMap({ $0 as? NSScrollView }).first(where: { $0.hasHorizontalScroller && ($0.documentView?.frame.height ?? 0) > 300 }),
               let document = scroll.documentView else { return nil }
         // The composer is the lowest text field in the first lane.
-        let fields = views(document)
-.filter { ($0 is NSTextField || $0 is NSTextView) && !$0.isHidden && $0.frame.height > 0 && $0.frame.height < 60 }
-            .map { $0.convert($0.bounds, to: nil) }
+        let candidates = views(document).filter { ($0 is NSTextField || $0 is NSTextView) && !$0.isHidden }
+        let fields = candidates.filter { $0.frame.height > 0 && $0.frame.height < 60 }.map { $0.convert($0.bounds, to: nil) }
         let field = fields.min { ($0.minY, $0.minX) < ($1.minY, $1.minX) }
         return Measured(document: document.convert(document.bounds, to: nil), field: field)
     }
@@ -140,8 +139,15 @@ import Testing
         // then — checked in the view hierarchy, not the accessibility tree (the skeleton is one element)
         let measured = try #require(measure(window))
         #expect(measured.field != nil, "the real composer field is present")
-        let editable = views(try #require(window.contentView)).compactMap { $0 as? NSTextField }.filter(\.isEditable)
+        let all = views(try #require(window.contentView))
+        let editable = all.compactMap { $0 as? NSTextField }.filter(\.isEditable)
+        #expect(!editable.isEmpty, "the composer's field is in the hierarchy")
         #expect(editable.allSatisfy { !$0.isEnabled }, "no editable field is enabled while loading")
+        // Send is a control of the same composer: every control inside the lanes is disabled.
+        let document = try #require(all.compactMap { $0 as? NSScrollView }.first { $0.hasHorizontalScroller }?.documentView)
+        let controls = views(document).compactMap { $0 as? NSControl }
+        #expect(!controls.isEmpty, "the Send button is in the hierarchy")
+        #expect(controls.allSatisfy { !$0.isEnabled }, "Send is disabled")
     }
 
     @Test func givenTheLoadingSkeleton_whenMounted_thenBothToolbarButtonsAreDisabled() async throws {

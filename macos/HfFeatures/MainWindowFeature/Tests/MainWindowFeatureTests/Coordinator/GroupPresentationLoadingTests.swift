@@ -13,10 +13,14 @@ import Testing
     @MainActor private final class RecordingRouting: ParallelRouting {
         private(set) var events: [String] = []
         private(set) var writers: [ObjectIdentifier] = []
+        private(set) var titles: [String] = []
+        private(set) var lastContent: GroupTopBarContent?
         func selectTask(_: String) {}
         func copyToPasteboard(_: String) -> Bool { false }
         func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag) {
             events.append(content.isLoading ? "publish loading" : "publish loaded")
+            titles.append(content.title)
+            lastContent = content
             writers.append(tag.writer)
         }
 
@@ -53,7 +57,7 @@ import Testing
         #expect(Array(routing.events.prefix(2)) == ["publish loading", "activate"])
     }
 
-    @Test func givenAnEmptyGroup_whenClassified_thenItIsClassifiedAndTheLoadingContentIsCleared() async throws {
+    @Test func givenAnEmptyGroup_whenClassified_thenItIsClassifiedAndTheBarKeepsTheGroupName() async throws {
         // given
         let routing = RecordingRouting()
         let sut = makeSUT(CurrentValueSubject([]), routing: routing)
@@ -65,7 +69,10 @@ import Testing
 
         // then
         #expect(sut.detailVM == nil && sut.parallelVM == nil)
-        #expect(routing.events.suffix(2) == ["deactivate", "clear"])
+        #expect(routing.events.last == "publish loaded", "the group's own title replaces the loading content")
+        #expect(routing.events.contains("clear") == false)
+        #expect(routing.titles.last == "group")
+        #expect(routing.lastContent?.isLoading == false && routing.lastContent?.badge == nil && routing.lastContent?.meta == nil)
     }
 
     @Test func givenOneConversation_whenClassified_thenTheDetailMountsAndTheLoadingContentIsCleared() async throws {
