@@ -19,6 +19,15 @@ import HfUI
 import MonitorCore
 import SwiftUI
 
+// MARK: - ParallelColumnChrome
+
+/// Which surface draws a column. `.lane` is the HarflowDesign v2 lane (group and workflow-run Parallel);
+/// `.inspector` keeps the Graph selected-node inspector's earlier chrome until it has its own v2 design.
+enum ParallelColumnChrome: Equatable, Sendable {
+    case lane
+    case inspector
+}
+
 // MARK: - ParallelColumnModel
 
 /// Presentation data for one Parallel column: the conversation's fresh CURRENT member (status,
@@ -77,6 +86,8 @@ struct ParallelColumnModel: Identifiable {
     var onAdoptWindow: (() -> Void)?
     var onSubmitMessage: ((String, Bool) -> Bool)?
     var onCancelMessage: ((String) -> Void)?
+    /// The surface that draws this column; the VM sets `.inspector` for the Graph inspector's VM.
+    var chrome = ParallelColumnChrome.lane
 
     /// "<Backend> · <repo name>" plus "· N turns" when `turns > 1` — the lane header's subtitle,
     /// without the session id.
@@ -84,6 +95,14 @@ struct ParallelColumnModel: Identifiable {
         var parts = [BackendStyle.displayName(backend), Format.repoName(repoPath)].filter { !$0.isEmpty }
         if turns > 1 { parts.append("\(turns) turns") }
         return parts.joined(separator: " · ")
+    }
+
+    /// The same column drawn by another surface. The Graph inspector forces `.inspector` so it keeps its
+    /// earlier chrome until it receives a v2 design.
+    func withChrome(_ chrome: ParallelColumnChrome) -> ParallelColumnModel {
+        var copy = self
+        copy.chrome = chrome
+        return copy
     }
 
     /// Raw item count excludes conversation separators.
@@ -106,33 +125,77 @@ struct ParallelColumnView: View {
     }
 
     var body: some View {
+        Group {
+            switch model.chrome {
+            case .lane: laneBody
+            case .inspector: inspectorBody
+            }
+        }
+        .opensFileLinks(repoPath: model.task.repoPath)
+    }
+
+    // MARK: Lane chrome
+
+    /// HarflowDesign v2 `.hd-lane`: head (12/16 padding, bottom hairline), body (the feed fills it edge to
+    /// edge; items outside the feed carry their own 16 pt side padding, 12 pt row gap) and foot (12 pt
+    /// padding, top hairline) holding the composer.
+    private var laneBody: some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
+            header
+                .padding(.horizontal, HfRadius.Metrics.spacing16)
+                .padding(.vertical, HfRadius.Metrics.spacing12)
+            laneHairline
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+                    if let message = model.outcomeMessage {
+                        Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                    }
+                    if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
+                    historyBoundary
+                    resultCallout
+                }
+                .padding(.horizontal, HfRadius.Metrics.spacing16)
+                .padding(.top, HfRadius.Metrics.spacing16)
+                SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
+                    SkeletonRows(count: 4, showsBadge: false)
+                        .padding(.top, HfRadius.Metrics.spacing4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } content: {
+                    feed
+                }
+                .padding(.horizontal, HfRadius.Metrics.spacing16)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            laneHairline
+            composer
+                .padding(HfRadius.Metrics.spacing12)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var laneHairline: some View {
+        Rectangle()
+            .fill(TaskScreenStyle.Colors.border.color)
+            .frame(height: ParallelLayout.dividerWidth)
+            .accessibilityHidden(true)
+    }
+
+    // MARK: Inspector chrome
+
+    /// The Graph inspector's earlier column, unchanged.
+    private var inspectorBody: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
             header
             if let message = model.outcomeMessage {
                 Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }
             if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
-            VStack(alignment: .leading, spacing: 8) {
-                Text(model.cachedHistoryNotice ?? "Available captured history")
-.font(.hf(.caption))
-.fixedSize(horizontal: false, vertical: true)
-                    .focusable()
-.focused($historyBoundaryFocused)
-                if let adopt = model.onAdoptWindow {
-                    Button("Load current activity") {
-                        adopt()
-                        historyBoundaryFocused = true
-                        NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
-                            userInfo: [.announcement: "Loading current activity; the cached reading window will be replaced.",
-                                       .priority: NSAccessibilityPriorityLevel.medium.rawValue])
-                    }
-                }
-            }
+            historyBoundary
             Divider()
             resultCallout
             SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
                 SkeletonRows(count: 4, showsBadge: false)
-.padding(.top, HfRadius.Metrics.spacing4)
+                    .padding(.top, HfRadius.Metrics.spacing4)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } content: {
                 feed
@@ -141,7 +204,25 @@ struct ParallelColumnView: View {
         }
         .padding(HfRadius.Metrics.spacing16)
         .frame(maxHeight: .infinity, alignment: .top)
-        .opensFileLinks(repoPath: model.task.repoPath)
+    }
+
+    private var historyBoundary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(model.cachedHistoryNotice ?? "Available captured history")
+                .font(.hf(.caption))
+                .fixedSize(horizontal: false, vertical: true)
+                .focusable()
+                .focused($historyBoundaryFocused)
+            if let adopt = model.onAdoptWindow {
+                Button("Load current activity") {
+                    adopt()
+                    historyBoundaryFocused = true
+                    NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                        userInfo: [.announcement: "Loading current activity; the cached reading window will be replaced.",
+                                   .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+                }
+            }
+        }
     }
 
     private var composer: some View {

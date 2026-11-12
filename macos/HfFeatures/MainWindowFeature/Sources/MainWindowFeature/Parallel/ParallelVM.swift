@@ -481,6 +481,7 @@ final class ParallelVM: ParallelViewModel {
             column.onCancelMessage = { [weak self] messageID in self?.cancelMessage(messageID, conversationID: conversation.id) }
             windowAdoption.prepareColumn(&column, id: conversation.id) { [weak self] in self?.adoptObservationWindow(conversation.id) }
             column.workMessages = WorkMessageBubble.applying(column.workMessages, notes: messageNotes[metadata.task.taskID] ?? [:])
+            column.chrome = isWorkflowInspector ? .inspector : .lane
             column.animatesArrival = arrivals.contains(column.id)
             column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }
             column.isResident = presentations[column.id] != nil || residentIDs.contains(column.id)
@@ -596,5 +597,4 @@ extension ParallelVM {
         publishColumns()
         schedule(inputs)
     }
-
 }

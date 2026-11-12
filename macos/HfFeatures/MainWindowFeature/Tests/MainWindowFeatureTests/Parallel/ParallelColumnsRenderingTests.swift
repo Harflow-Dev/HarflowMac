@@ -8,55 +8,93 @@ import Testing
 
 @MainActor @Suite(.serialized) struct ParallelColumnsRenderingTests {
     @Test(arguments: [ColorScheme.light, .dark], [RenderState.loaded, .nonresident, .skeleton])
-    func givenAParallelLane_whenRenderedAtItsActualBoundary_thenItsBottomCornersAreTheSquareLaneSurface(
+    func givenAParallelLane_whenRenderedAtItsActualBoundary_thenItsBottomCornersAreTheChromeSurface(
         scheme: ColorScheme, state: RenderState
     ) throws {
-        // given — render the production ParallelColumnsContent, including its actual resident and
-        // placeholder branches. The outer corners are the amendment's observable flush boundary;
-        // activity cards inside the lane are intentionally not sampled here.
-        let model = makeModel(state: state)
-        let view = ParallelColumnsContent(
-            columns: [model], availableSize: CGSize(width: 630, height: 320),
-            stateForColumn: { _ in ParallelColumnUIState() }, onViewport: { _, _ in }
-        )
-        let image = try render(view.frame(width: 630, height: 320), scheme: scheme)
-        let cardReference = try render(Color.cardFill.frame(width: 630, height: 320), scheme: scheme)
-        let windowReference = try render(Color.windowBG.frame(width: 630, height: 320), scheme: scheme)
-        let clearReference = try render(Color.clear.frame(width: 630, height: 320), scheme: scheme)
-
-        // when / then — a rounded pane would expose the transparent parent at both bottom
-        // corners. A square flush lane paints cardFill through the full boundary in both modes.
-        for point in [CGPoint(x: 0, y: image.pixelsHigh - 1),
-                      CGPoint(x: image.pixelsWide - 1, y: image.pixelsHigh - 1)] {
-            let actual = try #require(image.colorAt(x: Int(point.x), y: Int(point.y)))
-            let expected = try #require(cardReference.colorAt(x: Int(point.x), y: Int(point.y)))
-            let window = try #require(windowReference.colorAt(x: Int(point.x), y: Int(point.y)))
-            let clear = try #require(clearReference.colorAt(x: Int(point.x), y: Int(point.y)))
-            #expect(close(actual, expected), "(state) (scheme) corner must match cardFill")
-            #expect(!close(actual, window), "(state) (scheme) corner must not be windowBG")
-            #expect(!close(actual, clear), "(state) (scheme) corner must not be clear")
+        for chrome in [ParallelColumnChrome.lane, .inspector] {
+            try assertCorners(scheme: scheme, state: state, chrome: chrome)
         }
     }
 
-    @Test func givenTwoLoadedLanes_whenRendered_thenTheDividerRemainsAtTheOriginalStride() throws {
+    private func assertCorners(scheme: ColorScheme, state: RenderState, chrome: ParallelColumnChrome) throws {
+        // given — render the production ParallelColumnsContent, including its actual resident and
+        // placeholder branches. The outer corners are the observable flush boundary; activity cards
+        // inside the lane are intentionally not sampled here.
+        var model = makeModel(state: state)
+        model.chrome = chrome
+        let width = ParallelLayout.minimumColumnWidth
+        let view = ParallelColumnsContent(
+            columns: [model], availableSize: CGSize(width: width, height: 320),
+            stateForColumn: { _ in ParallelColumnUIState() }, onViewport: { _, _ in }
+        )
+        let surface: Color = chrome == .lane ? TaskScreenStyle.Colors.pageBackground.color : Color.cardFill
+        let image = try render(view.frame(width: width, height: 320), scheme: scheme)
+        let reference = try render(surface.frame(width: width, height: 320), scheme: scheme)
+        let clearReference = try render(Color.clear.frame(width: width, height: 320), scheme: scheme)
+
+        // when / then — a rounded pane would expose the transparent parent at both bottom corners. A
+        // square flush lane paints its surface through the full boundary in both modes. The right
+        // sample sits inside the lane, off the 1 pt separator that follows it.
+        for point in [CGPoint(x: 2, y: image.pixelsHigh - 1),
+                      CGPoint(x: image.pixelsWide - 3, y: image.pixelsHigh - 1)] {
+            let actual = try #require(image.colorAt(x: Int(point.x), y: Int(point.y)))
+            let expected = try #require(reference.colorAt(x: Int(point.x), y: Int(point.y)))
+            let clear = try #require(clearReference.colorAt(x: Int(point.x), y: Int(point.y)))
+            #expect(close(actual, expected), "\(state) \(scheme) \(chrome) corner must match the chrome surface")
+            #expect(!close(actual, clear), "\(state) \(scheme) \(chrome) corner must not be clear")
+        }
+    }
+
+    @Test(arguments: [ColorScheme.light, .dark])
+    func givenTwoLoadedLanes_whenRendered_thenTheSeparatorIsOnePointOfBorderAtTheLaneStride(scheme: ColorScheme) throws {
         // given
+        let width = ParallelTestGeometry.laneStride * 2
         let first = makeModel(id: "first", state: .loaded)
         let second = makeModel(id: "second", state: .loaded)
         let view = ParallelColumnsContent(
-            columns: [first, second], availableSize: CGSize(width: 1262, height: 320),
+            columns: [first, second], availableSize: CGSize(width: width, height: 320),
             stateForColumn: { _ in ParallelColumnUIState() }, onViewport: { _, _ in }
         )
-        let image = try render(view.frame(width: 1262, height: 320), scheme: .light)
+        let image = try render(view.frame(width: width, height: 320), scheme: scheme)
 
-        // when / then — the divider is still the existing column stride, independent of whether
-        // the outer lane surround is rounded or flush.
-        let width = ParallelLayout.columnWidth(memberCount: 2, availableWidth: 1262)
-        #expect(width == 630)
+        // when / then — lane, then a 1 pt `--border` separator, then the next lane at the original stride.
+        let laneWidth = ParallelLayout.columnWidth(memberCount: 2, availableWidth: width)
+        #expect(laneWidth == ParallelLayout.minimumColumnWidth)
         #expect(ParallelLayout.dividerWidth == 1)
-        let divider = try #require(image.colorAt(x: Int(width), y: image.pixelsHigh / 2))
-        let left = try #require(image.colorAt(x: Int(width) - 1, y: image.pixelsHigh / 2))
-        let right = try #require(image.colorAt(x: Int(width) + 1, y: image.pixelsHigh / 2))
-        #expect(!close(divider, left) || !close(divider, right))
+        let y = image.pixelsHigh / 2
+        let border = try render(TaskScreenStyle.Colors.border.color.frame(width: 4, height: 4), scheme: scheme)
+        let expectedBorder = try #require(border.colorAt(x: 1, y: 1))
+        let separator = try #require(image.colorAt(x: Int(laneWidth), y: y))
+        let left = try #require(image.colorAt(x: Int(laneWidth) - 2, y: y))
+        let right = try #require(image.colorAt(x: Int(laneWidth) + 3, y: y))
+        #expect(close(separator, expectedBorder), "the separator is --border")
+        #expect(!close(left, separator) && !close(right, separator))
+        let background = try render(TaskScreenStyle.Colors.pageBackground.color.frame(width: 4, height: 4), scheme: scheme)
+        let expectedBackground = try #require(background.colorAt(x: 1, y: 1))
+        #expect(close(left, expectedBackground) && close(right, expectedBackground), "both lanes are filled with --bg")
+    }
+
+    @Test func givenAnInspectorColumn_whenRendered_thenItKeepsTheCardFillStatusStripAndSystemDivider() throws {
+        // given
+        var model = makeModel(state: .loaded)
+        model.chrome = .inspector
+        let width = ParallelLayout.minimumColumnWidth
+        let view = ParallelColumnsContent(
+            columns: [model], availableSize: CGSize(width: width, height: 320),
+            stateForColumn: { _ in ParallelColumnUIState() }, onViewport: { _, _ in }
+        )
+
+        // when
+        let image = try render(view.frame(width: width, height: 320), scheme: .light)
+        let stripColor = try #require(ParallelLaneTint.color(for: model.task.status))
+        let strip = try render(stripColor.frame(width: 4, height: 4), scheme: .light)
+
+        // then — a 3 pt status-tinted strip across the top edge; the old geometry is unchanged.
+        let top = try #require(image.colorAt(x: 100, y: 1))
+        #expect(close(top, try #require(strip.colorAt(x: 1, y: 1))))
+        let below = try #require(image.colorAt(x: 100, y: 6))
+        #expect(!close(below, top))
+        #expect(HfRadius.Metrics.parallelLaneStatusStripHeight == 3)
     }
 
     @Test func givenALongSettledResult_whenHosted_thenResultIsBoundedActivityRemainsScrollableAndTerminalActionRemainsAccessible() async throws {

@@ -41,28 +41,51 @@ struct ParallelColumnsContent: View {
 
 // MARK: - ParallelLaneSurface
 
-/// The lane surface (user amendment to SPEC §6.5): a square, full-lane `cardFill` background with
-/// an optional 3 pt status strip across its top edge — no rounded pane surround, hairline border
-/// or clip, so the lanes stay edge-to-edge as before the redesign. Presentation only — the cell's
-/// equality, the resident placeholder, the stable IDs, arrival, the viewport observer and the
-/// column stride are all owned by their own unchanged contracts.
+/// The lane surface. `.lane` is HarflowDesign v2's `.hd-lane`: a square, full-lane `--bg` fill with no
+/// status strip, rounded surround or border of its own (the separator after it is drawn by the cell).
+/// `.inspector` keeps the Graph inspector's earlier surface: `cardFill` with an optional 3 pt status
+/// strip across its top edge. Presentation only — the cell's equality, the resident placeholder, the
+/// stable IDs, arrival, the viewport observer and the column stride are owned by their own contracts.
 struct ParallelLaneSurface<Content: View>: View {
-    /// The status-tinted top strip's colour; `nil` (the default) draws no strip — an unknown
-    /// status never gets an invented one.
+    var chrome = ParallelColumnChrome.lane
+    /// The status-tinted top strip's colour (`.inspector` only); `nil` (the default) draws no strip —
+    /// an unknown status never gets an invented one.
     var statusTint: Color?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        content()
-            .background(Color.cardFill)
-            .overlay(alignment: .top) {
-                if let statusTint {
-                    Rectangle()
-                        .fill(statusTint)
-                        .frame(height: HfRadius.Metrics.parallelLaneStatusStripHeight)
-                        .accessibilityHidden(true)
+        switch chrome {
+        case .lane:
+            content().background(TaskScreenStyle.Colors.pageBackground.color)
+        case .inspector:
+            content()
+                .background(Color.cardFill)
+                .overlay(alignment: .top) {
+                    if let statusTint {
+                        Rectangle()
+                            .fill(statusTint)
+                            .frame(height: HfRadius.Metrics.parallelLaneStatusStripHeight)
+                            .accessibilityHidden(true)
+                    }
                 }
-            }
+        }
+    }
+}
+
+// MARK: - ParallelLaneSeparator
+
+/// The separator after a lane: a 1 pt `--border` rectangle for lanes (`gap: 1px` on `--border` in the
+/// design), the system divider for the inspector.
+struct ParallelLaneSeparator: View {
+    let chrome: ParallelColumnChrome
+
+    var body: some View {
+        switch chrome {
+        case .lane:
+            Rectangle().fill(TaskScreenStyle.Colors.border.color).frame(width: ParallelLayout.dividerWidth)
+        case .inspector:
+            Divider().frame(width: ParallelLayout.dividerWidth)
+        }
     }
 }
 
@@ -81,11 +104,12 @@ struct ParallelColumnCell: View, @MainActor Equatable {
 
     var body: some View {
         HStack(spacing: HfRadius.Metrics.zero) {
-            ParallelLaneSurface(statusTint: ParallelLaneTint.color(for: model.task.status)) {
+            ParallelLaneSurface(chrome: model.chrome,
+                                statusTint: model.chrome == .inspector ? ParallelLaneTint.color(for: model.task.status) : nil) {
                 content
             }
             .frame(width: size.width, height: size.height)
-            Divider().frame(width: ParallelLayout.dividerWidth)
+            ParallelLaneSeparator(chrome: model.chrome)
         }
     }
 
@@ -142,7 +166,7 @@ enum ParallelLaneTint {
 }
 
 #if DEBUG
-/// One lane's flush boundary as the amendment draws it: full-bleed `cardFill`, the truthful
+/// One inspector lane's flush boundary: full-bleed `cardFill`, the truthful
 /// status strip, and the lane's own internal header/skeleton content — no invented data.
 @ViewBuilder
 @MainActor
@@ -153,7 +177,7 @@ private func parallelLaneSurfacePreview() -> some View {
         "status": .string("running"),
         "repo_path": .string("/tmp")
     ]))!
-    ParallelLaneSurface(statusTint: ParallelLaneTint.color(for: task.status)) {
+    ParallelLaneSurface(chrome: .inspector, statusTint: ParallelLaneTint.color(for: task.status)) {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 StatusIcon(status: task.status)

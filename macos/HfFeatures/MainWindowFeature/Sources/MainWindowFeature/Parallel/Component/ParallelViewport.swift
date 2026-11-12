@@ -7,7 +7,7 @@ import SwiftUI
 
 final class ParallelScrollObservationView: NSView {
     private weak var nativeIdentityOwner: ParallelScrollNativeIdentity?
-    private var isTornDown = false
+    var isTornDown = false
     /// Transfer registration when the representable changes holders; preserve the old holder's
     /// last scoped identity for an observer-only remount.
     func bindNativeIdentity(_ holder: ParallelScrollNativeIdentity?) {
@@ -34,19 +34,19 @@ final class ParallelScrollObservationView: NSView {
     private var wheelMonitor: Any?
     private var liveUserScroll = false
     private var reevaluatingRestoration = false
-    private weak var observedScrollView: NSScrollView?
+    weak var observedScrollView: NSScrollView?
     private weak var observedDocument: NSView?
-    private var subscriptions = Set<AnyCancellable>()
+    var subscriptions = Set<AnyCancellable>()
     private var documentSubscription: AnyCancellable?
     var horizontalPosition: ParallelViewportPosition?
     var explicitNavigationID: String?
     private var preservedHorizontalOffset: CGFloat?
     private var configuredHorizontalPosition = false
+    var focusedLaneIndex: Int?
     private var previousNavigationID: String?
     func cancelHorizontalMovement() { pendingOffset = nil; preservedHorizontalOffset = nil }
-
-    private var ids: [String] = []
-    private var stride: CGFloat = 0
+    var ids: [String] = []
+    var stride: CGFloat = 0
     private var pendingOffset: CGFloat?
     private var applyingRestoration = false
     private var nativeAnchorTarget: CGFloat?
@@ -275,9 +275,8 @@ final class ParallelScrollObservationView: NSView {
         report(documentGeometryChanged: true)
     }
 
-    /// Subscribes the native bounds/frame notifications of one adopted scroll view and its
-    /// document — the shared body of both attachment paths — and records the subscribed
-    /// document so a same-scroll replacement can be detected later.
+    /// Subscribes the native bounds/frame notifications of one adopted scroll view and its document
+    /// (the shared body of both attachment paths), recording the document so a replacement is detected.
     private func attachNotifications(for scroll: NSScrollView) {
         guard let document = scroll.documentView else { return }
         subscriptions.removeAll()
@@ -314,6 +313,7 @@ final class ParallelScrollObservationView: NSView {
                 .sink { [weak self] _ in self?.liveUserScroll = false }
                 .store(in: &subscriptions)
         }
+        observeFocus(in: scroll)
         attachDocumentNotifications(for: document)
     }
 
@@ -485,8 +485,8 @@ final class ParallelScrollObservationView: NSView {
         return providerTarget
     }
 
-    private func applyRestorationTarget(_ target: CGFloat, scroll: NSScrollView, document: NSView,
-                                        geometry: (length: CGFloat, viewport: CGFloat, visible: CGRect)) {
+    func applyRestorationTarget(_ target: CGFloat, scroll: NSScrollView, document: NSView,
+                                geometry: (length: CGFloat, viewport: CGFloat, visible: CGRect)) {
         let (length, viewport, visible) = geometry
         diagnose("apply target=\(target) visible=\(visible.minY) height=\(length) viewport=\(viewport) before")
         pendingOffset = nil
@@ -546,7 +546,7 @@ final class ParallelScrollObservationView: NSView {
                                geometry: (length, viewport, scroll.documentVisibleRect))
     }
 
-    private func report(observeExternalMovement: Bool = false, documentGeometryChanged: Bool = false) {
+    func report(observeExternalMovement: Bool = false, documentGeometryChanged: Bool = false) {
         guard !isTornDown, let scroll = observedScrollView, let document = scroll.documentView else { return }
         // Native targets re-assert the zero-inset contract on every report, so a later resize or
         // layout pass that restores an automatic inset cannot shift the feed's document geometry.

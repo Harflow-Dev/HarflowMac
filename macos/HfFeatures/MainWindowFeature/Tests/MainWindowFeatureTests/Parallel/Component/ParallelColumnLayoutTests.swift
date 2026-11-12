@@ -7,8 +7,10 @@ import SwiftUI
 import Testing
 
 @MainActor @Suite(.serialized) struct ParallelColumnLayoutTests {
-    @Test(arguments: [0, 2, 6, 12])
-    func givenShortOrWindowedHistory_whenHostedInsideParallelCells_thenActivityFillsSpaceAboveTheColumnComposer(count: Int) async throws {
+    @Test(arguments: [0, 2, 6, 12], [ParallelColumnChrome.lane, .inspector])
+    func givenShortOrWindowedHistory_whenHostedInsideParallelCells_thenActivityFillsSpaceAboveTheColumnComposer(
+        count: Int, chrome: ParallelColumnChrome
+    ) async throws {
         // given
         _ = NSApplication.shared
         let task = try #require(TaskInfo(.object([
@@ -25,6 +27,7 @@ import Testing
                                         isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         model.onSubmitMessage = { _, _ in false }
         model.onCancelMessage = { _ in }
+        model.chrome = chrome
         let measured = ComposerFrameCapture()
         let content = measuringComposer(WorkflowActivityColumns(columns: [model], selectedTaskID: nil), taskID: task.id, capture: measured)
         let fixture = RedesignHost(content, size: CGSize(width: 380, height: 700))
@@ -59,10 +62,7 @@ import Testing
             .first { $0.placeholderString == "Queue a message…" })
         let fieldFrame = host.convert(field.bounds, from: field)
         // then — activity fills exactly the region above the actual composer, which owns the bottom band.
-        #expect(abs(viewport.maxY + HfRadius.Metrics.spacing10 - composerFrame.minY) < 2,
-                "Activity must reach the composer with the production column's 10-point stack gap")
-        #expect(abs(composerFrame.maxY - (host.bounds.maxY - HfRadius.Metrics.spacing16)) < 2,
-                "The composer must fit inside the cell's bottom padding")
+        assertComposerSpacing(chrome, viewport: viewport, composer: composerFrame, hostBounds: host.bounds)
         #expect(composerFrame.contains(fieldFrame), "The native message field must remain inside its composer")
         #expect(viewport.height > 0 && composerFrame.height > fieldFrame.height)
         if count == 12 {
@@ -127,6 +127,22 @@ import Testing
         }
         // then
         #expect(bottomDistance(scroll) > 1000, "Resize must not jump manual reading back to live")
+    }
+
+    private func assertComposerSpacing(_ chrome: ParallelColumnChrome, viewport: CGRect, composer composerFrame: CGRect, hostBounds: CGRect) {
+        switch chrome {
+        case .inspector:
+            #expect(abs(viewport.maxY + HfRadius.Metrics.spacing10 - composerFrame.minY) < 2,
+                    "Activity must reach the composer with the production column's 10-point stack gap")
+            #expect(abs(composerFrame.maxY - (hostBounds.maxY - HfRadius.Metrics.spacing16)) < 2,
+                    "The composer must fit inside the cell's bottom padding")
+        case .lane:
+            let foot = ParallelLayout.dividerWidth + HfRadius.Metrics.spacing12
+            #expect(abs(viewport.maxY + foot - composerFrame.minY) < 2,
+                    "Activity must reach the foot's top hairline, which sits 12 points above the composer")
+            #expect(abs(composerFrame.maxY - (hostBounds.maxY - HfRadius.Metrics.spacing12)) < 2,
+                    "The composer must fit inside the foot's 12-point padding")
+        }
     }
 
     private func measuringComposer(_ content: some View, taskID: String, capture: ComposerFrameCapture) -> some View {

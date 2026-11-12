@@ -23,7 +23,7 @@ struct WorkflowSelectedActivityView: View {
             }
             GeometryReader { viewport in
                 if let column = activity.columns.first(where: { $0.id == activity.selectedConversationID }) {
-                    ParallelColumnCell(model: column,
+                    ParallelColumnCell(model: column.withChrome(.inspector),
                                        state: column.isResident ? activity.columnState(for: column.id) : nil,
                                        residencyState: residencyHandoffs.state(for: column.id),
                                        size: CGSize(width: max(0, viewport.size.width - ParallelLayout.dividerWidth),

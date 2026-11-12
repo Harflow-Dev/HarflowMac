@@ -111,7 +111,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
                 claimStrip
                 // Design point 3: columns fill the available width instead of a fixed 900pt budget —
                 // `GeometryReader` reads the row's actual width so `ParallelLayout.columnWidth(memberCount:availableWidth:)`
-                // can divide it evenly, keeping the 630pt reading-width floor (and the horizontal scroll) once there
+                // can divide it evenly, keeping the 360pt lane floor (and the horizontal scroll) once there
                 // are too many members for the window to fit.
                 GeometryReader { proxy in
                     ScrollView(.horizontal) {
@@ -218,7 +218,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
                                     width: ParallelLayout.columnWidth(memberCount: columnCount, availableWidth: proxy.size.width),
                                     height: max(0, proxy.size.height)
                                 )
-                            Divider()
+                            ParallelLaneSeparator(chrome: .lane)
                         }
                     }
                     // The document probe (§6.5): inside the loading lane's own document.

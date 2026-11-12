@@ -191,9 +191,9 @@ import Testing
         await waitUntil { host.layoutSubtreeIfNeeded(); return vm.width > 400 }
         // when
         host.rootView = WorkflowActivityColumns(viewModel: vm, selectedTaskID: "c")
-        await waitUntil { host.layoutSubtreeIfNeeded(); return vm.offset > 800 }
+        await waitUntil { host.layoutSubtreeIfNeeded(); return vm.offset > ParallelTestGeometry.laneStride * 2 - 2 }
         // then
-        #expect(vm.offset > 800)
+        #expect(vm.offset > ParallelTestGeometry.laneStride * 2 - 2)
         #expect(vm.width > 400)
     }
 
@@ -201,7 +201,7 @@ import Testing
     func givenProductionActivityAtRight_whenWorkingLaneArrives_thenPixelPositionIsPreserved(workflow: Bool) async throws {
         // given
         _ = NSApplication.shared
-        let vm = ViewportVM(columns: try ["a", "b", "c"].map { try column(id: $0, rows: 0) })
+        let vm = ViewportVM(columns: try ["a", "b", "c", "d", "e"].map { try column(id: $0, rows: 0) })
         let host = NSHostingView(rootView: activitySurface(vm: vm, workflow: workflow))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 500),
                               styleMask: [.titled], backing: .buffered, defer: false)
@@ -221,7 +221,7 @@ import Testing
         host.rootView = activitySurface(vm: vm, workflow: workflow)
         await waitUntil {
             host.layoutSubtreeIfNeeded()
-            return (scroll.documentView?.bounds.width ?? 0) > 2500 && abs(vm.offset - 700) < 2
+            return (scroll.documentView?.bounds.width ?? 0) > ParallelTestGeometry.laneStride * 6 - 10 && abs(vm.offset - 700) < 2
         }
         // then
         #expect(abs(vm.offset - 700) < 2)

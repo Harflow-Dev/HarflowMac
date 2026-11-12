@@ -22,7 +22,7 @@ extension ParallelVMTests {
 
     @Test func givenManyConversations_whenViewportMoves_thenOnlyVisibleMembersAreLeased() async {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 1262)
+        harness.sut.updateViewport(offset: 0, width: ParallelTestGeometry.laneStride * 2)
         let tasks = (0 ..< 64).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         harness.sut.didAppear()
@@ -31,7 +31,7 @@ extension ParallelVMTests {
         #expect(harness.sut.residentColumnCount == 2)
         #expect(harness.sut.leasedMemberCount == 2)
         let original = Set(harness.sut.columns.filter(\.isResident).map(\.id))
-        harness.sut.updateViewport(offset: 631 * 20, width: 1262)
+        harness.sut.updateViewport(offset: ParallelTestGeometry.laneStride * 20, width: ParallelTestGeometry.laneStride * 2)
         await waitUntil { harness.sut.isPresentationSettled }
         #expect(harness.sut.residentColumnCount == 2)
         #expect(harness.sut.leasedMemberCount == 2)
@@ -61,14 +61,16 @@ extension ParallelVMTests {
 
     @Test func givenRapidViewportChanges_whenWorkerSettles_thenOnlyLatestResidencyApplies() async {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 1262)
+        harness.sut.updateViewport(offset: 0, width: ParallelTestGeometry.laneStride * 2)
         let tasks = (0 ..< 256).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         harness.sut.didAppear()
         harness.tasksSubject.send(tasks)
         await waitUntil { harness.sut.columns.count == 256 }
-        for index in 0 ..< 30 { harness.sut.updateViewport(offset: CGFloat(index) * 631, width: 1262) }
-        harness.sut.updateViewport(offset: 0, width: 1262)
+        for index in 0 ..< 30 {
+            harness.sut.updateViewport(offset: CGFloat(index) * ParallelTestGeometry.laneStride, width: ParallelTestGeometry.laneStride * 2)
+        }
+        harness.sut.updateViewport(offset: 0, width: ParallelTestGeometry.laneStride * 2)
         await waitUntil { harness.sut.isPresentationSettled }
         #expect(harness.sut.residentColumnCount == 2)
         #expect(harness.sut.leasedMemberCount == 2)
@@ -83,7 +85,7 @@ extension ParallelVMTests {
 
     @Test func givenOneMemberActivity_whenItChanges_thenOnlyItsResidentColumnBuilds() async throws {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 1262)
+        harness.sut.updateViewport(offset: 0, width: ParallelTestGeometry.laneStride * 2)
         let tasks = (0 ..< 8).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
         let subject = PassthroughSubject<[TimelineItem], Never>()
@@ -105,7 +107,7 @@ extension ParallelVMTests {
 
     @Test func givenLongResumeChains_whenOnlyTwoColumnsAreVisible_thenAllTheirTurnsAreLeased() async throws {
         let harness = makeSUT()
-        harness.sut.updateViewport(offset: 0, width: 1262)
+        harness.sut.updateViewport(offset: 0, width: ParallelTestGeometry.laneStride * 2)
         var tasks: [TaskInfo] = []
         for column in 0 ..< 8 {
             for turn in 0 ..< 16 {
@@ -145,5 +147,57 @@ extension ParallelVMTests {
         #expect(ParallelResidency.indices(count: 64, offset: .infinity, width: 1262, stride: 631).isEmpty)
         #expect(ParallelResidency.indices(count: 64, offset: 0, width: 0, stride: 631).isEmpty)
         #expect(ParallelResidency.indices(count: 2, offset: 100_000, width: 1262, stride: 631) == 0 ..< 2)
+    }
+
+    // MARK: 360 lane floor
+
+    @Test func givenFiveConversationsAtAMinimumWindow_whenLanesAre360Wide_thenThreeAreResidentAndScrollingReleasesTheFirstTwo() async {
+        // given — a 1000-pt window's 736-pt detail area: two whole lanes and a peek.
+        let harness = makeSUT()
+        let stride = ParallelTestGeometry.laneStride
+        harness.sut.updateViewport(offset: 0, width: 736)
+        let tasks = (0 ..< 5).map { task(id: "task-\($0)", startedAt: Date(timeIntervalSince1970: Double($0))) }
+        harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
+        harness.sut.didAppear()
+        harness.tasksSubject.send(tasks)
+        await waitUntil { harness.sut.columns.count == 5 && harness.sut.isPresentationSettled }
+
+        // then — the peek lane is intersecting, so it is resident and leased.
+        #expect(harness.sut.residentColumnCount == 3)
+        #expect(harness.sut.leasedMemberCount == 3)
+        let firstTwo = harness.sut.columns.prefix(2).map(\.task.taskID)
+
+        // when
+        harness.sut.updateViewport(offset: stride * 2, width: 736)
+        await waitUntil { harness.sut.isPresentationSettled && Set(firstTwo).isSubset(of: harness.releasedBox.value) }
+
+        // then — the first two release their leases (their retained snapshots stay) and the lanes at the new offset hold three.
+        #expect(Set(firstTwo).isSubset(of: harness.releasedBox.value))
+        #expect(harness.sut.leasedMemberCount == 3)
+        #expect(harness.sut.columns.count == 5)
+        harness.sut.didDisappear()
+    }
+
+    @Test func givenAThreeTurnConversationInThePeekLane_whenResident_thenAllItsTurnsAreLeased() async {
+        // given
+        let harness = makeSUT()
+        harness.sut.updateViewport(offset: 0, width: 736)
+        var tasks = [task(id: "c0", startedAt: Date(timeIntervalSince1970: 0)), task(id: "c1", startedAt: Date(timeIntervalSince1970: 100))]
+        for turn in 0 ..< 3 {
+            tasks.append(task(id: "c2-t\(turn)", status: turn == 2 ? "running" : "completed",
+                startedAt: Date(timeIntervalSince1970: Double(200 + turn)), parentTaskID: turn == 0 ? nil : "c2-t\(turn - 1)"))
+        }
+        tasks.append(task(id: "c3", startedAt: Date(timeIntervalSince1970: 300)))
+        harness.tasksBox.value = Dictionary(uniqueKeysWithValues: tasks.map { ($0.taskID, $0) })
+        harness.sut.didAppear()
+        harness.tasksSubject.send(tasks)
+
+        // when
+        await waitUntil { harness.sut.columns.count == 4 && harness.sut.isPresentationSettled }
+
+        // then — lanes 0 and 1 hold one lease each, the 3-member peek lane holds three.
+        #expect(harness.sut.residentColumnCount == 3)
+        #expect(harness.sut.leasedMemberCount == 5)
+        harness.sut.didDisappear()
     }
 }

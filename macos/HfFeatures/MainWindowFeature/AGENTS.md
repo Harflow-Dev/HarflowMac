@@ -287,6 +287,15 @@ no embedded terminal anywhere in this package:
   old id to its conversation's new one.
 - Parallel keeps complete group membership for summaries and actions, but acquires activity leases
   only for members of viewport-intersecting conversations; do not prefetch neighboring columns.
+  Lanes are 360 points wide at minimum (`ParallelLayout.minimumColumnWidth`, HarflowDesign `2934681`) with a
+  1 point separator, so a minimum-size window (736 point detail area) shows two whole lanes plus a 14 point peek,
+  and the peek lane is intersecting, hence resident and leased (every member of each visible conversation holds a
+  lease). `ParallelColumnModel.chrome` (`.lane`, set from the VM role) selects the v2 lane surface (`--bg`, no status
+  strip, `--border` separators, head/body/foot frames); the Graph inspector's VM sets `.inspector`, and
+  `WorkflowSelectedActivityView` forces it, so the inspector keeps its `cardFill` surface, strip and `Divider`.
+  When focus ENTERS a different lane (a first-responder change inside the row's document, never a re-render),
+  `ParallelScrollObservationView` cancels pending horizontal restoration and scrolls the minimum distance that
+  shows the whole lane; residency then follows the new geometry.
   The standalone group and workflow Parallel view share the measured horizontal viewport surface.
   The Graph selected-node inspector instead renders one width-fitting conversation at a time; its
   explicit selector determines residency while its measured width is positive. Zero width or hiding

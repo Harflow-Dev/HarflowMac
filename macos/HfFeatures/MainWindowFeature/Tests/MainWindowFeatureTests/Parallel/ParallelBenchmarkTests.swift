@@ -28,11 +28,18 @@ extension ParallelVMTests {
         try data.write(to: URL(fileURLWithPath: output))
     }
 
+    /// The viewport width the benchmark scenarios run at: `HARFLOW_PARALLEL_BENCHMARK_WIDTH`, else two lanes.
+    private static var benchmarkWidth: CGFloat {
+        ProcessInfo.processInfo.environment["HARFLOW_PARALLEL_BENCHMARK_WIDTH"].flatMap(Double.init).map { CGFloat($0) }
+            ?? ParallelTestGeometry.laneStride * 2
+    }
+
     private func benchmarkSample(count: Int, turns: Int, calls callCount: Int, sample: Int,
                                  fixture: (tasks: [TaskInfo], conversations: [Conversation], items: [TimelineItem])) async throws -> [[String: Any]] {
         let harness = makeSUT()
-        let recorder = ParallelBenchmarkRecorder(count: count, turns: turns, calls: callCount, sample: sample, sut: harness.sut)
-        harness.sut.updateViewport(offset: 0, width: 1262)
+        let recorder = ParallelBenchmarkRecorder(count: count, turns: turns, calls: callCount, sample: sample, width: Self.benchmarkWidth, sut: harness.sut)
+        let width = Self.benchmarkWidth
+        harness.sut.updateViewport(offset: 0, width: width)
         harness.tasksBox.value = Dictionary(uniqueKeysWithValues: fixture.tasks.map { ($0.taskID, $0) })
         harness.itemsBox.value = Dictionary(uniqueKeysWithValues: fixture.tasks.map { ($0.taskID, fixture.items) })
         harness.availabilityBox.value = Dictionary(uniqueKeysWithValues: fixture.tasks.map { ($0.taskID, .available) })
@@ -54,14 +61,16 @@ extension ParallelVMTests {
         #expect(harness.sut.columns.count == count && harness.sut.isPresentationSettled)
         recorder.record("initial_model_settlement", start)
         start = DispatchTime.now().uptimeNanoseconds
-        harness.sut.updateViewport(offset: 631 * 4, width: 1262)
+        harness.sut.updateViewport(offset: ParallelTestGeometry.laneStride * 4, width: width)
         await waitUntil(timeout: 30) { harness.sut.isPresentationSettled }
         recorder.record("viewport_crossing", start)
         start = DispatchTime.now().uptimeNanoseconds
-        for index in [0, 4, 1, 5, 0] { harness.sut.updateViewport(offset: CGFloat(index) * 631, width: 1262) }
+        for index in [0, 4, 1, 5, 0] { harness.sut.updateViewport(offset: CGFloat(index) * ParallelTestGeometry.laneStride, width: width) }
         await waitUntil(timeout: 30) { harness.sut.isPresentationSettled }
         recorder.record("rapid_reversal", start)
-        let event = try #require(TaskEvent(line: "{\"v\":1,\"seq\":99999,\"kind\":\"assistant_text\",\"text\":\"synthetic delta\"}"))
+        let eventLine = "{\"product\":\"harflow\",\"format\":\"harflow.event\",\"v\":1,\"product_version\":\"\(HarflowVersion.current)\","
+            + "\"seq\":99999,\"kind\":\"assistant_text\",\"text\":\"synthetic delta\"}"
+        let event = try #require(TaskEvent(line: eventLine))
         let extra = Timeline.items(from: [event])
         let oldBuilds = harness.sut.builtColumnCount
         start = DispatchTime.now().uptimeNanoseconds
@@ -81,7 +90,7 @@ extension ParallelVMTests {
         recorder.record("unchanged_poll", start)
         #expect(harness.sut.presentationWriteCount == oldWrites)
         #expect(harness.sut.builtColumnCount == oldBuildCount)
-        #expect(harness.sut.leasedMemberCount <= 4 * turns)
+        #expect(harness.sut.leasedMemberCount <= (Int((width / ParallelTestGeometry.laneStride).rounded(.up)) + 2) * turns)
         harness.sut.didDisappear()
         return recorder.records
     }
@@ -109,6 +118,9 @@ extension ParallelVMTests {
             var payload = value
             seq += 1
             payload["v"] = .number(1)
+            payload["product"] = .string("harflow")
+            payload["format"] = .string("harflow.event")
+            payload["product_version"] = .string(HarflowVersion.current)
             payload["seq"] = .number(Double(seq))
             events.append(try #require(TaskEvent(line: JSONValue.object(payload).rendered())))
         }
@@ -159,8 +171,8 @@ private final class ParallelBenchmarkRecorder {
     private(set) var records: [[String: Any]] = []
     var eagerRows = 0
 
-    init(count: Int, turns: Int, calls: Int, sample: Int, sut: ParallelVM) {
-        self.labels = ["version": 1, "conversations": count, "turns": turns, "tool_calls_per_turn": calls, "sample": sample]
+    init(count: Int, turns: Int, calls: Int, sample: Int, width: CGFloat, sut: ParallelVM) {
+        self.labels = ["version": 1, "viewport_width": Double(width), "conversations": count, "turns": turns, "tool_calls_per_turn": calls, "sample": sample]
         self.sut = sut
     }
 
