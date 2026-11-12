@@ -34,6 +34,9 @@ extension ParallelVM {
         var value = ParallelColumnPresentation(id: id, task: conversation.current, title: snapshot.title,
             subtitle: ParallelColumnModel.subtitle(repoPath: conversation.current.repoPath, backend: conversation.current.backend,
                                                    turns: conversation.members.count),
+            caption: ParallelLaneStatus.caption(current: conversation.current),
+            harnessName: ParallelLaneStatus.harnessName(current: conversation.current),
+            status: ParallelLaneStatus.make(current: conversation.current, snapshot: nil, frame: nil),
             isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
             start: conversation.first.startedAt, memberTaskIDs: Set(memberIDs))
         if let presentation = snapshot.presentation {

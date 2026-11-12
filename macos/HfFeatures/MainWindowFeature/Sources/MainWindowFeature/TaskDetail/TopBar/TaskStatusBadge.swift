@@ -50,7 +50,7 @@ struct TaskStatusBadge: View {
         switch model.clock {
         case .none: EmptyView()
         case let .fixed(seconds): Text(Format.clock(seconds)).monospacedDigit().fixedSize()
-        case let .live(start): LiveBadgeClock(start: start)
+        case let .live(start): TaskLiveClock(start: start)
         }
     }
 
@@ -91,11 +91,12 @@ private struct BadgeAccessibility: ViewModifier {
     }
 }
 
-// MARK: - LiveBadgeClock
+// MARK: - TaskLiveClock
 
-/// The running clock. Once a run is close to an hour old the clock reserves the width of an hours reading, so
-/// crossing the hour does not change the badge's width.
-private struct LiveBadgeClock: View {
+/// The running clock, shared by the top bar badge and the Parallel lane head. It ticks inside this child view only.
+/// Once a run is close to an hour old the clock reserves the width of an hours reading, so crossing the hour does
+/// not change the width of what holds it.
+struct TaskLiveClock: View {
     let start: Date
 
     /// Elapsed seconds from which the hours width is reserved.

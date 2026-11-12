@@ -18,17 +18,20 @@ enum ActivityFeedStyle: Equatable, Sendable {
     case standard
     case transcript
     case lane
+    /// `.lane` with content above the feed: the first entry sits one row gap (12) under that content instead of at
+    /// the 16 pt body inset, so the content and the feed do not overlap.
+    case laneAfterBlock
 
     /// True for `.transcript` and `.lane`: every row view reads the transcript metrics through this.
-    var isTranscript: Bool { self == .transcript || self == .lane }
-    var isLane: Bool { self == .lane }
+    var isTranscript: Bool { self != .standard }
+    var isLane: Bool { self == .lane || self == .laneAfterBlock }
 
     /// The feed's horizontal padding for a caller whose standard padding is `standard`.
     func horizontalPadding(standard: CGFloat) -> CGFloat {
         switch self {
         case .standard: standard
         case .transcript: TaskScreenStyle.Transcript.paddingHorizontal
-        case .lane: TaskScreenStyle.Lane.paddingHorizontal
+        case .lane, .laneAfterBlock: TaskScreenStyle.Lane.paddingHorizontal
         }
     }
 
@@ -36,14 +39,20 @@ enum ActivityFeedStyle: Equatable, Sendable {
     var rowGap: CGFloat { isLane ? TaskScreenStyle.Lane.rowGap : TaskScreenStyle.Transcript.gap }
 
     /// The padding above the feed's first entry.
-    var topPadding: CGFloat { isLane ? TaskScreenStyle.Lane.paddingTop : TaskScreenStyle.Transcript.paddingTop }
+    var topPadding: CGFloat {
+        switch self {
+        case .standard, .transcript: TaskScreenStyle.Transcript.paddingTop
+        case .lane: TaskScreenStyle.Lane.paddingTop
+        case .laneAfterBlock: TaskScreenStyle.Lane.rowGap
+        }
+    }
 
     /// The top spacing of an entry that follows other content (`gap`) or opens the feed (`first`).
     /// The standard values are the feed's established 20 and 12.
     func spacing(first: Bool, standardFirst: CGFloat, standardBetween: CGFloat) -> CGFloat {
         switch self {
         case .standard: first ? standardFirst : standardBetween
-        case .transcript, .lane: first ? topPadding : rowGap
+        case .transcript, .lane, .laneAfterBlock: first ? topPadding : rowGap
         }
     }
 }
@@ -74,6 +83,11 @@ extension TaskScreenStyle {
     /// A fixed-size system font for a design size, bypassing HfUI's type scale (the transcript's own sizes).
     static func sans(size: CGFloat) -> Font {
         Font(NSFont.systemFont(ofSize: size))
+    }
+
+    /// The same with a weight.
+    static func sans(size: CGFloat, weight: NSFont.Weight) -> Font {
+        Font(NSFont.systemFont(ofSize: size, weight: weight))
     }
 
     /// Extra line spacing that brings a system-font line of `size` to `lineHeight`.

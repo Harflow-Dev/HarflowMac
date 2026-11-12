@@ -131,7 +131,7 @@ no embedded terminal anywhere in this package:
   `.lane` is the same transcript metrics (`isTranscript` is true for both, so every row view follows) at the
   lane's insets: 16 point side padding, 16 point top padding, 12 point row gap, no 760 column (the feed fills
   its lane; `ParallelColumnView` passes `style.horizontalPadding` and the lane body adds none around the feed),
-  the single-dot working row, and no "N activity items" line. Parallel lanes (`ParallelColumnChrome.lane`, group
+  the single-dot working row, and no "N activity items" line. `.laneAfterBlock` is `.lane` with content above the feed (history boundary, outcome, prompt, result): the first entry then sits one 12 point row gap under it instead of the 16 point body inset, so nothing overlaps. Lane head (`ParallelLaneHead`): glyph, task title (two lines at most), caption ("Claude · Opus 5.5", plus "· taken over"), status caption ("Running 03:24", from `ParallelLaneStatus` over `TaskBadgeModel`) and the Lane actions menu; the history notice is a bordered boundary block drawn only while a notice exists, and when "Load current activity" completes the head takes focus and announces "Current activity loaded". Parallel lanes (`ParallelColumnChrome.lane`, group
   and workflow run) use it; the Graph inspector's column stays `.standard` with the three-dot live step. Tool bodies are unbounded in height (no 220 point cap): a recorded deviation pending owner review.
   `MessageBoxStyle` follows the same mounts through `TaskDetailView`: `.transcript` is the solid
   `.hd-composer` surface, `.standard` keeps glass for Parallel and workflow composers. Field and actions stay
@@ -388,8 +388,9 @@ no embedded terminal anywhere in this package:
   (backed by `EventStreamRepository`) carry the tailer's `loading`/`available`/`unavailable` state
   so an empty edit list is never confused with "the log couldn't be read".
 - Take over (`TaskDetailVM+Actions.swift`'s `didTapTakeover()`, `ParallelVM`'s `didTapTakeover(taskID:)`)
-  is an entry in the standalone task overflow, and a plain button in Group, embedded and Parallel
-  views. There is exactly one destination. The confirmation dialog says the
+  is an entry in the standalone task overflow, and a plain button in Group, embedded and the Graph
+  inspector's Parallel column. A Parallel lane has none: its head's Lane actions menu holds Open task only
+  (`ParallelColumnModel.onTapTakeover` is `nil` for `.lane`). There is exactly one destination. The confirmation dialog says the
   session opens in Terminal.app; the actual hand-off (`ctl takeover` grant → hand-off files →
   `open -a Terminal`) lives entirely in `HfRepository.TakeoverServiceImpl`, which this package only
   calls through `TaskDetailUseCase.beginTakeover(taskID:)`/`ParallelUseCase.beginTakeover(taskID:)`.

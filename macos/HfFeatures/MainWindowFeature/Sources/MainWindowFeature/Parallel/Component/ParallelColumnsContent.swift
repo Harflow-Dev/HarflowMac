@@ -79,6 +79,11 @@ struct ParallelLaneSurface<Content: View>: View {
 struct ParallelLaneSeparator: View {
     let chrome: ParallelColumnChrome
 
+    /// A horizontal 1 pt `--border` rule.
+    static var hairline: some View {
+        Rectangle().fill(TaskScreenStyle.Colors.border.color).frame(height: ParallelLayout.dividerWidth).accessibilityHidden(true)
+    }
+
     var body: some View {
         switch chrome {
         case .lane:
@@ -127,26 +132,46 @@ struct ParallelColumnCell: View, @MainActor Equatable {
         .modifier(PanelArrival(animate: model.animatesArrival))
     }
 
+    @ViewBuilder
     private var residentPlaceholder: some View {
-            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
-                HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
-                    StatusIcon(status: model.task.status)
-                    VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
-                        Text(model.title).font(.hf(.headline, weight: .semibold)).lineLimit(2)
-                        HStack(spacing: HfRadius.Metrics.spacing6) {
-                            BackendDot(backend: model.task.backend)
-                            Text(model.subtitle).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: HfRadius.Metrics.spacing8)
-                    TaskStatusLabel(task: model.task).fixedSize()
-                }
-                Divider()
+        if model.chrome == .lane {
+            // The same one-row head as the mounted lane (without its menu), so a lane does not jump when it becomes resident.
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
+                ParallelLaneHead(title: model.title, caption: model.laneCaption, task: model.task, status: model.laneStatus)
+                    .padding(.horizontal, HfRadius.Metrics.spacing16)
+                    .padding(.vertical, HfRadius.Metrics.spacing12)
+                ParallelLaneSeparator.hairline
                 SkeletonRows(count: 4, showsBadge: false)
+                    .padding(.top, TaskScreenStyle.Lane.paddingTop)
+                    .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
                 Spacer(minLength: HfRadius.Metrics.zero)
             }
-            .padding(HfRadius.Metrics.spacing16)
             .accessibilityIdentifier("parallel-column-placeholder")
+        } else {
+            inspectorPlaceholder
+        }
+    }
+
+    private var inspectorPlaceholder: some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
+            HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
+                StatusIcon(status: model.task.status)
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
+                    Text(model.title).font(.hf(.headline, weight: .semibold)).lineLimit(2)
+                    HStack(spacing: HfRadius.Metrics.spacing6) {
+                        BackendDot(backend: model.task.backend)
+                        Text(model.subtitle).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: HfRadius.Metrics.spacing8)
+                TaskStatusLabel(task: model.task).fixedSize()
+            }
+            Divider()
+            SkeletonRows(count: 4, showsBadge: false)
+            Spacer(minLength: HfRadius.Metrics.zero)
+        }
+        .padding(HfRadius.Metrics.spacing16)
+        .accessibilityIdentifier("parallel-column-placeholder")
     }
 }
 

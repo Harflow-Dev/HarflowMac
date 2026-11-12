@@ -112,6 +112,12 @@ enum TaskScreenStyle {
         static let paddingHorizontal = Scale.space4
         static let paddingTop = Scale.space4
         static let rowGap = Scale.space3
+        /// `.hd-lane__head`: items centred, `gap: space-2`, title 13/18, caption and status 12 pt.
+        static let headGap = Scale.space2
+        static let headTitle = TextSpec(size: 13, lineHeight: 18)
+        static let headCaptionSize: CGFloat = 12
+        /// `.hd-btn--icon.hd-btn--sm`.
+        static let menuSize: CGFloat = 26
     }
 
     /// `.hd-msg-user`: right-aligned, `max-width: 80%`, `surface-active` fill, `radius-lg`,

@@ -69,6 +69,13 @@ import Testing
         return field.window?.makeFirstResponder(field) ?? false
     }
 
+    /// Awaits a few polls so the main queue delivers the focus handlers of the previous change before the next one
+    /// (a real key or click event is processed between two focus changes; `RunLoop.run` does not drain it here).
+    private func drain(_ mounted: Mounted) async {
+        var polls = 0
+        await mounted.fixture.settle { polls += 1; return polls > 5 }
+    }
+
     private func close(_ mounted: Mounted) {
         mounted.harness.sut.didDisappear()
         mounted.fixture.close()
@@ -189,12 +196,13 @@ import Testing
 
         // when — a click into the peek lane's field (a mouse-initiated focus change)
         #expect(focus(mounted.fields[2], keyboard: false))
-        pump()
+        await drain(mounted)
         // then — the row stays under the pointer.
         #expect(scroll.documentVisibleRect.minX == 0, "pointer focus scrolled the row: \(scroll.documentVisibleRect)")
 
         // when — the keyboard moves focus out, then into the same lane
         #expect(focus(mounted.fields[0]))
+        await drain(mounted)
         #expect(focus(mounted.fields[2]))
         let laneMax = 3 * ParallelTestGeometry.laneStride - ParallelLayout.dividerWidth
         await mounted.fixture.settle { scroll.documentVisibleRect.maxX >= laneMax - 0.5 }
@@ -241,22 +249,51 @@ import Testing
         #expect(abs(row.scroll.documentVisibleRect.minX - target) < 1, "visible \(row.scroll.documentVisibleRect)")
     }
 
-    @Test func givenALoadedLane_whenMeasured_thenTheBlockAndTheFeedSitTheDesignGapApart() async throws {
-        // given — a lane column with its always-present history caption and a feed.
-        _ = NSApplication.shared
+    @Test func givenPointerFocusInAPartlyHiddenLane_whenKeyboardFocusMovesWithinThatLane_thenTheRowDoesNotMove() async throws {
+        // given — pointer focus lands in the peek lane's first field: recorded, without scrolling.
+        let row = try await RevealRow.mounted(laneCount: 5, documentLanes: 5)
+        defer { row.close() }
+        row.focus(lane: 2, keyboard: false)
+        await row.settle { row.observer.focusReveal.lane == 2 }
+        #expect(row.scroll.documentVisibleRect.minX == 0)
+
+        // when — Tab moves to the second field of the same lane
+        row.focusSecondField(lane: 2)
+        pump(turns: 30)
+        await row.settle { true }
+
+        // then — the lane was already entered, so the row stays put.
+        #expect(row.scroll.documentVisibleRect.minX == 0, "visible \(row.scroll.documentVisibleRect)")
+    }
+
+    private func frameOf(_ fixture: RedesignHost, _ label: String) throws -> CGRect {
+        let element = try #require(fixture.element(label))
+        return try #require(fixture.frame(element))
+    }
+
+    private func gapModel(notice: String?, rowCount: Int) -> ParallelColumnModel {
         let tests = ParallelVMTests()
         let task = tests.task(id: "gap-lane", status: "completed")
-        let rows = [ConversationTimelineRow(id: "gap#1", taskID: task.taskID, timestamp: nil,
-                                            kind: .item(PreviewFixtures.textItem("First row", seq: 1)), live: false)]
-        let model = ParallelColumnModel(id: task.taskID, task: task, title: "Gap", subtitle: "Claude", isBusy: false,
+        let rows = (0 ..< rowCount).map { index in
+            ConversationTimelineRow(id: "gap#\(index)", taskID: task.taskID, timestamp: nil,
+                                    kind: .item(PreviewFixtures.textItem("Row \(index)", seq: index)), live: false)
+        }
+        var model = ParallelColumnModel(id: task.taskID, task: task, title: "Gap", subtitle: "Claude", isBusy: false,
                                         outcomeMessage: nil, showPrompt: false, prompt: nil, rows: rows,
                                         activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil, isLoading: false,
-                                        summary: nil, onTapTakeover: {}, onTapOpenTask: {})
+                                        summary: nil, onTapTakeover: nil, onTapOpenTask: {})
+        model.cachedHistoryNotice = notice
+        return model
+    }
+
+    @Test func givenALaneWithAHistoryBlock_whenMeasuredUnscrolledAndScrolled_thenTheBlockAndTheFeedSitTheDesignGapApartWithoutOverlap() async throws {
+        // given — a lane with a boundary block above a feed long enough to scroll.
+        _ = NSApplication.shared
+        let model = gapModel(notice: "Observation session changed · cached history is not current.", rowCount: 60)
         let fixture = RedesignHost(ParallelColumnView(model: model).frame(width: 380, height: 600), size: CGSize(width: 380, height: 600))
         defer { fixture.close() }
-        await fixture.settle { fixture.element("Available captured history") != nil && fixture.descendants.contains { $0 is ActivityFeedNativeTableView } }
-        let caption = try #require(fixture.element("Available captured history"))
-        let captionFrame = try #require(fixture.frame(caption))
+        await fixture.settle { fixture.element("History boundary") != nil && fixture.descendants.contains { $0 is ActivityFeedNativeTableView } }
+        let block = try #require(fixture.element("History boundary"))
         let table = try #require(fixture.descendants.compactMap { $0 as? ActivityFeedNativeTableView }.first)
         await fixture.settle { table.numberOfRows > 0 }
         guard case .header = try #require(table.owner?.entries.first) else {
@@ -264,11 +301,53 @@ import Testing
             return
         }
 
-        // then — the feed's first entry content starts 12 pt below the block (padding 16 / gap 12 of `.hd-lane__body`).
-        // Window coordinates (origin bottom-left): the entry's content top edge against the caption's bottom edge.
+        let scroll = try #require(table.enclosingScrollView)
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await fixture.settle { scroll.documentVisibleRect.minY < 1 }
+
+        // then — unscrolled: the feed's first entry content starts 12 pt below the block (the row gap), and the feed
+        // starts at the block's bottom edge instead of overlapping it. Window coordinates: origin bottom-left.
+        let blockFrame = try #require(fixture.frame(block))
+        let tableTop = scroll.convert(scroll.bounds, to: nil).maxY
+        let entryTop = table.convert(table.rect(ofRow: 0), to: nil).maxY - ActivityFeedStyle.laneAfterBlock.topPadding
+        #expect(abs(blockFrame.minY - entryTop - 12) < 1.5, "block to first feed entry: \(blockFrame.minY - entryTop)")
+        #expect(blockFrame.minY >= tableTop - 0.5, "the feed overlaps the block: block bottom \(blockFrame.minY), feed top \(tableTop)")
+
+        // when — scrolled well into the feed.
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: 400))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await fixture.settle { scroll.documentVisibleRect.minY > 300 }
+
+        // then — the block has not moved and the scrolled feed still does not reach into it.
+        let scrolledBlock = try frameOf(fixture, "History boundary")
+        #expect(abs(scrolledBlock.minY - blockFrame.minY) < 1)
+        #expect(scrolledBlock.minY >= scroll.convert(scroll.bounds, to: nil).maxY - 0.5)
+    }
+
+    @Test func givenALaneWithoutABlock_whenMeasured_thenTheFeedOpensUnderTheHeadAtTheBodyInset() async throws {
+        // given
+        _ = NSApplication.shared
+        let model = gapModel(notice: nil, rowCount: 3)
+        let fixture = RedesignHost(ParallelColumnView(model: model).frame(width: 380, height: 600), size: CGSize(width: 380, height: 600))
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle { fixture.element("Lane actions") != nil && fixture.descendants.contains { $0 is ActivityFeedNativeTableView } }
+        let table = try #require(fixture.descendants.compactMap { $0 as? ActivityFeedNativeTableView }.first)
+        await fixture.settle { table.numberOfRows > 0 }
+
+        // then — nothing draws between the head hairline and the feed, whose first entry sits 16 pt under it.
+        #expect(fixture.element("History boundary") == nil)
+        let scroll = try #require(table.enclosingScrollView)
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await fixture.settle { scroll.documentVisibleRect.minY < 1 }
+        let tableTop = scroll.convert(scroll.bounds, to: nil).maxY
         let entryTop = table.convert(table.rect(ofRow: 0), to: nil).maxY - ActivityFeedStyle.lane.topPadding
-        let gapBelow = captionFrame.minY - entryTop
-        #expect(abs(gapBelow - 12) < 1.5, "block to first feed entry: \(gapBelow)")
+        #expect(abs(tableTop - entryTop - 16) < 1.5, "hairline to first feed entry: \(tableTop - entryTop)")
+        let menu = try frameOf(fixture, "Lane actions")
+        #expect(tableTop < menu.minY, "the feed starts under the head")
     }
 }
 
@@ -284,6 +363,7 @@ import Testing
     let ids: [String]
     let viewportWidth: CGFloat = 736
     private var fields: [NSTextField] = []
+    private var secondFields: [NSTextField] = []
 
     final class RevealDocument: NSView { override var isFlipped: Bool { true } }
 
@@ -307,6 +387,10 @@ import Testing
             field.placeholderString = "lane \(lane)"
             document.addSubview(field)
             fields.append(field)
+            let second = NSTextField(frame: CGRect(x: CGFloat(lane) * ParallelTestGeometry.laneStride + 20, y: 60, width: 200, height: 24))
+            second.placeholderString = "lane \(lane) second"
+            document.addSubview(second)
+            secondFields.append(second)
         }
         document.addSubview(observer)
         observer.horizontalPosition = ParallelViewportPosition()
@@ -318,6 +402,12 @@ import Testing
 
     func setDocumentLanes(_ count: Int) {
         document.setFrameSize(NSSize(width: CGFloat(count) * ParallelTestGeometry.laneStride, height: 200))
+    }
+
+    func focusSecondField(lane: Int) {
+        ParallelScrollObservationView.focusEventType = { .keyDown }
+        defer { ParallelScrollObservationView.focusEventType = { NSApp.currentEvent?.type } }
+        window.makeFirstResponder(secondFields[lane])
     }
 
     func focus(lane: Int, keyboard: Bool) {

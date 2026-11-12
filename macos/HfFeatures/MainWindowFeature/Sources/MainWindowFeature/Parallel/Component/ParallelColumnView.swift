@@ -67,7 +67,8 @@ struct ParallelColumnModel: Identifiable {
     /// "No tool calls recorded", proven only for a terminal current task from the UNFILTERED
     /// member inputs — never inferred from the visible page having none.
     var noToolCallsText: String?
-    let onTapTakeover: () -> Void
+    /// Take over in a terminal; only the Graph inspector offers it (a lane's actions menu holds Open task only).
+    var onTapTakeover: (() -> Void)?
     let onTapOpenTask: () -> Void
     /// Opens another task by id (a consumed follow-up's successor).
     var onSelectTask: ((String) -> Void)?
@@ -88,6 +89,16 @@ struct ParallelColumnModel: Identifiable {
     var onCancelMessage: ((String) -> Void)?
     /// The surface that draws this column; the VM sets `.inspector` for the Graph inspector's VM.
     var chrome = ParallelColumnChrome.lane
+    /// The lane caption under the title: "Claude · Opus 5.5", plus " · taken over". Empty means derive from `task`.
+    var caption = ""
+    /// The harness name for the composer labels. Empty means derive from `task`.
+    var harnessName = ""
+    /// The lane head's status. `nil` means derive from `task` alone.
+    var status: TaskBadgeModel?
+
+    var laneCaption: String { caption.isEmpty ? ParallelLaneStatus.caption(current: task) : caption }
+    var laneHarnessName: String { harnessName.isEmpty ? ParallelLaneStatus.harnessName(current: task) : harnessName }
+    var laneStatus: TaskBadgeModel { status ?? ParallelLaneStatus.make(current: task, snapshot: nil, frame: nil) }
 
     /// "<Backend> · <repo name>" plus "· N turns" when `turns > 1` — the lane header's subtitle,
     /// without the session id.
@@ -116,6 +127,8 @@ struct ParallelColumnModel: Identifiable {
 struct ParallelColumnView: View {
     let model: ParallelColumnModel
     @FocusState private var historyBoundaryFocused: Bool
+    @State private var headFocusToken = 0
+    @State private var awaitingCurrentActivity = false
     @State private var state: ParallelColumnUIState
     @State private var resultContentSize = CGSize(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.parallelResultMaximumHeight)
 
@@ -141,29 +154,31 @@ struct ParallelColumnView: View {
     /// padding, top hairline) holding the composer.
     private var laneBody: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
-            header
+            ParallelLaneHead(title: model.title, caption: model.laneCaption, task: model.task, status: model.laneStatus,
+                             onOpenTask: model.onTapOpenTask, focusToken: headFocusToken)
                 .padding(.horizontal, HfRadius.Metrics.spacing16)
                 .padding(.vertical, HfRadius.Metrics.spacing12)
             laneHairline
-            // `.hd-lane__body`: padding 16, gap 12. One owner per edge: the block outside the feed owns the top
-            // 16; the feed owns its first entry's `Lane.paddingTop`, which the block's negative bottom padding pulls
-            // up to the 12 pt row gap, so the block and the feed's first entry sit exactly 12 apart.
+            // `.hd-lane__body`: padding 16, gap 12. The block above the feed exists only when it has content and owns
+            // the top 16; the feed owns its first entry's top padding: 16 under the head, or the 12 pt row gap under a
+            // block (`ActivityFeedStyle.laneAfterBlock`), so nothing overlaps.
             VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
-                VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
-                    if let message = model.outcomeMessage {
-                        Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                if hasLeadingBlock {
+                    VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
+                        if let message = model.outcomeMessage {
+                            Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                        }
+                        if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
+                        laneHistoryBoundary
+                        resultCallout
                     }
-                    if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
-                    historyBoundary
-                    resultCallout
+                    .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
+                    .padding(.top, TaskScreenStyle.Lane.paddingTop)
                 }
-                .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
-                .padding(.top, TaskScreenStyle.Lane.paddingTop)
-                .padding(.bottom, TaskScreenStyle.Lane.rowGap - TaskScreenStyle.Lane.paddingTop)
                 // The feed fills the body edge to edge and supplies its own 16 pt insets through `.lane`.
                 SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
                     SkeletonRows(count: 4, showsBadge: false)
-                        .padding(.top, TaskScreenStyle.Lane.paddingTop)
+                        .padding(.top, feedStyle.topPadding)
                         .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } content: {
@@ -176,6 +191,19 @@ struct ParallelColumnView: View {
                 .padding(HfRadius.Metrics.spacing12)
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .onChange(of: model.cachedHistoryNotice) { _, notice in
+            // "Load current activity" completed: the notice is gone, so the head takes focus and says so.
+            guard notice == nil, awaitingCurrentActivity else { return }
+            awaitingCurrentActivity = false
+            headFocusToken += 1
+            NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                userInfo: [.announcement: "Current activity loaded", .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+        }
+    }
+
+    /// Whether anything draws above the lane's feed.
+    private var hasLeadingBlock: Bool {
+        model.outcomeMessage != nil || (model.showPrompt && model.prompt != nil) || model.cachedHistoryNotice != nil || showsResultCallout
     }
 
     private var laneHairline: some View {
@@ -195,7 +223,7 @@ struct ParallelColumnView: View {
                 Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }
             if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
-            historyBoundary
+            inspectorHistoryBoundary
             Divider()
             resultCallout
             SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
@@ -211,7 +239,39 @@ struct ParallelColumnView: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    private var historyBoundary: some View {
+    /// The lane's boundary block (`.hd-d2b-boundary`): drawn only while there is a notice.
+    @ViewBuilder private var laneHistoryBoundary: some View {
+        if let notice = model.cachedHistoryNotice {
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                Text(notice)
+                    .font(TaskScreenStyle.sans(size: 13, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .focusable()
+                    .focused($historyBoundaryFocused)
+                if let adopt = model.onAdoptWindow {
+                    Button("Load current activity") {
+                        awaitingCurrentActivity = true
+                        adopt()
+                        historyBoundaryFocused = true
+                        NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                            userInfo: [.announcement: "Loading current activity; the cached reading window will be replaced.",
+                                       .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .padding(TaskScreenStyle.Scale.space3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: TaskScreenStyle.Scale.radiusMedium).fill(TaskScreenStyle.Colors.surfaceSunken.color))
+            .overlay(RoundedRectangle(cornerRadius: TaskScreenStyle.Scale.radiusMedium)
+                .strokeBorder(TaskScreenStyle.Colors.border.color, lineWidth: HfRadius.Metrics.hairlineStroke))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("History boundary")
+        }
+    }
+
+    private var inspectorHistoryBoundary: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.cachedHistoryNotice ?? "Available captured history")
                 .font(.hf(.caption))
@@ -250,7 +310,7 @@ struct ParallelColumnView: View {
         .accessibilityIdentifier("parallel-column-composer")
     }
 
-    // MARK: Header
+    // MARK: Inspector header
 
     private var header: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
@@ -288,8 +348,8 @@ struct ParallelColumnView: View {
     @ViewBuilder
     private var terminalAction: some View {
         if model.isBusy { ProgressView().controlSize(.small) }
-        if WorkflowNodePresentation.allowsTerminal(model.task) {
-            TerminalActionButton("Take over in terminal", action: model.onTapTakeover)
+        if WorkflowNodePresentation.allowsTerminal(model.task), let takeover = model.onTapTakeover {
+            TerminalActionButton("Take over in terminal", action: takeover)
                 .disabled(model.task.sessionID == nil || model.isBusy)
         }
     }
@@ -301,10 +361,14 @@ struct ParallelColumnView: View {
     /// the snapshot's own, with no fallback to `task.summary`, and an empty or missing one is
     /// omitted entirely. Long results scroll independently within a bounded callout so activity
     /// remains reachable without changing the activity feed's own identity or scroll state.
+    private var showsResultCallout: Bool {
+        guard let summary = model.summary else { return false }
+        return !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && model.task.status.isTerminal
+    }
+
     @ViewBuilder
     private var resultCallout: some View {
-        if let summary = model.summary, !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           model.task.status.isTerminal {
+        if showsResultCallout, let summary = model.summary {
             ScrollView {
                 MarkdownText(text: summary)
                     .padding(HfRadius.Metrics.spacing12)
@@ -337,7 +401,10 @@ struct ParallelColumnView: View {
     // MARK: Feed
 
     /// Lanes use the transcript metrics at lane insets; the inspector keeps the standard feed.
-    private var feedStyle: ActivityFeedStyle { model.chrome == .lane ? .lane : .standard }
+    private var feedStyle: ActivityFeedStyle {
+        guard model.chrome == .lane else { return .standard }
+        return hasLeadingBlock ? .laneAfterBlock : .lane
+    }
 
     private var feed: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {

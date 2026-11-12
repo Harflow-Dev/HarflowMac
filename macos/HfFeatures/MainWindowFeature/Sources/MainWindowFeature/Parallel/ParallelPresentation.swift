@@ -8,7 +8,13 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     var id: String
     let task: TaskInfo
     let title: String
+    /// The inspector's "<Backend> · <repo>" subtitle; empty for lanes, which use `caption`.
     let subtitle: String
+    /// The lane caption: harness, model and "taken over".
+    var caption = ""
+    var harnessName = ""
+    /// The lane head's status (`nil` for the inspector).
+    var status: TaskBadgeModel?
     let isBusy: Bool
     let outcomeMessage: String?
     var showPrompt: Bool
@@ -244,6 +250,7 @@ struct ParallelColumnRenderValue: Equatable {
         let right = rhs.presentation
         return ParallelTaskRenderingKey(left.task) == ParallelTaskRenderingKey(right.task)
             && left.id == right.id && left.title == right.title && left.subtitle == right.subtitle
+            && left.caption == right.caption && left.harnessName == right.harnessName && left.status == right.status
             && left.isBusy == right.isBusy && left.outcomeMessage == right.outcomeMessage
             && left.showPrompt == right.showPrompt && left.prompt == right.prompt
             && left.rows == right.rows && left.activityRows == right.activityRows
@@ -263,7 +270,7 @@ struct ParallelColumnRenderValue: Equatable {
 extension ParallelColumnModel {
     var renderValue: ParallelColumnRenderValue {
         var value = ParallelColumnPresentation(id: id, task: task, title: title, subtitle: subtitle,
-            isBusy: isBusy, outcomeMessage: outcomeMessage, showPrompt: showPrompt, prompt: prompt,
+            caption: caption, harnessName: harnessName, status: status, isBusy: isBusy, outcomeMessage: outcomeMessage, showPrompt: showPrompt, prompt: prompt,
             summary: summary, start: start, memberTaskIDs: memberTaskIDs)
         value.rows = rows
         value.activitySnapshot = activitySnapshot

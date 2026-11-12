@@ -26,6 +26,7 @@ extension ParallelScrollObservationView {
         focusReveal = ParallelFocusReveal()
         // The delivered value is ignored: the first responder is read fresh when the change is handled. The event
         // type is read synchronously, while the responder change is still inside its originating event.
+        // No `receive(on:)` here: `firstResponder` changes only on main and the event type must be read synchronously (macos/AGENTS.md:75).
         window.publisher(for: \.firstResponder, options: [.new])
             .sink { [weak self] _ in
                 let isKeyboard = Self.focusEventType() == .keyDown
@@ -45,10 +46,12 @@ extension ParallelScrollObservationView {
             focusReveal = ParallelFocusReveal()
             return
         }
-        guard isKeyboard, index != focusReveal.lane else {
-            if !isKeyboard { focusReveal.pending = nil; focusReveal.retry = nil }
+        // Pointer focus is recorded without scrolling, so a later keyboard move within the same lane does not reveal it.
+        guard isKeyboard else {
+            focusReveal = ParallelFocusReveal(lane: index)
             return
         }
+        guard index != focusReveal.lane else { return }
         reveal(index, scroll: scroll, document: document)
     }
 

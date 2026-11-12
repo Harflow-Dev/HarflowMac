@@ -30,7 +30,7 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var isWorkflowInspector = false
     static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
     @ObservationIgnored let useCase: any ParallelUseCase
-    @ObservationIgnored private let routing: any ParallelRouting
+    @ObservationIgnored let routing: any ParallelRouting
     @ObservationIgnored private let buildColumns: ParallelColumnsBuild
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var itemCancellables: [String: AnyCancellable] = [:]
@@ -458,7 +458,10 @@ final class ParallelVM: ParallelViewModel {
         let summary = includePrompt ? latestSnapshots[currentID]?.summary : nil
         return ParallelColumnPresentation(id: conversation.id, task: current,
             title: workflowTitles[currentID] ?? useCase.title(conversation.first.taskID),
-            subtitle: ParallelColumnModel.subtitle(repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count),
+            subtitle: isWorkflowInspector
+                ? ParallelColumnModel.subtitle(repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count) : "",
+            caption: ParallelLaneStatus.caption(current: current), harnessName: ParallelLaneStatus.harnessName(current: current),
+            status: isWorkflowInspector ? nil : laneStatus(current),
             isBusy: latestBusy.contains(currentID) || messageDispatches.contains(currentID), outcomeMessage: latestOutcomes[currentID], showPrompt: showPrompt,
             prompt: prompt, summary: summary, start: conversation.first.startedAt,
             memberTaskIDs: Set(conversation.members.map(\.taskID)))
@@ -475,13 +478,14 @@ final class ParallelVM: ParallelViewModel {
             let presentation = presentations[conversation.id] ?? descriptors[conversation.id] ?? basePresentation(conversation, includePrompt: false)
             let metadata = descriptors[conversation.id] ?? presentation
             var column = ParallelColumnModelBuilder.build(presentation: presentation, metadata: metadata,
-                onTapTakeover: { [weak self] in self?.didTapTakeover(taskID: metadata.task.taskID) },
+                onTapTakeover: isWorkflowInspector ? { [weak self] in self?.didTapTakeover(taskID: metadata.task.taskID) } : nil,
                 onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) }, onSelectTask: { [weak self] in self?.routing.selectTask($0) })
             column.onSubmitMessage = { [weak self] text, now in self?.submitMessage(text, conversationID: conversation.id, now: now) ?? false }
             column.onCancelMessage = { [weak self] messageID in self?.cancelMessage(messageID, conversationID: conversation.id) }
             windowAdoption.prepareColumn(&column, id: conversation.id) { [weak self] in self?.adoptObservationWindow(conversation.id) }
             column.workMessages = WorkMessageBubble.applying(column.workMessages, notes: messageNotes[metadata.task.taskID] ?? [:])
             column.chrome = isWorkflowInspector ? .inspector : .lane
+            if !isWorkflowInspector { column.status = laneStatus(metadata.task) }
             column.animatesArrival = arrivals.contains(column.id)
             column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }
             column.isResident = presentations[column.id] != nil || residentIDs.contains(column.id)
@@ -536,17 +540,6 @@ final class ParallelVM: ParallelViewModel {
             worker = nil
             startPending()
         }
-    }
-
-    private func didTapTakeover(taskID: String) {
-        let dialog = ParallelTakeover.dialog(taskID: taskID,
-            task: useCase.task(taskID), snapshot: latestSnapshots[taskID]) { [weak self] in
-                guard let self else { return nil }
-                let current = conversations.first { $0.members.contains { $0.taskID == taskID } }?.current.taskID
-                return (useCase, routing, current)
-            }
-        guard let dialog else { return }
-        publishDialog(dialog)
     }
 }
 

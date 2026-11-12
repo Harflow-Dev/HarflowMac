@@ -102,7 +102,7 @@ import Testing
         #expect(HfRadius.Metrics.parallelLaneStatusStripHeight == 3)
     }
 
-    @Test func givenALongSettledResult_whenHosted_thenResultIsBoundedActivityRemainsScrollableAndTerminalActionRemainsAccessible() async throws {
+    @Test func givenALongSettledResult_whenHosted_thenResultIsBoundedActivityRemainsScrollableAndTheLaneMenuIsAccessible() async throws {
         // given — a real lane with a long snapshot result, a long activity feed, and the existing
         // settled-session terminal action. No test-only production hook is used.
         _ = NSApplication.shared
@@ -163,11 +163,13 @@ import Testing
                 || accessibilityString($0, "accessibilityValue")?.contains("RESULT-END") == true
         })
         #expect(allAccessibilityObjects(in: host).contains { object in
-            accessibilityString(object, "accessibilityRole") == NSAccessibility.Role.button.rawValue
-                && ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
-                    accessibilityString(object, $0)?.contains("Take over in terminal") == true
-                }
+            ["accessibilityLabel", "accessibilityTitle"].contains { accessibilityString(object, $0) == "Lane actions" }
         })
+        #expect(!allAccessibilityObjects(in: host).contains { object in
+            ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
+                accessibilityString(object, $0)?.contains("Take over in terminal") == true
+            }
+        }, "a lane offers no inline Take over")
     }
 
     @Test(arguments: ["", " \n\t "])
@@ -223,6 +225,117 @@ import Testing
         #expect((result.documentView?.bounds.height ?? 0) <= result.contentView.bounds.height + 3)
         #expect(result.scrollerStyle == .overlay)
         #expect(result.verticalScroller?.controlSize == .small)
+    }
+
+    // MARK: - Lane head
+
+    private func laneHeadModel(title: String = "Audit what the preload bridge exposes", notice: String? = nil, adopt: Bool = false,
+                               chrome: ParallelColumnChrome = .lane) -> ParallelColumnModel {
+        var model = makeModel(id: "head", state: .loaded)
+        model = ParallelColumnModel(id: model.id, task: model.task, title: title, subtitle: "Codex · tmp", isBusy: false,
+            outcomeMessage: nil, showPrompt: false, prompt: nil, rows: model.rows, activityRows: model.activityRows, liveStep: nil,
+            isLoading: false, summary: nil, onTapTakeover: chrome == .inspector ? {} : nil, onTapOpenTask: {})
+        model.chrome = chrome
+        model.cachedHistoryNotice = notice
+        if adopt { model.onAdoptWindow = {} }
+        return model
+    }
+
+    private func frameOf(_ fixture: RedesignHost, _ label: String) throws -> CGRect {
+        let element = try #require(fixture.element(label))
+        return try #require(fixture.frame(element))
+    }
+
+    private func mount(_ model: ParallelColumnModel, width: CGFloat = 380, height: CGFloat = 600) -> RedesignHost {
+        RedesignHost(ParallelColumnView(model: model).frame(width: width, height: height), size: CGSize(width: width, height: height))
+    }
+
+    @Test func givenALaneHead_whenMounted_thenTheMenuIsA26PointControlAtTheHeadPadding() async throws {
+        // given
+        let fixture = mount(laneHeadModel())
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle { fixture.element("Lane actions") != nil && fixture.element("Audit what the preload bridge exposes") != nil }
+
+        // then — 16 pt side padding, 26 x 26 menu, title after the 16 pt glyph and 8 pt gap
+        let menu = try frameOf(fixture, "Lane actions")
+        let title = try frameOf(fixture, "Audit what the preload bridge exposes")
+        #expect(abs(menu.width - 26) < 1.5 && abs(menu.height - 26) < 1.5, "menu \(menu)")
+        #expect(abs(menu.maxX - (380 - 16)) < 1.5, "menu trailing edge \(menu.maxX)")
+        #expect(abs(title.minX - (16 + 16 + 8)) < 1.5, "title leading edge \(title.minX)")
+        #expect(fixture.element("Take over in terminal") == nil)
+        #expect(fixture.element("Open task") == nil, "Open task lives inside the menu, not in the head")
+    }
+
+    @Test func givenALongTitle_whenMountedAtTheLaneFloor_thenItWrapsToTwoLinesAndNoFurther() async throws {
+        // given
+        let short = mount(laneHeadModel(title: "Short"), width: 360)
+        defer { short.close() }
+        let longTitle = String(repeating: "Check the allow-list and sandbox settings ", count: 8)
+        let long = mount(laneHeadModel(title: longTitle), width: 360)
+        defer { long.close() }
+
+        // when
+        await short.settle { short.element("Short") != nil }
+        await long.settle { long.element(longTitle) != nil }
+
+        // then
+        let one = try frameOf(short, "Short").height
+        let two = try frameOf(long, longTitle).height
+        #expect(abs(two - 2 * one) < 3, "one line \(one), long title \(two)")
+    }
+
+    @Test func givenNoHistoryNotice_whenMounted_thenNoBoundaryLineIsDrawn() async {
+        // given
+        let fixture = mount(laneHeadModel())
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle { fixture.element("Lane actions") != nil }
+
+        // then
+        #expect(fixture.element("Available captured history") == nil)
+        #expect(fixture.element("History boundary") == nil)
+    }
+
+    @Test func givenAHistoryNotice_whenMounted_thenTheBoundaryBlockAndItsButtonAreDrawn() async {
+        // given
+        let notice = "Observation session changed · cached history is not current. Replace this window to load current activity."
+        let withButton = mount(laneHeadModel(notice: notice, adopt: true))
+        defer { withButton.close() }
+        let withoutButton = mount(laneHeadModel(notice: notice, adopt: false))
+        defer { withoutButton.close() }
+
+        // when
+        await withButton.settle { withButton.element("History boundary") != nil }
+        await withoutButton.settle { withoutButton.element("History boundary") != nil }
+
+        // then
+        #expect(withButton.element(notice) != nil)
+        #expect(withButton.element("Load current activity") != nil)
+        #expect(withoutButton.element("Load current activity") == nil)
+    }
+
+    @Test func givenTheInspector_whenMounted_thenItKeepsItsHeaderTakeoverAndDefaultHistoryLine() async {
+        // given
+        var model = laneHeadModel(chrome: .inspector)
+        model = ParallelColumnModel(id: model.id, task: TaskInfo(.object([
+            "task_id": .string("head"), "backend": .string("codex"), "status": .string("completed"),
+            "repo_path": .string("/tmp"), "session_id": .string("s")]))!, title: "Inspector", subtitle: "Codex · tmp", isBusy: false,
+            outcomeMessage: nil, showPrompt: false, prompt: nil, rows: model.rows, activityRows: model.activityRows, liveStep: nil,
+            isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
+        model.chrome = .inspector
+        let fixture = mount(model)
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle { fixture.element("Available captured history") != nil }
+
+        // then
+        #expect(fixture.element("Take over in terminal") != nil)
+        #expect(fixture.element("Open task") != nil)
+        #expect(fixture.element("Lane actions") == nil)
     }
 
     enum RenderState: String, CaseIterable, CustomStringConvertible {

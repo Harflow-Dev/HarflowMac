@@ -231,7 +231,7 @@ import Testing
     @Test func givenAnEmbeddedTakeover_whenConfirmed_thenSelectionMovesToTheTaskScreen() async {
         // given
         let harness = makeSUT()
-        let sut = harness.sut
+        let sut = harness.sut.makeWorkflowActivity() // a lane offers no Take over; the Graph inspector keeps it
         let useCase = harness.useCase
         let routing = harness.routing
         let tasksSubject = harness.tasksSubject
@@ -245,7 +245,7 @@ import Testing
         let cancellable = sut.objectDidPublishViewEvent.publisher.sink { capturedEvent = $0 }
         
         // when
-        sut.columns.first?.onTapTakeover()
+        sut.columns.first?.onTapTakeover?()
         await waitUntil { capturedEvent?.dialog != nil }
         guard case .dialog(let dialog) = capturedEvent else {
             Issue.record("expected a .dialog event")
@@ -266,7 +266,7 @@ import Testing
     @Test func givenATerminalTaskTakeover_whenTapped_thenTheDialogOffersToContinueInATerminal() async {
         // given
         let harness = makeSUT()
-        let sut = harness.sut
+        let sut = harness.sut.makeWorkflowActivity() // a lane offers no Take over; the Graph inspector keeps it
         let tasksSubject = harness.tasksSubject
         let tasksBox = harness.tasksBox
         let task1 = task(id: "t1", status: "completed", freedom: "read_only")
@@ -278,7 +278,7 @@ import Testing
         let cancellable = sut.objectDidPublishViewEvent.publisher.sink { capturedEvent = $0 }
         
         // when
-        sut.columns.first?.onTapTakeover()
+        sut.columns.first?.onTapTakeover?()
         
         // then
         await waitUntil { capturedEvent?.dialog != nil }

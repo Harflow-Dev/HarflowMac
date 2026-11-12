@@ -60,8 +60,8 @@ extension ParallelVMTests {
         #expect(runningColumn?.start == agentATurn1.startedAt, "rows time from the first turn, not the current one")
         let separatorCount = runningColumn?.rows.filter { if case .separator = $0.kind { return true }; return false }.count
         #expect(separatorCount == 2)
-        #expect(runningColumn?.subtitle.hasSuffix("· 3 turns") == true, "the subtitle counts the conversation's turns")
-        #expect(runningColumn?.subtitle.contains("session") == false, "session ids stay off the column header")
+        #expect(runningColumn?.caption.contains("session") == false, "session ids stay off the column header")
+        #expect(runningColumn?.subtitle.isEmpty == true, "lanes use the caption; only the inspector keeps the turn-counting subtitle")
         #expect(runningColumn?.activityRows.count == runningColumn?.rows.count, "no tool calls to fold, so one activity row per row")
 
         // when — "Open task" on the running column

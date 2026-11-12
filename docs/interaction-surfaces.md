@@ -22,7 +22,7 @@ unsupported, loading and long text in Light/Dark. Composer placement follows the
 | Resource slots | Read-only capacity, holders and ordered waiters from public engine reads. Qualified Open task and Open workflow run actions use existing detail routes. Back to resource slots appears only for an owner opened there; unrelated navigation clears that return route. Task phase context can open the overview. Unknown metadata never invents an owner route or zero usage. |
 | Sidebar | Builder, native control and transport tasks are discoverable under their workflow, with ordinary task fallback when no workflow is known. Conversation grouping preserves parent relationships. |
 | Approval cards | Existing engine feature, ownership and current-request validation remain authoritative. A visible request never grants permission to answer it. |
-| Terminal/takeover | Managed and native-subagent restrictions remain in force. A disabled takeover action explains the owning-workflow route. |
+| Terminal/takeover | Managed and native-subagent restrictions remain in force. A disabled takeover action explains the owning-workflow route. A Parallel lane has no takeover button (its Lane actions menu holds Open task only); Take over stays on the task screen and the Graph inspector. |
 | Menu bar | Existing task monitoring remains independent of launch origin. Opening a task routes to its conversation; workflow controls belong in the main window. |
 
 Eligibility is advisory and refreshed with status. The engine revalidates ownership, pending

@@ -87,7 +87,7 @@ extension ParallelVMTests {
     @Test func givenTheConversationIsResumedWhileTakeoverIsOpen_whenConfirmed_thenItRefusesInsteadOfTakingOver() async {
         // given — a finished conversation and its "Continue in terminal" dialog open
         let harness = makeSUT()
-        let sut = harness.sut
+        let sut = harness.sut.makeWorkflowActivity() // a lane offers no Take over; the Graph inspector keeps it
         let useCase = harness.useCase
         let routing = harness.routing
         let tasksSubject = harness.tasksSubject
@@ -100,7 +100,7 @@ extension ParallelVMTests {
         await waitUntil { sut.columns.count == 1 && sut.isPresentationSettled }
         var capturedEvent: ViewEvent?
         let cancellable = sut.objectDidPublishViewEvent.publisher.sink { capturedEvent = $0 }
-        sut.columns.first?.onTapTakeover()
+        sut.columns.first?.onTapTakeover?()
         await waitUntil { capturedEvent?.dialog != nil }
         guard case .dialog(let dialog) = capturedEvent else {
             Issue.record("expected a .dialog event")

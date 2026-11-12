@@ -41,7 +41,11 @@ extension ParallelVMTests {
     @Test func givenOnlyEnforcementChanges_whenHeaderClaimsRefresh_thenColumnPresentationAndActionsStayQuiet() async throws {
         // given
         let harness = makeSUT()
-        let sampleTask = task(id: "t1", status: "completed")
+        // A recorded exit and duration, so the arriving snapshot does not change the lane's status ("exit not observed", the clock).
+        var settledRaw = task(id: "t1", status: "completed").raw
+        settledRaw["exit_code"] = .number(0)
+        settledRaw["duration_seconds"] = .number(5)
+        let sampleTask = TaskInfo(.object(settledRaw))!
         harness.tasksBox.value[sampleTask.taskID] = sampleTask
         harness.sut.didAppear()
         harness.tasksSubject.send([sampleTask])

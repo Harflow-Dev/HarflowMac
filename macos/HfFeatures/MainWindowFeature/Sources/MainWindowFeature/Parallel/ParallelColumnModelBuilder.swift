@@ -3,7 +3,7 @@
 /// Maps retained activity and fresh metadata without accessing leases or mutable VM state.
 enum ParallelColumnModelBuilder {
     static func build(presentation: ParallelColumnPresentation, metadata: ParallelColumnPresentation,
-                      onTapTakeover: @escaping () -> Void, onTapOpenTask: @escaping () -> Void,
+                      onTapTakeover: (() -> Void)?, onTapOpenTask: @escaping () -> Void,
                       onSelectTask: ((String) -> Void)? = nil) -> ParallelColumnModel {
         var column = ParallelColumnModel(id: presentation.id, task: metadata.task, title: metadata.title,
             subtitle: metadata.subtitle, isBusy: metadata.isBusy, outcomeMessage: metadata.outcomeMessage,
@@ -12,6 +12,9 @@ enum ParallelColumnModelBuilder {
             pendingMessages: presentation.pendingMessages, isLoading: presentation.isLoading, summary: presentation.summary,
             stepCountText: presentation.stepCountText, noToolCallsText: presentation.noToolCallsText,
             onTapTakeover: onTapTakeover, onTapOpenTask: onTapOpenTask, start: presentation.start)
+        column.caption = metadata.caption
+        column.harnessName = metadata.harnessName
+        column.status = metadata.status
         column.activitySnapshot = presentation.activitySnapshot
         column.workMessages = presentation.workMessages
         column.emptyText = presentation.emptyText

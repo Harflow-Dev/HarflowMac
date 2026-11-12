@@ -67,4 +67,20 @@ extension ParallelVM {
               !messageDispatches.contains(current.taskID) else { return nil }
         return current
     }
+
+    func didTapTakeover(taskID: String) {
+        let dialog = ParallelTakeover.dialog(taskID: taskID,
+            task: useCase.task(taskID), snapshot: latestSnapshots[taskID]) { [weak self] in
+                guard let self else { return nil }
+                let current = conversations.first { $0.members.contains { $0.taskID == taskID } }?.current.taskID
+                return (useCase, routing, current)
+            }
+        guard let dialog else { return }
+        publishDialog(dialog)
+    }
+
+    /// The lane status from the freshest snapshot and observation frame of `current`.
+    func laneStatus(_ current: TaskInfo) -> TaskBadgeModel {
+        ParallelLaneStatus.make(current: current, snapshot: latestSnapshots[current.taskID], frame: observationFrames[current.taskID])
+    }
 }
