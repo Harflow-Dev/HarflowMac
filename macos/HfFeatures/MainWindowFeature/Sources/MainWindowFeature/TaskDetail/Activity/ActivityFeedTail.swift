@@ -24,6 +24,8 @@ enum ActivityFeedTailPresentation: Equatable {
         var approvalNotice: String?
         var approvalNoticeActionTitle = "Refresh approval history"
         var cancel = CancelAvailability.enabled
+        /// A lane's outcome line (refusal, "Queued message cancelled."), drawn after the pinned bubbles.
+        var outcome: String?
     }
 
     /// Whether a pinned bubble's Cancel is offered: hidden without a handler, disabled while the surface is busy.
@@ -42,7 +44,8 @@ enum ActivityFeedTailPresentation: Equatable {
 
     func isVisible(with semanticTail: ActivityFeedTail) -> Bool {
         if case .standard(let standard) = self,
-           !standard.approvals.isEmpty || standard.approvalNotice != nil || !standard.workMessages.isEmpty { return true }
+           !standard.approvals.isEmpty || standard.approvalNotice != nil || !standard.workMessages.isEmpty
+            || standard.outcome != nil { return true }
         return semanticTail != ActivityFeedTail() && self != .absent
     }
 }

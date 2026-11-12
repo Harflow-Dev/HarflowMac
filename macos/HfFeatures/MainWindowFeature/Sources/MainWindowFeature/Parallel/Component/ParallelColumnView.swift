@@ -165,9 +165,6 @@ struct ParallelColumnView: View {
             VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
                 if hasLeadingBlock {
                     VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
-                        if let message = model.outcomeMessage {
-                            Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                        }
                         if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
                         laneHistoryBoundary
                         resultCallout
@@ -176,7 +173,7 @@ struct ParallelColumnView: View {
                     .padding(.top, TaskScreenStyle.Lane.paddingTop)
                 }
                 // The feed fills the body edge to edge and supplies its own 16 pt insets through `.lane`.
-                SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
+                SkeletonContent(isLoading: laneFeedIsLoading, state: state.activityHandoff) {
                     SkeletonRows(count: 4, showsBadge: false)
                         .padding(.top, feedStyle.topPadding)
                         .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
@@ -187,8 +184,19 @@ struct ParallelColumnView: View {
             }
             .frame(maxHeight: .infinity, alignment: .top)
             laneHairline
-            composer
-                .padding(HfRadius.Metrics.spacing12)
+            VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
+                // While the feed shows its skeleton the outcome has no tail to sit in, so it sits above the composer.
+                if laneFeedIsLoading, let message = model.outcomeMessage {
+                    Text(message)
+                        .font(TaskScreenStyle.sans(size: 13))
+                        .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 13, lineHeight: 20)))
+                        .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("parallel-column-outcome")
+                }
+                composer
+            }
+            .padding(HfRadius.Metrics.spacing12)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .onChange(of: model.cachedHistoryNotice) { _, notice in
@@ -201,9 +209,11 @@ struct ParallelColumnView: View {
         }
     }
 
+    private var laneFeedIsLoading: Bool { model.isLoading && model.liveStep == nil }
+
     /// Whether anything draws above the lane's feed.
     private var hasLeadingBlock: Bool {
-        model.outcomeMessage != nil || (model.showPrompt && model.prompt != nil) || model.cachedHistoryNotice != nil || showsResultCallout
+        (model.showPrompt && model.prompt != nil) || model.cachedHistoryNotice != nil || showsResultCallout
     }
 
     private var laneHairline: some View {
@@ -290,7 +300,37 @@ struct ParallelColumnView: View {
         }
     }
 
+    @ViewBuilder
     private var composer: some View {
+        if model.chrome == .lane { laneComposer } else { inspectorComposer }
+    }
+
+    /// The lane's composer: Queue only (no Send now), labelled for the harness, with a note when messaging is unavailable.
+    private var laneComposer: some View {
+        let harness = model.laneHarnessName
+        return VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
+            MessageBoxView(model: MessageBoxModel(
+                canSend: !model.task.takenOver && model.onSubmitMessage != nil, canContinue: false, isBusy: model.isBusy,
+                label: "Message \(harness)", hint: "",
+                placeholder: model.task.takenOver ? MessageBoxDisabledReason.takenOver.text : "Message \(harness)",
+                buttonLabel: "Send", isLocked: model.task.takenOver,
+                fieldAccessibilityLabel: "Message \(harness)", sendAccessibilityLabel: "Send to \(harness)"
+            ), style: .lane) { model.onSubmitMessage?($0, false) ?? false }
+            if model.onSubmitMessage == nil {
+                Text("Messaging is unavailable for this activity view.")
+                    .font(TaskScreenStyle.sans(size: 13))
+                    .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 13, lineHeight: 20)))
+                    .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+                    .padding(.top, TaskScreenStyle.Scale.space2)
+            }
+        }
+        .anchorPreference(key: ParallelComposerBounds.self, value: .bounds) { [model.id: $0] }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Message \(harness): \(model.title)")
+        .accessibilityIdentifier("parallel-column-composer")
+    }
+
+    private var inspectorComposer: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             MessageBoxView(model: MessageBoxModel(
                 canSend: !model.task.takenOver && model.onSubmitMessage != nil, canContinue: false, isBusy: model.isBusy,
@@ -429,157 +469,13 @@ struct ParallelColumnView: View {
                                 pendingMessages: model.pendingMessages,
                                 workMessages: model.workMessages,
                                 liveStep: model.liveStep.map { .init(text: $0.text, indicator: model.chrome == .lane ? .singleDot : .threeDots) },
-                                cancel: model.onCancelMessage == nil ? .hidden : (model.isBusy ? .disabled : .enabled)
+                                cancel: model.onCancelMessage == nil ? .hidden : (model.isBusy ? .disabled : .enabled),
+                                outcome: model.chrome == .lane && !laneFeedIsLoading ? model.outcomeMessage : nil
                              )), onSelectChildTask: model.onSelectTask,
                              onCancelQueuedMessage: model.onCancelMessage)
         }
     }
 }
-
-#if DEBUG
-private func previewTask(id: String, age: TimeInterval, status: String = "running") -> TaskInfo {
-    TaskInfo(.object([
-        "task_id": .string(id), "backend": .string("claude"), "status": .string(status), "repo_path": .string("/Users/me/Code/harflow"),
-        "started_at": .string(ISO8601DateFormatter().string(from: .now.addingTimeInterval(-age)))
-    ]))!
-}
-
-@MainActor
-private func previewColumn(_ model: ParallelColumnModel) -> some View {
-    ParallelColumnView(model: model)
-        .frame(width: HfRadius.Metrics.parallelColumnPreviewWidth, height: HfRadius.Metrics.parallelColumnPreviewHeight)
-        .background(Color.windowBG)
-}
-
-@MainActor
-private func columnModel(
-    id: String = "abc123", task: TaskInfo, rows: [ConversationTimelineRow], isLoading: Bool = false, turns: Int = 1,
-    summary: String? = nil, liveStep: LiveStep? = nil
-) -> ParallelColumnModel {
-    ParallelColumnModel(
-        id: id, task: task, title: "Fix the login bug",
-        subtitle: ParallelColumnModel.subtitle(repoPath: "/Users/me/Code/harflow", backend: task.backend, turns: turns),
-        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
-        rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: liveStep ?? LiveStep(rows: rows), isLoading: isLoading,
-        summary: summary, onTapTakeover: {}, onTapOpenTask: {}
-    )
-}
-
-private var followUpRows: [ConversationTimelineRow] {
-    [
-        ConversationTimelineRow(
-            id: "t1#1", taskID: "t1", timestamp: .now.addingTimeInterval(-90),
-            kind: .item(PreviewFixtures.textItem("Looked at the failing test.")), live: false
-        ),
-        ConversationTimelineRow(
-            id: "sep:t2", taskID: "t2", timestamp: .now,
-            kind: .separator(text: "Also add a test for the edge case"), live: false
-        ),
-        ConversationTimelineRow(id: "t2#1", taskID: "t2", timestamp: .now, kind: .item(PreviewFixtures.finishedItem()), live: true)
-    ]
-}
-
-#Preview("Running - light") {
-    previewColumn(columnModel(task: previewTask(id: "abc123", age: 90), rows: PreviewFixtures.sampleRows(taskID: "abc123")))
-        .preferredColorScheme(.light)
-}
-
-#Preview("Running - dark") {
-    previewColumn(columnModel(task: previewTask(id: "abc123", age: 90), rows: PreviewFixtures.sampleRows(taskID: "abc123")))
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Finished - light") {
-    previewColumn(columnModel(
-        task: previewTask(id: "abc123", age: 90, status: "completed"), rows: PreviewFixtures.sampleRows(taskID: "abc123", running: false),
-        summary: "Fixed the **flaky** login test by warming the keychain first."
-    ))
-    .preferredColorScheme(.light)
-}
-
-#Preview("Finished - dark") {
-    previewColumn(columnModel(
-        task: previewTask(id: "abc123", age: 90, status: "completed"), rows: PreviewFixtures.sampleRows(taskID: "abc123", running: false),
-        summary: "Fixed the **flaky** login test by warming the keychain first."
-    ))
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Long result - light") {
-    previewColumn(longResultColumnModel()).preferredColorScheme(.light)
-}
-
-#Preview("Long result - dark") {
-    previewColumn(longResultColumnModel()).preferredColorScheme(.dark)
-}
-
-@MainActor
-private func longResultColumnModel() -> ParallelColumnModel {
-    columnModel(task: previewTask(id: "abc123", age: 90, status: "completed"),
-                rows: PreviewFixtures.sampleRows(taskID: "abc123", running: false),
-                summary: Array(repeating: "The completed review includes a detailed result that remains scrollable above activity.", count: 20)
-                    .joined(separator: "\n\n"))
-}
-
-#Preview("Loading column - light") {
-    previewColumn(columnModel(task: previewTask(id: "abc123", age: 2), rows: [], isLoading: true)).preferredColorScheme(.light)
-}
-
-#Preview("Loading column - dark") {
-    previewColumn(columnModel(task: previewTask(id: "abc123", age: 2), rows: [], isLoading: true)).preferredColorScheme(.dark)
-}
-
-#Preview("With a follow-up turn - light") {
-    previewColumn(columnModel(id: "t1", task: previewTask(id: "t2", age: 90), rows: followUpRows, turns: 2))
-        .preferredColorScheme(.light)
-}
-
-#Preview("With a follow-up turn - dark") {
-    previewColumn(columnModel(id: "t1", task: previewTask(id: "t2", age: 90), rows: followUpRows, turns: 2))
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Prose-only, no tools recorded - light") {
-    previewColumn(noToolsColumnModel())
-        .preferredColorScheme(.light)
-}
-
-#Preview("Prose-only, no tools recorded - dark") {
-    previewColumn(noToolsColumnModel())
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Live activity, three dots - light") {
-    previewColumn(liveStepColumnModel()).preferredColorScheme(.light)
-}
-
-#Preview("Live activity, three dots - dark") {
-    previewColumn(liveStepColumnModel()).preferredColorScheme(.dark)
-}
-
-@MainActor
-private func noToolsColumnModel() -> ParallelColumnModel {
-    // A complete, settled, prose-only turn: the count reads "1 activity item" and the proven
-    // "No tool calls recorded" note shows beside it.
-    let rows = [ConversationTimelineRow(
-        id: "abc123#1", taskID: "abc123", timestamp: .now.addingTimeInterval(-30),
-        kind: .item(PreviewFixtures.textItem("Reviewed the diff and left one comment.")), live: false
-    )]
-    var model = columnModel(task: previewTask(id: "abc123", age: 30, status: "completed"), rows: rows)
-    model.stepCountText = "1 activity item"
-    model.noToolCallsText = "No tool calls recorded"
-    return model
-}
-
-@MainActor
-private func liveStepColumnModel() -> ParallelColumnModel {
-    let rows = PreviewFixtures.sampleRows(taskID: "abc123")
-    var model = columnModel(task: previewTask(id: "abc123", age: 10), rows: rows,
-                            liveStep: LiveStep(rows: rows, isRunning: true))
-    model.stepCountText = "6 activity items"
-    return model
-}
-#endif
 
 // MARK: - ParallelComposerBounds
 

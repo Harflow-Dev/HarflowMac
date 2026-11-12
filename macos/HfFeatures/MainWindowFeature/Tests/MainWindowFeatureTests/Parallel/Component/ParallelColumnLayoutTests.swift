@@ -59,7 +59,7 @@ import Testing
         let composerFrame = try #require(measured.frame)
         let field = try #require(descendants(host)
 .compactMap { $0 as? NSTextField }
-            .first { $0.placeholderString == "Queue a message…" })
+            .first { $0.placeholderString == "Queue a message…" || $0.accessibilityLabel()?.hasPrefix("Message ") == true })
         let fieldFrame = host.convert(field.bounds, from: field)
         // then — activity fills exactly the region above the actual composer, which owns the bottom band.
         assertComposerSpacing(chrome, viewport: viewport, composer: composerFrame, hostBounds: host.bounds)

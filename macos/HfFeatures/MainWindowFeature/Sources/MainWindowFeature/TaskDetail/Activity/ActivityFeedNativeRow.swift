@@ -355,6 +355,20 @@ struct ActivityFeedNativeTailContent: View {
                     WorkMessageBubblesView(bubbles: pinned, onCancel: standard.cancel == .hidden ? nil : actions.onCancelQueuedMessage,
                                            isCancelDisabled: standard.cancel == .disabled)
                 }
+                if let outcome = standard.outcome {
+                    Text(outcome)
+                        .font(TaskScreenStyle.sans(size: 12))
+                        .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 12, lineHeight: 17)))
+                        .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isStaticText)
+                }
+            }
+            .onChange(of: standard.outcome) { _, outcome in
+                guard let outcome else { return }
+                NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                    userInfo: [.announcement: outcome, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
             }
         }
     }

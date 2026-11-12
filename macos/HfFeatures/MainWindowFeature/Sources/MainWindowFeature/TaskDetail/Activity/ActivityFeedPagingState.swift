@@ -127,6 +127,7 @@ enum ActivityFeedNativeEntries {
         case .standard(let standard):
             standard.subTaskStrip != nil || !standard.pendingMessages.isEmpty
                 || !standard.workMessages.isEmpty || standard.liveStep != nil || standard.approvalNotice != nil
+                || standard.outcome != nil
         }
     }
 

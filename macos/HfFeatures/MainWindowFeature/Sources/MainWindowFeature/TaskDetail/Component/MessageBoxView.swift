@@ -71,6 +71,10 @@ struct MessageBoxModel {
 
     /// Allows retaining an editable draft while submission waits for current status authority.
     var allowsDraftEditing = false
+    /// The field's accessibility label when it differs from the placeholder ("Message Codex"). `nil` keeps the placeholder.
+    var fieldAccessibilityLabel: String?
+    /// The send button's accessibility label when it differs from `buttonLabel` ("Send to Codex").
+    var sendAccessibilityLabel: String?
     var canEditDraft: Bool { canSend || canContinue || allowsDraftEditing }
 
     /// The printed hint under an enabled composer: the guaranteed shortcut, after the model's hint when it has one.
@@ -90,6 +94,10 @@ struct MessageBoxModel {
 enum MessageBoxStyle: Equatable {
     case standard
     case transcript
+    /// The Parallel lane's composer (`.hd-composer` in `.hd-lane__foot`): the transcript surface in one row of a
+    /// field and a 28 pt send button, padding 8/8/8/12. It never draws Send now, a printed hint, Stop, the wrapper
+    /// padding or the 696 cap; lanes queue only.
+    case lane
 
     /// The transcript composer's "Send now" size (13 pt); not part of `TaskScreenStyle.Composer`.
     static let sendNowSize: CGFloat = 13
@@ -175,7 +183,86 @@ struct MessageBoxView: View {
         switch style {
         case .standard: standardBody
         case .transcript: transcriptBody
+        case .lane: laneBody
         }
+    }
+
+    // MARK: Lane
+
+    /// `.hd-composer` in a lane: padding `space-2 space-2 space-2 space-3`, one row, the field at least 24 pt tall
+    /// (40 pt when locked) and a 28 pt send button, so the row is 44 pt (56 pt locked).
+    private var laneBody: some View {
+        HStack(spacing: TaskScreenStyle.Composer.gap) {
+            laneField
+            laneSendButton
+        }
+        .padding(.top, TaskScreenStyle.Scale.space2)
+        .padding(.trailing, TaskScreenStyle.Scale.space2)
+        .padding(.bottom, TaskScreenStyle.Scale.space2)
+        .padding(.leading, TaskScreenStyle.Scale.space3)
+        .background { TranscriptComposerSurface() }
+    }
+
+    static let laneSendSize: CGFloat = 28
+    static let laneFieldMinHeight: CGFloat = 24
+    static let laneLockedFieldMinHeight: CGFloat = 40
+
+    @ViewBuilder private var laneField: some View {
+        let composer = TaskScreenStyle.Composer.self
+        if model.isLocked {
+            HStack(spacing: HfRadius.Metrics.spacing8) {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+                    .accessibilityHidden(true)
+                Text(model.placeholder)
+            }
+            .font(TaskScreenStyle.sans(size: composer.inputText.size))
+            .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+            .frame(maxWidth: .infinity, minHeight: Self.laneLockedFieldMinHeight, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        } else {
+            TextField("", text: draft, axis: .vertical)
+                .focused($fieldFocused)
+                .scrollChromeScope()
+                .accessibilityLabel(model.fieldAccessibilityLabel ?? model.placeholder)
+                .lineLimit(1 ... 6)
+                .textFieldStyle(.plain)
+                .font(TaskScreenStyle.sans(size: composer.inputText.size))
+                .overlay(alignment: .leading) {
+                    if draft.wrappedValue.isEmpty {
+                        Text(model.placeholder)
+                            .font(TaskScreenStyle.sans(size: composer.inputText.size))
+                            .foregroundStyle(composer.placeholderColor.color)
+                            .lineLimit(1)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .foregroundStyle(composer.inputColor.color)
+                .disabled(!model.canEditDraft)
+                .onSubmit(submit)
+                .frame(minHeight: Self.laneFieldMinHeight)
+        }
+    }
+
+    /// The 28 pt send circle; ⌘↩ binds only while the field is focused.
+    @ViewBuilder private var laneSendButton: some View {
+        let composer = TaskScreenStyle.Composer.self
+        let fill = canSubmit ? (isHoveringSend ? composer.sendHoverFill : composer.sendFill) : composer.sendDisabledFill
+        let button = Button(action: submit) {
+            Image(systemName: "arrow.up")
+                .font(.hf(.body, weight: .bold))
+                .foregroundStyle((canSubmit ? composer.sendForeground : composer.sendDisabledForeground).color)
+                .frame(width: Self.laneSendSize, height: Self.laneSendSize)
+                .background(Circle().fill(fill.color))
+                .contentShape(Circle())
+        }
+        .buttonStyle(UndimmedButtonStyle())
+        .disabled(!canSubmit)
+        .onHover { isHoveringSend = $0 }
+        .help("\(model.buttonLabel) (⌘↩)")
+        .accessibilityLabel(model.sendAccessibilityLabel ?? model.buttonLabel)
+        if fieldFocused { button.keyboardShortcut(.return, modifiers: .command) } else { button }
     }
 
     private var standardBody: some View {
@@ -249,7 +336,7 @@ struct MessageBoxView: View {
     @ViewBuilder private var actions: some View {
         switch style {
         case .standard: actionButtons
-        case .transcript:
+        case .transcript, .lane:
             HStack(spacing: TaskScreenStyle.Composer.barGap) { actionButtons }
         }
     }
@@ -281,7 +368,7 @@ struct MessageBoxView: View {
                 .foregroundStyle(sendNowColor)
                 .disabled(!canSubmit)
                 .help("Ask for immediate delivery; an engine refusal keeps the message queued")
-        case .transcript:
+        case .transcript, .lane:
             Button("Send now") { if onSubmitNow(draft.wrappedValue) { draft.wrappedValue = "" } }
                 .buttonStyle(UndimmedButtonStyle())
                 .font(TaskScreenStyle.sans(size: MessageBoxStyle.sendNowSize))
@@ -294,7 +381,7 @@ struct MessageBoxView: View {
     private var sendNowColor: Color {
         switch style {
         case .standard: canSubmit ? Color.primaryText : Color.tertiaryText
-        case .transcript: (canSubmit ? TaskScreenStyle.Colors.text : TaskScreenStyle.Colors.textTertiary).color
+        case .transcript, .lane: (canSubmit ? TaskScreenStyle.Colors.text : TaskScreenStyle.Colors.textTertiary).color
         }
     }
 
@@ -304,7 +391,7 @@ struct MessageBoxView: View {
     @ViewBuilder private var sendButton: some View {
         switch style {
         case .standard: standardSendButton
-        case .transcript: transcriptSendButton
+        case .transcript, .lane: transcriptSendButton
         }
     }
 
@@ -350,7 +437,7 @@ struct MessageBoxView: View {
     private var field: some View {
         switch style {
         case .standard: standardField
-        case .transcript: transcriptField
+        case .transcript, .lane: transcriptField
         }
     }
 

@@ -134,7 +134,10 @@ no embedded terminal anywhere in this package:
   the single-dot working row, and no "N activity items" line. `.laneAfterBlock` is `.lane` with content above the feed (history boundary, outcome, prompt, result): the first entry then sits one 12 point row gap under it instead of the 16 point body inset, so nothing overlaps. Lane head (`ParallelLaneHead`): glyph, task title (two lines at most), caption ("Claude · Opus 5.5", plus "· taken over"), status caption ("Running 03:24", from `ParallelLaneStatus` over `TaskBadgeModel`) and the Lane actions menu; the history notice is a bordered boundary block drawn only while a notice exists, and when "Load current activity" completes the head takes focus and announces "Current activity loaded". Parallel lanes (`ParallelColumnChrome.lane`, group
   and workflow run) use it; the Graph inspector's column stays `.standard` with the three-dot live step. Tool bodies are unbounded in height (no 220 point cap): a recorded deviation pending owner review.
   `MessageBoxStyle` follows the same mounts through `TaskDetailView`: `.transcript` is the solid
-  `.hd-composer` surface, `.standard` keeps glass for Parallel and workflow composers. Field and actions stay
+  `.hd-composer` surface, `.standard` keeps glass for the Graph inspector and workflow composers, and `.lane` is the Parallel lane's
+  composer: the transcript surface in one row (padding 8/8/8/12, field at least 24 pt or 40 pt locked, 28 pt send), queue only (no Send now,
+  hint or Stop; ⌘↩ binds only while the field is focused). A lane's outcome line (`ActivityFeedTailPresentation.Standard.outcome`) sits in the
+  feed tail after the pinned bubbles, and in the lane foot above the composer while the feed shows its skeleton; the inspector keeps it at the top. Field and actions stay
   in one row with the printed hint; the stacked form and an editor swap wait on a design for Send now and locked states.
 - **Summary entry.** The standalone transcript (`TaskDetailChrome.standalone` only, copied into
   `TaskDetailTimelineInput.showsSummaryEntry` from the VM's explicit `chrome:` init parameter) can end with

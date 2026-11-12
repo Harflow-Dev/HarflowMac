@@ -53,26 +53,30 @@ extension MessageBoxTranscriptStyleHostedTests {
         }
     }
 
-    @Test func givenParallelColumnAndWorkflowComposer_whenTheirBodiesAreReflected_thenEveryMessageBoxIsStandard() throws {
+    @Test func givenParallelLaneInspectorAndWorkflowComposer_whenTheirBodiesAreReflected_thenTheLaneIsLaneAndTheOthersAreStandard() throws {
         // given
         let task = try #require(TaskInfo(.object([
             "task_id": .string("col"), "backend": .string("claude"), "status": .string("running"), "live_input": .bool(true)
         ])))
-        let column = ParallelColumnModel(
+        let lane = ParallelColumnModel(
             id: "col", task: task, title: "Column", subtitle: "Claude", isBusy: false, outcomeMessage: nil, showPrompt: false,
             prompt: nil, rows: [], activityRows: [], liveStep: nil, isLoading: false, summary: nil,
-            onTapTakeover: {}, onTapOpenTask: {}
+            onTapTakeover: nil, onTapOpenTask: {}
         )
+        let inspector = lane.withChrome(.inspector)
         let workflow = WorkflowActivityMessageComposer(viewModel: WorkflowPreview.make(run: true))
 
         // when
-        let parallel = Self.messageBoxStyles(in: ParallelColumnView(model: column).body)
+        let laneStyles = Self.messageBoxStyles(in: ParallelColumnView(model: lane).body)
+        let inspectorStyles = Self.messageBoxStyles(in: ParallelColumnView(model: inspector).body)
         let nested = Self.messageBoxStyles(in: workflow.body)
 
         // then — the reflection reaches the composer in each body; an empty result would mean it asserts nothing.
-        #expect(!parallel.isEmpty, "no MessageBoxView found in the Parallel column body")
+        #expect(!laneStyles.isEmpty, "no MessageBoxView found in the Parallel lane body")
+        #expect(!inspectorStyles.isEmpty, "no MessageBoxView found in the Graph inspector column body")
         #expect(!nested.isEmpty, "no MessageBoxView found in the workflow composer body")
-        #expect((parallel + nested).allSatisfy { $0 == .standard })
+        #expect(laneStyles.allSatisfy { $0 == .lane })
+        #expect((inspectorStyles + nested).allSatisfy { $0 == .standard })
     }
 
     static func messageBoxStyles(in value: Any, depth: Int = 0) -> [MessageBoxStyle] {

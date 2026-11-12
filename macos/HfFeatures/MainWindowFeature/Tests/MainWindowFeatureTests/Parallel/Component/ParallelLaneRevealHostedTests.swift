@@ -30,7 +30,7 @@ import Testing
         var fields: [NSTextField] {
             fixture.descendants
 .compactMap { $0 as? NSTextField }
-                .filter { $0.placeholderString == "Queue a message…" }
+                .filter(\.isEditable)
                 .sorted { fixture.host.convert($0.bounds, from: $0).minX < fixture.host.convert($1.bounds, from: $1).minX }
         }
     }
