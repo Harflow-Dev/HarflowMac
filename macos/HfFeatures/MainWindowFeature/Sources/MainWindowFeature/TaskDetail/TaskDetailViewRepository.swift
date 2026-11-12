@@ -143,7 +143,15 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     
     func statusReadOutcome(_ id: String) -> TaskSnapshotReadOutcome? { taskSnapshotRepository.readOutcomes[id] }
     func statusReadChangesPublisher() -> AnyPublisher<Void, Never> {
-        taskSnapshotRepository.readChangesPublisher().map { _ in () }.eraseToAnyPublisher()
+        Self.voidChanges(taskSnapshotRepository.readChangesPublisher())
+    }
+
+    /// Built in a `nonisolated` helper so the operator closure is not main-actor isolated: the
+    /// snapshot repository sends from background contexts, and an isolated closure would trap there.
+    nonisolated static func voidChanges(
+        _ upstream: AnyPublisher<TaskSnapshotReadChange, Never>
+    ) -> AnyPublisher<Void, Never> {
+        upstream.map { _ in () }.eraseToAnyPublisher()
     }
 
     func isStopping(_ id: String) -> Bool { taskActionRepository.isStopping(id) }

@@ -72,6 +72,8 @@ data, search and selection. An older result must never overwrite a newer present
 ordering, freshness and bounded resource use. For performance changes, verify that expensive
 computation runs outside the main actor and unchanged polling produces no rendering publications.
 
+In `@MainActor` types, Combine operators (closures, function references or key paths) applied to publishers that may emit off the main thread must run after `receive(on: DispatchQueue.main)` or be built in a `nonisolated static` helper. A main-actor-isolated closure traps (`dispatch_assert_queue`) when the upstream sends from a background context.
+
 ## Rendering publisher equality
 
 Publishers that drive rendering must emit the initial state, then emit again only when their

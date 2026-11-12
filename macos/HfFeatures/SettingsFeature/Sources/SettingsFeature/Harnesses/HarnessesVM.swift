@@ -231,11 +231,11 @@ final class HarnessesVM: HarnessesViewModel {
         // The initial snapshot is covered by didAppear's load. Later readiness recovery
         // must refresh even when startup qualification creates no install success notice.
         useCase.runtimeSetupPublisher()
+            .receive(on: DispatchQueue.main)
             .map(\.isReady)
             .removeDuplicates()
             .dropFirst()
             .filter(\.self)
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.loadQualifications()
                 Task { [weak self] in await self?.load() }

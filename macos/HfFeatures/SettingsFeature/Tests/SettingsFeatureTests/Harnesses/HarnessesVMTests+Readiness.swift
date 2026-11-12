@@ -51,6 +51,39 @@ extension HarnessesVMTests {
         #expect(calls.value == 2)
     }
 
+    @Test func givenPreparationFailure_whenRuntimeBecomesReadyFromOffMainContext_thenHarnessesReloads() async {
+        // given — regression guard: the managed-runtime state is sent from an actor, not the main thread
+        final class CallCount { var value = 0 }
+        final class SendableSubject: @unchecked Sendable {
+            let subject = CurrentValueSubject<RuntimeSetupState, Never>(.checking)
+        }
+        let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
+        let calls = CallCount()
+        let populated = document(twoRowsJSON)
+        given(useCase).status().willProduce {
+            calls.value += 1
+            return calls.value == 1
+                ? .failure(.refused(code: "managed_runtime_preparing", message: "Preparing runtime"))
+                : .success(populated)
+        }
+        let setup = SendableSubject()
+        Self.stubInstall(useCase, runtimeSetupPublisher: setup.subject.eraseToAnyPublisher())
+        let sut = HarnessesVM(useCase: useCase)
+        sut.didAppear()
+        await waitUntil { calls.value == 1 && !sut.isLoading }
+        #expect(calls.value == 1)
+
+        // when
+        await Task.detached { setup.subject.send(.ready) }.value
+
+        // then
+        await waitUntil { sut.rows.count == 2 }
+        #expect(sut.rows.count == 2)
+        #expect(calls.value == 2)
+    }
+
     @Test func givenExplicitInstall_whenReadyAndInstalledArrive_thenHarnessesRefreshesOnceAndDismissalIsQuiet() async {
         // given
         let useCase = MockHarnessesUseCase()
