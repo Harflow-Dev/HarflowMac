@@ -14,6 +14,7 @@ import Testing
 @MainActor private final class RecordingRouting: ParallelRouting {
     private(set) var events: [String] = []
     func selectTask(_: String) {}
+    func copyToPasteboard(_: String) -> Bool { false }
     func publishTopBar(_ content: GroupTopBarContent, tag _: TaskTopBarHolder.Tag) { events.append(content.isLoading ? "publish loading" : "publish loaded") }
     func clearTopBar(tag _: TaskTopBarHolder.Tag) { events.append("clear") }
     func activateTopBar(tag _: TaskTopBarHolder.Tag) { events.append("activate") }

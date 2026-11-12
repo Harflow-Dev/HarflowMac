@@ -110,7 +110,7 @@ extension MessageBoxTranscriptStyleHostedTests {
         let task = try #require(TaskInfo(.object(["task_id": .string("lane"), "backend": .string("codex"), "status": .string("running"),
                                                  "repo_path": .string("/tmp")])))
         var model = ParallelColumnModel(id: "lane", task: task, title: "Lane", subtitle: "", isBusy: false, outcomeMessage: nil,
-                                        showPrompt: false, prompt: nil, rows: [], activityRows: [], liveStep: nil, isLoading: false,
+                                        showPrompt: false, rows: [], activityRows: [], liveStep: nil, isLoading: false,
                                         summary: nil, onTapTakeover: nil, onTapOpenTask: {})
         model.onSubmitMessage = { text, now in recorder.calls.append("\(text)|now=\(now)"); return true }
         let page = fixture(ParallelColumnView(model: model).frame(width: 380, height: 500), size: CGSize(width: 380, height: 500), dark: false)

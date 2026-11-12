@@ -98,7 +98,7 @@ extension ParallelVMTests {
     private func emptyActivityBase() -> ParallelColumnPresentation {
         let task = task(id: "empty", status: "completed")
         return ParallelColumnPresentation(id: task.taskID, task: task, title: "Task", subtitle: "", isBusy: false,
-            outcomeMessage: nil, showPrompt: false, prompt: nil, summary: nil, start: nil, memberTaskIDs: [task.taskID])
+            outcomeMessage: nil, showPrompt: false, summary: nil, start: nil, memberTaskIDs: [task.taskID])
     }
 
     @Test func givenSharedThirdColumn_whenEvictedAndReacquired_thenItsFreshStreamWinsOverLateOldItems() async throws {

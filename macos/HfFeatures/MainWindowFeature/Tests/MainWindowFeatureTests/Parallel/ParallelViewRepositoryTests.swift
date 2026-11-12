@@ -182,6 +182,26 @@ import Testing
         #expect(sut.prompt(for: "abc123") == "Fix the bug")
     }
     
+    @Test func givenRequestReads_whenCalled_thenTheyForwardToEventStreamRepository() {
+        // given
+        let events = MockEventStreamRepository()
+        given(events).requestState(for: .value("abc123")).willReturn(.notRequested)
+        given(events).requestPublisher(for: .value("abc123")).willReturn(Just(TaskRequestReadState.notRequested).eraseToAnyPublisher())
+        given(events).readRequest(for: .value("abc123"), maxBytes: .value(65536)).willReturn()
+        let sut = ParallelViewRepository(eventStreamRepository: events)
+
+        // when
+        let state = sut.requestState(for: "abc123")
+        _ = sut.requestPublisher(for: "abc123")
+        sut.readRequest(for: "abc123", maxBytes: 65536)
+
+        // then
+        #expect(state == .notRequested)
+        verify(events).requestState(for: .value("abc123")).called(1)
+        verify(events).requestPublisher(for: .value("abc123")).called(1)
+        verify(events).readRequest(for: .value("abc123"), maxBytes: .value(65536)).called(1)
+    }
+
     @Test func givenEventsAvailabilityQueries_whenCalled_thenTheyForwardToEventStreamRepository() {
         // given — Monitor piece 12, Design point 4: mirrors `TaskDetailViewRepositoryTests`'s
         // identical case for `TaskDetailUseCase`.

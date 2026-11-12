@@ -60,7 +60,7 @@ final class ParallelViewModelMock: ParallelViewModel {
         return [
             ParallelColumnModel(
                 id: "abc123", task: running, title: "Fix the login bug", subtitle: "repo · Claude",
-                isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+                isBusy: false, outcomeMessage: nil, showPrompt: false,
                 rows: sampleRows, activityRows: ActivityRowsBuilder.build(from: sampleRows), liveStep: nil,
                 isLoading: false,
                 summary: nil, stepCountText: "1 activity item", noToolCallsText: nil,
@@ -68,7 +68,7 @@ final class ParallelViewModelMock: ParallelViewModel {
             ),
             ParallelColumnModel(
                 id: "def456", task: done, title: "Refactor the parser", subtitle: "repo · Codex",
-                isBusy: false, outcomeMessage: "Refused: read-only freedom.", showPrompt: false, prompt: nil,
+                isBusy: false, outcomeMessage: "Refused: read-only freedom.", showPrompt: false,
                 rows: [], activityRows: [], liveStep: nil, isLoading: false,
                 summary: "Refactored the parser into smaller functions.", stepCountText: nil, noToolCallsText: nil,
                 onTapTakeover: {}, onTapOpenTask: {}

@@ -105,4 +105,55 @@ import Testing
         #expect(status.label == "Cancelled")
         #expect(status.clock == .fixed(271))
     }
+
+    // MARK: - End row
+
+    private func endRow(_ current: TaskInfo, snapshot: TaskInfo? = nil) -> ActivityFeedTailPresentation.SettledLine? {
+        ParallelLaneStatus.settledLine(current: current, status: ParallelLaneStatus.make(current: current, snapshot: snapshot, frame: nil))
+    }
+
+    @Test func givenADoneMemberWithADuration_whenBuildingTheEndRow_thenItIsSuccessWithTheClock() {
+        // when
+        let line = endRow(task("completed", exit: 0, duration: 291))
+
+        // then
+        #expect(line == .init(text: "Done · 04:51", tone: .success, symbol: "checkmark"))
+    }
+
+    @Test func givenAFailedMember_whenBuildingTheEndRow_thenItIsDangerWithTheClock() {
+        #expect(endRow(task("failed", exit: 1, duration: 468))?.text == "Failed · 07:48")
+        #expect(endRow(task("failed", exit: 1, duration: 468))?.tone == .danger)
+    }
+
+    @Test func givenATimedOutMember_whenBuildingTheEndRow_thenItIsDanger() {
+        #expect(endRow(task("timed_out", exit: 124, duration: 60))?.text == "Timed out · 01:00")
+        #expect(endRow(task("timed_out", exit: 124, duration: 60))?.tone == .danger)
+    }
+
+    @Test func givenACancelledMember_whenBuildingTheEndRow_thenItIsSecondaryWithAStopGlyph() {
+        #expect(endRow(task("cancelled", exit: 130, duration: 271)) == .init(text: "Cancelled · 04:31", tone: .secondary, symbol: "stop.fill"))
+    }
+
+    @Test func givenATakenOverCancelledMember_whenBuildingTheEndRow_thenTakenOverPrecedesTheClock() {
+        #expect(endRow(task("cancelled", takenOver: true, exit: 130, duration: 271))?.text == "Cancelled · taken over · 04:31")
+    }
+
+    @Test func givenNoRecordedDuration_whenBuildingTheEndRow_thenThereIsNoClock() {
+        #expect(endRow(task("completed"))?.text == "Done")
+    }
+
+    @Test func givenASnapshotWithoutAnExit_whenBuildingTheEndRow_thenTheQualifierIsKept() {
+        // given
+        let current = task("completed")
+        let snapshot = task("completed")
+
+        // when / then
+        #expect(endRow(current, snapshot: snapshot)?.text == "Done · exit not observed")
+    }
+
+    @Test(arguments: ["running"])
+    func givenARunningMember_whenBuildingTheEndRow_thenThereIsNone(_ status: String) {
+        #expect(endRow(task(status)) == nil)
+        #expect(endRow(task(status, takenOver: true)) == nil)
+    }
 }

@@ -60,7 +60,7 @@ extension MessageBoxTranscriptStyleHostedTests {
         ])))
         let lane = ParallelColumnModel(
             id: "col", task: task, title: "Column", subtitle: "Claude", isBusy: false, outcomeMessage: nil, showPrompt: false,
-            prompt: nil, rows: [], activityRows: [], liveStep: nil, isLoading: false, summary: nil,
+            rows: [], activityRows: [], liveStep: nil, isLoading: false, summary: nil,
             onTapTakeover: nil, onTapOpenTask: {}
         )
         let inspector = lane.withChrome(.inspector)

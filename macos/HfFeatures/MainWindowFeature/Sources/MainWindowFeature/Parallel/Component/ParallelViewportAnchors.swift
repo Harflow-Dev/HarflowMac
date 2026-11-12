@@ -35,15 +35,37 @@ final class ParallelColumnUIState {
     @ObservationIgnored var inventoryComplete = false
     @ObservationIgnored var inventoryIncomplete = false
     @ObservationIgnored var inventoryError: String?
-    /// The outcome line last announced for this lane, so a recycled view never repeats it.
-    @ObservationIgnored private(set) var lastAnnouncedOutcome: String?
+    /// Where the outcome line last announced for this lane is remembered: the group's memory when the VM supplies one
+    /// (it outlives this state, which leaving the group discards), else this state alone.
+    @ObservationIgnored private var outcomeMemory = ParallelOutcomeMemory()
+    @ObservationIgnored private var outcomeKey = ""
+
+    init() {}
+
+    /// A state whose announced-outcome memory is shared and keyed by conversation, so returning to a group does not
+    /// announce an unchanged outcome again.
+    init(outcomeMemory: ParallelOutcomeMemory, key: String) {
+        self.outcomeMemory = outcomeMemory
+        self.outcomeKey = key
+    }
 
     /// Records `outcome` and returns whether it is new and should be announced. A cleared outcome resets the memory,
     /// so the same text announces again when it returns.
-    func shouldAnnounce(outcome: String?) -> Bool {
-        guard let outcome else { lastAnnouncedOutcome = nil; return false }
-        guard outcome != lastAnnouncedOutcome else { return false }
-        lastAnnouncedOutcome = outcome
+    func shouldAnnounce(outcome: String?) -> Bool { outcomeMemory.shouldAnnounce(outcome, key: outcomeKey) }
+}
+
+// MARK: - ParallelOutcomeMemory
+
+/// The outcome line last announced per conversation. Owned by the VM and kept across `didDisappear`, so it is
+/// "outside the per-appearance UI state".
+@MainActor
+final class ParallelOutcomeMemory {
+    private var announced: [String: String] = [:]
+
+    func shouldAnnounce(_ outcome: String?, key: String) -> Bool {
+        guard let outcome else { announced[key] = nil; return false }
+        guard announced[key] != outcome else { return false }
+        announced[key] = outcome
         return true
     }
 }

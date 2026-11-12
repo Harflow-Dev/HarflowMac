@@ -7,7 +7,7 @@ enum ParallelColumnModelBuilder {
                       onSelectTask: ((String) -> Void)? = nil) -> ParallelColumnModel {
         var column = ParallelColumnModel(id: presentation.id, task: metadata.task, title: metadata.title,
             subtitle: metadata.subtitle, isBusy: metadata.isBusy, outcomeMessage: metadata.outcomeMessage,
-            showPrompt: metadata.showPrompt, prompt: presentation.prompt, rows: presentation.rows,
+            showPrompt: metadata.showPrompt, rows: presentation.rows,
             activityRows: presentation.activityRows, liveStep: presentation.liveStep,
             pendingMessages: presentation.pendingMessages, isLoading: presentation.isLoading, summary: presentation.summary,
             stepCountText: presentation.stepCountText, noToolCallsText: presentation.noToolCallsText,

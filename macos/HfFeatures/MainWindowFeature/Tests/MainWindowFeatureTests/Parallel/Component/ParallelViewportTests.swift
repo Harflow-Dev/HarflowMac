@@ -497,7 +497,7 @@ import Testing
                                            kind: .item(PreviewFixtures.textItem(rowText, seq: $0)), live: false)
         }
         return ParallelColumnModel(id: id, task: task, title: id, subtitle: "Codex", isBusy: false,
-                                   outcomeMessage: nil, showPrompt: false, prompt: nil, rows: rows,
+                                   outcomeMessage: nil, showPrompt: false, rows: rows,
                                    activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
                                    isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
     }

@@ -22,7 +22,7 @@ import Testing
                                     kind: .item(PreviewFixtures.textItem("Step \($0)", seq: $0)), live: false)
         }
         var model = ParallelColumnModel(id: task.id, task: task, title: "Cell fixture", subtitle: "Codex",
-                                        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+                                        isBusy: false, outcomeMessage: nil, showPrompt: false,
                                         rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
                                         isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         model.onSubmitMessage = { _, _ in false }
@@ -84,7 +84,7 @@ import Testing
                                     kind: .item(PreviewFixtures.textItem(text, seq: $0)), live: false)
         }
         let model = ParallelColumnModel(id: task.id, task: task, title: "Resize fixture", subtitle: "Codex",
-                                        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+                                        isBusy: false, outcomeMessage: nil, showPrompt: false,
                                         rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
                                         isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         let host = NSHostingView(rootView: WorkflowActivityColumns(columns: [model], selectedTaskID: nil))

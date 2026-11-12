@@ -31,6 +31,10 @@ protocol ParallelUseCase: Sendable {
     func items(for taskID: String) -> [TimelineItem]
     func itemsPublisher(for taskID: String) -> AnyPublisher<[TimelineItem], Never>
     func prompt(for taskID: String) -> String?
+    /// The stored first request of a task (read through the engine on demand).
+    func requestState(for taskID: String) -> TaskRequestReadState
+    func requestPublisher(for taskID: String) -> AnyPublisher<TaskRequestReadState, Never>
+    func readRequest(for taskID: String, maxBytes: Int)
     func eventHistory(for taskID: String) -> EventHistoryState
     func eventHistoryPublisher(for taskID: String) -> AnyPublisher<EventHistoryState, Never>
     func conversationHistory(sessionID: String, cursor: String?) async throws -> TaskHistoryPage?
@@ -55,6 +59,8 @@ protocol ParallelUseCase: Sendable {
 @MainActor
 protocol ParallelRouting: Sendable {
     func selectTask(_ taskID: String)
+    /// Copies request text; true when the pasteboard accepted it.
+    func copyToPasteboard(_ text: String) -> Bool
     /// Group top bar transport: the writer's tag names its group; the window shows only the active writer of the
     /// shown group.
     func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag)

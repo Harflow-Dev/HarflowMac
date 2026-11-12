@@ -43,6 +43,8 @@ import Testing
         let loadAdmissionBox: Box<Bool>
         let acquireEffectBox: Box<((String) -> Void)?>
         let conversationPagesBox: Box<[TaskHistoryPage?]>
+        /// The request-read surface of the use case (View prompt).
+        let requests: RequestStub
     }
 
     func makeSUT(groupName: String = "g1", leasePool: ParallelTestLeasePool? = nil, publishesTopBar: Bool = false,
@@ -102,7 +104,8 @@ import Testing
             tasksBox: tasksBox, titlesBox: titlesBox, itemsBox: itemsBox, itemSubjectsBox: itemSubjectsBox, availabilityBox: availabilityBox,
             leasesBox: leasesBox, releasedBox: releasedBox, runningInSubtreesBox: runningInSubtreesBox,
             observationBox: observationBox, eventsBox: eventsBox, historyBox: historyBox, historySubjectsBox: historySubjectsBox,
-            loadCallsBox: loadCallsBox, loadAdmissionBox: loadAdmissionBox, acquireEffectBox: acquireEffectBox, conversationPagesBox: conversationPagesBox
+            loadCallsBox: loadCallsBox, loadAdmissionBox: loadAdmissionBox, acquireEffectBox: acquireEffectBox, conversationPagesBox: conversationPagesBox,
+            requests: RequestStub()
         )
         configureHistory(harness, leasePool: leasePool)
         return harness

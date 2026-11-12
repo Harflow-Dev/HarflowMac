@@ -102,7 +102,7 @@ import Testing
         #expect(HfRadius.Metrics.parallelLaneStatusStripHeight == 3)
     }
 
-    @Test func givenALongSettledResult_whenHosted_thenResultIsBoundedActivityRemainsScrollableAndTheLaneMenuIsAccessible() async throws {
+    @Test func givenALongSettledResult_whenTheInspectorHostsIt_thenResultIsBoundedAndActivityRemainsScrollable() async throws {
         // given — a real lane with a long snapshot result, a long activity feed, and the existing
         // settled-session terminal action. No test-only production hook is used.
         _ = NSApplication.shared
@@ -116,14 +116,14 @@ import Testing
         }
         let model = ParallelColumnModel(
             id: task.taskID, task: task, title: "Long result", subtitle: "Claude", isBusy: false,
-            outcomeMessage: nil, showPrompt: false, prompt: nil, rows: rows,
+            outcomeMessage: nil, showPrompt: false, rows: rows,
             activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil, isLoading: false,
             summary: String(repeating: "A long settled result remains independently readable.\n", count: 100) + "RESULT-END",
             onTapTakeover: {}, onTapOpenTask: {}
         )
         let previousEnhanced = NSApplication.shared.accessibilityAttributeValue(NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))
         NSApplication.shared.accessibilitySetValue(true, forAttribute: NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))
-        let host = NSHostingView(rootView: ParallelColumnView(model: model).frame(width: 520, height: 700))
+        let host = NSHostingView(rootView: ParallelColumnView(model: model.withChrome(.inspector)).frame(width: 520, height: 700))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 520, height: 700),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -162,6 +162,44 @@ import Testing
             accessibilityString($0, "accessibilityLabel")?.contains("RESULT-END") == true
                 || accessibilityString($0, "accessibilityValue")?.contains("RESULT-END") == true
         })
+    }
+
+    @Test func givenALongSettledResult_whenALaneHostsIt_thenThereIsNoResultCalloutAndTheMenuIsAccessible() async throws {
+        // given
+        _ = NSApplication.shared
+        let task = TaskInfo(.object([
+            "task_id": .string("lane-result"), "backend": .string("claude"),
+            "status": .string("completed"), "session_id": .string("session")
+        ]))!
+        let rows = (0 ..< 40).map { index in
+            ConversationTimelineRow(id: "row-\(index)", taskID: task.taskID, timestamp: nil,
+                kind: .item(PreviewFixtures.textItem("Activity row \(index)", seq: index)), live: false)
+        }
+        let model = ParallelColumnModel(
+            id: task.taskID, task: task, title: "Lane result", subtitle: "Claude", isBusy: false,
+            outcomeMessage: nil, showPrompt: false, rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
+            isLoading: false, summary: "LANE-RESULT-TEXT", onTapTakeover: nil, onTapOpenTask: {})
+        let enhanced = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
+        let previousEnhanced = NSApplication.shared.accessibilityAttributeValue(enhanced)
+        NSApplication.shared.accessibilitySetValue(true, forAttribute: enhanced)
+        let host = NSHostingView(rootView: ParallelColumnView(model: model).frame(width: 520, height: 700))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 520, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = host; window.orderFront(nil)
+        defer {
+            window.contentView = nil
+            window.close()
+            NSApplication.shared.accessibilitySetValue(previousEnhanced, forAttribute: enhanced)
+        }
+
+        // when
+        await DisplayFrames.waitForPresentedFrame()
+        await waitUntil(timeout: 5) { host.layoutSubtreeIfNeeded(); return !descendants(host).compactMap { $0 as? NSScrollView }.isEmpty }
+
+        // then — the result is not drawn in a lane (the end row carries the outcome); the actions menu stays reachable
+        #expect(!allAccessibilityObjects(in: host).contains { object in
+            ["accessibilityLabel", "accessibilityValue"].contains { accessibilityString(object, $0)?.contains("LANE-RESULT-TEXT") == true }
+        })
+        #expect(!allAccessibilityObjects(in: host).contains { accessibilityString($0, "accessibilityLabel") == "Result" })
         #expect(allAccessibilityObjects(in: host).contains { object in
             ["accessibilityLabel", "accessibilityTitle"].contains { accessibilityString(object, $0) == "Lane actions" }
         })
@@ -181,7 +219,7 @@ import Testing
         ]))!
         func model(summary: String?) -> ParallelColumnModel {
             ParallelColumnModel(id: task.taskID, task: task, title: "Result", subtitle: "Claude", isBusy: false,
-                outcomeMessage: nil, showPrompt: false, prompt: nil, rows: [], activityRows: [], liveStep: nil,
+                outcomeMessage: nil, showPrompt: false, rows: [], activityRows: [], liveStep: nil,
                 isLoading: false, summary: summary, onTapTakeover: {}, onTapOpenTask: {})
         }
 
@@ -193,7 +231,7 @@ import Testing
         #expect(missing.tiffRepresentation == blank.tiffRepresentation)
     }
 
-    @Test func givenAShortSettledResult_whenHosted_thenResultViewportHugsContentAndKeepsNativeThinChrome() async throws {
+    @Test func givenAShortSettledResult_whenTheInspectorHostsIt_thenResultViewportHugsContentAndKeepsNativeThinChrome() async throws {
         // given
         _ = NSApplication.shared
         let task = TaskInfo(.object([
@@ -205,10 +243,10 @@ import Testing
                 kind: .item(PreviewFixtures.textItem("Activity row \(index)", seq: index)), live: false)
         }
         let model = ParallelColumnModel(id: task.taskID, task: task, title: "Short result", subtitle: "Claude",
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil, rows: rows,
+            isBusy: false, outcomeMessage: nil, showPrompt: false, rows: rows,
             activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil, isLoading: false,
             summary: "Short result", onTapTakeover: {}, onTapOpenTask: {})
-        let host = NSHostingView(rootView: ParallelColumnView(model: model).frame(width: 520, height: 700))
+        let host = NSHostingView(rootView: ParallelColumnView(model: model.withChrome(.inspector)).frame(width: 520, height: 700))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 520, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false; window.contentView = host; window.orderFront(nil)
         defer { window.contentView = nil; window.close() }
@@ -233,7 +271,7 @@ import Testing
                                chrome: ParallelColumnChrome = .lane) -> ParallelColumnModel {
         var model = makeModel(id: "head", state: .loaded)
         model = ParallelColumnModel(id: model.id, task: model.task, title: title, subtitle: "Codex · tmp", isBusy: false,
-            outcomeMessage: nil, showPrompt: false, prompt: nil, rows: model.rows, activityRows: model.activityRows, liveStep: nil,
+            outcomeMessage: nil, showPrompt: false, rows: model.rows, activityRows: model.activityRows, liveStep: nil,
             isLoading: false, summary: nil, onTapTakeover: chrome == .inspector ? {} : nil, onTapOpenTask: {})
         model.chrome = chrome
         model.cachedHistoryNotice = notice
@@ -323,7 +361,7 @@ import Testing
         model = ParallelColumnModel(id: model.id, task: TaskInfo(.object([
             "task_id": .string("head"), "backend": .string("codex"), "status": .string("completed"),
             "repo_path": .string("/tmp"), "session_id": .string("s")]))!, title: "Inspector", subtitle: "Codex · tmp", isBusy: false,
-            outcomeMessage: nil, showPrompt: false, prompt: nil, rows: model.rows, activityRows: model.activityRows, liveStep: nil,
+            outcomeMessage: nil, showPrompt: false, rows: model.rows, activityRows: model.activityRows, liveStep: nil,
             isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         model.chrome = .inspector
         let fixture = mount(model)
@@ -365,7 +403,7 @@ import Testing
                                           kind: .item(PreviewFixtures.textItem("Result", seq: 1)), live: false)
         var model = ParallelColumnModel(
             id: id, task: task, title: "Lane", subtitle: "Codex", isBusy: false,
-            outcomeMessage: nil, showPrompt: false, prompt: nil, rows: [row],
+            outcomeMessage: nil, showPrompt: false, rows: [row],
             activityRows: ActivityRowsBuilder.build(from: [row]), liveStep: nil,
             isLoading: state == .skeleton, summary: nil,
             onTapTakeover: {}, onTapOpenTask: {}

@@ -32,7 +32,7 @@ private func columnModel(
     ParallelColumnModel(
         id: id, task: task, title: "Fix the login bug",
         subtitle: ParallelColumnModel.subtitle(repoPath: "/Users/me/Code/harflow", backend: task.backend, turns: turns),
-        isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+        isBusy: false, outcomeMessage: nil, showPrompt: false,
         rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: liveStep ?? LiveStep(rows: rows), isLoading: isLoading,
         summary: summary, onTapTakeover: {}, onTapOpenTask: {}
     )

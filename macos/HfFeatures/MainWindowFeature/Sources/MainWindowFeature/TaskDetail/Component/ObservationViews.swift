@@ -43,9 +43,17 @@ struct StoredRequestView: View {
     let state: TaskRequestReadState
     let read: (Int) -> Void
     let copy: (String) -> Void
-    @State private var expanded = false
+    @State private var expanded: Bool
     @State private var textFocusIntent: StoredRequestFocusIntent?
     @State private var focusReplacement = false
+
+    /// `initiallyExpanded` opens the disclosure on first draw (a Parallel lane's View prompt); the task screen keeps it closed.
+    init(state: TaskRequestReadState, read: @escaping (Int) -> Void, copy: @escaping (String) -> Void, initiallyExpanded: Bool = false) {
+        self.state = state
+        self.read = read
+        self.copy = copy
+        _expanded = State(initialValue: initiallyExpanded)
+    }
 
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {

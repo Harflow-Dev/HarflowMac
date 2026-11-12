@@ -22,7 +22,7 @@ final class ParallelVM: ParallelViewModel {
     private(set) var isEmpty = false
     private(set) var columns: [ParallelColumnModel] = []
     private(set) var selectedConversationID: String?
-    @ObservationIgnored private var isWorkflowInspector = false
+    @ObservationIgnored var isWorkflowInspector = false
     static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
     /// True only for the standalone group mount (`buildParallelView`); workflow and inspector VMs never publish.
     @ObservationIgnored let publishesTopBar: Bool
@@ -74,6 +74,10 @@ final class ParallelVM: ParallelViewModel {
         history.update(conversations: orderedConversations, visible: visibleIDs, states: uiStates)
     })
     @ObservationIgnored var uiStates: [String: ParallelColumnUIState] = [:]
+    /// View prompt: stored first requests by prompt task, their subscriptions and the lease generation each was read in.
+    @ObservationIgnored var requestStates: [String: TaskRequestReadState] = [:]
+    @ObservationIgnored var requestSubscriptions: [String: AnyCancellable] = [:]
+    @ObservationIgnored var requestReadGenerations: [String: UUID] = [:]
     @ObservationIgnored var descriptors: [String: ParallelColumnPresentation] = [:]
     @ObservationIgnored var presentations: [String: ParallelColumnPresentation] = [:]
     @ObservationIgnored var completedInputs: [String: ParallelColumnInput] = [:]
@@ -81,7 +85,7 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var pendingInputs: [String: ParallelColumnInput]?
     @ObservationIgnored private var revision: UInt64 = 0
-    @ObservationIgnored private var epoch: UInt64 = 0
+    @ObservationIgnored var epoch: UInt64 = 0
     @ObservationIgnored private var scheduledStart: UInt64?
     @ObservationIgnored private var latencyStart: UInt64?
     var isPresentationSettled: Bool { worker == nil && pendingInputs == nil && acquisition.isSettled }
@@ -93,12 +97,8 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private(set) var presentationWriteCount = 0
     @ObservationIgnored private(set) var builtColumnCount = 0
     @ObservationIgnored private(set) var sourceUpdateCount = 0
-    func columnState(for id: String) -> ParallelColumnUIState {
-        if let state = uiStates[id] { return state }
-        let state = ParallelColumnUIState()
-        if conversationByID[id] != nil { uiStates[id] = state }
-        return state
-    }
+    /// The outcome lines already announced, kept across `didDisappear` so returning to a group stays quiet.
+    @ObservationIgnored let outcomeMemory = ParallelOutcomeMemory()
 
     func updateViewport(offset: CGFloat, width: CGFloat) {
         guard viewportOffset != offset || viewportWidth != width else { return }
@@ -161,6 +161,7 @@ final class ParallelVM: ParallelViewModel {
         refreshingRetainedIDs.removeAll()
         visibleIDs.removeAll()
         uiStates.removeAll()
+        cancelRequestReads()
         orderedConversations.removeAll()
         selectedConversationID = nil
         viewportWidth = 0
@@ -188,6 +189,7 @@ final class ParallelVM: ParallelViewModel {
     func didTapViewPrompt() {
         let start = MonitorMetrics.begin()
         showPrompt.toggle()
+        syncRequestReads()
         for id in descriptors.keys { descriptors[id]?.showPrompt = showPrompt }
         var inputs = desiredInputs
         for id in inputs.keys { inputs[id]?.base.showPrompt = showPrompt }
@@ -312,6 +314,7 @@ final class ParallelVM: ParallelViewModel {
     }
 
     private func releaseLease(_ taskID: String) {
+        releaseRequest(taskID)
         history.release(taskID)
         leases[taskID]?.release()
         leases[taskID] = nil
@@ -349,6 +352,7 @@ final class ParallelVM: ParallelViewModel {
                                          authoritative: activityReady && initialMembershipResolved && resolved)
         descriptors = Dictionary(uniqueKeysWithValues: orderedConversations.map { ($0.id, basePresentation($0, includePrompt: false)) })
         let inputs = updateResidency()
+        syncRequestReads()
         publishColumns()
         publishHeaderClaims()
         schedule(inputs)
@@ -393,6 +397,7 @@ final class ParallelVM: ParallelViewModel {
         let preparation = MonitorMetrics.begin()
         defer { MonitorMetrics.end(preparation, stage: .parallelPreparation, residentColumns: residentIDs.count, leasedMembers: leases.count) }
         MonitorMetrics.end(start, stage: .parallelLeases, residentColumns: residentIDs.count, leasedMembers: leases.count)
+        syncRequestReads()
         var inputs = desiredInputs
         for id in Set(ids.compactMap { ownerByMember[$0] }) {
             if residentIDs.contains(id), let conversation = conversationByID[id], readyToRefresh(conversation) { inputs[id] = captureInput(conversation) }
@@ -456,7 +461,6 @@ final class ParallelVM: ParallelViewModel {
     private func basePresentation(_ conversation: Conversation, includePrompt: Bool = true) -> ParallelColumnPresentation {
         let current = WorkflowNodePresentation.merged(latestSnapshots[conversation.current.taskID], with: conversation.current)
         let currentID = current.taskID
-        let prompt: String? = nil
         let summary = includePrompt ? latestSnapshots[currentID]?.summary : nil
         return ParallelColumnPresentation(id: conversation.id, task: current,
             title: workflowTitles[currentID] ?? useCase.title(conversation.first.taskID),
@@ -465,7 +469,7 @@ final class ParallelVM: ParallelViewModel {
             caption: ParallelLaneStatus.caption(current: current), harnessName: ParallelLaneStatus.harnessName(current: current),
             status: isWorkflowInspector ? nil : laneStatus(current),
             isBusy: latestBusy.contains(currentID) || messageDispatches.contains(currentID), outcomeMessage: latestOutcomes[currentID], showPrompt: showPrompt,
-            prompt: prompt, summary: summary, start: conversation.first.startedAt,
+            summary: summary, start: conversation.first.startedAt,
             memberTaskIDs: Set(conversation.members.map(\.taskID)))
     }
 
@@ -487,6 +491,7 @@ final class ParallelVM: ParallelViewModel {
             windowAdoption.prepareColumn(&column, id: conversation.id) { [weak self] in self?.adoptObservationWindow(conversation.id) }
             column.workMessages = WorkMessageBubble.applying(column.workMessages, notes: messageNotes[metadata.task.taskID] ?? [:])
             column.chrome = isWorkflowInspector ? .inspector : .lane
+            applyRequest(to: &column, conversationID: conversation.id)
             if !isWorkflowInspector { column.status = laneStatus(metadata.task) }
             column.animatesArrival = arrivals.contains(column.id)
             column.onDidPresent = { [weak self] in self?.arrivalTracker.didPresent(conversation.id) }

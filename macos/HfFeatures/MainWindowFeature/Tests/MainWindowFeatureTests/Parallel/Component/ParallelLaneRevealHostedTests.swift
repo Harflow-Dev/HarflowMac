@@ -295,7 +295,7 @@ import Testing
                                     kind: .item(PreviewFixtures.textItem("Row \(index)", seq: index)), live: false)
         }
         var model = ParallelColumnModel(id: task.taskID, task: task, title: "Gap", subtitle: "Claude", isBusy: false,
-                                        outcomeMessage: nil, showPrompt: false, prompt: nil, rows: rows,
+                                        outcomeMessage: nil, showPrompt: false, rows: rows,
                                         activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil, isLoading: false,
                                         summary: nil, onTapTakeover: nil, onTapOpenTask: {})
         model.cachedHistoryNotice = notice

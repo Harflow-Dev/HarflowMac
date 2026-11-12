@@ -18,7 +18,7 @@ extension ActivityFeedTranscriptStyleHostedTests {
                                     kind: .item(PreviewFixtures.textItem("Row \(index)", seq: index)), live: false)
         }
         var model = ParallelColumnModel(id: task.taskID, task: task, title: "Tail", subtitle: "", isBusy: false,
-                                        outcomeMessage: outcome, showPrompt: false, prompt: nil, rows: rows,
+                                        outcomeMessage: outcome, showPrompt: false, rows: rows,
                                         activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil, isLoading: false,
                                         summary: nil, onTapTakeover: nil, onTapOpenTask: {})
         model.workMessages = bubbles

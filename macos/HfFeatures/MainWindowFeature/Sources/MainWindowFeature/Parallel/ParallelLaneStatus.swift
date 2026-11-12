@@ -38,4 +38,25 @@ enum ParallelLaneStatus {
             settledDuration: TaskSettledDuration.seconds(for: current))
         return TaskBadgeModel.make(evidence: evidence, startedAt: current.startedAt)
     }
+
+    /// The end row of a settled lane: the status label, " · taken over" when taken over, then " · " and the recorded
+    /// clock when there is one ("Done · 04:51", "Cancelled · taken over · 04:31"). `nil` while the current member runs
+    /// or has no terminal status. Tone and glyph come from the lane status.
+    nonisolated static func settledLine(current: TaskInfo, status: TaskBadgeModel) -> ActivityFeedTailPresentation.SettledLine? {
+        guard current.status.isTerminal else { return nil }
+        var text = status.label
+        if let suffix = status.suffix { text += " " + suffix }
+        if case let .fixed(seconds) = status.clock { text += " · " + Format.clock(seconds) }
+        let tone: ActivityFeedTailPresentation.SettledLine.Tone = switch status.tone {
+        case .done: .success
+        case .failed: .danger
+        default: .secondary
+        }
+        let symbol: String? = switch status.tone {
+        case .done: "checkmark"
+        case .neutral: "stop.fill"
+        default: if case let .symbol(name) = status.icon { name } else { nil }
+        }
+        return .init(text: text, tone: tone, symbol: symbol)
+    }
 }

@@ -190,7 +190,7 @@ extension ActivityFeedApprovalHostedTests {
         let rows = [ConversationTimelineRow(id: "capture-row", taskID: task.id, timestamp: nil,
             kind: .item(PreviewFixtures.textItem("Reviewing the activity.")), live: true)]
         var model = ParallelColumnModel(id: task.id, task: task, title: "Review", subtitle: "Codex",
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+            isBusy: false, outcomeMessage: nil, showPrompt: false,
             rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
             isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         model.workMessages = [.init(id: "column-message", seq: 1, kind: .queued(canCancel: true, note: nil),

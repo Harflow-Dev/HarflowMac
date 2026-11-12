@@ -307,7 +307,16 @@ no embedded terminal anywhere in this package:
   viewport, becomes resident and the next Tab or Shift-Tab can continue. Pointer focus never scrolls the row, a lane
   already shown that way does not move it, and a reveal that finds the row's layout not ready is kept and applied when
   the document's frame next changes. Residency stays geometry-driven.
-  The standalone group and workflow Parallel view share the measured horizontal viewport surface.
+  The standalone group and workflow Parallel view share the measured horizontal viewport surface. A horizontal lane row measures
+  its offset and viewport inside its scroll view's content insets (the detail column's safe area under a floating sidebar), so offset
+  0 is lane 1 at the sidebar edge and a changed inset keeps the logical position (`ParallelViewport+Horizontal.swift`).
+  A settled lane draws one end row in the feed tail (`ActivityFeedTailPresentation.Standard.settled`, built by
+  `ParallelLaneStatus.settledLine` from the lane status), after the pinned bubbles and the outcome, and no result card
+  (the inspector keeps `resultCallout`). View prompt: `ParallelVM+Request.swift` reads a resident lane's first member's stored
+  request through `ParallelUseCase.readRequest` only while View prompt is on and that member is leased, once per lease generation
+  and only from `.notRequested`; the state is held per prompt task, applied in `publishColumns` and dropped with its lease; the
+  lane draws it with `StoredRequestView(initiallyExpanded: true)` above the history boundary, pinned and capped at 40 percent
+  of the lane body. The announced-outcome memory (`ParallelOutcomeMemory`) belongs to the VM and survives `didDisappear`.
   The Graph selected-node inspector instead renders one width-fitting conversation at a time; its
   explicit selector determines residency while its measured width is positive. Zero width or hiding
   releases its leases. Keep selection and visited reading state across switches and suspension; new

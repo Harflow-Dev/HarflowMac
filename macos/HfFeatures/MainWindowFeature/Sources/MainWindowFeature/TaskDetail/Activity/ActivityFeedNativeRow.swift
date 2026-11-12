@@ -245,7 +245,15 @@ struct ActivityFeedNativeRowRoot: View {
         switch entry {
         case .header(let header): headerContent(header)
         case .empty(let text, _):
-            Text(text).font(.hf(.body)).foregroundStyle(Color.secondaryText)
+            if style.isLane {
+                Text(text)
+                    .font(TaskScreenStyle.sans(size: 13))
+                    .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 13, lineHeight: 20)))
+                    .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(text).font(.hf(.body)).foregroundStyle(Color.secondaryText)
+            }
         case .row(let row): rowContent(row)
         case .tail(let presentation, _): ActivityFeedNativeTailContent(presentation: presentation, actions: actions, style: style)
         case .approval(let card, _):
@@ -364,8 +372,30 @@ struct ActivityFeedNativeTailContent: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityAddTraits(.isStaticText)
                 }
+                if let settled = standard.settled { settledRow(settled) }
             }
         }
+    }
+
+    /// `.hd-lane__end`: 13/18, medium weight, a glyph and the text 8 pt apart.
+    private func settledRow(_ line: ActivityFeedTailPresentation.SettledLine) -> some View {
+        let color: Color = switch line.tone {
+        case .success: TaskScreenStyle.Colors.success.color
+        case .danger: TaskScreenStyle.Colors.danger.color
+        case .secondary: TaskScreenStyle.Colors.textSecondary.color
+        }
+        return HStack(spacing: TaskScreenStyle.Scale.space2) {
+            if let symbol = line.symbol { Image(systemName: symbol).font(.hf(.secondary, weight: .semibold)).accessibilityHidden(true) }
+            Text(line.text)
+                .font(TaskScreenStyle.sans(size: 13, weight: .medium))
+                .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 13, lineHeight: 18)))
+        }
+        .foregroundStyle(color)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isStaticText)
+        .accessibilityIdentifier("parallel-lane-end")
     }
 }
 

@@ -15,6 +15,7 @@
 //
 
 import AppKit
+import HfRepository
 import HfUI
 import MonitorCore
 import SwiftUI
@@ -42,7 +43,10 @@ struct ParallelColumnModel: Identifiable {
     let isBusy: Bool
     let outcomeMessage: String?
     let showPrompt: Bool
-    let prompt: String?
+    /// The conversation's stored first request while View prompt is on; `nil` otherwise. Not rendered state of its own: the VM reads it.
+    var request: TaskRequestReadState?
+    var onReadRequest: ((Int) -> Void)?
+    var onCopyRequest: ((String) -> Void)?
     /// Raw timeline items and separators for the complete step count.
     let rows: [ConversationTimelineRow]
     /// What the feed renders: `rows` with adjacent tool calls folded into cards.
@@ -128,6 +132,10 @@ struct ParallelColumnView: View {
     let model: ParallelColumnModel
     @FocusState private var historyBoundaryFocused: Bool
     @State private var headFocusToken = 0
+    /// The lane body's height, so the block above the feed can be capped at 40% of it.
+    @State private var laneBodyHeight: CGFloat = 0
+    /// The leading block's natural height; it is shown whole up to the cap, then scrolls.
+    @State private var leadingBlockHeight: CGFloat = 0
     @State private var adoptionFocus = AdoptionFocusTracker()
     @State private var state: ParallelColumnUIState
     @State private var resultContentSize = CGSize(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.parallelResultMaximumHeight)
@@ -164,13 +172,9 @@ struct ParallelColumnView: View {
             // block (`ActivityFeedStyle.laneAfterBlock`), so nothing overlaps.
             VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
                 if hasLeadingBlock {
-                    VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
-                        if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
-                        laneHistoryBoundary
-                        resultCallout
-                    }
-                    .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
-                    .padding(.top, TaskScreenStyle.Lane.paddingTop)
+                    leadingBlock
+                        .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
+                        .padding(.top, TaskScreenStyle.Lane.paddingTop)
                 }
                 // The feed fills the body edge to edge and supplies its own 16 pt insets through `.lane`.
                 SkeletonContent(isLoading: laneFeedIsLoading, state: state.activityHandoff) {
@@ -183,6 +187,7 @@ struct ParallelColumnView: View {
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { if laneBodyHeight != $0 { laneBodyHeight = $0 } }
             laneHairline
             VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
                 // While the feed shows its skeleton the outcome has no tail to sit in, so it sits above the composer.
@@ -221,7 +226,28 @@ struct ParallelColumnView: View {
 
     /// Whether anything draws above the lane's feed.
     private var hasLeadingBlock: Bool {
-        (model.showPrompt && model.prompt != nil) || model.cachedHistoryNotice != nil || showsResultCallout
+        (model.showPrompt && model.request != nil) || model.cachedHistoryNotice != nil
+    }
+
+    /// The prompt (View prompt) first, then the history boundary, matching the drawing's order. The block is pinned above
+    /// the feed and capped at 40% of the lane body, scrolling inside when taller.
+    @ViewBuilder private var leadingBlock: some View {
+        let block = VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
+            if model.showPrompt, let request = model.request {
+                StoredRequestView(state: request, read: { model.onReadRequest?($0) }, copy: { model.onCopyRequest?($0) },
+                                  initiallyExpanded: true)
+                    .accessibilityIdentifier("parallel-lane-request")
+            }
+            laneHistoryBoundary
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        if laneBodyHeight > 0, leadingBlockHeight > 0 {
+            ScrollView { block.onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { leadingBlockHeight = $0 } }
+                .background(ActivityScrollChrome())
+                .frame(height: min(leadingBlockHeight, laneBodyHeight * 0.4))
+        } else {
+            block.onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { leadingBlockHeight = $0 }
+        }
     }
 
     private var laneHairline: some View {
@@ -240,7 +266,6 @@ struct ParallelColumnView: View {
             if let message = model.outcomeMessage {
                 Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }
-            if model.showPrompt, let prompt = model.prompt { PromptBubbleView(text: prompt) }
             inspectorHistoryBoundary
             Divider()
             resultCallout
@@ -478,7 +503,9 @@ struct ParallelColumnView: View {
                                 workMessages: model.workMessages,
                                 liveStep: model.liveStep.map { .init(text: $0.text, indicator: model.chrome == .lane ? .singleDot : .threeDots) },
                                 cancel: model.onCancelMessage == nil ? .hidden : (model.isBusy ? .disabled : .enabled),
-                                outcome: model.chrome == .lane && !laneFeedIsLoading ? model.outcomeMessage : nil
+                                outcome: model.chrome == .lane && !laneFeedIsLoading ? model.outcomeMessage : nil,
+                                settled: model.chrome == .lane && !laneFeedIsLoading
+                                    ? ParallelLaneStatus.settledLine(current: model.task, status: model.laneStatus) : nil
                              )), onSelectChildTask: model.onSelectTask,
                              onCancelQueuedMessage: model.onCancelMessage)
         }

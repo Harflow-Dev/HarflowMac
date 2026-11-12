@@ -18,7 +18,6 @@ struct ParallelColumnPresentation: Equatable, Sendable {
     let isBusy: Bool
     let outcomeMessage: String?
     var showPrompt: Bool
-    let prompt: String?
     var rows: [ConversationTimelineRow] = []
     var activitySnapshot: ActivityFeedSnapshot?
     var activityRows: [ActivityRow] = []
@@ -244,6 +243,7 @@ struct ParallelColumnRenderValue: Equatable {
     var hasMessageActions = false
     var hasMessageCancellation = false
     var chrome = ParallelColumnChrome.lane
+    var request: TaskRequestReadState?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         let left = lhs.presentation
@@ -252,7 +252,7 @@ struct ParallelColumnRenderValue: Equatable {
             && left.id == right.id && left.title == right.title && left.subtitle == right.subtitle
             && left.caption == right.caption && left.harnessName == right.harnessName && left.status == right.status
             && left.isBusy == right.isBusy && left.outcomeMessage == right.outcomeMessage
-            && left.showPrompt == right.showPrompt && left.prompt == right.prompt
+            && left.showPrompt == right.showPrompt
             && left.rows == right.rows && left.activityRows == right.activityRows
             && left.liveStep == right.liveStep && left.pendingMessages == right.pendingMessages
             && left.workMessages == right.workMessages
@@ -263,14 +263,14 @@ struct ParallelColumnRenderValue: Equatable {
             && left.memberTaskIDs == right.memberTaskIDs && lhs.animatesArrival == rhs.animatesArrival
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
             && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
-            && lhs.chrome == rhs.chrome
+            && lhs.chrome == rhs.chrome && lhs.request == rhs.request
     }
 }
 
 extension ParallelColumnModel {
     var renderValue: ParallelColumnRenderValue {
         var value = ParallelColumnPresentation(id: id, task: task, title: title, subtitle: subtitle,
-            caption: caption, harnessName: harnessName, status: status, isBusy: isBusy, outcomeMessage: outcomeMessage, showPrompt: showPrompt, prompt: prompt,
+            caption: caption, harnessName: harnessName, status: status, isBusy: isBusy, outcomeMessage: outcomeMessage, showPrompt: showPrompt,
             summary: summary, start: start, memberTaskIDs: memberTaskIDs)
         value.rows = rows
         value.activitySnapshot = activitySnapshot
@@ -287,6 +287,6 @@ extension ParallelColumnModel {
         value.cachedHistoryNotice = cachedHistoryNotice
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
                                         hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil,
-                                        chrome: chrome)
+                                        chrome: chrome, request: request)
     }
 }

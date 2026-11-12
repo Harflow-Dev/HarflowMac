@@ -26,7 +26,7 @@ extension ActivityFeedTranscriptStyleHostedTests {
         let task = TaskInfo(.object(["task_id": .string(Self.laneTask), "backend": .string("codex"),
                                      "status": .string("completed"), "repo_path": .string("/tmp")]))!
         var model = ParallelColumnModel(id: Self.laneTask, task: task, title: "Lane", subtitle: "Codex", isBusy: false,
-                                        outcomeMessage: nil, showPrompt: false, prompt: nil, rows: rows,
+                                        outcomeMessage: nil, showPrompt: false, rows: rows,
                                         activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil, isLoading: false,
                                         summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         model.stepCountText = "\(rows.count) activity items"

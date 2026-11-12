@@ -15,6 +15,10 @@ import MonitorCore
 // MARK: - ParallelUseCase
 
 extension ParallelUseCase {
+    func requestState(for _: String) -> TaskRequestReadState { .notRequested }
+    func requestPublisher(for id: String) -> AnyPublisher<TaskRequestReadState, Never> { Just(requestState(for: id)).eraseToAnyPublisher() }
+    func readRequest(for _: String, maxBytes _: Int) {}
+
     func recoveredTranscript(for _: String) -> RecoveredTranscriptFrame { .init() }
     func recoveredTranscriptPublisher(for id: String) -> AnyPublisher<RecoveredTranscriptFrame, Never> {
         Just(recoveredTranscript(for: id)).eraseToAnyPublisher()

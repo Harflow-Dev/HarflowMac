@@ -156,7 +156,7 @@ extension ParallelVMTests {
         let current = conversation.current
         let base = ParallelColumnPresentation(id: conversation.id, task: current, title: "Synthetic fixture",
             subtitle: ParallelColumnModel.subtitle(repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count),
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: "Synthetic fixture", summary: nil,
+            isBusy: false, outcomeMessage: nil, showPrompt: false, summary: nil,
             start: conversation.first.startedAt, memberTaskIDs: Set(conversation.members.map(\.taskID)))
         return ParallelColumnInput(base: base, members: conversation.members.map {
             ParallelMemberInput(task: $0, items: items, prompt: "Synthetic fixture", availability: .available)

@@ -17,7 +17,7 @@ extension ParallelVMTests {
         var member = ParallelMemberInput(task: task, items: capturedItems, prompt: nil, availability: .available, observation: frame)
         member.recoveredTranscript = RecoveredTranscriptFrame(generation: generation, events: [event], items: Timeline.items(from: [event]))
         let base = ParallelColumnPresentation(id: task.id, task: task, title: task.id, subtitle: task.backend,
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil, start: task.startedAt, memberTaskIDs: [task.id])
+            isBusy: false, outcomeMessage: nil, showPrompt: false, start: task.startedAt, memberTaskIDs: [task.id])
         // when
         let presentation = try ParallelPresentationBuilder.build(.init(base: base, members: [member], events: frame.events, snapshot: nil))
         // then

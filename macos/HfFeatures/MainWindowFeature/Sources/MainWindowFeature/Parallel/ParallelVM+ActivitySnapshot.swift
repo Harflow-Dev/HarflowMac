@@ -37,7 +37,7 @@ extension ParallelVM {
             caption: ParallelLaneStatus.caption(current: conversation.current),
             harnessName: ParallelLaneStatus.harnessName(current: conversation.current),
             status: ParallelLaneStatus.make(current: conversation.current, snapshot: nil, frame: nil),
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+            isBusy: false, outcomeMessage: nil, showPrompt: false,
             start: conversation.first.startedAt, memberTaskIDs: Set(memberIDs))
         if let presentation = snapshot.presentation {
             value.rows = presentation.rows

@@ -26,6 +26,16 @@ enum ActivityFeedTailPresentation: Equatable {
         var cancel = CancelAvailability.enabled
         /// A lane's outcome line (refusal, "Queued message cancelled."), drawn after the pinned bubbles.
         var outcome: String?
+        /// A lane's end row ("Done · 04:51"), drawn last, after the outcome.
+        var settled: SettledLine?
+    }
+
+    /// The row that ends a settled lane's feed: one static line with a glyph, in the tone of the lane's result.
+    struct SettledLine: Equatable {
+        enum Tone: Equatable { case success, danger, secondary }
+        let text: String
+        let tone: Tone
+        let symbol: String?
     }
 
     /// Whether a pinned bubble's Cancel is offered: hidden without a handler, disabled while the surface is busy.
@@ -45,7 +55,7 @@ enum ActivityFeedTailPresentation: Equatable {
     func isVisible(with semanticTail: ActivityFeedTail) -> Bool {
         if case .standard(let standard) = self,
            !standard.approvals.isEmpty || standard.approvalNotice != nil || !standard.workMessages.isEmpty
-            || standard.outcome != nil { return true }
+            || standard.outcome != nil || standard.settled != nil { return true }
         return semanticTail != ActivityFeedTail() && self != .absent
     }
 }

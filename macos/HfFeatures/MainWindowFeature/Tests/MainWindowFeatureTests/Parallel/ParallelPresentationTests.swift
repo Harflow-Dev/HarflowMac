@@ -155,7 +155,7 @@ extension ParallelVMTests {
 
     private func basePresentation(for task: TaskInfo) -> ParallelColumnPresentation {
         ParallelColumnPresentation(id: task.id, task: task, title: task.id, subtitle: task.backend,
-                                   isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil,
+                                   isBusy: false, outcomeMessage: nil, showPrompt: false,
                                    start: task.startedAt, memberTaskIDs: [task.id])
     }
 
@@ -183,7 +183,7 @@ extension ParallelVMTests {
         let current = task(id: "task", startedAt: Date(timeIntervalSince1970: 1))
         func model(open: @escaping () -> Void) -> ParallelColumnModel {
             ParallelColumnModel(id: "task", task: current, title: "Title", subtitle: "Subtitle", isBusy: false,
-                outcomeMessage: nil, showPrompt: false, prompt: nil, rows: [], activityRows: [], liveStep: nil,
+                outcomeMessage: nil, showPrompt: false, rows: [], activityRows: [], liveStep: nil,
                 isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: open)
         }
         let first = model(open: {})

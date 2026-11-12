@@ -44,6 +44,7 @@ extension ParallelVMTests {
     }
 
     func configureHistory(_ harness: SUT, leasePool: ParallelTestLeasePool?) {
+        stubRequests(harness)
         let useCase = harness.useCase
         let eventsBox = harness.eventsBox
         let historyBox = harness.historyBox

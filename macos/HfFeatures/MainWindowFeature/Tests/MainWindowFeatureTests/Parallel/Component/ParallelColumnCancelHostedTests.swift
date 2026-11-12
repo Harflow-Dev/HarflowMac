@@ -18,7 +18,7 @@ import Testing
         let rows = [ConversationTimelineRow(id: "row", taskID: task.id, timestamp: nil,
                                             kind: .item(PreviewFixtures.textItem("Working", seq: 0)), live: false)]
         var model = ParallelColumnModel(id: task.id, task: task, title: "Cancel fixture", subtitle: "Codex",
-                                        isBusy: isBusy, outcomeMessage: nil, showPrompt: false, prompt: nil,
+                                        isBusy: isBusy, outcomeMessage: nil, showPrompt: false,
                                         rows: rows, activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil,
                                         isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         model.workMessages = [WorkMessageBubble(id: "m", seq: 1, kind: .queued(canCancel: true, note: nil), text: "Queued note")]

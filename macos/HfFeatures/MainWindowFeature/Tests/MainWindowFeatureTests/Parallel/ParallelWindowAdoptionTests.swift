@@ -18,14 +18,14 @@ extension ParallelVMTests {
             items: [PreviewFixtures.textItem("New source row", seq: 6)], history: .init(caughtUp: true))
         let member = ParallelMemberInput(task: memberTask, items: old.items, prompt: nil, availability: .available, observation: old)
         let base = ParallelColumnPresentation(id: memberTask.id, task: memberTask, title: "Retained", subtitle: memberTask.backend,
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil, start: nil, memberTaskIDs: [memberTask.id])
+            isBusy: false, outcomeMessage: nil, showPrompt: false, start: nil, memberTaskIDs: [memberTask.id])
         let previous = ParallelColumnInput(base: base, members: [member], events: [], snapshot: nil)
         let adoption = ParallelWindowAdoption()
         // when
         #expect(adoption.needsAdoption(id: memberTask.id, previous: previous, frames: [memberTask.id: fresh]))
         let presentation = try ParallelPresentationBuilder.build(previous)
         var column = ParallelColumnModel(id: memberTask.id, task: memberTask, title: "Retained", subtitle: memberTask.backend,
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil, rows: presentation.rows,
+            isBusy: false, outcomeMessage: nil, showPrompt: false, rows: presentation.rows,
             activityRows: presentation.activityRows, liveStep: presentation.liveStep, isLoading: false,
             summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         let retainedIDs = column.rows.map(\.id)
@@ -51,13 +51,13 @@ extension ParallelVMTests {
             items: [PreviewFixtures.textItem("Cached evidence", seq: 7)], availability: .available)
         let member = ParallelMemberInput(task: memberTask, items: old.items, prompt: nil, availability: .available, observation: old)
         let base = ParallelColumnPresentation(id: memberTask.id, task: memberTask, title: "Limited", subtitle: memberTask.backend,
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil, start: nil, memberTaskIDs: [memberTask.id])
+            isBusy: false, outcomeMessage: nil, showPrompt: false, start: nil, memberTaskIDs: [memberTask.id])
         let previous = ParallelColumnInput(base: base, members: [member], events: [], snapshot: nil)
         let unavailable = EventObservationFrame(taskID: memberTask.id, scope: old.scope, items: old.items,
             history: .init(reasons: [reason], currentness: .sourceChangePending))
         let adoption = ParallelWindowAdoption()
         var column = ParallelColumnModel(id: memberTask.id, task: memberTask, title: "Limited", subtitle: memberTask.backend,
-            isBusy: false, outcomeMessage: nil, showPrompt: false, prompt: nil, rows: [], activityRows: [], liveStep: nil,
+            isBusy: false, outcomeMessage: nil, showPrompt: false, rows: [], activityRows: [], liveStep: nil,
             isLoading: false, summary: nil, onTapTakeover: {}, onTapOpenTask: {})
         // when
         #expect(adoption.needsAdoption(id: memberTask.id, previous: previous, frames: [memberTask.id: unavailable]))

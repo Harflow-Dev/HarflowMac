@@ -192,7 +192,7 @@ private struct HostedLane: View {
         let task = TaskInfo(.object(["task_id": .string("handoff-lane"), "backend": .string("claude"),
                                      "status": .string("completed"), "repo_path": .string("/repo")]))!
         let model = ParallelColumnModel(id: task.taskID, task: task, title: "Retained lane", subtitle: "Agent", isBusy: false,
-            outcomeMessage: nil, showPrompt: false, prompt: nil, rows: [], activityRows: [], liveStep: nil, isLoading: false,
+            outcomeMessage: nil, showPrompt: false, rows: [], activityRows: [], liveStep: nil, isLoading: false,
             summary: nil, onTapTakeover: {}, onTapOpenTask: {}, isResident: input.resident)
         ScrollView(.horizontal) {
             ParallelColumnsContent(columns: [model], availableSize: CGSize(width: 400, height: 500),

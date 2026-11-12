@@ -13,6 +13,21 @@ import HfUI
 import MonitorCore
 import SwiftUI
 
+// MARK: - LaneHeadFocusTarget
+
+/// Whether the lane title is a keyboard target. It is one only while a requested focus move is in flight or holds.
+struct LaneHeadFocusTarget: Equatable {
+    /// How long a requested focus move is given before it is judged to have failed.
+    static let settleDelay: Duration = .milliseconds(200)
+    private(set) var isTarget = false
+
+    mutating func request() { isTarget = true }
+    /// The deferred focus attempt finished; a title that did not take focus stops being a target.
+    mutating func attemptFinished(focused: Bool) { if !focused { isTarget = false } }
+    /// Focus left the title, or the head disappeared.
+    mutating func focusLost() { isTarget = false }
+}
+
 // MARK: - ParallelLaneHead
 
 struct ParallelLaneHead: View {
@@ -28,7 +43,7 @@ struct ParallelLaneHead: View {
     @FocusState private var titleFocused: Bool
     /// The title is a keyboard target only while it is receiving focus after "Load current activity"; otherwise it is
     /// plain text and never draws a focus ring or takes initial focus.
-    @State private var titleIsFocusTarget = false
+    @State private var focusTarget = LaneHeadFocusTarget()
     @AccessibilityFocusState private var titleAccessibilityFocused: Bool
 
     private typealias Metrics = TaskScreenStyle.Lane
@@ -43,7 +58,7 @@ struct ParallelLaneHead: View {
                     .foregroundStyle(TaskScreenStyle.Colors.text.color)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .focusable(titleIsFocusTarget)
+                    .focusable(focusTarget.isTarget)
                     .focused($titleFocused)
                     .accessibilityFocused($titleAccessibilityFocused)
                 Text(caption)
@@ -56,15 +71,22 @@ struct ParallelLaneHead: View {
             if let onOpenTask { actionsMenu(onOpenTask) }
         }
         .onChange(of: focusToken) { _, _ in
-            titleIsFocusTarget = true
+            focusTarget.request()
             DispatchQueue.main.async {
                 titleFocused = true
                 titleAccessibilityFocused = true
+                // The attempt can fail (the head is not in a key window, or focus lands elsewhere): the title must not
+                // stay a Tab stop.
+                Task { @MainActor in
+                    try? await Task.sleep(for: LaneHeadFocusTarget.settleDelay)
+                    focusTarget.attemptFinished(focused: titleFocused)
+                }
             }
         }
         .onChange(of: titleFocused) { _, focused in
-            if !focused { titleIsFocusTarget = false }
+            if !focused { focusTarget.focusLost() }
         }
+        .onDisappear { focusTarget.focusLost() }
     }
 
     // MARK: Status

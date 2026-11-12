@@ -59,6 +59,7 @@ extension WorkflowUseCase {
 @MainActor
 protocol WorkflowRouting: ParallelRouting {
     func selectTask(_ taskID: String)
+    func copyToPasteboard(_ text: String) -> Bool
     func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag)
     func clearTopBar(tag: TaskTopBarHolder.Tag)
     func activateTopBar(tag: TaskTopBarHolder.Tag)

@@ -87,3 +87,7 @@ the stream finishes (the running indicator is still shown while ticks are stoppe
 the stream finishes), feed counter deltas and the native subtree size. CPU is `getrusage` for the
 whole test process in a debug build, so the figures compare variants rather than give an absolute
 feed cost.
+
+## Parallel View prompt reads
+
+Turning View prompt on starts one bounded stored-request read (64 KiB) per resident, leased lane, so a visible group issues as many concurrent reads as it has visible lanes (two to three at common window sizes). Each lane reads once per lease generation and only when its request was never read; toggling View prompt off and on, a second member's lease and scrolling a lane back in do not read again. Reads are cancelled with the lease or when the group disappears.
