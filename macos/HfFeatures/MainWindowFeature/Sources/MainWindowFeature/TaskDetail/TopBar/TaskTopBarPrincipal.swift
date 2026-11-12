@@ -65,8 +65,19 @@ struct TaskTopBarPrincipal: View {
                 .help(group.title)
                 .accessibilityLabel(group.title)
                 .topBarRole(.title)
-            if let badge = group.badge { TaskStatusBadge(model: badge).topBarRole(.badge) }
-            if let meta = group.meta, !group.isLoading { groupMeta(meta).topBarRole(.meta) }
+            if group.isLoading {
+                // Membership is unknown: a 150 pt badge block and a 300 pt meta block (dropped when it does not fit).
+                SkeletonBlock(width: 150, height: 12).topBarRole(.badge)
+                SkeletonBlock(width: 300, height: 12)
+.fixedSize()
+.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    .clipped()
+.accessibilityHidden(true)
+.topBarRole(.meta)
+            } else {
+                if let badge = group.badge { TaskStatusBadge(model: badge).topBarRole(.badge) }
+                if let meta = group.meta { groupMeta(meta).topBarRole(.meta) }
+            }
             status.topBarRole(.status)
         }
         .accessibilityElement(children: .contain)

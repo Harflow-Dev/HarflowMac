@@ -4,7 +4,7 @@ import Foundation
 
 extension ParallelVM {
     /// This VM's writer identity for the top bar holder.
-    var topBarTag: TaskTopBarHolder.Tag { TaskTopBarHolder.Tag(writer: ObjectIdentifier(self), subject: .group(groupName)) }
+    var topBarTag: TaskTopBarHolder.Tag { TaskTopBarHolder.Tag(writer: topBarWriter ?? ObjectIdentifier(self), subject: .group(groupName)) }
 
     /// The content before the group's first resolved membership.
     var loadingTopBarContent: GroupTopBarContent { GroupTopBarContent(title: groupName, badge: nil, meta: nil, isLoading: true) }

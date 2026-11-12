@@ -27,6 +27,7 @@ final class ParallelVM: ParallelViewModel {
     /// True only for the standalone group mount (`buildParallelView`); workflow and inspector VMs never publish.
     @ObservationIgnored let publishesTopBar: Bool
     @ObservationIgnored var lastPublishedTopBar: GroupTopBarContent?
+    @ObservationIgnored var topBarWriter: ObjectIdentifier?
     @ObservationIgnored let useCase: any ParallelUseCase
     @ObservationIgnored let routing: any ParallelRouting
     @ObservationIgnored private let buildColumns: ParallelColumnsBuild
@@ -97,7 +98,6 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private(set) var presentationWriteCount = 0
     @ObservationIgnored private(set) var builtColumnCount = 0
     @ObservationIgnored private(set) var sourceUpdateCount = 0
-    /// The outcome lines already announced, kept across `didDisappear` so returning to a group stays quiet.
     @ObservationIgnored let outcomeMemory = ParallelOutcomeMemory()
 
     func updateViewport(offset: CGFloat, width: CGFloat) {

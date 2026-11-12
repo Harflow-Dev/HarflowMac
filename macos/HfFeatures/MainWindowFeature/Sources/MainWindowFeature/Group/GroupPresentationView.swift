@@ -58,6 +58,8 @@ protocol GroupPresentationViewModel: ViewModel {
     var activityState: ParallelColumnUIState { get }
     var detailIdentity: String? { get }
     var hasPromotedActivity: Bool { get }
+    /// True once the group's membership has been classified at least once; before that the loading skeleton shows.
+    var isClassified: Bool { get }
     func didAppear()
     func didDisappear()
 }
@@ -73,7 +75,12 @@ final class GroupPresentationVM: GroupPresentationViewModel {
     private(set) var detailIdentity: String?
     private(set) var activityState = ParallelColumnUIState()
     private(set) var hasPromotedActivity = false
+    private(set) var isClassified = false
     @ObservationIgnored private let groupName: String
+    /// The group's top bar: this VM shows the loading content until the group is classified, then hands the same writer
+    /// identity to the Parallel VM (several conversations) or clears it (one conversation or none).
+    @ObservationIgnored private let routing: (any ParallelRouting)?
+    @ObservationIgnored private var topBarTag: TaskTopBarHolder.Tag { TaskTopBarHolder.Tag(writer: ObjectIdentifier(self), subject: .group(groupName)) }
     @ObservationIgnored private let useCase: any GroupPresentationUseCase
     @ObservationIgnored private let makeDetail: (String) -> TaskDetailVM
     @ObservationIgnored private let makeParallel: () -> ParallelVM
@@ -85,9 +92,10 @@ final class GroupPresentationVM: GroupPresentationViewModel {
     @ObservationIgnored private var detailMembers: Set<String> = []
     @ObservationIgnored private var detailHarnesses: Set<GroupMembershipPresentation.Harness> = []
 
-    init(groupName: String, useCase: any GroupPresentationUseCase,
+    init(groupName: String, useCase: any GroupPresentationUseCase, routing: (any ParallelRouting)? = nil,
          makeDetail: @escaping (String) -> TaskDetailVM, makeParallel: @escaping () -> ParallelVM) {
         self.groupName = groupName
+        self.routing = routing
         self.useCase = useCase
         self.makeDetail = makeDetail
         self.makeParallel = makeParallel
@@ -96,6 +104,8 @@ final class GroupPresentationVM: GroupPresentationViewModel {
     func didAppear() {
         guard !didSubscribe else { return }
         didSubscribe = true
+        routing?.publishTopBar(GroupTopBarContent(title: groupName, badge: nil, meta: nil, isLoading: true), tag: topBarTag)
+        routing?.activateTopBar(tag: topBarTag)
         subscription = useCase.tasksPublisher()
 .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -105,6 +115,8 @@ final class GroupPresentationVM: GroupPresentationViewModel {
     func didDisappear() {
         guard didSubscribe else { return }
         didSubscribe = false
+        isClassified = false
+        releaseTopBar()
         generation &+= 1
         subscription = nil
         worker?.cancel()
@@ -141,11 +153,20 @@ final class GroupPresentationVM: GroupPresentationViewModel {
         }
     }
 
+    private func releaseTopBar() {
+        routing?.deactivateTopBar(tag: topBarTag)
+        routing?.clearTopBar(tag: topBarTag)
+    }
+
     private func apply(_ value: GroupMembershipPresentation) {
+        isClassified = true
         // Promotion is one-way until the selected group is torn down, retaining visited lanes.
         if parallelVM != nil { return }
+        if value.conversations.count <= 1 { releaseTopBar() }
         if value.conversations.count > 1 {
             let parallel = makeParallel()
+            // The Parallel VM writes under this VM's identity, so the loading content is replaced in place.
+            parallel.topBarWriter = ObjectIdentifier(self)
             if let detailVM, let snapshot = detailVM.exportConversationActivity() {
                 parallel.seedConversationActivity(snapshot, state: activityState)
                 hasPromotedActivity = true
@@ -200,8 +221,11 @@ struct GroupPresentationView<VM: GroupPresentationViewModel>: View {
                 ParallelView(parallel, initiallyPrepared: viewModel.hasPromotedActivity)
             } else if let detail = viewModel.detailVM {
                 TaskDetailView(detail, activityState: viewModel.activityState, transcriptStyle: .transcript).id(viewModel.detailIdentity)
+            } else if viewModel.isClassified {
+                ParallelEmptyGroupText()
+                    .parallelGroupToolbar(.init(isEmpty: true), onViewPrompt: {}, onCancelAll: {})
             } else {
-                ContentUnavailableView("No tasks in this group", systemImage: "rectangle.split.3x1")
+                ParallelLoadingContent(laneCount: ParallelLoadingSkeleton.defaultLaneCount)
             }
         }
         .onAppear { viewModel.didAppear() }
@@ -218,6 +242,7 @@ private final class GroupPresentationPreviewVM: GroupPresentationViewModel {
     var activityState = ParallelColumnUIState()
     var detailIdentity: String?
     var hasPromotedActivity = false
+    var isClassified = true
     func didAppear() {}
     func didDisappear() {}
 }

@@ -432,9 +432,11 @@ TOP_BAR_INTEGRATED_SUITE = "MainWindowFeatureTests.TaskTopBarIntegratedHostedTes
 TOP_BAR_CAPTURE_SUITE = "MainWindowFeatureTests.TaskTopBarCaptureHostedTests"
 TASK_DRAFT_COMPOSER_SUITE = "MainWindowFeatureTests.TaskDraftComposerHostedTests"
 PARALLEL_GROUP_TOP_BAR_SUITE = "MainWindowFeatureTests.ParallelGroupTopBarHostedTests"
+PARALLEL_GROUP_LOADING_SUITE = "MainWindowFeatureTests.ParallelGroupLoadingHostedTests"
 HOSTED_SUITE_NAMES = (
     APPROVAL_SUITE,
     PARALLEL_GROUP_TOP_BAR_SUITE,
+    PARALLEL_GROUP_LOADING_SUITE,
     TAIL_INSERT_SUITE,
     OBSERVATION_SUITE,
     ACCESS_OPTION_SUITE,

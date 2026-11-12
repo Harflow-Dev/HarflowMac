@@ -78,6 +78,7 @@ TERM_GRACE_SECONDS = 5.0
 HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.ActivityFeedApprovalHostedTests",
     "MainWindowFeatureTests.ParallelGroupTopBarHostedTests",
+    "MainWindowFeatureTests.ParallelGroupLoadingHostedTests",
     "MainWindowFeatureTests.ActivityFeedNativeTailInsertHostedTests",
     "MainWindowFeatureTests.ObservationHostedTests",
     "MainWindowFeatureTests.AccessOptionRowTests",

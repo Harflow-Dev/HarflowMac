@@ -321,6 +321,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         let vm = GroupPresentationVM(
             groupName: name,
             useCase: GroupPresentationViewRepository(taskListRepository: taskListRepository),
+            routing: self,
             makeDetail: { [self] id in
                 TaskDetailVM(taskID: id, useCase: TaskDetailViewRepository(), routing: self, continuityHistory: continuityHistory,
                              chrome: .group, scheduler: GlobalValues.scheduling)

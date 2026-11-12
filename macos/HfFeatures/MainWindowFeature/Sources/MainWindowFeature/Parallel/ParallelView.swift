@@ -77,10 +77,14 @@ struct ParallelView<VM: ParallelViewModel>: View {
             if initiallyPrepared {
                 mountedContent
             } else {
-                DeferredContent { placeholderContent } content: { mountedContent }
+                DeferredContent { ParallelLoadingContent(laneCount: loadingLaneCount) } content: { mountedContent }
             }
         }
         .publishViewEvent(from: viewModel, to: viewEvent)
+    }
+
+    private var loadingLaneCount: Int {
+        viewModel.columns.isEmpty ? ParallelLoadingSkeleton.defaultLaneCount : viewModel.columns.count
     }
 
     private var mountedContent: some View {
@@ -93,13 +97,7 @@ struct ParallelView<VM: ParallelViewModel>: View {
         GeometryReader { screen in
             VStack(spacing: HfRadius.Metrics.zero) {
                 if viewModel.isEmpty {
-                    Text("No tasks in this group any more.")
-                        .font(TaskScreenStyle.sans(size: 14))
-                        .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 14, lineHeight: 22)))
-                        .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
-                        .multilineTextAlignment(.center)
-                        .padding(TaskScreenStyle.Scale.space5)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ParallelEmptyGroupText()
                 } else {
                     // Design point 3: columns fill the available width instead of a fixed 900pt budget —
                     // `GeometryReader` reads the row's actual width so `ParallelLayout.columnWidth(memberCount:availableWidth:)`
@@ -122,82 +120,72 @@ struct ParallelView<VM: ParallelViewModel>: View {
         }
     }
 
-    /// The group's title, badge and enforcement sentence live in the window's top bar (published by the VM); the two
-    /// actions sit beside them on the bare toolbar, in the group top bar's button styles.
     private func withToolbar(@ViewBuilder content: () -> some View) -> some View {
-        content().toolbar {
+        content().parallelGroupToolbar(
+            .init(isEmpty: viewModel.isEmpty, showPrompt: viewModel.showPrompt, canCancelAll: viewModel.canCancelAll),
+            onViewPrompt: viewModel.didTapViewPrompt, onCancelAll: viewModel.didTapCancelAll)
+    }
+}
+
+// MARK: - ParallelEmptyGroupText
+
+/// A group whose membership resolved to nothing: "No tasks in this group any more.", 14/22 secondary, centred.
+struct ParallelEmptyGroupText: View {
+    var body: some View {
+        Text("No tasks in this group any more.")
+            .font(TaskScreenStyle.sans(size: 14))
+            .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 14, lineHeight: 22)))
+            .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+            .multilineTextAlignment(.center)
+            .padding(TaskScreenStyle.Scale.space5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - ParallelLoadingContent
+
+/// The group screen before its membership is known: the loading lanes under the group toolbar with both buttons disabled.
+struct ParallelLoadingContent: View {
+    let laneCount: Int
+
+    var body: some View {
+        ParallelLoadingSkeleton(laneCount: laneCount)
+            .parallelGroupToolbar(.init(isLoading: true, canCancelAll: true), onViewPrompt: {}, onCancelAll: {})
+    }
+}
+
+// MARK: - Group toolbar
+
+/// What the group's toolbar buttons depend on.
+struct ParallelGroupToolbarState {
+    var isLoading = false
+    var isEmpty = false
+    var showPrompt = false
+    var canCancelAll = false
+}
+
+extension View {
+    /// The group's actions on the bare toolbar, in the group top bar's button styles: View prompt (disabled for an empty
+    /// or loading group, pressed while the prompt shows) and Cancel all (danger, only while something runs; shown
+    /// disabled while loading so the bar's layout does not change when the membership resolves).
+    func parallelGroupToolbar(_ state: ParallelGroupToolbarState, onViewPrompt: @escaping () -> Void,
+                              onCancelAll: @escaping () -> Void) -> some View {
+        let (isLoading, isEmpty, showPrompt, canCancelAll) = (state.isLoading, state.isEmpty, state.showPrompt, state.canCancelAll)
+        return toolbar {
             ToolbarSpacer(.flexible)
-            ToolbarItem(placement: .primaryAction) { viewPromptButton }.sharedBackgroundVisibility(.hidden)
-            if viewModel.canCancelAll {
-                ToolbarItem(placement: .primaryAction) { cancelAllButton }.sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: .primaryAction) {
+                Button("View prompt", action: onViewPrompt)
+                    .buttonStyle(TopBarButtonStyle(kind: .ghost, isSelected: showPrompt))
+                    .disabled(isEmpty || isLoading)
+                    .accessibilityAddTraits(showPrompt ? .isSelected : [])
             }
-        }
-    }
-
-    private var viewPromptButton: some View {
-        Button("View prompt") { viewModel.didTapViewPrompt() }
-            .buttonStyle(TopBarButtonStyle(kind: .ghost, isSelected: viewModel.showPrompt))
-            .disabled(viewModel.isEmpty)
-            .accessibilityAddTraits(viewModel.showPrompt ? .isSelected : [])
-    }
-
-    private var cancelAllButton: some View {
-        Button("Cancel all") { viewModel.didTapCancelAll() }.buttonStyle(TopBarButtonStyle(kind: .danger))
-    }
-
-    /// The deferred first frame: a header skeleton plus N column skeletons. N is whatever is cheaply
-    /// known at this point (`viewModel.columns.count`, read with no extra cost since the VM already
-    /// holds it) — for a genuinely fresh selection that is always 0 (the VM hasn't subscribed yet, by
-    /// design: `didAppear()` lives on `realContent`, not here), so this falls back to 2, a reasonable
-    /// guess for "a group" without overcommitting to an exact count nothing here can know yet.
-    private var placeholderContent: some View {
-        let columnCount = viewModel.columns.isEmpty ? 2 : viewModel.columns.count
-        return VStack(spacing: HfRadius.Metrics.zero) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
-                    SkeletonBlock(width: HfRadius.Metrics.parallelSkeletonTitleWidth, height: HfRadius.Metrics.parallelSkeletonTitleHeight)
-                    SkeletonBlock(width: HfRadius.Metrics.parallelSkeletonMetaWidth, height: HfRadius.Metrics.spacing12)
+            .sharedBackgroundVisibility(.hidden)
+            if canCancelAll {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Cancel all", action: onCancelAll).buttonStyle(TopBarButtonStyle(kind: .danger)).disabled(isLoading)
                 }
-                Spacer()
+                .sharedBackgroundVisibility(.hidden)
             }
-            .padding(.horizontal, HfRadius.Metrics.spacing16)
-            .padding(.vertical, HfRadius.Metrics.spacing12)
-            Divider()
-            GeometryReader { proxy in
-                ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: HfRadius.Metrics.zero) {
-                        ForEach(0 ..< columnCount, id: \.self) { _ in
-                            columnPlaceholder
-                                .frame(
-                                    width: ParallelLayout.columnWidth(memberCount: columnCount, availableWidth: proxy.size.width),
-                                    height: max(0, proxy.size.height)
-                                )
-                            ParallelLaneSeparator(chrome: .lane)
-                        }
-                    }
-                    // The document probe (§6.5): inside the loading lane's own document.
-                    .background(ScrollChrome())
-                }
-            }
-        }
-    }
-
-    private var columnPlaceholder: some View {
-        ParallelLaneSurface {
-            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
-                HStack(spacing: HfRadius.Metrics.spacing8) {
-                    SkeletonBlock(width: HfRadius.Metrics.parallelSkeletonAvatarSize, height: HfRadius.Metrics.parallelSkeletonAvatarSize,
-                                  cornerRadius: HfRadius.Metrics.parallelSkeletonAvatarRadius)
-                    VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-                        SkeletonBlock(width: HfRadius.Metrics.parallelSkeletonColumnTitleWidth, height: HfRadius.Metrics.spacing14)
-                        SkeletonBlock(width: HfRadius.Metrics.parallelSkeletonColumnMetaWidth, height: HfRadius.Metrics.spacing10)
-                    }
-                }
-                Divider()
-                SkeletonRows(count: 4, showsBadge: false)
-                Spacer(minLength: HfRadius.Metrics.zero)
-            }
-            .padding(HfRadius.Metrics.spacing16)
         }
     }
 }
