@@ -134,6 +134,11 @@ private final class PreviewWorkflowUseCase: WorkflowUseCase, @unchecked Sendable
 private struct PreviewWorkflowRouting: WorkflowRouting {
     func chooseDirectory() async -> String? { nil }
     func selectTask(_: String) {}
+    func publishTopBar(_: GroupTopBarContent, tag _: TaskTopBarHolder.Tag) {}
+    func clearTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func activateTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func deactivateTopBar(tag _: TaskTopBarHolder.Tag) {}
+    func retryTopBarActivation(tag _: TaskTopBarHolder.Tag) {}
     func didSaveWorkflow(name _: String) {}
     func openWorkflowEditor(name _: String?) {}
     func openWorkflowRun(id _: String) {}

@@ -46,7 +46,9 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                     .navigationSplitViewColumnWidth(min: 264, ideal: 264, max: 320)
                     .environment(\.toggleHarflowSidebar, { columns = .detailOnly })
             } detail: {
-                detail
+                // The detail column's own width (the sidebar's shown width and collapse are already out of it) gives a
+                // group's top bar its budget; only the principal reads it.
+                detail.onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { layout.setDetailWidth($0) }
             }
         }
         .onGeometryChange(for: TopBarWidthBand.self) { TopBarWidthBand(width: $0.size.width) } action: { layout.setBand($0) }

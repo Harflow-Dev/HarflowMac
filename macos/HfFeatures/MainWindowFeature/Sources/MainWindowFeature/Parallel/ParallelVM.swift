@@ -15,13 +15,8 @@ import MonitorCore
 final class ParallelVM: ParallelViewModel {
     let horizontalPosition: ParallelViewportPosition?
     let groupName: String
-    private(set) var headerSubtitle = ""
-    /// Truthful current-membership counts, included before metadata in the description.
+    /// Truthful current-membership counts ("1 running · 2 done"), the group top bar badge's text.
     private(set) var statusSummary: String?
-    /// Common enforced claims from every current member; empty input produces no pills.
-    private(set) var headerPills: [String] = []
-    /// Remaining common clauses, or the unchanged common/fallback sentence when no pills exist.
-    private(set) var headerClaimCaption = ""
     private(set) var showPrompt = false
     private(set) var canCancelAll = false
     private(set) var isEmpty = false
@@ -29,6 +24,9 @@ final class ParallelVM: ParallelViewModel {
     private(set) var selectedConversationID: String?
     @ObservationIgnored private var isWorkflowInspector = false
     static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
+    /// True only for the standalone group mount (`buildParallelView`); workflow and inspector VMs never publish.
+    @ObservationIgnored let publishesTopBar: Bool
+    @ObservationIgnored var lastPublishedTopBar: GroupTopBarContent?
     @ObservationIgnored let useCase: any ParallelUseCase
     @ObservationIgnored let routing: any ParallelRouting
     @ObservationIgnored private let buildColumns: ParallelColumnsBuild
@@ -52,7 +50,6 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored var messageNotes: [String: [String: String]] = [:]
     @ObservationIgnored var memberIDs: [String] = []
     @ObservationIgnored var conversations: [Conversation] = []
-    @ObservationIgnored private var groupStartedAt: Date?
     @ObservationIgnored private var workflowTaskIDs: [String]?
     @ObservationIgnored private var workflowFocusedTaskIDs: Set<String>?
     @ObservationIgnored private var workflowTitles: [String: String] = [:]
@@ -119,8 +116,9 @@ final class ParallelVM: ParallelViewModel {
     }
 
     init(groupName: String, useCase: any ParallelUseCase, routing: any ParallelRouting,
-         horizontalPosition: ParallelViewportPosition = ParallelViewportPosition(),
+         horizontalPosition: ParallelViewportPosition = ParallelViewportPosition(), publishesTopBar: Bool = false,
          buildColumns: @escaping ParallelColumnsBuild = ParallelPresentationBuilder.buildColumns) {
+        self.publishesTopBar = publishesTopBar
         self.horizontalPosition = horizontalPosition
         self.groupName = groupName
         self.useCase = useCase
@@ -128,7 +126,10 @@ final class ParallelVM: ParallelViewModel {
         self.buildColumns = buildColumns
     }
 
-    func didAppear() { subscribeIfNeeded() }
+    func didAppear() {
+        subscribeIfNeeded()
+        activateTopBar()
+    }
 
     /// Workflow membership follows persisted dispatch associations.
     func setWorkflowTaskIDs(_ ids: [String], focusedTaskIDs: Set<String>? = nil, titles: [String: String] = [:]) {
@@ -140,6 +141,11 @@ final class ParallelVM: ParallelViewModel {
     }
 
     func didDisappear() {
+        if publishesTopBar {
+            routing.deactivateTopBar(tag: topBarTag)
+            routing.clearTopBar(tag: topBarTag)
+            lastPublishedTopBar = nil
+        }
         epoch &+= 1
         revision &+= 1
         worker?.cancel()
@@ -256,7 +262,6 @@ final class ParallelVM: ParallelViewModel {
     private func recomputeMembersAndLeases() {
         let preparation = MonitorMetrics.begin()
         let group = Lineage.sections(latestTasks).parallel.first { $0.name == groupName }
-        groupStartedAt = group?.startedAt
         let groupConversations = ParallelMembership.conversations(tasks: latestTasks, group: group?.conversations ?? [],
             workflowTaskIDs: workflowTaskIDs, focusedTaskIDs: workflowFocusedTaskIDs)
 .map { ParallelMembership.extending($0, states: uiStates) }
@@ -349,15 +354,12 @@ final class ParallelVM: ParallelViewModel {
         schedule(inputs)
     }
 
-    /// Apply complete-membership header values without publishing unchanged presentation.
+    /// Apply complete-membership header values and publish the group top bar content when it changed.
     private func publishHeaderClaims() {
         let tasks = orderedConversations.map { latestSnapshots[$0.current.taskID] ?? $0.current }
         let header = ParallelHeaderPresentation(tasks: tasks, fallback: Self.fallbackFooter)
         if statusSummary != header.statusSummary { statusSummary = header.statusSummary }
-        let subtitle = ParallelHeader.subtitle(conversations, startedAt: groupStartedAt, statusSummary: header.statusSummary)
-        if headerSubtitle != subtitle { headerSubtitle = subtitle }
-        if headerPills != header.pills { headerPills = header.pills }
-        if headerClaimCaption != header.caption { headerClaimCaption = header.caption }
+        publishTopBar(initialMembershipResolved ? header.content(title: groupName) : loadingTopBarContent)
     }
 
     private func updateResidency() -> [String: ParallelColumnInput] {

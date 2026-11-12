@@ -16,10 +16,7 @@ import MonitorCore
 final class ParallelViewModelMock: ParallelViewModel {
     
     var groupName: String
-    var headerSubtitle: String
     var statusSummary: String?
-    var headerPills: [String]
-    var headerClaimCaption: String
     var showPrompt: Bool
     var canCancelAll: Bool
     var isEmpty: Bool
@@ -27,20 +24,14 @@ final class ParallelViewModelMock: ParallelViewModel {
 
     init(
         groupName: String = "release-notes",
-        headerSubtitle: String = "2 agents · read_only, write_in_repo · ~/repo · started 10:02 AM",
         statusSummary: String? = "1 running · 1 done",
-        headerPills: [String] = ["No network"],
-        headerClaimCaption: String = "",
         showPrompt: Bool = false,
         canCancelAll: Bool = true,
         isEmpty: Bool = false,
         columns: [ParallelColumnModel] = ParallelViewModelMock.sampleColumns()
     ) {
         self.groupName = groupName
-        self.headerSubtitle = headerSubtitle
         self.statusSummary = statusSummary
-        self.headerPills = headerPills
-        self.headerClaimCaption = headerClaimCaption
         self.showPrompt = showPrompt
         self.canCancelAll = canCancelAll
         self.isEmpty = isEmpty

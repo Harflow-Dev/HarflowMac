@@ -40,7 +40,7 @@ extension ParallelVMTests {
 
         // then — two columns, one per agent conversation, never six
         await waitUntil { sut.columns.count == 2 && sut.isPresentationSettled }
-        #expect(sut.headerSubtitle.hasPrefix("2 agents"))
+        #expect(sut.statusSummary == "1 running · 1 done")
         #expect(
             Set(leasesBox.value.keys) == ["a1", "a2", "a3", "b1", "b2", "b3"],
             "a lease is held for every turn of every conversation, not just its current one"

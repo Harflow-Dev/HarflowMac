@@ -67,7 +67,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             isNewSessionPresentedSubject.send(selection == .newSession)
             discardStopConfirmationIfConversationChanged()
             if selection != .pendingLaunches { endPendingStop(reason: .discard, closeSheet: true) }
-            topBar.setShownConversation(shownTaskConversation())
+            topBar.setShownSubject(shownTopBarSubject())
         }
     }
 
@@ -326,7 +326,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
                              chrome: .group, scheduler: GlobalValues.scheduling)
             },
             makeParallel: { [self] in
-                ParallelVM(groupName: name, useCase: ParallelViewRepository(), routing: self, horizontalPosition: parallelPosition(for: "group:" + name))
+                ParallelVM(groupName: name, useCase: ParallelViewRepository(), routing: self, horizontalPosition: parallelPosition(for: "group:" + name),
+                           publishesTopBar: true)
             }
         )
         return GroupPresentationView(vm).id(name).eraseToAnyView()
@@ -379,12 +380,21 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         if case .task(let id) = selection { normalisedConversationID(for: id) } else { nil }
     }
 
+    /// The subject the top bar shows content for: the selected task's conversation or the selected group, `nil` otherwise.
+    func shownTopBarSubject() -> TopBarSubject? {
+        switch selection {
+        case .task(let id): .task(normalisedConversationID(for: id))
+        case .group(let name): .group(name)
+        default: nil
+        }
+    }
+
     /// The listing changed: refresh the shown conversation, unless a mounted task view is still showing under the old
     /// id. A retention shift then keeps the title until a selection change or rebuild re-keys the view.
     private func listingChanged() {
         reconcileDrafts()
         guard topBar.activeTag == nil else { return }
-        topBar.setShownConversation(shownTaskConversation())
+        topBar.setShownSubject(shownTopBarSubject())
     }
 
     // MARK: - ViewCoordinator
@@ -518,6 +528,7 @@ extension MainWindowCoordinator: PendingLaunchesRouting {
 
 extension MainWindowCoordinator: TaskDetailRouting {
     func publishTopBar(_ content: TaskTopBarContent, tag: TaskTopBarHolder.Tag) { topBar.publish(content, tag: tag) }
+    func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag) { topBar.publish(content, tag: tag) }
     func clearTopBar(tag: TaskTopBarHolder.Tag) { topBar.clear(tag: tag) }
     func deactivateTopBar(tag: TaskTopBarHolder.Tag) { topBar.deactivate(tag) }
 
@@ -525,13 +536,13 @@ extension MainWindowCoordinator: TaskDetailRouting {
     /// while the listing loaded is corrected, then accepts the writer if its conversation is the shown one.
     func retryTopBarActivation(tag: TaskTopBarHolder.Tag) {
         guard topBar.activeTag == nil else { return }
-        if shownTaskConversation() == tag.conversationID { topBar.setShownConversation(tag.conversationID) }
+        if shownTopBarSubject() == tag.subject { topBar.setShownSubject(tag.subject) }
         topBar.activateIfVacant(tag)
     }
 
     func activateTopBar(tag: TaskTopBarHolder.Tag) {
         guard topBar.activeTag != tag else { return }
-        if shownTaskConversation() == tag.conversationID { topBar.setShownConversation(tag.conversationID) }
+        if shownTopBarSubject() == tag.subject { topBar.setShownSubject(tag.subject) }
         topBar.activate(tag)
     }
 

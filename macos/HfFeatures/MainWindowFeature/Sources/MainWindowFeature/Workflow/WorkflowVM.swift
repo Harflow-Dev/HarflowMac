@@ -59,6 +59,11 @@ extension WorkflowUseCase {
 @MainActor
 protocol WorkflowRouting: ParallelRouting {
     func selectTask(_ taskID: String)
+    func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag)
+    func clearTopBar(tag: TaskTopBarHolder.Tag)
+    func activateTopBar(tag: TaskTopBarHolder.Tag)
+    func deactivateTopBar(tag: TaskTopBarHolder.Tag)
+    func retryTopBarActivation(tag: TaskTopBarHolder.Tag)
     func chooseDirectory() async -> String?
     func didSaveWorkflow(name: String)
     func openWorkflowEditor(name: String?)

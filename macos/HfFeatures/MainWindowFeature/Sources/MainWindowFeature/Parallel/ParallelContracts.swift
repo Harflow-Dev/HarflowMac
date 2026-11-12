@@ -55,4 +55,11 @@ protocol ParallelUseCase: Sendable {
 @MainActor
 protocol ParallelRouting: Sendable {
     func selectTask(_ taskID: String)
+    /// Group top bar transport: the writer's tag names its group; the window shows only the active writer of the
+    /// shown group.
+    func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag)
+    func clearTopBar(tag: TaskTopBarHolder.Tag)
+    func activateTopBar(tag: TaskTopBarHolder.Tag)
+    func deactivateTopBar(tag: TaskTopBarHolder.Tag)
+    func retryTopBarActivation(tag: TaskTopBarHolder.Tag)
 }

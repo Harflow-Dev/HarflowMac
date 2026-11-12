@@ -35,9 +35,10 @@ struct TaskTopBarPrincipal: View {
 
     var body: some View {
         _ = onEvaluation?()
+        if let group = holder.shownGroup { return AnyView(groupBody(group)) }
         let content = holder.shown
         let band = layout.effectiveBand
-        return TopBarPrincipalLayout(cap: band.cap, probe: probe) {
+        return AnyView(TopBarPrincipalLayout(cap: band.cap, probe: probe) {
             titleText(content).topBarRole(.title)
             if let content {
                 TaskStatusBadge(model: content.badge).topBarRole(.badge)
@@ -46,7 +47,43 @@ struct TaskTopBarPrincipal: View {
             }
             status.topBarRole(.status)
         }
+        .accessibilityElement(children: .contain))
+    }
+
+    // MARK: Group
+
+    /// A Parallel group: title, badge and meta in the group's own width budget (the detail column minus both toolbar
+    /// buttons and the bar's margins). The badge stays whole; the meta is whole or dropped, never shortened.
+    private func groupBody(_ group: GroupTopBarContent) -> some View {
+        let cap = layout.detailWidth.map(GroupTopBarBudget.cap(detailWidth:)) ?? layout.effectiveBand.cap
+        return TopBarPrincipalLayout(cap: cap, probe: probe, titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false) {
+            Text(group.title)
+                .font(.hf(.reading, weight: Metrics.titleWeight))
+                .foregroundStyle(Color.primaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(group.title)
+                .accessibilityLabel(group.title)
+                .topBarRole(.title)
+            if let badge = group.badge { TaskStatusBadge(model: badge).topBarRole(.badge) }
+            if let meta = group.meta, !group.isLoading { groupMeta(meta).topBarRole(.meta) }
+            status.topBarRole(.status)
+        }
         .accessibilityElement(children: .contain)
+    }
+
+    /// Whole at its ideal width. A dropped meta is placed with a zero width, so the clipped frame draws nothing; it stays
+    /// in the accessibility tree (the minimum-window dot that will carry it is a later slice). No state is involved, so
+    /// there is nothing to go stale between layout passes.
+    private func groupMeta(_ meta: String) -> some View {
+        Text(meta)
+            .font(.hf(.secondary))
+            .foregroundStyle(Metrics.metaColor.color)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            .accessibilityIdentifier("group-top-bar.meta")
     }
 
     @ViewBuilder private func titleText(_ content: TaskTopBarContent?) -> some View {

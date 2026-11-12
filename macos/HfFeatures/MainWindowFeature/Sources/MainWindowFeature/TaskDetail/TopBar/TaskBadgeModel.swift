@@ -23,6 +23,8 @@ struct TaskBadgeModel: Equatable, Sendable {
         case spinner
         /// A 12 point SF Symbol.
         case symbol(String)
+        /// No indicator (the group badge when nothing is running).
+        case none
     }
 
     /// The `TaskScreenStyle.Badge` colour pair the badge uses.

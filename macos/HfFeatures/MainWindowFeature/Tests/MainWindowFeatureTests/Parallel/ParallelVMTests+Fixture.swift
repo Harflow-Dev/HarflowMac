@@ -1,8 +1,18 @@
 import Foundation
 @testable import MainWindowFeature
+import Mockable
 import MonitorCore
 
 extension ParallelVMTests {
+    /// The group top bar writes are no-ops on the strict mock.
+    static func stubTopBar(_ routing: MockParallelRouting) {
+        given(routing).publishTopBar(.any, tag: .any).willReturn()
+        given(routing).clearTopBar(tag: .any).willReturn()
+        given(routing).activateTopBar(tag: .any).willReturn()
+        given(routing).deactivateTopBar(tag: .any).willReturn()
+        given(routing).retryTopBarActivation(tag: .any).willReturn()
+    }
+
     func task(
         id: String, backend: String = "claude", status: String = "running", startedAt: Date? = .now,
         group: String? = "g1", freedom: String? = nil, sessionID: String? = "sess-1234567890",

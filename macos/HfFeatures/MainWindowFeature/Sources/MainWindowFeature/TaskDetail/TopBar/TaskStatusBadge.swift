@@ -43,6 +43,8 @@ struct TaskStatusBadge: View {
             RunningSpinner(size: Metrics.spinSize, tint: pair.foreground.color).accessibilityHidden(true)
         case let .symbol(name):
             Image(systemName: name).font(.hf(.secondary)).accessibilityHidden(true)
+        case .none:
+            EmptyView()
         }
     }
 

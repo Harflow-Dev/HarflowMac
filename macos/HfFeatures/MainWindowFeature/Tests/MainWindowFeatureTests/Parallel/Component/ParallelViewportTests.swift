@@ -505,10 +505,7 @@ import Testing
     @Observable final class ViewportVM: ParallelViewModel {
         let horizontalPosition: ParallelViewportPosition? = ParallelViewportPosition()
         var groupName = "viewport"
-        var headerSubtitle = ""
         var statusSummary: String?
-        var headerPills: [String] = []
-        var headerClaimCaption = ""
         var showPrompt = false
         var canCancelAll = false
         var isEmpty = false

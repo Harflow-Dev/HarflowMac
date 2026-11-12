@@ -100,7 +100,7 @@ extension ParallelVMTests {
         harness.sut.didTapCancelAll()
         await waitUntil { captured?.dialog != nil }
         let dialog = try #require(captured?.dialog)
-        dialog.actions.first?.action()
+        dialog.actions.last?.action()
         verify(harness.useCase).runningInSubtrees(of: .value(["older", "current"])).called(1)
         subscription.cancel()
         harness.sut.didDisappear()

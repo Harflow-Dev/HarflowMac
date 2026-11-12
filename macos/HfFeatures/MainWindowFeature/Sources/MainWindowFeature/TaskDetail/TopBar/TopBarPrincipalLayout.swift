@@ -8,6 +8,7 @@
 //  `m05-proposal.css` `.hd-m05-bar__center`.
 //
 
+import AppKit
 import Observation
 import SwiftUI
 
@@ -65,6 +66,14 @@ final class TopBarLayoutState {
     /// Whether the band is narrow; written only when it changes, so a task view reading it is not re-evaluated by
     /// a crossing between the wider bands. Only the principal reads `effectiveBand`.
     private(set) var isNarrow = false
+    /// The detail column's width, `nil` before the first measurement; read only by the principal, for a group's
+    /// width budget (`GroupTopBarBudget`). Written only when it changes.
+    private(set) var detailWidth: CGFloat?
+
+    /// Records the detail column's measured width.
+    func setDetailWidth(_ width: CGFloat) {
+        if detailWidth != width { detailWidth = width }
+    }
 
     /// Records a measurement.
     func setBand(_ band: TopBarWidthBand) {
@@ -136,6 +145,10 @@ struct TopBarPrincipalLayout: Layout {
     let cap: CGFloat
     /// Receives the solver's result for the current pass; `nil` outside the principal.
     var probe: TopBarLayoutProbe?
+    /// A group's own title floor; `nil` keeps the task's.
+    var titleFloor: CGFloat?
+    /// `false` for a group: the meta is whole or dropped.
+    var metaMayTruncate = true
 
     /// The pure solver. `fixed` are the ideal widths of the parts that keep them (badge, busy slot, status);
     /// `badgeIndex` names the badge among them.
@@ -147,14 +160,18 @@ struct TopBarPrincipalLayout: Layout {
     /// 4. If the fixed parts plus the title floor exceed the cap, meta is dropped, the badge truncates to
     ///    `cap - other fixed parts - gaps - 80` (never below `badgeMinimum`), and if that is not enough the title takes what is left, below 80.
     ///    The total never exceeds the cap unless the non-badge fixed parts alone do.
+    ///
+    /// A group's content passes `metaMayTruncate: false` and its own `titleFloor`: its meta is then whole or dropped
+    /// (never shortened), and shown only while the title keeps at least its floor. Task content keeps the defaults.
     nonisolated static func solve(titleIdeal: CGFloat, metaIdeal: CGFloat?, fixed: [CGFloat], cap: CGFloat,
-                                  badgeIndex: Int? = nil, badgeMinimum: CGFloat = 0) -> Solution {
+                                  badgeIndex: Int? = nil, badgeMinimum: CGFloat = 0,
+                                  titleFloor customFloor: CGFloat? = nil, metaMayTruncate: Bool = true) -> Solution {
         let fixedWidth = fixed.reduce(0, +)
         func remaining(withMeta: Bool) -> CGFloat {
             let parts = fixed.count + 1 + (withMeta ? 1 : 0)
             return cap - fixedWidth - spacing * CGFloat(parts - 1)
         }
-        let floor = min(titleIdeal, titleFloor)
+        let floor = min(titleIdeal, customFloor ?? titleFloor)
         let withMeta = remaining(withMeta: metaIdeal != nil)
         if let metaIdeal, titleIdeal + metaIdeal <= withMeta {
             return Solution(titleWidth: titleIdeal, metaWidth: metaIdeal, metaDropped: false, badgeWidth: nil)
@@ -162,6 +179,11 @@ struct TopBarPrincipalLayout: Layout {
         let alone = remaining(withMeta: false)
         if metaIdeal == nil, titleIdeal <= alone {
             return Solution(titleWidth: titleIdeal, metaWidth: nil, metaDropped: false, badgeWidth: nil)
+        }
+        if !metaMayTruncate, let metaIdeal {
+            let titleRoom = withMeta - metaIdeal
+            if titleRoom >= floor { return Solution(titleWidth: min(titleIdeal, titleRoom), metaWidth: metaIdeal, metaDropped: false, badgeWidth: nil) }
+            return Solution(titleWidth: max(0, min(titleIdeal, alone)), metaWidth: nil, metaDropped: true, badgeWidth: nil)
         }
         if alone < floor {
             return overBudget(titleIdeal: titleIdeal, dropsMeta: metaIdeal != nil, fixed: fixed, cap: cap,
@@ -231,7 +253,8 @@ struct TopBarPrincipalLayout: Layout {
 
     private func solution(_ ideals: Ideals) -> Solution {
         Self.solve(titleIdeal: ideals.title.width, metaIdeal: ideals.meta?.width, fixed: ideals.fixed.map(\.width), cap: cap,
-                   badgeIndex: ideals.badgeIndex, badgeMinimum: ideals.badgeMinimum)
+                   badgeIndex: ideals.badgeIndex, badgeMinimum: ideals.badgeMinimum, titleFloor: titleFloor,
+                   metaMayTruncate: metaMayTruncate)
     }
 
     func sizeThatFits(proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
@@ -274,5 +297,36 @@ extension View {
     /// Tags this view's role for `TopBarPrincipalLayout`.
     func topBarRole(_ role: TopBarPrincipalLayout.Role) -> some View {
         layoutValue(key: TopBarPrincipalLayout.RoleKey.self, value: role)
+    }
+}
+
+// MARK: - GroupTopBarBudget
+
+/// A group's principal width budget: the detail column's width minus the two toolbar buttons (reserved whether or
+/// not Cancel all shows, so the meta cannot toggle when the last task settles) minus the bar's margins. The
+/// buttons' widths are constants computed once from their labels and `TopBarButtonStyle`'s padding.
+enum GroupTopBarBudget {
+    /// The title never goes below this while the badge and meta decision are made.
+    static let titleFloor: CGFloat = 160
+
+    /// `.hd-btn`: 13/18 weight 500, padding 0 12, plus the danger button's 1 pt border.
+    static let viewPromptWidth: CGFloat = buttonWidth("View prompt", border: 0)
+    static let cancelAllWidth: CGFloat = buttonWidth("Cancel all", border: 1)
+
+    /// Both buttons, the gap between them and the gaps either side.
+    static var reservedButtons: CGFloat {
+        viewPromptWidth + cancelAllWidth + TaskScreenStyle.TopBar.actionsGap + 2 * TaskScreenStyle.TopBar.gap
+    }
+
+    /// The bar's own margins.
+    static let margins = TaskScreenStyle.TopBar.paddingLeading + TaskScreenStyle.TopBar.paddingTrailing
+
+    /// The principal's cap for a detail column of `detailWidth`; never negative.
+    static func cap(detailWidth: CGFloat) -> CGFloat { max(0, detailWidth - reservedButtons - margins) }
+
+    private static func buttonWidth(_ label: String, border: CGFloat) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        let text = (label as NSString).size(withAttributes: [.font: font]).width
+        return ceil(text) + 2 * TopBarButtonStyle.paddingHorizontal + 2 * border
     }
 }

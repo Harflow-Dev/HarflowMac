@@ -45,7 +45,7 @@ import Testing
         let conversationPagesBox: Box<[TaskHistoryPage?]>
     }
 
-    func makeSUT(groupName: String = "g1", leasePool: ParallelTestLeasePool? = nil,
+    func makeSUT(groupName: String = "g1", leasePool: ParallelTestLeasePool? = nil, publishesTopBar: Bool = false,
                  buildColumns: @escaping ParallelColumnsBuild = ParallelPresentationBuilder.buildColumns) -> SUT {
         let useCase = MockParallelUseCase()
         let routing = MockParallelRouting()
@@ -92,8 +92,9 @@ import Testing
         given(useCase).beginTakeover(taskID: .any).willReturn()
         given(useCase).setOutcome(.any, .any).willReturn()
         given(routing).selectTask(.any).willReturn()
+        Self.stubTopBar(routing)
 
-        let sut = ParallelVM(groupName: groupName, useCase: useCase, routing: routing, buildColumns: buildColumns)
+        let sut = ParallelVM(groupName: groupName, useCase: useCase, routing: routing, publishesTopBar: publishesTopBar, buildColumns: buildColumns)
         sut.updateViewport(offset: 0, width: 100_000)
         let harness = SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: tasksSubject, snapshotsSubject: snapshotsSubject,
@@ -325,9 +326,12 @@ import Testing
             return
         }
         #expect(dialog.title == "Cancel every running task in this group?")
-        #expect(dialog.actions.count == 1)
-        #expect(dialog.actions.first?.role == .destructive)
+        #expect(dialog.actions.map(\.title) == ["Cancel", "Cancel all"])
+        #expect(dialog.actions.map(\.role) == [.cancel, .destructive])
+        verify(useCase).cancelAll(.any).called(0)
         dialog.actions.first?.action()
+        verify(useCase).cancelAll(.any).called(0)
+        dialog.actions.last?.action()
         
         // then — every running task in the members' subtrees is cancelled, sub-tasks included
         await verify(useCase).cancelAll(.value(["t1", "sub-of-t1"])).calledEventually(1, before: .seconds(5))
@@ -499,7 +503,7 @@ import Testing
         
         // then
         await waitUntil { sut.columns.count == 2 && sut.isPresentationSettled }
-        #expect(sut.headerSubtitle.hasPrefix("2 agents · \(sut.statusSummary ?? "") · Can edit this repo, Read-only ·"))
+        #expect(sut.statusSummary != nil)
     }
     
     // MARK: - Column loading state (Monitor piece 12, Design point 4)

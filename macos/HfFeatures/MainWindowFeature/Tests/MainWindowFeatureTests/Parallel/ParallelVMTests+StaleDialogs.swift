@@ -39,7 +39,7 @@ extension ParallelVMTests {
         tasksBox.value["t2"] = joined
         tasksSubject.send([first, joined])
         await waitUntil { sut.columns.count == 2 && sut.isPresentationSettled }
-        dialog.actions.first?.action()
+        dialog.actions.last?.action()
 
         // then — the member that joined is cancelled as well, not just the captured snapshot
         await verify(useCase).cancelAll(.matching { Set($0) == ["t1", "t2"] }).calledEventually(1, before: .seconds(5))
@@ -77,7 +77,7 @@ extension ParallelVMTests {
         tasksBox.value["t2"] = resumed
         tasksSubject.send([finished, resumed])
         await waitUntil { sut.columns.first?.task.taskID == "t2" }
-        dialog.actions.first?.action()
+        dialog.actions.last?.action()
 
         // then — the resumed turn is part of what gets cancelled
         await verify(useCase).cancelAll(.matching { $0.contains("t2") }).calledEventually(1, before: .seconds(5))
@@ -113,7 +113,7 @@ extension ParallelVMTests {
         tasksBox.value["t2"] = resumed
         tasksSubject.send([firstTurn, resumed])
         await waitUntil { sut.columns.first?.task.taskID == "t2" }
-        dialog.actions.first?.action()
+        dialog.actions.last?.action()
 
         // then — no takeover of the stale member, no navigation, and the column says why
         verify(useCase).beginTakeover(taskID: .any).called(0)

@@ -65,7 +65,8 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
 
     func buildPendingLaunchesView() -> AnyView { PendingLaunchesView(PendingLaunchesPreviewMock()).eraseToAnyView() }
     func buildNewSessionView() -> AnyView { NewSessionView(composerViewModel, optionsPresented: optionsInitiallyPresented).eraseToAnyView() }
-    func buildParallelView(name: String) -> AnyView { Text("Parallel: \(name)").eraseToAnyView() }
+    @ObservationIgnored var parallelBuilder: (@MainActor (String) -> AnyView)?
+    func buildParallelView(name: String) -> AnyView { parallelBuilder?(name) ?? Text("Parallel: \(name)").eraseToAnyView() }
     /// Lets an integrated test mount a different task view (for example the standalone one) under the real shell.
     @ObservationIgnored var taskDetailBuilder: (@MainActor (String) -> AnyView)?
     func buildTaskDetailView(id: String) -> AnyView {

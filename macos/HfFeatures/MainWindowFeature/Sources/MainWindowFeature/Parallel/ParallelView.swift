@@ -19,16 +19,9 @@ import SwiftUI
 protocol ParallelViewModel: ViewModel {
 
     var groupName: String { get }
-    var headerSubtitle: String { get }
     /// The header's truthful current-status counts ("1 running · 1 done"), or `nil` when nothing
     /// can be counted. Pure presentation from the complete current membership.
     var statusSummary: String? { get }
-    /// The common enforcement claims every current member makes, as short pills; empty when none
-    /// can be derived.
-    var headerPills: [String] { get }
-    /// The non-pill common clauses under the pills — or, when no pill can be derived, the
-    /// unchanged common/fallback sentence. Empty means no caption.
-    var headerClaimCaption: String { get }
     var showPrompt: Bool { get }
     var canCancelAll: Bool { get }
     var isEmpty: Bool { get }
@@ -98,77 +91,42 @@ struct ParallelView<VM: ParallelViewModel>: View {
 
     private var realContent: some View {
         GeometryReader { screen in
-        VStack(spacing: HfRadius.Metrics.zero) {
-            groupTitle
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, HfRadius.Metrics.spacing16)
-                .padding(.vertical, HfRadius.Metrics.spacing12)
-                .fixedSize(horizontal: false, vertical: true)
-            Divider()
-            if viewModel.isEmpty {
-                Text("No tasks in this group any more.").font(.hf(.body)).foregroundStyle(Color.secondaryText).frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                claimStrip
-                // Design point 3: columns fill the available width instead of a fixed 900pt budget —
-                // `GeometryReader` reads the row's actual width so `ParallelLayout.columnWidth(memberCount:availableWidth:)`
-                // can divide it evenly, keeping the 360pt lane floor (and the horizontal scroll) once there
-                // are too many members for the window to fit.
-                GeometryReader { proxy in
-                    ScrollView(.horizontal) {
-                        ParallelColumnsContent(columns: viewModel.columns, availableSize: proxy.size,
-                                               horizontalPosition: viewModel.horizontalPosition,
-                                               stateForColumn: viewModel.columnState(for:),
-                                               onViewport: { viewModel.updateViewport(offset: $0, width: $1) })
-                            // The document probe (§6.5): inside the real lane's own document, so
-                            // it can only ever target this horizontal scroll view.
-                            .background(ScrollChrome())
+            VStack(spacing: HfRadius.Metrics.zero) {
+                if viewModel.isEmpty {
+                    Text("No tasks in this group any more.")
+                        .font(TaskScreenStyle.sans(size: 14))
+                        .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 14, lineHeight: 22)))
+                        .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+                        .multilineTextAlignment(.center)
+                        .padding(TaskScreenStyle.Scale.space5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Design point 3: columns fill the available width instead of a fixed 900pt budget —
+                    // `GeometryReader` reads the row's actual width so `ParallelLayout.columnWidth(memberCount:availableWidth:)`
+                    // can divide it evenly, keeping the 360pt lane floor (and the horizontal scroll) once there
+                    // are too many members for the window to fit. The lanes start directly under the toolbar.
+                    GeometryReader { proxy in
+                        ScrollView(.horizontal) {
+                            ParallelColumnsContent(columns: viewModel.columns, availableSize: proxy.size,
+                                                   horizontalPosition: viewModel.horizontalPosition,
+                                                   stateForColumn: viewModel.columnState(for:),
+                                                   onViewport: { viewModel.updateViewport(offset: $0, width: $1) })
+                                // The document probe (§6.5): inside the real lane's own document, so
+                                // it can only ever target this horizontal scroll view.
+                                .background(ScrollChrome())
+                        }
                     }
                 }
             }
-        }
-        .frame(width: screen.size.width, height: screen.size.height, alignment: .top)
+            .frame(width: screen.size.width, height: screen.size.height, alignment: .top)
         }
     }
 
-    /// SPEC §4/§6.5: the group's common enforcement claims — pills for the clauses that are
-    /// already short enough to be one, the rest (or, when no pill can be derived, the unchanged
-    /// common/fallback sentence) as a caption — in a content-top strip ABOVE the lanes, never the
-    /// toolbar. The header's claim inputs stay out of the toolbar's consumed fields entirely, so
-    /// enforcement-only changes leave the toolbar presentation quiet.
-    private var claimStrip: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
-            if !viewModel.headerPills.isEmpty {
-                HStack(spacing: HfRadius.Metrics.spacing6) {
-                    ForEach(viewModel.headerPills, id: \.self) { label in
-                        Text(label)
-                            .font(.hf(.secondary, weight: .semibold))
-                            .foregroundStyle(Color.secondaryText)
-                            .padding(.horizontal, HfRadius.Metrics.parallelPillHorizontalPadding)
-                            .padding(.vertical, HfRadius.Metrics.parallelPillVerticalPadding)
-                            .background(Capsule().fill(Color.pillFill))
-                    }
-                    Spacer(minLength: HfRadius.Metrics.zero)
-                }
-            }
-            if !viewModel.headerClaimCaption.isEmpty {
-                Text(viewModel.headerClaimCaption)
-                    .font(.hf(.caption))
-                    .foregroundStyle(Color.tertiaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, HfRadius.Metrics.spacing16)
-        .padding(.top, HfRadius.Metrics.spacing12)
-        .padding(.bottom, HfRadius.Metrics.spacing8)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Keep actions in the native toolbar. The two-line group title lives in the content
-    /// header, where its vertical inset is not constrained by the native toolbar height.
+    /// The group's title, badge and enforcement sentence live in the window's top bar (published by the VM); the two
+    /// actions sit beside them on the bare toolbar, in the group top bar's button styles.
     private func withToolbar(@ViewBuilder content: () -> some View) -> some View {
         content().toolbar {
             ToolbarSpacer(.flexible)
-            // The task screen's quiet buttons, each on the bare toolbar — no glass capsule.
             ToolbarItem(placement: .primaryAction) { viewPromptButton }.sharedBackgroundVisibility(.hidden)
             if viewModel.canCancelAll {
                 ToolbarItem(placement: .primaryAction) { cancelAllButton }.sharedBackgroundVisibility(.hidden)
@@ -176,19 +134,15 @@ struct ParallelView<VM: ParallelViewModel>: View {
         }
     }
 
-    private var groupTitle: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
-            Text(viewModel.groupName).font(.hf(.title, weight: .semibold)).lineLimit(1)
-            Text(viewModel.headerSubtitle).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
-        }
-    }
-
     private var viewPromptButton: some View {
-        Button("View prompt") { viewModel.didTapViewPrompt() }.buttonStyle(MonitorButtonStyle(.glass))
+        Button("View prompt") { viewModel.didTapViewPrompt() }
+            .buttonStyle(TopBarButtonStyle(kind: .ghost, isSelected: viewModel.showPrompt))
+            .disabled(viewModel.isEmpty)
+            .accessibilityAddTraits(viewModel.showPrompt ? .isSelected : [])
     }
 
     private var cancelAllButton: some View {
-        Button("Cancel all", role: .destructive) { viewModel.didTapCancelAll() }.buttonStyle(QuietButtonStyle())
+        Button("Cancel all") { viewModel.didTapCancelAll() }.buttonStyle(TopBarButtonStyle(kind: .danger))
     }
 
     /// The deferred first frame: a header skeleton plus N column skeletons. N is whatever is cheaply
@@ -261,24 +215,9 @@ struct ParallelView<VM: ParallelViewModel>: View {
         .preferredColorScheme(.dark)
 }
 
-/// No pill can be derived here, so the caption carries the unchanged common sentence.
-#Preview("Parallel, no pills - light") {
-    ParallelView(ParallelViewModelMock(
-        statusSummary: "2 done",
-        headerPills: [],
-        headerClaimCaption: "Enforced for every agent here: Network: not controlled."
-    ))
-    .frame(width: HfRadius.Metrics.toolbarPreviewWidth, height: HfRadius.Metrics.sidebarPreviewHeight)
-    .preferredColorScheme(.light)
-}
-
-#Preview("Parallel, no pills - dark") {
-    ParallelView(ParallelViewModelMock(
-        statusSummary: "2 done",
-        headerPills: [],
-        headerClaimCaption: "Enforced for every agent here: Network: not controlled."
-    ))
-    .frame(width: HfRadius.Metrics.toolbarPreviewWidth, height: HfRadius.Metrics.sidebarPreviewHeight)
-    .preferredColorScheme(.dark)
+#Preview("Parallel, empty - light") {
+    ParallelView(ParallelViewModelMock(statusSummary: nil, canCancelAll: false, isEmpty: true, columns: []))
+        .frame(width: HfRadius.Metrics.toolbarPreviewWidth, height: HfRadius.Metrics.sidebarPreviewHeight)
+        .preferredColorScheme(.light)
 }
 #endif
