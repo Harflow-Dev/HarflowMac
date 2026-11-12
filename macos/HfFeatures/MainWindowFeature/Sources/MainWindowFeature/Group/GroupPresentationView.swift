@@ -163,6 +163,8 @@ final class GroupPresentationVM: GroupPresentationViewModel {
     private func settleTopBar(conversationCount: Int) {
         if conversationCount == 0 {
             routing?.publishTopBar(GroupTopBarContent(title: groupName, badge: nil, meta: nil, isLoading: false), tag: topBarTag)
+            // A group that went from one conversation to none was released: ask to be shown again.
+            routing?.activateTopBar(tag: topBarTag)
         } else if conversationCount == 1 {
             releaseTopBar()
         }

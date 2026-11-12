@@ -134,7 +134,8 @@ final class TopBarMetaDotView: NSView {
 
     override func accessibilityPerformPress() -> Bool {
         // Focus is what ends the press: taking it here means moving focus away closes the popover.
-        _ = window?.makeFirstResponder(self)
+        // A refused focus leaves nothing pressed, since focus loss is what would end the press.
+        guard window?.makeFirstResponder(self) == true else { return false }
         state.press()
         refreshPopover()
         return true

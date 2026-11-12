@@ -69,10 +69,29 @@ import Testing
 
         // then
         #expect(sut.detailVM == nil && sut.parallelVM == nil)
-        #expect(routing.events.last == "publish loaded", "the group's own title replaces the loading content")
+        #expect(Array(routing.events.suffix(2)) == ["publish loaded", "activate"], "the group's own title replaces the loading content")
         #expect(routing.events.contains("clear") == false)
         #expect(routing.titles.last == "group")
         #expect(routing.lastContent?.isLoading == false && routing.lastContent?.badge == nil && routing.lastContent?.meta == nil)
+    }
+
+    @Test func givenOneConversation_whenTheGroupBecomesEmpty_thenTheTitleIsPublishedAndActivatedAgain() async throws {
+        // given — one conversation released the bar
+        let routing = RecordingRouting()
+        let tasks = CurrentValueSubject<[TaskInfo], Never>([task("only", session: "s1")])
+        let sut = makeSUT(tasks, routing: routing)
+        defer { sut.didDisappear() }
+        sut.didAppear()
+        try await waitUntil { sut.detailVM != nil && routing.events.contains("clear") }
+        let before = routing.events.count
+
+        // when
+        tasks.send([])
+        try await waitUntil { sut.detailVM == nil && routing.events.count > before }
+
+        // then — the group's own title is shown again, not the generic fallback
+        #expect(Array(routing.events.suffix(from: before)) == ["publish loaded", "activate"])
+        #expect(routing.titles.last == "group")
     }
 
     @Test func givenOneConversation_whenClassified_thenTheDetailMountsAndTheLoadingContentIsCleared() async throws {

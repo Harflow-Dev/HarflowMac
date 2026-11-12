@@ -3,6 +3,7 @@
 //  MainWindowFeatureTests
 //
 
+import AppKit
 import Foundation
 @testable import MainWindowFeature
 import Testing
@@ -181,6 +182,20 @@ import Testing
 
         // then
         #expect(state.showsPopover)
+    }
+
+    @MainActor @Test func givenADotWithoutAWindow_whenPressed_thenFocusIsRefusedAndNothingStaysPressed() {
+        // given — no window, so focus cannot be taken
+        let dot = TopBarMetaDotView(frame: NSRect(x: 0, y: 0, width: 16, height: 16))
+        dot.sentence = "Enforced for every agent here."
+
+        // when
+        let handled = dot.accessibilityPerformPress()
+
+        // then
+        #expect(handled == false)
+        #expect(dot.state.isPressed == false)
+        #expect(dot.state.showsPopover == false)
     }
 
     @Test func givenAHoveredAndFocusedDot_whenItIsHidden_thenNothingStaysSet() {
