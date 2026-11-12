@@ -1,58 +1,114 @@
 import AppKit
 import Combine
 
-// MARK: - Lane reveal on focus
+// MARK: - ParallelFocusReveal
+
+/// Reveal bookkeeping of one horizontal lane row.
+struct ParallelFocusReveal {
+    /// The lane keyboard focus was last moved into and handled (revealed, or already whole): a reveal fires only when
+    /// keyboard focus enters a different lane. Set only once the lane was handled, never while its reveal is pending.
+    var lane: Int?
+    /// A lane whose reveal waits for the row's layout, retried when the document's frame changes.
+    var pending: Int?
+    var retry: AnyCancellable?
+}
+
+// MARK: - Lane reveal on keyboard focus
 
 extension ParallelScrollObservationView {
+    /// The type of the event being processed when the first responder changes. Tests replace it to simulate a key or a
+    /// mouse event, since the harness cannot deliver a real Tab.
+    static var focusEventType: () -> NSEvent.EventType? = { NSApp.currentEvent?.type }
+
     /// Starts watching the window's first responder for a horizontal lane row.
     func observeFocus(in scroll: NSScrollView) {
         guard axis == .horizontal, !usesNativeIdentity, let window = scroll.window else { return }
-        focusedLaneIndex = nil
-        // The delivered value is ignored: the first responder is read fresh when the change is handled.
+        focusReveal = ParallelFocusReveal()
+        // The delivered value is ignored: the first responder is read fresh when the change is handled. The event
+        // type is read synchronously, while the responder change is still inside its originating event.
         window.publisher(for: \.firstResponder, options: [.new])
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.firstResponderChanged() }
+            .sink { [weak self] _ in
+                let isKeyboard = Self.focusEventType() == .keyDown
+                DispatchQueue.main.async { self?.firstResponderChanged(isKeyboard: isKeyboard) }
+            }
             .store(in: &subscriptions)
     }
 
-    /// Keyboard reach of lanes: when focus ENTERS a different lane (a focus-change edge, never a re-render
-    /// while focus stays), the row scrolls to show that whole lane. A reveal is explicit navigation, so it
-    /// cancels pending horizontal restoration first. Residency stays geometry-driven: only the resulting
-    /// scroll can bring the next lane (and its controls) into being.
-    private func firstResponderChanged() {
+    /// Keyboard reach of lanes: when KEYBOARD focus (Tab, Shift-Tab) ENTERS a different lane, the row scrolls to show
+    /// that whole lane plus its separator and one point of the neighbouring lane in the scroll direction, so that
+    /// neighbour becomes resident and the next Tab or Shift-Tab can continue. A mouse click never scrolls the row
+    /// under the pointer, and focus that stays in a lane never re-triggers a reveal. A reveal is explicit navigation,
+    /// so it cancels pending horizontal restoration first. Residency stays geometry-driven.
+    private func firstResponderChanged(isKeyboard: Bool) {
         guard axis == .horizontal, !usesNativeIdentity, !isTornDown, let scroll = observedScrollView,
-              let document = scroll.documentView, let window = scroll.window else { return }
-        guard let responder = window.firstResponder as? NSView, responder !== document, responder.isDescendant(of: document),
-              stride > 0, !ids.isEmpty else {
-            focusedLaneIndex = nil
+              let document = scroll.documentView, let index = focusedLane(scroll: scroll, document: document) else {
+            focusReveal = ParallelFocusReveal()
             return
         }
-        let frame = document.convert(responder.bounds, from: responder)
-        let index = min(max(0, Int((frame.midX / stride).rounded(.down))), ids.count - 1)
-        guard index != focusedLaneIndex else { return }
-        focusedLaneIndex = index
-        revealLane(index, scroll: scroll, document: document)
+        guard isKeyboard, index != focusReveal.lane else {
+            if !isKeyboard { focusReveal.pending = nil; focusReveal.retry = nil }
+            return
+        }
+        reveal(index, scroll: scroll, document: document)
     }
 
-    private func revealLane(_ index: Int, scroll: NSScrollView, document: NSView) {
+    /// The lane that holds the window's first responder, if it is inside the row's document.
+    private func focusedLane(scroll: NSScrollView, document: NSView) -> Int? {
+        guard let responder = scroll.window?.firstResponder as? NSView, responder !== document, responder.isDescendant(of: document),
+              stride > 0, !ids.isEmpty else { return nil }
+        let frame = document.convert(responder.bounds, from: responder)
+        return min(max(0, Int((frame.midX / stride).rounded(.down))), ids.count - 1)
+    }
+
+    /// Reveals the lane now, or keeps it pending until the row's layout settles.
+    private func reveal(_ index: Int, scroll: NSScrollView, document: NSView) {
+        if revealLane(index, scroll: scroll, document: document) {
+            focusReveal = ParallelFocusReveal(lane: index)
+            return
+        }
+        focusReveal.pending = index
+        guard focusReveal.retry == nil else { return }
+        document.postsFrameChangedNotifications = true
+        scroll.postsFrameChangedNotifications = true
+        focusReveal.retry = NotificationCenter.default
+.publisher(for: NSView.frameDidChangeNotification, object: document)
+            .merge(with: NotificationCenter.default.publisher(for: NSView.frameDidChangeNotification, object: scroll))
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.retryPendingReveal() } }
+    }
+
+    private func retryPendingReveal() {
+        guard let pending = focusReveal.pending, !isTornDown, let scroll = observedScrollView, let document = scroll.documentView,
+              focusedLane(scroll: scroll, document: document) == pending else {
+            focusReveal.pending = nil
+            focusReveal.retry = nil
+            return
+        }
+        reveal(pending, scroll: scroll, document: document)
+    }
+
+    /// Scrolls the lane into view. False only while the row's layout is not ready for lane geometry.
+    private func revealLane(_ index: Int, scroll: NSScrollView, document: NSView) -> Bool {
         let length = document.bounds.width
         let visible = scroll.documentVisibleRect
-        guard visible.width > 0, abs(length - CGFloat(ids.count) * stride) < 2 else { return }
+        guard visible.width > 0, abs(length - CGFloat(ids.count) * stride) < 2 else { return false }
         let laneMin = CGFloat(index) * stride
         let laneMax = laneMin + stride - ParallelLayout.dividerWidth
+        // The lane wholly, plus its separator and one point of the neighbouring lane on each side that has one, so
+        // that neighbour intersects the viewport, becomes resident and the next Tab or Shift-Tab can continue.
+        let peek = ParallelLayout.dividerWidth + 1
+        let leftBound = laneMin - (index > 0 ? peek : 0)
+        let rightBound = laneMax + (index + 1 < ids.count ? peek : 0)
         var target = visible.minX
-        if laneMin < visible.minX - 0.5 {
-            target = laneMin
-        } else if laneMax > visible.maxX + 0.5 {
-            // Show the lane wholly, plus its separator and one point of the following lane: that lane then
-            // intersects the viewport, becomes resident and builds its controls, so Tab can continue.
-            let trailing = index + 1 < ids.count ? ParallelLayout.dividerWidth + 1 : 0
-            target = min(laneMin, laneMax + trailing - visible.width)
+        if leftBound < visible.minX - 0.5 {
+            target = leftBound
+        } else if rightBound > visible.maxX + 0.5 {
+            target = min(laneMin, rightBound - visible.width)
         }
         target = min(max(0, target), max(0, length - visible.width))
-        guard abs(target - visible.minX) > 0.5 else { return }
+        guard abs(target - visible.minX) > 0.5 else { return true }
         cancelHorizontalMovement()
         applyRestorationTarget(target, scroll: scroll, document: document, geometry: (length, visible.width, visible))
         report()
+        return true
     }
 }

@@ -31,6 +31,7 @@ import Testing
         let image = try render(view.frame(width: width, height: 320), scheme: scheme)
         let reference = try render(surface.frame(width: width, height: 320), scheme: scheme)
         let clearReference = try render(Color.clear.frame(width: width, height: 320), scheme: scheme)
+        let windowReference = try render(Color.windowBG.frame(width: width, height: 320), scheme: scheme)
 
         // when / then — a rounded pane would expose the transparent parent at both bottom corners. A
         // square flush lane paints its surface through the full boundary in both modes. The right
@@ -42,6 +43,10 @@ import Testing
             let clear = try #require(clearReference.colorAt(x: Int(point.x), y: Int(point.y)))
             #expect(close(actual, expected), "\(state) \(scheme) \(chrome) corner must match the chrome surface")
             #expect(!close(actual, clear), "\(state) \(scheme) \(chrome) corner must not be clear")
+            if chrome == .inspector {
+                let window = try #require(windowReference.colorAt(x: Int(point.x), y: Int(point.y)))
+                #expect(!close(actual, window), "\(state) \(scheme) inspector corner must not be windowBG")
+            }
         }
     }
 

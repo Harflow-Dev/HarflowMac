@@ -154,8 +154,9 @@ extension ActivityFeedTranscriptStyleHostedTests {
         #expect(inspector.table.owner?.model?.style == .standard)
     }
 
-    @Test func givenLaneFeedMounted_whenStyleChangesFromStandardToLane_thenItRemeasuresThroughTheStructuralRoute() async throws {
-        // given — a standard-chrome column, then the same rows in lane chrome.
+    @Test func givenStandardAndLaneChrome_whenMountedWithTheSameRows_thenTheLaneRowsAreMeasuredWithTheLaneMetrics() async throws {
+        // given — the same rows mounted in a standard-chrome (inspector) column and in a lane column (two mounts: a style
+        // change on one mounted feed is covered by the transcript-to-standard promotion test).
         let rows = laneRows()
         let standard = try await mountLane(laneModel(rows: rows, chrome: .inspector), width: 600)
         defer { standard.fixture.close() }
@@ -168,7 +169,6 @@ extension ActivityFeedTranscriptStyleHostedTests {
 
         // then — the lane's 12 pt gap and 22 pt line replace the standard spacing and body line.
         #expect(abs(after - before) > 1, "standard \(before) and lane \(after) heights are equal")
-        #expect(ActivityFeedStyle.standard != ActivityFeedStyle.lane)
     }
 
     /// The horizontal extent of what is drawn inside `band` that differs from the band's left-edge background.

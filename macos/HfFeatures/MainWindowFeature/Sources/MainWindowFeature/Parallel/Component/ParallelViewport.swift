@@ -42,7 +42,7 @@ final class ParallelScrollObservationView: NSView {
     var explicitNavigationID: String?
     private var preservedHorizontalOffset: CGFloat?
     private var configuredHorizontalPosition = false
-    var focusedLaneIndex: Int?
+    var focusReveal = ParallelFocusReveal()
     private var previousNavigationID: String?
     func cancelHorizontalMovement() { pendingOffset = nil; preservedHorizontalOffset = nil }
     var ids: [String] = []

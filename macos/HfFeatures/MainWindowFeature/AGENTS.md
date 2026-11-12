@@ -297,9 +297,12 @@ no embedded terminal anywhere in this package:
   lease). `ParallelColumnModel.chrome` (`.lane`, set from the VM role) selects the v2 lane surface (`--bg`, no status
   strip, `--border` separators, head/body/foot frames); the Graph inspector's VM sets `.inspector`, and
   `WorkflowSelectedActivityView` forces it, so the inspector keeps its `cardFill` surface, strip and `Divider`.
-  When focus ENTERS a different lane (a first-responder change inside the row's document, never a re-render),
-  `ParallelScrollObservationView` cancels pending horizontal restoration and scrolls the minimum distance that
-  shows the whole lane; residency then follows the new geometry.
+  When KEYBOARD focus (Tab, Shift-Tab; the first-responder change happens inside a key-down event) ENTERS a
+  different lane, `ParallelScrollObservationView` cancels pending horizontal restoration and scrolls to show the whole
+  lane plus its separator and 1 point of the neighbouring lane in the scroll direction, so that neighbour intersects the
+  viewport, becomes resident and the next Tab or Shift-Tab can continue. Pointer focus never scrolls the row, a lane
+  already shown that way does not move it, and a reveal that finds the row's layout not ready is kept and applied when
+  the document's frame next changes. Residency stays geometry-driven.
   The standalone group and workflow Parallel view share the measured horizontal viewport surface.
   The Graph selected-node inspector instead renders one width-fitting conversation at a time; its
   explicit selector determines residency while its measured width is positive. Zero width or hiding

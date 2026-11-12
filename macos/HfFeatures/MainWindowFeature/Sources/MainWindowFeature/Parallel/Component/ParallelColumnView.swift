@@ -145,8 +145,11 @@ struct ParallelColumnView: View {
                 .padding(.horizontal, HfRadius.Metrics.spacing16)
                 .padding(.vertical, HfRadius.Metrics.spacing12)
             laneHairline
-            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+            // `.hd-lane__body`: padding 16, gap 12. One owner per edge: the block outside the feed owns the top
+            // 16; the feed owns its first entry's `Lane.paddingTop`, which the block's negative bottom padding pulls
+            // up to the 12 pt row gap, so the block and the feed's first entry sit exactly 12 apart.
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
+                VStack(alignment: .leading, spacing: TaskScreenStyle.Lane.rowGap) {
                     if let message = model.outcomeMessage {
                         Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
                     }
@@ -154,13 +157,14 @@ struct ParallelColumnView: View {
                     historyBoundary
                     resultCallout
                 }
-                .padding(.horizontal, HfRadius.Metrics.spacing16)
-                .padding(.top, HfRadius.Metrics.spacing16)
+                .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
+                .padding(.top, TaskScreenStyle.Lane.paddingTop)
+                .padding(.bottom, TaskScreenStyle.Lane.rowGap - TaskScreenStyle.Lane.paddingTop)
                 // The feed fills the body edge to edge and supplies its own 16 pt insets through `.lane`.
                 SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
                     SkeletonRows(count: 4, showsBadge: false)
-                        .padding(.top, HfRadius.Metrics.spacing4)
-                        .padding(.horizontal, HfRadius.Metrics.spacing16)
+                        .padding(.top, TaskScreenStyle.Lane.paddingTop)
+                        .padding(.horizontal, TaskScreenStyle.Lane.paddingHorizontal)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } content: {
                     feed
