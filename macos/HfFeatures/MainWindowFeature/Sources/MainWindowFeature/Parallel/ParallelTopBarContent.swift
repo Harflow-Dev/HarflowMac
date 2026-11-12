@@ -65,7 +65,7 @@ extension TaskBadgeModel {
     /// done. Non-running badges carry no icon. `nil` when there is nothing to count.
     nonisolated static func group(_ counts: ParallelStatusCounts) -> TaskBadgeModel? {
         guard let text = counts.text else { return nil }
-        let icon: Icon = counts.running > 0 ? .spinner : .none
+        let icon: Icon = counts.running > 0 ? .spinner : .hidden
         let tone: Tone = if counts.running > 0 { .running } else if counts.failed > 0 { .failed } else if counts.cancelled > 0 { .neutral } else { .done }
         return TaskBadgeModel(icon: icon, tone: tone, label: text, clock: .none, suffix: nil)
     }

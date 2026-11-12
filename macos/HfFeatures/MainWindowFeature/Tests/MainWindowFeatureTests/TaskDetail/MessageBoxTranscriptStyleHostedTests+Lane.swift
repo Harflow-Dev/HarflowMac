@@ -2,6 +2,7 @@ import AppKit
 import HfTestUtilities
 import HfUI
 @testable import MainWindowFeature
+import MonitorCore
 import SwiftUI
 import Testing
 
@@ -100,5 +101,30 @@ extension MessageBoxTranscriptStyleHostedTests {
 
         // then
         #expect(sink.values == ["hello"])
+    }
+
+    @Test func givenAMountedLane_whenTextIsTypedAndSent_thenTheColumnsSubmitClosureReceivesNowFalse() async throws {
+        // given — the production lane view, whose composer must queue only.
+        final class Recorder: @unchecked Sendable { var calls: [String] = [] }
+        let recorder = Recorder()
+        let task = try #require(TaskInfo(.object(["task_id": .string("lane"), "backend": .string("codex"), "status": .string("running"),
+                                                 "repo_path": .string("/tmp")])))
+        var model = ParallelColumnModel(id: "lane", task: task, title: "Lane", subtitle: "", isBusy: false, outcomeMessage: nil,
+                                        showPrompt: false, prompt: nil, rows: [], activityRows: [], liveStep: nil, isLoading: false,
+                                        summary: nil, onTapTakeover: nil, onTapOpenTask: {})
+        model.onSubmitMessage = { text, now in recorder.calls.append("\(text)|now=\(now)"); return true }
+        let page = fixture(ParallelColumnView(model: model).frame(width: 380, height: 500), size: CGSize(width: 380, height: 500), dark: false)
+        defer { page.close() }
+        await page.settle { Self.editableField(in: page) != nil && page.element("Send to Codex") != nil }
+        let field = try #require(Self.editableField(in: page))
+        await Self.type("hello", into: field, in: page)
+        await page.settle { page.element("Send to Codex").map { TaskStoppingHostedTests.isEnabled($0) == true } ?? false }
+
+        // when
+        #expect(page.press(try #require(page.element("Send to Codex"))))
+
+        // then
+        #expect(recorder.calls == ["hello|now=false"])
+        #expect(page.element("Send now") == nil)
     }
 }

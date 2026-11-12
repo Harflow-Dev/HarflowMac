@@ -128,7 +128,7 @@ struct ParallelColumnView: View {
     let model: ParallelColumnModel
     @FocusState private var historyBoundaryFocused: Bool
     @State private var headFocusToken = 0
-    @State private var awaitingCurrentActivity = false
+    @State private var adoptionFocus = AdoptionFocusTracker()
     @State private var state: ParallelColumnUIState
     @State private var resultContentSize = CGSize(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.parallelResultMaximumHeight)
 
@@ -199,13 +199,21 @@ struct ParallelColumnView: View {
             .padding(HfRadius.Metrics.spacing12)
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .onChange(of: model.cachedHistoryNotice) { _, notice in
-            // "Load current activity" completed: the notice is gone, so the head takes focus and says so.
-            guard notice == nil, awaitingCurrentActivity else { return }
-            awaitingCurrentActivity = false
-            headFocusToken += 1
-            NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
-                userInfo: [.announcement: "Current activity loaded", .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+        .onChange(of: model.cachedHistoryNotice) { old, notice in
+            switch adoptionFocus.noticeChanged(from: old, to: notice) {
+            case .loaded:
+                // "Load current activity" completed: the notice is gone, so the head takes focus and says so.
+                headFocusToken += 1
+                NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
+                    userInfo: [.announcement: "Current activity loaded", .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+            case .failed, .none:
+                break
+            }
+        }
+        // The outcome line is announced once when it first appears (in the tail or, while loading, above the composer)
+        // and again only when it changes; the lane's UI state remembers the last one across recycled views.
+        .onChange(of: model.outcomeMessage, initial: true) { _, outcome in
+            if state.shouldAnnounce(outcome: outcome), let outcome { ParallelOutcomeAnnouncer.announce(outcome) }
         }
     }
 
@@ -260,7 +268,7 @@ struct ParallelColumnView: View {
                     .focused($historyBoundaryFocused)
                 if let adopt = model.onAdoptWindow {
                     Button("Load current activity") {
-                        awaitingCurrentActivity = true
+                        adoptionFocus.requestAdoption()
                         adopt()
                         historyBoundaryFocused = true
                         NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,

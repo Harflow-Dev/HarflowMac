@@ -69,10 +69,18 @@ final class TopBarLayoutState {
     /// The detail column's width, `nil` before the first measurement; read only by the principal, for a group's
     /// width budget (`GroupTopBarBudget`). Written only when it changes.
     private(set) var detailWidth: CGFloat?
+    /// The window's content width, `nil` before the first measurement. The principal is centred in the window, so a
+    /// group's budget is also bounded by what fits beside the trailing buttons on both sides of the centre.
+    private(set) var windowWidth: CGFloat?
 
     /// Records the detail column's measured width.
     func setDetailWidth(_ width: CGFloat) {
         if detailWidth != width { detailWidth = width }
+    }
+
+    /// Records the window's measured width.
+    func setWindowWidth(_ width: CGFloat) {
+        if windowWidth != width { windowWidth = width }
     }
 
     /// Records a measurement.
@@ -321,8 +329,15 @@ enum GroupTopBarBudget {
     /// The bar's own margins.
     static let margins = TaskScreenStyle.TopBar.paddingLeading + TaskScreenStyle.TopBar.paddingTrailing
 
-    /// The principal's cap for a detail column of `detailWidth`; never negative.
-    static func cap(detailWidth: CGFloat) -> CGFloat { max(0, detailWidth - reservedButtons - margins) }
+    /// The principal's cap for a detail column of `detailWidth`; never negative. The principal is a centred toolbar
+    /// item, so with a `windowWidth` the cap is also at most twice the room between the window's centre and the
+    /// trailing buttons: `2 × (windowWidth / 2 − reserved buttons − margin)`.
+    static func cap(detailWidth: CGFloat, windowWidth: CGFloat? = nil) -> CGFloat {
+        let leading = max(0, detailWidth - reservedButtons - margins)
+        guard let windowWidth else { return leading }
+        let centred = max(0, 2 * (windowWidth / 2 - reservedButtons - margins))
+        return min(leading, centred)
+    }
 
     private static func buttonWidth(_ label: String, border: CGFloat) -> CGFloat {
         let font = NSFont.systemFont(ofSize: 13, weight: .medium)

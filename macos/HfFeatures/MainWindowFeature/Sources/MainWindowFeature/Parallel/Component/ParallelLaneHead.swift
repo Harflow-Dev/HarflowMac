@@ -8,6 +8,7 @@
 //
 
 import AppKit
+import Foundation
 import HfUI
 import MonitorCore
 import SwiftUI
@@ -25,6 +26,9 @@ struct ParallelLaneHead: View {
     var focusToken = 0
 
     @FocusState private var titleFocused: Bool
+    /// The title is a keyboard target only while it is receiving focus after "Load current activity"; otherwise it is
+    /// plain text and never draws a focus ring or takes initial focus.
+    @State private var titleIsFocusTarget = false
     @AccessibilityFocusState private var titleAccessibilityFocused: Bool
 
     private typealias Metrics = TaskScreenStyle.Lane
@@ -39,7 +43,7 @@ struct ParallelLaneHead: View {
                     .foregroundStyle(TaskScreenStyle.Colors.text.color)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .focusable()
+                    .focusable(titleIsFocusTarget)
                     .focused($titleFocused)
                     .accessibilityFocused($titleAccessibilityFocused)
                 Text(caption)
@@ -52,8 +56,14 @@ struct ParallelLaneHead: View {
             if let onOpenTask { actionsMenu(onOpenTask) }
         }
         .onChange(of: focusToken) { _, _ in
-            titleFocused = true
-            titleAccessibilityFocused = true
+            titleIsFocusTarget = true
+            DispatchQueue.main.async {
+                titleFocused = true
+                titleAccessibilityFocused = true
+            }
+        }
+        .onChange(of: titleFocused) { _, focused in
+            if !focused { titleIsFocusTarget = false }
         }
     }
 

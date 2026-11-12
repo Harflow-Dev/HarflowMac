@@ -8,6 +8,9 @@ struct ParallelFocusReveal {
     /// The lane keyboard focus was last moved into and handled (revealed, or already whole): a reveal fires only when
     /// keyboard focus enters a different lane. Set only once the lane was handled, never while its reveal is pending.
     var lane: Int?
+    /// The lane was entered by the pointer only: nothing scrolled, so a keyboard move to a control that is off-screen in
+    /// that same lane still reveals it (it is skipped only when the lane is already whole).
+    var lanePointerOnly = false
     /// A lane whose reveal waits for the row's layout, retried when the document's frame changes.
     var pending: Int?
     var retry: AnyCancellable?
@@ -46,12 +49,12 @@ extension ParallelScrollObservationView {
             focusReveal = ParallelFocusReveal()
             return
         }
-        // Pointer focus is recorded without scrolling, so a later keyboard move within the same lane does not reveal it.
+        // Pointer focus is recorded without scrolling. A later keyboard move within that lane reveals it only if the lane is not already whole.
         guard isKeyboard else {
-            focusReveal = ParallelFocusReveal(lane: index)
+            focusReveal = ParallelFocusReveal(lane: index, lanePointerOnly: true)
             return
         }
-        guard index != focusReveal.lane else { return }
+        guard index != focusReveal.lane || focusReveal.lanePointerOnly else { return }
         reveal(index, scroll: scroll, document: document)
     }
 

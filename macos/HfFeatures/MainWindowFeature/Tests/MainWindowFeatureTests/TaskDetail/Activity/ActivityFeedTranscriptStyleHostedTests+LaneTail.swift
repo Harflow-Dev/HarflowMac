@@ -72,7 +72,7 @@ extension ActivityFeedTranscriptStyleHostedTests {
         #expect(ActivityFeedTailPresentation.standard(.init()).isVisible(with: ActivityFeedTail()) == false)
     }
 
-    @Test func givenAnUncertainBubble_whenMounted_thenItIsNotPinnedAndHasNoCancel() async throws {
+    @Test func givenAnUncertainBubble_whenMounted_thenItIsRenderedAsUncertainWithoutCancel() async throws {
         // given
         let uncertain = bubble("u", .uncertain("Delivery could not be confirmed. The message is not requeued."), "Summarise the change.")
         #expect(!uncertain.isPinned && !uncertain.canCancel)
@@ -82,22 +82,24 @@ extension ActivityFeedTranscriptStyleHostedTests {
         defer { fixture.close() }
         await fixture.settle { fixture.element("Summarise the change.") != nil }
 
-        // then
-        #expect(fixture.element("Delivery uncertain") != nil || fixture.element("Summarise the change.") != nil)
+        // then — the bubble and its rendered caption exist, so the absence of Cancel is not vacuous.
+        _ = try #require(fixture.element("Summarise the change."))
+        _ = try #require(fixture.element("Delivery uncertain"), "the rendered caption")
         #expect(fixture.element("Cancel queued message") == nil)
     }
 
-    @Test func givenADeliveringBubble_whenMounted_thenItKeepsTheQueuedCaptionWithoutCancel() async throws {
+    @Test func givenADeliveringBubble_whenMounted_thenItRendersQueuedWithoutCancel() async throws {
         // given
         let delivering = bubble("d", .queued(canCancel: false, note: nil), "Run the suite again.")
 
         // when
         let fixture = try await mountTail(tailModel(bubbles: [delivering], outcome: "Delivery is in progress."))
         defer { fixture.close() }
-        await fixture.settle { fixture.element("Run the suite again.") != nil }
+        await fixture.settle { fixture.element("Run the suite again.") != nil && fixture.element("Delivery is in progress.") != nil }
 
         // then
-        #expect(delivering.caption == "Queued")
+        _ = try #require(fixture.element("Run the suite again."))
+        _ = try #require(fixture.element("Queued"), "the rendered caption")
         #expect(fixture.element("Cancel queued message") == nil)
     }
 
@@ -108,6 +110,78 @@ extension ActivityFeedTranscriptStyleHostedTests {
         await fixture.settle { fixture.element("Cancel queued message") != nil }
 
         // then
-        #expect(fixture.element("Cancel queued message") != nil)
+        _ = try #require(fixture.element("Cancel queued message"))
+    }
+
+    // MARK: - Outcome announcement
+
+    private func announcements(_ model: ParallelColumnModel, waiting seconds: Double = 0.6) async throws -> [String] {
+        var posted: [String] = []
+        let previous = ParallelOutcomeAnnouncer.post
+        ParallelOutcomeAnnouncer.post = { posted.append($0) }
+        defer { ParallelOutcomeAnnouncer.post = previous }
+        let fixture = try await mountTail(model)
+        defer { fixture.close() }
+        try await Task.sleep(for: .seconds(seconds))
+        return posted
+    }
+
+    @Test func givenAnOutcomeThatCreatesTheTail_whenMounted_thenItIsAnnouncedOnce() async throws {
+        // given / when
+        let posted = try await announcements(tailModel(bubbles: [], outcome: "Announce tail outcome."))
+
+        // then — other tests in the suite may share the announcer, so only this text is counted
+        #expect(posted.filter { $0.contains("Announce tail outcome.") }.count == 1, "\(posted)")
+    }
+
+    @Test func givenAnOutcomeWhileTheLaneIsLoading_whenMounted_thenTheFootLineIsAnnouncedOnce() async throws {
+        // given
+        var model = tailModel(bubbles: [], outcome: "Announce foot outcome.", rowCount: 0)
+        model.isLoading = true
+
+        // when
+        let posted = try await announcements(model)
+
+        // then
+        #expect(posted.filter { $0.contains("Announce foot outcome.") }.count == 1, "\(posted)")
+    }
+
+    @Test func givenAnnouncementsInOneBurst_whenTheWindowCloses_thenTheyPostAsOneAndIdenticalTextsCollapse() async throws {
+        // given
+        var posted: [String] = []
+        let previous = ParallelOutcomeAnnouncer.post
+        ParallelOutcomeAnnouncer.post = { posted.append($0) }
+        defer { ParallelOutcomeAnnouncer.post = previous }
+
+        // when — Cancel all sets the same outcome on three lanes
+        for _ in 0 ..< 3 { ParallelOutcomeAnnouncer.announce("Announce burst.") }
+        try await Task.sleep(for: .seconds(0.6))
+
+        // then
+        #expect(posted.filter { $0.contains("Announce burst.") }.count == 1, "\(posted)")
+        #expect(!posted.contains { $0.contains("Announce burst. Announce burst.") })
+    }
+}
+
+@Suite struct OutcomeAnnouncementTests {
+    @Test func givenTheColumnState_whenOutcomesChange_thenOnlyANewOutcomeIsAnnounced() async {
+        await MainActor.run {
+            let state = ParallelColumnUIState()
+            #expect(state.shouldAnnounce(outcome: nil) == false)
+            #expect(state.shouldAnnounce(outcome: "Queued message cancelled.") == true)
+            #expect(state.shouldAnnounce(outcome: "Queued message cancelled.") == false, "a recycled view does not repeat it")
+            #expect(state.shouldAnnounce(outcome: "Delivery is in progress.") == true)
+            #expect(state.shouldAnnounce(outcome: nil) == false)
+            #expect(state.shouldAnnounce(outcome: "Delivery is in progress.") == true, "the same text announces again after it cleared")
+        }
+    }
+
+    @Test func givenABurst_whenFlushed_thenUniqueTextsBecomeOneAnnouncement() {
+        var burst = OutcomeAnnouncementCoalescer()
+        burst.add("Cancelled.")
+        burst.add("Cancelled.")
+        burst.add("Couldn't cancel the message: busy")
+        #expect(burst.flush() == "Cancelled. Couldn't cancel the message: busy")
+        #expect(burst.flush() == nil)
     }
 }

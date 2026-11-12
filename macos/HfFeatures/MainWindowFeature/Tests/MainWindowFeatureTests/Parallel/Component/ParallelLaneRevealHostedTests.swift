@@ -249,7 +249,7 @@ import Testing
         #expect(abs(row.scroll.documentVisibleRect.minX - target) < 1, "visible \(row.scroll.documentVisibleRect)")
     }
 
-    @Test func givenPointerFocusInAPartlyHiddenLane_whenKeyboardFocusMovesWithinThatLane_thenTheRowDoesNotMove() async throws {
+    @Test func givenPointerFocusInAPartlyHiddenLane_whenKeyboardFocusMovesToAnotherControlInIt_thenTheLaneIsRevealed() async throws {
         // given — pointer focus lands in the peek lane's first field: recorded, without scrolling.
         let row = try await RevealRow.mounted(laneCount: 5, documentLanes: 5)
         defer { row.close() }
@@ -257,12 +257,28 @@ import Testing
         await row.settle { row.observer.focusReveal.lane == 2 }
         #expect(row.scroll.documentVisibleRect.minX == 0)
 
-        // when — Tab moves to the second field of the same lane
+        // when — Tab moves to the second field of the same, still partly hidden lane
         row.focusSecondField(lane: 2)
+        let target = 3 * ParallelTestGeometry.laneStride - ParallelLayout.dividerWidth + 2 - row.viewportWidth
+        await row.settle { abs(row.scroll.documentVisibleRect.minX - target) < 1 }
+
+        // then — the lane was only entered by the pointer, so keyboard focus still reveals it.
+        #expect(abs(row.scroll.documentVisibleRect.minX - target) < 1, "visible \(row.scroll.documentVisibleRect)")
+    }
+
+    @Test func givenPointerFocusInAWholeLane_whenKeyboardFocusMovesWithinThatLane_thenTheRowDoesNotMove() async throws {
+        // given
+        let row = try await RevealRow.mounted(laneCount: 5, documentLanes: 5)
+        defer { row.close() }
+        row.focus(lane: 0, keyboard: false)
+        await row.settle { row.observer.focusReveal.lane == 0 }
+
+        // when
+        row.focusSecondField(lane: 0)
         pump(turns: 30)
         await row.settle { true }
 
-        // then — the lane was already entered, so the row stays put.
+        // then — the lane is already whole, so nothing scrolls.
         #expect(row.scroll.documentVisibleRect.minX == 0, "visible \(row.scroll.documentVisibleRect)")
     }
 

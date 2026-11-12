@@ -56,6 +56,7 @@ struct ViewPresentationContextModifier: ViewModifier {
             ) { alert in
                 ForEach(alert.actions, id: \.self) { action in
                     Button(action.title, role: action.role, action: action.action)
+                        .keyboardShortcut(action.isDefault ? .defaultAction : nil)
                 }
             } message: { alert in
                 if let description = alert.description {
@@ -73,6 +74,7 @@ struct ViewPresentationContextModifier: ViewModifier {
             ) { dialog in
                 ForEach(dialog.actions, id: \.self) { action in
                     Button(action.title, role: action.role, action: action.action)
+                        .keyboardShortcut(action.isDefault ? .defaultAction : nil)
                 }
             } message: { dialog in
                 if let description = dialog.description {

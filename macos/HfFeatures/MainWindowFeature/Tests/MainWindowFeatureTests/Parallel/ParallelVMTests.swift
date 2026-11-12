@@ -328,6 +328,7 @@ import Testing
         #expect(dialog.title == "Cancel every running task in this group?")
         #expect(dialog.actions.map(\.title) == ["Cancel", "Cancel all"])
         #expect(dialog.actions.map(\.role) == [.cancel, .destructive])
+        #expect(dialog.actions.map(\.isDefault) == [true, false], "Return chooses Cancel, never Cancel all")
         verify(useCase).cancelAll(.any).called(0)
         dialog.actions.first?.action()
         verify(useCase).cancelAll(.any).called(0)

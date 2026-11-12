@@ -8,7 +8,7 @@ extension ParallelVM {
     func didTapCancelAll() {
         guard canCancelAll else { return }
         publishDialog("Cancel every running task in this group?") {
-            AlertAction(title: "Cancel", role: .cancel) {}
+            AlertAction(title: "Cancel", role: .cancel, isDefault: true) {}
             AlertAction(title: "Cancel all", role: .destructive) { [weak self] in
                 guard let self else { return }
                 let ids = useCase.runningInSubtrees(of: memberIDs)

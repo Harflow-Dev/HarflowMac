@@ -39,12 +39,15 @@ public struct AlertAction: Sendable {
     let id: UUID = .init()
     public let title: String
     public let role: ButtonRole?
+    /// Whether Return activates this button. Only a confirmation that must not default to its destructive choice sets it.
+    public let isDefault: Bool
     public let action: @MainActor () -> Void
     
     @DummyableInit
-    public init(title: String, role: ButtonRole? = nil, action: @MainActor @escaping () -> Void = {}) {
+    public init(title: String, role: ButtonRole? = nil, isDefault: Bool = false, action: @MainActor @escaping () -> Void = {}) {
         self.title = title
         self.role = role
+        self.isDefault = isDefault
         self.action = action
     }
 }

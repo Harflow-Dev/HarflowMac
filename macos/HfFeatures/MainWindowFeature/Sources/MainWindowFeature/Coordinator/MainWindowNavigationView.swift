@@ -52,6 +52,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             }
         }
         .onGeometryChange(for: TopBarWidthBand.self) { TopBarWidthBand(width: $0.size.width) } action: { layout.setBand($0) }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { layout.setWindowWidth($0) }
         .environment(\.topBarLayout, layout)
         .toolbar {
             if coordinator.canReturnToResourceSlots {

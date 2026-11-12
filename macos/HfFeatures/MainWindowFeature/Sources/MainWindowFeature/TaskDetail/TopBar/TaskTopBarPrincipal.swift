@@ -55,7 +55,7 @@ struct TaskTopBarPrincipal: View {
     /// A Parallel group: title, badge and meta in the group's own width budget (the detail column minus both toolbar
     /// buttons and the bar's margins). The badge stays whole; the meta is whole or dropped, never shortened.
     private func groupBody(_ group: GroupTopBarContent) -> some View {
-        let cap = layout.detailWidth.map(GroupTopBarBudget.cap(detailWidth:)) ?? layout.effectiveBand.cap
+        let cap = layout.detailWidth.map { GroupTopBarBudget.cap(detailWidth: $0, windowWidth: layout.windowWidth) } ?? layout.effectiveBand.cap
         return TopBarPrincipalLayout(cap: cap, probe: probe, titleFloor: GroupTopBarBudget.titleFloor, metaMayTruncate: false) {
             Text(group.title)
                 .font(.hf(.reading, weight: Metrics.titleWeight))
@@ -80,9 +80,13 @@ struct TaskTopBarPrincipal: View {
             .font(.hf(.secondary))
             .foregroundStyle(Metrics.metaColor.color)
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            // Flexible like the task meta: the layout proposes the whole ideal width (no truncation can occur) or zero
+            // (nothing is drawn), so a dropped meta has no frame and cannot spill past the principal's bounds.
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .clipped()
+            // One element for the frame itself, so its accessibility frame is the drawn width (zero when dropped).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(meta)
             .accessibilityIdentifier("group-top-bar.meta")
     }
 

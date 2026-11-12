@@ -365,11 +365,6 @@ struct ActivityFeedNativeTailContent: View {
                         .accessibilityAddTraits(.isStaticText)
                 }
             }
-            .onChange(of: standard.outcome) { _, outcome in
-                guard let outcome else { return }
-                NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
-                    userInfo: [.announcement: outcome, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
-            }
         }
     }
 }

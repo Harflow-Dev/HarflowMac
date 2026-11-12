@@ -173,7 +173,7 @@ import Testing
         #expect(badge(counts(running: 1, done: 2))?.icon == .spinner)
         #expect(badge(counts(running: 1, done: 2))?.label == "1 running · 2 done")
         #expect(badge(counts(done: 3))?.tone == .done)
-        #expect(badge(counts(done: 3))?.icon == TaskBadgeModel.Icon.none)
+        #expect(badge(counts(done: 3))?.icon == TaskBadgeModel.Icon.hidden)
         #expect(badge(counts(done: 3))?.label == "3 done")
         #expect(badge(counts(done: 2, failed: 1))?.tone == .failed)
         #expect(badge(counts(done: 2, failed: 1))?.label == "2 done · 1 failed")

@@ -35,6 +35,17 @@ final class ParallelColumnUIState {
     @ObservationIgnored var inventoryComplete = false
     @ObservationIgnored var inventoryIncomplete = false
     @ObservationIgnored var inventoryError: String?
+    /// The outcome line last announced for this lane, so a recycled view never repeats it.
+    @ObservationIgnored private(set) var lastAnnouncedOutcome: String?
+
+    /// Records `outcome` and returns whether it is new and should be announced. A cleared outcome resets the memory,
+    /// so the same text announces again when it returns.
+    func shouldAnnounce(outcome: String?) -> Bool {
+        guard let outcome else { lastAnnouncedOutcome = nil; return false }
+        guard outcome != lastAnnouncedOutcome else { return false }
+        lastAnnouncedOutcome = outcome
+        return true
+    }
 }
 
 // MARK: - ParallelVerticalAnchor
