@@ -152,7 +152,7 @@ struct CenteredComposerHostedTests {
         width: Int, height: Int, expectedHeight: CGFloat
     ) async throws {
         // given — the + options popover presented up front (viewport height minus its two paddings).
-        let model = NewSessionViewModelMock(backend: "vibe", repo: "/fixture/repository", message: "Fixture draft")
+        let model = NewSessionViewModelMock(backend: "vibe", repo: "/fixture/repository", message: "Fixture draft", controls: .previewVibeLike)
         model.effort = "retained-effort"
         let fixture = try makeHostedFixture(
             model: model,

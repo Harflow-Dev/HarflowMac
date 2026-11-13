@@ -85,7 +85,7 @@ import Testing
         let previousActivationPolicy = NSApp.activationPolicy()
         NSApp.setActivationPolicy(.regular)
         defer { NSApp.setActivationPolicy(previousActivationPolicy) }
-        let model = NewSessionViewModelMock(backend: "vibe", repo: "/fixture/repository", message: "Fixture draft")
+        let model = NewSessionViewModelMock(backend: "vibe", repo: "/fixture/repository", message: "Fixture draft", controls: .previewVibeLike)
         model.effort = "retained-effort"
         model.turnLimit = "retained-invalid-turns"
         let host = NSHostingView(rootView: NewSessionView(model, optionsPresented: true))

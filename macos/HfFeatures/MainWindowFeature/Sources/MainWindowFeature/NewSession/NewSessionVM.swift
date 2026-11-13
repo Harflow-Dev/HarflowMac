@@ -133,6 +133,7 @@ final class NewSessionVM: NewSessionViewModel {
     private var modelBackend = ""
     private var hasChosenBackend = false
     private var catalogBackendIDs: Set<String> = []
+    private var catalog: BackendCatalog = .empty
     private var rememberedChoices: [String: Choices] = [:]
     private struct Choices {
         let backend: String
@@ -150,17 +151,32 @@ final class NewSessionVM: NewSessionViewModel {
             messages.append("The requested harness is unavailable. Choose a harness explicitly.")
         }
         if !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            if !showsModel {
+            if controls.model == .unsupported {
                 messages.append("This harness does not accept a model option. Choose Default explicitly.")
-            } else if modelBackend != backend {
+            } else if controls.model == .supported || catalog.state == .available, modelBackend != backend {
                 messages.append("Review and select the model for this harness.")
             }
         }
-        if !effort.isEmpty, !effortOptions.contains(effort) { messages.append("The requested effort is unsupported by this harness.") }
+        switch controls.effort {
+        case .levels(let levels):
+            if !effort.isEmpty, !levels.contains(effort) { messages.append("The requested effort is unsupported by this harness.") }
+        case .unsupported:
+            if !effort.isEmpty { messages.append("The requested effort is unsupported by this harness.") }
+        case .unknown:
+            break
+        }
         if !Self.freedomLevels.contains(where: { $0.id == freedom }) { messages.append("The requested access is unsupported.") }
         if let turnLimitError { messages.append(turnLimitError) }
         if let callerApprovalError { messages.append(callerApprovalError) }
+        if catalog.state != .available, hasNonDefaultHarnessOption {
+            messages.append("Harness options can't be checked until the harness list is available.")
+        }
         return messages
+    }
+
+    /// A model, effort or turn limit the user set; the defaults need no engine fact to be checked.
+    private var hasNonDefaultHarnessOption: Bool {
+        ![model, turnLimit].allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } || !effort.isEmpty
     }
 
     private(set) var agentOptions: [BackendTab] = []
@@ -197,28 +213,30 @@ final class NewSessionVM: NewSessionViewModel {
         }
     }
 
-    /// Vibe keeps effort in its own config. Cursor has no effort flag, so its level list is empty.
-    var showsEffort: Bool { backend != "vibe" && !BackendStyle.effortLevels(backend).isEmpty }
+    /// The run-option controls the engine reports for the chosen backend; `.unavailable` (all
+    /// unknown) unless the catalog is available. Never keyed on a backend name.
+    var controls: BackendControls { catalog.controls(for: backend) }
     /// The Model combo's suggestions: "Default" (the agent's own model, an empty value) first, then
     /// the agent's known models. Only "Default" until a discovery finishes or when there are none.
     var modelChoices: [ModelChoiceModel] {
         [ModelChoiceModel(id: "", title: "Default")] + modelOptions.map { ModelChoiceModel(id: $0.value, title: $0.label) }
     }
 
-    /// Vibe rejects a model outright: its model is chosen in its own config.
-    var showsModel: Bool { backend != "vibe" }
-    /// Shown in place of the Model control for an agent that takes no model from harflow (vibe).
+    /// Whether the engine says this harness takes a model; suggestions load only then.
+    var showsModel: Bool { controls.model == .supported }
+    /// Shown for a harness the engine says takes no model.
     var modelUnavailableNote: String? {
-        backend == "vibe" ? "Vibe uses the model set in its own config (~/.vibe/config.toml)." : nil
+        catalog.state == .available && controls.model == .unsupported ? "Model selection isn't available for this harness." : nil
     }
 
-    /// Only agents harflow can cap (claude, vibe). Cursor has no turn-cap flag.
-    var showsTurnLimit: Bool { BackendStyle.supportsTurnLimit(backend) }
-    /// The effort levels offered for the chosen backend: antigravity takes only `low`/`medium`/
-    /// `high` (it refuses `xhigh`), cursor takes none, and the others take harflow's full
-    /// vocabulary. The table lives in `BackendStyle`; unsupported requested effort remains
-    /// visible for review and blocks Start.
-    var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
+    var showsTurnLimit: Bool { controls.turnCap == .supported }
+    var showsEffort: Bool { !effortOptions.isEmpty }
+    /// The effort levels the engine reports for the chosen backend, in its order. Unsupported
+    /// requested effort remains visible for review and blocks Start.
+    var effortOptions: [String] {
+        if case .levels(let levels) = controls.effort { return levels }
+        return []
+    }
 
     var canStart: Bool {
         agentNotFoundNote == nil && qualification?.isReady == true && !optionsLocked && validationMessages.isEmpty && !backend.isEmpty && !repo.isEmpty
@@ -235,7 +253,7 @@ final class NewSessionVM: NewSessionViewModel {
     /// Why Start is held back by the Turn limit field, or `nil` when it is blank, valid or hidden.
     var turnLimitError: String? {
         guard !turnLimit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        if !showsTurnLimit { return "The requested turn limit is unsupported by this harness." }
+        if controls.turnCap == .unsupported { return "The requested turn limit is unsupported by this harness." }
         guard parsedTurnLimit == nil else { return nil }
         return "Enter a whole number above 0, or leave it empty for the default."
     }
@@ -511,6 +529,8 @@ final class NewSessionVM: NewSessionViewModel {
     private func applyCatalog(_ catalog: BackendCatalog) {
         // An in-flight preflight must not launch using a catalog snapshot it no longer owns.
         if composerState == .preparing { requestRevision = UUID() }
+        let previousModel = controls.model
+        self.catalog = catalog
         catalogBackendIDs = Set(Self.computeAgentOptions(from: catalog).options.map(\.id))
         approvalBackends = catalog.state == .available ? Set(catalog.entries.filter(\.supportsCallerApprovals).map(\.backend)) : []
         let (options, unavailableNote) = Self.computeAgentOptions(from: catalog)
@@ -527,7 +547,13 @@ final class NewSessionVM: NewSessionViewModel {
             agentOptions.append(BackendTab(id: backend, isNotFound: true))
         }
         recomputeAgentNotFoundNote()
-        if backend != previous, didSubscribe { agentDidChange() }
+        if backend != previous, didSubscribe {
+            agentDidChange()
+        } else if didSubscribe, controls.model != previousModel {
+            // The engine's answer for this harness arrived or changed: load (or drop) suggestions.
+            // Requested values are never touched; only validation re-derives.
+            loadModels()
+        }
         if didSubscribe, composerState == .editable { refreshQualification() }
     }
 

@@ -9,7 +9,7 @@ import Testing
 @MainActor
 @Suite struct NewSessionComposerStateTests {
     private func make(
-        catalog: BackendCatalog = .init(entries: [.init(backend: "claude", installed: true)], state: .available),
+        catalog: BackendCatalog = .init(entries: [BackendControlFixtures.entry("claude")], state: .available),
         catalogSubject: PassthroughSubject<BackendCatalog, Never>? = nil,
         runGate: QualificationCheckGate? = nil
     ) -> (NewSessionVM, MockNewSessionUseCase, MockNewSessionRouting) {
@@ -215,9 +215,9 @@ import Testing
         let (vm, useCase, routing) = make(catalog: .init(entries: [], state: .loading), catalogSubject: subject, runGate: gate)
         given(useCase).run(.any, runtime: .any).willThrow(ToolError.unknownOutcome(message: "Launch owner did not answer"))
         let submittedBackend = vm.backend
-        vm.didChangeModel("custom-model")
+        // Only defaults reach Start while the harness list is loading: model, effort and turn limit
+        // cannot be checked until the catalog is available.
         vm.didChangeFreedom("publish")
-        vm.didChangeEffort("high")
         vm.didChangeName("Captured title")
         await waitUntil { vm.canStart }
         // when: the first real catalog arrives only after dispatch crossed the launch boundary.
@@ -227,8 +227,8 @@ import Testing
         await waitUntil { vm.agentOptions.contains { $0.id == "codex" } }
         // then
         #expect(vm.composerState == .submitting)
-        #expect(vm.backend == submittedBackend && vm.model == "custom-model")
-        #expect(vm.freedom == "publish" && vm.effort == "high" && vm.turnLimit.isEmpty && !vm.callerApprovals)
+        #expect(vm.backend == submittedBackend && vm.model.isEmpty)
+        #expect(vm.freedom == "publish" && vm.effort.isEmpty && vm.turnLimit.isEmpty && !vm.callerApprovals)
         #expect(vm.message == "Original draft" && vm.name == "Captured title")
         await gate.open()
         await waitUntil { vm.composerState == .unknown }
@@ -239,13 +239,13 @@ import Testing
         vm.prepareForNewTask()
         vm.didTapStart()
         #expect(vm.composerState == .unknown && vm.optionsLocked)
-        #expect(vm.backend == submittedBackend && vm.model == "custom-model")
-        #expect(vm.freedom == "publish" && vm.effort == "high" && vm.turnLimit.isEmpty && !vm.callerApprovals)
+        #expect(vm.backend == submittedBackend && vm.model.isEmpty)
+        #expect(vm.freedom == "publish" && vm.effort.isEmpty && vm.turnLimit.isEmpty && !vm.callerApprovals)
         #expect(vm.message == "Original draft" && vm.name == "Captured title")
         verify(useCase)
 .run(.matching {
-            $0.backend == submittedBackend && $0.model == "custom-model" && $0.freedom == "publish"
-                && $0.reasoningEffort == "high" && $0.title == "Captured title" && $0.maxTurns == nil && !$0.callerApprovals
+            $0.backend == submittedBackend && $0.model == nil && $0.freedom == "publish"
+                && $0.reasoningEffort == nil && $0.title == "Captured title" && $0.maxTurns == nil && !$0.callerApprovals
         }, runtime: .any)
 .called(1)
         verify(useCase).run(.any, runtime: .any).called(1)

@@ -41,7 +41,7 @@ import Testing
     }
 
     private func catalog(_ entries: [(String, Bool?)]) -> BackendCatalog {
-        BackendCatalog(entries: entries.map { BackendCatalogEntry(backend: $0.0, installed: $0.1) }, state: .available)
+        BackendCatalog(entries: entries.map { BackendControlFixtures.entry($0.0, installed: $0.1) }, state: .available)
     }
 
     // MARK: - Model combo
@@ -51,7 +51,7 @@ import Testing
 
     @Test func givenAnAgentWithKnownModels_whenTheSheetAppears_thenDefaultComesFirstThenTheModels() async {
         // given
-        let (sut, _, _, _) = makeSUT(models: ["claude": [opusOption, sonnetOption]])
+        let (sut, _, _, _) = makeSUT(catalog: catalog([("claude", true)]), models: ["claude": [opusOption, sonnetOption]], appear: false)
         sut.didChangeBackend("claude")
         #expect(sut.modelChoices == [ModelChoiceModel(id: "", title: "Default")])
 
@@ -89,7 +89,7 @@ import Testing
 
     @Test(.timeLimit(.minutes(1))) func givenAnAgentWithNoKnownModels_whenTheSheetAppears_thenOnlyDefaultIsOffered() async {
         // given
-        let (sut, useCase, _, _) = makeSUT(appear: false)
+        let (sut, useCase, _, _) = makeSUT(catalog: catalog([("claude", true)]), appear: false)
 
         // when
         // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
@@ -178,7 +178,7 @@ import Testing
 
     @Test func givenASuggestionIsPicked_whenStarted_thenItsValueIsTheModel() async {
         // given
-        let (sut, useCase, routing, _) = makeSUT(models: ["claude": [opusOption]])
+        let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true)]), models: ["claude": [opusOption]])
         sut.didChangeBackend("claude")
         sut.didAppear()
         await waitUntil { sut.modelChoices.count == 2 }
@@ -191,26 +191,75 @@ import Testing
         verify(useCase).run(.matching { $0.model == "opus" }, runtime: .any).called(1)
     }
 
-    @Test func givenVibeSelected_whenTheSheetAppears_thenNoModelListIsRequested() async {
+    @Test func givenVibeWhoseModelSelectionIsNotReady_whenTheSheetAppears_thenNoModelListIsRequested() async {
         // given
         let (sut, useCase, _, _) = makeSUT(catalog: catalog([("vibe", true)]))
 
         // when
         sut.didAppear()
 
-        // then — nothing to wait for: vibe never asks, so assert the call count stays zero.
+        // then — nothing to wait for: the engine says no model, so assert the call count stays zero.
         #expect(sut.showsModel == false)
-        #expect(sut.modelUnavailableNote == "Vibe uses the model set in its own config (~/.vibe/config.toml).")
+        #expect(sut.modelUnavailableNote == "Model selection isn't available for this harness.")
         verify(useCase).models(for: .any).called(0)
         #expect(sut.modelChoices == [ModelChoiceModel(id: "", title: "Default")])
     }
 
-    @Test func givenAnAgentThatTakesAModel_whenTheNoteIsRead_thenItIsNil() {
-        // given / when
-        let (sut, _, _, _) = makeSUT()
+    @Test func givenVibeWithModelSelectionReady_whenTheSheetAppears_thenModelIsShownAndSuggestionsAreRequested() async {
+        // given
+        let vibe = BackendControlFixtures.entry("vibe", facts: BackendControlFixtures.vibeReady)
+        let (sut, useCase, _, _) = makeSUT(
+            catalog: BackendCatalog(entries: [vibe], state: .available), models: ["vibe": [opusOption]]
+        )
+
+        // when
+        await waitUntil { sut.modelChoices.count == 2 }
 
         // then
         #expect(sut.showsModel)
         #expect(sut.modelUnavailableNote == nil)
+        verify(useCase).models(for: .value("vibe")).called(1)
+    }
+
+    @Test func givenAnAgentThatTakesAModel_whenTheNoteIsRead_thenItIsNil() {
+        // given / when
+        let (sut, _, _, _) = makeSUT(catalog: catalog([("claude", true)]))
+
+        // then
+        #expect(sut.showsModel)
+        #expect(sut.modelUnavailableNote == nil)
+    }
+
+    @Test func givenFactsArriveAfterTheSheetOpened_whenTheModelBecomesSupported_thenSuggestionsLoadAndTheTypedModelStays() async {
+        // given — the catalog is still loading, so the claude fallback has no model facts yet.
+        let (sut, useCase, _, catalogSubject) = makeSUT(models: ["claude": [opusOption]])
+        sut.didChangeBackend("claude")
+        sut.didChangeModel("custom")
+        #expect(sut.showsModel == false)
+        verify(useCase).models(for: .any).called(0)
+
+        // when
+        catalogSubject.send(catalog([("claude", true)]))
+
+        // then
+        await waitUntil { sut.modelChoices.count == 2 }
+        #expect(sut.showsModel)
+        #expect(sut.model == "custom")
+        #expect(sut.validationMessages.isEmpty)
+    }
+
+    @Test func givenVibeGateIsUnknownInAnAvailableCatalog_whenAModelIsTyped_thenNoWarningAndStartIsAllowed() async {
+        // given — a failed identify() leaves the gate unknown; the engine decides at launch.
+        let vibe = BackendControlFixtures.entry("vibe", facts: BackendControlFixtures.vibeUnknownGate)
+        let (sut, useCase, routing, _) = makeSUT(catalog: BackendCatalog(entries: [vibe], state: .available))
+
+        // when
+        sut.didChangeModel("some-model")
+        await start(sut, useCase, routing)
+
+        // then
+        #expect(sut.modelUnavailableNote == nil)
+        #expect(sut.showsModel == false)
+        verify(useCase).run(.matching { $0.model == "some-model" }, runtime: .any).called(1)
     }
 }

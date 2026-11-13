@@ -6,8 +6,21 @@
 #if DEBUG
 
 import Foundation
+import HfRepository
 import HfUI
 import SwiftUI
+
+// MARK: - BackendControls (preview)
+
+extension BackendControls {
+    /// Four effort levels, a model and a turn cap: what the engine reports for claude.
+    static let previewClaudeLike = BackendControls(
+        model: .supported, effort: .levels(["low", "medium", "high", "xhigh"]), turnCap: .supported
+    )
+
+    /// No model and no effort, but a turn cap: vibe while its `model_selection` gate is not ready.
+    static let previewVibeLike = BackendControls(model: .unsupported, effort: .unsupported, turnCap: .supported)
+}
 
 // MARK: - NewSessionViewModelMock
 
@@ -58,12 +71,18 @@ final class NewSessionViewModelMock: NewSessionViewModel {
         }
     }
 
-    var effortOptions: [String] { showsEffort ? BackendStyle.effortLevels(backend) : [] }
-    var showsEffort: Bool { backend != "vibe" && !BackendStyle.effortLevels(backend).isEmpty }
-    var showsModel: Bool { backend != "vibe" }
-    var showsTurnLimit: Bool { true }
+    /// The engine-reported controls the mock presents; claude-like unless a preview or test says otherwise.
+    var controls: BackendControls
+    var effortOptions: [String] {
+        if case .levels(let levels) = controls.effort { return levels }
+        return []
+    }
+
+    var showsEffort: Bool { !effortOptions.isEmpty }
+    var showsModel: Bool { controls.model == .supported }
+    var showsTurnLimit: Bool { controls.turnCap == .supported }
     var modelUnavailableNote: String? {
-        backend == "vibe" ? "Vibe uses the model set in its own config (~/.vibe/config.toml)." : nil
+        controls.model == .unsupported ? "Model selection isn't available for this harness." : nil
     }
 
     var modelChoices: [ModelChoiceModel] {
@@ -86,8 +105,10 @@ final class NewSessionViewModelMock: NewSessionViewModel {
         notInstalled: Set<String> = [],
         recentRepos: [RecentRepoModel] = [],
         agentNotFoundNote: String? = nil,
-        agentListUnavailableNote: String? = nil
+        agentListUnavailableNote: String? = nil,
+        controls: BackendControls = .previewClaudeLike
     ) {
+        self.controls = controls
         self.backend = backend
         self.repo = repo
         self.freedom = freedom

@@ -48,7 +48,7 @@ import Testing
     }
 
     private func catalog(_ entries: [(String, Bool?)], state: BackendCatalogState = .available) -> BackendCatalog {
-        BackendCatalog(entries: entries.map { BackendCatalogEntry(backend: $0.0, installed: $0.1) }, state: state)
+        BackendCatalog(entries: entries.map { BackendControlFixtures.entry($0.0, installed: $0.1) }, state: state)
     }
 
     @Test func givenDefaults_whenTheSheetOpens_thenTheFirstIdentityReadOnlyAndEmptyFieldsShow() {
@@ -417,7 +417,7 @@ import Testing
 
     @Test func givenAModelAndTurnLimit_whenStarted_thenTheyReachTheRequest() async {
         // given
-        let (sut, useCase, routing, _) = makeSUT()
+        let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true)]))
         sut.didChangeBackend("claude")
         sut.didChangeModel(" gpt-x ")
         sut.didChangeTurnLimit(" 40 ")
@@ -432,8 +432,9 @@ import Testing
     @Test(arguments: ["codex", "opencode"])
     func givenAnAgentHarflowCannotCap_whenATurnLimitWasTyped_thenTheRequestRemainsVisibleAndBlocked(_ backend: String) {
         // given
-        let (sut, useCase, routing, _) = makeSUT()
+        let (sut, useCase, routing, _) = makeSUT(catalog: catalog([("claude", true), ("codex", true), ("opencode", true)]))
         defer { withExtendedLifetime(routing) {} }
+        sut.didChangeBackend("claude")
         sut.didChangeTurnLimit("40")
         // when
         sut.didChangeBackend(backend)

@@ -101,7 +101,7 @@ import Testing
     @Test func givenBackendCatalogValues_whenReadOrSubscribed_thenTheyPassThroughToBackendsRepository() {
         // given
         let backends = MockBackendsRepository()
-        let catalog = BackendCatalog(entries: [BackendCatalogEntry(backend: "vibe", installed: true)], state: .available)
+        let catalog = BackendCatalog(entries: [BackendControlFixtures.entry("vibe", facts: BackendControlFixtures.vibeReady)], state: .available)
         given(backends).catalog.willReturn(catalog)
         let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
         given(backends).catalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())

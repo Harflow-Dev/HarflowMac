@@ -92,6 +92,7 @@ no embedded terminal anywhere in this package:
 - `SidebarRouting` doubles as the read side of that same selection state (`selection`/
   `selectionPublisher()`) so the Sidebar's `List(selection:)` binding reflects a selection made
   elsewhere (e.g. "Open parent" or a breadcrumb tap in `TaskDetail`), not just its own taps.
+- Model, effort and turn-limit controls come from `BackendCatalog.controls(for:)` (three-state per control, all unknown unless the catalog is `.available`) and are never keyed on backend names. New Session keeps the controls visible; `unsupported` keeps the per-control message, `unknown` adds no suggestions and, only while the catalog is not available, one message ("Harness options can't be checked until the harness list is available.") when a model, effort or turn limit is set. An available catalog whose model gate is unknown (failed identify) shows no warning and lets the engine decide. Facts never mutate requested values; the VM reloads model suggestions when the model control becomes supported.
 - The New Session directory chooser is presented by `MainWindowCoordinator.chooseDirectory()`
   (`NSOpenPanel`, AppKit) — never the VM, which only calls `routing.chooseDirectory()` and awaits
   the result. New Session is headless-only: a non-blank message is required to start.

@@ -9,7 +9,7 @@ import Testing
 @MainActor
 struct NewSessionQualificationTests {
     private func make(_ fixture: QualificationFixture,
-                      catalog: BackendCatalog = .init(entries: [.init(backend: "fixture", installed: true)], state: .available),
+                      catalog: BackendCatalog = .init(entries: [BackendControlFixtures.entry("fixture")], state: .available),
                       subject: PassthroughSubject<BackendCatalog, Never>? = nil,
                       session: QualificationSession? = nil) -> (NewSessionVM, MockNewSessionUseCase, MockNewSessionRouting) {
         let useCase = MockNewSessionUseCase()
@@ -101,7 +101,7 @@ struct NewSessionQualificationTests {
 
     @Test func givenKnownMissingHarnessWithNoRequiredFeatures_whenSheetOpens_thenUnavailableAndCannotStart() async {
         // given
-        let catalog = BackendCatalog(entries: [.init(backend: "fixture", installed: false)], state: .available)
+        let catalog = BackendCatalog(entries: [BackendControlFixtures.entry("fixture", installed: false)], state: .available)
         let (vm, useCase, routing) = make(QualificationFixture(gated: false), catalog: catalog)
         defer { withExtendedLifetime(routing) {} }
         // when / then

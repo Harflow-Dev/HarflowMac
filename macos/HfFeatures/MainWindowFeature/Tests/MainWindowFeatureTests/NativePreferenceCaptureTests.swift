@@ -55,8 +55,8 @@ struct NativePreferenceCaptureTests {
         let useCase = MockNewSessionUseCase()
         let routing = MockNewSessionRouting()
         let catalog = BackendCatalog(entries: [
-            BackendCatalogEntry(backend: "claude", installed: true),
-            BackendCatalogEntry(backend: "codex", installed: true)
+            BackendControlFixtures.entry("claude"),
+            BackendControlFixtures.entry("codex")
         ], state: .available)
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendCatalog.willReturn(catalog)
