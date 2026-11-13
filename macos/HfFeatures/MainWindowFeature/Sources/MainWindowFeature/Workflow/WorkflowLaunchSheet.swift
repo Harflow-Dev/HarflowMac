@@ -79,7 +79,8 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             candidate: Binding(get: { viewModel.generationAgent }, set: { viewModel.generationAgent = $0 }),
                             backendIDs: viewModel.backendIDs,
                             modelChoices: viewModel.modelChoices,
-                            loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends, backendControls: viewModel.backendControls
+                            loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends,
+                            backendControls: viewModel.backendControls
                         )
                     } else {
                         if let preview = viewModel.launchPreview {

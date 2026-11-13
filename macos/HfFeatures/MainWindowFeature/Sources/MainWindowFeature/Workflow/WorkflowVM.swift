@@ -26,7 +26,6 @@ protocol WorkflowUseCase: Sendable {
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never>
     func recordAgentUsage(_ identity: AgentUsageIdentity, acknowledgementID: String) async
     var callerApprovalBackends: Set<String> { get }
-    /// The engine-reported harness list with its run-option facts.
     var backendCatalog: BackendCatalog { get }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never>
     func modelOptions(backend: String) async -> [ModelOption]
@@ -51,8 +50,6 @@ extension WorkflowUseCase {
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
     func recordAgentUsage(_: AgentUsageIdentity, acknowledgementID _: String) async {}
     var callerApprovalBackends: Set<String> { [] }
-    var backendCatalog: BackendCatalog { .empty }
-    func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { Just(.empty).eraseToAnyPublisher() }
     func artifactPage(runID _: String, executionID _: String, cursor _: String?) async -> Result<WorkflowArtifactPage, ToolError> {
         .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
     }
@@ -171,11 +168,9 @@ final class WorkflowVM: WorkflowViewModel {
     var generationFallbacks: [[String: JSONValue]] = []
     var modelChoices: [String: [ModelChoiceModel]] = [:]
     var agentUsageSnapshot = AgentUsageSnapshot()
-    /// Run-option controls per harness, from the engine-reported catalog; every control unknown
-    /// until the catalog is available. Written only when it changes.
     var backendControls: [String: BackendControls] = [:]
     @ObservationIgnored private var usageSubscription: AnyCancellable?
-    @ObservationIgnored private var catalogSubscription: AnyCancellable?
+    @ObservationIgnored var catalogSubscription: AnyCancellable?
     @ObservationIgnored private var modelTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var modelGeneration = UUID()
     var showsRunSheet = false { didSet { if showsRunSheet != oldValue { scheduleLaunchPreview() } } }
@@ -296,10 +291,7 @@ final class WorkflowVM: WorkflowViewModel {
         }
         didSubscribe = true
         applyUsageSnapshot(useCase.agentUsageSnapshot)
-        applyCatalog(useCase.backendCatalog)
-        catalogSubscription = useCase.backendCatalogPublisher().receive(on: DispatchQueue.main).sink { [weak self] catalog in
-            self?.applyCatalog(catalog)
-        }
+        startBackendControls()
         usageSubscription = useCase.agentUsagePublisher().receive(on: DispatchQueue.main).sink { [weak self] snapshot in
             self?.applyUsageSnapshot(snapshot)
         }
@@ -340,11 +332,6 @@ final class WorkflowVM: WorkflowViewModel {
                 } catch { return }
             }
         }
-    }
-
-    private func applyCatalog(_ catalog: BackendCatalog) {
-        let controls = Dictionary(catalog.entries.map { ($0.backend, catalog.controls(for: $0.backend)) }, uniquingKeysWith: { first, _ in first })
-        if backendControls != controls { backendControls = controls }
     }
 
     func didDisappear() {

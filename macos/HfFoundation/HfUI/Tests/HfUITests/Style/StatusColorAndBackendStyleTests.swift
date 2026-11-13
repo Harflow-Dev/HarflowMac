@@ -101,24 +101,4 @@ import Testing
     @Test func givenAnOtherStatus_whenReadingItsColor_thenReturnsSecondary() {
         #expect(StatusColor.of(.other("queued")) == .secondary)
     }
-
-    @Test func givenEachBackend_whenAskingAboutATurnLimit_thenOnlyClaudeAndVibeSupportIt() {
-        // given / when / then — mirrors harflow's supports_turn_cap per backend.
-        #expect(BackendStyle.supportsTurnLimit("claude"))
-        #expect(BackendStyle.supportsTurnLimit("vibe"))
-        #expect(!BackendStyle.supportsTurnLimit("codex"))
-        #expect(!BackendStyle.supportsTurnLimit("opencode"))
-        #expect(!BackendStyle.supportsTurnLimit("antigravity"))
-        #expect(!BackendStyle.supportsTurnLimit("cursor"))
-        #expect(!BackendStyle.supportsTurnLimit("someday"))
-    }
-
-    @Test func givenEachBackend_whenReadingItsEffortLevels_thenTheyMirrorEachBackendsOwnVocabulary() {
-        // given / when / then — antigravity refuses `xhigh` (measured); the others take the lot.
-        #expect(BackendStyle.effortLevels("claude") == ["low", "medium", "high", "xhigh"])
-        #expect(BackendStyle.effortLevels("codex") == ["low", "medium", "high", "xhigh"])
-        #expect(BackendStyle.effortLevels("opencode") == ["low", "medium", "high", "xhigh"])
-        #expect(BackendStyle.effortLevels("antigravity") == ["low", "medium", "high"])
-        #expect(BackendStyle.effortLevels("cursor") == [])
-    }
 }

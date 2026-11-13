@@ -111,22 +111,6 @@ public enum BackendStyle {
         }
     }
 
-    /// Whether harflow accepts a turn cap — mirrors each backend's `supports_turn_cap`
-    /// (claude and vibe; codex, opencode, antigravity, cursor and unknown backends get no field at all).
-    public nonisolated static func supportsTurnLimit(_ backend: String) -> Bool {
-        backend == "claude" || backend == "vibe"
-    }
-
-    /// The reasoning-effort levels harflow accepts for `backend` — antigravity refuses `xhigh`;
-    /// cursor has no effort flag. The catalog carries no levels, so this is New Session's table.
-    public static func effortLevels(_ backend: String) -> [String] {
-        switch backend {
-        case "antigravity": ["low", "medium", "high"]
-        case "cursor": []
-        default: ["low", "medium", "high", "xhigh"]
-        }
-    }
-
     /// The backends the New session sheet offers when the engine catalog is missing.
     /// Display list only; `run` validates the choice itself.
     public static let known = ["claude", "codex", "opencode", "vibe", "antigravity", "cursor"]
