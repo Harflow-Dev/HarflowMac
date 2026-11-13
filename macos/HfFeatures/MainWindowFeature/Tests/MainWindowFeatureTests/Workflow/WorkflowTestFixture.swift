@@ -10,6 +10,7 @@ extension WorkflowTests {
     func makeVM(qualification: QualificationFixture = QualificationFixture(gated: false),
                 session: QualificationSession? = nil) -> (sut: WorkflowVM, useCase: MockWorkflowUseCase) {
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).qualificationSession().willReturn(session ?? QualificationSession(repository: qualification))
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])

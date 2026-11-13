@@ -1,4 +1,7 @@
+import Combine
 import HfRepository
+@testable import MainWindowFeature
+import Mockable
 import MonitorCore
 
 /// Control facts mirroring what the recorded 0.0.13 `backends` document reports for each harness
@@ -37,5 +40,19 @@ enum BackendControlFixtures {
     /// A catalog entry carrying the recorded facts of its name.
     static func entry(_ backend: String, installed: Bool? = true, facts: BackendControlFacts? = nil) -> BackendCatalogEntry {
         BackendCatalogEntry(backend: backend, installed: installed, controls: facts ?? self.facts(for: backend))
+    }
+
+    /// Controls per harness name, mapped exactly as the catalog maps them.
+    static func controls(_ names: String...) -> [String: BackendControls] {
+        Dictionary(uniqueKeysWithValues: names.map { ($0, BackendControls(facts: facts(for: $0))) })
+    }
+}
+
+extension MockWorkflowUseCase {
+    /// Stubs the catalog members the workflow VM reads at init and appearance. The publisher
+    /// replays the same catalog; tests that push later catalogs stub their own subject instead.
+    func stubBackendCatalog(_ catalog: BackendCatalog = .empty) {
+        given(self).backendCatalog.willReturn(catalog)
+        given(self).backendCatalogPublisher().willReturn(Just(catalog).eraseToAnyPublisher())
     }
 }

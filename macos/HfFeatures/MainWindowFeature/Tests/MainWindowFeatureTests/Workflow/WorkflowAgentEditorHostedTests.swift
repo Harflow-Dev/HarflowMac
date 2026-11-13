@@ -18,7 +18,8 @@ import Testing
             ScrollView {
                 WorkflowAgentEditor(candidate: Binding(get: { state.candidate }, set: { state.candidate = $0 }),
                                     backendIDs: ["codex", "claude", "vibe"], modelChoices: [:],
-                                    loadModels: { state.loadedBackends.append($0) })
+                                    loadModels: { state.loadedBackends.append($0) },
+                                    backendControls: BackendControlFixtures.controls("claude", "codex", "vibe"))
                     .padding(HfRadius.Metrics.spacing16)
             }.preferredColorScheme(appearance), size: CGSize(width: width, height: 900)
         )
@@ -53,10 +54,11 @@ import Testing
         await fixture.settle { WorkflowAgentEditorOperations.fallbacks(state.candidate).count == 2 }
         #expect(WorkflowAgentEditorOperations.fallbacks(state.candidate).map { $0["backend"]?.stringValue } == ["vibe", "codex"])
 
-        // when / then: the real binding's backend change reloads models and preserves Vibe eligibility.
+        // when / then: the real binding's backend change drops the Model row for a harness whose model
+        // selection the engine reports as unsupported, so no suggestions are loaded for it.
         state.candidate = WorkflowCandidateSettings.replacingBackend(in: state.candidate, with: "vibe")
-        await fixture.settle { state.loadedBackends.contains("vibe") }
-        #expect(state.loadedBackends.contains("vibe"))
+        await fixture.settle { fixture.descendants.compactMap { $0 as? NSTextField }.filter { $0.placeholderString == "Default" }.count == 1 }
+        #expect(!state.loadedBackends.contains("vibe"))
         let allModels = fixture.descendants.compactMap { $0 as? NSTextField }.filter { $0.placeholderString == "Default" }
         #expect(allModels.count == 1, "Only the Codex fallback retains its model field; the Vibe primary and fallback omit theirs")
     }

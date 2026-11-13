@@ -33,7 +33,7 @@ extension WorkflowInspector {
             WorkflowAgentEditor(candidate: Binding(get: { current(node).raw["agent"]?.objectValue ?? [:] }, set: {
                 viewModel.updateNode(node.id, key: "agent", value: .object($0))
             }), backendIDs: viewModel.backendIDs, modelChoices: viewModel.modelChoices,
-                loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends,
+                loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends, backendControls: viewModel.backendControls,
                 preferredAgent: viewModel.definition["orchestrator"]?.objectValue)
             SectionLabel(text: "When called")
             Picker("Access", selection: standaloneString(node, "freedom", default: "read_only")) {

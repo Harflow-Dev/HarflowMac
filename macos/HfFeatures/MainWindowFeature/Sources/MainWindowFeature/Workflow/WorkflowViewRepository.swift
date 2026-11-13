@@ -55,5 +55,7 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     }
 
     var backendIDs: [String] { backends.catalog.entries.map(\.backend) }
+    var backendCatalog: BackendCatalog { backends.catalog }
+    func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { backends.catalogPublisher() }
     func modelOptions(backend: String) async -> [ModelOption] { await models.models(for: backend) }
 }

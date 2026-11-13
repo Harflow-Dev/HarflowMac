@@ -12,6 +12,7 @@ import Testing
 @Suite struct WorkflowRunnerRoutingTests {
     private func makeRunner() async throws -> (WorkflowVM, MockWorkflowUseCase, MockWorkflowRouting) {
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()

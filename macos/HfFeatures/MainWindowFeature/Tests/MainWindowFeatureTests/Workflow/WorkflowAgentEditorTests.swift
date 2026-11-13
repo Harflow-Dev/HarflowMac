@@ -1,3 +1,4 @@
+import HfRepository
 @testable import MainWindowFeature
 import MonitorCore
 import Testing
@@ -5,15 +6,72 @@ import Testing
 // MARK: - WorkflowAgentEditorTests
 
 struct WorkflowAgentEditorTests {
-    @Test func givenVibeCandidate_whenEdited_thenModelAndEffortControlsStayUnavailable() {
-        // given / when / then — vibe's model and effort are config-only; the editor never
-        // offers controls the backend would silently ignore.
-        #expect(!WorkflowAgentEditorPresentation.showsModelAndEffort(backend: "vibe"))
-        #expect(WorkflowAgentEditorPresentation.showsModelAndEffort(backend: "codex"))
-        #expect(WorkflowAgentEditorPresentation.showsModelAndEffort(backend: "claude"))
-        #expect(WorkflowAgentEditorPresentation.showsModel(backend: "cursor"))
-        #expect(!WorkflowAgentEditorPresentation.showsEffort(backend: "cursor"))
-        #expect(WorkflowAgentEditorPresentation.showsEffort(backend: "codex"))
+    private func controls(_ name: String) -> BackendControls { BackendControls(facts: BackendControlFixtures.facts(for: name)) }
+
+    @Test func givenEngineControls_whenRowsAreDecided_thenOnlyUnsupportedControlsAreHidden() {
+        // given
+        let empty: [String: JSONValue] = [:]
+        let vibe = controls("vibe")
+        // when / then
+        #expect(!WorkflowAgentEditorPresentation.showsModel(vibe, candidate: empty))
+        #expect(!WorkflowAgentEditorPresentation.showsEffort(vibe, candidate: empty))
+        #expect(WorkflowAgentEditorPresentation.showsTurnLimit(vibe, candidate: empty))
+        let cursor = controls("cursor")
+        #expect(WorkflowAgentEditorPresentation.showsModel(cursor, candidate: empty))
+        #expect(!WorkflowAgentEditorPresentation.showsEffort(cursor, candidate: empty))
+        #expect(!WorkflowAgentEditorPresentation.showsTurnLimit(cursor, candidate: empty))
+        let codex = controls("codex")
+        #expect(WorkflowAgentEditorPresentation.showsEffort(codex, candidate: empty))
+        // effort no longer depends on the model row
+        let effortOnly = BackendControls(model: .unsupported, effort: .levels(["low"]), turnCap: .unsupported)
+        #expect(WorkflowAgentEditorPresentation.showsEffort(effortOnly, candidate: empty))
+        #expect(!WorkflowAgentEditorPresentation.showsModel(effortOnly, candidate: empty))
+    }
+
+    @Test func givenUnknownControls_whenRowsAreDecided_thenAllRowsShow() {
+        // given / when / then
+        for unknown in [BackendControls.unavailable] {
+            #expect(WorkflowAgentEditorPresentation.showsModel(unknown, candidate: [:]))
+            #expect(WorkflowAgentEditorPresentation.showsEffort(unknown, candidate: [:]))
+            #expect(WorkflowAgentEditorPresentation.showsTurnLimit(unknown, candidate: [:]))
+        }
+    }
+
+    @Test func givenASavedValueForAnUnsupportedControl_whenRowsAreDecided_thenItStaysVisible() {
+        // given
+        let vibe = controls("vibe")
+        let saved: [String: JSONValue] = ["model": .string("m"), "reasoning_effort": .string("high")]
+        // when / then
+        #expect(WorkflowAgentEditorPresentation.showsModel(vibe, candidate: saved))
+        #expect(WorkflowAgentEditorPresentation.showsEffort(vibe, candidate: saved))
+        let cursor = controls("cursor")
+        #expect(WorkflowAgentEditorPresentation.showsTurnLimit(cursor, candidate: ["max_turns": .number(3)]))
+    }
+
+    @Test func givenEngineLevels_whenEffortMenuIsBuilt_thenDefaultThenExactlyThoseLevelsInOrder() {
+        // given / when
+        let options = WorkflowAgentEditorPresentation.effortOptions(controls("antigravity"), saved: "")
+        // then
+        #expect(options.map(\.value) == ["", "low", "medium", "high"])
+        #expect(options.map(\.title) == ["Default", "Low", "Medium", "High"])
+    }
+
+    @Test func givenASavedEffortOutsideTheLevels_whenMenuIsBuilt_thenItIsMarkedUnavailable() {
+        // given / when
+        let options = WorkflowAgentEditorPresentation.effortOptions(controls("antigravity"), saved: "xhigh")
+        // then
+        #expect(options.last == .init(value: "xhigh", title: "xhigh — unavailable for this harness"))
+        #expect(options.count == 5)
+    }
+
+    @Test func givenUnknownEffort_whenMenuIsBuilt_thenDefaultPlusTheSavedValueOnly() {
+        // given / when
+        let none = WorkflowAgentEditorPresentation.effortOptions(.unavailable, saved: "")
+        let saved = WorkflowAgentEditorPresentation.effortOptions(.unavailable, saved: "high")
+        // then — levels are never invented
+        #expect(none.map(\.value) == [""])
+        #expect(saved.map(\.value) == ["", "high"])
+        #expect(saved.last?.title == "High")
     }
 
     @Test func givenCustomModelEntry_whenApplied_thenEmptyRevertsToDefaultAndTextIsKept() {

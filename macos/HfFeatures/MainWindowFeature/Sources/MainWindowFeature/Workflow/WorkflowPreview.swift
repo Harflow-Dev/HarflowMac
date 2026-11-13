@@ -1,4 +1,5 @@
 #if DEBUG
+import Combine
 import Foundation
 import HfRepository
 import HfUI
@@ -119,6 +120,23 @@ enum WorkflowPreview {
 private final class PreviewWorkflowUseCase: WorkflowUseCase, @unchecked Sendable {
     var run: [String: JSONValue] = [:]
     var backendIDs: [String] { ["codex", "claude", "vibe"] }
+    /// Representative engine facts: claude-like with a turn cap, codex without one, vibe without model or effort.
+    var backendCatalog: BackendCatalog {
+        func facts(model: Bool, turn: Bool, levels: [String], gate: BackendControlFacts.ModelSelectionGate) -> BackendControlFacts {
+            BackendControlFacts(
+                supportsModelSelection: model, supportsTurnCap: turn,
+                effort: .init(acceptsParameter: !levels.isEmpty, levels: levels), modelSelection: gate
+            )
+        }
+        let full = ["low", "medium", "high", "xhigh"]
+        return BackendCatalog(entries: [
+            BackendCatalogEntry(backend: "codex", installed: true, controls: facts(model: true, turn: false, levels: full, gate: .notDeclared)),
+            BackendCatalogEntry(backend: "claude", installed: true, controls: facts(model: true, turn: true, levels: full, gate: .notDeclared)),
+            BackendCatalogEntry(backend: "vibe", installed: true, controls: facts(model: true, turn: true, levels: [], gate: .notReady))
+        ], state: .available)
+    }
+
+    func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { Just(backendCatalog).eraseToAnyPublisher() }
     func modelOptions(backend _: String) async -> [ModelOption] { [] }
     func refreshTasks() async {}
     func command(_ command: String, options _: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {

@@ -12,6 +12,7 @@ extension WorkflowTests {
     @Test func givenCanonicalRetryMetadata_whenLimitsAndTopologyChange_thenDraftStaysRawAndInferenceNeverStales() async throws {
         // given
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).agentUsageSnapshot.willReturn(.init())

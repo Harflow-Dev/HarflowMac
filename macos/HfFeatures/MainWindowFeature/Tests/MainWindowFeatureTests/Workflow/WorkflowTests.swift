@@ -541,23 +541,24 @@ import Testing
         let candidate = WorkflowCandidateSettings.make(backend: backend)
         #expect(candidate["max_turns"] == nil)
         let supported = ["claude", "vibe"].contains(backend)
-        #expect(WorkflowCandidateSettings.turnLimitText(candidate) == (supported ? "100" : ""))
+        let control: ControlState = supported ? .supported : .unsupported
+        #expect(WorkflowCandidateSettings.turnLimitText(candidate, turnCap: control) == (supported ? "100" : ""))
         #expect(candidate["max_attempts"] == nil)
         #expect(candidate["max_transitions"] == nil)
     }
 
     @Test func givenExplicitWorkflowTurnLimit_whenEditingOrSwitchingBackend_thenPreservesSupportedLimitAndDropsUnsupportedCap() {
         let candidate: [String: JSONValue] = ["backend": .string("claude"), "max_turns": .number(12), "model": .string("opus")]
-        #expect(WorkflowCandidateSettings.turnLimitText(candidate) == "12")
-        let switched = WorkflowCandidateSettings.replacingBackend(in: candidate, with: "vibe")
+        #expect(WorkflowCandidateSettings.turnLimitText(candidate, turnCap: .supported) == "12")
+        let switched = WorkflowCandidateSettings.replacingBackend(in: candidate, with: "vibe", supportsTurnCap: true)
         #expect(switched["max_turns"] == .number(12))
         #expect(switched["model"] == nil)
-        let unsupported = WorkflowCandidateSettings.replacingBackend(in: switched, with: "codex")
+        let unsupported = WorkflowCandidateSettings.replacingBackend(in: switched, with: "codex", supportsTurnCap: false)
         #expect(unsupported["max_turns"] == nil)
-        #expect(WorkflowCandidateSettings.turnLimitText(unsupported).isEmpty)
-        let restored = WorkflowCandidateSettings.replacingBackend(in: unsupported, with: "claude")
+        #expect(WorkflowCandidateSettings.turnLimitText(unsupported, turnCap: .unsupported).isEmpty)
+        let restored = WorkflowCandidateSettings.replacingBackend(in: unsupported, with: "claude", supportsTurnCap: true)
         #expect(restored["max_turns"] == nil)
-        #expect(WorkflowCandidateSettings.turnLimitText(restored) == "100")
+        #expect(WorkflowCandidateSettings.turnLimitText(restored, turnCap: .supported) == "100")
     }
 
 }
@@ -566,6 +567,7 @@ extension WorkflowTests {
     @Test func givenChildLink_whenOpened_thenCoordinatorReceivesRunDestination() {
         // given
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])

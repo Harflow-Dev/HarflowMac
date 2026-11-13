@@ -17,6 +17,7 @@ import Testing
     private func makeVM(visibility: FakeMonitorVisibility, scheduler: CapturingScheduler, reads: PollCounter,
                         raw: [String: JSONValue]) -> WorkflowVM {
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
@@ -116,6 +117,7 @@ import Testing
                                               "events": .array([]), "has_more": .bool(true)], runID: "run", executionID: "act1")!
         let inspects = PollCounter()
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
@@ -172,6 +174,7 @@ import Testing
             "activations": .array([.object(activation)])
         ]
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
@@ -254,6 +257,7 @@ import Testing
     @Test func givenAChangedRun_whenRefreshed_thenSelectedRunIsReassigned() async {
         // given
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let routing = MockWorkflowRouting()

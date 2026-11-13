@@ -15,6 +15,7 @@ import Testing
     func harness(current: [String: JSONValue]) -> (WorkflowVM, WorkflowDraftStore) {
         let store = WorkflowDraftTests().store()
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])

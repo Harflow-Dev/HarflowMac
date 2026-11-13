@@ -79,7 +79,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                             candidate: Binding(get: { viewModel.generationAgent }, set: { viewModel.generationAgent = $0 }),
                             backendIDs: viewModel.backendIDs,
                             modelChoices: viewModel.modelChoices,
-                            loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends
+                            loadModels: viewModel.loadModels, callerApprovalBackends: viewModel.callerApprovalBackends, backendControls: viewModel.backendControls
                         )
                     } else {
                         if let preview = viewModel.launchPreview {
@@ -97,7 +97,7 @@ struct WorkflowLaunchSheet<VM: WorkflowViewModel>: View {
                                 backendIDs: viewModel.backendIDs,
                                 modelChoices: viewModel.modelChoices,
                                 loadModels: viewModel.loadModels,
-                                allowsFallbacks: false, callerApprovalBackends: viewModel.callerApprovalBackends
+                                allowsFallbacks: false, callerApprovalBackends: viewModel.callerApprovalBackends, backendControls: viewModel.backendControls
                             )
                             Text("Saved fallback harnesses remain in effect.").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
                         }

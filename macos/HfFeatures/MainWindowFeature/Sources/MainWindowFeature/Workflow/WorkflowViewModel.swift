@@ -1,4 +1,5 @@
 import HfCommon
+import HfRepository
 import HfUI
 import MonitorCore
 import SwiftUI
@@ -71,6 +72,8 @@ protocol WorkflowViewModel: ViewModel {
     var edges: [WorkflowEdgeModel] { get }
     var backendIDs: [String] { get }
     var callerApprovalBackends: Set<String> { get }
+    /// Engine-reported run-option controls per harness; empty until the catalog is known.
+    var backendControls: [String: BackendControls] { get }
     var selectedNode: WorkflowNodeModel? { get }
     var selectedEdge: WorkflowEdgeModel? { get }
     var canSave: Bool { get }
@@ -166,7 +169,10 @@ extension WorkflowViewModel {
 }
 
 @MainActor
-extension WorkflowViewModel { var callerApprovalBackends: Set<String> { [] } }
+extension WorkflowViewModel {
+    var callerApprovalBackends: Set<String> { [] }
+    var backendControls: [String: BackendControls] { [:] }
+}
 
 extension WorkflowViewModel {
     var qualificationCards: [QualificationCard] { [] }

@@ -14,6 +14,7 @@ import Testing
     func makeVM(failRead: Bool = false, failSave: Bool = false) -> (WorkflowVM, WorkflowDraftStore, MockWorkflowUseCase) {
         let store = WorkflowDraftTests().store()
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendIDs.willReturn(["codex"])
@@ -146,6 +147,7 @@ import Testing
     @Test func givenImmediateSaveValidationFailure_whenReferenceMissing_thenStructuredDiagnosticsRemainActionable() async {
         // given
         let useCase = MockWorkflowUseCase()
+        useCase.stubBackendCatalog()
         given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         let references: [JSONValue] = [.object(["target_workflow_id": .string("missing"), "node_id": .string("verify")])]

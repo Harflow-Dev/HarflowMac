@@ -1,21 +1,53 @@
+import HfRepository
 import HfUI
 import MonitorCore
 import SwiftUI
 
 // MARK: - WorkflowAgentEditorPresentation
 
-/// The candidate editor's pure presentation rules: vibe has no model or effort controls
-/// (config-only, several layers removed from the command line), and a custom model entry that is
-/// empty reverts to the backend's default.
+/// The candidate editor's pure presentation rules. Rows follow the engine-reported controls: a row
+/// is hidden only when its control is `unsupported`, and a saved value is never hidden while it is
+/// still sent. A custom model entry that is empty reverts to the backend's default.
 enum WorkflowAgentEditorPresentation {
-    static func showsModel(backend: String) -> Bool { backend != "vibe" }
+    /// Shown beside a row whose control the app cannot check right now.
+    static let unknownCaption = "Can't be checked right now"
 
-    /// Cursor accepts a model id and has no separate effort flag.
-    static func showsEffort(backend: String) -> Bool {
-        showsModel(backend: backend) && !BackendStyle.effortLevels(backend).isEmpty
+    /// One entry of the Effort menu.
+    struct EffortOption: Equatable {
+        let value: String
+        let title: String
     }
 
-    static func showsModelAndEffort(backend: String) -> Bool { showsModel(backend: backend) }
+    static func hasSaved(_ candidate: [String: JSONValue], _ key: String) -> Bool {
+        guard let value = candidate[key], value != .null else { return false }
+        return value.stringValue?.isEmpty != true
+    }
+
+    static func showsModel(_ controls: BackendControls, candidate: [String: JSONValue]) -> Bool {
+        controls.model != .unsupported || hasSaved(candidate, "model")
+    }
+
+    static func showsEffort(_ controls: BackendControls, candidate: [String: JSONValue]) -> Bool {
+        controls.effort != .unsupported || hasSaved(candidate, "reasoning_effort")
+    }
+
+    static func showsTurnLimit(_ controls: BackendControls, candidate: [String: JSONValue]) -> Bool {
+        controls.turnCap != .unsupported || hasSaved(candidate, "max_turns")
+    }
+
+    /// Default, then the engine's levels in its order (never invented). A saved value outside them
+    /// stays selectable and says it is unavailable for this harness.
+    static func effortOptions(_ controls: BackendControls, saved: String) -> [EffortOption] {
+        var options = [EffortOption(value: "", title: "Default")]
+        var known: [String] = []
+        if case .levels(let levels) = controls.effort { known = levels }
+        options += known.map { EffortOption(value: $0, title: $0.capitalized) }
+        if !saved.isEmpty, !known.contains(saved) {
+            let title = controls.effort == .unknown ? saved.capitalized : "\(saved) — unavailable for this harness"
+            options.append(EffortOption(value: saved, title: title))
+        }
+        return options
+    }
 
     /// Retains the supplied frequency order and the saved backend without duplicates.
     static func backendOptions(_ available: [String], current: String, preferred: String?) -> [String] {
@@ -84,10 +116,12 @@ struct WorkflowAgentEditor: View {
     let loadModels: (String) -> Void
     var allowsFallbacks = true
     var callerApprovalBackends: Set<String> = []
+    var backendControls: [String: BackendControls] = [:]
     var preferredAgent: [String: JSONValue]?
     @State private var approvalNote: String?
 
     private var backend: String { candidate["backend"]?.stringValue ?? "" }
+    private var controls: BackendControls { backendControls[backend] ?? .unavailable }
     private var allBackends: [String] {
         WorkflowAgentEditorPresentation.backendOptions(backendIDs, current: backend, preferred: preferredAgent?["backend"]?.stringValue)
     }
@@ -114,42 +148,55 @@ struct WorkflowAgentEditor: View {
                     .pickerStyle(.menu)
                     .fixedSize()
                 }
-                if WorkflowAgentEditorPresentation.showsModel(backend: backend) {
+                if WorkflowAgentEditorPresentation.showsModel(controls, candidate: candidate) {
                     WorkflowFormDivider()
                     WorkflowFormRow(label: "Model") {
-                        ModelCombo(
-                            text: candidate["model"]?.stringValue ?? "",
-                            choices: displayedModels
-                        ) {
-                            candidate["model"] = WorkflowAgentEditorPresentation.modelValue($0)
+                        VStack(alignment: .trailing, spacing: HfRadius.Metrics.spacing4) {
+                            ModelCombo(
+                                text: candidate["model"]?.stringValue ?? "",
+                                choices: displayedModels
+                            ) {
+                                candidate["model"] = WorkflowAgentEditorPresentation.modelValue($0)
+                            }
+                            .frame(maxWidth: HfRadius.Metrics.workflowInspectorMinimumWidth)
+                            caption(for: controls.model)
                         }
-                        .frame(maxWidth: HfRadius.Metrics.workflowInspectorMinimumWidth)
                     }
                     .frame(minHeight: HfRadius.Metrics.formRowHeight)
-                    if WorkflowAgentEditorPresentation.showsEffort(backend: backend) {
-                        WorkflowFormDivider()
-                        WorkflowFormRow(label: "Effort") {
+                }
+                if WorkflowAgentEditorPresentation.showsEffort(controls, candidate: candidate) {
+                    WorkflowFormDivider()
+                    WorkflowFormRow(label: "Effort") {
+                        VStack(alignment: .trailing, spacing: HfRadius.Metrics.spacing4) {
                             Picker("Effort", selection: binding("reasoning_effort")) {
-                                Text("Default").tag("")
-                                ForEach(BackendStyle.effortLevels(backend), id: \.self) { Text($0.capitalized).tag($0) }
+                                ForEach(WorkflowAgentEditorPresentation.effortOptions(
+                                    controls, saved: candidate["reasoning_effort"]?.stringValue ?? ""
+                                ), id: \.value) { Text($0.title).tag($0.value) }
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
                             .fixedSize()
+                            caption(for: controls.effort == .unknown ? .unknown : .supported)
                         }
                     }
                 }
-                if BackendStyle.supportsTurnLimit(backend) {
+                if WorkflowAgentEditorPresentation.showsTurnLimit(controls, candidate: candidate) {
                     WorkflowFormDivider()
                     WorkflowFormRow(label: "Turn limit") {
-                        TextField("Turn limit", text: Binding(get: {
-                            WorkflowCandidateSettings.turnLimitText(candidate)
-                        }, set: { value in
-                            candidate["max_turns"] = value.isEmpty ? nil : Int(value).map { .number(Double($0)) } ?? .string(value)
-                        }))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: HfRadius.Metrics.workflowFieldValueWidth)
-                            .accessibilityLabel("Turn limit")
+                        VStack(alignment: .trailing, spacing: HfRadius.Metrics.spacing4) {
+                            TextField("Turn limit", text: Binding(get: {
+                                WorkflowCandidateSettings.turnLimitText(candidate, turnCap: controls.turnCap)
+                            }, set: { value in
+                                candidate["max_turns"] = value.isEmpty ? nil : Int(value).map { .number(Double($0)) } ?? .string(value)
+                            }))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: HfRadius.Metrics.workflowFieldValueWidth)
+                                .accessibilityLabel("Turn limit")
+                            if controls.turnCap == .unsupported {
+                                Text("Unavailable for this harness").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                            }
+                            caption(for: controls.turnCap)
+                        }
                     }
                 }
             }
@@ -171,9 +218,21 @@ struct WorkflowAgentEditor: View {
             }
         }
         .font(.hf(.body))
-        .onAppear { loadModels(backend) }
-        .onChange(of: backend) { _, newValue in
-            loadModels(newValue)
+        .onAppear { loadSuggestions(for: backend) }
+        .onChange(of: backend) { _, newValue in loadSuggestions(for: newValue) }
+        .onChange(of: controls.model) { _, _ in loadSuggestions(for: backend) }
+    }
+
+    /// Suggestions load only where the engine says the harness takes a model.
+    private func loadSuggestions(for backend: String) {
+        guard (backendControls[backend] ?? .unavailable).model == .supported else { return }
+        loadModels(backend)
+    }
+
+    @ViewBuilder
+    private func caption(for state: ControlState) -> some View {
+        if state == .unknown {
+            Text(WorkflowAgentEditorPresentation.unknownCaption).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
         }
     }
 
@@ -181,7 +240,10 @@ struct WorkflowAgentEditor: View {
         Binding(get: { candidate[key]?.stringValue ?? "" }, set: {
             if key == "backend" {
                 let wasEnabled = candidate["caller_approvals"]?.boolValue == true
-                candidate = WorkflowCandidateSettings.replacingBackend(in: candidate, with: $0, supportsCallerApprovals: callerApprovalBackends.contains($0))
+                candidate = WorkflowCandidateSettings.replacingBackend(
+                    in: candidate, with: $0, supportsCallerApprovals: callerApprovalBackends.contains($0),
+                    supportsTurnCap: backendControls[$0]?.turnCap == .supported
+                )
                 if wasEnabled, candidate["caller_approvals"]?.boolValue != true {
                     approvalNote = "Caller approvals were cleared because the selected agent does not support them."
                 }
@@ -224,7 +286,8 @@ struct WorkflowAgentEditor: View {
                             modelChoices: modelChoices,
                             loadModels: loadModels,
                             allowsFallbacks: false,
-                            callerApprovalBackends: callerApprovalBackends
+                            callerApprovalBackends: callerApprovalBackends,
+                            backendControls: backendControls
                         )
                     }
                     .padding(HfRadius.Metrics.spacing10)
@@ -252,13 +315,20 @@ struct WorkflowAgentEditor: View {
 }
 
 #if DEBUG
+private let previewControls: [String: BackendControls] = [
+    "codex": BackendControls(model: .supported, effort: .levels(["low", "medium", "high", "xhigh"]), turnCap: .unsupported),
+    "claude": .previewClaudeLike,
+    "vibe": .previewVibeLike
+]
+
 private struct WorkflowAgentEditorPreview: View {
     var body: some View {
         WorkflowAgentEditor(
             candidate: .constant(["backend": .string("codex"), "fallbacks": .array([.object(["backend": .string("claude")])])]),
             backendIDs: ["codex", "claude", "vibe"],
             modelChoices: [:],
-            loadModels: { _ in }
+            loadModels: { _ in },
+            backendControls: previewControls
         )
         .padding()
         .frame(width: HfRadius.Metrics.formPreviewWidth)
@@ -272,7 +342,8 @@ private struct WorkflowAgentEditorPreview: View {
         candidate: .constant(["backend": .string("vibe")]),
         backendIDs: ["codex", "claude", "vibe"],
         modelChoices: [:],
-        loadModels: { _ in }
+        loadModels: { _ in },
+        backendControls: previewControls
     )
     .padding()
     .frame(width: HfRadius.Metrics.formPreviewWidth)
