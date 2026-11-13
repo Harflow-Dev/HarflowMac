@@ -266,7 +266,8 @@ struct M05ActionsTopBarStateMatrixHostedTests {
                 // Meta is dropped first at the minimum width; the access chip is icon-only, keeping its label but no title.
                 #expect(!ctx.principalStrings.contains { $0.contains(meta) }, "meta dropped \(ctx.name) \(ctx.principalStrings)")
                 #expect(accessStrings.contains(chips.accessLabel), "access label present \(ctx.name) \(accessStrings)")
-                #expect(!accessStrings.contains(content.accessText ?? ""), "access title absent \(ctx.name) \(accessStrings)")
+                let accessText = try #require(content.accessText, "access text published \(ctx.name)")
+                #expect(!accessStrings.contains(accessText), "access title absent \(ctx.name) \(accessStrings)")
             } else {
                 #expect(ctx.principalStrings.contains { $0.contains(meta) }, "meta shown \(ctx.name) \(ctx.principalStrings)")
             }

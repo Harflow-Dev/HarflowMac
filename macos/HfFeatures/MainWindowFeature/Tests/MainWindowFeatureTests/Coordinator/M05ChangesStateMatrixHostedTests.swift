@@ -218,8 +218,10 @@ struct M05ChangesStateMatrixHostedTests {
         }
         #expect(values.first { $0.label.hasPrefix("alpha") }?.value == "Expanded", "first repository open \(ctx.name)")
         for repository in document.repositories.dropFirst() {
-            #expect(values.first { $0.label.hasPrefix(repository.name) }?.value == "Collapsed", "\(repository.name) collapsed \(ctx.name)")
-            #expect(repository.count != nil, "collapsed repository keeps its count")
+            let header = try #require(values.first { $0.label.hasPrefix(repository.name) }, "header \(repository.name) \(ctx.name)")
+            #expect(header.value == "Collapsed", "\(repository.name) collapsed \(ctx.name)")
+            let count = try #require(repository.count, "collapsed repository keeps its count")
+            #expect(header.label.contains(count), "drawn count \(count) in \(header.label)")
         }
     }
 
