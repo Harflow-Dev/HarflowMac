@@ -15,6 +15,25 @@ No build/test downloads fixtures or requires a sibling checkout.
   and is not vendored or decoded as a ctl document. Its exact Rust subset remains
   Proposed, pending owner acceptance.
 
+## Recorded `backends` documents (not part of `contracts/v1`)
+
+`contracts/v1` has no canonical `harflow-ctl backends --json` fixture, and the vendored bundle must stay
+byte-identical, so two documents sit beside it in
+`macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/RecordedCtl`:
+
+- `ctl-backends-0.0.13-recorded.json`: recorded from the managed 0.0.13 engine run as
+  `env -i HOME=<empty scratch directory> PATH=<engine bin>:<directories of the installed harness binaries>`,
+  so no real state and no `HARFLOW_*` variable was read. Sanitised: each `identity.executable` is
+  `/fixture/bin/<binary>`, each `binary_sha256` is 64 `a`, `platform` is `darwin`, and no absolute path
+  under the user's home remains. All six harnesses read `installed: true`. Versions: claude 2.1.322,
+  codex 0.167.1, opencode 1.18.21, vibe 3.0.2, agy (antigravity) 1.5.8, cursor-agent 2026.11.11-b912975.
+- `ctl-backends-vibe-model-selection-seeded-synthetic.json`: the same document with a single-row
+  mutation, vibe's `model_selection` set to `ok: true`, `source: "seeded"`, version `3.0.3`. It is
+  synthetic: vibe 3.0.3 could not be recorded.
+
+Both are temporary. They are to be replaced by a canonical `contracts/v1/ctl-backends*.json` requested
+for HarflowMCP 0.0.14, when the whole bundle is next re-vendored.
+
 ## Compatibility evidence
 
 The vendored manifest supplies expected format/product version, required

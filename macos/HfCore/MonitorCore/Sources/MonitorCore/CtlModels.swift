@@ -220,36 +220,6 @@ public extension Dictionary where Key == String, Value == TaskInfo {
     }
 }
 
-/// One backend as `harflow-ctl backends --json` reports it: its registered name, its binary, and
-/// whether that binary is on the login PATH the Monitor runs `harflow-ctl` with. `installed` is
-/// `nil` — unknown — whenever the field is missing or not a bool, never silently `false`: a wrong
-/// or absent answer must never read as a confirmed "not found" (Code review round 1, finding 1).
-public struct BackendAvailability: Equatable, Sendable {
-    public let backend: String
-    public let binary: String
-    public let installed: Bool?
-    public let supportsCallerApprovals: Bool
-
-    public init(backend: String, binary: String, installed: Bool?, supportsCallerApprovals: Bool = false) {
-        self.backend = backend
-        self.binary = binary
-        self.installed = installed
-        self.supportsCallerApprovals = supportsCallerApprovals
-    }
-
-    public init?(_ value: JSONValue) {
-        guard let object = value.objectValue,
-              let backend = object["backend"]?.stringValue, !backend.isEmpty,
-              let binary = object["binary"]?.stringValue else { return nil }
-        self.backend = backend
-        self.binary = binary
-        // `.boolValue` itself already answers `nil` for a missing key or a non-bool value — no
-        // `?? false` fallback here, so either case reads as "unknown," never "confirmed absent."
-        installed = object["installed"]?.boolValue
-        supportsCallerApprovals = object["capabilities"]?.objectValue?["supports_caller_approvals"]?.boolValue ?? false
-    }
-}
-
 public enum ISODate {
     // Built once: creating a formatter costs far more than parsing with one, and a large listing
     // parses a start time per task (this once froze the sidebar). `ISO8601DateFormatter` is

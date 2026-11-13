@@ -18,7 +18,7 @@ let package = Package(
         .testTarget(
             name: "MonitorCoreTests",
             dependencies: ["MonitorCore"],
-            resources: [.copy("Resources/ContractsV1")],
+            resources: [.copy("Resources/ContractsV1"), .copy("Resources/RecordedCtl")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ],
