@@ -45,6 +45,9 @@ import Testing
             element(id).map { ShellMatrix.contains(text, in: $0) } ?? false
         }
 
+        /// Whether the right pane's subtree holds `text`; for landmarks (tab names, group titles) the sidebar or toolbar may repeat.
+        func inPane(_ text: String) -> Bool { within("Task details", has: text) }
+
         /// The first such element, for geometry, enabled and press checks.
         func element(_ text: String) -> NSObject? { ShellMatrix.element(text, in: window) }
 
@@ -130,6 +133,12 @@ import Testing
                                                   coordinator: fixture.coordinator, name: name)
             do {
                 try spec.verify(context)
+                // Activation can be lost to another application between the checks and the window capture.
+                await waitUntil(timeout: 10) {
+                    fixture.keepActive()
+                    fixture.pump()
+                    return NSApp.isActive && fixture.window.isVisible
+                }
                 try await M05MatrixCapture.record(suite: spec.suite, state: spec.state, dark: dark, size: size,
                                                   window: fixture.window, host: host)
             } catch {

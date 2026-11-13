@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import HfRepository
 @testable import MainWindowFeature
@@ -68,4 +69,34 @@ import Testing
 
     /// A text row for a transcript.
     static func text(_ seq: Int, _ text: String) -> TimelineItem { SummaryEntryScenario.text(seq, text) }
+
+    /// Answers the per-member reads a conversation's other turn needs, as `HostedContinuationFixture.installMember` does.
+    static func installMember(_ member: TaskInfo, conversation: [TaskInfo], on harness: TaskDetailVMTests.SUT) {
+        let useCase = harness.useCase
+        let id = member.taskID
+        given(useCase).detail(.value(id)).willReturn(member)
+        given(useCase).conversationMembers(of: .value(id)).willReturn(conversation)
+        given(useCase).snapshot(.value(id)).willReturn(member)
+        given(useCase).refreshSnapshot(.value(id)).willReturn()
+        given(useCase).children(of: .value(id)).willReturn([])
+        given(useCase).siblings(of: .value(id)).willReturn([])
+        given(useCase).activity(for: .value(id)).willReturn(ActivityCounts())
+        given(useCase).current(for: .value(id)).willReturn(nil)
+        given(useCase).prompt(for: .value(id)).willReturn(nil)
+        given(useCase).events(for: .value(id)).willReturn([])
+        given(useCase).items(for: .value(id)).willReturn([])
+        given(useCase).eventsAvailability(for: .value(id)).willReturn(.available)
+        given(useCase).eventsAvailabilityPublisher(for: .value(id)).willReturn(Empty().eraseToAnyPublisher())
+        given(useCase).itemsPublisher(for: .value(id)).willReturn(Empty().eraseToAnyPublisher())
+        given(useCase).observation(for: .value(id)).willReturn(FeatureObservationFixture.frame(id: id, availability: .available))
+        given(useCase).observationPublisher(for: .value(id)).willReturn(Empty().eraseToAnyPublisher())
+        given(useCase).recoveredTranscript(for: .value(id)).willReturn(RecoveredTranscriptFrame())
+        given(useCase).recoveredTranscriptPublisher(for: .value(id)).willReturn(Empty().eraseToAnyPublisher())
+        given(useCase).requestState(for: .value(id)).willReturn(.notRequested)
+        given(useCase).requestPublisher(for: .value(id)).willReturn(Empty().eraseToAnyPublisher())
+        let lease = MockEventStreamLease()
+        given(lease).taskID.willReturn(id)
+        given(lease).release().willReturn()
+        given(useCase).acquireEventLease(.value(id)).willReturn(lease)
+    }
 }

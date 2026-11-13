@@ -85,6 +85,7 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.AccessOptionRowTests",
     "MainWindowFeatureTests.M04StateMatrixHostedTests",
     "MainWindowFeatureTests.M05StatusStateMatrixHostedTests",
+    "MainWindowFeatureTests.M05ActionsTopBarStateMatrixHostedTests",
     "MainWindowFeatureTests.ActivityFeedTranscriptStyleHostedTests",
     "MainWindowFeatureTests.MessageBoxTranscriptStyleHostedTests",
     "MainWindowFeatureTests.NewSessionComposerHostedTests",

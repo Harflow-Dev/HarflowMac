@@ -47,6 +47,24 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     func selectionPublisher() -> AnyPublisher<MonitorDestination?, Never> { Empty().eraseToAnyPublisher() }
     
     var isNewSessionPresented = false
+    /// Lets an integrated test present the standalone Stop confirmation under the real shell. It builds the sheet through
+    /// `stopConfirmationBuilder`, which defaults to an empty view like every other coordinator that has no Stop sheet.
+    var isStopConfirmationPresented = false
+    @ObservationIgnored var stopConfirmationBuilder: (@MainActor () -> AnyView)?
+    func buildStopConfirmationView() -> AnyView { stopConfirmationBuilder?() ?? AnyView(EmptyView()) }
+    var presentedSheet: MainWindowSheet? {
+        get {
+            if isStopConfirmationPresented { return .stopTask }
+            if isNewSessionPresented { return .newSession }
+            return isWorkflowRunnerPresented ? .workflowRunner : nil
+        }
+        set {
+            isStopConfirmationPresented = newValue == .stopTask
+            isNewSessionPresented = newValue == .newSession
+            isWorkflowRunnerPresented = newValue == .workflowRunner
+        }
+    }
+
     func isNewSessionPresentedPublisher() -> AnyPublisher<Bool, Never> { Empty().eraseToAnyPublisher() }
     
     func handle(path _: any PathDestination) {}
