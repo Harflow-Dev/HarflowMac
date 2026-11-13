@@ -45,6 +45,7 @@ import Testing
         case .some(let value): harness.snapshotBox.value = value
         }
         if stubChanges { stubUnreadableChanges(harness) }
+        given(harness.useCase).loadMoreEvents(.any).willReturn(false)
         return harness
     }
 
