@@ -1,6 +1,6 @@
 # MonitorCore
 
-Foundation-only values and I/O for Harflow wire decoding, event tailing, lineage, process execution, and environment construction. The package stays in Swift 5 language mode for its process/tailing concurrency internals; see [architecture rules](../../AGENTS.md).
+Foundation-only values and I/O for Harflow wire decoding, public event pages, lineage, process execution, and environment construction. The package stays in Swift 5 language mode for its process/tailing concurrency internals; see [architecture rules](../../AGENTS.md).
 
 ## Compatibility
 

@@ -13,7 +13,7 @@ public enum MonitorMetrics {
         case sidebarPreparation, sidebarScheduling, sidebarBuild, sidebarApply, sidebarUpdateLatency
         case parallelPreparation, parallelScheduling, parallelBuild, parallelApply, parallelUpdateLatency
         case parallelViewport, parallelLeases
-        case activityFold, activityPageRead
+        case activityFold
         case activityViewport, activityPaginationRequest, activityScrollRestore
         case detailPreparation, detailBuild, detailApply, detailUpdateLatency
     }

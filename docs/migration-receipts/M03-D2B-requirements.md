@@ -28,7 +28,7 @@ Return immutable approved loading/empty/populated/error/interaction state refere
 
 ## Cutover and validation
 
-After approval, adapt these consumers and replace BOTH EventStreamRepositoryImpl activity EventFileTailer/EventPages/LineTail and its independent cumulative-summary LineTail scans together. Bind shared public lifetime/leases, explicit runtime invalidation callback, fresh ctl/event capability gates, cancellation and queued publication fences. Keep recoveryActivity separately labelled. Remove obsolete private path/read helpers only after production callsite audit; preserve app-owned preferences/runtime files and public CLI inputs.
+After approval, adapt these consumers and replace BOTH EventStreamRepositoryImpl activity EventFileTailer/EventPages/LineTail and its independent cumulative-summary LineTail scans together. Bind shared public lifetime/leases, explicit runtime invalidation callback, fresh ctl/event capability gates, cancellation and queued publication fences. Keep recoveryActivity separately labelled. Remove obsolete private path/read helpers only after production callsite audit; preserve app-owned preferences/runtime files and public CLI inputs. Later note: `EventFileTailer`, `EventPages`, `LineTail` and `TaskTitle` were removed at the commit "Remove unused engine-file readers from MonitorCore" (2026-11-13); the engine is read only through `task-events`.
 
 Use immutable0.0.8 event/prompt contracts unless an accepted delta is separately assigned. Runtime0.0.7 must explicitly refuse missing capabilities; no private/MCP fallback or automatic repin/acquisition. Public watcher adoption remains separate.
 
