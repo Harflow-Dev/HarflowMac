@@ -426,3 +426,4 @@ no embedded terminal anywhere in this package:
   `Mock*` types, and `waitUntil` from `HfTestUtilities`. Re-stubbing the same Mockable member twice in
   one test is FIFO/unreliable — see `ParallelVMTests`'s `Box` note and
   `TaskDetailVMTests`'s `refreshSnapshotEffect` box for the fix.
+- The M05 task-state matrix (`M05*StateMatrixHostedTests` under `Tests/.../Coordinator`) mounts each approved task state in the production shell with a real standalone `TaskDetailVM` through `M05MatrixRunner` and `TopBarIntegratedFixture`'s injected-harness initialiser, at 1280x800 and 1000x620 in both appearances. Add a state by adding its row to `M05StateTable` (checked against the literal design id list in `M05StateTableTests`) and a recipe in its suite. Scope every landmark that the sidebar, toolbar or badge could also show to its component subtree or an identifier, and build fixtures inside `build` so sizes never share state.

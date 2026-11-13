@@ -59,7 +59,7 @@ activation-to-suite delay; it does not guarantee a shorter unlocked-desktop wind
 must remain available throughout native execution.
 `TaskDetailObservationHostedTests` remains ordinary geometry coverage.
 
-The M05 task-state matrix suites (`M05*StateMatrixHostedTests`) write review captures only when `HARFLOW_M05_MATRIX_CAPTURE_DIR` is set: per state and size, a host bitmap, the exact owned window capture and a JSON naming the HarflowDesign route and commit. Without it they assert and write nothing.
+The M05 task-state matrix suites (`M05StatusStateMatrixHostedTests`, `M05ActionsTopBarStateMatrixHostedTests`, `M05PaneStateMatrixHostedTests`, `M05ChangesStateMatrixHostedTests` and `M05TranscriptStateMatrixHostedTests`, each in `HOSTED_SUITES`) write review captures only when `HARFLOW_M05_MATRIX_CAPTURE_DIR` is set: per state and size, a host bitmap, the exact owned window capture and a JSON naming the HarflowDesign route and commit. Without it they assert and write nothing.
 
 The host uses the `xcrun` selected compiler and Testing.framework (Library 1902), checks that exactly
 that Testing image remains loaded, and uses an isolated HOME, CFFIXED_USER_HOME and TMPDIR with

@@ -408,6 +408,7 @@ M05_STATUS_MATRIX_SUITE = "MainWindowFeatureTests.M05StatusStateMatrixHostedTest
 M05_ACTIONS_MATRIX_SUITE = "MainWindowFeatureTests.M05ActionsTopBarStateMatrixHostedTests"
 M05_PANE_MATRIX_SUITE = "MainWindowFeatureTests.M05PaneStateMatrixHostedTests"
 M05_CHANGES_MATRIX_SUITE = "MainWindowFeatureTests.M05ChangesStateMatrixHostedTests"
+M05_TRANSCRIPT_MATRIX_SUITE = "MainWindowFeatureTests.M05TranscriptStateMatrixHostedTests"
 TRANSCRIPT_STYLE_SUITE = "MainWindowFeatureTests.ActivityFeedTranscriptStyleHostedTests"
 MESSAGE_BOX_STYLE_SUITE = "MainWindowFeatureTests.MessageBoxTranscriptStyleHostedTests"
 NEW_SESSION_COMPOSER_SUITE = "MainWindowFeatureTests.NewSessionComposerHostedTests"
@@ -451,6 +452,7 @@ HOSTED_SUITE_NAMES = (
     M05_ACTIONS_MATRIX_SUITE,
     M05_PANE_MATRIX_SUITE,
     M05_CHANGES_MATRIX_SUITE,
+    M05_TRANSCRIPT_MATRIX_SUITE,
     TRANSCRIPT_STYLE_SUITE,
     MESSAGE_BOX_STYLE_SUITE,
     NEW_SESSION_COMPOSER_SUITE,
