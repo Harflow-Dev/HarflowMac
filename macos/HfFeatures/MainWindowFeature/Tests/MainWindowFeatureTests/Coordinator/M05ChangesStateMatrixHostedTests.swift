@@ -52,9 +52,9 @@ struct M05ChangesStateMatrixHostedTests {
         case "changes-text": text()
         case "changes-loading": loading()
         case "changes-error":
-            listing(state, { try ChangesJSON.unavailable() }, landmark: "Stored changes unavailable") { ctx, built in
+            listing(state, { try ChangesJSON.unavailable() }, landmark: "Stored changes unavailable") { ctx, _ in
                 #expect(ctx.vm.changesTabCount == nil)
-                if let action = built.note?.action { #expect(ctx.has(action.title), "action \(action.title) \(ctx.name)") }
+                #expect(ctx.has("Retry read"), "Retry read offered \(ctx.name)")
                 #expect(!ctx.has("No differences observed."))
             }
         case "changes-turns": turns()
@@ -127,9 +127,9 @@ struct M05ChangesStateMatrixHostedTests {
 
     // MARK: Snapshots the shared support lacks
 
-    /// Three complete repositories in both scopes, so the tab count is the sum of their stored row counts.
+    /// Eight complete repositories (the engine's maximum) in both scopes, so the tab count is the sum of their stored row counts.
     static func completeMultiSnapshot() throws -> TaskChangesSnapshot {
-        let repositories = ["alpha", "beta", "gamma"].map { name in
+        let repositories = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"].map { name in
             ChangesJSON.repository(root: "/work/\(name)",
                                    committed: ChangesJSON.committed(rows: [
                                        ChangesJSON.row("\(name)/a.swift"), ChangesJSON.row("\(name)/b.swift", status: "added")]),
@@ -217,7 +217,10 @@ struct M05ChangesStateMatrixHostedTests {
             #expect(values.contains { $0.label.hasPrefix(repository.name) }, "repository header \(repository.name) \(ctx.name): \(values)")
         }
         #expect(values.first { $0.label.hasPrefix("alpha") }?.value == "Expanded", "first repository open \(ctx.name)")
-        #expect(values.first { $0.label.hasPrefix("beta") }?.value == "Collapsed", "later repositories collapsed \(ctx.name)")
+        for repository in document.repositories.dropFirst() {
+            #expect(values.first { $0.label.hasPrefix(repository.name) }?.value == "Collapsed", "\(repository.name) collapsed \(ctx.name)")
+            #expect(repository.count != nil, "collapsed repository keeps its count")
+        }
     }
 
     private static func multiLimited(_ ctx: M05MatrixRunner.Context, _ built: TaskChangesBuilt) throws {
@@ -286,7 +289,7 @@ struct M05ChangesStateMatrixHostedTests {
 
     private static func text() -> M05MatrixRunner.Spec {
         let task = M05Fixtures.settled()
-        let patches = ChangesPatchScript()
+        let patchBox = PatchBox()
         let listing = Holder()
         return M05MatrixRunner.Spec(suite: M05StateTable.Suite.changes.rawValue, state: "changes-text", config: baseConfig(), build: {
             let snapshot = try ChangesJSON.availableListing()
@@ -294,11 +297,13 @@ struct M05ChangesStateMatrixHostedTests {
             let harness = M05Fixtures.harness(task, stubChanges: false)
             let script = ChangesReadScript(.snapshot(snapshot))
             given(harness.useCase).readChanges(key: .any, operationIsCurrent: .any).willProduce { key, fence in script.serve(key, fence) }
+            let patches = ChangesPatchScript()
+            patchBox.script = patches
             patches.answerFromNowOn(.text(ChangesJSON.textCompleteText))
             given(harness.useCase).readChangesPatch(key: .any, selector: .any, operationIsCurrent: .any).willProduce { key, selector, fence in
                 patches.serve(key, selector, fence)
             }
-            return .init(harness: harness, retained: [script, patches, listing])
+            return .init(harness: harness, retained: [script, patches, listing, patchBox])
         }, drive: { ctx in
             ctx.harness.tasksSubject.send([task])
             guard let built = listing.built else { return }
@@ -314,17 +319,18 @@ struct M05ChangesStateMatrixHostedTests {
             return false
         }, verify: { ctx in
             guard case .diff(let model) = ctx.vm.changesDiff else { Issue.record("no diff shown \(ctx.name)"); return }
-            #expect(patches.count >= 1, "the patch was read")
-            #expect(model.drawnLines.contains { $0.contains("print('b')") } || !model.drawnLines.isEmpty, "diff text drawn")
-            #expect(ctx.hasContaining("Committed"), "scope header \(ctx.name)")
+            #expect((patchBox.script?.count ?? 0) >= 1, "the patch was read")
+            #expect(model.drawnLines.contains { $0.contains("print('b')") }, "diff model holds the patch text")
+            #expect(ctx.paneContains("print('b')"), "diff line drawn inside the pane \(ctx.name)")
+            #expect(ctx.paneContains("Committed"), "scope header in the pane \(ctx.name)")
         }, finish: { ctx in
             // A refusal on the next read offers Retry.
-            patches.answerFromNowOn(.failure(.failed(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "fixture"))))
+            patchBox.script?.answerFromNowOn(.failure(.failed(.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "fixture"))))
             guard let built = listing.built,
                   let row = rows(built).first(where: { $0.path == "docs/guide.md" }), let selector = row.selector else { return }
             ctx.vm.didSelectChangesRow(selector)
-            await waitUntil(timeout: 10) { ctx.fixture.pump(); return ctx.hasContaining("Retry") }
-            #expect(ctx.hasContaining("Retry"), "Retry offered on refusal \(ctx.name)")
+            await waitUntil(timeout: 10) { ctx.fixture.pump(); return ctx.paneContains("Retry") }
+            #expect(ctx.paneContains("Retry"), "Retry offered inside the pane on a read failure \(ctx.name)")
         })
     }
 
@@ -380,4 +386,5 @@ struct M05ChangesStateMatrixHostedTests {
     }
 
     private final class ScriptBox { var script: ChangesReadScript? }
+    private final class PatchBox { var script: ChangesPatchScript? }
 }

@@ -45,6 +45,14 @@ import Testing
             element(id).map { ShellMatrix.contains(text, in: $0) } ?? false
         }
 
+        /// Whether any element in the right pane's subtree has a label, title or value containing `text`.
+        func paneContains(_ text: String) -> Bool {
+            guard let pane = element("Task details") else { return false }
+            return ShellMatrix.tree(pane).contains { object in
+                [ShellMatrix.label(object), ShellMatrix.value(object), ShellMatrix.string(object, "accessibilityTitle")].contains { $0?.contains(text) == true }
+            }
+        }
+
         /// Whether the right pane's subtree holds `text`; for landmarks (tab names, group titles) the sidebar or toolbar may repeat.
         func inPane(_ text: String) -> Bool { within("Task details", has: text) }
 

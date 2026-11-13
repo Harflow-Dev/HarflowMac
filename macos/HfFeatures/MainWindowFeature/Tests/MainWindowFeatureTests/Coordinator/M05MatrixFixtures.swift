@@ -56,10 +56,22 @@ import Testing
     }
 
     /// An observation frame for the matrix task with the given facts. Items default to none.
-    static func frame(items: [TimelineItem] = [], history: EventObservationHistory = .init(caughtUp: true, forwardDrained: true),
+    static func frame(items: [TimelineItem] = [], records: [ObservedEventRecord] = [],
+                      history: EventObservationHistory = .init(caughtUp: true, forwardDrained: true),
                       logState: EventLogState? = .final, summary: ObservedActivitySummary = .init(),
                       scope: EventObservationScope = FeatureObservationFixture.scope) -> EventObservationFrame {
-        EventObservationFrame(taskID: taskID, scope: scope, items: items, history: history, summary: summary, logState: logState)
+        EventObservationFrame(taskID: taskID, scope: scope, records: records, items: items, history: history, summary: summary,
+                              logState: logState)
+    }
+
+    /// Normalized records of the given kinds, in order, as the public observation lists them.
+    static func records(_ kinds: [String], scope: EventObservationScope = FeatureObservationFixture.scope) -> [ObservedEventRecord] {
+        kinds.enumerated().compactMap { admission, kind in
+            let raw: [String: JSONValue] = ["product": .string("harflow"), "format": .string("harflow.event"), "v": .number(1),
+                "product_version": .string("0.0.8"), "seq": .number(Double(admission + 1)), "observed_at": .null, "kind": .string(kind),
+                "truncated": .bool(false), "oversized": .bool(false)]
+            return TaskEventRecord(raw: raw).map { ObservedEventRecord(id: .init(scope: scope, admission: admission), record: $0) }
+        }
     }
 
     /// Publishes `frame` as the VM's observation, as the repository's publisher would.

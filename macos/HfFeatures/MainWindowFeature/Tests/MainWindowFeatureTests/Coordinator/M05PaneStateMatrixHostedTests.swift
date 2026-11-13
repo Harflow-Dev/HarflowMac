@@ -120,6 +120,12 @@ struct M05PaneStateMatrixHostedTests {
 
     // MARK: Events
 
+    private static var twoToolCalls: ActivityCounts {
+        var counts = ActivityCounts()
+        counts.toolCalls = 2
+        return counts
+    }
+
     private static func eventsFrame(_ state: String, rows: [TimelineItem]) -> EventObservationFrame? {
         switch state {
         case "events-page":
@@ -135,34 +141,52 @@ struct M05PaneStateMatrixHostedTests {
         case "events-error":
             M05Fixtures.frame(items: [], history: .init(reasons: [.unavailable]), logState: .unavailable,
                               summary: .init(state: .unavailable, reasons: [.unavailable]))
-        default: nil
+        default:
+            M05Fixtures.frame(items: rows, records: M05Fixtures.records(["notice", "tool_result"]),
+                              summary: .init(state: .observed, counts: twoToolCalls, totalFiles: 0))
+        }
+    }
+
+    /// The Events pane's own summary line for each state, asserted inside the pane at both sizes.
+    private static func paneSummary(_ state: String) -> String {
+        switch state {
+        case "events-populated": "2 tool calls observed"
+        case "events-loading": "Loading tool activity"
+        case "events-error": "Tool activity unavailable"
+        default: "No tool calls observed in the available captured history"
         }
     }
 
     /// In the 1000 x 620 overlay the pane is modal, so SwiftUI hides the transcript column's own views (the history boundary and
-    /// its actions) from accessibility; the rows' native table stays. The history landmarks are asserted only where they are reachable.
+    /// its actions) from accessibility; those transcript landmarks are asserted at 1280 x 800 only, the pane's at both sizes.
     private static func verifyEvents(_ state: String, _ ctx: M05MatrixRunner.Context) {
         let overlay = ctx.size.width < 1100
+        #expect(ctx.paneContains("Public normalized events · bounded record window"), "events section in the pane \(ctx.name)")
+        #expect(ctx.paneContains(paneSummary(state)), "pane summary \(paneSummary(state)) \(ctx.name)")
+        if state != "events-populated" { #expect(!ctx.paneContains("Task failed"), "history state is not a task failure \(ctx.name)") }
         switch state {
         case "events-populated":
             for group in ["Task", "What was enforced", "Notices"] {
                 #expect(ctx.fixture.groupValue(group) == "Collapsed", "\(group) group collapsed by default \(ctx.name): \(ctx.fixture.groupHeaderLabels)")
             }
+            for kind in ["notice", "tool_result"] { #expect(ctx.paneContains(kind), "record kind \(kind) listed in the pane \(ctx.name)") }
         case "events-page":
-            #expect(ctx.has("Load earlier") || overlay, "history action \(ctx.name)")
+            if !overlay { #expect(ctx.has("Load earlier"), "history action on the transcript boundary \(ctx.name)") }
+            #expect(!ctx.paneContains("Load earlier"), "Load earlier is not in the pane \(ctx.name)")
         case "events-page-error":
-            #expect(ctx.has("Retry history read") || overlay, "history action \(ctx.name)")
+            if !overlay { #expect(ctx.has("Retry history read"), "history action on the transcript boundary \(ctx.name)") }
             #expect(!ctx.has("Earlier records couldn't be read"), "design heading is not native copy \(ctx.name)")
             #expect(!ctx.has("Reload from newest"), "design action is not native copy \(ctx.name)")
         case "events-loading":
-            #expect(ctx.has("Loading captured history") || overlay)
-            #expect(!ctx.has("No tool calls observed in the available captured history"), "loading never reads as empty \(ctx.name)")
+            if !overlay { #expect(ctx.has("Loading captured history"), "transcript boundary note \(ctx.name)") }
+            #expect(!ctx.paneContains("No tool calls observed in the available captured history"), "loading never reads as empty \(ctx.name)")
         case "events-empty":
             #expect(!ctx.has("No rows in the available captured history"), "design copy is not native \(ctx.name)")
             #expect(!ctx.has("An empty window does not qualify totals."), "design copy is not native \(ctx.name)")
         default:
-            #expect(ctx.has("History incomplete or unavailable · see Events") || overlay)
-            #expect(!ctx.has("Task failed"), "history unavailable never reads as task failure \(ctx.name)")
+            if !overlay { #expect(ctx.has("History incomplete or unavailable · see Events"), "transcript boundary note \(ctx.name)") }
+            #expect(!ctx.has("Captured history unavailable"), "design heading is not native copy \(ctx.name)")
+            #expect(!ctx.has("This does not mean the task failed."), "design sentence is not native copy \(ctx.name)")
         }
     }
 
@@ -194,8 +218,8 @@ struct M05PaneStateMatrixHostedTests {
             // The history boundary sits at the top of the transcript; the shorter window realises rows from the tail.
             if let scroll = ActivityFeedTranscriptStyleHostedTests.tables(ctx.host).first?.enclosingScrollView { activityNativeTestScroll(scroll, to: 0) }
             let overlay = ctx.size.width < 1100
-            let heading = "Public normalized events · bounded record window"
-            return ctx.fixture.hasPane && (populated ? ctx.fixture.groupValue("Notices") != nil : ctx.has(overlay ? heading : landmark))
+            let summary = ctx.paneContains(paneSummary(state))
+            return ctx.fixture.hasPane && summary && (populated ? ctx.fixture.groupValue("Notices") != nil : (overlay || ctx.has(landmark)))
         }, verify: { ctx in
             try assertPaneChrome(ctx)
             #expect(ctx.fixture.store.selectedTab(for: TopBarIntegratedFixture.conversation) == .events)

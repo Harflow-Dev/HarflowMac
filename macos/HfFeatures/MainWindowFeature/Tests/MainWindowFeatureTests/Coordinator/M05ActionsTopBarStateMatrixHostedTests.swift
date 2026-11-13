@@ -116,6 +116,7 @@ struct M05ActionsTopBarStateMatrixHostedTests {
         let current = M05Fixtures.task(status: "running")
         let previous = M05Fixtures.task(status: "running", fields: ["task_id": .string("earlier01")])
         return M05MatrixRunner.Spec(suite: M05StateTable.Suite.actionsTopBar.rawValue, state: state, config: config(), build: {
+            holder.request = nil
             let fixtures = TaskDetailVMTests.Fixtures()
             if earlier {
                 fixtures.conversationMembersProvider.value = { _ in [previous, current] }
@@ -176,8 +177,10 @@ struct M05ActionsTopBarStateMatrixHostedTests {
             #expect(ShellMatrix.contains("Take over this task?", in: sheet))
             #expect(ShellMatrix.contains("Take over in terminal", in: sheet))
             #expect(ShellMatrix.contains("Cancel", in: sheet))
-            let opening = "The headless run is stopped first (with any sub-tasks), then the same conversation opens in Terminal.app."
-            #expect(ShellMatrix.hasPrefix(opening, in: sheet), "body \(ctx.name)")
+            let body = "The headless run is stopped first (with any sub-tasks), then the same conversation opens in Terminal.app. "
+                + "It runs under your own default permissions, not this task's access level (Can edit this repo). "
+                + "While the terminal is open, harflow refuses resumes of this session from anywhere else."
+            #expect(ShellMatrix.hasPrefix(body, in: sheet), "full body matches the design \(ctx.name)")
         }, finish: { ctx in
             if let sheet = ctx.window.attachedSheet, let cancel = ShellMatrix.element("Cancel", in: sheet) { _ = ShellMatrix.press(cancel) }
             await waitUntil(timeout: 5) { ctx.fixture.pump(); return ctx.window.attachedSheet == nil }
@@ -255,11 +258,17 @@ struct M05ActionsTopBarStateMatrixHostedTests {
             #expect(ctx.fixture.isOnScreen(ctx.fixture.item(TopBarIntegratedFixture.inspector)))
             #expect(ctx.fixture.itemRendering("Back to resource slots") != nil, "resource return drawn \(ctx.name)")
             let chips = content.chips(isNarrow: ctx.fixture.band.isNarrow)
+            #expect(!content.metaParts.isEmpty, "the state carries meta \(ctx.name)")
+            let meta = try #require(content.metaParts.first)
+            let access = try #require(ctx.fixture.itemRendering(chips.accessLabel), "access chip \(chips.accessLabel) \(ctx.name)")
+            let accessStrings = access.view.map { ctx.fixture.strings(in: $0) } ?? []
             if ctx.fixture.band.isNarrow {
-                // Meta is dropped first at the minimum width; the chips stay with their counts.
-                let meta = content.metaParts.joined(separator: " ")
-                if !meta.isEmpty { #expect(!ctx.principalStrings.contains { $0.contains(meta) }, "meta dropped \(ctx.name) \(ctx.principalStrings)") }
-                #expect(ctx.fixture.itemRendering(chips.accessLabel) != nil, "access chip \(chips.accessLabel) \(ctx.name)")
+                // Meta is dropped first at the minimum width; the access chip is icon-only, keeping its label but no title.
+                #expect(!ctx.principalStrings.contains { $0.contains(meta) }, "meta dropped \(ctx.name) \(ctx.principalStrings)")
+                #expect(accessStrings.contains(chips.accessLabel), "access label present \(ctx.name) \(accessStrings)")
+                #expect(!accessStrings.contains(content.accessText ?? ""), "access title absent \(ctx.name) \(accessStrings)")
+            } else {
+                #expect(ctx.principalStrings.contains { $0.contains(meta) }, "meta shown \(ctx.name) \(ctx.principalStrings)")
             }
             #expect(ctx.fixture.itemRendering(chips.noticesLabel) != nil, "notices chip \(chips.noticesLabel) \(ctx.name)")
         })

@@ -173,7 +173,7 @@ struct M05TranscriptStateMatrixHostedTests {
         }, ready: { ctx in ctx.has("Loading task") }, verify: { ctx in
             #expect(ctx.vm.task == nil && !ctx.vm.hasListed, "the VM has not listed \(ctx.name)")
             #expect(ctx.has("Loading task"), "skeleton drawn \(ctx.name)")
-            #expect(ctx.fixture.item(TopBarIntegratedFixture.more) != nil || !ctx.fixture.items.isEmpty, "toolbar frame \(ctx.name)")
+            #expect(ctx.has(M04ToolbarEvidence.contextTitle(ctx.coordinator)), "loading toolbar shows the context title \(ctx.name)")
             #expect(!ctx.fixture.hasPane, "no pane in the skeleton \(ctx.name)")
             #expect(!ctx.has("Stop"), "no Stop control while loading \(ctx.name)")
         })
@@ -218,7 +218,14 @@ struct M05TranscriptStateMatrixHostedTests {
             ctx.has("Approve once") && ctx.has("Reject")
         }, verify: { ctx in
             #expect(ctx.has("Approve once") && ctx.has("Reject"), "exact action copy \(ctx.name)")
-            #expect(ctx.hasContaining("Answered from Harflow") || ctx.hasContaining("Working directory: /repo"), "source attribution \(ctx.name)")
+            #expect(ctx.hasContaining("Working directory: /repo"), "source attribution \(ctx.name)")
+            let table = try #require(ActivityFeedTranscriptStyleHostedTests.tables(ctx.host).first)
+            let entries = try #require(table.owner?.entries)
+            let card = try #require(entries.firstIndex { if case .approval = $0 { return true }; return false }, "approval entry \(ctx.name)")
+            for index in entries.indices { if case .row = entries[index] { #expect(index < card, "approval card sits after every row \(ctx.name)") } }
+            if let bottom = entries.firstIndex(where: { if case .bottom = $0 { return true }; return false }) {
+                #expect(card < bottom, "approval card sits before the bottom sentinel \(ctx.name)")
+            }
             #expect(ctx.hasContaining("Access level: write_in_repo"), "access level \(ctx.name)")
         })
     }

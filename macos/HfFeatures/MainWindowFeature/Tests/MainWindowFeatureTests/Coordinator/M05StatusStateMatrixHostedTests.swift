@@ -252,7 +252,7 @@ struct M05StatusStateMatrixHostedTests {
             if !body.isEmpty { #expect(ctx.within(id, has: body), "banner body \(ctx.name)") }
             let proceed = try #require(ctx.element("task-state-continue"))
             #expect(ShellMatrix.isEnabled(proceed) == true, "Continue enabled \(ctx.name)")
-            #expect(ctx.within("task-state-continue", has: "Continue in a new session") || ctx.has("Continue in a new session"))
+            #expect(ctx.has("Continue in a new session"), "button label \(ctx.name)")
             if state != "failed-continue" { #expect(ctx.has("task-state-copy-resume"), "Copy resume command in the banner \(ctx.name)") }
             let badge = switch state {
             case "cancelled": "Cancelled"
@@ -282,6 +282,8 @@ struct M05StatusStateMatrixHostedTests {
         case "continue-started":
             #expect(ctx.vm.currentTaskID == "accepted-session")
             #expect(ctx.principalHas(prefix: "Running"), "badge Running \(ctx.name) \(ctx.principalStrings)")
+            // Native keeps the accepted notice after the recorded successor is adopted, beside the Running badge, as the design does.
+            #expect(ctx.within(id, has: "New session accepted"), "accepted notice kept after adoption \(ctx.name)")
         default:
             #expect(ctx.within(id, has: "The engine refused this request."), "refusal body \(ctx.name)")
             #expect(ctx.within(id, has: reason), "raw reason shown \(ctx.name)")
@@ -325,6 +327,8 @@ struct M05StatusStateMatrixHostedTests {
             if state != "continue-starting" { await fixture.runner.latch.release() }
             if state == "continue-started" {
                 await waitUntil(timeout: 10) { ctx.fixture.pump(); return ctx.within(id, has: title) }
+                #expect(ctx.within(id, has: title), "accepted notice shown before adoption \(ctx.name)")
+                #expect(ctx.within(id, has: "The engine accepted the request. It may still be waiting for resources; acceptance does not mean completion."))
                 // Positive recorded evidence and conversation adoption arrive, so the new session is the current member.
                 fixture.pages.result = .success(HostedContinuationPages.page(["accepted-session"]))
                 let successor = HostedContinuationFixture.task(id: "accepted-session", status: "running", predecessor: fixture.sourceID)

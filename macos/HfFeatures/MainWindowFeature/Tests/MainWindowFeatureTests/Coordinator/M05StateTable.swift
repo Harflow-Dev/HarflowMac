@@ -100,8 +100,8 @@ enum M05StateTable {
 
     static let changes: [Entry] = [
         entry("changes-single", .changes, "one repository listing"),
-        entry("changes-multi", .changes, "eight repositories"),
-        entry("changes-multi-limited", .changes, "eight repositories, one limited"),
+        entry("changes-multi", .changes, "eight complete repositories, first open and the rest collapsed with counts"),
+        entry("changes-multi-limited", .changes, "two repositories, one row limited"),
         entry("changes-same-path", .changes, "same path in both scopes"),
         entry("changes-row-states", .changes, "binary, untracked, truncated, omitted and not captured rows"),
         entry("changes-incomplete", .changes, "incomplete capture with rows"),
