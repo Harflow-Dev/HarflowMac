@@ -84,7 +84,7 @@ public final class BackendsRepositoryImpl: BackendsRepository, @unchecked Sendab
 
     /// "After a successful harflow install/update" (Review round 1 item 1): a fresh refresh every
     /// time the install pipeline reaches its terminal success state, without this repository needing
-    /// to be threaded through `InstallRepositoryImpl`'s own barrier. The environment itself may have
+    /// to be threaded through the install repository's own barrier. The environment itself may have
     /// changed (a new install can land on a `PATH` this process didn't have before), so this bumps
     /// the generation exactly like `settingsChanged()` (finding 2).
     private func subscribeToInstallState() {

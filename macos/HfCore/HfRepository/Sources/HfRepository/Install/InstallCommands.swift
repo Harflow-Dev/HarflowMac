@@ -26,7 +26,6 @@ public enum InstallNeed: Equatable, Sendable {
 // MARK: - InstallCommands
 
 /// Pure constants, argv builders, and the install classifier — nothing here runs a process.
-/// `InstallRepositoryImpl` is what actually spawns curl/sh/git/uv/pgrep using these.
 public enum InstallCommands {
 
     // MARK: Source
