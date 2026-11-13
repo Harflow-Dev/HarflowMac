@@ -67,7 +67,17 @@ import Testing
         var resourceHeld = false
         var dark = false
         var openPane = false
+        /// Stores an explicit "closed" choice, so a finished task does not open the pane by its first-show default.
+        var closePane = false
+        /// The tab shown when `openPane` is set.
+        var paneTab = TaskPaneStateStore.Tab.events
         var expandedGroups: Set<TaskPaneStateStore.FactsGroup> = []
+        /// Extra task record fields merged over the generated JSON (`exit_code`, `session_id`, `resume_command`, `taken_over`,
+        /// `spawned_by`, `supervision`). Used only when the fixture builds the task itself.
+        var fields: [String: JSONValue] = [:]
+        /// The task has not been listed yet: no task, so the standalone view draws its loading skeleton and the fixture does
+        /// not wait for a task or a principal.
+        var loading = false
     }
 
     static let conversation = "conv"
@@ -86,29 +96,39 @@ import Testing
     private var controller: NSHostingController<AnyView>?
 
     /// Mounts the scenario and waits until the principal and the task toolbar have drawn.
-    init(_ config: Config) async {
+    ///
+    /// With an injected `harness` the caller owns every fixture box, stub, provider and the `readChanges` answer: this
+    /// initialiser installs none of them and only mounts. `prepare` runs once, after the pane choices are stored and before
+    /// the shell is built. Without a harness the fixture builds its own, exactly as before.
+    init(_ config: Config, harness injected: TaskDetailVMTests.SUT? = nil, prepare: ((TaskDetailVMTests.SUT) -> Void)? = nil) async {
         _ = NSApplication.shared
         self.config = config
         self.previousEnhanced = NSApplication.shared.accessibilityAttributeValue(enhanced)
         NSApplication.shared.accessibilitySetValue(true, forAttribute: enhanced)
-        let harness = TaskDetailVMTests().makeSUT(chrome: .standalone)
+        let harness = injected ?? TaskDetailVMTests().makeSUT(chrome: .standalone)
         self.harness = harness
-        // The standalone VM reads stored changes once the pane opens (the chip tests open it) or while a capture settles.
-        // The strict mock needs an answer for any key; the key is echoed back, so every lifecycle generation matches. An
-        // unreadable listing touches only the Changes tab, which these tests never show: the toolbar, the principal and the
-        // Events facts groups do not read it. Same stub as the Summary entry VM tests.
-        given(harness.useCase).readChanges(key: .any, operationIsCurrent: .any).willProduce { key, _ in
-            .failure(TaskChangesReadFailure(key: key, outcome: .failed(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "unavailable"))))
+        if injected == nil {
+            // The standalone VM reads stored changes once the pane opens (the chip tests open it) or while a capture settles.
+            // The strict mock needs an answer for any key; the key is echoed back, so every lifecycle generation matches. An
+            // unreadable listing touches only the Changes tab, which these tests never show: the toolbar, the principal and the
+            // Events facts groups do not read it. Same stub as the Summary entry VM tests.
+            given(harness.useCase).readChanges(key: .any, operationIsCurrent: .any).willProduce { key, _ in
+                .failure(TaskChangesReadFailure(key: key, outcome: .failed(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "unavailable"))))
+            }
         }
         let conversation = Self.conversation
         if config.openPane {
             store.setOpenChoice(.open, for: conversation)
-            store.setSelectedTab(.events, for: conversation)
+            store.setSelectedTab(config.paneTab, for: conversation)
             store.setExpandedGroups(config.expandedGroups, for: conversation)
         }
-        let task = Self.task(config, notices: config.notices)
-        harness.detailBox.value = task
-        if config.enforcementSnapshot { harness.snapshotBox.value = Self.enforcementSnapshot(of: task) }
+        if config.closePane, !config.openPane { store.setOpenChoice(.closed, for: conversation) }
+        if injected == nil, !config.loading {
+            let task = Self.task(config, notices: config.notices)
+            harness.detailBox.value = task
+            if config.enforcementSnapshot { harness.snapshotBox.value = Self.enforcementSnapshot(of: task) }
+        }
+        prepare?(harness)
         coordinator.resourceReturnAvailable = config.resourceReturn
         coordinator.selection = .task(conversation)
         coordinator.topBar.setShownConversation(conversation)
@@ -130,6 +150,13 @@ import Testing
         self.window = M04ToolbarEvidence.makeWindow(controller, size: NSSize(width: config.width, height: config.height))
         // Both appearances are set explicitly: an unset window follows the desktop, so a "light" capture would turn dark.
         window.appearance = NSAppearance(named: config.dark ? .darkAqua : .aqua)
+        if config.loading {
+            await waitUntil(timeout: 10) {
+                pump()
+                return M04ToolbarEvidence.isPopulated(window)
+            }
+            return
+        }
         await waitUntil(timeout: 10) {
             pump()
             return harness.sut.task != nil && harness.sut.didSubscribe && M04ToolbarEvidence.isPopulated(window)
@@ -233,6 +260,7 @@ import Testing
         guard let value = try? JSONDecoder().decode(JSONValue.self, from: Data(source.utf8)), var raw = value.objectValue else {
             preconditionFailure("The integrated top bar fixture task did not decode")
         }
+        for (key, field) in config.fields { raw[key] = field }
         if config.resourceHeld {
             raw["phase_slots"] = .array([.object([
                 "lease_id": .string("lease-heavy"), "task_id": .string(taskID), "name": .string("heavy-build"),
