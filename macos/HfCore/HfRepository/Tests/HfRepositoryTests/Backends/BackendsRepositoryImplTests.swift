@@ -8,7 +8,7 @@ import Testing
 
 /// `.serialized`: several tests in this suite gate a `willProduce`/`StubProcessRunner` stub on a
 /// blocking `AsyncGate` (`DispatchSemaphore`) to force a deterministic race — the same technique
-/// `TaskListRepositoryImplTests`/`ToolEnvironmentRepositoryImplTests` already use. Mockable's
+/// `TaskListRepositoryImplTests` already uses. Mockable's
 /// `willProduce` only accepts a *synchronous* closure even for an `async` member (confirmed: an
 /// `async`, non-blocking closure there fails to typecheck), so a blocking wait is the only available
 /// mechanism — and running several of them concurrently (this suite's own, on top of every other

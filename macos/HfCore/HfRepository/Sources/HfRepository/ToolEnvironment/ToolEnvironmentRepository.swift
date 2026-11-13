@@ -67,7 +67,7 @@ public extension ToolEnvironmentRepository {
 public struct NullToolEnvironmentRepository: ToolEnvironmentRepository {
     public init() {}
     public var home: String { NSHomeDirectory() }
-    public var tasksDirectory: String { TaskTitle.tasksDirectory(home: home) }
+    public var tasksDirectory: String { ManagedRuntimeLayout(home: home).tasksDirectory }
     public var locator: ToolLocator { ToolLocator(overrideDirectory: nil, home: home, uvToolBin: nil, isExecutable: { _ in false }) }
     public var discovery: DiscoveryResult { DiscoveryResult(loginPath: nil, uv: nil) }
     public func discoveryPublisher() -> AnyPublisher<DiscoveryResult, Never> { Just(discovery).eraseToAnyPublisher() }

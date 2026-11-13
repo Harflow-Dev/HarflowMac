@@ -5,8 +5,9 @@ import SwiftEnvironment
 
 // MARK: - Scheduling
 
-/// The one scheduling seam every production timer in this package goes through: the 1 s FSEvents
-/// throttle and the 10 s safety poll (`TaskListRepository`). Tests inject a `MockScheduling` that
+/// The one scheduling seam every production timer in this package goes through: the 1 s task-list
+/// polling tick, the 1 s public observation tick, the 5 s recovery refresh and the one-shot retry
+/// delays (for example `TaskListRepository`'s). Tests inject a `MockScheduling` that
 /// captures the scheduled closure and invokes it directly, so timing-dependent behaviour is driven
 /// without ever sleeping.
 @Mockable
