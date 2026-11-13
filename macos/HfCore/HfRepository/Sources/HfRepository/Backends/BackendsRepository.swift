@@ -26,11 +26,82 @@ public struct BackendCatalogEntry: Equatable, Identifiable, Sendable {
     public let backend: String
     public let installed: Bool?
     public let supportsCallerApprovals: Bool
+    /// The run-option facts the engine reported; `.unknown` whenever the catalog is degraded.
+    public let controls: BackendControlFacts
 
-    public init(backend: String, installed: Bool?, supportsCallerApprovals: Bool = false) {
+    public init(
+        backend: String,
+        installed: Bool?,
+        supportsCallerApprovals: Bool = false,
+        controls: BackendControlFacts = .unknown
+    ) {
         self.backend = backend
         self.installed = installed
         self.supportsCallerApprovals = supportsCallerApprovals
+        self.controls = controls
+    }
+}
+
+// MARK: - ControlState
+
+/// Whether one run-option control applies to a harness: the engine said yes, said no, or the app
+/// cannot tell (catalog loading or degraded, or the engine omitted the fact).
+public enum ControlState: Equatable, Sendable {
+    case supported
+    case unsupported
+    case unknown
+}
+
+// MARK: - EffortState
+
+/// The reasoning-effort control of a harness. `.levels` is never empty and keeps the engine's
+/// order; levels the engine did not report are never invented.
+public enum EffortState: Equatable, Sendable {
+    case levels([String])
+    case unsupported
+    case unknown
+}
+
+// MARK: - BackendControls
+
+/// What a feature may offer for one harness: model, effort and turn-limit controls, each three-state.
+/// Derived only from engine-reported facts of an `.available` catalog, never from a backend name.
+public struct BackendControls: Equatable, Sendable {
+    public let model: ControlState
+    public let effort: EffortState
+    public let turnCap: ControlState
+
+    public init(model: ControlState, effort: EffortState, turnCap: ControlState) {
+        self.model = model
+        self.effort = effort
+        self.turnCap = turnCap
+    }
+
+    /// Nothing is known: the catalog is loading or degraded, or the backend is not listed.
+    public static let unavailable = BackendControls(model: .unknown, effort: .unknown, turnCap: .unknown)
+
+    /// Maps engine facts to control states. A missing fact is `.unknown`; the model control also
+    /// needs a usable qualification gate (`.notReady` is `.unsupported`, `.unknown` is `.unknown`).
+    public init(facts: BackendControlFacts) {
+        switch facts.supportsModelSelection {
+        case nil: self.model = .unknown
+        case false?: self.model = .unsupported
+        case true?:
+            switch facts.modelSelection {
+            case .notDeclared, .ready: self.model = .supported
+            case .notReady: self.model = .unsupported
+            case .unknown: self.model = .unknown
+            }
+        }
+        switch facts.effort {
+        case nil: self.effort = .unknown
+        case let block?: self.effort = block.acceptsParameter && !block.levels.isEmpty ? .levels(block.levels) : .unsupported
+        }
+        switch facts.supportsTurnCap {
+        case nil: self.turnCap = .unknown
+        case true?: self.turnCap = .supported
+        case false?: self.turnCap = .unsupported
+        }
     }
 }
 
@@ -49,6 +120,13 @@ public struct BackendCatalog: Equatable, Sendable {
     }
 
     public static let empty = BackendCatalog(entries: [], state: .loading)
+
+    /// The run-option controls for `backend`: `.unavailable` unless the catalog is `.available` and
+    /// lists that backend, so loading, degraded and unlisted all read as unknown.
+    public func controls(for backend: String) -> BackendControls {
+        guard state == .available, let entry = entries.first(where: { $0.backend == backend }) else { return .unavailable }
+        return BackendControls(facts: entry.controls)
+    }
 }
 
 // MARK: - BackendsRepository

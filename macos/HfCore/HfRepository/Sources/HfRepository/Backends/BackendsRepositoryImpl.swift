@@ -206,7 +206,7 @@ public final class BackendsRepositoryImpl: BackendsRepository, @unchecked Sendab
         switch result {
         case .success(let items):
             catalogValue = BackendCatalog(
-                entries: items.map { BackendCatalogEntry(backend: $0.backend, installed: $0.installed, supportsCallerApprovals: $0.supportsCallerApprovals) },
+                entries: items.map { BackendCatalogEntry(backend: $0.backend, installed: $0.installed, supportsCallerApprovals: $0.supportsCallerApprovals, controls: $0.controls) },
                 state: .available
             )
         case .failure:

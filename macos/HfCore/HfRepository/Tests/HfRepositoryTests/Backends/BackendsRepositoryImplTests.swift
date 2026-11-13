@@ -469,4 +469,62 @@ import Testing
         withExtendedLifetime(token) {}
     }
 
+    // MARK: Control facts
+
+    private func ctlClient(rawBackends: String) -> CtlClient {
+        let response = #"{"product":"harflow","format":"harflow.ctl","v":1,"product_version":"0.0.1","backends":"# + rawBackends + "}"
+        return CtlClient(executable: "/bin/echo", environment: [:], runner: StubProcessRunner(compatibleOutput: stdout(response)))
+    }
+
+    private static let vibeEntry = #"""
+    {"backend":"vibe","binary":"vibe","installed":true,
+     "capabilities":{"supports_model_selection":true,"supports_turn_cap":true,
+       "reasoning_effort":{"accepts_parameter":false,"levels":[]}},
+     "qualification":{"features":{"model_selection":{"ok":true,"source":"seeded"}}}}
+    """#
+
+    @Test func givenASuccessfulFetchWithFacts_whenRefreshed_thenEntriesCarryThemAndControlsFollow() async {
+        // given
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).ctl().willReturn(.success(ctlClient(rawBackends: "[" + Self.vibeEntry + "]")))
+        let sut = makeSUT(toolEnvironment: toolEnvironment)
+        // when
+        await sut.refresh()
+        // then
+        #expect(sut.catalog.entries.first?.controls.supportsTurnCap == true)
+        #expect(sut.catalog.entries.first?.controls.modelSelection == .ready)
+        #expect(sut.catalog.controls(for: "vibe") == BackendControls(model: .supported, effort: .unsupported, turnCap: .supported))
+    }
+
+    @Test func givenFactsThenADegradedFetch_whenRefreshed_thenTheCarriedEntryDropsToUnknown() async {
+        // given
+        let toolEnvironment = MockToolEnvironmentRepository()
+        let result = LockedBox<Result<CtlClient, ToolError>>(.success(ctlClient(rawBackends: "[" + Self.vibeEntry + "]")))
+        given(toolEnvironment).ctl().willProduce { result.value }
+        let sut = makeSUT(toolEnvironment: toolEnvironment)
+        await sut.refresh()
+        // when
+        result.mutate { $0 = .failure(.notFound(tool: "harflow-ctl", searched: [])) }
+        await sut.refresh()
+        // then
+        #expect(sut.catalog.state == .degraded)
+        #expect(sut.catalog.entries.first?.controls == .unknown)
+        #expect(sut.catalog.controls(for: "vibe") == .unavailable)
+    }
+
+    @Test func givenAnUnchangedRefreshWithFacts_whenRepeated_thenNothingIsPublished() async {
+        // given
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).ctl().willReturn(.success(ctlClient(rawBackends: "[" + Self.vibeEntry + "]")))
+        let sut = makeSUT(toolEnvironment: toolEnvironment)
+        let received = LockedBox<[BackendCatalog]>([])
+        let token = sut.catalogPublisher().sink { value in received.mutate { $0.append(value) } }
+        // when
+        await sut.refresh()
+        await sut.refresh()
+        // then
+        #expect(received.value.map(\.state) == [.loading, .available])
+        withExtendedLifetime(token) {}
+    }
+
 }
