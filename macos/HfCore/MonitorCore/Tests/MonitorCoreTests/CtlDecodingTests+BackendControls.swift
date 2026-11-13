@@ -154,4 +154,12 @@ extension CtlDecodingTests {
         #expect(entry(capabilities: nil, qualification: .object(["features": .array([])])).modelSelection == .unknown)
         #expect(entry(capabilities: nil, qualification: .object(["features": .object([:])])).modelSelection == .notDeclared)
     }
+
+    @Test
+    func givenExplicitNullUnavailableReason_whenDecoded_thenItReadsAsAbsent() {
+        // given
+        let document = JSONValue.object(["features": .object([:]), "unavailable_reason": .null])
+        // when / then
+        #expect(entry(capabilities: nil, qualification: document).modelSelection == .notDeclared)
+    }
 }

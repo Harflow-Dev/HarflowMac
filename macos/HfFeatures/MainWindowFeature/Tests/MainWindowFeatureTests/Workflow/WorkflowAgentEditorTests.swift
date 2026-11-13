@@ -165,4 +165,37 @@ struct WorkflowAgentEditorTests {
         // then
         #expect(WorkflowAgentEditorOperations.fallbacks(candidate).count == 2)
     }
+
+    @Test func givenASavedModelOnAnUnsupportedControl_whenCaptionIsDecided_thenUnavailableCaptionShows() {
+        // given
+        let vibe = controls("vibe")
+        // when / then — the row is visible only because a value is saved, and says so
+        #expect(WorkflowAgentEditorPresentation.showsModel(vibe, candidate: ["model": .string("m")]))
+        #expect(WorkflowAgentEditorPresentation.showsUnavailableCaption(vibe.model))
+        #expect(!WorkflowAgentEditorPresentation.showsUnavailableCaption(controls("claude").model))
+        #expect(!WorkflowAgentEditorPresentation.showsUnavailableCaption(.unknown))
+        #expect(WorkflowAgentEditorPresentation.unavailableCaption == "Unavailable for this harness")
+    }
+
+    @Test func givenSavedMaxTurns_whenPickerSwitchesCodexToClaudeWithAvailableCatalog_thenItIsKept() {
+        // given
+        let candidate: [String: JSONValue] = ["backend": .string("codex"), "max_turns": .number(9)]
+        let available = BackendControlFixtures.controls("codex", "claude")
+        // when
+        let switched = WorkflowAgentEditorPresentation.replacingBackend(
+            in: candidate, with: "claude", callerApprovalBackends: [], backendControls: available)
+        // then
+        #expect(switched["backend"] == .string("claude"))
+        #expect(switched["max_turns"] == .number(9))
+    }
+
+    @Test func givenSavedMaxTurns_whenPickerSwitchesCodexToClaudeWhileCatalogLoads_thenItIsCleared() {
+        // given
+        let candidate: [String: JSONValue] = ["backend": .string("codex"), "max_turns": .number(9)]
+        // when — a loading catalog has no controls for the new harness
+        let switched = WorkflowAgentEditorPresentation.replacingBackend(
+            in: candidate, with: "claude", callerApprovalBackends: [], backendControls: [:])
+        // then
+        #expect(switched["max_turns"] == nil)
+    }
 }

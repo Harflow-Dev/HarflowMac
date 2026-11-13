@@ -79,7 +79,7 @@ public struct BackendControlFacts: Equatable, Sendable {
     }
 
     private static func decodeGate(_ value: JSONValue?) -> ModelSelectionGate {
-        guard let document = value?.objectValue, document["unavailable_reason"] == nil,
+        guard let document = value?.objectValue, document["unavailable_reason"]?.stringValue == nil,
               let features = document["features"]?.objectValue else { return .unknown }
         guard let row = features["model_selection"] else { return .notDeclared }
         guard let feature = BackendQualificationFeature(row), feature.isReady else { return .notReady }

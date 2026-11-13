@@ -11,6 +11,22 @@ import SwiftUI
 enum WorkflowAgentEditorPresentation {
     /// Shown beside a row whose control the app cannot check right now.
     static let unknownCaption = "Can't be checked right now"
+    /// Shown beside a row that is visible only because a value is saved for an unsupported control.
+    static let unavailableCaption = "Unavailable for this harness"
+
+    static func showsUnavailableCaption(_ state: ControlState) -> Bool { state == .unsupported }
+
+    /// The backend picker's mutation: clears model and effort, and keeps `max_turns` only when the
+    /// NEW harness's turn cap is supported in the catalog.
+    static func replacingBackend(
+        in candidate: [String: JSONValue], with backend: String,
+        callerApprovalBackends: Set<String>, backendControls: [String: BackendControls]
+    ) -> [String: JSONValue] {
+        WorkflowCandidateSettings.replacingBackend(
+            in: candidate, with: backend, supportsCallerApprovals: callerApprovalBackends.contains(backend),
+            supportsTurnCap: backendControls[backend]?.turnCap == .supported
+        )
+    }
 
     /// One entry of the Effort menu.
     struct EffortOption: Equatable {
@@ -159,6 +175,9 @@ struct WorkflowAgentEditor: View {
                                 candidate["model"] = WorkflowAgentEditorPresentation.modelValue($0)
                             }
                             .frame(maxWidth: HfRadius.Metrics.workflowInspectorMinimumWidth)
+                            if WorkflowAgentEditorPresentation.showsUnavailableCaption(controls.model) {
+                                Text(WorkflowAgentEditorPresentation.unavailableCaption).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                            }
                             caption(for: controls.model)
                         }
                     }
@@ -193,7 +212,7 @@ struct WorkflowAgentEditor: View {
                                 .frame(width: HfRadius.Metrics.workflowFieldValueWidth)
                                 .accessibilityLabel("Turn limit")
                             if controls.turnCap == .unsupported {
-                                Text("Unavailable for this harness").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                                Text(WorkflowAgentEditorPresentation.unavailableCaption).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
                             }
                             caption(for: controls.turnCap)
                         }
@@ -240,9 +259,8 @@ struct WorkflowAgentEditor: View {
         Binding(get: { candidate[key]?.stringValue ?? "" }, set: {
             if key == "backend" {
                 let wasEnabled = candidate["caller_approvals"]?.boolValue == true
-                candidate = WorkflowCandidateSettings.replacingBackend(
-                    in: candidate, with: $0, supportsCallerApprovals: callerApprovalBackends.contains($0),
-                    supportsTurnCap: backendControls[$0]?.turnCap == .supported
+                candidate = WorkflowAgentEditorPresentation.replacingBackend(
+                    in: candidate, with: $0, callerApprovalBackends: callerApprovalBackends, backendControls: backendControls
                 )
                 if wasEnabled, candidate["caller_approvals"]?.boolValue != true {
                     approvalNote = "Caller approvals were cleared because the selected agent does not support them."
