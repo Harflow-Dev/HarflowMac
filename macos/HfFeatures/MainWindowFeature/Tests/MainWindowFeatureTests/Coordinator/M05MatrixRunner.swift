@@ -39,6 +39,12 @@ import Testing
             }
         }
 
+        /// Whether the subtree of the element identified `id` holds an element labelled, titled or valued `text`. Used for every
+        /// landmark that could also appear in the sidebar, toolbar or badge.
+        func within(_ id: String, has text: String) -> Bool {
+            element(id).map { ShellMatrix.contains(text, in: $0) } ?? false
+        }
+
         /// The first such element, for geometry, enabled and press checks.
         func element(_ text: String) -> NSObject? { ShellMatrix.element(text, in: window) }
 
@@ -122,9 +128,15 @@ import Testing
                     "window appearance \(name)")
             try ShellMatrix.assertShellInvariants(fixture.window, host: host, size: size, collapsed: spec.collapsed,
                                                   coordinator: fixture.coordinator, name: name)
-            try spec.verify(context)
-            try await M05MatrixCapture.record(suite: spec.suite, state: spec.state, dark: dark, size: size,
-                                              window: fixture.window, host: host)
+            do {
+                try spec.verify(context)
+                try await M05MatrixCapture.record(suite: spec.suite, state: spec.state, dark: dark, size: size,
+                                                  window: fixture.window, host: host)
+            } catch {
+                // A failing check must not leave a held read (a ctl latch) behind.
+                if let finish = spec.finish { await finish(context) }
+                throw error
+            }
             if let finish = spec.finish { await finish(context) }
         }
     }

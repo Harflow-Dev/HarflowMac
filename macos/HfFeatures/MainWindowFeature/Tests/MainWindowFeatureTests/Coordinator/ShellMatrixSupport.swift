@@ -22,7 +22,7 @@ import Testing
         return (object.value(forKey: "accessibilityFrame") as? NSValue)?.rectValue
     }
 
-    static func contains(_ text: String, in window: NSWindow) -> Bool { tree(window).contains { matches($0, text) } }
+    static func contains(_ text: String, in root: NSObject) -> Bool { tree(root).contains { matches($0, text) } }
 
     static func matches(_ object: NSObject, _ text: String) -> Bool {
         ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { key in

@@ -44,7 +44,9 @@ import Testing
         }
     }
 
-    /// One scenario.
+    /// One scenario. With an injected harness the fixture builds no task, so `status`, `notices`, `continuity`, `freedom`,
+    /// `enforcementSnapshot`, `resourceHeld` and `fields` are ignored (the caller's harness owns the task record); `title`,
+    /// `badge`, the size, appearance, pane choices and `resourceReturn` still apply.
     struct Config {
         var width: CGFloat = 1280
         var height: CGFloat = 800
@@ -151,9 +153,10 @@ import Testing
         // Both appearances are set explicitly: an unset window follows the desktop, so a "light" capture would turn dark.
         window.appearance = NSAppearance(named: config.dark ? .darkAqua : .aqua)
         if config.loading {
+            // The skeleton's own accessibility element ("Loading task") is the readiness signal; there is no task or principal.
             await waitUntil(timeout: 10) {
                 pump()
-                return M04ToolbarEvidence.isPopulated(window)
+                return M04ToolbarEvidence.isPopulated(window) && contentText("Loading task") != nil
             }
             return
         }

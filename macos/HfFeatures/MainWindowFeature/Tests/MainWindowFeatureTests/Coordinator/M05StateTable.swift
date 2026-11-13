@@ -152,9 +152,6 @@ enum M05StateTable {
         ("pending-", "Pending launches are a separate destination; a possible later matrix.")
     ]
 
-    /// Every approved state id this matrix accounts for, rendered or excluded: the design's approved list.
-    static let approved: Set<String> = Set(all.map(\.id)).union(exclusions.map(\.id))
-
     /// The entry for a state id.
     static func lookup(_ id: String) -> Entry? { all.first { $0.id == id } }
 
