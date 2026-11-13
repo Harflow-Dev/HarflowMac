@@ -52,12 +52,13 @@ No clearly missing producer operation was established for these core retained ca
 | `MC/Titles.swift:20` | First event-line read, bounded256KiB; constructs task event path | Header/status title + `task-prompt` authoritative/preview/integrity distinctions |
 | `MC/EventPages.swift:40,115` | FileHandle, byte offsets/anchors | `task-events` opaque cursors, capture/gap semantics |
 | `MC/Tail.swift:90,119,241` | File reads/descriptor DispatchSource/LineTail | Bounded public observations, cancellation/disposal |
-
-Later note: `MC/EventPages.swift` and `MC/Tail.swift` were removed at the commit "Remove unused engine-file readers from MonitorCore" (2026-11-13); the engine is read only through `task-events`.
 | `Repo/EventStream/EventStreamRepositoryImpl.swift:48,311,316` | Constructs event path, local tail/history/summary | Public prompt/events, generation-fenced off-main folding |
 | `Repo/TaskList/TaskListRepositoryImpl+Compatibility.swift:71` | Starts tasks directory watcher after compatibility success | Public list/page/status reconciliation after fresh handshake |
 | `Repo/TaskList/DirectoryWatcher.swift:11` | FSEvents storage-layout dependency | Public polling scheduler/backoff; no engine directory watch |
 | `MC/Events.swift:3,11` | Physical-line assumptions in documentation | Normalized event identity/version independent of persistence |
+
+Later note: `MC/EventPages.swift` and `MC/Tail.swift` were removed, and the prompt reader in `MC/Titles.swift` with them (the file keeps only `parseLoginPath`) at the commit "Remove unused engine-file readers from MonitorCore" (2026-11-13); the engine is read only through `task-events`.
+
 
 Old watcher latency0.3s, throttling and 10/30/60s safety scheduling (S02) are behavior evidence, not a mandate to retain private access. Replace triggers without weakening freshness, stale-response rejection or observation disposal. Retain logical reading anchors and bounded visible-lane observation. Preference/notification-seen storage belongs to the app, managed-runtime acquisition/receipt files belong to its runtime manager, and private0700/0600 temporary CLI payload files are explicit inputs: none is a license to read engine task persistence, nor a reason to delete valid app-owned I/O.
 

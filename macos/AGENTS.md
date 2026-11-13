@@ -107,7 +107,7 @@ a behaviour change. These are intentional deviations, not oversights.
 
 Every package targets tools 6.2 / macOS 26. Every package **except** `MonitorCore` builds in Swift 6
 mode, including the `Harflow` app-shell package. **`MonitorCore` uses
-`swiftLanguageModes: [.v5]`** — its tailing/process-table internals do not compile under Swift 6's
+`swiftLanguageModes: [.v5]`** — its process-table internals do not compile under Swift 6's
 strict concurrency checking; migrating it is separate work. Swift 6 app code requires appropriate
 isolation, including: an `@MainActor`-isolated conformance clause
 (`@MainActor UNUserNotificationCenterDelegate`) for a delegate protocol whose requirements can be

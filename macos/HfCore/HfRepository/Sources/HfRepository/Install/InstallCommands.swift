@@ -57,9 +57,8 @@ public enum InstallCommands {
         ["-fsSL", "--max-time", "120", "-o", destination, uvInstallScriptURL]
     }
 
-    /// `UV_NO_MODIFY_PATH=1` so the downloaded installer never touches the user's shell rc files —
-    /// the app's own login-PATH probe is the only thing that needs to see `uv`, and it re-probes
-    /// after this stage runs.
+    /// `UV_NO_MODIFY_PATH=1` so a downloaded `uv` installer never touches the user's shell rc files.
+    /// No production code runs that installer any more.
     public static func uvNoModifyPathEnvironment(base: [String: String]) -> [String: String] {
         var env = base
         env["UV_NO_MODIFY_PATH"] = "1"

@@ -33,10 +33,9 @@ public struct DiscoveryResult: Equatable, Sendable {
 
 // MARK: - ToolEnvironmentRepository
 
-/// Login-PATH and `uv` discovery, and the launch environment every process the app starts gets —
-/// exactly `AppModel`'s `discoverEnvironment`/`environment`/`ctl`/`setup`. After a run publishes,
-/// `locator` re-reads only the Settings override live (F4-05/decision 11) — the login-PATH and `uv`
-/// probes never rerun on their own.
+/// The tooling the app launches processes with: the selected managed runtime's `harflow-ctl` and
+/// `harflow-setup` clients, and the launch environment every process the app starts gets. The discovery
+/// result and locator remain for the consumers that read them.
 @Mockable
 public protocol ToolEnvironmentRepository: Sendable {
 
@@ -46,8 +45,7 @@ public protocol ToolEnvironmentRepository: Sendable {
     var discovery: DiscoveryResult { get }
     func discoveryPublisher() -> AnyPublisher<DiscoveryResult, Never>
 
-    /// Awaits tooling readiness. Managed callers join the same current acquisition attempt;
-    /// legacy discovery implementations retain their probe-coalescing semantics.
+    /// Awaits tooling readiness. Callers join the same current acquisition attempt.
     func discoverEnvironment() async -> DiscoveryResult
 
     func environment(toolDirectory: String?) -> [String: String]

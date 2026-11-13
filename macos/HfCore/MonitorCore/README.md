@@ -1,6 +1,6 @@
 # MonitorCore
 
-Foundation-only values and I/O for Harflow wire decoding, public event pages, lineage, process execution, and environment construction. The package stays in Swift 5 language mode for its process/tailing concurrency internals; see [architecture rules](../../AGENTS.md).
+Foundation-only values and I/O for Harflow wire decoding, public event pages, lineage, process execution, and environment construction. The package stays in Swift 5 language mode for its process-table concurrency internals; see [architecture rules](../../AGENTS.md).
 
 ## Compatibility
 
@@ -71,8 +71,8 @@ cap the baseline process runner's raw stdout capture or total heap use. The
 per-record admissibility meter uses a conservative unescaped serialization lower
 bound, not ASCII-escaped wire size. Native explicit-filter admission is limited
 to200names/16KiB UTF-8; cursors remain opaque and at most2048Unicode scalars.
-This typed foundation does not yet replace the application's private activity
-and cumulative-summary readers; their shared observation migration is M03-D2.
+The application's former private activity and cumulative-summary file readers are deleted;
+events are read only through these public pages.
 
 ## Task changes
 
