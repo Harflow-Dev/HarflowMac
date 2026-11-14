@@ -57,7 +57,7 @@ struct S06ContractFixtureTests {
     }
 
     @Test(arguments: ["task-event-page", "task-prompt", "task-successors", "workflow-live-activity", "statistics-cost-model", "task-changes",
-                           "task-continue", "task-artifacts", "task-continuation-stop", "task-cancel-cascade"])
+                           "task-continue", "task-artifacts", "task-continuation-stop", "task-cancel-cascade", "backend-models"])
     func givenMissingS05Capability_whenRequested_thenBaseDecodeSucceedsButCommandNeverDispatches(_ capability: String) async throws {
         // given
         let data = try fixture("invalid-s05-missing-\(capability).json")

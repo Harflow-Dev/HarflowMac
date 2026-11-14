@@ -62,6 +62,9 @@ public enum CtlCapability {
 
     /// Qualifies the `cascade.observation` added to successful cancel results.
     public static let taskCancelCascade = "task-cancel-cascade.v1"
+
+    /// Permits `backend-models`, the engine's advisory per-harness model listing.
+    public static let backendModels = "backend-models.v1"
 }
 
 /// Numeric semantic version with bounded components and optional build metadata; no prereleases.

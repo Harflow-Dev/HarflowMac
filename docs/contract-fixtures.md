@@ -58,7 +58,7 @@ dependencies, matching the vendored bundle's product version. This records the s
 pin, not an inspection of an installed runtime or owner state. Isolated installer
 qualification of 0.0.14 is recorded in [M03 runtime 0.0.14](migration-receipts/M03-runtime-0014.md). The 0.0.12 bundle added the `task-continue.v1`,
 `task-artifacts.v1`, `task-continuation-stop.v1` and `task-cancel-cascade.v1`
-capabilities; the 0.0.13 bundle adds `task-pending-launch.v1` (`task-pending-page`, `task-pending-status`), which the pending-launch client and screens require. MonitorCore decodes the additive artifact, continuation-stop, cancel-observation and chain-stopped fields; no screen uses them yet. The 0.0.14 bundle adds `backend-models.v1` (`backend-models`); no decoder or screen uses it yet. See the [M05 receipt](migration-receipts/M05.md) for the 0.0.12, 0.0.13 and 0.0.14 vendoring evidence.
+capabilities; the 0.0.13 bundle adds `task-pending-launch.v1` (`task-pending-page`, `task-pending-status`), which the pending-launch client and screens require. MonitorCore decodes the additive artifact, continuation-stop, cancel-observation and chain-stopped fields; no screen uses them yet. The 0.0.14 bundle adds `backend-models.v1` (`backend-models`); MonitorCore decodes its `ctl-backend-models-*` specimens (`BackendModelListing`), and no screen uses them yet. See the [M05 receipt](migration-receipts/M05.md) for the 0.0.12, 0.0.13 and 0.0.14 vendoring evidence.
 Release changes are separately owned and excluded from migration commits. See [S06 receipt](migration-receipts/S06.md)
 for observed validation and remaining acceptance.
 

@@ -140,3 +140,19 @@ complete, untruncated target evidence with a stopped state and settlement/not-st
 basis proves stopped. Acknowledgement alone does not. Same-ID spawn races use ordinary
 cancel semantics, without an atomic generation precondition. These clients have no UI
 or inventory owner and do not change the selected engine pin or certify runtime support.
+
+## Backend models client
+
+`CtlClient.backendModels(backend:)` reads one harness's advisory model list with
+`backend-models --backend=NAME` after a fresh handshake advertises `backend-models.v1`. It
+returns a `BackendModelsOutcome`: `.listing(BackendModelListing)` (any state, including
+`unavailable`, `not_installed` and `unsupported`, with the engine's rows in order),
+`.capabilityMissing` (the command never ran), `.refused(code:detail:)` (the engine refused the
+caller, for example `agent_caller` or `caller_undecidable` with its bounded `detail`) or
+`.failed(ToolError)` for transport failures, usage errors, oversized or unreadable documents and
+any other engine error. `state`, `reason` and `source` keep unknown values as `.unrecognized`; a
+missing required field or a field of the wrong type makes the whole document unreadable. Rows
+carry `id`, `label`, `isDefault` (`nil` when the source does not say) and `effortLevels` (`nil`
+when the source says nothing, empty when it lists levels and none is selectable). The document
+is bounded at 262,144 bytes. The result is advisory: the harness may accept an id it does not
+list, or refuse one it does.
