@@ -205,12 +205,14 @@ public enum BackendModelsOutcome: Equatable, Sendable {
     /// Anything else: transport failure, unreadable or oversized document, usage error, other engine error.
     case failed(ToolError)
 
-    /// Largest accepted document: the engine's own printed-line ceiling.
+    /// Largest accepted document, excluding one terminal newline: the engine's own printed-line ceiling.
     static let maximumDocumentBytes = 262_144
 
     /// Decodes `harflow-ctl backend-models --backend=NAME --json` output.
     static func decode(output: ProcessOutput, productVersion: String) -> BackendModelsOutcome {
-        guard output.stdout.count <= maximumDocumentBytes else {
+        // The engine's ceiling covers the printed line without its newline.
+        let documentBytes = output.stdout.count - (output.stdout.last == 0x0A ? 1 : 0)
+        guard documentBytes <= maximumDocumentBytes else {
             return .failed(.unreadable(tool: "harflow-ctl", exitCode: output.exitCode, stderr: "backend-models exceeded document byte limit"))
         }
         let validated = CtlDocument.validatedDocument(

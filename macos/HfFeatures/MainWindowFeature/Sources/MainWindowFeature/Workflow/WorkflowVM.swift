@@ -510,7 +510,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func loadModels(_ backend: String) {
-        guard modelChoices[backend] == nil else { return }
+        guard (modelChoices[backend]?.count ?? 0) <= 1 else { return } // Default-only: nothing offered yet, ask again
         requestModels(backend)
     }
 

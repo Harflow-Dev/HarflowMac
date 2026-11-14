@@ -178,6 +178,39 @@ struct WorkflowModelEffortPresentationTests {
         ])
     }
 
+    @Test func givenADefaultOnlyResult_whenLoadedAgainAfterOptionsExist_thenItIsRequestedAgain() async {
+        // given
+        let suggestions = Suggestions([])
+        let vm = makeVM(suggestions: suggestions, usage: CurrentValueSubject(.init()))
+        vm.loadModels("codex")
+        await waitUntil { vm.modelChoices["codex"] != nil }
+        #expect(vm.modelChoices["codex"] == [ModelChoiceModel(id: "", title: "Default")])
+
+        // when
+        suggestions.value = [ModelOption(value: "gpt-a", label: "GPT A", effortLevels: ["low"])]
+        vm.loadModels("codex")
+        await waitUntil { vm.modelChoices["codex"]?.count == 2 }
+
+        // then
+        #expect(vm.modelChoices["codex"]?.last == ModelChoiceModel(id: "gpt-a", title: "GPT A", effortLevels: ["low"]))
+    }
+
+    @Test func givenLoadedOptions_whenLoadedAgain_thenTheEngineIsNotAskedAgain() async {
+        // given
+        let suggestions = Suggestions([ModelOption(value: "gpt-a", label: "GPT A")])
+        let vm = makeVM(suggestions: suggestions, usage: CurrentValueSubject(.init()))
+        vm.loadModels("codex")
+        await waitUntil { vm.modelChoices["codex"]?.count == 2 }
+
+        // when
+        suggestions.value = [ModelOption(value: "gpt-b", label: "GPT B")]
+        vm.loadModels("codex")
+        await Task.yield()
+
+        // then
+        #expect(vm.modelChoices["codex"]?.last?.id == "gpt-a")
+    }
+
     @Test func givenLoadedChoices_whenReloadedWithOnlyDifferentEffortLevels_thenTheChoicesAreRepublished() async {
         // given
         let suggestions = Suggestions([ModelOption(value: "gpt-a", label: "GPT A", effortLevels: ["low", "high"])])

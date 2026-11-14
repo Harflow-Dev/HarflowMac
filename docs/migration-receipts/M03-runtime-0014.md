@@ -28,7 +28,7 @@ Published PyPI release (source commit `a891388b1259add2ec8432d7d0fc5ca38163c27d`
 | `harflow_mcp-0.0.13-py3-none-any.whl` (baseline) | 1,381,123 | `1363c549e8d701efb9a0d6f00197f725a262f5fdecca6ff2964f5331d60c8424` |
 | PyPI JSON 0.0.14 | | `7cc53b1780d778f06a27d611b37fb68d0b1e245e0076156edd6c2be1fcaad9f6` |
 | PyPI JSON 0.0.13 (fetched again for this run) | | `69e2a616199fbdeb1d8639eb5dd32fb353f2eaa248d737d2ccee3f2d1705fd1d` |
-| Production `ManagedRuntime.json` (0.0.14) | | `85aca722c4f70a3624dc065f4b5d8f369b70933efaaec11672d28493ba2f74e0` |
+| Production `ManagedRuntime.json` (0.0.14) | | `568355460d28cb953dc6e1825e198bcc858083acf4dd73107e8a81e25f190075` |
 | Baseline `ManagedRuntime.json` (0.0.13, from `54347d6`) | | `f9b0b14d0f9f943c8f6a5a3b77e8081f91c62b3ed4b5cfcde075500bbd6c29e2` |
 
 The wheel digest equals the expected value and the sdist digest equals the one in the
@@ -36,7 +36,7 @@ The wheel digest equals the expected value and the sdist digest equals the one i
 recorded in the 0.0.13 receipt (`92dd0e3e...`); the wheel digest and size are identical, so
 this is PyPI metadata drift, not a different artifact. Specification identities: 0.0.13
 `1c50608c03f9e05f52bd6bf531614a49adcf05620d796c82b6b59835cba5ec49`, 0.0.14
-`a0b02b75725203e36989d725bc0075520ab3b9dc0181dfb020caca0dbeb666be`. The two
+`cf843ca7588a43733c66726c014774113d2807c210cec2fdce3fdcc38769d4ba`. The two
 specifications have identical interpreter (CPython 3.13.16, release 20261020) and 29
 dependency pins. Those 30 inputs were copied from the 0.0.13 qualification's scratch cache
 after size and SHA-256 matched both specifications; they were not re-downloaded. Network
@@ -54,6 +54,8 @@ with a scrubbed environment and a scratch HOME, TMPDIR and CFFIXED_USER_HOME. Th
 any HOME that is not a mode-0700, caller-owned, symlink-free directory under the scratch root.
 
 ## Qualification observed
+
+The specification's provenance string was corrected after the first run (it had repeated the lock and export digests the generator appends itself), which changes its identity and the resource hash recorded above but no dependency pin or engine byte. The installer steps in the table below (baseline install, check and offline prepare, upgrade, offline reuse, both corrupt-wheel refusals, check after refusals, fresh install) were repeated with the final specification: the same acquisition and subprocess counts, the same refusals before any subprocess, and an unchanged runtime tree (4,952 entries) after the refusals. The prior-generation byte comparison, the public reads and the `backend-models` reads were made in the first run, whose engine and dependency bytes are identical.
 
 | Operation | Acquisition calls | Subprocesses | Result |
 | --- | ---: | ---: | --- |

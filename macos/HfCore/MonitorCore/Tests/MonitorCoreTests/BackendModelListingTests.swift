@@ -307,17 +307,56 @@ struct BackendModelListingTests {
         guard case .failed(.unreadable) = outcome else { Issue.record("accepted: \(outcome)"); return }
     }
 
+    /// A valid listing envelope padded with a label so its serialised size is exactly `size` bytes.
+    private func envelope(ofSize size: Int) throws -> Data {
+        func make(_ pad: Int) throws -> Data {
+            var object = try #require(JSONValue.parse(Data(Self.baseResult.utf8))?.objectValue)
+            var row = try #require(object["models"]?.arrayValue?.first?.objectValue)
+            row["label"] = .string(String(repeating: "x", count: pad))
+            object["models"] = .array([.object(row)])
+            return ctlJSON("{\"result\":" + JSONValue.object(object).rendered() + "}")
+        }
+        let base = try make(0).count
+        let data = try make(size - base)
+        try #require(data.count == size)
+        return data
+    }
+
     @Test
-    func givenOversizedDocument_whenDecoded_thenItIsRefusedBeforeParsing() {
+    func givenEnvelopeAtTheCeilingWithTrailingNewline_whenDecoded_thenItIsAccepted() throws {
         // given
-        let padding = String(repeating: "x", count: BackendModelsOutcome.maximumDocumentBytes)
+        let output = ProcessOutput(exitCode: 0, stdout: try envelope(ofSize: BackendModelsOutcome.maximumDocumentBytes) + Data("\n".utf8), stderr: "")
 
         // when
-        let outcome = decode("{\"result\":{\"padding\":\"\(padding)\"}}")
+        let outcome = BackendModelsOutcome.decode(output: output, productVersion: HarflowVersion.current)
+
+        // then
+        guard case .listing = outcome else { Issue.record("not a listing: \(outcome)"); return }
+    }
+
+    @Test
+    func givenEnvelopeOneByteOverTheCeilingWithTrailingNewline_whenDecoded_thenItIsRefused() throws {
+        // given
+        let output = ProcessOutput(exitCode: 0, stdout: try envelope(ofSize: BackendModelsOutcome.maximumDocumentBytes + 1) + Data("\n".utf8), stderr: "")
+
+        // when
+        let outcome = BackendModelsOutcome.decode(output: output, productVersion: HarflowVersion.current)
 
         // then
         guard case .failed(.unreadable(_, _, let stderr)) = outcome else { Issue.record("accepted: \(outcome)"); return }
         #expect(stderr.contains("byte limit"))
+    }
+
+    @Test
+    func givenEnvelopeOneByteOverTheCeilingWithoutNewline_whenDecoded_thenItIsRefused() throws {
+        // given
+        let output = ProcessOutput(exitCode: 0, stdout: try envelope(ofSize: BackendModelsOutcome.maximumDocumentBytes + 1), stderr: "")
+
+        // when
+        let outcome = BackendModelsOutcome.decode(output: output, productVersion: HarflowVersion.current)
+
+        // then
+        guard case .failed(.unreadable) = outcome else { Issue.record("accepted: \(outcome)"); return }
     }
 
     @Test
