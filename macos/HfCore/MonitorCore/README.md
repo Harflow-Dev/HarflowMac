@@ -117,7 +117,7 @@ dispatch, including timeout or malformed responses. It never retries. A result f
 invocation cannot clear uncertainty retained from an earlier one, and an empty recorded-successor
 page cannot establish that no pending launch exists. Launch envelopes must contain exactly one
 of result, error or unknown. The shared continuation owner and standalone task screen now consume
-this client; evidence remains vendored 0.0.13 fixtures and fake runners, not exact-runtime qualification.
+this client; evidence remains vendored 0.0.14 fixtures and fake runners, not exact-runtime qualification.
 
 ## Pending-launch client foundation
 

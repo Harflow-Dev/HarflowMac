@@ -36,7 +36,7 @@ struct ManagedRuntimeSpecificationTests {
 
         // then
         #expect(specification.schema == 1)
-        #expect(specification.engineVersion == "0.0.13")
+        #expect(specification.engineVersion == "0.0.14")
         #expect(specification.engineVersion == HarflowVersion.current)
         #expect(specification.pythonVersion == "3.13.16")
         #expect(specification.python.version == specification.pythonVersion)
@@ -46,7 +46,7 @@ struct ManagedRuntimeSpecificationTests {
         try specification.validate()
     }
 
-    @Test(arguments: ["0.0.7", "0.0.8", "0.0.10", "0.0.11", "0.0.12", "0.0.13"])
+    @Test(arguments: ["0.0.7", "0.0.8", "0.0.10", "0.0.11", "0.0.12", "0.0.13", "0.0.14"])
     func givenExplicitlySupportedEngineVersion_whenValidated_thenItIsAccepted(_ version: String) throws {
         // given
         let bundled = try ManagedRuntimeSpecification.bundled()
@@ -59,10 +59,11 @@ struct ManagedRuntimeSpecificationTests {
         try specification.validate()
     }
 
-    @Test(arguments: ["", " ", "unknown", "0.0.6", "0.0.9", "0.0.14", "1.0.0", "0.0.8-dev", "v0.0.8", "0.0.8 ",
+    @Test(arguments: ["", " ", "unknown", "0.0.6", "0.0.9", "0.0.15", "1.0.0", "0.0.8-dev", "v0.0.8", "0.0.8 ",
                       "0.0.10-dev", "v0.0.10", " 0.0.10", "0.0.10 ",
                       "0.0.12-dev", "v0.0.12", " 0.0.12", "0.0.12 ",
-                      "0.0.13-dev", "v0.0.13", " 0.0.13", "0.0.13 "])
+                      "0.0.13-dev", "v0.0.13", " 0.0.13", "0.0.13 ",
+                      "0.0.14-dev", "v0.0.14", " 0.0.14", "0.0.14 "])
     func givenUnsupportedEngineVersion_whenValidated_thenItIsRejected(_ version: String) throws {
         // given
         let bundled = try ManagedRuntimeSpecification.bundled()
@@ -83,7 +84,7 @@ struct ManagedRuntimeSpecificationTests {
             bundleURL: fixture.bundleURL,
             resourceURL: fixture.resourceURL
         )
-        #expect(specification.engineVersion == "0.0.13")
+        #expect(specification.engineVersion == "0.0.14")
         #expect(specification.pythonVersion == "3.13.16")
     }
 
@@ -115,7 +116,7 @@ struct ManagedRuntimeSpecificationTests {
     @Test func givenNonAppExecution_whenLoaded_thenItRetainsSwiftPMResourceBehavior() throws {
         let fixtureRoot = try makeTempDir("managed-runtime-package")
         let specification = try ManagedRuntimeSpecification.bundled(bundleURL: fixtureRoot, resourceURL: nil)
-        #expect(specification.engineVersion == "0.0.13")
+        #expect(specification.engineVersion == "0.0.14")
     }
 
     @Test(arguments: [

@@ -233,8 +233,8 @@
       "version": "0.54.0"
     }
   ],
-  "engineVersion": "0.0.13",
-  "provenance": "HarflowMCP v0.0.13 commit 0ac7e3cc07a2adc8602e6d378549c99184247f93; PyPI sdist sha256:db2f86831ce09690a5365cf7d3f178a29705498a6affeb9ea366a2fe8808675a; uv export --offline --frozen --no-dev --no-emit-project --format requirements-txt; lock sha256:93a7e1325f07d5814260a6fc4add3c096c6c8a1239f477edd774aabfcbb058c4; production export sha256:832a8c3dd37fd16832135e8f728babf86c40ae13f303292ff27b46da844cd6ba",
+  "engineVersion": "0.0.14",
+  "provenance": "HarflowMCP v0.0.14 commit a891388b1259add2ec8432d7d0fc5ca38163c27d; PyPI sdist sha256:0e750c46048ee19859279463881f1585bec48b9c14415ed341f617048e81498f; uv export --offline --frozen --no-dev --no-emit-project --format requirements-txt; lock sha256:da4cccb486368454365d38df19871189c57196dc308b4ced1ff68d42a61e09ab; production export sha256:832a8c3dd37fd16832135e8f728babf86c40ae13f303292ff27b46da844cd6ba; lock sha256:da4cccb486368454365d38df19871189c57196dc308b4ced1ff68d42a61e09ab; production export sha256:832a8c3dd37fd16832135e8f728babf86c40ae13f303292ff27b46da844cd6ba",
   "python": {
     "filename": "cpython-3.13.16+20261020-aarch64-apple-darwin-install_only.tar.gz",
     "name": "cpython",

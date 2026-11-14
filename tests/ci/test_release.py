@@ -24,7 +24,7 @@ ASSET_MODULE_SPEC.loader.exec_module(release_assets)
 
 
 def test_source_accepts_current_plist_and_runtime_pair():
-    assert release.validate_source(ROOT) == ("0.0.9", "0.0.13")
+    assert release.validate_source(ROOT) == ("0.0.9", "0.0.14")
 
 
 def test_source_rejects_tag_mismatch_before_git_lookup():
@@ -35,9 +35,10 @@ def test_source_rejects_tag_mismatch_before_git_lookup():
 
 
 @pytest.mark.parametrize("engine_version", [
-    "0.0.1", "0.0.7", "0.0.8", "0.0.9", "0.0.10", "0.0.11", "0.0.12", "0.0.14",
+    "0.0.1", "0.0.7", "0.0.8", "0.0.9", "0.0.10", "0.0.11", "0.0.12", "0.0.13", "0.0.15",
     "0.0.10-dev", "v0.0.10", " 0.0.10", "0.0.10 ", "0.0.12-dev", "v0.0.12", " 0.0.12", "0.0.12 ",
     "0.0.13-dev", "v0.0.13", " 0.0.13", "0.0.13 ",
+    "0.0.14-dev", "v0.0.14", " 0.0.14", "0.0.14 ",
 ])
 def test_runtime_rejects_engine_version_that_is_not_the_paired_release(tmp_path, engine_version):
     runtime = ROOT / release.RUNTIME_PATH
@@ -52,7 +53,7 @@ def test_runtime_rejects_engine_version_that_is_not_the_paired_release(tmp_path,
 def test_runtime_rejects_provenance_with_pending_placeholder(tmp_path):
     runtime = ROOT / release.RUNTIME_PATH
     data = json.loads(runtime.read_text())
-    data["provenance"] = "HarflowMCP v0.0.13; PyPI sdist sha256:PENDING-SDIST-SHA256-REPLACE-AFTER-PYPI-PUBLICATION"
+    data["provenance"] = "HarflowMCP v0.0.14; PyPI sdist sha256:PENDING-SDIST-SHA256-REPLACE-AFTER-PYPI-PUBLICATION"
     candidate = tmp_path / "ManagedRuntime-test.json"
     candidate.write_text(json.dumps(data))
     with pytest.raises(release.ReleaseError):
@@ -173,13 +174,13 @@ def test_validate_bundle_requires_exact_packaged_runtime_path_and_rejects_duplic
         (resources / name).write_bytes(b"asset")
 
     good_process = lambda *args, **kwargs: subprocess.CompletedProcess(
-        args[0], 0, b'{"appVersion":"0.0.4","engineVersion":"0.0.13","status":"ok"}\n', b""
+        args[0], 0, b'{"appVersion":"0.0.4","engineVersion":"0.0.14","status":"ok"}\n', b""
     )
-    with mock.patch.object(release, "validate_source", return_value=("0.0.4", "0.0.13")), \
+    with mock.patch.object(release, "validate_source", return_value=("0.0.4", "0.0.14")), \
             mock.patch.object(release, "validate_plist", return_value="0.0.4"), \
             mock.patch.object(release, "code_paths", return_value=[]), \
             mock.patch.object(release, "verify_signature"):
-        assert release.validate_bundle(app, root, startup_process=good_process) == ("0.0.4", "0.0.13")
+        assert release.validate_bundle(app, root, startup_process=good_process) == ("0.0.4", "0.0.14")
         if not has_authoritative_copy:
             exact.unlink()
         misplaced = app / misplaced_path

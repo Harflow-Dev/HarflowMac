@@ -2,14 +2,14 @@
 
 The engine owns the public contracts. MonitorCore tests carry a complete,
 self-contained copy of `contracts/v1` from HarflowMCP release
-commit `0ac7e3cc07a2adc8602e6d378549c99184247f93` (tag `v0.0.13`).
+commit `a891388b1259add2ec8432d7d0fc5ca38163c27d` (tag `v0.0.14`).
 No build/test downloads fixtures or requires a sibling checkout.
 
 - Resource path: `macos/HfCore/MonitorCore/Tests/MonitorCoreTests/Resources/ContractsV1`.
-- Manifest SHA-256: `56ac4ce3c762ebb3b40855fc6defa47636076cb9b2ebdda9d7b207dce350fb55`.
-- Contents: 334 fixture files, `manifest.json` and `manifest.sha256`, byte-identical
+- Manifest SHA-256: `c61bac6e1c3ca00eab4aab4bd1a8f063e98dd91c88365d4f5023127417f432cf`.
+- Contents: 351 fixture files, `manifest.json` and `manifest.sha256`, byte-identical
   to the committed producer bundle. Hash verification covers every fixture.
-- Source product version: 0.0.13; historical fixture writer versions intentionally
+- Source product version: 0.0.14; historical fixture writer versions intentionally
   vary. Live compatibility is major/minor, not equality with a specimen's patch.
 - The separate `contracts/mcp-v1/tools.json` source schema inventory is agent-facing
   and is not vendored or decoded as a ctl document. Its exact Rust subset remains
@@ -31,8 +31,9 @@ byte-identical, so two documents sit beside it in
   mutation, vibe's `model_selection` set to `ok: true`, `source: "seeded"`, version `3.0.3`. It is
   synthetic: vibe 3.0.3 could not be recorded.
 
-Both are temporary. They are to be replaced by a canonical `contracts/v1/ctl-backends*.json` requested
-for HarflowMCP 0.0.14, when the whole bundle is next re-vendored.
+Both are temporary. The 0.0.14 bundle still has no canonical `contracts/v1/ctl-backends*.json`
+specimen (it adds the `ctl-backend-models-*` specimens for `backend-models.v1` only), so both recorded
+files stay until a later engine release supplies one.
 
 ## Compatibility evidence
 
@@ -52,12 +53,13 @@ a separate M03 slice.
 
 ## Runtime boundaries
 
-The Mac's managed specification selects engine 0.0.13 with CPython 3.13.16 and 29
+The Mac's managed specification selects engine 0.0.14 with CPython 3.13.16 and 29
 dependencies, matching the vendored bundle's product version. This records the source
-pin, not an inspection of an installed runtime or owner state. Isolated installer
-qualification of 0.0.13 is recorded in [M03 runtime 0.0.13](migration-receipts/M03-runtime-0013.md). The 0.0.12 bundle added the `task-continue.v1`,
+pin, not an inspection of an installed runtime or owner state; no installation or
+runtime qualification of 0.0.14 has run. Isolated installer qualification of 0.0.13 is recorded in
+[M03 runtime 0.0.13](migration-receipts/M03-runtime-0013.md). The 0.0.12 bundle added the `task-continue.v1`,
 `task-artifacts.v1`, `task-continuation-stop.v1` and `task-cancel-cascade.v1`
-capabilities; the 0.0.13 bundle adds `task-pending-launch.v1` (`task-pending-page`, `task-pending-status`), which the pending-launch client and screens require. MonitorCore decodes the additive artifact, continuation-stop, cancel-observation and chain-stopped fields; no screen uses them yet. See the [M05 receipt](migration-receipts/M05.md) for the 0.0.12 and 0.0.13 vendoring evidence.
+capabilities; the 0.0.13 bundle adds `task-pending-launch.v1` (`task-pending-page`, `task-pending-status`), which the pending-launch client and screens require. MonitorCore decodes the additive artifact, continuation-stop, cancel-observation and chain-stopped fields; no screen uses them yet. The 0.0.14 bundle adds `backend-models.v1` (`backend-models`); no decoder or screen uses it yet. See the [M05 receipt](migration-receipts/M05.md) for the 0.0.12, 0.0.13 and 0.0.14 vendoring evidence.
 Release changes are separately owned and excluded from migration commits. See [S06 receipt](migration-receipts/S06.md)
 for observed validation and remaining acceptance.
 
