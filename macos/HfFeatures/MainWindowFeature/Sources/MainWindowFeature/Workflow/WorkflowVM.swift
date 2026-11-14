@@ -522,7 +522,7 @@ final class WorkflowVM: WorkflowViewModel {
             let usage = useCase.agentUsageSnapshot
             let ranked = await Task.detached { usage.rankedModels(options, backend: backend) }.value
             guard !Task.isCancelled, let self, modelGeneration == generation else { return }
-            let choices = [ModelChoiceModel(id: "", title: "Default")] + ranked.map { ModelChoiceModel(id: $0.value, title: $0.label) }
+            let choices = [ModelChoiceModel(id: "", title: "Default")] + ranked.map(ModelChoiceModel.init)
             if modelChoices[backend] != choices { modelChoices[backend] = choices }
             modelTasks[backend] = nil
         }

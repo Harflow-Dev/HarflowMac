@@ -51,6 +51,16 @@ enum WorkflowAgentEditorPresentation {
         controls.turnCap != .unsupported || hasSaved(candidate, "max_turns")
     }
 
+    /// The harness controls narrowed by the node's own saved model. Only a saved model that exactly matches
+    /// one of this harness's suggestions (surrounding whitespace ignored) contributes its effort levels;
+    /// an empty or unmatched model, or the synthetic Default row, leaves the harness controls as they are.
+    static func effectiveControls(_ controls: BackendControls, candidate: [String: JSONValue],
+                                  choices: [ModelChoiceModel]) -> BackendControls {
+        let model = (candidate["model"]?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let levels = model.isEmpty ? nil : choices.first { $0.id == model }?.effortLevels
+        return BackendControls.effectiveControls(harness: controls, modelEffortLevels: levels)
+    }
+
     /// Default, then the engine's levels in its order (never invented). A saved value outside them
     /// stays selectable and says it is unavailable for this harness.
     static func effortOptions(_ controls: BackendControls, saved: String) -> [EffortOption] {
@@ -138,6 +148,11 @@ struct WorkflowAgentEditor: View {
 
     private var backend: String { candidate["backend"]?.stringValue ?? "" }
     private var controls: BackendControls { backendControls[backend] ?? .unavailable }
+    /// The harness controls as narrowed by this node's saved model; drives only the Effort row.
+    private var effortControls: BackendControls {
+        WorkflowAgentEditorPresentation.effectiveControls(controls, candidate: candidate, choices: modelChoices[backend] ?? [])
+    }
+
     private var allBackends: [String] {
         WorkflowAgentEditorPresentation.backendOptions(backendIDs, current: backend, preferred: preferredAgent?["backend"]?.stringValue)
     }
@@ -183,19 +198,19 @@ struct WorkflowAgentEditor: View {
                     }
                     .frame(minHeight: HfRadius.Metrics.formRowHeight)
                 }
-                if WorkflowAgentEditorPresentation.showsEffort(controls, candidate: candidate) {
+                if WorkflowAgentEditorPresentation.showsEffort(effortControls, candidate: candidate) {
                     WorkflowFormDivider()
                     WorkflowFormRow(label: "Effort") {
                         VStack(alignment: .trailing, spacing: HfRadius.Metrics.spacing4) {
                             Picker("Effort", selection: binding("reasoning_effort")) {
                                 ForEach(WorkflowAgentEditorPresentation.effortOptions(
-                                    controls, saved: candidate["reasoning_effort"]?.stringValue ?? ""
+                                    effortControls, saved: candidate["reasoning_effort"]?.stringValue ?? ""
                                 ), id: \.value) { Text($0.title).tag($0.value) }
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
                             .fixedSize()
-                            caption(for: controls.effort == .unknown ? .unknown : .supported)
+                            caption(for: effortControls.effort == .unknown ? .unknown : .supported)
                         }
                     }
                 }

@@ -21,6 +21,19 @@ public struct ModelOption: Equatable, Hashable, Sendable {
     }
 }
 
+// MARK: - ModelOption + effort
+
+public extension Sequence<ModelOption> {
+
+    /// The effort levels of the suggestion whose value equals `text` exactly (surrounding whitespace
+    /// ignored). `nil` when `text` is empty, matches no suggestion, or the suggestion lists no levels.
+    func effortLevels(forModel text: String) -> [String]? {
+        let chosen = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !chosen.isEmpty else { return nil }
+        return first { $0.value == chosen }?.effortLevels
+    }
+}
+
 // MARK: - ModelCatalogRepository
 
 /// The models each agent is known to accept, for the model suggestions of New Session and the workflow

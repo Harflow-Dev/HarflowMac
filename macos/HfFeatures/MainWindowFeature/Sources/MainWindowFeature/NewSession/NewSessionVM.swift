@@ -157,7 +157,7 @@ final class NewSessionVM: NewSessionViewModel {
                 messages.append("Review and select the model for this harness.")
             }
         }
-        switch controls.effort {
+        switch effectiveControls.effort {
         case .levels(let levels):
             if !effort.isEmpty, !levels.contains(effort) { messages.append("The requested effort is unsupported by this harness.") }
         case .unsupported:
@@ -231,10 +231,9 @@ final class NewSessionVM: NewSessionViewModel {
 
     var showsTurnLimit: Bool { controls.turnCap == .supported }
     var showsEffort: Bool { !effortOptions.isEmpty }
-    /// The effort levels the engine reports for the chosen backend, in its order. Unsupported
-    /// requested effort remains visible for review and blocks Start.
+    /// The effort levels for the chosen backend, narrowed by the chosen model's own; unsupported effort blocks Start.
     var effortOptions: [String] {
-        if case .levels(let levels) = controls.effort { return levels }
+        if case .levels(let levels) = effectiveControls.effort { return levels }
         return []
     }
 
@@ -275,7 +274,7 @@ final class NewSessionVM: NewSessionViewModel {
     // MARK: - Private Properties
 
     private var recentRepoPaths: [String] = []
-    private var modelOptions: [ModelOption] = []
+    private(set) var modelOptions: [ModelOption] = []
     private var usage = AgentUsageSnapshot()
     @ObservationIgnored private let useCase: any NewSessionUseCase
     @ObservationIgnored private weak var routing: (any NewSessionRouting)?

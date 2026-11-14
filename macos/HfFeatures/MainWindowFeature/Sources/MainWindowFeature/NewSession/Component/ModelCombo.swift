@@ -9,10 +9,13 @@ import SwiftUI
 // MARK: - ModelChoiceModel
 
 /// One suggestion in the Model combo. `id` is the value written into the field (empty for
-/// "Default"); `title` is what the menu shows. Mapped from `ModelOption` in the VM.
+/// "Default"); `title` is what the menu shows. Mapped from `ModelOption` in the VM. `effortLevels` are
+/// the engine's selectable effort levels for that model (`nil`: it says nothing; empty: none is
+/// selectable); the combo ignores them and the workflow editor reads them.
 struct ModelChoiceModel: Identifiable, Equatable {
     let id: String
     let title: String
+    var effortLevels: [String]?
 }
 
 // MARK: - ModelCombo
