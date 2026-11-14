@@ -36,7 +36,7 @@ Compatible engines expose capture ownership, live-input availability and backgro
 
 New session and workflow launch show the engine’s required harness feature checks before starting. Opening a form reads cached evidence; Check harness explicitly runs the checks, with cancellation and retry. Settings → Harnesses shows qualification separately from MCP registration. Evidence must match the selected runtime and harness binary. The paired engine 0.0.14 supplies `backend-qualification.v1`; new launches require matching successful qualification evidence.
 
-Harness and model menus share lifetime usage ranking from successful app submissions. Workflow node menus prefer a supported orchestrator agent and model while preserving saved selections.
+Model suggestions come from the engine's advisory model listing (`backend-models.v1`, engine 0.0.14 and later) for the chosen harness; where the engine offers none (harness not installed, listing unavailable, older engine, runtime still preparing), the Model field is free text. Harness and model menus share lifetime usage ranking from successful app submissions. Workflow node menus prefer a supported orchestrator agent and model while preserving saved selections.
 
 Retained workflow read failures appear as a counted entry above the sidebar appearance and Settings controls. Open it to read each failure and retry; the entry disappears when all sources recover. The top incident notification remains dismissible.
 

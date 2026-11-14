@@ -1,5 +1,6 @@
 import Foundation
 @testable import HfRepository
+import HfTestUtilities
 import Mockable
 import MonitorCore
 import Testing
@@ -8,131 +9,251 @@ import Testing
 
     // MARK: - Fixtures
 
-    /// Records every run's full argument set, unlike the shared `StubProcessRunner`.
-    private final class RecordingRunner: ProcessRunning, @unchecked Sendable {
-        struct Call: Equatable {
-            let executable: String
-            let arguments: [String]
-            let environment: [String: String]
-            let currentDirectory: String?
-            let timeout: Double
+    struct Row {
+        let id: String
+        let label: String
+        var effort: String = "null"
+        var isDefault: String = "null"
+    }
+
+    static func listingDocument(
+        backend: String = "opencode", state: String = "available", reason: String? = nil, source: String = "cli_output",
+        rows: [Row] = []
+    ) -> String {
+        let models = rows.map {
+            #"{"id":"\#($0.id)","label":"\#($0.label)","default":\#($0.isDefault),"effort_levels":\#($0.effort)}"#
         }
+.joined(separator: ",")
+        let reasonText = reason.map { "\"\($0)\"" } ?? "null"
+        return #"{"v":1,"product":"harflow","format":"harflow.ctl","product_version":"0.0.1","result":{"backend":"\#(backend)","#
+            + #""state":"\#(state)","reason":\#(reasonText),"source":"\#(source)","scope":"user","advisory":true,"#
+            + #""harness_version":null,"source_observed_at":null,"observed_at":"2026-11-14T00:00:00Z","truncated":false,"#
+            + #""dropped_count":0,"models":[\#(models)]}}"#
+    }
 
-        private let box = LockedBox<[Call]>([])
-        let answer: Result<ProcessOutput, ToolError>
-        var calls: [Call] { box.value }
+    private func listing(
+        backend: String = "opencode", state: String = "available", reason: String? = nil, source: String = "cli_output",
+        rows: [Row] = []
+    ) -> String {
+        Self.listingDocument(backend: backend, state: state, reason: reason, source: source, rows: rows)
+    }
 
-        init(answer: Result<ProcessOutput, ToolError>) { self.answer = answer }
+    private func refusal(code: String, detail: String? = nil) -> String {
+        let detailText = detail.map { #","detail":"\#($0)""# } ?? ""
+        return #"{"v":1,"product":"harflow","format":"harflow.ctl","product_version":"0.0.1","error":{"code":"\#(code)","#
+            + #""message":"Backend model listing requires a verified direct caller.","#
+            + #""data":{"coverage":"unknown","check":"direct_caller_required"\#(detailText)}}}"#
+    }
 
-        func run(
-            executable: String, arguments: [String], environment: [String: String], currentDirectory: String?, timeout: Double
-        ) async -> Result<ProcessOutput, ToolError> {
-            let call = Call(
-                executable: executable, arguments: arguments, environment: environment, currentDirectory: currentDirectory, timeout: timeout
-            )
-            box.mutate { $0.append(call) }
-            return answer
+    /// A ctl client whose runner answers the version-info handshake (with or without `backend-models.v1`)
+    /// and then the command from `answer`.
+    private func client(
+        capability: Bool = true, answer: @escaping @Sendable (StubProcessRunner.Call) -> Result<ProcessOutput, ToolError>
+    ) -> (client: CtlClient, runner: StubProcessRunner) {
+        let runner = StubProcessRunner { call in
+            guard call.arguments == ["version-info", "--json"] else { return answer(call) }
+            let root = NSHomeDirectory() + "/.harflow"
+            let capabilities = #""ctl.v1","setup.v1","events.v1""# + (capability ? #","backend-models.v1""# : "")
+            let versionInfo = #"{"product":"harflow","format":"harflow.version-info","v":1,"product_version":"0.0.1","#
+                + #""component":"engine","state_root":"\#(root)","contracts":{"ctl":{"format":"harflow.ctl","v":1},"#
+                + #""setup":{"format":"harflow.setup","v":1},"events":{"format":"harflow.event","v":1}},"#
+                + #""capabilities":[\#(capabilities)],"os":"darwin","architecture":"arm64"}"#
+            return .success(stdout(versionInfo))
         }
+        return (CtlClient(executable: "/bin/echo", environment: [:], runner: runner), runner)
     }
 
     private func makeSUT(
-        environment: [String: String] = ["PATH": "/login/bin"],
-        runner: RecordingRunner = RecordingRunner(answer: .success(stdout(""))),
-        files: [String: String] = [:]
-    ) -> (sut: ModelCatalogRepositoryImpl, runner: RecordingRunner, reads: LockedBox<[String]>) {
+        ctl: Result<CtlClient, ToolError>
+    ) -> (sut: ModelCatalogRepositoryImpl, toolEnvironment: MockToolEnvironmentRepository) {
         let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).home.willReturn("/home/me")
-        given(toolEnvironment).environment(toolDirectory: .any).willReturn(environment)
-        let reads = LockedBox<[String]>([])
-        let sut = ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment, runner: runner) { path in
-            reads.mutate { $0.append(path) }
-            return files[path].map { Data($0.utf8) }
-        }
-        return (sut, runner, reads)
+        given(toolEnvironment).ctl().willReturn(ctl)
+        return (ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment), toolEnvironment)
     }
 
-    private func codexCache(_ models: String) -> String {
-        #"{"fetched_at":"2026-09-30T00:00:00Z","etag":"x","client_version":"1","identity":{},"models":[\#(models)]}"#
+    private func makeSUT(
+        answering text: String
+    ) -> (sut: ModelCatalogRepositoryImpl, runner: StubProcessRunner) {
+        let (client, runner) = client { _ in .success(stdout(text)) }
+        return (makeSUT(ctl: .success(client)).sut, runner)
     }
 
-    // MARK: - opencode
+    private func commandCalls(_ runner: StubProcessRunner) -> [[String]] {
+        runner.calls.map(\.arguments).filter { $0.first == "backend-models" }
+    }
 
-    @Test func givenOpencodeStdoutWithBlankLinesAndWhitespace_whenAsked_thenOneOptionPerModelIdInOrder() async {
+    // MARK: - Available listings
+
+    @Test func givenAnAvailableListing_whenAsked_thenOneOptionPerRowInEngineOrderWithEffortLevels() async {
         // given
-        let text = "opencode/big-pickle\n\n  opencode/mimo-v2.5  \r\n   \nopencode/big-pickle\nanthropic/claude-x\n"
-        let runner = RecordingRunner(answer: .success(stdout(text)))
-        let (sut, _, _) = makeSUT(runner: runner)
+        let text = listing(rows: [
+            Row(id: "opencode/big-pickle", label: "Big Pickle"),
+            Row(id: "opencode/hy3-free", label: "Hy3 Free", effort: #"["low","medium","high"]"#),
+            Row(id: "opencode/no-levels", label: "No Levels", effort: "[]", isDefault: "true")
+        ])
+        let (sut, _) = makeSUT(answering: text)
 
         // when
         let models = await sut.models(for: "opencode")
 
         // then
         #expect(models == [
-            ModelOption(value: "opencode/big-pickle", label: "opencode/big-pickle"),
-            ModelOption(value: "opencode/mimo-v2.5", label: "opencode/mimo-v2.5"),
-            ModelOption(value: "anthropic/claude-x", label: "anthropic/claude-x")
+            ModelOption(value: "opencode/big-pickle", label: "Big Pickle", effortLevels: nil),
+            ModelOption(value: "opencode/hy3-free", label: "Hy3 Free", effortLevels: ["low", "medium", "high"]),
+            ModelOption(value: "opencode/no-levels", label: "No Levels", effortLevels: [])
         ])
     }
 
-    @Test func givenOpencode_whenAsked_thenItRunsWithTheDiscoveredEnvironmentFromHomeWithATimeout() async {
+    @Test func givenABackend_whenAsked_thenOneHandshakeAndOneBackendOptionCommandRun() async {
         // given
-        let (sut, runner, _) = makeSUT(environment: ["PATH": "/login/bin:/interactive/bin"])
+        let (sut, runner) = makeSUT(answering: listing(backend: "codex", rows: [Row(id: "gpt-a", label: "GPT A")]))
 
         // when
-        _ = await sut.models(for: "opencode")
+        _ = await sut.models(for: "codex")
 
         // then
-        #expect(runner.calls == [
-            .init(
-                executable: "/usr/bin/env", arguments: ["opencode", "models"],
-                environment: ["PATH": "/login/bin:/interactive/bin"], currentDirectory: "/home/me", timeout: 8
-            )
+        #expect(runner.calls.map(\.arguments) == [["version-info", "--json"], ["backend-models", "--backend=codex", "--json"]])
+    }
+
+    @Test func givenAvailableListingWithNoRows_whenAsked_thenTheListIsEmpty() async {
+        // given
+        let (sut, _) = makeSUT(answering: listing(rows: []))
+
+        // then
+        #expect(await sut.models(for: "opencode").isEmpty)
+    }
+
+    // MARK: - Labels
+
+    @Test func givenSharedAndEmptyLabels_whenAsked_thenThoseRowsAreTitledByIdAndUniqueLabelsStay() async {
+        // given
+        let text = listing(rows: [
+            Row(id: "a/one", label: "Same"), Row(id: "b/two", label: "Unique"), Row(id: "c/three", label: "Same"),
+            Row(id: "d/four", label: "")
         ])
-    }
-
-    @Test func givenOpencodeExitsNonZero_whenAsked_thenTheListIsEmpty() async {
-        // given
-        let runner = RecordingRunner(answer: .success(ProcessOutput(exitCode: 1, stdout: Data("a/b\n".utf8), stderr: "boom")))
-        let (sut, _, _) = makeSUT(runner: runner)
-
-        // then
-        #expect(await sut.models(for: "opencode").isEmpty)
-    }
-
-    @Test func givenOpencodeTimesOut_whenAsked_thenTheListIsEmpty() async {
-        // given
-        let runner = RecordingRunner(answer: .success(ProcessOutput(exitCode: 0, stdout: Data("a/b\n".utf8), stderr: "", timedOut: true)))
-        let (sut, _, _) = makeSUT(runner: runner)
-
-        // then
-        #expect(await sut.models(for: "opencode").isEmpty)
-    }
-
-    @Test func givenOpencodeCannotLaunch_whenAsked_thenTheListIsEmpty() async {
-        // given
-        let runner = RecordingRunner(answer: .failure(.launchFailed(tool: "env", detail: "nope")))
-        let (sut, _, _) = makeSUT(runner: runner)
-
-        // then
-        #expect(await sut.models(for: "opencode").isEmpty)
-    }
-
-    @Test func givenAnEmptyOpencodeAnswer_whenAskedTwice_thenItIsNotCachedAndRetries() async {
-        // given
-        let (sut, runner, _) = makeSUT()
+        let (sut, _) = makeSUT(answering: text)
 
         // when
-        _ = await sut.models(for: "opencode")
-        _ = await sut.models(for: "opencode")
+        let models = await sut.models(for: "opencode")
 
         // then
-        #expect(runner.calls.count == 2)
+        #expect(models.map(\.value) == ["a/one", "b/two", "c/three", "d/four"])
+        #expect(models.map(\.label) == ["a/one", "Unique", "c/three", "d/four"])
     }
 
-    @Test func givenASuccessfulOpencodeAnswer_whenAskedTwice_thenTheSecondComesFromTheCache() async {
+    // MARK: - Not available
+
+    @Test(arguments: [
+        ("not_installed", nil as String?), ("unsupported", nil), ("unavailable", "timeout"), ("unavailable", "exit_nonzero"),
+        ("unavailable", "auth_required"), ("unavailable", "unparseable"), ("unavailable", "source_missing"),
+        ("unavailable", "output_ceiling"), ("unavailable", "spawn_failed"), ("unavailable", "future_reason"), ("future_state", nil)
+    ])
+    func givenAnyNonAvailableState_whenAsked_thenTheListIsEmptyEvenIfRowsArePresent(_ state: String, _ reason: String?) async {
         // given
-        let runner = RecordingRunner(answer: .success(stdout("a/b\n")))
-        let (sut, _, _) = makeSUT(runner: runner)
+        let (sut, _) = makeSUT(answering: listing(state: state, reason: reason, rows: [Row(id: "x/y", label: "X Y")]))
+
+        // then
+        #expect(await sut.models(for: "opencode").isEmpty)
+    }
+
+    @Test(arguments: [
+        ("agent_caller", nil as String?), ("caller_undecidable", nil), ("caller_undecidable", "root_present_unmarked"),
+        ("caller_undecidable", "lock_timeout"), ("future_refusal", nil)
+    ])
+    func givenAnEngineRefusal_whenAsked_thenTheListIsEmpty(_ code: String, _ detail: String?) async {
+        // given
+        let (sut, _) = makeSUT(answering: refusal(code: code, detail: detail))
+
+        // then
+        #expect(await sut.models(for: "opencode").isEmpty)
+    }
+
+    @Test func givenTheCapabilityIsMissing_whenAsked_thenOnlyTheHandshakeRunsAndTheListIsEmpty() async {
+        // given
+        let (client, runner) = client(capability: false) { _ in .success(stdout(listing(rows: [Row(id: "x/y", label: "X")]))) }
+        let (sut, _) = makeSUT(ctl: .success(client))
+
+        // when
+        let models = await sut.models(for: "opencode")
+
+        // then
+        #expect(models.isEmpty)
+        #expect(commandCalls(runner).isEmpty)
+    }
+
+    @Test func givenAnUnknownBackend_whenAsked_thenTheEnginesUsageErrorYieldsAnEmptyList() async {
+        // given
+        let usage = #"{"v":1,"product":"harflow","format":"harflow.ctl","product_version":"0.0.1","error":{"code":"usage","#
+            + #""message":"argument --backend: invalid choice: 'mystery' (choose from 'claude')"}}"#
+        let (sut, _) = makeSUT(answering: usage)
+
+        // then
+        #expect(await sut.models(for: "mystery").isEmpty)
+    }
+
+    @Test(arguments: ["", "not json", "[]", #"{"result":{"backend":"opencode"}}"#, #"{"result":{"models":"nope"}}"#])
+    func givenAnUnreadableDocument_whenAsked_thenTheListIsEmpty(_ document: String) async {
+        // given
+        let (sut, _) = makeSUT(answering: document)
+
+        // then
+        #expect(await sut.models(for: "opencode").isEmpty)
+    }
+
+    @Test func givenTheCommandTimesOut_whenAsked_thenTheListIsEmpty() async {
+        // given
+        let (client, _) = client { _ in .success(ProcessOutput(exitCode: 0, stdout: Data(), stderr: "", timedOut: true)) }
+        let (sut, _) = makeSUT(ctl: .success(client))
+
+        // then
+        #expect(await sut.models(for: "opencode").isEmpty)
+    }
+
+    @Test func givenTheCommandCannotLaunch_whenAsked_thenTheListIsEmpty() async {
+        // given
+        let (client, _) = client { _ in .failure(.launchFailed(tool: "harflow-ctl", detail: "nope")) }
+        let (sut, _) = makeSUT(ctl: .success(client))
+
+        // then
+        #expect(await sut.models(for: "opencode").isEmpty)
+    }
+
+    @Test(arguments: [
+        ToolError.notFound(tool: "harflow-ctl", searched: []),
+        ToolError.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: "runtime is preparing")
+    ])
+    func givenNoCtlClientBecauseTheRuntimeIsNotReady_whenAsked_thenTheListIsEmpty(_ failure: ToolError) async {
+        // given
+        let (sut, _) = makeSUT(ctl: .failure(failure))
+
+        // then
+        #expect(await sut.models(for: "opencode").isEmpty)
+    }
+
+    // MARK: - Caching
+
+    @Test func givenARuntimeThatIsNotReady_whenAskedAgainOnceItIsReady_thenTheSecondAskRetriesAndSucceeds() async {
+        // given
+        let (client, runner) = client { _ in .success(stdout(listing(rows: [Row(id: "a/b", label: "A B")]))) }
+        let current = LockedBox<Result<CtlClient, ToolError>>(.failure(.notFound(tool: "harflow-ctl", searched: [])))
+        let toolEnvironment = MockToolEnvironmentRepository()
+        given(toolEnvironment).ctl().willProduce { current.value }
+        let sut = ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment)
+
+        // when
+        let first = await sut.models(for: "opencode")
+        current.mutate { $0 = .success(client) }
+        let second = await sut.models(for: "opencode")
+
+        // then
+        #expect(first.isEmpty)
+        #expect(second.map(\.value) == ["a/b"])
+        #expect(commandCalls(runner).count == 1)
+    }
+
+    @Test func givenASuccessfulAnswer_whenAskedTwice_thenTheSecondComesFromTheCache() async {
+        // given
+        let (sut, runner) = makeSUT(answering: listing(rows: [Row(id: "a/b", label: "A B")]))
 
         // when
         let first = await sut.models(for: "opencode")
@@ -140,210 +261,81 @@ import Testing
 
         // then
         #expect(first == second)
-        #expect(runner.calls.count == 1)
+        #expect(commandCalls(runner).count == 1)
     }
 
-    // MARK: - antigravity
-
-    @Test func givenAgyStdoutWithTheFetchingNoticeAndBlanks_whenAsked_thenOneOptionPerModelLine() async {
-        // given — measured shape: a `Fetching available models...` notice, then `<id>\t<label>`.
-        let text = "Fetching available models...\n\ngemini-3.8-flash\tGemini 3.8 Flash\n\r\nclaude-sonnet-4-6\tClaude Sonnet 4.6\n\n"
-        let runner = RecordingRunner(answer: .success(stdout(text)))
-        let (sut, _, _) = makeSUT(runner: runner)
+    @Test func givenTwoBackends_whenEachIsAskedTwice_thenEachBackendIsCachedSeparately() async {
+        // given
+        let (sut, runner) = makeSUT(answering: listing(rows: [Row(id: "a/b", label: "A B")]))
 
         // when
-        let models = await sut.models(for: "antigravity")
+        _ = await sut.models(for: "opencode")
+        _ = await sut.models(for: "codex")
+        _ = await sut.models(for: "opencode")
+        _ = await sut.models(for: "codex")
 
         // then
-        #expect(models == [
-            ModelOption(value: "gemini-3.8-flash", label: "Gemini 3.8 Flash"),
-            ModelOption(value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6")
-        ])
+        #expect(commandCalls(runner) == [["backend-models", "--backend=opencode", "--json"], ["backend-models", "--backend=codex", "--json"]])
     }
 
-    @Test func givenAnAgyLineWithNoTab_whenAsked_thenTheIdIsItsOwnLabel() async {
+    @Test(arguments: [
+        listingDocument(state: "unavailable", reason: "timeout"), listingDocument(state: "not_installed"),
+        listingDocument(rows: []), #"{"result":{}}"#
+    ])
+    func givenAnAnswerWithNoSuggestions_whenAskedTwice_thenItIsNotCachedAndRetries(_ document: String) async {
         // given
-        let runner = RecordingRunner(answer: .success(stdout("gemini-3.8-flash\n")))
-        let (sut, _, _) = makeSUT(runner: runner)
+        let (sut, runner) = makeSUT(answering: document)
 
         // when
-        let models = await sut.models(for: "antigravity")
+        _ = await sut.models(for: "opencode")
+        _ = await sut.models(for: "opencode")
 
         // then
-        #expect(models == [ModelOption(value: "gemini-3.8-flash", label: "gemini-3.8-flash")])
+        #expect(commandCalls(runner).count == 2)
     }
 
-    @Test func givenAgy_whenAsked_thenItRunsWithTheDiscoveredEnvironmentFromHomeWithATimeout() async {
+    @Test func givenAFailureThenASuccess_whenAskedTwice_thenTheSuccessIsReturnedAndCached() async {
         // given
-        let (sut, runner, _) = makeSUT(environment: ["PATH": "/login/bin:/interactive/bin"])
+        let attempts = LockedBox(0)
+        let (client, runner) = client { _ in
+            let attempt = attempts.value
+            attempts.mutate { $0 += 1 }
+            return .success(stdout(attempt == 0 ? refusal(code: "caller_undecidable", detail: "lock_timeout")
+                    : listing(rows: [Row(id: "a/b", label: "A B")])))
+        }
+        let (sut, _) = makeSUT(ctl: .success(client))
 
         // when
-        _ = await sut.models(for: "antigravity")
+        let first = await sut.models(for: "opencode")
+        let second = await sut.models(for: "opencode")
+        let third = await sut.models(for: "opencode")
 
         // then
-        #expect(runner.calls == [
-            .init(
-                executable: "/usr/bin/env", arguments: ["agy", "models"],
-                environment: ["PATH": "/login/bin:/interactive/bin"], currentDirectory: "/home/me", timeout: 8
-            )
-        ])
+        #expect(first.isEmpty)
+        #expect(second.map(\.value) == ["a/b"])
+        #expect(third == second)
+        #expect(commandCalls(runner).count == 2)
     }
 
-    @Test(arguments: [1, 2])
-    func givenAgyExitsNonZero_whenAsked_thenTheListIsEmpty(_ exitCode: Int32) async {
+    @Test func givenConcurrentRequestsForTheSameBackend_whenAnswered_thenOneCommandServesAll() async {
         // given
-        let runner = RecordingRunner(answer: .success(ProcessOutput(exitCode: exitCode, stdout: Data("a/b\n".utf8), stderr: "boom")))
-        let (sut, _, _) = makeSUT(runner: runner)
-
-        // then
-        #expect(await sut.models(for: "antigravity").isEmpty)
-    }
-
-    @Test func givenAgyTimesOut_whenAsked_thenTheListIsEmpty() async {
-        // given
-        let runner = RecordingRunner(answer: .success(ProcessOutput(exitCode: 0, stdout: Data("a/b\n".utf8), stderr: "", timedOut: true)))
-        let (sut, _, _) = makeSUT(runner: runner)
-
-        // then
-        #expect(await sut.models(for: "antigravity").isEmpty)
-    }
-
-    // MARK: - cursor
-
-    @Test func givenCursorStdoutWithAHeaderAndTip_whenAsked_thenOneOptionPerIdAndLabel() async {
-        // given — measured shape on 2026.10.22-27dcf5f: a header, `<id> - <label>`, then a tip.
-        let text = "Available models\n\nauto - Auto (current, default)\ncomposer-2.5 - Composer 2.5\n\n"
-            + "Tip: use --model <id> to switch.\n"
-        let runner = RecordingRunner(answer: .success(stdout(text)))
-        let (sut, _, _) = makeSUT(runner: runner)
+        let gate = AsyncGate()
+        let (client, runner) = client { _ in
+            gate.waitSync()
+            return .success(stdout(listing(rows: [Row(id: "a/b", label: "A B")])))
+        }
+        let (sut, _) = makeSUT(ctl: .success(client))
 
         // when
-        let models = await sut.models(for: "cursor")
+        async let first = sut.models(for: "opencode")
+        async let second = sut.models(for: "opencode")
+        async let third = sut.models(for: "opencode")
+        await waitUntil { !commandCalls(runner).isEmpty }
+        gate.open()
+        let results = await [first, second, third]
 
         // then
-        #expect(models == [
-            ModelOption(value: "auto", label: "Auto (current, default)"),
-            ModelOption(value: "composer-2.5", label: "Composer 2.5")
-        ])
-    }
-
-    @Test func givenCursor_whenAsked_thenItRunsWithTheDiscoveredEnvironmentFromHomeWithATimeout() async {
-        // given
-        let (sut, runner, _) = makeSUT(environment: ["PATH": "/login/bin:/interactive/bin"])
-
-        // when
-        _ = await sut.models(for: "cursor")
-
-        // then
-        #expect(runner.calls == [
-            .init(
-                executable: "/usr/bin/env", arguments: ["cursor-agent", "models"],
-                environment: ["PATH": "/login/bin:/interactive/bin"], currentDirectory: "/home/me", timeout: 8
-            )
-        ])
-    }
-
-    @Test func givenCursorExitsNonZeroOrTimesOut_whenAsked_thenTheListIsEmpty() async {
-        // given
-        let failed = RecordingRunner(answer: .success(ProcessOutput(exitCode: 1, stdout: Data("auto - Auto\n".utf8), stderr: "boom")))
-        let timedOut = RecordingRunner(answer: .success(ProcessOutput(exitCode: 0, stdout: Data("auto - Auto\n".utf8), stderr: "", timedOut: true)))
-
-        // then
-        #expect(await makeSUT(runner: failed).sut.models(for: "cursor").isEmpty)
-        #expect(await makeSUT(runner: timedOut).sut.models(for: "cursor").isEmpty)
-    }
-
-    // MARK: - codex
-
-    @Test func givenACodexCache_whenAsked_thenOnlyListedModelsComeBackByAscendingPriority() async {
-        // given
-        let json = codexCache("""
-        {"slug":"gpt-c","display_name":"GPT C","visibility":"list","supported_in_api":true,"priority":30},
-        {"slug":"gpt-hidden","display_name":"Hidden","visibility":"hide","priority":1},
-        {"slug":"gpt-a","display_name":"GPT A","visibility":"list","priority":10},
-        {"slug":"gpt-b","visibility":"list","priority":20},
-        {"slug":"gpt-none","display_name":"No Priority","visibility":"list"}
-        """)
-        let (sut, _, reads) = makeSUT(files: ["/home/me/.codex/models_cache.json": json])
-
-        // when
-        let models = await sut.models(for: "codex")
-
-        // then
-        #expect(models == [
-            ModelOption(value: "gpt-a", label: "GPT A"),
-            ModelOption(value: "gpt-b", label: "gpt-b"),
-            ModelOption(value: "gpt-c", label: "GPT C"),
-            ModelOption(value: "gpt-none", label: "No Priority")
-        ])
-        #expect(reads.value == ["/home/me/.codex/models_cache.json"])
-    }
-
-    @Test func givenCodexHomeIsSet_whenAsked_thenThatCacheIsRead() async {
-        // given
-        let json = codexCache(#"{"slug":"gpt-a","display_name":"GPT A","visibility":"list","priority":1}"#)
-        let (sut, _, reads) = makeSUT(environment: ["CODEX_HOME": "/custom/codex"], files: ["/custom/codex/models_cache.json": json])
-
-        // when
-        let models = await sut.models(for: "codex")
-
-        // then
-        #expect(models.map(\.value) == ["gpt-a"])
-        #expect(reads.value == ["/custom/codex/models_cache.json"])
-    }
-
-    @Test func givenNoCodexCacheFile_whenAsked_thenTheListIsEmpty() async {
-        // given
-        let (sut, _, _) = makeSUT()
-
-        // then
-        #expect(await sut.models(for: "codex").isEmpty)
-    }
-
-    @Test(arguments: ["", "not json", "[]", #"{"models":"nope"}"#, #"{"models":[1,"x",null]}"#, #"{"other":[]}"#])
-    func givenAMalformedCodexCache_whenAsked_thenTheListIsEmpty(_ contents: String) async {
-        // given
-        let (sut, _, _) = makeSUT(files: ["/home/me/.codex/models_cache.json": contents])
-
-        // then
-        #expect(await sut.models(for: "codex").isEmpty)
-    }
-
-    @Test func givenACodexCacheWithOneBrokenEntry_whenAsked_thenTheGoodEntriesSurvive() async {
-        // given
-        let json = codexCache(#"{"slug":7,"visibility":"list"},{"visibility":"list"},{"slug":"ok","visibility":"list","priority":1}"#)
-        let (sut, _, _) = makeSUT(files: ["/home/me/.codex/models_cache.json": json])
-
-        // then
-        #expect(await sut.models(for: "codex").map(\.value) == ["ok"])
-    }
-
-    // MARK: - claude, vibe, unknown
-
-    @Test func givenClaude_whenAsked_thenTheThreeDocumentedAliasesComeBackCapitalised() async {
-        // given
-        let (sut, runner, _) = makeSUT()
-
-        // when
-        let models = await sut.models(for: "claude")
-
-        // then
-        #expect(models == [
-            ModelOption(value: "fable", label: "Fable"),
-            ModelOption(value: "opus", label: "Opus"),
-            ModelOption(value: "sonnet", label: "Sonnet")
-        ])
-        #expect(runner.calls.isEmpty)
-    }
-
-    @Test(arguments: ["vibe", "mystery", ""])
-    func givenVibeOrAnUnknownBackend_whenAsked_thenTheListIsEmptyAndNothingRuns(_ backend: String) async {
-        // given
-        let (sut, runner, reads) = makeSUT()
-
-        // then
-        #expect(await sut.models(for: backend).isEmpty)
-        #expect(runner.calls.isEmpty)
-        #expect(reads.value.isEmpty)
+        #expect(results.allSatisfy { $0.map(\.value) == ["a/b"] })
+        #expect(commandCalls(runner).count == 1)
     }
 }
