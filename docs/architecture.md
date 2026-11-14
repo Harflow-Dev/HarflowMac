@@ -123,7 +123,7 @@ The shared `HarnessQualificationCard` follows approved HarflowDesign `5d48a18`, 
 
 Settings routes each action to its backend and keeps qualification separate from MCP registration. Known unavailable task harnesses cannot launch even when no feature checks are required. Workflow requirements and candidates remain engine-owned.
 
-The app selects engine `0.0.14`, which supplies `backend-qualification.v1`; installation and runtime qualification of 0.0.14 are pending (0.0.13 was qualified in isolation: [M03 runtime 0.0.13](migration-receipts/M03-runtime-0013.md)). New session and workflow launches require matching successful qualification evidence. Engines without this capability display unsupported qualification and cannot start new launches.
+The app selects engine `0.0.14`, which supplies `backend-qualification.v1`; isolated installer qualification of 0.0.14 passed ([M03 runtime 0.0.14](migration-receipts/M03-runtime-0014.md)). New session and workflow launches require matching successful qualification evidence. Engines without this capability display unsupported qualification and cannot start new launches.
 
 ## Harness picker ranking
 
@@ -147,7 +147,7 @@ Selected native execution activity uses an explicit `settledOnly` or `allowUnset
 
 Without that proof, the consumer requests `allowUnsettled`, requiring a fresh `workflow-live-activity.v1` capability before any activity command launches. A missing capability leaves activity truthfully unavailable. A proven settled execution retains the older engine read path without requiring that capability or new settlement reply metadata; an explicit `settled: false` reply is refused for `settledOnly`. Both `--view=activity` and `--view activity` require the supported event contract and share the bounded document budget. Available, not-started and unavailable activity and declared settlement remain distinct read facts. Run, execution, activation, request and runtime checks discard stale replies; failed refreshes retain loaded content, one read remains in flight, and unchanged activity does not republish rendering state.
 
-These consumer admission checks use the already selected `0.0.14` runtime (not yet runtime-qualified; 0.0.13 was installer-qualified in isolation, see M03 runtime 0.0.13). They neither perform provider qualification nor establish additional runtime qualification or aggregate migration acceptance. Public polling remains the source of workflow snapshots.
+These consumer admission checks use the already selected `0.0.14` runtime (installer-qualified in isolation; see M03 runtime 0.0.14). They neither perform provider qualification nor establish additional runtime qualification or aggregate migration acceptance. Public polling remains the source of workflow snapshots.
 
 ## Approval presentation
 
