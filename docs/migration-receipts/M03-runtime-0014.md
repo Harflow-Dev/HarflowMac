@@ -12,7 +12,8 @@ Cursor were not exercised. Aggregate M03 and M04 acceptance are not established.
 
 The owner's plan for the model catalog (Phase 2) required qualifying the 0.0.14
 runtime. Source: HarflowMac `4963950` (the commit that selects 0.0.14, clean tree
-at the start of the run). This is qualification only: no user app installation,
+at the start of the run; the installer steps were re-run against the corrected
+specification committed in `6b26805`). This is qualification only: no user app installation,
 real-state migration, provider dispatch, MCP registration, push or release. Unlike
 the 0.0.13 run, no app was launched: the earlier smoke wrote a preference file
 into the real Preferences directory, so this run stops at what can be done
