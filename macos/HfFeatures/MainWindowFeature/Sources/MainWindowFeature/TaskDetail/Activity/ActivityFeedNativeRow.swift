@@ -43,8 +43,6 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         let row: ActivityRow
         /// Whether a tool-group card renders expanded (single rows ignore it).
         let isExpanded: Bool
-        /// Whether the row animates its fade-in (following, first appearance).
-        let fade: Bool
         /// The entry's top spacing: 12 before the feed's first content, 20 otherwise.
         let topSpacing: CGFloat
     }
@@ -295,19 +293,15 @@ struct ActivityFeedNativeRowRoot: View {
             ToolGroupCardView(group: group, start: start, isExpanded: row.isExpanded) {
                 actions.onDisclosure(group.id)
             }
-            .hfFadeIn(animate: row.fade)
         case .summary(let entry):
             SummaryEntryRow(entry: entry)
-                .hfFadeIn(animate: row.fade)
         case .single(let value, let markdown):
             switch value.kind {
             case .separator(let text):
                 TurnSeparatorRow(text: text, timestamp: value.timestamp)
-                    .hfFadeIn(animate: row.fade)
             case .item(let item):
                 TimelineRow(model: TimelineRowModel(item: item, start: start, live: value.live,
                                                     showsPromptBubble: showsPromptBubble, markdown: markdown))
-                    .hfFadeIn(animate: row.fade)
             }
         }
     }
@@ -444,6 +438,26 @@ struct ActivityFeedNativeTailContent: View {
             addSubview(host)
             self.host = host
         }
+    }
+
+    /// Fades a newly hosted row in on the host's layer, in Core Animation. A SwiftUI animation in
+    /// the hosted root keeps its graph pending every frame, and the feed's platform host then
+    /// re-measures the whole table for the animation's duration. The model opacity stays 1.
+    func playArrivalFade() {
+        guard let layer = host?.layer else { return }
+        Self.addArrivalFade(to: layer)
+    }
+
+    static let arrivalFadeKey = "activityArrival"
+
+    /// The arrival animation itself, keyed so a second call replaces rather than stacks.
+    static func addArrivalFade(to layer: CALayer) {
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = 0
+        animation.toValue = 1
+        animation.duration = HfMotion.arrivalDuration
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer.add(animation, forKey: arrivalFadeKey)
     }
 
     func releaseHostedContent() {

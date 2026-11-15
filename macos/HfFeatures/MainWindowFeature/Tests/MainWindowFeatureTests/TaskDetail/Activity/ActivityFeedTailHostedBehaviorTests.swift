@@ -142,20 +142,7 @@ import Testing
             return paused
         }
         try #require(paused, Comment(rawValue: lifecycleMetadata(host: host, state: state)))
-        // Pausing changes first-appearance fade inputs. Commit those inputs before recording
-        // the lifecycle baseline; their normal revision is not a detach/reattach invalidation.
-        await waitUntil(timeout: 3) {
-            guard let owner = (scroll.documentView as? ActivityFeedNativeTableView)?.owner else { return false }
-            return owner.entries.allSatisfy { entry in
-                if case .row(let row) = entry { return !row.fade }
-                return true
-            }
-        }
         let owner = try #require((scroll.documentView as? ActivityFeedNativeTableView)?.owner)
-        try #require(owner.entries.allSatisfy { entry in
-            if case .row(let row) = entry { return !row.fade }
-            return true
-        })
         let anchor = try #require(state.anchor)
         let beforeMeasurement = try #require(mountedAnchorMeasurement(id: anchor.id, host: host, scroll: scroll),
                                              "The paused semantic row must have a native measurement")

@@ -65,7 +65,7 @@ import Testing
         defer { window.contentView = nil; window.close() }
         var hostIDs = Set<ObjectIdentifier>()
         for row in [prompt, tool, textRow(id: "review-recycled-text", sequence: 99)] {
-            let entry = ActivityFeedNativeEntry.row(.init(row: row, isExpanded: false, fade: false, topSpacing: 12))
+            let entry = ActivityFeedNativeEntry.row(.init(row: row, isExpanded: false, topSpacing: 12))
             let root = ActivityFeedNativeRowRoot(entry: entry, start: nil, horizontalPadding: 12,
                 showsPromptBubble: true, environment: ActivityFeedNativeEnvironment(EnvironmentValues()), actions: actions, availableWidth: 403)
             cell.configure(root: root, id: entry.id)

@@ -68,8 +68,7 @@ enum ActivityFeedNativeEntries {
         return nil
     }
 
-    static func build(model: ActivityFeedNativeModel, header: ActivityFeedNativeEntry.Header?, following: Bool,
-                      mountedIDs: Set<String>) -> [ActivityFeedNativeEntry] {
+    static func build(model: ActivityFeedNativeModel, header: ActivityFeedNativeEntry.Header?) -> [ActivityFeedNativeEntry] {
         var entries: [ActivityFeedNativeEntry] = []
         let style = model.style
         let hasHeader = header != nil
@@ -89,7 +88,6 @@ enum ActivityFeedNativeEntries {
             entries.append(.row(ActivityFeedNativeEntry.Row(
                 row: row,
                 isExpanded: isExpanded(row: row, expandedGroups: model.expandedGroups),
-                fade: following && !mountedIDs.contains(row.id),
                 topSpacing: style.spacing(first: isFirst, standardFirst: HfRadius.Metrics.spacing12,
                                           standardBetween: HfRadius.Metrics.spacing20)
             )))

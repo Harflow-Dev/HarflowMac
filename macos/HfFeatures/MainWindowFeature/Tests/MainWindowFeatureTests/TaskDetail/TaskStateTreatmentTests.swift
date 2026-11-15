@@ -61,8 +61,8 @@ struct TaskStateTreatmentTests {
         let leading = model(2, kind: .reconstructed)
         let trailing = model(2, kind: .ownerLost)
         // when
-        let notice = ActivityFeedNativeEntries.build(model: leading, header: .beginning, following: false, mountedIDs: [])
-        let banner = ActivityFeedNativeEntries.build(model: trailing, header: nil, following: false, mountedIDs: [])
+        let notice = ActivityFeedNativeEntries.build(model: leading, header: .beginning)
+        let banner = ActivityFeedNativeEntries.build(model: trailing, header: nil)
         // then
         #expect(notice[1].id == "activity-task-state-task")
         #expect(notice[1].anchorID == notice[1].id)
@@ -79,8 +79,8 @@ struct TaskStateTreatmentTests {
 
     @Test func givenTrailingBanner_whenAppendingRows_thenNativeTailInsertRemainsAvailable() {
         // given
-        let previous = ActivityFeedNativeEntries.build(model: model(2, kind: .ownerLost), header: nil, following: false, mountedIDs: [])
-        let next = ActivityFeedNativeEntries.build(model: model(3, kind: .ownerLost), header: nil, following: false, mountedIDs: [])
+        let previous = ActivityFeedNativeEntries.build(model: model(2, kind: .ownerLost), header: nil)
+        let next = ActivityFeedNativeEntries.build(model: model(3, kind: .ownerLost), header: nil)
         // when
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
         // then

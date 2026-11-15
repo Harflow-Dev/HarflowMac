@@ -231,6 +231,8 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         var reconciling = false
         var programmaticScrollDepth = 0
         var mountedIDs: Set<String> = []
+        /// Row ids added while following that have not mounted yet: the rows that fade in.
+        var pendingArrivals: Set<String> = []
         var shortFill = ActivityShortFillBudget()
         var pendingPage: ActivityFeedNativePendingPage?
         var pendingPageObservedLoading = false
@@ -315,6 +317,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             entries.removeAll()
             measurementHost = nil
             mountedIDs.removeAll()
+            pendingArrivals.removeAll()
             pendingPage = nil
             pendingPageObservedLoading = false
             rejectedIDs = nil
@@ -437,6 +440,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             pendingPageObservedLoading = false
             rejectedIDs = nil
             mountedIDs.removeAll()
+            pendingArrivals.removeAll()
             pendingNativeCapture = nil
             heldPagingOffset = nil
             pendingHostedHeights.removeAll()

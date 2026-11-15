@@ -7,9 +7,9 @@ import Testing
 /// The synthetic entry lists end with the bottom sentinel, as the production builder's do; the
 /// tail-insert plans over builder output are covered in `ActivityFeedNativeTailInsertPlanTests`.
 struct ActivityFeedNativePlanTests {
-    private func entry(_ seq: Int, topSpacing: CGFloat = 20, fade: Bool = false) -> ActivityFeedNativeEntry {
+    private func entry(_ seq: Int, topSpacing: CGFloat = 20) -> ActivityFeedNativeEntry {
         .row(ActivityFeedNativeEntry.Row(
-            row: .single(ActivityFixture.text(seq), markdown: nil), isExpanded: false, fade: fade,
+            row: .single(ActivityFixture.text(seq), markdown: nil), isExpanded: false,
             topSpacing: topSpacing))
     }
 
@@ -26,7 +26,7 @@ struct ActivityFeedNativePlanTests {
 
     private func built(count: Int) -> [ActivityFeedNativeEntry] {
         let rows = (1 ... count).map { ActivityRow.single(ActivityFixture.text($0), markdown: nil) }
-        return ActivityFeedNativeEntries.build(model: model(rows: rows), header: nil, following: false, mountedIDs: [])
+        return ActivityFeedNativeEntries.build(model: model(rows: rows), header: nil)
     }
 
     @Test func givenIdenticalEntries_whenPlanned_thenUnchanged() {
@@ -39,9 +39,9 @@ struct ActivityFeedNativePlanTests {
     }
 
     @Test func givenSameIDsWithRefreshedContent_whenPlanned_thenUnchanged() {
-        // given — spacing and fade differ, ids do not.
+        // given — spacing differs, ids do not.
         let previous = entries(1 ... 3)
-        let next = [entry(1, topSpacing: 12), entry(2, fade: true), entry(3)] + [.bottom(topSpacing: 0)]
+        let next = [entry(1, topSpacing: 12), entry(2), entry(3)] + [.bottom(topSpacing: 0)]
         // when
         let plan = ActivityFeedNativePlan.plan(previous: previous, next: next)
         // then

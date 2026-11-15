@@ -432,13 +432,6 @@ private enum TableReloadSpy {
         activityNativeTestScroll(mounted.scroll, to: mounted.table.rect(ofRow: index).minY + inset)
         await waitUntil(timeout: 3) { !mounted.state.followLive.isFollowing && mounted.state.anchor != nil }
         try #require(!mounted.state.followLive.isFollowing)
-        // Let the pause's own first-appearance refresh settle before recording baselines.
-        await waitUntil(timeout: 3) {
-            mounted.owner.entries.allSatisfy { entry in
-                if case .row(let row) = entry { return !row.fade }
-                return true
-            }
-        }
     }
 
     /// The cells AppKit itself reports for the rows in the visible rect, with their row numbers.

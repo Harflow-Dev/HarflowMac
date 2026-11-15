@@ -49,8 +49,7 @@ struct ActivityFeedStyleEntriesTests {
                        header: ActivityFeedNativeEntry.Header? = nil, emptyText: String? = nil,
                        tail: ActivityFeedTailPresentation = .absent) -> [ActivityFeedNativeEntry] {
         ActivityFeedNativeEntries.build(
-            model: model(rows, style: style, emptyText: emptyText, tail: tail), header: header,
-            following: false, mountedIDs: [])
+            model: model(rows, style: style, emptyText: emptyText, tail: tail), header: header)
     }
 
     private func spacings(_ entries: [ActivityFeedNativeEntry]) -> [CGFloat] { entries.map(\.topSpacing) }

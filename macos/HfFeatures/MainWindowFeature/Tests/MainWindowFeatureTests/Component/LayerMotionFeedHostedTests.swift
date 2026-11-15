@@ -37,12 +37,12 @@ import Testing
     }
 
     private func textEntry(_ seq: Int, streaming: Bool, text: String = "hello world") -> ActivityFeedNativeEntry {
-        .row(.init(row: .single(ActivityFixture.text(seq, text, streaming: streaming)), isExpanded: false, fade: false, topSpacing: 12))
+        .row(.init(row: .single(ActivityFixture.text(seq, text, streaming: streaming)), isExpanded: false, topSpacing: 12))
     }
 
     private func toolEntry(_ seq: Int, resolved: Bool) -> ActivityFeedNativeEntry {
         .row(.init(row: .single(ActivityFixture.tool(seq, category: "shell", command: "make test", resolved: resolved)),
-                   isExpanded: false, fade: false, topSpacing: 12))
+                   isExpanded: false, topSpacing: 12))
     }
 
     private func groupEntry(running: Bool, expanded: Bool) -> ActivityFeedNativeEntry {
@@ -50,7 +50,7 @@ import Testing
         let result: TaskEvent.ToolResult? = running ? nil : ActivityFixture.result("c1")
         let member = ToolGroupMember(id: "member", call: call, result: result, timestamp: nil, live: running)
         let group = ToolGroup(id: "group", taskID: "t1", bucket: .read, members: [member])
-        return .row(.init(row: .toolGroup(group), isExpanded: expanded, fade: false, topSpacing: 12))
+        return .row(.init(row: .toolGroup(group), isExpanded: expanded, topSpacing: 12))
     }
 
     private func liveStepEntry() -> ActivityFeedNativeEntry {

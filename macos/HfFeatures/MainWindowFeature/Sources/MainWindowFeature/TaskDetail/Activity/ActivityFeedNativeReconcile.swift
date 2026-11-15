@@ -55,8 +55,8 @@ extension ActivityFeedNativeList.Coordinator {
                 retainedFirstID: state.retainedFirstID, history: model.history),
             pendingPage: pendingPage != nil
         )
-        let next = ActivityFeedNativeEntries.build(model: model, header: header, following: following,
-                                                    mountedIDs: mountedIDs)
+        let next = ActivityFeedNativeEntries.build(model: model, header: header)
+        notePendingArrivals(next: next, following: following)
         let plan = ActivityFeedNativePlan.plan(previous: entries, next: next)
         apply(plan: plan, next: next, following: following,
               environmentHeightsInvalidated: environmentHeightsInvalidated, rootsNeedRefresh: rootsNeedRefresh)
@@ -98,9 +98,8 @@ extension ActivityFeedNativeList.Coordinator {
         if !wasReconciling { publishPosition() }
         reconciling = true
         defer { reconciling = wasReconciling }
-        let next = ActivityFeedNativeEntries.build(model: model, header: .loading,
-                                                   following: state.followLive.isFollowing,
-                                                   mountedIDs: mountedIDs)
+        let next = ActivityFeedNativeEntries.build(model: model, header: .loading)
+        notePendingArrivals(next: next, following: state.followLive.isFollowing)
         apply(plan: ActivityFeedNativePlan.plan(previous: entries, next: next), next: next,
               following: state.followLive.isFollowing,
               environmentHeightsInvalidated: false, rootsNeedRefresh: false)
@@ -212,7 +211,7 @@ extension ActivityFeedNativeList.Coordinator {
     private func entriesEqual(_ retained: ActivityFeedNativeItemBox, _ next: ActivityFeedNativeEntry, token: UUID?) -> Bool {
         if let token, case .row(let old) = retained.entry, case .row(let fresh) = next {
             return retained.renderToken == token && old.isExpanded == fresh.isExpanded
-                && old.fade == fresh.fade && old.topSpacing == fresh.topSpacing
+                && old.topSpacing == fresh.topSpacing
         }
         return retained.entry == next
     }
@@ -302,8 +301,13 @@ extension ActivityFeedNativeList.Coordinator {
         cell.onMounted = { [weak self, weak cell] in
             guard let self, let cell, let id = cell.entryID else { return }
             mountedIDs.insert(id)
+            pendingArrivals.remove(id)
         }
-        cell.configure(root: root(for: box, reporting: true), id: box.entry.id)
+        // Decided before configuring: configuring can lay out the new host and report it mounted.
+        let id = box.entry.id
+        let arrives = arrivalFades(entry: box.entry, in: cell)
+        cell.configure(root: root(for: box, reporting: true), id: id)
+        if arrives { cell.playArrivalFade() }
         cell.frame.size.width = currentWidth
         return cell
     }

@@ -97,12 +97,6 @@ import Testing
         activityNativeTestScroll(mounted.scroll, to: mounted.table.rect(ofRow: index).minY + inset)
         await waitUntil(timeout: 3) { !mounted.state.followLive.isFollowing && mounted.state.anchor != nil }
         try #require(!mounted.state.followLive.isFollowing)
-        await waitUntil(timeout: 3) {
-            mounted.owner.entries.allSatisfy { entry in
-                if case .row(let row) = entry { return !row.fade }
-                return true
-            }
-        }
     }
 
     /// The summary entry's slot, its displayed host height and the coordinator's off-window measurement.

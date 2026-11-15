@@ -420,6 +420,8 @@ LAYER_MOTION_ANIMATION_SUITE = "MainWindowFeatureTests.LayerMotionAnimationHoste
 LAYER_MOTION_FEED_SUITE = "MainWindowFeatureTests.LayerMotionFeedHostedTests"
 LAYER_MOTION_LOOK_SUITE = "MainWindowFeatureTests.LayerMotionLookHostedTests"
 LAYER_MOTION_NO_LOOP_SUITE = "MainWindowFeatureTests.LayerMotionNoLoopHostedTests"
+ARRIVAL_SUITE = "MainWindowFeatureTests.ActivityFeedArrivalHostedTests"
+ARRIVAL_NO_LOOP_SUITE = "MainWindowFeatureTests.ActivityFeedArrivalNoLoopHostedTests"
 TASK_PANE_SUITE = "MainWindowFeatureTests.TaskPaneHostedTests"
 TASK_PANE_CAPTURE_SUITE = "MainWindowFeatureTests.TaskPaneCaptureHostedTests"
 TASK_PANE_ESCAPE_SUITE = "MainWindowFeatureTests.TaskPaneEscapeHostedTests"
@@ -464,6 +466,8 @@ HOSTED_SUITE_NAMES = (
     LAYER_MOTION_FEED_SUITE,
     LAYER_MOTION_LOOK_SUITE,
     LAYER_MOTION_NO_LOOP_SUITE,
+    ARRIVAL_SUITE,
+    ARRIVAL_NO_LOOP_SUITE,
     TASK_PANE_SUITE,
     "MainWindowFeatureTests.TaskHeaderCleanupHostedTests",
     "MainWindowFeatureTests.TaskStateTreatmentHostedTests",

@@ -45,7 +45,7 @@ struct ActivityFeedNativeTailInsertPlanTests {
             shownRows: rows, allRowIDs: rows.map(\.id), start: nil, emptyText: nil, horizontalPadding: 0,
             showsPromptBubble: false, expandedGroups: [], tailPresentation: tail, history: EventHistoryState(),
             paginationRevision: 0, visible: true, loading: false, approvalReveal: nil, activitySnapshot: nil)
-        return ActivityFeedNativeEntries.build(model: model, header: header, following: false, mountedIDs: [])
+        return ActivityFeedNativeEntries.build(model: model, header: header)
     }
 
     private func plan(_ previous: [ActivityFeedNativeEntry], _ next: [ActivityFeedNativeEntry]) -> ActivityFeedNativePlan {

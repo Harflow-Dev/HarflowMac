@@ -10,7 +10,11 @@ public enum HfMotion {
     }
 
     /// Fade-only arrivals avoid competing with live scrolling and pagination anchors.
-    public static let arrival = Animation.easeOut(duration: 0.18)
+    public static let arrival = Animation.easeOut(duration: arrivalDuration)
+
+    /// Duration of a content arrival, in seconds. Shared with arrivals drawn in Core Animation
+    /// (an ease-out layer animation of the same length), so both read as one motion.
+    public static let arrivalDuration: Double = 0.18
 
     /// How a presentation component resolves Reduce Motion: an explicit `override` wins over the
     /// system setting, `nil` follows it. The system value is read-only, so this is how previews,

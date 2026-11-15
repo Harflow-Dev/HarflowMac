@@ -27,6 +27,13 @@ indicators inside feed cells (the streaming caret, the tool spinner, the working
 the live-step pulse) animate in Core Animation through layer-backed views, never through a
 SwiftUI `TimelineView` or repeating animation: a SwiftUI animation inside a hosted cell keeps
 its graph pending every frame and makes the feed's host re-measure the whole table.
+A row arriving while the feed follows live fades in the same way: a Core Animation opacity
+animation (`HfMotion.arrivalDuration`, ease-out) on the cell's host layer, played once when the
+cell first hosts the row. The coordinator keeps the ids added while following that have not yet
+mounted; the next build made while the feed is not following clears them, and a row added while
+the reader is above the tail never fades. The fade is not part of the native entry, so it never
+forces a row to re-measure or refresh. Tool-group member fades inside a hosted card still use the
+SwiftUI fade.
 These layer indicators resolve their colours from the effective appearance of their AppKit view. That is the window's appearance, except where a SwiftUI colour-scheme override is set on the row: SwiftUI applies it to the hosted view as an appearance, so the override wins (measured for the caret, the tool spinner and the pulse dot). HfUI's shared `RunningSpinner` is unchanged for surfaces outside the feed.
 
 Unchanged feed inputs refresh action callbacks without rebuilding native entries or

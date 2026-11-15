@@ -44,7 +44,7 @@ struct ActivityFeedSummaryEntryPlanTests {
     }
 
     private func build(_ rows: [ActivityRow], tail: ActivityFeedTailPresentation = .absent) -> [ActivityFeedNativeEntry] {
-        ActivityFeedNativeEntries.build(model: model(rows, tail: tail), header: nil, following: false, mountedIDs: [])
+        ActivityFeedNativeEntries.build(model: model(rows, tail: tail), header: nil)
     }
 
     private func plan(_ previous: [ActivityFeedNativeEntry], _ next: [ActivityFeedNativeEntry]) -> ActivityFeedNativePlan {
