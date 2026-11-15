@@ -81,12 +81,15 @@ public struct EventObservationHistory: Equatable, Sendable {
     public let availableActions: Set<EventObservationAction>
     /// Public refusal/read details, including actionable capability requirements.
     public let failure: ToolError?
+    /// Only the earlier-page read failed and a retry re-reads that same page.
+    public let olderReadFailed: Bool
 
     /// Creates independent history facts. Empty defaults do not claim caught-up history.
     public init(isLoading: Bool = false, hasOlder: Bool = false, caughtUp: Bool = false,
                 forwardDrained: Bool = false, reasons: Set<EventObservationReason> = [],
                 currentness: EventObservationCurrentness = .current,
-                availableActions: Set<EventObservationAction> = [], failure: ToolError? = nil) {
+                availableActions: Set<EventObservationAction> = [], failure: ToolError? = nil,
+                olderReadFailed: Bool = false) {
         self.isLoading = isLoading
         self.hasOlder = hasOlder
         self.caughtUp = caughtUp
@@ -95,6 +98,7 @@ public struct EventObservationHistory: Equatable, Sendable {
         self.currentness = currentness
         self.availableActions = availableActions
         self.failure = failure
+        self.olderReadFailed = olderReadFailed
     }
 }
 

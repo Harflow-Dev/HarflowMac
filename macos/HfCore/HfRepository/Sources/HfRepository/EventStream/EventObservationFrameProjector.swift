@@ -58,7 +58,8 @@ enum EventObservationFrameProjector {
             caughtUp: snapshot.forwardDrained && !snapshot.sourceChangePending && !reconnecting,
             forwardDrained: snapshot.forwardDrained, reasons: reasons,
             currentness: snapshot.sourceChangePending ? .sourceChangePending : reconnecting ? .reconnecting : .current,
-            availableActions: actions, failure: snapshot.error
+            availableActions: actions, failure: snapshot.error,
+            olderReadFailed: snapshot.olderReadPaused && !snapshot.stopped && !snapshot.sourceChangePending
         )
         return EventObservationFrame(taskID: taskID, scope: scope, revision: snapshot.revision,
                                      records: records, events: events, items: builder.items,
@@ -93,7 +94,8 @@ enum EventObservationFrameProjector {
                    !snapshot.issues.contains(.capacity), !snapshot.issues.contains(.historicalLimit) {
                     actions.insert(.loadEarlier)
                 }
-                if snapshot.error != nil || snapshot.pausedReads || snapshot.issues.contains(.nonprogress) { actions.insert(.retryRead) }
+                if snapshot.error != nil || snapshot.pausedReads || snapshot.olderReadPaused
+                    || snapshot.issues.contains(.nonprogress) { actions.insert(.retryRead) }
                 if snapshot.issues.contains(.capacity) { actions.insert(.rebaseWindow) }
             }
         }

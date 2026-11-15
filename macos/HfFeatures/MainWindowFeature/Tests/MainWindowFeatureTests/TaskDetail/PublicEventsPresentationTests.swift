@@ -185,4 +185,68 @@ import Testing
         // then
         #expect(value.summary == .unavailable)
     }
+
+    // MARK: - Earlier page unreadable
+
+    @Test func givenOlderReadFailedWithRecords_whenMade_thenEarlierPageNoteAndLoadEarlierHidden() {
+        // given
+        let frame = Self.frame(records: ["notice"], history: .init(hasOlder: true, availableActions: [.loadEarlier, .retryRead],
+                                                                  olderReadFailed: true))
+        // when
+        let value = PublicEventsPresentation.make(from: frame)
+        // then
+        #expect(value.note == .earlierPageUnreadable)
+        #expect(!value.showsLoadEarlier)
+        #expect(!value.isEmptyWindow)
+        #expect(value.showsRecordsCaption)
+    }
+
+    @Test func givenOlderReadFailedWithRecordsAndNoFailureDetail_whenMade_thenEarlierPageNote() {
+        // given
+        let frame = Self.frame(records: ["notice"], history: .init(availableActions: [.retryRead], olderReadFailed: true))
+        // when
+        let value = PublicEventsPresentation.make(from: frame)
+        // then
+        #expect(frame.history.failure == nil)
+        #expect(value.note == .earlierPageUnreadable)
+    }
+
+    @Test func givenOlderReadFailedWithEmptyWindow_whenMade_thenHistoryNoteUnderHeading() {
+        // given
+        let frame = Self.frame(history: .init(availableActions: [.retryRead], olderReadFailed: true))
+        // when
+        let value = PublicEventsPresentation.make(from: frame)
+        // then
+        #expect(value.note == .historyUnavailable)
+        #expect(!value.isEmptyWindow)
+    }
+
+    @Test func givenOlderReadFailedWithRebaseWindow_whenMade_thenHistoryNote() {
+        // given
+        let frame = Self.frame(records: ["notice"], history: .init(availableActions: [.retryRead, .rebaseWindow], olderReadFailed: true))
+        // when
+        let value = PublicEventsPresentation.make(from: frame)
+        // then
+        #expect(value.note == .historyUnavailable)
+    }
+
+    @Test func givenRetryReadWithRecordsAndNoOlderFlag_whenMade_thenHistoryNote() {
+        // given
+        let frame = Self.frame(records: ["notice"], history: .init(availableActions: [.retryRead], failure: Self.failure))
+        // when
+        let value = PublicEventsPresentation.make(from: frame)
+        // then
+        #expect(!frame.history.olderReadFailed)
+        #expect(value.note == .historyUnavailable)
+    }
+
+    @Test func givenOlderReadFailedWithoutRetryOffered_whenMade_thenNoNote() {
+        // given
+        let frame = Self.frame(records: ["notice"], history: .init(hasOlder: true, availableActions: [.loadEarlier], olderReadFailed: true))
+        // when
+        let value = PublicEventsPresentation.make(from: frame)
+        // then
+        #expect(value.note == nil)
+        #expect(value.showsLoadEarlier)
+    }
 }

@@ -230,6 +230,8 @@ struct PublicEventsPresentation: Equatable, Sendable {
     enum Note: Equatable, Sendable {
         /// The history read failed and a retry is on offer.
         case historyUnavailable
+        /// Only the earlier-page read failed; the retained records stay and a retry re-reads that page.
+        case earlierPageUnreadable
     }
 
     let summary: Summary
@@ -261,7 +263,13 @@ struct PublicEventsPresentation: Equatable, Sendable {
         } else {
             frame.summary.state == .loading ? .loading : .unavailable
         }
-        return PublicEventsPresentation(summary: summary, note: retry ? .historyUnavailable : nil,
+        let note: Note? = if retry {
+            (frame.history.olderReadFailed && !frame.records.isEmpty && !actions.contains(.rebaseWindow))
+                ? .earlierPageUnreadable : .historyUnavailable
+        } else {
+            nil
+        }
+        return PublicEventsPresentation(summary: summary, note: note,
                                         isEmptyWindow: empty, showsLoadEarlier: actions.contains(.loadEarlier) && !retry,
                                         showsRecordsCaption: !empty)
     }
@@ -286,13 +294,20 @@ struct PublicEventsView: View {
                 if !presentation.isEmptyWindow { heading("Captured activity facts") }
                 summaryLine(presentation.summary)
                 activityHeading
-                if presentation.note != nil { historyNote(frame) }
+                if presentation.note == .historyUnavailable {
+                    historyNote(frame, title: "Captured history unavailable",
+                                body: "The read could not be completed. This does not mean the task failed.")
+                }
                 if presentation.isEmptyWindow {
                     Text("No rows in the available captured history")
                     Text("An empty window does not qualify totals.").font(.hf(.caption)).foregroundStyle(.secondary)
                 }
                 if presentation.showsRecordsCaption {
                     Text("Public normalized events · bounded record window").font(.hf(.secondary, weight: .semibold))
+                }
+                if presentation.note == .earlierPageUnreadable {
+                    historyNote(frame, title: "Earlier records couldn't be read",
+                                body: "Records below stay. Retrying reads the same earlier page again.")
                 }
                 if presentation.showsLoadEarlier {
                     Button("Load earlier") { perform(.loadEarlier, label: "Load earlier") }
@@ -353,13 +368,13 @@ struct PublicEventsView: View {
         }
     }
 
-    private func historyNote(_ frame: EventObservationFrame) -> some View {
+    private func historyNote(_ frame: EventObservationFrame, title: String, body: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Captured history unavailable")
+                Text(title)
                     .font(TaskScreenStyle.sans(size: 13).weight(.semibold))
                     .foregroundStyle(TaskScreenStyle.Colors.text.color)
-                Text("The read could not be completed. This does not mean the task failed.")
+                Text(body)
                     .font(TaskScreenStyle.sans(size: 13))
                     .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
             }
@@ -442,6 +457,14 @@ struct PublicEventsView: View {
     ScrollView {
         PublicEventsView(frame: TaskDetailViewModelMock.previewObservation(actions: [.retryRead]), recovered: .init(),
                          copy: { _ in }, action: { _ in })
+            .padding(16)
+    }.frame(width: 320, height: 420)
+}
+
+#Preview("Events · earlier page unreadable") {
+    ScrollView {
+        PublicEventsView(frame: TaskDetailViewModelMock.previewObservation(actions: [.retryRead], olderReadFailed: true),
+                         recovered: .init(), copy: { _ in }, action: { _ in })
             .padding(16)
     }.frame(width: 320, height: 420)
 }

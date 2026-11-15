@@ -146,6 +146,55 @@ import Testing
     }
 
     @Test(arguments: [ColorScheme.light, .dark])
+    func givenEventsPaneEarlierPageNote_whenRetryPressed_thenRetryReadDispatchesOnceAndNoteStaysBelowCaption(scheme: ColorScheme) async throws {
+        // given
+        let frame = M05Fixtures.frame(records: M05Fixtures.records(["notice"]),
+            history: .init(hasOlder: true, forwardDrained: true, availableActions: [.loadEarlier, .retryRead], olderReadFailed: true),
+            summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
+        var actions: [EventObservationAction] = []
+        let view = ScrollView { PublicEventsView(frame: frame, recovered: .init(), copy: { _ in }, action: { actions.append($0) }).padding(16) }
+            .preferredColorScheme(scheme)
+        let fixture = ObservationHost(view, width: 320, height: 420, appearance: scheme)
+        defer { fixture.close() }
+        try await fixture.requireForeground()
+        let title = "Earlier records couldn't be read"
+        let caption = "Public normalized events · bounded record window"
+        // The note's title and body are one combined accessibility element, so the title is matched as a prefix.
+        func noteElement() -> NSObject? {
+            fixture.objects().first { element in
+                ["accessibilityLabel", "accessibilityValue"].contains { fixture.string(element, $0)?.hasPrefix(title) == true }
+            }
+        }
+        await waitUntil { fixture.find(identifier: "task-events.retry-history-read") != nil && noteElement() != nil }
+        let button = try #require(fixture.find(identifier: "task-events.retry-history-read"))
+        #expect(fixture.find("Captured history unavailable") == nil)
+        #expect(fixture.find(identifier: "task-events.load-earlier") == nil)
+        // The heading is above the caption; the note is below both (window coordinates grow upward or downward alike).
+        func isOrderedBelow() throws -> Bool {
+            let headingFrame = try #require(fixture.find("Captured activity").flatMap(fixture.frame))
+            let captionFrame = try #require(fixture.find(caption).flatMap(fixture.frame))
+            let noteFrame = try #require(noteElement().flatMap(fixture.frame))
+            let direction: CGFloat = headingFrame.midY > captionFrame.midY ? 1 : -1
+            return (captionFrame.midY - noteFrame.midY) * direction > 0
+        }
+        #expect(try isOrderedBelow(), "the note follows the records caption before Retry is pressed")
+        // when
+        let before = fixture.window.firstResponder
+        #expect(fixture.press(button))
+        await waitUntil { !actions.isEmpty }
+        // then
+        #expect(actions == [.retryRead])
+        await waitUntil { fixture.isHeadingFocused("Captured activity") }
+        #expect(fixture.isHeadingFocused("Captured activity"),
+                Comment(rawValue: "The Captured activity heading must own focus after Retry history read. "
+                    + fixture.focusDiagnostics(expectedText: "Captured activity")))
+        #expect(fixture.keyboardFocusMoved(from: before, button: button),
+                "keyboard focus must move off the pressed button. \(fixture.responderDiagnostics(before))")
+        #expect(try isOrderedBelow(), "the note stays below the caption after the dispatch")
+        #expect(actions == [.retryRead])
+    }
+
+    @Test(arguments: [ColorScheme.light, .dark])
     func givenPartialRequestReadMore_whenReplacementRemovesAction_thenFocusMovesToExpandedRequestText(scheme: ColorScheme) async throws {
         // given
         let partial = try requestState("partial")

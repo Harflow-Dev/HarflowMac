@@ -65,7 +65,8 @@ A future public watcher can replace the polling source without changing paging, 
 session. Activity and cumulative summaries no longer open engine event files.
 The repository publishes one atomic `EventObservationFrame` containing bounded
 normalized records, strictly projected rows, source/window identity, history
-health and independently qualified optional totals. Unknown or unsupported
+health (including `olderReadFailed`: only the earlier-page read is paused and a retry
+re-reads that same page; it also holds while an explicit retry of that page is outstanding) and independently qualified optional totals. Unknown or unsupported
 payloads remain raw evidence; missing success/text fields never become successful
 empty output. Conservative continuity barriers prevent matching through unknown
 intervals. Producer sequence numbers remain data, while session/source/window and

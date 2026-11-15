@@ -83,8 +83,9 @@ final class PublicEventObservationSession: Sendable {
             value.liveDemand = enabled
             if !enabled {
                 value.activityGeneration += 1
-                value.olderDemand = false
+                value.olderDemand = false; value.olderRetryPending = false
                 value.snapshot.historyLoading = false
+                if value.snapshot.olderReadPaused { value.snapshot.olderReadPaused = false; value.snapshot.revision += 1 }
             } else if value.bootstrapFinished, value.snapshot.liveCursor == nil,
                       !value.snapshot.sourceChangePending, !value.capacityBlocked {
                 // Summary-only bootstrap admitted no activity cursor or occurrence identity.
@@ -109,6 +110,7 @@ final class PublicEventObservationSession: Sendable {
             value.summaryDemand = true
             value.olderDemand = retryOlder
             value.snapshot.historyLoading = retryOlder
+            value.olderRetryPending = retryOlder && value.snapshot.olderReadPaused
             value.snapshot.issues.remove(.nonprogress)
             value.snapshot.issues.remove(.unavailable)
         }
@@ -135,6 +137,7 @@ final class PublicEventObservationSession: Sendable {
             value.snapshot.revision = revision
             value.snapshot.historicalOperations = work
             value.snapshot.stopped = true
+            value.olderRetryPending = false
         }
     }
 
@@ -248,13 +251,16 @@ final class PublicEventObservationSession: Sendable {
             value.budgetID = nil
             let before = value.snapshot
             defer {
-                if lane == .older { value.snapshot.historyLoading = false }
+                if lane == .older { value.snapshot.historyLoading = false; value.olderRetryPending = false }
                 if position == .newest,
                    value.snapshot.olderCursor == nil || value.capacityBlocked || value.snapshot.error != nil {
                     value.snapshot.historyLoading = false
-                    value.olderDemand = false
+                    value.olderDemand = false; value.olderRetryPending = false
                 }
+                if value.capacityBlocked { value.olderRetryPending = false }
                 value.snapshot.pausedReads = !value.paused.isEmpty
+                value.snapshot.olderReadPaused = (value.paused == [.older] || (value.olderRetryPending && value.paused.isEmpty))
+                    && value.activityEnabled && !value.capacityBlocked && value.snapshot.olderCursor != nil && value.snapshot.lifecycle?.state != .unavailable
                 value.snapshot.summary = value.reducer.snapshot(caughtUp: value.snapshot.summaryPhase == .caughtUp)
                 if value.paused.contains(.summary), !value.snapshot.sourceChangePending {
                     value.snapshot.summary = PublicEventSummary(state: .unavailable, counts: nil, files: [], totalFiles: nil,
@@ -277,7 +283,7 @@ final class PublicEventObservationSession: Sendable {
                 value.snapshot.issues.insert(.resetExhausted)
             }
             value.snapshot.sourceChangePending = true
-            value.olderDemand = false
+            value.olderDemand = false; value.olderRetryPending = false
             value.snapshot.historyLoading = false
             value.snapshot.forwardDrained = false
             value.snapshot.summaryPhase = .unavailable
@@ -335,6 +341,8 @@ final class PublicEventObservationSession: Sendable {
         value.capacityBlocked = false
         value.paused.removeAll()
         value.snapshot.pausedReads = false
+        value.snapshot.olderReadPaused = false
+        value.olderRetryPending = false
         value.snapshot.historyLoading = false
         value.liveDemand = true
         value.olderDemand = false
@@ -572,6 +580,7 @@ private extension PublicEventObservationSession {
         var liveDemand = true
         var liveForwardPages = 0
         var olderDemand = false
+        var olderRetryPending = false // explicit older retry outstanding; keeps the flag until that read completes
         var summaryCursor: String?
         var summarySeeking = false
         var summaryDemand = false
@@ -588,5 +597,4 @@ private extension PublicEventObservationSession {
         var subscribers: [UUID: Publisher] = [:]
         var delivered: [UUID: PublicEventObservationSnapshot] = [:]
     }
-
 }

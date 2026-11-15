@@ -10,8 +10,8 @@ import Testing
 
 /// Native evidence for the five Layout and six Events states of HarflowDesign `v2/scripts/screens-m05-proposal.js` (pin
 /// 4ff7d83), each in the production shell with a real standalone `TaskDetailVM`. `pane-overlay` mounts only at 1000x620 and
-/// `pane-split` only at 1280x800. Two Events states have no native copy for the design's wording (`events-page-error`,
-/// `events-empty`); the matrix asserts what native renders and the receipt records the difference.
+/// `pane-split` only at 1280x800. `events-empty` has no native copy for the design's wording; the matrix asserts what
+/// native renders and the receipt records the difference.
 @MainActor
 @Suite(.serialized)
 struct M05PaneStateMatrixHostedTests {
@@ -134,7 +134,8 @@ struct M05PaneStateMatrixHostedTests {
                               summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
         case "events-page-error":
             M05Fixtures.frame(items: rows, records: M05Fixtures.records(["notice"]),
-                              history: .init(hasOlder: true, caughtUp: false, forwardDrained: true, availableActions: [.retryRead]),
+                              history: .init(hasOlder: true, caughtUp: false, forwardDrained: true, availableActions: [.retryRead],
+                                             olderReadFailed: true),
                               summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
         case "events-loading":
             EventObservationFrame(taskID: M05Fixtures.taskID, scope: FeatureObservationFixture.scope, history: .init(isLoading: true))
@@ -181,13 +182,13 @@ struct M05PaneStateMatrixHostedTests {
             #expect(ctx.paneHasIdentifier("task-events.load-earlier"), "Load earlier is in the pane \(ctx.name)")
         case "events-page-error":
             if !overlay { #expect(ctx.outsidePaneHas("Retry history read"), "history action on the transcript boundary \(ctx.name)") }
-            #expect(ctx.paneContains("Captured history unavailable"), "history note in the pane \(ctx.name)")
-            #expect(ctx.paneContains("The read could not be completed. This does not mean the task failed."), "history note detail \(ctx.name)")
+            #expect(ctx.paneContains("Earlier records couldn't be read"), "page error note in the pane \(ctx.name)")
+            #expect(ctx.paneContains("Records below stay. Retrying reads the same earlier page again."), "page error note detail \(ctx.name)")
             #expect(ctx.paneHasIdentifier("task-events.retry-history-read"), "retry in the pane \(ctx.name)")
             #expect(!ctx.paneHasIdentifier("task-events.load-earlier"), "Load earlier yields to the note in the pane \(ctx.name)")
             #expect(ctx.paneContains("notice"), "retained record still listed in the pane \(ctx.name)")
-            #expect(!ctx.has("Earlier records couldn't be read"), "design heading is not native copy \(ctx.name)")
-            #expect(!ctx.has("Reload from newest"), "design action is not native copy \(ctx.name)")
+            #expect(!ctx.has("Captured history unavailable"), "the page error replaces the history note \(ctx.name)")
+            #expect(!ctx.has("Reload from newest"), "restart action is not native copy \(ctx.name)")
         case "events-loading":
             if !overlay { #expect(ctx.outsidePaneHas("Loading captured history"), "transcript boundary note \(ctx.name)") }
             #expect(!ctx.paneContains("No tool calls observed in the available captured history"), "loading never reads as empty \(ctx.name)")

@@ -90,9 +90,7 @@ enum M05StateTable {
         entry("pane-failed-closed", .pane, "failed task, no open choice"),
         entry("events-populated", .pane, "done task with enforcement and notices, Events open"),
         entry("events-page", .pane, "observation frame offering Load earlier"),
-        entry("events-page-error", .pane, "observation frame offering Retry history read",
-              deviation: "The design draws the heading \"Earlier records couldn't be read\" and the action "
-                  + "\"Reload from newest\"; native has neither and offers \"Retry history read\"."),
+        entry("events-page-error", .pane, "observation frame with a retained record, only the earlier-page read failed, Retry history read on offer"),
         entry("events-loading", .pane, "observation frame still loading"),
         entry("events-empty", .pane, "empty observation window"),
         entry("events-error", .pane, "observation frame with unavailable history and a retry on offer")

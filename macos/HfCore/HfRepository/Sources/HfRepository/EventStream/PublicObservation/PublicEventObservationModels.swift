@@ -36,6 +36,8 @@ struct PublicEventObservationSnapshot: Equatable, Sendable {
     var historyLoading = false
     /// At least one observation lane awaits an explicit read retry.
     var pausedReads = false
+    /// Only the older-page read is paused and an explicit retry would re-read that same page.
+    var olderReadPaused = false
     var revision = 0
     var activity: [PublicEventOccurrence] = []
     var rawBytes = 0
