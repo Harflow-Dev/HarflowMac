@@ -138,6 +138,8 @@ protocol TaskDetailRouting: Sendable {
     func presentStopConfirmation(_ confirmation: TaskStopConfirmation)
     func selectTask(_ taskID: String)
     func publishTopBar(_ content: TaskTopBarContent, tag: TaskTopBarHolder.Tag)
+    /// Publishes the loading or not-found state of the task slot (the loaded state travels as content).
+    func publishTopBarSlot(_ slot: TaskTopBarSlot, tag: TaskTopBarHolder.Tag)
     func clearTopBar(tag: TaskTopBarHolder.Tag)
     func activateTopBar(tag: TaskTopBarHolder.Tag)
     func deactivateTopBar(tag: TaskTopBarHolder.Tag)
@@ -198,7 +200,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// and the last content written (so an unchanged recompute writes nothing).
     @ObservationIgnored var topBarPaneOpen = false
     @ObservationIgnored let topBarConversationID: String
-    @ObservationIgnored var lastPublishedTopBar: TaskTopBarContent?
+    @ObservationIgnored var lastPublishedTopBar: TaskTopBarSlot?
 
     // The properties below are written from the `+Timeline`/`+Summary`/`+Actions` extension files
     // (each in its own file, per the screen shape), so they cannot be `private(set)` — `private` is
@@ -437,9 +439,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     func recomputeMembersAndLeases() {
         let resolvedMembers = useCase.conversationMembers(of: identityTaskID)
         let requested = resolvedMembers.first { $0.taskID == taskID }
-        let isLogicalWorkflow = requested?.raw["workflow_role"]?.stringValue == "orchestrator"
-            || requested?.raw["workflow_node_id"]?.stringValue != nil
-        let isExecutionChild = !isWorkflowBuilder && !isLogicalWorkflow && requested?.raw["workflow_run_id"]?.stringValue != nil
+        let isExecutionChild = !isWorkflowBuilder && Self.isWorkflowExecutionChild(requested)
         var members = isExecutionChild ? [requested].compactMap(\.self) : resolvedMembers
         if !isExecutionChild, members.isEmpty, let survivor = useCase.oldestSurvivor(among: Set(lastKnownMemberIDsOldestFirst)) {
             members = useCase.conversationMembers(of: survivor)
@@ -477,6 +477,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             task = nil
             callerApprovalController?.stop()
             resetForMissingTask()
+            publishTopBarMissing()
             return
         }
         task = detail
@@ -566,7 +567,6 @@ final class TaskDetailVM: TaskDetailViewModel {
 
     private func resetForMissingTask() {
         statusReadAvailability = .unread
-        clearTopBarPublication()
         resetResourceContext()
         resetChanges(keepPaneReport: true)
         timelineRevision &+= 1

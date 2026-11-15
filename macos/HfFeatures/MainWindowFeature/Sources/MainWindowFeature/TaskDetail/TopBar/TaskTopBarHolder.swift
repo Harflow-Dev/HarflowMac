@@ -57,14 +57,20 @@ public final class TaskTopBarHolder {
 
     /// What one writer published.
     enum Content: Equatable, Sendable {
-        case task(TaskTopBarContent)
+        case task(TaskTopBarSlot)
         case group(GroupTopBarContent)
         case page(PageTopBarContent)
     }
 
-    /// The task content the principal draws, `nil` when no active writer has published for the shown conversation.
+    /// The task slot state the principal draws, `nil` when no active writer has published for the shown conversation.
     /// Written only when it changes.
-    private(set) var shown: TaskTopBarContent?
+    private(set) var shownSlot: TaskTopBarSlot?
+    /// The slot state the coordinator derives from the listing for the selected task while no writer has published
+    /// (the frame before the task view mounts), `nil` for every other selection and for a task the read listing does
+    /// not hold. Written only when it changes, only by the coordinator; the principal is its one reader.
+    private(set) var preMountSlot: TaskTopBarSlot?
+    /// The loaded task content, `nil` in every other state.
+    var shown: TaskTopBarContent? { shownSlot?.content }
     /// The group content the principal draws, `nil` when no active group writer has published for the shown group.
     private(set) var shownGroup: GroupTopBarContent?
     /// The page content the principal draws, `nil` when no active page writer has published for the shown page.
@@ -85,8 +91,18 @@ public final class TaskTopBarHolder {
 
     /// Records task `content` for `tag`.
     func publish(_ content: TaskTopBarContent, tag: Tag) {
-        entries[tag] = .task(content)
+        publish(slot: .loaded(content), tag: tag)
+    }
+
+    /// Records a task slot state (loaded, loading or not found) for `tag`.
+    func publish(slot: TaskTopBarSlot, tag: Tag) {
+        entries[tag] = .task(slot)
         refreshShown()
+    }
+
+    /// Sets the pre-mount slot state; a repeated value writes nothing.
+    func setPreMountSlot(_ slot: TaskTopBarSlot?) {
+        if preMountSlot != slot { preMountSlot = slot }
     }
 
     /// Records group `content` for `tag`.
@@ -150,7 +166,7 @@ public final class TaskTopBarHolder {
 
     private func refreshShown() {
         let content: Content? = if let activeTag, activeTag.subject == shownSubject { entries[activeTag] } else { nil }
-        var task: TaskTopBarContent?
+        var task: TaskTopBarSlot?
         var group: GroupTopBarContent?
         var page: PageTopBarContent?
         switch content {
@@ -159,7 +175,7 @@ public final class TaskTopBarHolder {
         case .page(let value): page = value
         case nil: break
         }
-        if shown != task { shown = task }
+        if shownSlot != task { shownSlot = task }
         if shownGroup != group { shownGroup = group }
         if shownPage != page { shownPage = page }
     }

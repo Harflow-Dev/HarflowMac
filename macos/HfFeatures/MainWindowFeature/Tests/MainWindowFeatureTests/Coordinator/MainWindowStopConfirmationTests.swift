@@ -80,8 +80,10 @@ import Testing
         given(listing).tasks.willReturn(tasks)
         given(listing).tasksPublisher().willReturn(Empty<[TaskInfo], Never>().eraseToAnyPublisher())
         given(listing).hasListed.willReturn(true)
+        given(listing).title(.any).willProduce { "Task \($0)" }
         given(listing).listError.willReturn(nil)
         given(listing).hasListedPublisher().willReturn(Just(true).eraseToAnyPublisher())
+        given(listing).titlesPublisher().willReturn(Just<[String: String]>([:]).eraseToAnyPublisher())
         given(listing).listErrorPublisher().willReturn(Just<ToolError?>(nil).eraseToAnyPublisher())
         let sut = MainWindowCoordinator(parent: MockCoordinator(), taskListRepository: listing)
         sut.selection = .task("a")

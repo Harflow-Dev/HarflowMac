@@ -58,6 +58,7 @@ extension TaskDetailRouting {
     func showResourceSlots() {}
     func presentStopConfirmation(_: TaskStopConfirmation) {}
     func publishTopBar(_: TaskTopBarContent, tag _: TaskTopBarHolder.Tag) {}
+    func publishTopBarSlot(_: TaskTopBarSlot, tag _: TaskTopBarHolder.Tag) {}
     func clearTopBar(tag _: TaskTopBarHolder.Tag) {}
     func activateTopBar(tag _: TaskTopBarHolder.Tag) {}
     func deactivateTopBar(tag _: TaskTopBarHolder.Tag) {}

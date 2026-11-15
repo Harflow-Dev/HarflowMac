@@ -9,7 +9,8 @@ import Testing
 
     /// The design's task-state route ids at 4ff7d83, typed out independently of the table: the `task` routes of
     /// `screens-m05-proposal.js` ROUTES (status, actions, top bar, layout, changes, artifacts, events), the eight transcript
-    /// states of `screens-transcript.js`, `loading` and `loading-pane` of `screens-loading-work.js` and `approval` of
+    /// states of `screens-transcript.js`, `loading` and `loading-pane` of `screens-loading-work.js`, `loading-known-title` and `loading-pane-known-title` of
+    /// `states-titled-loading.js` (HarflowDesign `9709483`) and `approval` of
     /// `registry.js`. Provisional message, approval-state and pending-launch families are listed as excluded families.
     static let designRouteIDs: Set<String> = [
         "running-stop", "stop-requested", "cancelled", "cancelled-partial", "timed-out", "settling", "unknown-failed",
@@ -25,7 +26,7 @@ import Testing
         "events-populated", "events-page", "events-page-error", "events-not-started", "events-loading", "events-empty", "events-error",
         "transcript-observed", "transcript-loading", "transcript-partial", "transcript-unavailable", "transcript-integrity-failed",
         "transcript-reconnecting", "transcript-capacity", "transcript-sources",
-        "loading", "loading-pane", "approval"
+        "loading", "loading-pane", "loading-known-title", "loading-pane-known-title", "approval"
     ]
 
     @Test func givenTheTable_whenCountingStates_thenEachSuiteHasItsPinnedCount() {
@@ -37,7 +38,7 @@ import Testing
         #expect(counts[.actionsTopBar] == 9)
         #expect(counts[.pane] == 11)
         #expect(counts[.changes] == 15)
-        #expect(counts[.transcript] == 10)
+        #expect(counts[.transcript] == 11)
         #expect(M05StateTable.designCommit == "4ff7d83")
     }
 
@@ -53,9 +54,9 @@ import Testing
         #expect(rendered.count == union.count, "a state id is mounted twice")
         #expect(union == Self.designRouteIDs.subtracting(excluded), "rendered ids differ from the design's approved list")
         #expect(excluded.isSubset(of: Self.designRouteIDs))
-        #expect(Self.designRouteIDs.count == 70)
+        #expect(Self.designRouteIDs.count == 72)
         #expect(union.isDisjoint(with: excluded))
-        #expect(rendered.count == 61)
+        #expect(rendered.count == 62)
     }
 
     @Test func givenEveryExclusionAndDeviation_whenRead_thenItCarriesAReason() {

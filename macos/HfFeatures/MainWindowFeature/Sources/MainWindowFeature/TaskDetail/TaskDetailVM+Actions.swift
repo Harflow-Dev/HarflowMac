@@ -164,8 +164,20 @@ extension TaskDetailVM {
         useCase.setOutcome(currentTaskID, succeeded ? "Copied task ID." : "Couldn't copy to the clipboard.")
     }
 
+    /// The member whose title the loading states show: the conversation's first member, else the task itself.
+    var loadingFirstMember: TaskInfo? {
+        useCase.conversationMembers(of: taskID).first ?? useCase.task(taskID)
+    }
+
+    /// The title the standalone top bar shows while the task is unknown, by the rule the loaded bar uses: the requested
+    /// task for a workflow execution child, otherwise the conversation's first member.
+    var topBarLoadingTitle: String? {
+        if let requested = useCase.task(taskID), Self.isWorkflowExecutionChild(requested) { return useCase.title(requested.taskID) }
+        return loadingFirstMember.map { useCase.title($0.taskID) }
+    }
+
     var loadingHeader: TaskLoadingHeader? {
-        guard let first = useCase.conversationMembers(of: taskID).first ?? useCase.task(taskID) else { return nil }
+        guard let first = loadingFirstMember else { return nil }
         return TaskLoadingHeader(title: useCase.title(first.taskID), repoName: Format.repoName(first.repoPath))
     }
 

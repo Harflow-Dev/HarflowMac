@@ -144,6 +144,7 @@ import Testing
         given(listing).tasksPublisher().willReturn(Empty<[TaskInfo], Never>().eraseToAnyPublisher())
         given(listing).tasks.willReturn([])
         given(listing).hasListedPublisher().willReturn(listed.eraseToAnyPublisher())
+        given(listing).titlesPublisher().willReturn(Just<[String: String]>([:]).eraseToAnyPublisher())
         given(listing).listErrorPublisher().willReturn(errors.eraseToAnyPublisher())
         let refreshes = RefreshCounter()
         given(listing).refreshAndWait().willProduce { refreshes.increment(); return .success(()) }

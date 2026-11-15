@@ -38,6 +38,8 @@ enum M05StateTable {
     private static let transcriptFile = "v2/scripts/screens-transcript.js"
     private static let loadingFile = "v2/scripts/screens-loading-work.js"
     private static let registryFile = "v2/scripts/registry.js"
+    /// `task/loading-known-title` and `task/loading-pane-known-title` come from HarflowDesign `9709483`, after `designCommit`.
+    private static let titledLoadingFile = "v2/scripts/states-titled-loading.js"
 
     private static func entry(_ id: String, _ suite: Suite, file: String = proposal, _ recipe: String,
                               deviation: String? = nil, notRenderable: String? = nil) -> Entry {
@@ -126,6 +128,9 @@ enum M05StateTable {
         entry("loading", .transcript, file: loadingFile, "real VM that has not listed"),
         entry("loading-pane", .transcript, file: loadingFile, "real VM that has not listed, pane open",
               notRenderable: "The skeleton has no pane; the right pane and its Events toggle are not drawn while the task is loading."),
+        entry("loading-known-title", .transcript, file: titledLoadingFile, "real VM that has not listed, the listing's title known to the top bar"),
+        entry("loading-pane-known-title", .transcript, file: titledLoadingFile, "real VM that has not listed, pane open, title known",
+              notRenderable: "The skeleton has no pane; the right pane and its Events toggle are not drawn while the task is loading."),
         entry("approval", .transcript, file: registryFile, "pending caller approval at the feed tail")
     ]
 
@@ -135,6 +140,7 @@ enum M05StateTable {
         ("pending", "No task record exists, so the standalone view never mounts; the native equivalent is the Pending launches destination."),
         ("events-not-started", "Needs a pending launch with no task record; not reachable from the in-task shell."),
         ("loading-pane", "The skeleton has no pane; the right pane and its Events toggle are not drawn while the task is loading."),
+        ("loading-pane-known-title", "The skeleton has no pane; the right pane and its Events toggle are not drawn while the task is loading."),
         ("cancelled-partial", "Provisional design state; outside this matrix."),
         ("artifacts-populated", "Provisional design state; outside this matrix."),
         ("artifacts-page-error", "Provisional design state; outside this matrix."),

@@ -489,6 +489,8 @@ HOSTED_SUITE_NAMES = (
     TOP_BAR_SUITE,
     TOP_BAR_INTEGRATED_SUITE,
     TOP_BAR_CAPTURE_SUITE,
+    "MainWindowFeatureTests.TaskTopBarLoadingHostedTests",
+    "MainWindowFeatureTests.TaskTopBarLoadingMetricsHostedTests",
     TASK_DRAFT_COMPOSER_SUITE,
     "MainWindowFeatureTests.ParallelLaneRevealHostedTests",
     "MainWindowFeatureTests.PendingLaunchesTopBarHostedTests",

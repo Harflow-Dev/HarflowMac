@@ -35,6 +35,7 @@ import Testing
             coordinator.publishTopBar(content, tag: tag)
         }
 
+        func publishTopBarSlot(_ slot: TaskTopBarSlot, tag: TaskTopBarHolder.Tag) { coordinator.publishTopBarSlot(slot, tag: tag) }
         func clearTopBar(tag: TaskTopBarHolder.Tag) { cleared += 1; coordinator.clearTopBar(tag: tag) }
         func activateTopBar(tag: TaskTopBarHolder.Tag) { coordinator.activateTopBar(tag: tag) }
         func deactivateTopBar(tag: TaskTopBarHolder.Tag) { coordinator.deactivateTopBar(tag: tag) }
@@ -62,8 +63,10 @@ import Testing
             given(listing).hasListed.willReturn(true)
             given(listing).listError.willReturn(nil)
             given(listing).tasks.willProduce { box.value }
+            given(listing).title(.any).willProduce { "Task \($0)" }
             given(listing).tasksPublisher().willReturn(listingSubject.eraseToAnyPublisher())
             given(listing).hasListedPublisher().willReturn(Just(true).eraseToAnyPublisher())
+            given(listing).titlesPublisher().willReturn(Just<[String: String]>([:]).eraseToAnyPublisher())
             given(listing).listErrorPublisher().willReturn(Just<ToolError?>(nil).eraseToAnyPublisher())
             self.coordinator = MainWindowCoordinator(parent: MockCoordinator(), taskListRepository: listing)
         }
@@ -98,7 +101,7 @@ import Testing
             writer.fixtures.detailBox.value = base.task(id: writer.id, status: status)
             writer.fixtures.tasksSubject.send([writer.fixtures.detailBox.value!])
             await waitUntil { writer.sut.task?.status.label == label }
-            await waitUntil { writer.sut.lastPublishedTopBar?.badge.label == label }
+            await waitUntil { writer.sut.lastPublishedTopBar?.content?.badge.label == label }
         }
     }
 
@@ -362,7 +365,7 @@ import Testing
 
         // then
         #expect(rig.holder.shown == nil)
-        #expect(writer.sut.lastPublishedTopBar == nil)
+        #expect(writer.sut.lastPublishedTopBar?.content == nil, "the loaded content is replaced by the missing task's slot state")
 
         // when the identical task is restored while still mounted
         writer.fixtures.detailBox.value = task

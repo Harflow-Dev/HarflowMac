@@ -211,11 +211,13 @@ no embedded terminal anywhere in this package:
 - **Task top bar (standalone mount, M05 stage D1).** The shell's single `.principal` toolbar item draws
   `TaskTopBarPrincipal`: the title, status badge (`TaskBadgeModel`/`TaskStatusBadge`), a fixed busy slot, meta and the
   connection status, laid out inside a width cap by the pure solver `TopBarPrincipalLayout.solve` (the toolbar never
-  truncates a principal item; it overflows the other items). Every other selection, and a task before it publishes,
-  keeps the shell's `contextTitle`. Content travels through `TaskTopBarHolder` (owned by the coordinator, exposed as
+  truncates a principal item; it overflows the other items). Every other selection keeps the shell's `contextTitle`; a
+  task that is loading draws its loading shape (below) instead. Content travels through `TaskTopBarHolder` (owned by
+  the coordinator, exposed as
   `topBar`): a standalone `TaskDetailVM` publishes a quantised `TaskTopBarContent` through `TaskDetailRouting`
   (`publishTopBar`/`clearTopBar`/`activateTopBar`/`deactivateTopBar`/`retryTopBarActivation`; a publish retries activation only when no other writer holds the bar), writing only on change, on every `didAppear`
-  and clearing on `didDisappear` and `resetForMissingTask`. The holder shows only the entry of its `activeTag`, and only
+  and clearing on `didDisappear` (a task that goes missing publishes `notFound` instead). The holder shows only the
+  entry of its `activeTag`, and only
   while that tag's conversation equals `shownConversation`, which the coordinator sets from `selection` (never from a
   view body) with the same normalisation as `buildTaskDetailView`; a change drops the active tag, so one task's content
   never flashes over another's. A listing change refreshes `shownConversation` only while no tag is active. The shell
@@ -232,6 +234,27 @@ no embedded terminal anywhere in this package:
   line follows Original request, while Events Task facts preserve the full first-member routing sentence and
   takeover note (including the prior banner fallback). Group/embedded retain the legacy header and controls.
   No explicit toolbar id may be reused or duplicated.
+  **Task slot states and loading (HarflowDesign `9709483`).** The standalone task's slot is the enum `TaskTopBarSlot`:
+  `loading(title:)`, `loaded(TaskTopBarContent)` and `notFound`. The holder exposes the shown writer's state as
+  `shownSlot` (`shown` is its loaded content) and a second, coordinator-written `preMountSlot`; the principal reads
+  `shownSlot ?? preMountSlot`, and the shell never reads either. A mounted standalone `TaskDetailVM` publishes the
+  state in `recompute`: `loaded` as before, and for a task it cannot resolve `loading(title:)` (title from
+  `topBarLoadingTitle`: the requested task for an execution child, else the first member; normally `nil`) until the
+  listing is read and `notFound` after (`publishTopBarMissing`, through `TaskDetailRouting.publishTopBarSlot`;
+  `seedHasListed` reads the listing's readiness synchronously on appearance, writing only on change so a read listing
+  never flashes loading). `notFound` and no state at all draw the caption.
+  `MainWindowCoordinator.taskTopBarPreMountSlot()` (`MainWindowCoordinator+TopBar.swift`) derives `preMountSlot` for
+  the frame before the view mounts: runtime ready and a `.task` selection, `loading` with the listing's title for the
+  conversation's first member (the task itself for a workflow execution child,
+  `TaskDetailVM.isWorkflowExecutionChild`), `loading(nil)` while the listing is unread, `nil` (caption) for a task the
+  read listing lacks; it is refreshed from the selection, listing, titles, readiness and runtime sinks and written
+  only on change. The loading body is the loaded layout with the known title drawn exactly as the loaded title (or a
+  190 by 14 block), a 114 by 22 badge pill (8 + 10 spinner + 5 + about 83 for "Running 04:12" + 8, the
+  `task/running-stop` template badge), the 16 point busy slot and a 170 by 10 meta block that is absent when the window is narrow.
+  The title moves horizontally when the loaded bar replaces it (the principal is centred and intrinsically sized;
+  accepted by the owner), never in font, size or vertical position. Embedded and group chromes keep
+  `TaskLoadingSkeleton`'s in-content header. A pruned id whose surviving conversation the VM resolves shows the
+  caption for the pre-mount frame, then the loaded bar.
   **Group subject.** `TaskTopBarHolder` writers are keyed by `TopBarSubject` (`.task(conversation)` or `.group(name)`); the coordinator sets the shown subject from the selection (`shownTopBarSubject()`), and `activate`/`retry` compare subjects. A standalone group's `ParallelVM` (`publishesTopBar`, true only from `buildParallelView`) publishes `GroupTopBarContent` (title, `TaskBadgeModel.group` over `ParallelStatusCounts`, the enforcement sentence or the fallback, nil when empty) through `ParallelRouting`, loading content first, then activates its tag; the holder shows it in `shownGroup`. `TopBarPrincipalLayout.solve(metaMayTruncate: false, titleFloor: 160)` makes a group's meta whole or dropped; its cap is `GroupTopBarBudget.cap(detailWidth:)` (the detail column's width from `TopBarLayoutState.detailWidth`, minus both buttons' fixed widths, reserved even while Cancel all is hidden, minus the bar's margins). View prompt and Cancel all use `TopBarButtonStyle` (ghost, danger); Cancel all confirms with `Cancel` and `Cancel all`. The group content header, enforcement pills and claim strip are gone.
   **Page subject.** `TopBarSubject.pendingLaunches` carries `PageTopBarContent` (a title and one `TaskBadgeModel`) through
   `PendingLaunchesTopBarRouting` (a separate `@Mockable` dependency of `PendingLaunchesVM`, held weakly) into

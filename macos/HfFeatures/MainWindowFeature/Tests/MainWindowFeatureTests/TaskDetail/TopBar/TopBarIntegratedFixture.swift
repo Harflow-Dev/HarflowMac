@@ -80,6 +80,8 @@ import Testing
         /// The task has not been listed yet: no task, so the standalone view draws its loading skeleton and the fixture does
         /// not wait for a task or a principal.
         var loading = false
+        /// The title the loading state's top bar already knows (the listing's title); `nil` draws the title block.
+        var loadingTitle: String?
     }
 
     static let conversation = "conv"
@@ -134,7 +136,7 @@ import Testing
         coordinator.resourceReturnAvailable = config.resourceReturn
         coordinator.selection = .task(conversation)
         coordinator.topBar.setShownConversation(conversation)
-        coordinator.topBar.activate(tag)
+        Self.activateTopBar(coordinator, tag: tag, config: config)
         let store = store
         coordinator.taskDetailBuilder = { id in
             TaskDetailView(harness.sut, chrome: .standalone, paneBinding: TaskPaneBinding(store: store, conversationID: id),
@@ -169,6 +171,13 @@ import Testing
             pump()
             return principalItem != nil
         }
+    }
+
+    /// Makes the fixture's writer the shown one. The strict routing mock does not forward writes, so the loading state
+    /// the mounted VM would publish is written by hand.
+    private static func activateTopBar(_ coordinator: MainWindowNavigationCoordinatorMock, tag: TaskTopBarHolder.Tag, config: Config) {
+        coordinator.topBar.activate(tag)
+        if config.loading { coordinator.topBar.publish(slot: .loading(title: config.loadingTitle), tag: tag) }
     }
 
     func close() {

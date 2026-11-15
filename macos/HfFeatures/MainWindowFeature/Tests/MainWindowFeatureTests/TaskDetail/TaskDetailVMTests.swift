@@ -482,6 +482,7 @@ extension TaskDetailVMTests {
 /// Lets a standalone VM write to a strict routing mock.
 func stubTopBarRouting(_ routing: MockTaskDetailRouting) {
     given(routing).publishTopBar(.any, tag: .any).willReturn()
+    given(routing).publishTopBarSlot(.any, tag: .any).willReturn()
     given(routing).clearTopBar(tag: .any).willReturn()
     given(routing).activateTopBar(tag: .any).willReturn()
     given(routing).deactivateTopBar(tag: .any).willReturn()

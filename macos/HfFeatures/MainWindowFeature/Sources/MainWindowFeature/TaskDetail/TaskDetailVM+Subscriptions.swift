@@ -15,12 +15,31 @@ extension TaskDetailVM {
     func didAppear() {
         isMounted = true
         activateTopBar()
+        seedHasListed()
         // Members (and so leases) come first: the repository only has a live stream for a leased
         // task, and a publisher requested before that is an empty one that never updates.
         recomputeMembersAndLeases()
         subscribeIfNeeded()
         loadConversationHistory(initial: true)
         evaluateChangesDemand()
+    }
+
+    /// Reads the listing's readiness synchronously when its publisher holds a current value, so the first pass of an
+    /// appearance already knows a read listing and never shows the loading state for a task the listing does not hold.
+    /// The subscription below keeps it current; a publisher with no current value leaves it unchanged. Written only
+    /// when it changes.
+    private func seedHasListed() {
+        if let current = Self.currentValue(of: useCase.hasListedPublisher()), current != hasListed { hasListed = current }
+    }
+
+    /// The publisher's value at subscription time, `nil` when it holds none. Built outside the main actor because the
+    /// publisher may be driven from another context.
+    private nonisolated static func currentValue(of publisher: AnyPublisher<Bool, Never>) -> Bool? {
+        var current: Bool?
+        publisher.first()
+.sink { current = $0 }
+.cancel()
+        return current
     }
 
     func subscribeIfNeeded() {

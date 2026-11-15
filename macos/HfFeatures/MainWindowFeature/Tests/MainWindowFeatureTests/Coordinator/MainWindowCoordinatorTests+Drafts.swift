@@ -34,6 +34,7 @@ extension MainWindowCoordinatorTests {
             given(repository).tasks.willProduce { listing.tasks }
             given(repository).tasksPublisher().willReturn(subject.eraseToAnyPublisher())
             given(repository).hasListedPublisher().willReturn(Just(true).eraseToAnyPublisher())
+            given(repository).titlesPublisher().willReturn(Just<[String: String]>([:]).eraseToAnyPublisher())
             given(repository).listErrorPublisher().willReturn(Just<ToolError?>(nil).eraseToAnyPublisher())
             self.coordinator = MainWindowCoordinator(parent: MockCoordinator(), taskListRepository: repository)
         }

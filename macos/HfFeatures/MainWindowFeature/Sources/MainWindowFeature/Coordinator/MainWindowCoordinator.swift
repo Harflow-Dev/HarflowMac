@@ -67,7 +67,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             isNewSessionPresentedSubject.send(selection == .newSession)
             discardStopConfirmationIfConversationChanged()
             if selection != .pendingLaunches { endPendingStop(reason: .discard, closeSheet: true) }
-            topBar.setShownSubject(shownTopBarSubject())
+            selectionChangedTopBar()
         }
     }
 
@@ -136,6 +136,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored private var runtimeSubscription: AnyCancellable?
     @ObservationIgnored private var listingSubscription: AnyCancellable?
     @ObservationIgnored private var listingChangeSubscription: AnyCancellable?
+    @ObservationIgnored private var titlesSubscription: AnyCancellable?
 
     // MARK: - Private Properties
 
@@ -177,6 +178,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         self.listingChangeSubscription = listing.tasksPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.listingChanged() }
+        self.titlesSubscription = listing.titlesPublisher().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.refreshTaskTopBarPreMount() }
         self.hasLoadedWork = listing.hasListed
         self.loadingWorkError = listing.listError?.message
         self.listingSubscription = listing.hasListedPublisher()
@@ -187,6 +189,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
                 if hasLoadedWork != hasListed { self.hasLoadedWork = hasListed }
                 let message = error?.message
                 if loadingWorkError != message { self.loadingWorkError = message }
+                refreshTaskTopBarPreMount()
             }
         let install = self.installRepository
         self.runtimeIsReady = install.setupState.isReady
@@ -195,6 +198,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             guard let self else { return }
             if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
             if runtimeSetupState != state { self.runtimeSetupState = state }
+            refreshTaskTopBarPreMount()
             if !state.isReady { self.presentedSheet = nil }
             resourceSlotsVM?.runtimeChanged()
         }
@@ -396,6 +400,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// id. A retention shift then keeps the title until a selection change or rebuild re-keys the view.
     private func listingChanged() {
         reconcileDrafts()
+        refreshTaskTopBarPreMount()
         guard topBar.activeTag == nil else { return }
         topBar.setShownSubject(shownTopBarSubject())
     }

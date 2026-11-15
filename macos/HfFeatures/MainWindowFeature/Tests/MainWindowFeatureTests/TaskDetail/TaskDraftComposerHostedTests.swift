@@ -47,6 +47,7 @@ struct TaskDraftComposerHostedTests {
             given(repository).tasks.willProduce { listing.tasks }
             given(repository).tasksPublisher().willReturn(Empty<[TaskInfo], Never>(completeImmediately: false).eraseToAnyPublisher())
             given(repository).hasListedPublisher().willReturn(Just(true).eraseToAnyPublisher())
+            given(repository).titlesPublisher().willReturn(Just<[String: String]>([:]).eraseToAnyPublisher())
             given(repository).listErrorPublisher().willReturn(Just<ToolError?>(nil).eraseToAnyPublisher())
             self.coordinator = MainWindowCoordinator(parent: MockCoordinator(), taskListRepository: repository)
         }

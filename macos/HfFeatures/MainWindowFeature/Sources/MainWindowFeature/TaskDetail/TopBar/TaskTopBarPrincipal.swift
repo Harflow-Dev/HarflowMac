@@ -3,8 +3,9 @@
 //  MainWindowFeature
 //
 //  The window toolbar's single principal item. For a standalone task it draws the title, status badge and meta
-//  from `TaskTopBarHolder.shown`; for every other selection, and before the live task publishes, it draws the
-//  shell's context title. It is the only reader of the holder.
+//  from `TaskTopBarHolder.shownSlot`: the loaded content, or the loading shape while the task is read (the pre-mount
+//  slot state stands in until the task view publishes). For every other selection, and for a task that was not found,
+//  it draws the shell's context title. It is the only reader of the holder.
 //
 
 import HfUI
@@ -41,7 +42,9 @@ struct TaskTopBarPrincipal: View {
         _ = onEvaluation?()
         if let group = holder.shownGroup { return AnyView(groupBody(group)) }
         if let page = holder.shownPage ?? fallbackPage { return AnyView(pageBody(page)) }
-        let content = holder.shown
+        let slot = holder.shownSlot ?? holder.preMountSlot
+        if case .loading(let title) = slot { return AnyView(taskLoadingBody(title: title)) }
+        let content = slot?.content
         let band = layout.effectiveBand
         return AnyView(TopBarPrincipalLayout(cap: band.cap, probe: probe) {
             titleText(content).topBarRole(.title)
@@ -54,6 +57,45 @@ struct TaskTopBarPrincipal: View {
         }
         .accessibilityElement(children: .contain))
     }
+
+    // MARK: Task loading
+
+    /// The standalone task while it loads (`task/loading` and `task/loading-known-title`, HarflowDesign 9709483): the
+    /// known title drawn as the loaded bar draws it, else a title block, then a badge pill, the busy slot and a meta
+    /// block. Not-found and the frames with nothing to show draw the caption instead.
+    private func taskLoadingBody(title: String?) -> some View {
+        let band = layout.effectiveBand
+        return TopBarPrincipalLayout(cap: band.cap, probe: probe) {
+            Group {
+                if let title, !title.isEmpty {
+                    taskTitle(title)
+                } else {
+                    SkeletonBlock(width: Self.loadingTitleSize.width, height: Self.loadingTitleSize.height)
+                        .accessibilityHidden(true)
+                }
+            }
+            .topBarRole(.title)
+            SkeletonBlock(width: Self.loadingBadgeWidth, height: TaskScreenStyle.Badge.height, cornerRadius: TaskScreenStyle.Badge.height / 2)
+                .accessibilityHidden(true)
+                .topBarRole(.badge)
+            Color.clear.frame(width: Self.busySlotWidth, height: Self.busySlotWidth).accessibilityHidden(true).topBarRole(.busy)
+            // The meta follows the loaded meta's rule: absent when the window is narrow.
+            if !band.isNarrow {
+                loadingMetaBlock(width: Self.loadingMetaSize.width, height: Self.loadingMetaSize.height).topBarRole(.meta)
+            }
+            status.topBarRole(.status)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// `task/loading` title block: 190 by 14 (`skeleton-specs.js`, `S['task']`).
+    static let loadingTitleSize = CGSize(width: 190, height: 14)
+    /// `task/loading` meta block: 170 by 10, dropped by the solver when it does not fit.
+    static let loadingMetaSize = CGSize(width: 170, height: 10)
+    /// The badge pill fills the loaded badge's box: 22 pt high (`TaskScreenStyle.Badge.height`) and as wide as the
+    /// template badge in `task/running-stop`: 8 + 10 (spinner) + 5 (gap) + about 83 ("Running 04:12" at 12 pt medium)
+    /// + 8.
+    static let loadingBadgeWidth: CGFloat = 114
 
     // MARK: Page
 
@@ -92,7 +134,7 @@ struct TaskTopBarPrincipal: View {
             if group.isLoading {
                 // Membership is unknown: a 150 pt badge block and a 300 pt meta block (dropped when it does not fit).
                 SkeletonBlock(width: 150, height: 12).topBarRole(.badge)
-                loadingMetaBlock.topBarRole(.meta)
+                loadingMetaBlock(width: 300, height: 12).topBarRole(.meta)
             } else {
                 if let badge = group.badge { TaskStatusBadge(model: badge).topBarRole(.badge) }
                 if let meta = group.meta {
@@ -105,8 +147,8 @@ struct TaskTopBarPrincipal: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var loadingMetaBlock: some View {
-        let block = SkeletonBlock(width: 300, height: 12).fixedSize()
+    private func loadingMetaBlock(width: CGFloat, height: CGFloat) -> some View {
+        let block = SkeletonBlock(width: width, height: height).fixedSize()
         return block.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).clipped().accessibilityHidden(true)
     }
 
@@ -131,15 +173,20 @@ struct TaskTopBarPrincipal: View {
             .onGeometryChange(for: Bool.self) { $0.size.width < 1 } action: { groupMetaCollapsed = $0 }
     }
 
+    /// The task title as the loaded bar draws it; the loading bar uses the same view.
+    private func taskTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.hf(.reading, weight: Metrics.titleWeight))
+            .foregroundStyle(Color.primaryText)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .help(title)
+            .accessibilityLabel(title)
+    }
+
     @ViewBuilder private func titleText(_ content: TaskTopBarContent?) -> some View {
         if let content, !content.title.isEmpty {
-            Text(content.title)
-                .font(.hf(.reading, weight: Metrics.titleWeight))
-                .foregroundStyle(Color.primaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .help(content.title)
-                .accessibilityLabel(content.title)
+            taskTitle(content.title)
         } else {
             Text(fallbackTitle).font(.hf(.secondary)).lineLimit(1)
         }
@@ -166,3 +213,19 @@ struct TaskTopBarPrincipal: View {
         .frame(width: Self.busySlotWidth, height: Self.busySlotWidth)
     }
 }
+
+#if DEBUG
+@MainActor
+private func loadingPreview(title: String?, width: CGFloat) -> some View {
+    let holder = TaskTopBarHolder()
+    holder.setPreMountSlot(.loading(title: title))
+    let layout = TopBarLayoutState()
+    layout.setBand(TopBarWidthBand(width: width))
+    return TaskTopBarPrincipal(holder: holder, layout: layout, fallbackTitle: "Harflow · Work", status: AnyView(EmptyView()))
+        .frame(width: width, height: 52)
+}
+
+#Preview("Task loading, title known") { loadingPreview(title: "Review preload bridge", width: 1280) }
+#Preview("Task loading, title unknown") { loadingPreview(title: nil, width: 1280) }
+#Preview("Task loading, title known, narrow") { loadingPreview(title: "Review preload bridge", width: 1000) }
+#endif

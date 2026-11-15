@@ -49,6 +49,24 @@ struct TaskTopBarContent: Equatable, Sendable {
     }
 }
 
+// MARK: - TaskTopBarSlot
+
+/// What the standalone task's slot in the top bar holds: the observed state of the task being read, never inferred
+/// from a missing value.
+enum TaskTopBarSlot: Equatable, Sendable {
+    /// The task is not known yet. `title` is the title the listing already knows, `nil` when it knows none.
+    case loading(title: String?)
+    /// The task is known.
+    case loaded(TaskTopBarContent)
+    /// The listing was read and does not hold the task.
+    case notFound
+
+    /// The loaded content, `nil` for the other states.
+    var content: TaskTopBarContent? {
+        if case .loaded(let content) = self { content } else { nil }
+    }
+}
+
 // MARK: - TaskTopBarChips
 
 /// The trailing chips' quantised inputs, part of the toolbar snapshot.
@@ -108,6 +126,14 @@ extension TaskDetailViewModel {
 // MARK: - TaskDetailVM
 
 extension TaskDetailVM {
+    /// Whether `task` is a workflow execution child: a member of a workflow run that is not itself the logical workflow.
+    /// Its conversation is the task alone, so its title is its own. Shared with the coordinator's pre-mount title.
+    nonisolated static func isWorkflowExecutionChild(_ task: TaskInfo?) -> Bool {
+        let isLogicalWorkflow = task?.raw["workflow_role"]?.stringValue == "orchestrator"
+            || task?.raw["workflow_node_id"]?.stringValue != nil
+        return !isLogicalWorkflow && task?.raw["workflow_run_id"]?.stringValue != nil
+    }
+
     /// This VM's writer identity for the top bar holder.
     var topBarTag: TaskTopBarHolder.Tag {
         TaskTopBarHolder.Tag(writer: ObjectIdentifier(self), conversationID: topBarConversationID)
@@ -124,9 +150,19 @@ extension TaskDetailVM {
         // A listing change can shift the normalised id between build and appear, failing the first activation; the
         // holder still gates on the shown conversation, so asking again on every publish is safe.
         if chrome == .standalone, isMounted { routing.retryTopBarActivation(tag: topBarTag) }
-        guard chrome == .standalone, isMounted, let content = topBarContent, content != lastPublishedTopBar else { return }
-        lastPublishedTopBar = content
+        guard chrome == .standalone, isMounted, let content = topBarContent, .loaded(content) != lastPublishedTopBar else { return }
+        lastPublishedTopBar = .loaded(content)
         routing.publishTopBar(content, tag: topBarTag)
+    }
+
+    /// Writes the slot state for a task that is not known: loading until the listing has been read, then not found.
+    func publishTopBarMissing() {
+        guard chrome == .standalone, isMounted else { return }
+        routing.retryTopBarActivation(tag: topBarTag)
+        let slot: TaskTopBarSlot = hasListed ? .notFound : .loading(title: topBarLoadingTitle)
+        guard slot != lastPublishedTopBar else { return }
+        lastPublishedTopBar = slot
+        routing.publishTopBarSlot(slot, tag: topBarTag)
     }
 
     /// Clears this writer's entry and forgets what was written, so identical content restored later republishes.

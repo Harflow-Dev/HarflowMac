@@ -10,7 +10,7 @@ import Testing
 
 /// Native evidence for the eight transcript states (`screens-transcript.js`, approved 2026-11-08), the task `loading` state
 /// (`screens-loading-work.js`) and the pending caller `approval` card (`registry.js`, `task/approval`), each in the production
-/// shell with a real standalone `TaskDetailVM`. `loading-pane` is listed in the state table and not mounted: the skeleton
+/// shell with a real standalone `TaskDetailVM`. `loading-known-title` mounts the same state with the title known to the top bar. `loading-pane` and `loading-pane-known-title` are listed in the state table and not mounted: the skeleton
 /// has no pane. The transcript states open the pane on Events so the request, history and totals are all on screen.
 @MainActor
 @Suite(.serialized)
@@ -28,6 +28,7 @@ struct M05TranscriptStateMatrixHostedTests {
     static func spec(_ state: String) -> M05MatrixRunner.Spec {
         switch state {
         case "loading": loading()
+        case "loading-known-title": loadingKnownTitle()
         case "approval": approval()
         default: transcript(state)
         }
@@ -173,7 +174,32 @@ struct M05TranscriptStateMatrixHostedTests {
         }, ready: { ctx in ctx.has("Loading task") }, verify: { ctx in
             #expect(ctx.vm.task == nil && !ctx.vm.hasListed, "the VM has not listed \(ctx.name)")
             #expect(ctx.has("Loading task"), "skeleton drawn \(ctx.name)")
-            #expect(ctx.has(M04ToolbarEvidence.contextTitle(ctx.coordinator)), "loading toolbar shows the context title \(ctx.name)")
+            // The standalone top bar draws the loading shape (title, badge and meta blocks), never the shell's caption.
+            #expect(!ctx.has(M04ToolbarEvidence.contextTitle(ctx.coordinator)), "loading toolbar does not show the caption \(ctx.name)")
+            #expect(!ctx.fixture.hasPane, "no pane in the skeleton \(ctx.name)")
+            #expect(!ctx.has("Stop"), "no Stop control while loading \(ctx.name)")
+        })
+    }
+
+    // MARK: Loading with a known title
+
+    private static let knownTitle = "Fix the flaky retry path in the slot release"
+
+    /// `task/loading-known-title`: the top bar already knows the title from the listing and draws it in place of the caption.
+    private static func loadingKnownTitle() -> M05MatrixRunner.Spec {
+        M05MatrixRunner.Spec(suite: M05StateTable.Suite.transcript.rawValue, state: "loading-known-title", config: { _ in
+            var config = TopBarIntegratedFixture.Config()
+            config.title = knownTitle
+            config.loading = true
+            config.loadingTitle = knownTitle
+            return config
+        }, build: {
+            .init(harness: M05Fixtures.harness(nil))
+        }, ready: { ctx in ctx.has("Loading task") && ctx.principalHas(prefix: knownTitle) }, verify: { ctx in
+            #expect(ctx.vm.task == nil && !ctx.vm.hasListed, "the VM has not listed \(ctx.name)")
+            #expect(ctx.principalHas(prefix: knownTitle), "the toolbar shows the known title \(ctx.name); \(ctx.principalStrings)")
+            #expect(!ctx.has(M04ToolbarEvidence.contextTitle(ctx.coordinator)), "no caption \(ctx.name)")
+            #expect(ctx.has("Loading task"), "skeleton drawn \(ctx.name)")
             #expect(!ctx.fixture.hasPane, "no pane in the skeleton \(ctx.name)")
             #expect(!ctx.has("Stop"), "no Stop control while loading \(ctx.name)")
         })
