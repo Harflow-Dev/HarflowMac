@@ -70,7 +70,7 @@ struct WorkflowExecutionPresentationTests {
                 == StatusBadgePresentation(indicator: .symbol("stop.fill"), label: "Cancelling…", tint: .pending))
         for status in ["needs_attention", "needs_input", "Needs Input"] {
             #expect(WorkflowRunStatusBadge.presentation(status: status, isSettling: false)
-                    == StatusBadgePresentation(indicator: .symbol("exclamationmark.triangle.fill"), label: "Needs attention", tint: .warning), "\(status)")
+                    == StatusBadgePresentation(indicator: .glyph(.hand), label: "Needs attention", tint: .warning), "\(status)")
         }
     }
 

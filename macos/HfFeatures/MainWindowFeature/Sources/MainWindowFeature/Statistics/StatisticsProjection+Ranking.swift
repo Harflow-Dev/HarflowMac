@@ -162,7 +162,7 @@ extension StatisticsProjection {
             value: metricLabel(primary, measure: selection.measure, wall: wall),
             secondaryValue: metricLabel(secondary, measure: other(selection.measure), wall: wall),
             fraction: value(primary, measure: selection.measure, wall: wall) ?? 0,
-            statusGlyph: statusGlyph(fact), statusLabel: statusLabel(fact), isFailure: fact.isFailureOutcome
+            statusIcon: statusIcon(fact), statusLabel: statusLabel(fact)
         )
     }
 
@@ -252,11 +252,15 @@ extension StatisticsProjection {
         ]?.boolValue == false } ? "Owner-included native evidence" : "Independent execution evidence"
     }
 
-    static func statusGlyph(_ fact: StatisticsFact) -> String? {
-        if fact.isFailureOutcome { return "xmark.circle.fill" }
+    /// The approved status icon for a ranking row: done (the workflow glyph for a workflow fact), failed or timed out,
+    /// cancelled. Any other status draws none.
+    static func statusIcon(_ fact: StatisticsFact) -> StatisticsStatusIcon? {
+        if fact.isFailureOutcome {
+            return StatisticsStatusIcon(status: fact.text("status") == "timed_out" ? .timedOut : .failed, kind: .task)
+        }
         switch fact.text("status") {
-        case "completed": return "checkmark.circle.fill"
-        case "cancelled": return "minus.circle.fill"
+        case "completed": return StatisticsStatusIcon(status: .completed, kind: fact.kind == "workflow" ? .workflowRun : .task)
+        case "cancelled": return StatisticsStatusIcon(status: .cancelled, kind: .task)
         default: return nil
         }
     }

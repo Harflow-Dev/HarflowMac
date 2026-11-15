@@ -3,8 +3,9 @@ import SwiftUI
 
 // MARK: - GroupRow
 
-/// A parallel run as one row: overlapping backend dots, the group's name over "Parallel run · N of
-/// M finished", a thin progress bar while any member is running, and a spinner alongside it. Takes only a plain
+/// A parallel run as one row: overlapping backend dots (the parallel glyph while several members run, the running
+/// spinner for a single running member), the group's name over "Parallel run · N of M finished" and a thin progress
+/// bar while any member is running. Takes only a plain
 /// `ParallelGroup` value and never reads `AppModel`, so it qualifies for the shared component layer.
 public struct GroupRow: View {
     public let group: ParallelGroup
@@ -113,7 +114,7 @@ public struct GroupRow: View {
 
     public var body: some View {
         HStack(spacing: HfRadius.Metrics.rowItemSpacing) {
-            BackendDotStack(backends: conversations.prefix(3).map(\.first.backend))
+            leadingMark
             VStack(alignment: .leading, spacing: HfRadius.Metrics.rowLineSpacing) {
                 title
                 subtitleText
@@ -122,9 +123,25 @@ public struct GroupRow: View {
                 }
             }
             Spacer(minLength: HfRadius.Metrics.spacing4)
-            if group.anyRunning { RunningSpinner(tint: prominence == .increased ? .onAccent : nil) }
         }
         .padding(.vertical, sidebarAppearance == nil ? HfRadius.Metrics.rowPaddingVertical : HfRadius.Metrics.sidebarRowPaddingVertical)
+    }
+
+    /// A running group leads with its status glyph: the parallel glyph for several members, the running spinner for a
+    /// single member (its subtitle already says it is not a parallel run). A group with nothing running keeps its backend
+    /// dots. The glyph carries "running", so the row has no trailing spinner and announces it once.
+    @ViewBuilder
+    private var leadingMark: some View {
+        if group.anyRunning {
+            StatusIcon(
+                status: .running, kind: total > 1 ? .parallelGroup : .task,
+                size: sidebarAppearance == nil ? HfRadius.Metrics.statusIconSize : HfRadius.Metrics.sidebarStatusIconSize
+            )
+            // A single member's subtitle ("Group · Running") already says it; the icon stays out of the announcement.
+            .accessibilityHidden(total <= 1)
+        } else {
+            BackendDotStack(backends: conversations.prefix(3).map(\.first.backend))
+        }
     }
 
     /// The gated subtitle ink (see `metadataForeground`): non-`nil` only in the default,

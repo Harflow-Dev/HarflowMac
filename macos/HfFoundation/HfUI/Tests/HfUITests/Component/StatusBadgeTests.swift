@@ -15,7 +15,7 @@ import Testing
         #expect(done == StatusBadgePresentation(indicator: .symbol("checkmark"), label: "Done", tint: .done))
 
         let attention = StatusBadge.presentation(for: .other("needs_input"))
-        #expect(attention == StatusBadgePresentation(indicator: .symbol("exclamationmark.triangle.fill"), label: "Needs attention", tint: .warning))
+        #expect(attention == StatusBadgePresentation(indicator: .glyph(.hand), label: "Needs attention", tint: .warning))
 
         let failed = StatusBadge.presentation(for: .failed)
         #expect(failed == StatusBadgePresentation(indicator: .symbol("xmark"), label: "Failed", tint: .danger))
@@ -53,7 +53,7 @@ import Testing
             let presentation = StatusBadge.presentation(for: .other(raw))
             #expect(presentation.label == "Needs attention", "\(raw)")
             #expect(presentation.tint == .warning, "\(raw)")
-            #expect(presentation.indicator == .symbol("exclamationmark.triangle.fill"), "\(raw)")
+            #expect(presentation.indicator == .glyph(.hand), "\(raw)")
         }
     }
 

@@ -265,8 +265,11 @@ extension SidebarVMTests {
         #expect(alias.destination == .workflowRun("child"))
         #expect(items.filter { $0.isSelected(harness.sut.selection) }.map(\.id) == ["workflow:child", "workflow-shortcut:parent:child"])
         #expect(Set(items.map(\.id)).count == items.count)
-        if case .workflowShortcut(let row, _) = alias { #expect(row.status == .running) }
-        if let canonical = items.first(where: { $0.id == "workflow:child" }), case .workflow(let row) = canonical { #expect(row.status == .running) }
+        if case .workflowShortcut(let row, _) = alias { #expect(row.status == .running); #expect(row.kind == .workflowRun) }
+        if let canonical = items.first(where: { $0.id == "workflow:child" }), case .workflow(let row) = canonical {
+            #expect(row.status == .running)
+            #expect(row.kind == .workflowRun)
+        }
     }
 }
 

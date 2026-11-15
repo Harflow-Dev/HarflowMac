@@ -51,7 +51,7 @@ enum WorkflowRunStatusBadge {
             // The shared stop shape and neutral fill, never relabelled as Pending.
             return StatusBadgePresentation(indicator: .symbol("stop.fill"), label: "Cancelling…", tint: .pending)
         case "needs attention", "needs input":
-            return StatusBadgePresentation(indicator: .symbol("exclamationmark.triangle.fill"), label: "Needs attention", tint: .warning)
+            return StatusBadgePresentation(indicator: .glyph(.hand), label: "Needs attention", tint: .warning)
         case "completed":
             return StatusBadge.presentation(for: .completed)
         case "failed":

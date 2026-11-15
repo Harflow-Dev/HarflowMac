@@ -48,6 +48,8 @@ public struct TaskRowModel: Identifiable, Equatable, Sendable {
     /// This row's tree-guide gutter — one `MonitorCore.TreeGuide` per ancestor level plus this row's
     /// own connector; empty (default) draws no gutter.
     public let guides: [TreeGuide]
+    /// What the row represents: a workflow run draws its own glyph when finished. A task by default.
+    public let kind: StatusIcon.Kind
 
     /// Whether the task is currently running — switches the trailing area to a ticking clock.
     public var isRunning: Bool { status.isRunning }
@@ -87,7 +89,8 @@ public struct TaskRowModel: Identifiable, Equatable, Sendable {
         durationSeconds: Double? = nil,
         hasChildren: Bool = false,
         isExpanded: Bool = true,
-        guides: [TreeGuide] = []
+        guides: [TreeGuide] = [],
+        kind: StatusIcon.Kind = .task
     ) {
         self.id = id
         self.backend = backend
@@ -103,6 +106,7 @@ public struct TaskRowModel: Identifiable, Equatable, Sendable {
         self.hasChildren = hasChildren
         self.isExpanded = isExpanded
         self.guides = guides
+        self.kind = kind
     }
 }
 
@@ -228,7 +232,7 @@ public struct TaskRow: View {
                 .padding(.vertical, -verticalPadding)
                 // The sidebar's 20 pt guide includes the surrounding row gap.
                 .padding(.trailing, sidebarAppearance != nil && !model.guides.isEmpty ? -HfRadius.Metrics.rowItemSpacing : HfRadius.Metrics.zero)
-            StatusIcon(status: model.status, size: iconSize)
+            StatusIcon(status: model.status, kind: model.kind, size: iconSize)
             VStack(alignment: .leading, spacing: HfRadius.Metrics.rowLineSpacing) {
                 title
                 if let detail = model.detailLabel {

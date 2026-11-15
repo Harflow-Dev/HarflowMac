@@ -86,6 +86,16 @@ struct TimelineRow: View {
         }
     }
 
+    /// The status glyph beside the end-of-run text; the flag when the status has none of its own (running, settling).
+    @ViewBuilder
+    private func finishedGlyph(status: TaskStatus) -> some View {
+        switch StatusIcon.glyph(for: status) {
+        case let .symbol(name): Image(systemName: name)
+        case let .shape(kind): StatusGlyphView(kind, size: HfRadius.Metrics.statusBadgeGlyphFrame)
+        case .spinner: Image(systemName: "flag.checkered")
+        }
+    }
+
     /// The end-of-run marker (§6.2): the truthful status/exit text centred between hairlines —
     /// "Finished" for a clean completion, otherwise the status with the exit code only when it is
     /// non-zero. No duration: the per-member finished item supplies no reliably paired start, so
@@ -94,8 +104,7 @@ struct TimelineRow: View {
         HStack(spacing: HfRadius.Metrics.spacing12) {
             Rectangle().fill(feedStyle.ruleColor).frame(height: HfRadius.Metrics.hairlineStroke)
             HStack(spacing: HfRadius.Metrics.spacing6) {
-                Image(systemName: StatusIcon.symbolName(for: status) ?? "flag.checkered")
-                    .accessibilityHidden(true)
+                finishedGlyph(status: status).accessibilityHidden(true)
                 Text(Self.finishedText(status: status, exitCode: exitCode)).monospacedDigit()
             }
             .font(.hf(.secondary, weight: .medium))

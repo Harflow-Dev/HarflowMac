@@ -46,10 +46,12 @@ public enum StatusBadgeTint: Equatable, Sendable {
 /// A badge's tested presentation: its indicator (spinner or SF Symbol), its label and its tint.
 /// Pure and `Sendable` so the mapping from a `TaskStatus` is testable without rendering.
 public struct StatusBadgePresentation: Equatable, Sendable {
-    /// `spinner` draws `RunningSpinner`; `symbol` draws the named SF Symbol.
+    /// `spinner` draws `RunningSpinner`; `symbol` draws the named SF Symbol; `glyph` draws a design path glyph.
     public enum Indicator: Equatable, Sendable {
         case spinner
         case symbol(String)
+        /// A design path glyph (the raised hand).
+        case glyph(StatusGlyphShape.Kind)
     }
 
     public let indicator: Indicator
@@ -118,7 +120,7 @@ public struct StatusBadge: View {
             case "pending", "queued":
                 StatusBadgePresentation(indicator: .symbol("circle"), label: "Pending", tint: .pending)
             case "needs input", "needs attention":
-                StatusBadgePresentation(indicator: .symbol("exclamationmark.triangle.fill"), label: "Needs attention", tint: .warning)
+                StatusBadgePresentation(indicator: .glyph(.hand), label: "Needs attention", tint: .warning)
             default:
                 StatusBadgePresentation(indicator: .symbol("circle.dashed"), label: raw, tint: .unknown)
             }
@@ -163,6 +165,8 @@ public struct StatusBadge: View {
             case let .symbol(name):
                 Image(systemName: name)
                     .font(.hf(.secondary))
+            case let .glyph(kind):
+                StatusGlyphView(kind, size: HfRadius.Metrics.statusBadgeGlyphFrame)
             }
             Text(presentation.label)
             if let elapsedText {

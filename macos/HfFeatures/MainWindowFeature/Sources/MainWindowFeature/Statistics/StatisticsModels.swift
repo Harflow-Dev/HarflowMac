@@ -1,4 +1,6 @@
 import Foundation
+import HfUI
+import MonitorCore
 
 // MARK: - Statistics presentation
 
@@ -44,6 +46,12 @@ struct StatisticsChart: Equatable, Sendable {
     var disclosure: String?
 }
 
+/// A ranking child row's status icon: the status and the row kind `StatusIcon` draws it from.
+struct StatisticsStatusIcon: Equatable, Sendable {
+    var status: TaskStatus
+    var kind: StatusIcon.Kind
+}
+
 struct StatisticsChildRow: Identifiable, Equatable, Sendable {
     var id: String
     var title: String
@@ -51,9 +59,8 @@ struct StatisticsChildRow: Identifiable, Equatable, Sendable {
     var value: String
     var secondaryValue: String
     var fraction: Double
-    var statusGlyph: String?
+    var statusIcon: StatisticsStatusIcon?
     var statusLabel: String?
-    var isFailure = false
 }
 
 struct StatisticsRow: Identifiable, Equatable, Sendable {

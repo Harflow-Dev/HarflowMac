@@ -11,11 +11,11 @@ import Testing
 
     @Test func givenEachTerminalStatus_whenPickingASymbol_thenMatchesTheSharedBadgeSemantics() {
         // given / when / then — the same symbol vocabulary as the StatusBadge (SPEC §5.1), in the
-        // icon's filled-circle family: a stop glyph for cancelled.
-        #expect(StatusIcon.symbolName(for: .completed) == "checkmark.circle.fill")
-        #expect(StatusIcon.symbolName(for: .failed) == "xmark.circle.fill")
-        #expect(StatusIcon.symbolName(for: .timedOut) == "xmark.circle.fill")
-        #expect(StatusIcon.symbolName(for: .cancelled) == "stop.circle.fill")
+        // plain glyphs with no disc: a filled stop for cancelled.
+        #expect(StatusIcon.symbolName(for: .completed) == "checkmark")
+        #expect(StatusIcon.symbolName(for: .failed) == "xmark")
+        #expect(StatusIcon.symbolName(for: .timedOut) == "xmark")
+        #expect(StatusIcon.symbolName(for: .cancelled) == "stop.fill")
     }
 
     @Test func givenPendingAndQueuedRawStatuses_whenPickingASymbol_thenACircleIsUsed() {

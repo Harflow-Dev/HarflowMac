@@ -70,7 +70,7 @@ import Testing
     @Test(arguments: [
         (TaskStatus.completed, "Done", Model.Icon.symbol("checkmark"), Model.Tone.done),
         (.failed, "Failed", .symbol("xmark"), .failed),
-        (.timedOut, "Timed out", .symbol("clock"), .failed),
+        (.timedOut, "Timed out", .symbol("xmark"), .failed),
         (.cancelled, "Cancelled", .symbol("stop.fill"), .neutral)
     ])
     func givenEachSettledStatus_whenItsExitWasObservedWithADuration_thenTheBadgeCarriesTheFixedDuration(
@@ -417,7 +417,7 @@ import Testing
         let badge = make(evidence(.other(raw)), startedAt: Self.started)
 
         // then
-        #expect(badge == Model(icon: .symbol("exclamationmark.triangle.fill"), tone: .attention,
+        #expect(badge == Model(icon: .glyph(.hand), tone: .attention,
                                label: "Needs attention", clock: .none, suffix: nil))
     }
 

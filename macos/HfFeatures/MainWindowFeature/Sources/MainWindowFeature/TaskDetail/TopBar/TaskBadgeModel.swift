@@ -23,6 +23,8 @@ struct TaskBadgeModel: Equatable, Sendable {
         case spinner
         /// A 12 point SF Symbol.
         case symbol(String)
+        /// A design path glyph, drawn at the badge glyph size (the raised hand).
+        case glyph(StatusGlyphShape.Kind)
         /// No indicator (the group badge when nothing is running).
         case hidden
     }
@@ -112,7 +114,7 @@ struct TaskBadgeModel: Equatable, Sendable {
         case .failed:
             return TaskBadgeModel(icon: .symbol(Symbols.cross), tone: .failed, label: "Failed", clock: settled, suffix: nil)
         case .timedOut:
-            return TaskBadgeModel(icon: .symbol(Symbols.clock), tone: .failed, label: "Timed out", clock: settled, suffix: nil)
+            return TaskBadgeModel(icon: .symbol(Symbols.cross), tone: .failed, label: "Timed out", clock: settled, suffix: nil)
         case .cancelled:
             return TaskBadgeModel(icon: .symbol(Symbols.stop), tone: .neutral, label: "Cancelled", clock: settled, suffix: nil)
         case .other:
@@ -120,6 +122,7 @@ struct TaskBadgeModel: Equatable, Sendable {
             let icon: Icon = switch presentation.indicator {
             case .spinner: .spinner
             case let .symbol(name): .symbol(name)
+            case let .glyph(kind): .glyph(kind)
             }
             let tone: Tone = switch presentation.tint {
             case .running: .running
@@ -139,6 +142,5 @@ struct TaskBadgeModel: Equatable, Sendable {
         static let cross = "xmark"
         static let stop = "stop.fill"
         static let alert = "exclamationmark.triangle.fill"
-        static let clock = "clock"
     }
 }

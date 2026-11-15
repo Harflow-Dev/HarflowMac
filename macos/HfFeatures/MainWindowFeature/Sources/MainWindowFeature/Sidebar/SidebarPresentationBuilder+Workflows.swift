@@ -73,6 +73,7 @@ extension SidebarPresentationBuilder {
                             detailLabel: shortcut ? "Child workflow" : nil,
                             indent: depth, subTaskSummary: run.raw["attention_reason"]?.stringValue, startedAt: run.startedAt,
                             hasChildren: !shortcut && (!workflowChildren(run.id).isEmpty || unfilteredChildRuns.contains(run.id)),
-                            isExpanded: expanded ?? expandedExecutionParents.contains("workflow:\(run.id)"), guides: guides)
+                            isExpanded: expanded ?? expandedExecutionParents.contains("workflow:\(run.id)"), guides: guides,
+                            kind: .workflowRun)
     }
 }

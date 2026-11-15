@@ -17,12 +17,7 @@ struct WorkflowMenuBarRowView: View {
             ActivityCard(border: model.needsAttention ? Color.warningBorder : nil) {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
                     HStack(spacing: HfRadius.Metrics.spacing8) {
-                        if model.isWorking {
-                            RunningSpinner().frame(width: HfRadius.Metrics.statusIconSize, height: HfRadius.Metrics.statusIconSize)
-                        } else {
-                            Image(systemName: model.needsAttention ? "exclamationmark.triangle.fill" : "arrow.triangle.branch")
-                                .foregroundStyle(model.needsAttention ? Color.warningFG : Color.secondaryText)
-                        }
+                        leadingIcon
                         Text(model.name).font(.hf(.body, weight: .medium)).lineLimit(1)
                         Spacer(minLength: HfRadius.Metrics.spacing4)
                         Text(model.statusLabel)
@@ -33,6 +28,25 @@ struct WorkflowMenuBarRowView: View {
                 }
             }.contentShape(Rectangle())
         }.buttonStyle(.plain)
+    }
+}
+
+// MARK: - WorkflowMenuBarRowView leading icon
+
+extension WorkflowMenuBarRowView {
+    /// Working: the spinner. Needs attention: the raised hand. A terminal status: its approved glyph (the workflow
+    /// glyph when done). Anything else keeps the branch symbol.
+    @ViewBuilder private var leadingIcon: some View {
+        let status = TaskStatus(model.status)
+        if model.isWorking {
+            RunningSpinner().frame(width: HfRadius.Metrics.statusIconSize, height: HfRadius.Metrics.statusIconSize)
+        } else if model.needsAttention {
+            StatusIcon(status: .other("needs_attention"), kind: .workflowRun)
+        } else if status.isTerminal {
+            StatusIcon(status: status, kind: .workflowRun)
+        } else {
+            Image(systemName: "arrow.triangle.branch").foregroundStyle(Color.secondaryText)
+        }
     }
 }
 

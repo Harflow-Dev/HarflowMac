@@ -228,8 +228,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
     private var attentionCapsule: some View {
         if !viewModel.workflowCountsLoading, viewModel.workflowAttentionCount > 0 {
             HStack(spacing: HfRadius.Metrics.spacing4) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.hf(.caption))
+                StatusGlyphView(.hand, size: HfRadius.Metrics.statusBadgeGlyphFrame)
                     .accessibilityHidden(true)
                 Text(
                     "\(viewModel.workflowAttentionCount) "

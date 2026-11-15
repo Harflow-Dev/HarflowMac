@@ -96,4 +96,22 @@ import Testing
         let expectedVisible = probe.convert(scroll.contentView.bounds, from: scroll.contentView)
         #expect(controller.visibleRect == expectedVisible)
     }
+
+    @Test(arguments: ["needs_input", "needs_attention"])
+    func givenAttentionStatus_whenANodeDrawsItsIndicator_thenItIsTheHandGlyphForCompactAndRegularNodes(status: String) {
+        // given / when — both layouts draw `drawnIndicator`'s answer, so one lookup covers start/end and agent nodes.
+        let indicator = WorkflowCanvasNode.drawnIndicator(status: status)
+
+        // then — never `nil` (which would draw nothing) and never a fallback symbol.
+        #expect(indicator == .glyph(.hand))
+    }
+
+    @Test func givenOtherStatuses_whenANodeDrawsItsIndicator_thenOnlyTheEligibleOnesDraw() {
+        // given / when / then
+        #expect(WorkflowCanvasNode.drawnIndicator(status: "completed") == .symbol("checkmark"))
+        #expect(WorkflowCanvasNode.drawnIndicator(status: "failed") == .symbol("xmark"))
+        #expect(WorkflowCanvasNode.drawnIndicator(status: "uncertain") == .symbol("circle.dashed"))
+        #expect(WorkflowCanvasNode.drawnIndicator(status: "running") == nil)
+        #expect(WorkflowCanvasNode.drawnIndicator(status: "pending") == nil)
+    }
 }

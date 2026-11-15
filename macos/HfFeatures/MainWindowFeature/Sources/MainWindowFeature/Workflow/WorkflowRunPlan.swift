@@ -39,7 +39,7 @@ struct WorkflowRunPlan: View {
                         let task = entry.raw
                         HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
                             let done = task["status"]?.stringValue == "completed"
-                            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: done ? "checkmark" : "circle")
                                 .foregroundStyle(done ? Color.doneGreen : Color.secondaryText)
                                 .accessibilityLabel(done ? "Completed by orchestrator" : "Pending")
                             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {

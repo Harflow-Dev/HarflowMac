@@ -39,6 +39,15 @@ struct WorkflowCanvasNode: View {
     private var isCompact: Bool { ["start", "end", "parallel_start", "parallel_end"].contains(node.type) }
     private var isRunning: Bool { status == "running" }
     private var statusPresentation: StatusBadgePresentation { WorkflowNodeStatusPresentation.presentation(status: status) }
+    /// The statuses whose indicator the node draws beside its title (compact and regular layouts alike). Running draws its
+    /// own spinner; every other status draws none.
+    private static let indicatorStatuses: Set<String> = ["completed", "failed", "uncertain", "needs_attention", "needs_input"]
+
+    /// The indicator a node in `status` draws (a symbol, a design path glyph or the spinner), or `nil` when it draws none.
+    static func drawnIndicator(status: String) -> StatusBadgePresentation.Indicator? {
+        indicatorStatuses.contains(status) ? WorkflowNodeStatusPresentation.presentation(status: status).indicator : nil
+    }
+
     private var isAttention: Bool { statusPresentation.tint == .warning }
     private var isFailed: Bool { statusPresentation.tint == .danger }
     /// Preserve the original rounded rectangular click and drag footprint, including capsule corners.
@@ -153,9 +162,8 @@ struct WorkflowCanvasNode: View {
             VStack(spacing: HfRadius.Metrics.spacing8) {
                 if isRunning {
                     RunningSpinner()
-                } else if ["completed", "failed", "uncertain", "needs_attention", "needs_input"].contains(status),
-                          case let .symbol(symbol) = statusPresentation.indicator {
-                    Image(systemName: symbol).foregroundStyle(statusPresentation.tint.foreground)
+                } else if let indicator = Self.drawnIndicator(status: status) {
+                    StatusIndicatorView(indicator, tint: statusPresentation.tint.foreground)
                 } else if node.type == "start" {
                     Image(systemName: "play.fill")
                         .foregroundStyle(Color.doneGreen)
@@ -192,9 +200,8 @@ struct WorkflowCanvasNode: View {
                 Spacer(minLength: 0)
                 if isRunning {
                     RunningSpinner()
-                } else if ["completed", "failed", "uncertain", "needs_attention", "needs_input"].contains(status),
-                          case let .symbol(symbol) = statusPresentation.indicator {
-                    Image(systemName: symbol).foregroundStyle(statusPresentation.tint.foreground)
+                } else if let indicator = Self.drawnIndicator(status: status) {
+                    StatusIndicatorView(indicator, tint: statusPresentation.tint.foreground)
                 }
             }
             HStack(spacing: HfRadius.Metrics.spacing4) {

@@ -29,3 +29,13 @@ package needs belongs in that feature's own `Component/` folder, not here.
 - Presentation motion is overridable only through the presentation-only `hfReduceMotionOverride`
   environment value (nil follows the system). No VM publishes it, nothing persists it, and it is
   never a user setting.
+- `StatusIcon` draws the approved task status glyphs (HarflowDesign `fe6428c`): plain, no disc, `StatusIcon.glyph(for:kind:)`,
+  `tint(for:kind:)` and `accessibilityLabel(for:kind:)` are the tested tables, and `symbolName(for:)` is derived from the task
+  glyph. SF Symbols draw check, x and filled stop; `StatusGlyphShape` (workflow, parallel, hand) transcribes the design's SVG
+  paths and `StatusGlyphView` strokes them (icon 14/16 of the frame, stroke 1.8/24, round caps and joins, foreground style).
+  `StatusIcon.Kind` (`task`, `workflowRun`, `parallelGroup`) selects the workflow and parallel glyphs; `TaskRowModel.kind`
+  carries it. `GroupRow` shows the parallel glyph only while several members run (a single running member shows the running
+  spinner; neither has a trailing spinner), then the backend dots when nothing runs. Icon labels follow the design's
+  `aria-label`s ("Needs you", "Parallel group, running", "Done" for a workflow run) while badges keep their words
+  ("Needs attention"); that difference is accepted. `StatusBadgePresentation.Indicator.glyph` and `StatusIndicatorView` draw the
+  hand outside `StatusIcon`. Out-of-set states (pending, paused, unknown) keep their circles and triangle.

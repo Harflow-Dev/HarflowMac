@@ -59,6 +59,12 @@ public enum HfRadius {
         public static let badgeGlyphSize: CGFloat = 12
         /// The sidebar status icon's square frame (§5.1).
         public static let statusIconSize: CGFloat = 16
+        /// The design's status glyph geometry (`.hd-i--sm` inside `.hd-glyph`): the drawn icon is 14/16 of the glyph frame.
+        public static let statusGlyphIconRatio: CGFloat = 14.0 / 16.0
+        /// The design's icon stroke: 1.8 in a 24 unit view box.
+        public static let statusGlyphStrokeRatio: CGFloat = 1.8 / 24.0
+        /// The glyph frame a shape glyph takes inside a status badge capsule.
+        public static let statusBadgeGlyphFrame: CGFloat = 14
         /// Primary and tinted buttons (§5.3): capsule height and horizontal paddings.
         public static let primaryButtonHeight: CGFloat = 30
         public static let primaryButtonHorizontalPadding: CGFloat = 16

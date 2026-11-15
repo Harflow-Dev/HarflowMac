@@ -371,10 +371,8 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
             Text(row.childrenTitle).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             ForEach(row.children) { child in
                 HStack(spacing: 8) {
-                    if let glyph = child.statusGlyph {
-                        Image(systemName: glyph)
-                            .foregroundStyle(child.isFailure ? Color.failedRed : Color.secondaryText)
-                            .accessibilityLabel(child.statusLabel ?? "Status")
+                    if let icon = child.statusIcon {
+                        StatusIcon(status: icon.status, kind: icon.kind)
                     }
                     VStack(alignment: .leading) {
                         Text(child.title)

@@ -91,7 +91,7 @@ struct SidebarNativeRow: View {
             Label {
                 Text("Needs you")
             } icon: {
-                Image(systemName: "exclamationmark.circle").foregroundStyle(Color.warningFG)
+                SidebarNavigationIcon(.hand, size: 16).foregroundStyle(Color.warningFG)
             }
             .font(.hf(.body, weight: .medium))
             .padding(.vertical, HfRadius.Metrics.spacing6)
