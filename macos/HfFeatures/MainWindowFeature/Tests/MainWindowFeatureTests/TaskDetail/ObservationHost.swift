@@ -73,6 +73,11 @@ final class ObservationHost {
         } ?? matches.first
     }
 
+    /// Finds an accessibility element by its `accessibilityIdentifier`.
+    func find(identifier: String) -> NSObject? {
+        objects().first { string($0, "accessibilityIdentifier") == identifier }
+    }
+
     func objects() -> [NSObject] {
         host.layoutSubtreeIfNeeded()
         var seen = Set<ObjectIdentifier>()

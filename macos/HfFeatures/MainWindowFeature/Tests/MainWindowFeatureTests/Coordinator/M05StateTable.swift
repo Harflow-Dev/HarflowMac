@@ -92,10 +92,8 @@ enum M05StateTable {
               deviation: "The design draws the heading \"Earlier records couldn't be read\" and the action "
                   + "\"Reload from newest\"; native has neither and offers \"Retry history read\"."),
         entry("events-loading", .pane, "observation frame still loading"),
-        entry("events-empty", .pane, "empty observation window",
-              deviation: "The design draws \"No rows in the available captured history\" and "
-                  + "\"An empty window does not qualify totals.\"; native has neither."),
-        entry("events-error", .pane, "observation frame with unavailable history")
+        entry("events-empty", .pane, "empty observation window"),
+        entry("events-error", .pane, "observation frame with unavailable history and a retry on offer")
     ]
 
     static let changes: [Entry] = [

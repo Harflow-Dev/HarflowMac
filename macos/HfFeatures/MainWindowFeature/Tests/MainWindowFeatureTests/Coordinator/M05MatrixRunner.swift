@@ -53,6 +53,19 @@ import Testing
             }
         }
 
+        /// Whether an element labelled, titled or valued exactly `text` sits outside the right pane's subtree, for example on
+        /// the transcript's history boundary.
+        func outsidePaneHas(_ text: String) -> Bool {
+            let inPane = Set(element("Task details").map { ShellMatrix.tree($0).map { ObjectIdentifier($0) } } ?? [])
+            return ShellMatrix.elements(text, in: window).contains { !inPane.contains(ObjectIdentifier($0)) }
+        }
+
+        /// Whether the right pane's subtree holds an element with this accessibility identifier.
+        func paneHasIdentifier(_ identifier: String) -> Bool {
+            guard let pane = element("Task details") else { return false }
+            return ShellMatrix.tree(pane).contains { ShellMatrix.hasIdentifier($0, identifier) }
+        }
+
         /// Whether the right pane's subtree holds `text`; for landmarks (tab names, group titles) the sidebar or toolbar may repeat.
         func inPane(_ text: String) -> Bool { within("Task details", has: text) }
 

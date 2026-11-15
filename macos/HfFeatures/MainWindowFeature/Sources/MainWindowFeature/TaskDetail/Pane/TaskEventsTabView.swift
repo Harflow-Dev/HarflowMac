@@ -36,8 +36,10 @@ struct TaskEventsTabView<VM: TaskDetailViewModel>: View {
                     noticesGroup
                     continuityGroup
                     usageGroup
-                    PublicEventsView(frame: viewModel.task.flatMap { viewModel.observationFrames[$0.taskID] },
-                                     recovered: viewModel.recoveredTranscript, copy: viewModel.didCopyObservationText)
+                    let frame = viewModel.task.flatMap { viewModel.observationFrames[$0.taskID] }
+                    PublicEventsView(frame: frame, recovered: viewModel.recoveredTranscript, copy: viewModel.didCopyObservationText) {
+                        if let frame { viewModel.didRequestObservation($0, taskID: frame.taskID) }
+                    }
                         .padding(.top, TaskScreenStyle.FactsBody.headingMarginTop)
                 }
                 .padding(TaskScreenStyle.PaneBody.padding)

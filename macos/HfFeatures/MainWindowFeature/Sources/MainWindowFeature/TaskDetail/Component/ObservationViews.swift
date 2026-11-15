@@ -202,21 +202,101 @@ struct ObservationHistoryView: View {
     }
 }
 
+// MARK: - PublicEventsPresentation
+
+/// What the Events pane draws around the captured records, decided from one observation frame.
+///
+/// Pure and derived in the view from the domain frame: it adds no published view-model state. Records keep rendering
+/// from `EventObservationFrame.records`; this value only decides the summary block, the history note, the pane's
+/// "Load earlier" button and the section caption.
+struct PublicEventsPresentation: Equatable, Sendable {
+    /// The tool-activity line drawn under "Captured activity facts".
+    enum Summary: Equatable, Sendable {
+        /// No frame has been published yet.
+        case loadingRecords
+        /// The summary is still loading.
+        case loading
+        /// Observed counts with at least one tool call.
+        case counts(toolCalls: Int, edits: Int, commands: Int)
+        /// Observed, with records present but no tool calls.
+        case noToolCalls
+        /// Any other non-observed summary state.
+        case unavailable
+        /// An empty, current, fully read window: no summary line is drawn.
+        case none
+    }
+
+    /// The warning note above the captured activity.
+    enum Note: Equatable, Sendable {
+        /// The history read failed and a retry is on offer.
+        case historyUnavailable
+    }
+
+    let summary: Summary
+    let note: Note?
+    /// An empty window that was read completely and is current.
+    let isEmptyWindow: Bool
+    /// Whether the pane offers "Load earlier" between the caption and the records.
+    let showsLoadEarlier: Bool
+    /// Whether the "Public normalized events" caption is drawn.
+    let showsRecordsCaption: Bool
+
+    // MARK: Building
+
+    /// Derives the presentation from the observation frame, or from none while it loads.
+    static func make(from frame: EventObservationFrame?) -> PublicEventsPresentation {
+        guard let frame else {
+            return PublicEventsPresentation(summary: .loadingRecords, note: nil, isEmptyWindow: false,
+                                            showsLoadEarlier: false, showsRecordsCaption: true)
+        }
+        let actions = frame.history.availableActions
+        let retry = actions.contains(.retryRead)
+        let empty = frame.summary.state == .observed && frame.records.isEmpty && !frame.history.isLoading
+            && frame.history.failure == nil && frame.history.currentness == .current && !retry
+        let summary: Summary = if empty {
+            .none
+        } else if frame.summary.state == .observed, let counts = frame.summary.counts {
+            counts.toolCalls == 0 ? .noToolCalls
+                : .counts(toolCalls: counts.toolCalls, edits: counts.edits, commands: counts.commands)
+        } else {
+            frame.summary.state == .loading ? .loading : .unavailable
+        }
+        return PublicEventsPresentation(summary: summary, note: retry ? .historyUnavailable : nil,
+                                        isEmptyWindow: empty, showsLoadEarlier: actions.contains(.loadEarlier) && !retry,
+                                        showsRecordsCaption: !empty)
+    }
+}
+
 // MARK: - PublicEventsView
 
 struct PublicEventsView: View {
     let frame: EventObservationFrame?
     let recovered: RecoveredTranscriptFrame
     let copy: (String) -> Void
+    let action: (EventObservationAction) -> Void
+    /// The heading is a tab stop only after a pane history action has asked for focus.
+    @State private var focusArmed = false
+    @FocusState private var headingFocused: Bool
+    @AccessibilityFocusState private var headingAccessibilityFocused: Bool
+
     var body: some View {
+        let presentation = PublicEventsPresentation.make(from: frame)
         VStack(alignment: .leading, spacing: 12) {
-            Text("Public normalized events · bounded record window").font(.hf(.secondary, weight: .semibold))
             if let frame {
-                if frame.summary.state == .observed, let counts = frame.summary.counts {
-                    Text(counts.toolCalls == 0 ? "No tool calls observed in the available captured history"
-                         : "\(counts.toolCalls) tool calls observed · \(counts.edits) edits · \(counts.commands) commands")
-                } else {
-                    Text(frame.summary.state == .loading ? "Loading tool activity" : "Tool activity unavailable")
+                if !presentation.isEmptyWindow { heading("Captured activity facts") }
+                summaryLine(presentation.summary)
+                activityHeading
+                if presentation.note != nil { historyNote(frame) }
+                if presentation.isEmptyWindow {
+                    Text("No rows in the available captured history")
+                    Text("An empty window does not qualify totals.").font(.hf(.caption)).foregroundStyle(.secondary)
+                }
+                if presentation.showsRecordsCaption {
+                    Text("Public normalized events · bounded record window").font(.hf(.secondary, weight: .semibold))
+                }
+                if presentation.showsLoadEarlier {
+                    Button("Load earlier") { perform(.loadEarlier, label: "Load earlier") }
+                        .accessibilityIdentifier("task-events.load-earlier")
                 }
                 ForEach(frame.records) { observed in
                     let json = observed.normalizedJSON
@@ -228,7 +308,10 @@ struct PublicEventsView: View {
                             .font(.hf(.secondary))
                     }
                 }
-            } else { Text("Loading captured records") }
+            } else {
+                Text("Public normalized events · bounded record window").font(.hf(.secondary, weight: .semibold))
+                Text("Loading captured records")
+            }
             if !recovered.items.isEmpty {
                 Divider()
                 Text("Recovered transcript").font(.hf(.secondary, weight: .semibold))
@@ -238,6 +321,74 @@ struct PublicEventsView: View {
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func heading(_ title: String) -> some View {
+        Text(title).font(.hf(.secondary, weight: .semibold)).accessibilityAddTraits(.isHeader)
+    }
+
+    /// The persistent "Captured activity" heading; it takes keyboard and accessibility focus after a pane history action.
+    private var activityHeading: some View {
+        heading("Captured activity")
+            .focusable(focusArmed)
+            .focused($headingFocused)
+            .accessibilityFocused($headingAccessibilityFocused)
+            .onChange(of: focusArmed) { _, armed in
+                // The heading became focusable in the update that just rendered, so the focus request can now land.
+                if armed { moveFocusToHeading() }
+            }
+            .onChange(of: headingFocused) { _, focused in
+                // Losing keyboard focus disarms the heading, so it is not a permanent tab stop.
+                if !focused { focusArmed = false }
+            }
+    }
+
+    @ViewBuilder private func summaryLine(_ summary: PublicEventsPresentation.Summary) -> some View {
+        switch summary {
+        case .loadingRecords, .none: EmptyView()
+        case .loading: Text("Loading tool activity")
+        case .noToolCalls: Text("No tool calls observed in the available captured history")
+        case let .counts(toolCalls, edits, commands): Text("\(toolCalls) tool calls observed · \(edits) edits · \(commands) commands")
+        case .unavailable: Text("Tool activity unavailable")
+        }
+    }
+
+    private func historyNote(_ frame: EventObservationFrame) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Captured history unavailable")
+                    .font(TaskScreenStyle.sans(size: 13).weight(.semibold))
+                    .foregroundStyle(TaskScreenStyle.Colors.text.color)
+                Text("The read could not be completed. This does not mean the task failed.")
+                    .font(TaskScreenStyle.sans(size: 13))
+                    .foregroundStyle(TaskScreenStyle.Colors.textSecondary.color)
+            }
+            .accessibilityElement(children: .combine)
+            Button("Retry history read") { perform(.retryRead, label: "Retry history read") }
+                .controlSize(.small)
+                .disabled(frame.history.isLoading)
+                .padding(.top, 8)
+                .accessibilityIdentifier("task-events.retry-history-read")
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(RoundedRectangle(cornerRadius: TaskScreenStyle.Scale.radiusMedium).fill(TaskScreenStyle.Notice.warning.background.color))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func perform(_ value: EventObservationAction, label: String) {
+        ObservationAnnouncement.requested(label)
+        action(value)
+        // Arm first: the focus request is issued from `onChange(of: focusArmed)`, after the heading is focusable. When the
+        // heading is already armed (it still holds focus) no change fires, so the request is issued directly.
+        if focusArmed { moveFocusToHeading() } else { focusArmed = true }
+    }
+
+    private func moveFocusToHeading() {
+        headingFocused = true
+        headingAccessibilityFocused = true
     }
 }
 
@@ -266,7 +417,31 @@ struct PublicEventsView: View {
 
 #Preview("Events · public normalized synthetic record") {
     ScrollView {
-        PublicEventsView(frame: TaskDetailViewModelMock.previewObservation(), recovered: .init(), copy: { _ in })
+        PublicEventsView(frame: TaskDetailViewModelMock.previewObservation(), recovered: .init(), copy: { _ in }, action: { _ in })
+            .padding(16)
+    }.frame(width: 320, height: 420)
+}
+
+#Preview("Events · page with Load earlier") {
+    ScrollView {
+        PublicEventsView(frame: TaskDetailViewModelMock.previewObservation(actions: [.loadEarlier]), recovered: .init(),
+                         copy: { _ in }, action: { _ in })
+            .padding(16)
+    }.frame(width: 320, height: 420)
+}
+
+#Preview("Events · empty window") {
+    ScrollView {
+        PublicEventsView(frame: TaskDetailViewModelMock.previewObservation(empty: true), recovered: .init(),
+                         copy: { _ in }, action: { _ in })
+            .padding(16)
+    }.frame(width: 320, height: 420)
+}
+
+#Preview("Events · history unavailable") {
+    ScrollView {
+        PublicEventsView(frame: TaskDetailViewModelMock.previewObservation(actions: [.retryRead]), recovered: .init(),
+                         copy: { _ in }, action: { _ in })
             .padding(16)
     }.frame(width: 320, height: 420)
 }

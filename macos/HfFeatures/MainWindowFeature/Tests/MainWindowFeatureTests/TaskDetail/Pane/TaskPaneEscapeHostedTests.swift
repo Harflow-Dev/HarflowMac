@@ -130,6 +130,29 @@ import Testing
         #expect(store.openChoice(for: "A") == .closed)
     }
 
+    @Test func givenAnOverlayAfterEventsLoadEarlierIsPressed_whenEscapeIsPressed_thenItClosesAsBefore() async throws {
+        // given — the pane's own Load earlier moves focus to the "Captured activity" heading
+        let store = seededStore()
+        let mock = PaneMocks.running()
+        let taskID = try #require(mock.task?.taskID)
+        mock.observationFrames = [taskID: TaskDetailViewModelMock.previewObservation(actions: [.loadEarlier])]
+        let host = await overlay(mock, store: store)
+        defer { host.close() }
+        let button = try #require(host.page
+.elements(in: host.page.host)
+            .first { host.page.string($0, "accessibilityIdentifier") == "task-events.load-earlier" })
+        #expect(host.page.press(button), "task-events.load-earlier did not accept a press")
+        #expect(await focusLands(on: "Captured activity", host), "\(state(of: host))")
+
+        // when
+        host.sendEscape(via: .application)
+        await host.page.settle { !host.hasPane }
+
+        // then
+        #expect(!host.hasPane, "\(state(of: host)); \(geometry(of: host))")
+        #expect(store.openChoice(for: Self.conversation) == .closed)
+    }
+
     // MARK: - The window path passes through
 
     @Test func givenAnOverlayWithNothingFocused_whenEscapeIsSentStraightToTheWindow_thenItPassesThroughAndThePaneStays() async {

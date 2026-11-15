@@ -574,8 +574,10 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if eventsExpanded {
-                        PublicEventsView(frame: viewModel.task.flatMap { viewModel.observationFrames[$0.taskID] },
-                                         recovered: viewModel.recoveredTranscript, copy: viewModel.didCopyObservationText)
+                        let frame = viewModel.task.flatMap { viewModel.observationFrames[$0.taskID] }
+                        PublicEventsView(frame: frame, recovered: viewModel.recoveredTranscript, copy: viewModel.didCopyObservationText) {
+                            if let frame { viewModel.didRequestObservation($0, taskID: frame.taskID) }
+                        }
                     }
                     DisclosureGroup("Task snapshot facts and actions", isExpanded: $snapshotFactsExpanded) {
                         TaskSnapshotFactsView(model: viewModel.inspectorModel, supervisionRequest: supervisionRequest)

@@ -29,22 +29,24 @@ import Testing
                         Text("Retained captured row").frame(maxWidth: .infinity, alignment: .leading)
                     }.padding(24)
                 }
-                ScrollView { PublicEventsView(frame: frame, recovered: recovered, copy: { _ in }).padding(16) }
+                ScrollView { PublicEventsView(frame: frame, recovered: recovered, copy: { _ in }, action: { _ in }).padding(16) }
                     .frame(width: 300)
             }
 .frame(width: width - 256, height: width == 1000 ? 620 : 800)
                 .preferredColorScheme(scheme)
             let fixture = ObservationHost(surface, width: width - 256, height: width == 1000 ? 620 : 800, appearance: scheme)
             defer { fixture.close() }
-            // when
-            await waitUntil { fixture.host.layoutSubtreeIfNeeded(); return fixture.find("Public normalized events · bounded record window") != nil }
+            // when — an empty, fully read window drops the records caption in favour of the empty-window copy
+            let sectionText = scenario == "capacity"
+                ? "No rows in the available captured history" : "Public normalized events · bounded record window"
+            await waitUntil { fixture.host.layoutSubtreeIfNeeded(); return fixture.find(sectionText) != nil }
             try fixture.requireRequestedBounds()
             let heading = StoredRequestPresentation(state: state).heading
             if let disclosure = fixture.find(heading) { #expect(fixture.press(disclosure)) }
             await waitUntil { fixture.host.layoutSubtreeIfNeeded(); return fixture.host.fittingSize.width > 0 }
             // then
             #expect(fixture.find(heading) != nil)
-            #expect(fixture.find("Public normalized events · bounded record window") != nil)
+            #expect(fixture.find(sectionText) != nil)
             #expect(fixture.find("Recovered transcript") != nil)
             #expect(fixture.host.fittingSize.width <= width - 256 + 1)
             let visibleButtons = fixture.objects().filter { fixture.string($0, "accessibilityRole") == NSAccessibility.Role.button.rawValue }
@@ -81,6 +83,66 @@ import Testing
         await waitUntil { fixture.objects().contains { fixture.isFocused($0) == true } }
         #expect(fixture.objects().contains { fixture.isFocused($0) == true },
                 "explicit history action must leave an accessible focus owner")
+    }
+
+    @Test(arguments: [ColorScheme.light, .dark])
+    func givenEventsPaneLoadEarlier_whenPressed_thenActionDispatchesOnceAndHeadingOwnsFocus(scheme: ColorScheme) async throws {
+        // given
+        let frame = M05Fixtures.frame(records: M05Fixtures.records(["notice"]),
+            history: .init(hasOlder: true, forwardDrained: true, availableActions: [.loadEarlier]),
+            summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
+        var actions: [EventObservationAction] = []
+        let view = ScrollView { PublicEventsView(frame: frame, recovered: .init(), copy: { _ in }, action: { actions.append($0) }).padding(16) }
+            .preferredColorScheme(scheme)
+        let fixture = ObservationHost(view, width: 320, height: 420, appearance: scheme)
+        defer { fixture.close() }
+        try await fixture.requireForeground()
+        await waitUntil { fixture.find(identifier: "task-events.load-earlier") != nil }
+        let button = try #require(fixture.find(identifier: "task-events.load-earlier"))
+        #expect(fixture.find(identifier: "task-events.retry-history-read") == nil)
+        // when
+        let before = fixture.window.firstResponder
+        #expect(fixture.press(button))
+        await waitUntil { !actions.isEmpty }
+        // then
+        #expect(actions == [.loadEarlier])
+        await waitUntil { fixture.isHeadingFocused("Captured activity") }
+        #expect(fixture.isHeadingFocused("Captured activity"),
+                Comment(rawValue: "The Captured activity heading must own focus after Load earlier. "
+                    + fixture.focusDiagnostics(expectedText: "Captured activity")))
+        #expect(fixture.keyboardFocusMoved(from: before, button: button),
+                "keyboard focus must move off the pressed button. \(fixture.responderDiagnostics(before))")
+        #expect(actions == [.loadEarlier])
+    }
+
+    @Test(arguments: [ColorScheme.light, .dark])
+    func givenEventsPaneHistoryNote_whenRetryPressed_thenRetryReadDispatchesOnceAndLoadEarlierIsAbsent(scheme: ColorScheme) async throws {
+        // given
+        let frame = M05Fixtures.frame(records: M05Fixtures.records(["notice"]),
+            history: .init(hasOlder: true, forwardDrained: true, availableActions: [.loadEarlier, .retryRead]),
+            summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
+        var actions: [EventObservationAction] = []
+        let view = ScrollView { PublicEventsView(frame: frame, recovered: .init(), copy: { _ in }, action: { actions.append($0) }).padding(16) }
+            .preferredColorScheme(scheme)
+        let fixture = ObservationHost(view, width: 320, height: 420, appearance: scheme)
+        defer { fixture.close() }
+        try await fixture.requireForeground()
+        await waitUntil { fixture.find(identifier: "task-events.retry-history-read") != nil }
+        let button = try #require(fixture.find(identifier: "task-events.retry-history-read"))
+        #expect(fixture.find(identifier: "task-events.load-earlier") == nil)
+        // when
+        let before = fixture.window.firstResponder
+        #expect(fixture.press(button))
+        await waitUntil { !actions.isEmpty }
+        // then
+        #expect(actions == [.retryRead])
+        await waitUntil { fixture.isHeadingFocused("Captured activity") }
+        #expect(fixture.isHeadingFocused("Captured activity"),
+                Comment(rawValue: "The Captured activity heading must own focus after Retry history read. "
+                    + fixture.focusDiagnostics(expectedText: "Captured activity")))
+        #expect(fixture.keyboardFocusMoved(from: before, button: button),
+                "keyboard focus must move off the pressed button. \(fixture.responderDiagnostics(before))")
+        #expect(actions == [.retryRead])
     }
 
     @Test(arguments: [ColorScheme.light, .dark])
@@ -172,5 +234,26 @@ private struct RequestReplacementView: View {
             model.reads.append(bound)
             model.state = .received(complete, maxBytes: bound)
         }, copy: { _ in }).padding(24)
+    }
+}
+
+extension ObservationHost {
+    /// Keyboard check: after the press the window's first responder is a different object than before, is not the pressed
+    /// button's view, and lies inside the fixture. SwiftUI does not name the heading as the responder, so the accessibility
+    /// check is the one that identifies it.
+    func keyboardFocusMoved(from before: NSResponder?, button: NSObject) -> Bool {
+        guard let after = window.firstResponder, after !== before, after !== (button as? NSResponder) else { return false }
+        guard let view = after as? NSView else { return false }
+        return view.isDescendant(of: host)
+    }
+
+    /// The responder before and after, for a failure message.
+    func responderDiagnostics(_ before: NSResponder?) -> String {
+        "before \(String(describing: before.map { type(of: $0) })), after \(String(describing: window.firstResponder.map { type(of: $0) }))"
+    }
+
+    /// Whether an element labelled `title` currently owns accessibility focus.
+    func isHeadingFocused(_ title: String) -> Bool {
+        objects().contains { string($0, "accessibilityLabel") == title && isFocused($0) == true }
     }
 }

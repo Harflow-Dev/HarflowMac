@@ -113,18 +113,18 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     }
 
     /// A bounded, tool-free synthetic captured record window for the preview's visible text.
-    static func previewObservation() -> EventObservationFrame {
+    static func previewObservation(actions: Set<EventObservationAction> = [], empty: Bool = false) -> EventObservationFrame {
         let scope = EventObservationScope(sessionID: UUID(), sourceID: UUID(), windowID: UUID())
         let raw: [String: JSONValue] = [
             "product": .string("harflow"), "format": .string(WireContract.events.format),
             "v": .number(1), "product_version": .string(HarflowVersion.current), "seq": .number(1),
             "kind": .string("assistant_text"), "observed_at": .null, "text": .string("Looked at the failing test.")
         ]
-        let records = TaskEventRecord(raw: raw).map { [ObservedEventRecord(id: .init(scope: scope, admission: 0), record: $0)] } ?? []
+        let records = empty ? [] : (TaskEventRecord(raw: raw).map { [ObservedEventRecord(id: .init(scope: scope, admission: 0), record: $0)] } ?? [])
         let events = TaskEvent(line: JSONValue.object(raw).rendered()).map { [$0] } ?? []
         return EventObservationFrame(taskID: "abc12345", scope: scope, records: records, events: events,
             items: [PreviewFixtures.textItem("Looked at the failing test.")],
-            history: .init(caughtUp: true), summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
+            history: .init(caughtUp: true, availableActions: actions), summary: .init(state: .observed, counts: ActivityCounts(), totalFiles: 0))
     }
 
     func didAppear() {}
