@@ -68,8 +68,9 @@ struct NativePreferenceCaptureTests {
         ])
         given(useCase).agentUsageSnapshot.willReturn(usage)
         given(useCase).agentUsagePublisher().willReturn(Just(usage).eraseToAnyPublisher())
-        given(useCase).models(for: .any).willProduce { backend in
-            backend == "codex" ? [ModelOption(value: "gpt-5", label: "GPT 5"), ModelOption(value: "mini", label: "Mini")] : []
+        given(useCase).modelListing(for: .any).willProduce { backend in
+            ModelListing(state: .available, options: backend == "codex"
+                ? [ModelOption(value: "gpt-5", label: "GPT 5"), ModelOption(value: "mini", label: "Mini")] : [])
         }
         return NewSessionVM(useCase: useCase, routing: routing)
     }

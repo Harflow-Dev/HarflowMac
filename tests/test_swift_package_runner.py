@@ -489,6 +489,7 @@ HOSTED_SUITE_NAMES = (
     "MainWindowFeatureTests.ParallelLaneRevealHostedTests",
     "MainWindowFeatureTests.PendingLaunchesTopBarHostedTests",
     "MainWindowFeatureTests.StatusGlyphCaptureHostedTests",
+    "MainWindowFeatureTests.ModelPickerStatesHostedTests",
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"

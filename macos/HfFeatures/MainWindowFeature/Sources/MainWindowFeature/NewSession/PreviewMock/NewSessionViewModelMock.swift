@@ -80,13 +80,24 @@ final class NewSessionViewModelMock: NewSessionViewModel {
 
     var showsEffort: Bool { !effortOptions.isEmpty }
     var showsModel: Bool { controls.model == .supported }
+    /// Suggestions after the three built-in rows, set by captures and previews.
+    var extraModelChoices: [ModelChoiceModel] = []
     var showsTurnLimit: Bool { controls.turnCap == .supported }
-    var modelUnavailableNote: String? {
-        controls.model == .unsupported ? "Model selection isn't available for this harness." : nil
+    /// What the listing phase is; the note is computed through the real `ModelListingNote`.
+    var modelListingPhase: ModelListingPhase = .idle
+    var modelNote: ModelListingNote? {
+        ModelListingNote.make(
+            phase: modelListingPhase, harness: backend, controls: controls, catalogReady: true, agentNotFound: agentNotFoundNote != nil
+        )
     }
+
+    /// Counts the taps, for previews and tests.
+    private(set) var retryTaps = 0
+    func didTapRetryModels() { retryTaps += 1 }
 
     var modelChoices: [ModelChoiceModel] {
         [ModelChoiceModel(id: "", title: "Default"), ModelChoiceModel(id: "opus", title: "Opus"), ModelChoiceModel(id: "sonnet", title: "Sonnet")]
+            + extraModelChoices
     }
 
     var canStart: Bool {
@@ -106,9 +117,11 @@ final class NewSessionViewModelMock: NewSessionViewModel {
         recentRepos: [RecentRepoModel] = [],
         agentNotFoundNote: String? = nil,
         agentListUnavailableNote: String? = nil,
-        controls: BackendControls = .previewClaudeLike
+        controls: BackendControls = .previewClaudeLike,
+        modelListingPhase: ModelListingPhase = .idle
     ) {
         self.controls = controls
+        self.modelListingPhase = modelListingPhase
         self.backend = backend
         self.repo = repo
         self.freedom = freedom

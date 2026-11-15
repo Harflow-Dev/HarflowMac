@@ -75,5 +75,6 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
 
     // MARK: Model catalog
 
-    func models(for backend: String) async -> [ModelOption] { await modelCatalogRepository.models(for: backend) }
+    func modelListing(for backend: String) async -> ModelListing { await modelCatalogRepository.listing(for: backend) }
+    func refreshModelListing(for backend: String) async -> ModelListing { await modelCatalogRepository.refreshListing(for: backend) }
 }

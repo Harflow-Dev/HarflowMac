@@ -39,9 +39,12 @@ protocol NewSessionUseCase: Sendable {
     var backendCatalog: BackendCatalog { get }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never>
 
-    /// The known models for `backend` (no "Default" entry); empty when there are none or discovery
-    /// failed. Never throws and never blocks the caller beyond the discovery itself.
-    func models(for backend: String) async -> [ModelOption]
+    /// The model listing for `backend` (no "Default" entry): its state, completeness and rows. Never
+    /// throws and never blocks the caller beyond the discovery itself.
+    func modelListing(for backend: String) async -> ModelListing
+
+    /// Reads the listing for `backend` again, bypassing any cached or in-flight answer ("Try again").
+    func refreshModelListing(for backend: String) async -> ModelListing
 }
 
 extension NewSessionUseCase {
@@ -219,14 +222,19 @@ final class NewSessionVM: NewSessionViewModel {
     /// The Model combo's suggestions: "Default" (the agent's own model, an empty value) first, then
     /// the agent's known models. Only "Default" until a discovery finishes or when there are none.
     var modelChoices: [ModelChoiceModel] {
-        [ModelChoiceModel(id: "", title: "Default")] + modelOptions.map { ModelChoiceModel(id: $0.value, title: $0.label) }
+        [ModelChoiceModel(id: "", title: "Default")]
+            + modelOptions.map { ModelChoiceModel(id: $0.value, title: $0.label, isDefault: $0.isDefault) }
     }
 
     /// Whether the engine says this harness takes a model; suggestions load only then.
     var showsModel: Bool { controls.model == .supported }
-    /// Shown for a harness the engine says takes no model.
-    var modelUnavailableNote: String? {
-        catalog.state == .available && controls.model == .unsupported ? "Model selection isn't available for this harness." : nil
+
+    /// The one note under the Model field: the listing state, or why the harness takes no model.
+    var modelNote: ModelListingNote? {
+        ModelListingNote.make(
+            phase: modelListingPhase, harness: backend, controls: controls, catalogReady: catalog.state == .available,
+            agentNotFound: agentNotFoundNote != nil
+        )
     }
 
     var showsTurnLimit: Bool { controls.turnCap == .supported }
@@ -274,13 +282,27 @@ final class NewSessionVM: NewSessionViewModel {
     // MARK: - Private Properties
 
     private var recentRepoPaths: [String] = []
-    private(set) var modelOptions: [ModelOption] = []
+    // `internal(set)`: `NewSessionVM+ModelListing.swift`, a separate file, writes these.
+    /// The ranked options of the loaded listing for `optionsBackend`; empty otherwise. Start gating reads it
+    /// (through `effectiveControls`), so it is kept while a same-harness reload is in flight.
+    internal(set) var modelOptions: [ModelOption] = []
+    /// Where the Model field's listing stands for the chosen harness.
+    internal(set) var modelListingPhase: ModelListingPhase = .idle
+    @ObservationIgnored var optionsBackend = ""
+    /// The last applied listing and its ranked options per harness, for this view model's lifetime.
+    @ObservationIgnored var retainedListings: [String: (listing: ModelListing, ranked: [ModelOption])] = [:]
+    /// Bumped by every load, retry and teardown, and by a model control turning unsupported; an answer
+    /// from an older generation is dropped.
+    @ObservationIgnored var modelsGeneration = 0
+    @ObservationIgnored var rerankTask: Task<Void, Never>?
+    /// Test seam: awaited by a re-rank after it ranked and before it applies, so a test can hold its completion.
+    @ObservationIgnored var rerankCompletionGate: (@Sendable () async -> Void)?
     private var usage = AgentUsageSnapshot()
-    @ObservationIgnored private let useCase: any NewSessionUseCase
+    @ObservationIgnored let useCase: any NewSessionUseCase
     @ObservationIgnored private weak var routing: (any NewSessionRouting)?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
-    @ObservationIgnored private var modelsTask: Task<Void, Never>?
+    @ObservationIgnored var modelsTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -307,8 +329,11 @@ final class NewSessionVM: NewSessionViewModel {
         qualification?.stop()
         cancellables.removeAll()
         didSubscribe = false
+        modelsGeneration += 1
         modelsTask?.cancel()
         modelsTask = nil
+        rerankTask?.cancel()
+        rerankTask = nil
     }
 
     func didChangeBackend(_ value: String) {
@@ -317,7 +342,7 @@ final class NewSessionVM: NewSessionViewModel {
         backend = value
         hasChosenBackend = true
         recomputeAgentNotFoundNote()
-        if value != previous { agentDidChange() }
+        if value != previous { loadModels() }
         refreshQualification()
     }
 
@@ -328,7 +353,7 @@ final class NewSessionVM: NewSessionViewModel {
             backend = choices.backend; model = choices.model; modelBackend = choices.modelBackend
             freedom = choices.freedom; effort = choices.effort; turnLimit = choices.turnLimit
             callerApprovals = choices.callerApprovals; hasChosenBackend = true
-            recomputeAgentNotFoundNote(); agentDidChange()
+            recomputeAgentNotFoundNote(); loadModels()
         }
         refreshQualification()
     }
@@ -470,30 +495,6 @@ final class NewSessionVM: NewSessionViewModel {
         )
     }
 
-    /// Refresh suggestions without changing the requested model or its harness provenance.
-    private func agentDidChange() {
-        modelOptions = []
-        loadModels()
-    }
-
-    /// Requests the current agent's model list without blocking the sheet; an answer that arrives
-    /// after the agent changed again is dropped.
-    private func loadModels() {
-        modelsTask?.cancel()
-        let requested = backend
-        guard showsModel else {
-            modelOptions = []
-            return
-        }
-        modelsTask = Task { [weak self, useCase] in
-            let options = await useCase.models(for: requested)
-            guard !Task.isCancelled, let self, backend == requested else { return }
-            let ranked = await Task.detached { [usage = useCase.agentUsageSnapshot] in usage.rankedModels(options, backend: requested) }.value
-            guard !Task.isCancelled, backend == requested else { return }
-            if modelOptions != ranked { modelOptions = ranked }
-        }
-    }
-
     private func refreshRecentRepos() {
         var seen = Set<String>()
         recentRepoPaths = useCase.tasks
@@ -515,7 +516,7 @@ final class NewSessionVM: NewSessionViewModel {
                 guard let self, self.usage != usage else { return }
                 self.usage = usage
                 rankAgentOptions()
-                loadModels()
+                rerankModels()
             }
             .store(in: &cancellables)
         useCase.backendCatalogPublisher()
@@ -546,13 +547,9 @@ final class NewSessionVM: NewSessionViewModel {
             agentOptions.append(BackendTab(id: backend, isNotFound: true))
         }
         recomputeAgentNotFoundNote()
-        if backend != previous, didSubscribe {
-            agentDidChange()
-        } else if didSubscribe, controls.model != previousModel {
-            // The engine's answer for this harness arrived or changed: load (or drop) suggestions.
-            // Requested values are never touched; only validation re-derives.
-            loadModels()
-        }
+        // A harness change, or the engine's answer for this harness arriving or changing, loads (or drops) the
+        // suggestions. Requested values are never touched; only validation re-derives.
+        if didSubscribe, backend != previous || controls.model != previousModel { loadModels() }
         if didSubscribe, composerState == .editable { refreshQualification() }
     }
 
@@ -576,7 +573,7 @@ final class NewSessionVM: NewSessionViewModel {
             agentNotFoundNote = nil
             return
         }
-        agentNotFoundNote = "\(backend) wasn't found on your PATH — starting this harness may fail."
+        agentNotFoundNote = "\(BackendStyle.displayName(backend)) wasn't found on your PATH — starting this harness may fail."
     }
 
     /// Design's New Session section: every backend harflow reports, in registry order; while

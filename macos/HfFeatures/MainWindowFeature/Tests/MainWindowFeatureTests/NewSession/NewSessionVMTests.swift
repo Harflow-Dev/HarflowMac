@@ -21,7 +21,7 @@ import Testing
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn(tasks)
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
-        given(useCase).models(for: .any).willReturn([])
+        given(useCase).modelListing(for: .any).willReturn(ModelListing(state: .available))
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let sut = NewSessionVM(useCase: useCase, routing: routing)
@@ -217,7 +217,7 @@ import Testing
         sut.didChangeBackend("codex")
 
         // then
-        #expect(sut.agentNotFoundNote == "codex wasn't found on your PATH — starting this harness may fail.")
+        #expect(sut.agentNotFoundNote == "Codex wasn't found on your PATH — starting this harness may fail.")
 
         // when — switching back to a found backend clears it.
         sut.didChangeBackend("claude")

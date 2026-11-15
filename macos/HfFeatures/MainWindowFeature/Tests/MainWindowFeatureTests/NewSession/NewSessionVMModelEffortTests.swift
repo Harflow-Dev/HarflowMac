@@ -39,7 +39,7 @@ import Testing
         given(useCase).backendCatalog.willReturn(BackendCatalog(entries: [BackendControlFixtures.entry(backend)], state: .available))
         given(useCase).tasks.willReturn([])
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
-        given(useCase).models(for: .any).willProduce { _ in suggestions.value }
+        given(useCase).modelListing(for: .any).willProduce { _ in ModelListing(state: .available, options: suggestions.value) }
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(usageSubject.eraseToAnyPublisher())
         let sut = NewSessionVM(useCase: useCase, routing: MockNewSessionRouting())
@@ -215,7 +215,7 @@ import Testing
 
         // when
         fixture.suggestions.value = [ModelOption(value: "opus", label: "Opus", effortLevels: [])]
-        fixture.usageSubject.send(AgentUsageSnapshot(counts: [AgentUsageIdentity(backend: "claude", model: "opus"): 1]))
+        fixture.sut.didAppear()
         await waitUntil { fixture.sut.modelChoices.count == 2 }
 
         // then
@@ -231,7 +231,7 @@ import Testing
 
         // when
         fixture.suggestions.value = [ModelOption(value: "opus", label: "Opus", effortLevels: ["medium"])]
-        fixture.usageSubject.send(AgentUsageSnapshot(counts: [AgentUsageIdentity(backend: "claude", model: "opus"): 1]))
+        fixture.sut.didAppear()
         await waitUntil { fixture.sut.effortOptions == ["medium"] }
 
         // then

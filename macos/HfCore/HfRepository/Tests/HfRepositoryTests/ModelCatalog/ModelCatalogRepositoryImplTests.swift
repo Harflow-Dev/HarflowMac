@@ -17,28 +17,31 @@ import Testing
     }
 
     static func listingDocument(
-        backend: String = "opencode", state: String = "available", reason: String? = nil, source: String = "cli_output",
-        rows: [Row] = []
+        backend: String = "opencode", state: String = "available", reason: String? = nil, source: String? = "cli_output",
+        truncated: Bool = false, dropped: Int = 0, rows: [Row] = []
     ) -> String {
         let models = rows.map {
             #"{"id":"\#($0.id)","label":"\#($0.label)","default":\#($0.isDefault),"effort_levels":\#($0.effort)}"#
         }
 .joined(separator: ",")
         let reasonText = reason.map { "\"\($0)\"" } ?? "null"
+        let sourceText = source.map { "\"\($0)\"" } ?? "null"
         return #"{"v":1,"product":"harflow","format":"harflow.ctl","product_version":"0.0.1","result":{"backend":"\#(backend)","#
-            + #""state":"\#(state)","reason":\#(reasonText),"source":"\#(source)","scope":"user","advisory":true,"#
-            + #""harness_version":null,"source_observed_at":null,"observed_at":"2026-11-14T00:00:00Z","truncated":false,"#
-            + #""dropped_count":0,"models":[\#(models)]}}"#
+            + #""state":"\#(state)","reason":\#(reasonText),"source":\#(sourceText),"scope":"user","advisory":true,"#
+            + #""harness_version":null,"source_observed_at":null,"observed_at":"2026-11-14T00:00:00Z","truncated":\#(truncated),"#
+            + #""dropped_count":\#(dropped),"models":[\#(models)]}}"#
     }
 
-    private func listing(
-        backend: String = "opencode", state: String = "available", reason: String? = nil, source: String = "cli_output",
-        rows: [Row] = []
+    func listing(
+        backend: String = "opencode", state: String = "available", reason: String? = nil, source: String? = "cli_output",
+        truncated: Bool = false, dropped: Int = 0, rows: [Row] = []
     ) -> String {
-        Self.listingDocument(backend: backend, state: state, reason: reason, source: source, rows: rows)
+        Self.listingDocument(
+            backend: backend, state: state, reason: reason, source: source, truncated: truncated, dropped: dropped, rows: rows
+        )
     }
 
-    private func refusal(code: String, detail: String? = nil) -> String {
+    func refusal(code: String, detail: String? = nil) -> String {
         let detailText = detail.map { #","detail":"\#($0)""# } ?? ""
         return #"{"v":1,"product":"harflow","format":"harflow.ctl","product_version":"0.0.1","error":{"code":"\#(code)","#
             + #""message":"Backend model listing requires a verified direct caller.","#
@@ -47,7 +50,7 @@ import Testing
 
     /// A ctl client whose runner answers the version-info handshake (with or without `backend-models.v1`)
     /// and then the command from `answer`.
-    private func client(
+    func client(
         capability: Bool = true, answer: @escaping @Sendable (StubProcessRunner.Call) -> Result<ProcessOutput, ToolError>
     ) -> (client: CtlClient, runner: StubProcessRunner) {
         let runner = StubProcessRunner { call in
@@ -63,7 +66,7 @@ import Testing
         return (CtlClient(executable: "/bin/echo", environment: [:], runner: runner), runner)
     }
 
-    private func makeSUT(
+    func makeSUT(
         ctl: Result<CtlClient, ToolError>
     ) -> (sut: ModelCatalogRepositoryImpl, toolEnvironment: MockToolEnvironmentRepository) {
         let toolEnvironment = MockToolEnvironmentRepository()
@@ -71,14 +74,14 @@ import Testing
         return (ModelCatalogRepositoryImpl(toolEnvironment: toolEnvironment), toolEnvironment)
     }
 
-    private func makeSUT(
+    func makeSUT(
         answering text: String
     ) -> (sut: ModelCatalogRepositoryImpl, runner: StubProcessRunner) {
         let (client, runner) = client { _ in .success(stdout(text)) }
         return (makeSUT(ctl: .success(client)).sut, runner)
     }
 
-    private func commandCalls(_ runner: StubProcessRunner) -> [[String]] {
+    func commandCalls(_ runner: StubProcessRunner) -> [[String]] {
         runner.calls.map(\.arguments).filter { $0.first == "backend-models" }
     }
 
@@ -100,7 +103,7 @@ import Testing
         #expect(models == [
             ModelOption(value: "opencode/big-pickle", label: "Big Pickle", effortLevels: nil),
             ModelOption(value: "opencode/hy3-free", label: "Hy3 Free", effortLevels: ["low", "medium", "high"]),
-            ModelOption(value: "opencode/no-levels", label: "No Levels", effortLevels: [])
+            ModelOption(value: "opencode/no-levels", label: "No Levels", effortLevels: [], isDefault: true)
         ])
     }
 

@@ -125,6 +125,7 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.ParallelLaneRevealHostedTests",
     "MainWindowFeatureTests.PendingLaunchesTopBarHostedTests",
     "MainWindowFeatureTests.StatusGlyphCaptureHostedTests",
+    "MainWindowFeatureTests.ModelPickerStatesHostedTests",
 })
 HOSTED_PACKAGE = "MainWindowFeature"
 HOSTED_RESOURCE_BUNDLE = HOSTED_PACKAGE + "_" + HOSTED_PACKAGE + ".bundle"

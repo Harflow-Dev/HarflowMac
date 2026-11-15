@@ -155,4 +155,7 @@ missing required field or a field of the wrong type makes the whole document unr
 carry `id`, `label`, `isDefault` (`nil` when the source does not say) and `effortLevels` (`nil`
 when the source says nothing, empty when it lists levels and none is selectable). The document
 is bounded at 262,144 bytes. The result is advisory: the harness may accept an id it does not
-list, or refuse one it does.
+list, or refuse one it does. `HfRepository`'s `ModelCatalogRepository` maps every outcome to a
+`ModelListing` (state, reason, source, `truncated`, `droppedCount`, rows with their default flag;
+`unreadable` for a missing capability, a refusal, a failure or no runtime yet), and New task shows
+one note under the Model field for it.

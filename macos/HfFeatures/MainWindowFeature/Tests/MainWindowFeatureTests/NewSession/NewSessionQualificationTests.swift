@@ -18,7 +18,7 @@ struct NewSessionQualificationTests {
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).backendCatalogPublisher().willReturn(subject?.eraseToAnyPublisher() ?? Empty().eraseToAnyPublisher())
         given(useCase).tasks.willReturn([])
-        given(useCase).models(for: .any).willReturn([])
+        given(useCase).modelListing(for: .any).willReturn(ModelListing(state: .available))
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Empty().eraseToAnyPublisher())
         given(useCase).resolvedRepoPath(.any).willReturn("/fixture/repo")

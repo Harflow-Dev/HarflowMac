@@ -19,7 +19,7 @@ import Testing
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject?.eraseToAnyPublisher() ?? Empty().eraseToAnyPublisher())
         given(useCase).tasks.willReturn([])
-        given(useCase).models(for: .any).willReturn([])
+        given(useCase).modelListing(for: .any).willReturn(ModelListing(state: .available))
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Empty().eraseToAnyPublisher())
         given(useCase).resolvedRepoPath(.any).willProduce { $0 }
@@ -274,7 +274,8 @@ private final class GatedComposerUseCase: NewSessionUseCase {
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { base.agentUsagePublisher() }
     var backendCatalog: BackendCatalog { base.backendCatalog }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { base.backendCatalogPublisher() }
-    func models(for backend: String) async -> [ModelOption] { await base.models(for: backend) }
+    func modelListing(for backend: String) async -> ModelListing { await base.modelListing(for: backend) }
+    func refreshModelListing(for backend: String) async -> ModelListing { await base.refreshModelListing(for: backend) }
 
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String {
         let result: Result<String, Error>

@@ -21,7 +21,7 @@ import Testing
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn([])
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
-        given(useCase).models(for: .any).willReturn([])
+        given(useCase).modelListing(for: .any).willReturn(ModelListing(state: .available))
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let sut = NewSessionVM(useCase: useCase, routing: MockNewSessionRouting())
@@ -91,7 +91,7 @@ import Testing
             sut.didAppear()
             // then
             #expect(!sut.showsModel)
-            verify(useCase).models(for: .any).called(0)
+            verify(useCase).modelListing(for: .any).called(0)
         }
     }
 
@@ -124,7 +124,7 @@ import Testing
         #expect(sut.effortOptions.isEmpty)
         #expect(!sut.showsModel)
         #expect(!sut.showsTurnLimit)
-        #expect(sut.modelUnavailableNote == nil)
+        #expect(sut.modelNote == nil)
         #expect(sut.validationMessages.isEmpty)
     }
 

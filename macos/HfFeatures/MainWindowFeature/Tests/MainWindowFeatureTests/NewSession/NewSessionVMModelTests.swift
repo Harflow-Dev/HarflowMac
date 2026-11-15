@@ -20,7 +20,7 @@ import Testing
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn([])
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
-        given(useCase).models(for: .any).willProduce { models[$0] ?? [] }
+        given(useCase).modelListing(for: .any).willProduce { ModelListing(state: .available, options: models[$0] ?? []) }
         given(useCase).agentUsageSnapshot.willReturn(usage)
         given(useCase).agentUsagePublisher().willReturn(Just(usage).eraseToAnyPublisher())
         let sut = NewSessionVM(useCase: useCase, routing: routing)
@@ -94,10 +94,10 @@ import Testing
         // when
         // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
         let invocation = AsyncStream<Bool>.makeStream()
-        when(useCase).models(for: .any).perform { invocation.continuation.yield(true) }
+        when(useCase).modelListing(for: .any).perform { invocation.continuation.yield(true) }
         sut.didAppear()
         #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
-        verify(useCase).models(for: .any).called(1)
+        verify(useCase).modelListing(for: .any).called(1)
 
         // then
         #expect(sut.modelChoices == [ModelChoiceModel(id: "", title: "Default")])
@@ -200,8 +200,8 @@ import Testing
 
         // then — nothing to wait for: the engine says no model, so assert the call count stays zero.
         #expect(sut.showsModel == false)
-        #expect(sut.modelUnavailableNote == "Model selection isn't available for this harness.")
-        verify(useCase).models(for: .any).called(0)
+        #expect(sut.modelNote?.text == "Model selection isn't available for this harness.")
+        verify(useCase).modelListing(for: .any).called(0)
         #expect(sut.modelChoices == [ModelChoiceModel(id: "", title: "Default")])
     }
 
@@ -217,17 +217,17 @@ import Testing
 
         // then
         #expect(sut.showsModel)
-        #expect(sut.modelUnavailableNote == nil)
-        verify(useCase).models(for: .value("vibe")).called(1)
+        #expect(sut.modelNote == nil)
+        verify(useCase).modelListing(for: .value("vibe")).called(1)
     }
 
-    @Test func givenAnAgentThatTakesAModel_whenTheNoteIsRead_thenItIsNil() {
+    @Test func givenAnAgentThatTakesAModel_whenTheSheetAppears_thenTheNoteSaysLoading() {
         // given / when
         let (sut, _, _, _) = makeSUT(catalog: catalog([("claude", true)]))
 
         // then
         #expect(sut.showsModel)
-        #expect(sut.modelUnavailableNote == nil)
+        #expect(sut.modelNote?.text == "Loading suggested models… You can still type a model name.")
     }
 
     @Test func givenFactsArriveAfterTheSheetOpened_whenTheModelBecomesSupported_thenSuggestionsLoadAndTheTypedModelStays() async {
@@ -236,7 +236,7 @@ import Testing
         sut.didChangeBackend("claude")
         sut.didChangeModel("custom")
         #expect(sut.showsModel == false)
-        verify(useCase).models(for: .any).called(0)
+        verify(useCase).modelListing(for: .any).called(0)
 
         // when
         catalogSubject.send(catalog([("claude", true)]))
@@ -258,7 +258,7 @@ import Testing
         await start(sut, useCase, routing)
 
         // then
-        #expect(sut.modelUnavailableNote == nil)
+        #expect(sut.modelNote == nil)
         #expect(sut.showsModel == false)
         verify(useCase).run(.matching { $0.model == "some-model" }, runtime: .any).called(1)
     }

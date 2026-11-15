@@ -53,8 +53,11 @@ protocol NewSessionViewModel: ViewModel {
     var showsModel: Bool { get }
     /// "Default" first, then the agent's known models.
     var modelChoices: [ModelChoiceModel] { get }
-    /// Explains why there is no Model control; `nil` when there is one.
-    var modelUnavailableNote: String? { get }
+    /// The one note under the Model field (listing state, or why the harness takes no model); `nil` when
+    /// there is nothing to say.
+    var modelNote: ModelListingNote? { get }
+    /// Reads the unavailable model listing again.
+    func didTapRetryModels()
     var showsTurnLimit: Bool { get }
     var agentNotFoundNote: String? { get }
     var agentListUnavailableNote: String? { get }
@@ -82,7 +85,9 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     @State var viewModel: VM
     @State private var optionsPresented: Bool
     @State private var repositoryPresented = false
-    @State private var harnessPresented = false
+    @State private var harnessPresented: Bool
+    /// Bumped when "Try again" is tapped; the Model field takes focus, since the button disappears while loading.
+    @State private var modelFocusRequest = 0
     @FocusState private var focus: Focus?
 
     private enum Focus: Hashable { case prompt, options, firstOption }
@@ -96,9 +101,11 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         static var optionsMinimumHeight: CGFloat { 208 }
     }
 
-    init(_ viewModel: VM, optionsPresented: Bool = false) {
+    /// `optionsPresented` and `harnessPresented` set the initial popover state, so hosted captures can open them.
+    init(_ viewModel: VM, optionsPresented: Bool = false, harnessPresented: Bool = false) {
         _viewModel = State(initialValue: viewModel)
         _optionsPresented = State(initialValue: optionsPresented)
+        _harnessPresented = State(initialValue: harnessPresented)
     }
 
     var body: some View {
@@ -310,9 +317,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                     Text(card.name + (card.isNotInstalled ? " — not installed" : "")).tag(card.id)
                 }
             }
-            ModelCombo(text: viewModel.model, choices: viewModel.modelChoices, onChange: { viewModel.didChangeModel($0) })
-            Button("Use default model") { viewModel.didChangeModel("") }
-            if let note = viewModel.modelUnavailableNote { Text(note) }
+            modelField
             if let note = viewModel.agentNotFoundNote { Text(note) }
             if let note = viewModel.agentListUnavailableNote { Text(note) }
         }
@@ -320,6 +325,37 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         .padding(HfRadius.Metrics.spacing16)
         .frame(width: Layout.optionsWidth)
         .disabled(viewModel.optionsLocked)
+    }
+
+    /// The Model field: a visible label, the combo, then the one listing note and, for an unavailable listing,
+    /// "Try again" (hidden, not disabled, while the options are locked).
+    private var modelField: some View {
+        let note = viewModel.modelNote
+        return VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
+            Text("Model")
+                .font(.hf(.caption))
+                .foregroundStyle(Color.secondaryText)
+                .accessibilityHidden(true)
+            ModelCombo(
+                text: viewModel.model, choices: viewModel.modelChoices, hint: note?.text ?? viewModel.agentNotFoundNote, focusRequest: modelFocusRequest,
+                onChange: { viewModel.didChangeModel($0) }
+            )
+            if let note {
+                Text(note.text)
+                    .font(.hf(.caption))
+                    .foregroundStyle(Color.tertiaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("new-session-model-note")
+                if note.showsRetry, !viewModel.optionsLocked {
+                    Button("Try again") {
+                        viewModel.didTapRetryModels()
+                        modelFocusRequest += 1
+                    }
+                    .controlSize(.small)
+                    .accessibilityIdentifier("new-session-model-retry")
+                }
+            }
+        }
     }
 
     private var outcome: some View {
