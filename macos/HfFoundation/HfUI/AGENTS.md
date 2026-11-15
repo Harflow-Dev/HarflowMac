@@ -34,8 +34,9 @@ package needs belongs in that feature's own `Component/` folder, not here.
   glyph. SF Symbols draw check, x and filled stop; `StatusGlyphShape` (workflow, parallel, hand) transcribes the design's SVG
   paths and `StatusGlyphView` strokes them (icon 14/16 of the frame, stroke 1.8/24, round caps and joins, foreground style).
   `StatusIcon.Kind` (`task`, `workflowRun`, `parallelGroup`) selects the workflow and parallel glyphs; `TaskRowModel.kind`
-  carries it. `GroupRow` shows the parallel glyph only while several members run (a single running member shows the running
-  spinner; neither has a trailing spinner), then the backend dots when nothing runs. Icon labels follow the design's
+  carries it. `GroupRow` shows the parallel glyph while several members run (accent) and once every member has finished
+  (`doneGreen`, whatever the outcomes, labelled "Parallel group, done"); a single running member shows the running spinner,
+  and a finished group of one keeps its backend dots; no group row has a trailing spinner. Icon labels follow the design's
   `aria-label`s ("Needs you", "Parallel group, running", "Done" for a workflow run) while badges keep their words
   ("Needs attention"); that difference is accepted. `StatusBadgePresentation.Indicator.glyph` and `StatusIndicatorView` draw the
   hand outside `StatusIcon`. Out-of-set states (pending, paused, unknown) keep their circles and triangle.

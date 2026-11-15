@@ -35,8 +35,15 @@ import Testing
         #expect(StatusIcon.glyph(for: .running, kind: .workflowRun) == .spinner)
         #expect(StatusIcon.glyph(for: .failed, kind: .workflowRun) == .symbol("xmark"))
         #expect(StatusIcon.glyph(for: .running, kind: .parallelGroup) == .shape(.parallel))
-        #expect(StatusIcon.glyph(for: .completed, kind: .parallelGroup) == .symbol("checkmark"))
         #expect(StatusIcon.glyph(for: .other("needs_input"), kind: .workflowRun) == .shape(.hand))
+    }
+
+    @Test(arguments: [TaskStatus.completed, .failed, .cancelled, .timedOut])
+    func givenATerminalParallelGroup_whenDrawn_thenItIsTheDoneParallelGlyph(status: TaskStatus) {
+        // given / when / then
+        #expect(StatusIcon.glyph(for: status, kind: .parallelGroup) == .shape(.parallel))
+        #expect(StatusIcon.tint(for: status, kind: .parallelGroup) == .doneGreen)
+        #expect(StatusIcon.accessibilityLabel(for: status, kind: .parallelGroup) == "Parallel group, done")
     }
 
     @Test func givenEveryStatusAndKind_whenReadingTheSymbolName_thenItIsDerivedFromTheTaskGlyph() {
@@ -224,9 +231,10 @@ import Testing
         #expect(!strings.contains("Parallel group, running"))
     }
 
-    @Test func givenAFinishedGroup_whenRendered_thenNeitherGlyphIsDrawn() async {
+    @Test(arguments: [false, true])
+    func givenAFinishedMultiMemberGroup_whenRendered_thenTheParallelGlyphIsAnnouncedDoneOnce(sidebar: Bool) async {
         // given
-        let row = GroupRow(group: group(["completed", "failed"]), sidebarAppearance: SidebarRowAppearance())
+        let row = GroupRow(group: group(["completed", "failed"]), sidebarAppearance: sidebar ? SidebarRowAppearance() : nil)
 
         // when
         let strings = await labels(of: row)
@@ -234,7 +242,34 @@ import Testing
         // then — positive first, so an empty accessibility tree cannot pass.
         #expect(strings.contains("Parallel run · 2 of 2 finished"), "\(strings)")
         #expect(strings.contains("g"))
+        #expect(strings.filter { $0 == "Parallel group, done" }.count == 1, "\(strings)")
         #expect(!strings.contains("Running") && !strings.contains("Parallel group, running"))
+    }
+
+    @Test func givenAFinishedSingleMemberGroup_whenRendered_thenItKeepsBackendDotsAndNoGroupGlyph() async {
+        // given
+        let row = GroupRow(group: group(["completed"]), sidebarAppearance: SidebarRowAppearance())
+
+        // when
+        let strings = await labels(of: row)
+
+        // then
+        #expect(strings.contains("Group · Done"), "\(strings)")
+        #expect(strings.contains("Claude"), "\(strings)")
+        #expect(!strings.contains("Parallel group, done") && !strings.contains("Parallel group, running"))
+    }
+
+    @Test(arguments: [false, true])
+    func givenAWaitingMultiMemberGroup_whenRendered_thenItIsNotAnnouncedDone(sidebar: Bool) async {
+        // given
+        let row = GroupRow(group: group(["needs_input", "completed"]), sidebarAppearance: sidebar ? SidebarRowAppearance() : nil)
+
+        // when
+        let strings = await labels(of: row)
+
+        // then — positive first, so an empty accessibility tree cannot pass.
+        #expect(strings.contains("Parallel run · 1 of 2 finished"), "\(strings)")
+        #expect(!strings.contains("Parallel group, done"), "\(strings)")
     }
 
     // MARK: Task row

@@ -18,7 +18,8 @@ public enum StatusGlyph: Equatable, Sendable {
 /// A task's status as a plain glyph in a square frame, no disc behind it (HarflowDesign `fe6428c`, `.hd-glyph`):
 /// check for done, x for failed and timed out, a filled stop for cancelled, the raised hand for needs input and
 /// needs attention, a spinner while running, the workflow glyph for a finished workflow run and the parallel glyph
-/// for a running parallel group. Pending keeps a circle and any other raw status the dashed circle (no design state).
+/// for a parallel group (accent while running, success once it has finished). Pending keeps a circle and any other raw
+/// status the dashed circle (no design state).
 /// The accessibility label follows the design's labels; an increased-prominence row (a solid accent selection)
 /// turns the icon white so it doesn't vanish into the highlight.
 public struct StatusIcon: View {
@@ -71,9 +72,14 @@ public struct StatusIcon: View {
     public nonisolated static func glyph(for status: TaskStatus, kind: Kind = .task) -> StatusGlyph {
         switch status {
         case .running: kind == .parallelGroup ? .shape(.parallel) : .spinner
-        case .completed: kind == .workflowRun ? .shape(.workflow) : .symbol("checkmark")
-        case .failed, .timedOut: .symbol("xmark")
-        case .cancelled: .symbol("stop.fill")
+        case .completed:
+            switch kind {
+            case .workflowRun: .shape(.workflow)
+            case .parallelGroup: .shape(.parallel)
+            case .task: .symbol("checkmark")
+            }
+        case .failed, .timedOut: kind == .parallelGroup ? .shape(.parallel) : .symbol("xmark")
+        case .cancelled: kind == .parallelGroup ? .shape(.parallel) : .symbol("stop.fill")
         case .other:
             switch raw(status) ?? "" {
             case "settling": .spinner
@@ -91,19 +97,22 @@ public struct StatusIcon: View {
         return nil
     }
 
-    /// The glyph's colour on an ordinary row. `kind` is accepted for symmetry with the other tables and does not change
-    /// the colour: every kind shares the status colours (a running group is `runningFG`, as the spinner is).
+    /// The glyph's colour on an ordinary row. Every kind shares the status colours (a running group is `runningFG`, as
+    /// the spinner is), except a finished parallel group: the design draws it in success whatever its members' outcomes.
     public nonisolated static func tint(for status: TaskStatus, kind: Kind = .task) -> Color {
+        if kind == .parallelGroup, status.isTerminal { return StatusColor.of(.completed) }
         if needsYou(status) { return Color.warningFG }
         if let raw = raw(status), raw == "pending" || raw == "queued" { return Color.cancelledGray }
         return StatusColor.of(status)
     }
 
     /// The spoken label: the design's "Needs you" for needs input and needs attention, "Parallel group, running" for a
-    /// running group and "Done" for a finished workflow run; every other state keeps the status label.
+    /// running group, "Parallel group, done" for a finished one and "Done" for a finished workflow run; every other
+    /// state keeps the status label.
     public nonisolated static func accessibilityLabel(for status: TaskStatus, kind: Kind = .task) -> String {
         if needsYou(status) { return "Needs you" }
         if kind == .parallelGroup, status.isRunning { return "Parallel group, running" }
+        if kind == .parallelGroup, status.isTerminal { return "Parallel group, done" }
         if kind == .workflowRun, status == .completed { return "Done" }
         return status.label
     }
@@ -234,6 +243,7 @@ private struct StatusIconsPreview: View {
             StatusIcon(status: .other("needs_input"))
             StatusIcon(status: .completed, kind: .workflowRun)
             StatusIcon(status: .running, kind: .parallelGroup)
+            StatusIcon(status: .completed, kind: .parallelGroup)
             StatusIcon(status: .other("unknown"))
         }
         .padding()
