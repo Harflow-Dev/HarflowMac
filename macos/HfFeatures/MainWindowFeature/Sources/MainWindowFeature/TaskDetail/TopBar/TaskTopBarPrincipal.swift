@@ -20,6 +20,9 @@ struct TaskTopBarPrincipal: View {
     /// Shown for every selection that is not a task, and until a task publishes.
     let fallbackTitle: String
     let status: AnyView
+    /// The page shape drawn while a page-level screen has not published yet (pending launches), so the bar never
+    /// shows the shell's text and then restyles. `nil` for every other selection.
+    var fallbackPage: PageTopBarContent?
     /// Native regression probe; production leaves this nil.
     var onEvaluation: (() -> Void)?
 
@@ -37,6 +40,7 @@ struct TaskTopBarPrincipal: View {
     var body: some View {
         _ = onEvaluation?()
         if let group = holder.shownGroup { return AnyView(groupBody(group)) }
+        if let page = holder.shownPage ?? fallbackPage { return AnyView(pageBody(page)) }
         let content = holder.shown
         let band = layout.effectiveBand
         return AnyView(TopBarPrincipalLayout(cap: band.cap, probe: probe) {
@@ -49,6 +53,25 @@ struct TaskTopBarPrincipal: View {
             status.topBarRole(.status)
         }
         .accessibilityElement(children: .contain))
+    }
+
+    // MARK: Page
+
+    /// A page-level screen: a single-line title and one badge. No meta, busy slot or buttons.
+    private func pageBody(_ page: PageTopBarContent) -> some View {
+        TopBarPrincipalLayout(cap: layout.effectiveBand.cap, probe: probe) {
+            Text(page.title)
+                .font(.hf(.reading, weight: Metrics.titleWeight))
+                .foregroundStyle(Color.primaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(page.title)
+                .accessibilityLabel(page.title)
+                .topBarRole(.title)
+            TaskStatusBadge(model: page.badge).topBarRole(.badge)
+            status.topBarRole(.status)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: Group

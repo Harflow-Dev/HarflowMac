@@ -223,4 +223,86 @@ import Testing
         #expect(blank.message == "The engine recorded that this launch did not start.")
         #expect(absent.message == blank.message)
     }
+
+    // MARK: - Top bar title
+
+    private let neutralTitle = "Pending launch"
+
+    @Test(arguments: ["waiting_for_resources", "reserved", "claimed", "granted", "not_started"])
+    func givenAQualifiedLookupWithATitle_whenMapped_thenTheTopBarTitleIsTheLaunchTitle(_ state: String) {
+        // given / when
+        let detail = make(PendingLaunchesFixture.item(id: id, state: state, title: "Review launch admission checks"))
+        // then
+        #expect(detail.topBarTitle == "Review launch admission checks")
+    }
+
+    @Test func givenAPaddedTitle_whenMapped_thenTheTopBarTitleIsTrimmed() {
+        // given / when
+        let detail = make(PendingLaunchesFixture.item(id: id, title: "  Review checks \n"))
+        // then
+        #expect(detail.topBarTitle == "Review checks")
+    }
+
+    @Test(arguments: [nil, "", "   ", "\n\t"] as [String?])
+    func givenANilOrBlankTitle_whenMapped_thenTheTopBarTitleFallsBackToThePendingLaunchTitle(_ title: String?) {
+        // given / when
+        let detail = make(PendingLaunchesFixture.item(id: id, title: title))
+        // then
+        #expect(detail.kind == .waiting)
+        #expect(detail.topBarTitle == neutralTitle)
+    }
+
+    @Test func givenAnUnsupportedCancelMechanism_whenMapped_thenTheQualifiedTitleStillShows() {
+        // given / when
+        let detail = make(PendingLaunchesFixture.item(id: id, state: "claimed", title: "Prepare local environment", cancelSupport: "unsupported"))
+        // then
+        #expect(detail.kind == .preparingHandshake)
+        #expect(detail.topBarTitle == "Prepare local environment")
+    }
+
+    @Test func givenAnUnrecognizedLaunchState_whenMapped_thenTheTitleIsNotTakenFromTheLaunch() {
+        // given / when
+        let detail = make(PendingLaunchesFixture.item(id: id, state: "future_state", title: "Should not appear"))
+        // then
+        #expect(detail.kind == .unavailable)
+        #expect(detail.topBarTitle == neutralTitle)
+    }
+
+    @Test func givenNonQualifiedOutcomes_whenMapped_thenTheTopBarTitleIsThePendingLaunchTitle() {
+        // given
+        let details = [make(plain: "recorded"), make(plain: "not_found"), make(plain: "refused"), make(plain: "unknown"),
+                       make(plain: "future_disposition")]
+        // when / then
+        for detail in details { #expect(detail.topBarTitle == neutralTitle) }
+    }
+
+    @Test func givenNoEvidenceOrAFailure_whenMapped_thenTheTopBarTitleIsThePendingLaunchTitle() {
+        // given / when
+        let checking = PendingLaunchDetailPresentation.make(taskID: id, evidence: .none, flags: .init(), timeZone: utc)
+        let unavailable = PendingLaunchDetailPresentation.make(taskID: id, evidence: .failed, flags: settled, timeZone: utc)
+        let handoff = PendingLaunchDetailPresentation.make(
+            taskID: id, evidence: .value(PendingLaunchesFixture.plainLookup(id: id, disposition: "recorded")),
+            flags: PendingLaunchDetailFlags(firstCheckSettled: true, handoffFailed: true), timeZone: utc)
+        // then
+        #expect(checking.topBarTitle == neutralTitle)
+        #expect(unavailable.topBarTitle == neutralTitle)
+        #expect(handoff.kind == .handoffFailed)
+        #expect(handoff.topBarTitle == neutralTitle)
+    }
+
+    @Test func givenALaunchOrNone_whenAskingForTheTopBarTitle_thenOnlyANonBlankTitleIsUsed() throws {
+        // given
+        let titled = try #require(PendingLaunchesFixture.item(id: id, title: " Titled ").launch)
+        let blank = try #require(PendingLaunchesFixture.item(id: id, title: " ").launch)
+        // when / then
+        #expect(PendingLaunchDetailPresentation.topBarTitle(for: titled) == "Titled")
+        #expect(PendingLaunchDetailPresentation.topBarTitle(for: blank) == neutralTitle)
+        #expect(PendingLaunchDetailPresentation.topBarTitle(for: nil) == neutralTitle)
+    }
+
+    @Test func givenTheDefaultPresentationFields_whenBuilt_thenTheTopBarTitleStartsNeutral() {
+        // given / when / then
+        #expect(PendingLaunchDetailPresentation(kind: .checking, title: "t", message: "m", facts: [], action: nil, isActionEnabled: false)
+            .topBarTitle == neutralTitle)
+    }
 }

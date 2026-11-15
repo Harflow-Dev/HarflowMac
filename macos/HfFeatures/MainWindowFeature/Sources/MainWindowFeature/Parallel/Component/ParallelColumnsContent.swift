@@ -14,8 +14,11 @@ struct ParallelColumnsContent: View {
     let onViewport: (CGFloat, CGFloat) -> Void
     @State var residencyHandoffs = ParallelResidencyHandoffStore()
 
+    /// A row's columns share one chrome; the last column's decides the row's trailing separator.
+    private var chrome: ParallelColumnChrome { columns.last?.chrome ?? .lane }
+
     private var columnWidth: CGFloat {
-        ParallelLayout.columnWidth(memberCount: columns.count, availableWidth: availableSize.width)
+        ParallelLayout.columnWidth(memberCount: columns.count, availableWidth: availableSize.width, chrome: chrome)
     }
 
     var body: some View {
@@ -25,7 +28,8 @@ struct ParallelColumnsContent: View {
                 ParallelColumnCell(model: column,
                                    state: column.isResident ? stateForColumn(column.id) : nil,
                                    residencyState: residencyHandoffs.state(for: column.id),
-                                   size: CGSize(width: columnWidth, height: max(0, availableSize.height)))
+                                   size: CGSize(width: columnWidth, height: max(0, availableSize.height)),
+                                   isLast: column.id == columns.last?.id)
                     .equatable()
                     .id(column.id)
             }
@@ -33,6 +37,7 @@ struct ParallelColumnsContent: View {
         .onChange(of: columns.map(\.id), initial: true) { _, ids in residencyHandoffs.retain(ids: Set(ids)) }
         .background(ParallelScrollObserver(axis: .horizontal, columnIDs: columns.map(\.id),
                                            columnStride: columnWidth + ParallelLayout.dividerWidth,
+                                           documentTrim: ParallelLayout.trailingTrim(chrome: chrome),
                                            horizontalPosition: horizontalPosition, explicitNavigationID: explicitNavigationID) { offset, _, viewport in
             onViewport(offset, viewport)
         })
@@ -42,7 +47,7 @@ struct ParallelColumnsContent: View {
 // MARK: - ParallelLaneSurface
 
 /// The lane surface. `.lane` is HarflowDesign v2's `.hd-lane`: a square, full-lane `--bg` fill with no
-/// status strip, rounded surround or border of its own (the separator after it is drawn by the cell).
+/// status strip, rounded surround or border of its own (the separator between lanes is drawn by the cell, never after the last).
 /// `.inspector` keeps the Graph inspector's earlier surface: `cardFill` with an optional 3 pt status
 /// strip across its top edge. Presentation only — the cell's equality, the resident placeholder, the
 /// stable IDs, arrival, the viewport observer and the column stride are owned by their own contracts.
@@ -102,9 +107,13 @@ struct ParallelColumnCell: View, @MainActor Equatable {
     let state: ParallelColumnUIState?
     var residencyState: SkeletonContentState?
     let size: CGSize
+    /// The last column of its row: a `.lane` then draws no separator after it. The previous last cell flips when a
+    /// member joins, so this takes part in equality.
+    var isLast = false
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.model.renderValue == rhs.model.renderValue && lhs.state === rhs.state && lhs.residencyState === rhs.residencyState && lhs.size == rhs.size
+        lhs.model.renderValue == rhs.model.renderValue && lhs.state === rhs.state && lhs.residencyState === rhs.residencyState
+            && lhs.size == rhs.size && lhs.isLast == rhs.isLast
     }
 
     var body: some View {
@@ -114,7 +123,7 @@ struct ParallelColumnCell: View, @MainActor Equatable {
                 content
             }
             .frame(width: size.width, height: size.height)
-            ParallelLaneSeparator(chrome: model.chrome)
+            if !(isLast && model.chrome == .lane) { ParallelLaneSeparator(chrome: model.chrome) }
         }
     }
 

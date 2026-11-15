@@ -51,9 +51,10 @@ import Testing
     }
 
     @Test(arguments: [ColorScheme.light, .dark])
-    func givenTwoLoadedLanes_whenRendered_thenTheSeparatorIsOnePointOfBorderAtTheLaneStride(scheme: ColorScheme) throws {
+    func givenTwoLoadedLanes_whenRendered_thenTheSeparatorIsOnePointOfBorderAtTheLaneStrideAndNoneFollowsTheLastLane(scheme: ColorScheme) throws {
         // given
-        let width = ParallelTestGeometry.laneStride * 2
+        // Two minimum lanes and the one separator between them: nothing follows the last lane.
+        let width = ParallelTestGeometry.laneStride * 2 - ParallelLayout.dividerWidth
         let first = makeModel(id: "first", state: .loaded)
         let second = makeModel(id: "second", state: .loaded)
         let view = ParallelColumnsContent(
@@ -63,7 +64,7 @@ import Testing
         let image = try render(view.frame(width: width, height: 320), scheme: scheme)
 
         // when / then — lane, then a 1 pt `--border` separator, then the next lane at the original stride.
-        let laneWidth = ParallelLayout.columnWidth(memberCount: 2, availableWidth: width)
+        let laneWidth = ParallelLayout.columnWidth(memberCount: 2, availableWidth: width, chrome: .lane)
         #expect(laneWidth == ParallelLayout.minimumColumnWidth)
         #expect(ParallelLayout.dividerWidth == 1)
         let y = image.pixelsHigh - 3
@@ -77,6 +78,8 @@ import Testing
         let background = try render(TaskScreenStyle.Colors.pageBackground.color.frame(width: 4, height: 4), scheme: scheme)
         let expectedBackground = try #require(background.colorAt(x: 1, y: 1))
         #expect(close(left, expectedBackground) && close(right, expectedBackground), "both lanes are filled with --bg")
+        let last = try #require(image.colorAt(x: image.pixelsWide - 1, y: y))
+        #expect(close(last, expectedBackground), "the last lane's trailing edge is --bg, not a rule")
     }
 
     @Test func givenAnInspectorColumn_whenRendered_thenItKeepsTheCardFillStatusStripAndSystemDivider() throws {

@@ -46,4 +46,65 @@ extension MainWindowCoordinatorTests {
         #expect(sut.topBar.shownGroup == nil)
         routing.clearTopBar(tag: tag)
     }
+
+    @Test func givenThePendingLaunchesSelection_whenAskingForTheTopBarSubject_thenItIsThePage() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+
+        // when
+        sut.selection = .pendingLaunches
+
+        // then
+        #expect(sut.shownTopBarSubject() == .pendingLaunches)
+        #expect(sut.topBar.shownSubject == .pendingLaunches)
+        #expect(sut.topBar.shownConversation == nil)
+    }
+
+    @Test func givenAPageWriter_whenItActivatesThroughTheCoordinator_thenItIsAcceptedOnlyOnThePendingLaunchesPage() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        let writer = TopBarFixtures.Writer()
+        let tag = TaskTopBarHolder.Tag(writer: ObjectIdentifier(writer), subject: .pendingLaunches)
+        let routing: any PendingLaunchesTopBarRouting = sut
+        let content = PageTopBarContent.pendingLaunches(title: "Review checks")
+
+        // when / then: another selection refuses it
+        sut.selection = .statistics
+        routing.publishTopBar(content, tag: tag)
+        routing.activateTopBar(tag: tag)
+        #expect(sut.topBar.shownPage == nil)
+
+        // the page's own selection accepts a fresh write
+        sut.selection = .pendingLaunches
+        routing.publishTopBar(content, tag: tag)
+        routing.activateTopBar(tag: tag)
+        #expect(sut.topBar.shownPage?.title == "Review checks")
+        #expect(sut.topBar.shown == nil)
+        #expect(sut.topBar.shownGroup == nil)
+
+        // leaving the page hides it; deactivation and clear are safe afterwards
+        sut.selection = .statistics
+        #expect(sut.topBar.shownPage == nil)
+        routing.deactivateTopBar(tag: tag)
+        routing.clearTopBar(tag: tag)
+    }
+
+    @Test func givenAPageWriter_whenItDeactivatesAndClears_thenTheBarIsEmpty() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        let writer = TopBarFixtures.Writer()
+        let tag = TaskTopBarHolder.Tag(writer: ObjectIdentifier(writer), subject: .pendingLaunches)
+        let routing: any PendingLaunchesTopBarRouting = sut
+        sut.selection = .pendingLaunches
+        routing.publishTopBar(.pendingLaunchesInventory, tag: tag)
+        routing.activateTopBar(tag: tag)
+        #expect(sut.topBar.shownPage == .pendingLaunchesInventory)
+
+        // when
+        routing.deactivateTopBar(tag: tag)
+        routing.clearTopBar(tag: tag)
+
+        // then
+        #expect(sut.topBar.shownPage == nil)
+    }
 }

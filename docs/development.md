@@ -61,6 +61,8 @@ must remain available throughout native execution.
 
 The M05 task-state matrix suites (`M05StatusStateMatrixHostedTests`, `M05ActionsTopBarStateMatrixHostedTests`, `M05PaneStateMatrixHostedTests`, `M05ChangesStateMatrixHostedTests` and `M05TranscriptStateMatrixHostedTests`, each in `HOSTED_SUITES`) write review captures only when `HARFLOW_M05_MATRIX_CAPTURE_DIR` is set: per state and size, a host bitmap, the exact owned window capture and a JSON naming the HarflowDesign route and commit. Without it they assert and write nothing.
 
+`PendingLaunchesTopBarHostedTests` (`HARFLOW_PENDING_TOPBAR_CAPTURE_DIR`) and `ParallelGroupMinimumHostedTests` (`HARFLOW_PARALLEL_LANES_CAPTURE_DIR`) follow the same shape for the Pending launches top bar (inventory, qualified detail, checking detail) and the titled Parallel lanes with captions: light and dark at 1000 x 620 and 1280 x 800, each with a host bitmap, the exact owned window capture and a JSON naming the HarflowDesign route, file and commit. Without the variable they only assert.
+
 The host uses the `xcrun` selected compiler and Testing.framework (Library 1902), checks that exactly
 that Testing image remains loaded, and uses an isolated HOME, CFFIXED_USER_HOME and TMPDIR with
 saved-state restoration disabled. Setup, signing and activation share the build budget. A real

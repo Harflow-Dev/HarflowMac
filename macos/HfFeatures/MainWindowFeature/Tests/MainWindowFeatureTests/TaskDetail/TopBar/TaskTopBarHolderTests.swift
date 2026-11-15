@@ -384,4 +384,171 @@ import Testing
         #expect(holder.activateIfVacant(tag))
         #expect(holder.activeTag == tag)
     }
+
+    // MARK: - Page content
+
+    /// Writers stay alive for the process so two tags never share a reused object identity.
+    private static var retainedWriters: [Fixtures.Writer] = []
+
+    private func pageTag(_ writer: Fixtures.Writer) -> TaskTopBarHolder.Tag {
+        Self.retainedWriters.append(writer)
+        return TaskTopBarHolder.Tag(writer: ObjectIdentifier(writer), subject: .pendingLaunches)
+    }
+
+    @Test func givenThePendingLaunchesPage_whenItsWriterPublishesAndActivates_thenOnlyThePageContentIsShown() {
+        // given
+        let holder = TaskTopBarHolder()
+        let writer = Fixtures.Writer()
+        let tag = pageTag(writer)
+        holder.setShownSubject(.pendingLaunches)
+        holder.publish(PageTopBarContent.pendingLaunches(title: "Review checks"), tag: tag)
+        #expect(holder.shownPage == nil)
+
+        // when
+        let accepted = holder.activate(tag)
+
+        // then
+        #expect(accepted)
+        #expect(holder.shownPage?.title == "Review checks")
+        #expect(holder.shownPage?.badge == .pendingLaunch)
+        #expect(holder.shown == nil)
+        #expect(holder.shownGroup == nil)
+    }
+
+    @Test func givenAnotherSubjectShown_whenThePageWriterActivates_thenItIsRefusedAndNothingIsShown() {
+        // given
+        let holder = TaskTopBarHolder()
+        let tag = pageTag(Fixtures.Writer())
+        holder.setShownSubject(.group("release"))
+        holder.publish(PageTopBarContent.pendingLaunchesInventory, tag: tag)
+
+        // when / then
+        #expect(!holder.activate(tag))
+        #expect(!holder.activateIfVacant(tag))
+        #expect(holder.shownPage == nil)
+    }
+
+    @Test func givenShownPageContent_whenTheSelectionLeavesThePage_thenItIsDroppedAndDoesNotReturnWithoutAFreshWrite() {
+        // given
+        let holder = TaskTopBarHolder()
+        let tag = pageTag(Fixtures.Writer())
+        holder.setShownSubject(.pendingLaunches)
+        holder.activate(tag)
+        holder.publish(PageTopBarContent.pendingLaunchesInventory, tag: tag)
+        #expect(holder.shownPage != nil)
+
+        // when
+        holder.setShownConversation("a")
+        holder.setShownSubject(.pendingLaunches)
+
+        // then
+        #expect(holder.shownPage == nil)
+        #expect(holder.activeTag == nil)
+    }
+
+    @Test func givenShownPageContent_whenDifferentContentIsPublished_thenTheShownTitleFollows() {
+        // given
+        let holder = TaskTopBarHolder()
+        let tag = pageTag(Fixtures.Writer())
+        holder.setShownSubject(.pendingLaunches)
+        holder.activate(tag)
+        holder.publish(PageTopBarContent.pendingLaunchesInventory, tag: tag)
+
+        // when
+        holder.publish(PageTopBarContent.pendingLaunches(title: "Prepare local environment"), tag: tag)
+
+        // then
+        #expect(holder.shownPage?.title == "Prepare local environment")
+    }
+
+    @Test func givenShownPageContent_whenTheSameContentIsPublishedAgain_thenObserversAreNotNotified() {
+        // given
+        let holder = TaskTopBarHolder()
+        let tag = pageTag(Fixtures.Writer())
+        holder.setShownSubject(.pendingLaunches)
+        holder.activate(tag)
+        holder.publish(PageTopBarContent.pendingLaunchesInventory, tag: tag)
+        let flag = Flag()
+        withObservationTracking { _ = holder.shownPage } onChange: { flag.fired = true }
+
+        // when
+        holder.publish(PageTopBarContent.pendingLaunchesInventory, tag: tag)
+
+        // then
+        #expect(!flag.fired)
+    }
+
+    @Test func givenShownPageContent_whenDifferentContentIsPublished_thenObserversAreNotified() {
+        // given
+        let holder = TaskTopBarHolder()
+        let tag = pageTag(Fixtures.Writer())
+        holder.setShownSubject(.pendingLaunches)
+        holder.activate(tag)
+        holder.publish(PageTopBarContent.pendingLaunchesInventory, tag: tag)
+        let flag = Flag()
+        withObservationTracking { _ = holder.shownPage } onChange: { flag.fired = true }
+
+        // when
+        holder.publish(PageTopBarContent.pendingLaunches(title: "Other"), tag: tag)
+
+        // then
+        #expect(flag.fired)
+    }
+
+    @Test func givenShownPageContent_whenTheWriterDeactivatesOrClears_thenNothingIsShown() {
+        // given
+        let holder = TaskTopBarHolder()
+        let tag = pageTag(Fixtures.Writer())
+        holder.setShownSubject(.pendingLaunches)
+        holder.activate(tag)
+        holder.publish(PageTopBarContent.pendingLaunchesInventory, tag: tag)
+
+        // when
+        holder.deactivate(tag)
+
+        // then
+        #expect(holder.shownPage == nil)
+
+        // when: it activates again with its stored content, then clears.
+        holder.activate(tag)
+        #expect(holder.shownPage != nil)
+        holder.clear(tag: tag)
+
+        // then
+        #expect(holder.shownPage == nil)
+    }
+
+    @Test func givenAnActivePageWriter_whenAnotherWriterOfTheSameSubjectActivates_thenOnlyTheLatestIsShown() {
+        // given
+        let holder = TaskTopBarHolder()
+        let first = pageTag(Fixtures.Writer())
+        let second = pageTag(Fixtures.Writer())
+        holder.setShownSubject(.pendingLaunches)
+        holder.publish(PageTopBarContent.pendingLaunches(title: "First"), tag: first)
+        holder.publish(PageTopBarContent.pendingLaunches(title: "Second"), tag: second)
+        holder.activate(first)
+
+        // when
+        holder.activate(second)
+
+        // then
+        #expect(holder.shownPage?.title == "Second")
+        // and a late write from the outgoing writer is stored but not shown
+        holder.publish(PageTopBarContent.pendingLaunches(title: "Late"), tag: first)
+        #expect(holder.shownPage?.title == "Second")
+    }
+
+    @Test func givenAPageTag_whenAskingForItsConversationID_thenItIsAFixedKey() {
+        // given / when / then
+        #expect(pageTag(Fixtures.Writer()).conversationID == "pending-launches")
+    }
+
+    @Test func givenThePageContent_whenBuilt_thenItCarriesTheInventoryTitleAndTheBaseToneBadge() {
+        // given / when / then
+        #expect(PageTopBarContent.pendingLaunchesTitle == "Pending launches")
+        #expect(PageTopBarContent.pendingLaunchesInventory == PageTopBarContent.pendingLaunches(title: "Pending launches"))
+        #expect(TaskBadgeModel.pendingLaunch.label == "Pending launch")
+        #expect(TaskBadgeModel.pendingLaunch.tone == .base)
+        #expect(TaskBadgeModel.pendingLaunch.clock == .none)
+    }
 }

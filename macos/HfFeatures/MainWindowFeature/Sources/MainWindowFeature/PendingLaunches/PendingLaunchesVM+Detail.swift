@@ -40,6 +40,7 @@ extension PendingLaunchesVM {
         handoffFailed = false
         focusRowID = nil
         detail = .checking(taskID: id)
+        publishTopBar()
         enqueueCheck()
         reproject()
         rebuild()
@@ -89,6 +90,7 @@ extension PendingLaunchesVM {
         firstCheckSettled = false
         handoffFailed = false
         detail = nil
+        publishTopBar()
         discardStopState()
         if projection.stop != nil { projection.stop = nil }
     }

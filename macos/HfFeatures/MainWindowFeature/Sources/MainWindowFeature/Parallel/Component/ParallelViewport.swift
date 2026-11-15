@@ -47,6 +47,10 @@ final class ParallelScrollObservationView: NSView {
     func cancelHorizontalMovement() { pendingOffset = nil; preservedHorizontalOffset = nil }
     var ids: [String] = []
     var stride: CGFloat = 0
+    /// How much shorter the horizontal document is than `ids.count * stride` (a lane row draws no rule after its last lane).
+    var documentTrim: CGFloat = 0
+    /// The horizontal document's length once every column is laid out.
+    var expectedDocumentLength: CGFloat { CGFloat(ids.count) * stride - documentTrim }
     var pendingOffset: CGFloat?
     var applyingRestoration = false
     private var nativeAnchorTarget: CGFloat?
@@ -558,7 +562,7 @@ final class ParallelScrollObservationView: NSView {
         // movement observation, so a user move that cancels the provider this same report
         // cannot leave a stale correction to apply.
         let providerTarget = nativeRestorationTarget(document: document, geometryChanged: documentGeometryChanged)
-        let horizontalLayoutReady = axis != .horizontal || (!ids.isEmpty && stride > 0 && abs(length - CGFloat(ids.count) * stride) < 2)
+        let horizontalLayoutReady = axis != .horizontal || (!ids.isEmpty && stride > 0 && abs(length - expectedDocumentLength) < 2)
         if restorationActive, pendingOffset == nil, let requestedOffset { pendingOffset = requestedOffset }
         if let target = providerTarget ?? preservedHorizontalOffset ?? pendingOffset, viewport > 0, horizontalLayoutReady {
             applyRestorationTarget(target, scroll: scroll, document: document, geometry: (length, viewport, visible))

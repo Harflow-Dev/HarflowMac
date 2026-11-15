@@ -93,7 +93,12 @@ struct ParallelView<VM: ParallelViewModel>: View {
             .onDisappear { viewModel.didDisappear() }
     }
 
-    private var realContent: some View {
+    /// The recovery applies to the lane row only: an empty group's centred text keeps the system safe area.
+    @ViewBuilder private var realContent: some View {
+        if viewModel.isEmpty { laneRowContent } else { laneRowContent.parallelLeadingRecovery() }
+    }
+
+    private var laneRowContent: some View {
         GeometryReader { screen in
             VStack(spacing: HfRadius.Metrics.zero) {
                 if viewModel.isEmpty {

@@ -51,6 +51,9 @@ protocol ParallelUseCase: Sendable {
     func setOutcome(_ id: String, _ text: String?)
     /// Starts Terminal takeover synchronously before routing.
     func beginTakeover(taskID: String)
+    /// The engine's models for `backend` (its `backend-models` read), whose labels name a lane's model. Empty when the engine
+    /// offers none; the lane then shows the raw model id.
+    func modelOptions(backend: String) async -> [ModelOption]
 }
 
 // MARK: - ParallelRouting

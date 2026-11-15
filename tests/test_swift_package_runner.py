@@ -487,6 +487,7 @@ HOSTED_SUITE_NAMES = (
     TOP_BAR_CAPTURE_SUITE,
     TASK_DRAFT_COMPOSER_SUITE,
     "MainWindowFeatureTests.ParallelLaneRevealHostedTests",
+    "MainWindowFeatureTests.PendingLaunchesTopBarHostedTests",
 )
 HOSTED_NORMAL = APPROVAL_SUITE + "/testApproval()"
 HOSTED_SECOND = APPROVAL_SUITE + "/testBlockedApproval()"

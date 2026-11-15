@@ -7,6 +7,10 @@ import SwiftUI
 
 extension EnvironmentValues {
     @Entry var toggleHarflowSidebar: (@MainActor () -> Void)?
+    /// Whether the floating sidebar is shown beside the detail column (the split view's column visibility is not
+    /// `.detailOnly`). Written by the shell from its own column state, never inferred from a measured inset. The
+    /// Parallel lane row reads it to take back the sidebar's 8 pt outer margin.
+    @Entry var isFloatingSidebarExpanded = false
 }
 
 // MARK: - MainWindowNavigationView
@@ -49,6 +53,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 // The detail column's own width (the sidebar's shown width and collapse are already out of it) gives a
                 // group's top bar its budget; only the principal reads it.
                 detail.onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { layout.setDetailWidth($0) }
+                    .environment(\.isFloatingSidebarExpanded, !isCollapsed)
             }
         }
         .onGeometryChange(for: TopBarWidthBand.self) { TopBarWidthBand(width: $0.size.width) } action: { layout.setBand($0) }
@@ -62,7 +67,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
             }
             ToolbarItem(placement: .principal) {
                 TaskTopBarPrincipal(holder: coordinator.topBar, layout: layout, fallbackTitle: contextTitle,
-                                    status: coordinator.buildConnectionStatusView(), onEvaluation: onPrincipalEvaluation)
+                                    status: coordinator.buildConnectionStatusView(), fallbackPage: fallbackPage,
+                                    onEvaluation: onPrincipalEvaluation)
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -106,6 +112,12 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
                 }
             }
         }
+    }
+
+    /// The page shape the principal draws before the selected page publishes; only when the page itself is mounted.
+    private var fallbackPage: PageTopBarContent? {
+        guard coordinator.runtimeIsReady, coordinator.selection == .pendingLaunches else { return nil }
+        return .pendingLaunchesInventory
     }
 
     private var contextTitle: String {

@@ -256,6 +256,24 @@ import Testing
         #expect(abs(row.scroll.documentVisibleRect.minX - target) < 1, "visible \(row.scroll.documentVisibleRect)")
     }
 
+    @Test func givenTheLastLaneOfALaneRow_whenKeyboardFocusEntersIt_thenTheRowEndsExactlyAtTheDocumentEdge() async throws {
+        // given — three lanes with no rule after the last: the document is three strides less one separator
+        let row = try await RevealRow.mounted(laneCount: 3, documentLanes: 3, documentTrim: ParallelLayout.dividerWidth)
+        defer { row.close() }
+        let documentLength = row.document.frame.width
+        #expect(documentLength == 3 * ParallelTestGeometry.laneStride - ParallelLayout.dividerWidth)
+        #expect(row.scroll.documentVisibleRect.minX == 0)
+
+        // when — keyboard focus enters the last lane (a 14 pt peek at the minimum window)
+        row.focus(lane: 2, keyboard: true)
+        await row.settle { abs(row.scroll.documentVisibleRect.maxX - documentLength) < 1 }
+
+        // then — the lane is whole and the row ends at the lane's own edge: no separator or neighbour is asked for beyond it
+        let visible = row.scroll.documentVisibleRect
+        #expect(abs(visible.maxX - documentLength) < 1, "visible \(visible), document \(documentLength)")
+        #expect(visible.minX <= 2 * ParallelTestGeometry.laneStride)
+    }
+
     @Test func givenLayoutNotReady_whenKeyboardFocusEntersALane_thenTheRevealIsKeptAndAppliedOnceLayoutSettles() async throws {
         // given — the document is still the width of two lanes while the row already lists five.
         let row = try await RevealRow.mounted(laneCount: 5, documentLanes: 2)
@@ -409,20 +427,26 @@ import Testing
 
     final class RevealDocument: NSView { override var isFlipped: Bool { true } }
 
-    static func mounted(laneCount: Int, documentLanes: Int) async throws -> RevealRow {
-        let row = RevealRow(laneCount: laneCount, documentLanes: documentLanes)
+    /// How much shorter than whole strides the document is: the separator a lane row does not draw after its last lane.
+    let documentTrim: CGFloat
+
+    static func mounted(laneCount: Int, documentLanes: Int, documentTrim: CGFloat = 0) async throws -> RevealRow {
+        let row = RevealRow(laneCount: laneCount, documentLanes: documentLanes, documentTrim: documentTrim)
+        row.observer.documentTrim = documentTrim
         row.observer.configure(ids: row.ids, stride: ParallelTestGeometry.laneStride, restorationOffset: nil, restorationActive: false)
         await row.settle { row.scroll.documentVisibleRect.width == row.viewportWidth && row.observer.observedScrollView != nil }
         try #require(row.observer.observedScrollView != nil, "the observer never attached to the row's scroll view")
         return row
     }
 
-    private init(laneCount: Int, documentLanes: Int) {
+    private init(laneCount: Int, documentLanes: Int, documentTrim: CGFloat) {
         _ = NSApplication.shared
+        self.documentTrim = documentTrim
         self.ids = (0 ..< laneCount).map { "lane-\($0)" }
         self.scroll = NSScrollView(frame: CGRect(x: 0, y: 0, width: 736, height: 200))
         scroll.hasHorizontalScroller = true
-        self.document = RevealDocument(frame: CGRect(x: 0, y: 0, width: CGFloat(documentLanes) * ParallelTestGeometry.laneStride, height: 200))
+        self.document = RevealDocument(frame: CGRect(x: 0, y: 0, width: CGFloat(documentLanes) * ParallelTestGeometry.laneStride - documentTrim,
+                                                     height: 200))
         scroll.documentView = document
         for lane in 0 ..< laneCount {
             let field = NSTextField(frame: CGRect(x: CGFloat(lane) * ParallelTestGeometry.laneStride + 20, y: 20, width: 200, height: 24))
@@ -443,7 +467,7 @@ import Testing
     }
 
     func setDocumentLanes(_ count: Int) {
-        document.setFrameSize(NSSize(width: CGFloat(count) * ParallelTestGeometry.laneStride, height: 200))
+        document.setFrameSize(NSSize(width: CGFloat(count) * ParallelTestGeometry.laneStride - documentTrim, height: 200))
     }
 
     func focusSecondField(lane: Int) {

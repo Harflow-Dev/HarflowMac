@@ -80,7 +80,7 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored var descriptors: [String: ParallelColumnPresentation] = [:]
     @ObservationIgnored var presentations: [String: ParallelColumnPresentation] = [:]
     @ObservationIgnored var completedInputs: [String: ParallelColumnInput] = [:]
-    @ObservationIgnored private var desiredInputs: [String: ParallelColumnInput] = [:]
+    @ObservationIgnored var desiredInputs: [String: ParallelColumnInput] = [:]
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var pendingInputs: [String: ParallelColumnInput]?
     @ObservationIgnored private var revision: UInt64 = 0
@@ -97,6 +97,7 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private(set) var builtColumnCount = 0
     @ObservationIgnored private(set) var sourceUpdateCount = 0
     @ObservationIgnored let outcomeMemory = ParallelOutcomeMemory()
+    @ObservationIgnored let modelLabels = ParallelModelLabelStore()
 
     func updateViewport(offset: CGFloat, width: CGFloat) {
         guard viewportOffset != offset || viewportWidth != width else { return }
@@ -160,6 +161,7 @@ final class ParallelVM: ParallelViewModel {
         visibleIDs.removeAll()
         uiStates.removeAll()
         cancelRequestReads()
+        cancelModelLabelRequests()
         orderedConversations.removeAll()
         selectedConversationID = nil
         viewportWidth = 0
@@ -193,8 +195,7 @@ final class ParallelVM: ParallelViewModel {
         for id in inputs.keys { inputs[id]?.base.showPrompt = showPrompt }
         publishColumns()
         schedule(inputs)
-        MonitorMetrics.end(start, stage: .parallelPreparation,
-            residentColumns: residentIDs.count, leasedMembers: leases.count)
+        MonitorMetrics.end(start, stage: .parallelPreparation, residentColumns: residentIDs.count, leasedMembers: leases.count)
     }
 
     // MARK: - Private Methods
@@ -349,6 +350,7 @@ final class ParallelVM: ParallelViewModel {
         arrivals = arrivalTracker.update(orderedConversations.map { (id: $0.id, startedAt: $0.first.startedAt) },
                                          authoritative: activityReady && initialMembershipResolved && resolved)
         descriptors = Dictionary(uniqueKeysWithValues: orderedConversations.map { ($0.id, basePresentation($0, includePrompt: false)) })
+        requestModelLabels()
         let inputs = updateResidency()
         syncRequestReads()
         publishColumns()
@@ -464,7 +466,7 @@ final class ParallelVM: ParallelViewModel {
             title: workflowTitles[currentID] ?? useCase.title(conversation.first.taskID),
             subtitle: isWorkflowInspector
                 ? ParallelColumnModel.subtitle(repoPath: current.repoPath, backend: current.backend, turns: conversation.members.count) : "",
-            caption: ParallelLaneStatus.caption(current: current), harnessName: ParallelLaneStatus.harnessName(current: current),
+            caption: caption(for: current), harnessName: ParallelLaneStatus.harnessName(current: current),
             status: isWorkflowInspector ? nil : laneStatus(current),
             isBusy: latestBusy.contains(currentID) || messageDispatches.contains(currentID), outcomeMessage: latestOutcomes[currentID], showPrompt: showPrompt,
             summary: summary, start: conversation.first.startedAt,
@@ -504,7 +506,7 @@ final class ParallelVM: ParallelViewModel {
         presentationWriteCount += 1
     }
 
-    private func schedule(_ inputs: [String: ParallelColumnInput]) {
+    func schedule(_ inputs: [String: ParallelColumnInput]) {
         guard desiredInputs != inputs else { return }
         desiredInputs = inputs
         revision &+= 1
@@ -536,7 +538,7 @@ final class ParallelVM: ParallelViewModel {
             if didSubscribe, epoch == buildEpoch, revision == buildRevision, let result {
                 builtColumnCount += result.count
                 for (id, presentation) in result where residentIDs.contains(id) && desiredInputs[id] == inputs[id] {
-                    presentations[id] = presentation
+                    presentations[id] = withCurrentCaption(presentation)
                     completedInputs[id] = inputs[id]
                 }
                 publishColumns()

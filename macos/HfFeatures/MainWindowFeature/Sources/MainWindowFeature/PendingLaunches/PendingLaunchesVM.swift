@@ -39,6 +39,20 @@ protocol PendingLaunchesRouting: AnyObject {
     func dismissPendingLaunchStop()
 }
 
+// MARK: - PendingLaunchesTopBarRouting
+
+/// The window's top bar writer protocol for the pending launches page. Held weakly by the VM; the coordinator's
+/// holder only shows content while this page is the selected destination.
+@Mockable
+@MainActor
+protocol PendingLaunchesTopBarRouting: AnyObject {
+    func publishTopBar(_ content: PageTopBarContent, tag: TaskTopBarHolder.Tag)
+    func clearTopBar(tag: TaskTopBarHolder.Tag)
+    func activateTopBar(tag: TaskTopBarHolder.Tag)
+    func deactivateTopBar(tag: TaskTopBarHolder.Tag)
+    func retryTopBarActivation(tag: TaskTopBarHolder.Tag)
+}
+
 // MARK: - PendingLaunchStopRequest
 
 /// Why a Stop confirmation ended without a request. Only the user's own Cancel returns focus to Stop.
@@ -100,6 +114,9 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
     @ObservationIgnored let useCase: any PendingLaunchesUseCase
     @ObservationIgnored let builder: Builder
     @ObservationIgnored weak var routing: (any PendingLaunchesRouting)?
+    @ObservationIgnored weak var topBarRouting: (any PendingLaunchesTopBarRouting)?
+    /// The last content written to the top bar; nil until this appearance publishes.
+    @ObservationIgnored var lastPublishedTopBar: PageTopBarContent?
     @ObservationIgnored var didSubscribe = false
     @ObservationIgnored private var isStarting = false
     @ObservationIgnored private var generation = UUID()
@@ -174,14 +191,17 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
     /// Called on the main actor after each build result is processed; `true` when it was applied.
     @ObservationIgnored var didProcessBuild: (@MainActor (Bool) -> Void)?
 
-    init(useCase: any PendingLaunchesUseCase, routing: (any PendingLaunchesRouting)? = nil, builder: @escaping Builder) {
+    init(useCase: any PendingLaunchesUseCase, routing: (any PendingLaunchesRouting)? = nil,
+         topBarRouting: (any PendingLaunchesTopBarRouting)? = nil, builder: @escaping Builder) {
         self.useCase = useCase
         self.routing = routing
+        self.topBarRouting = topBarRouting
         self.builder = builder
     }
 
-    convenience init(useCase: any PendingLaunchesUseCase, routing: (any PendingLaunchesRouting)? = nil) {
-        self.init(useCase: useCase, routing: routing, builder: { PendingLaunchesBuildOutput.make($0) })
+    convenience init(useCase: any PendingLaunchesUseCase, routing: (any PendingLaunchesRouting)? = nil,
+                     topBarRouting: (any PendingLaunchesTopBarRouting)? = nil) {
+        self.init(useCase: useCase, routing: routing, topBarRouting: topBarRouting, builder: { PendingLaunchesBuildOutput.make($0) })
     }
 
     func didAppear() {
@@ -199,6 +219,7 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
         if initial.inventory.isRefreshing { didObserveRead = true }
         acquireLease()
         isStarting = false
+        activateTopBar()
         rebuild()
     }
 
@@ -207,6 +228,7 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
         didSubscribe = false
         generation = UUID()
         resetSelectionForDisappearance()
+        deactivateTopBar()
         cancellables.removeAll()
         build?.cancel()
         build = nil
@@ -263,5 +285,6 @@ final class PendingLaunchesVM: PendingLaunchesViewModel {
         // A selection cleared since this build was requested (Back, disappearance) already hid the detail.
         let next = selection == nil ? nil : result.detail
         if detail != next { detail = next }
+        publishTopBar()
     }
 }

@@ -17,6 +17,9 @@ struct ParallelScrollObserver: NSViewRepresentable {
     let axis: Axis
     var columnIDs: [String] = []
     var columnStride: CGFloat = 0
+    /// How much shorter the document is than `columnIDs.count * columnStride`: the separator a lane row does not draw
+    /// after its last lane.
+    var documentTrim: CGFloat = 0
     var horizontalPosition: ParallelViewportPosition?
     var explicitNavigationID: String?
     var restorationOffset: CGFloat?
@@ -66,6 +69,7 @@ struct ParallelScrollObserver: NSViewRepresentable {
         view.updateWheelMonitor()
         view.horizontalPosition = horizontalPosition
         view.explicitNavigationID = explicitNavigationID
+        view.documentTrim = documentTrim
         view.configure(ids: columnIDs, stride: columnStride, restorationOffset: restorationOffset,
                        restorationActive: restorationActive, generation: restorationGeneration)
         view.bindNativeIdentity(nativeIdentity)

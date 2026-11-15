@@ -10,9 +10,8 @@ import Testing
 
 @MainActor
 @Suite struct ParallelVMTests {
-    /// A plain mutable box read by a `willProduce` closure registered exactly once — `Mockable`'s
-    /// FIFO stub queue does not reliably swap a member's answer for the very next call (see the
-    /// Phase 3/4a/4b reports). Mutating a box sidesteps it.
+    /// A plain mutable box read by a `willProduce` closure registered exactly once — `Mockable`'s FIFO stub queue
+    /// does not reliably swap a member's answer for the very next call (Phase 3/4a/4b reports). Mutate a box instead.
     final class Box<Value> {
         var value: Value
         init(_ value: Value) { self.value = value }
@@ -45,6 +44,7 @@ import Testing
         let conversationPagesBox: Box<[TaskHistoryPage?]>
         /// The request-read surface of the use case (View prompt).
         let requests: RequestStub
+        let catalog = CatalogStub()
     }
 
     func makeSUT(groupName: String = "g1", leasePool: ParallelTestLeasePool? = nil, publishesTopBar: Bool = false,
@@ -95,7 +95,6 @@ import Testing
         given(useCase).setOutcome(.any, .any).willReturn()
         given(routing).selectTask(.any).willReturn()
         Self.stubTopBar(routing)
-
         let sut = ParallelVM(groupName: groupName, useCase: useCase, routing: routing, publishesTopBar: publishesTopBar, buildColumns: buildColumns)
         sut.updateViewport(offset: 0, width: 100_000)
         let harness = SUT(
@@ -107,6 +106,7 @@ import Testing
             loadCallsBox: loadCallsBox, loadAdmissionBox: loadAdmissionBox, acquireEffectBox: acquireEffectBox, conversationPagesBox: conversationPagesBox,
             requests: RequestStub()
         )
+        Self.stubCatalog(useCase, harness.catalog)
         configureHistory(harness, leasePool: leasePool)
         return harness
     }

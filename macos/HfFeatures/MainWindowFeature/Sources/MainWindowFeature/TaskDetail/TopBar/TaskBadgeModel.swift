@@ -30,6 +30,8 @@ struct TaskBadgeModel: Equatable, Sendable {
     /// The `TaskScreenStyle.Badge` colour pair the badge uses.
     enum Tone: Equatable, Sendable {
         case running, done, failed, attention, warning, neutral
+        /// `.hd-badge`: `surface-hover` on `text-secondary`, the unmodified base badge.
+        case base
         /// Transparent, keeping the base foreground.
         case plain
     }

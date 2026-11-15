@@ -81,7 +81,9 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
         ConnectionStatusView(ConnectionStatusPreviewMock()).eraseToAnyView()
     }
 
-    func buildPendingLaunchesView() -> AnyView { PendingLaunchesView(PendingLaunchesPreviewMock()).eraseToAnyView() }
+    /// Lets an integrated test mount the real pending launches screen (with its real view model) under the shell.
+    @ObservationIgnored var pendingLaunchesBuilder: (@MainActor () -> AnyView)?
+    func buildPendingLaunchesView() -> AnyView { pendingLaunchesBuilder?() ?? PendingLaunchesView(PendingLaunchesPreviewMock()).eraseToAnyView() }
     func buildNewSessionView() -> AnyView { NewSessionView(composerViewModel, optionsPresented: optionsInitiallyPresented).eraseToAnyView() }
     @ObservationIgnored var parallelBuilder: (@MainActor (String) -> AnyView)?
     func buildParallelView(name: String) -> AnyView { parallelBuilder?(name) ?? Text("Parallel: \(name)").eraseToAnyView() }

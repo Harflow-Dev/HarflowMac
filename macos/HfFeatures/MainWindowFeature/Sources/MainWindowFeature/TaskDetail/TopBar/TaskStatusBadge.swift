@@ -68,7 +68,7 @@ struct TaskStatusBadge: View {
         case .attention: Metrics.attention
         case .warning: Metrics.warning
         case .neutral: Metrics.neutral
-        case .plain: Metrics.base
+        case .base, .plain: Metrics.base
         }
     }
 }

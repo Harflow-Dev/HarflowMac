@@ -99,10 +99,11 @@ extension ParallelScrollObservationView {
         let insets = horizontalInsets(of: scroll)
         // The lane row's own viewport: inside the content insets a floating sidebar leaves.
         let visible = CGRect(x: raw.minX + insets.leading, y: raw.minY, width: raw.width - insets.leading - insets.trailing, height: raw.height)
-        guard visible.width > 0, abs(length - CGFloat(ids.count) * stride) < 2 else { return false }
+        guard visible.width > 0, abs(length - expectedDocumentLength) < 2 else { return false }
         let laneMin = CGFloat(index) * stride
         let laneMax = laneMin + stride - ParallelLayout.dividerWidth
-        // The lane wholly, plus its separator and one point of the neighbouring lane on each side that has one, so
+        // The lane wholly, plus its separator and one point of the neighbouring lane on each side that has one (the last lane of a
+        // lane row has neither: the document ends at its edge), so
         // that neighbour intersects the viewport, becomes resident and the next Tab or Shift-Tab can continue.
         let peek = ParallelLayout.dividerWidth + 1
         let leftBound = laneMin - (index > 0 ? peek : 0)

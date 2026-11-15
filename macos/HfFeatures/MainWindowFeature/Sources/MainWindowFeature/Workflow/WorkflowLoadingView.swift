@@ -118,7 +118,7 @@ struct WorkflowLoadingActivity: View {
                             Spacer(minLength: 0)
                         }
                         .padding(HfRadius.Metrics.spacing16)
-                        .frame(width: ParallelLayout.columnWidth(memberCount: 2, availableWidth: viewport.size.width),
+                        .frame(width: ParallelLayout.columnWidth(memberCount: 2, availableWidth: viewport.size.width, chrome: .inspector),
                                height: viewport.size.height)
                         Divider()
                     }

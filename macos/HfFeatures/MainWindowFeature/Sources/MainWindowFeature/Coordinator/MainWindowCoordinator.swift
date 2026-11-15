@@ -254,7 +254,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     }
 
     public func buildPendingLaunchesView() -> AnyView {
-        let vm = pendingLaunchesVM ?? PendingLaunchesVM(useCase: PendingLaunchesViewRepository(), routing: self)
+        let vm = pendingLaunchesVM ?? PendingLaunchesVM(useCase: PendingLaunchesViewRepository(), routing: self, topBarRouting: self)
         pendingLaunchesVM = vm
         return PendingLaunchesView(vm).eraseToAnyView()
     }
@@ -381,11 +381,13 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         if case .task(let id) = selection { normalisedConversationID(for: id) } else { nil }
     }
 
-    /// The subject the top bar shows content for: the selected task's conversation or the selected group, `nil` otherwise.
+    /// The subject the top bar shows content for: the selected task's conversation, the selected group or the pending
+    /// launches page, `nil` otherwise.
     func shownTopBarSubject() -> TopBarSubject? {
         switch selection {
         case .task(let id): .task(normalisedConversationID(for: id))
         case .group(let name): .group(name)
+        case .pendingLaunches: .pendingLaunches
         default: nil
         }
     }
@@ -515,6 +517,10 @@ extension MainWindowCoordinator: ParallelRouting {
     }
 }
 
+// MARK: - PendingLaunchesTopBarRouting
+
+extension MainWindowCoordinator: PendingLaunchesTopBarRouting {}
+
 // MARK: - PendingLaunchesRouting
 
 extension MainWindowCoordinator: PendingLaunchesRouting {
@@ -530,6 +536,7 @@ extension MainWindowCoordinator: PendingLaunchesRouting {
 extension MainWindowCoordinator: TaskDetailRouting {
     func publishTopBar(_ content: TaskTopBarContent, tag: TaskTopBarHolder.Tag) { topBar.publish(content, tag: tag) }
     func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag) { topBar.publish(content, tag: tag) }
+    func publishTopBar(_ content: PageTopBarContent, tag: TaskTopBarHolder.Tag) { topBar.publish(content, tag: tag) }
     func clearTopBar(tag: TaskTopBarHolder.Tag) { topBar.clear(tag: tag) }
     func deactivateTopBar(tag: TaskTopBarHolder.Tag) { topBar.deactivate(tag) }
 

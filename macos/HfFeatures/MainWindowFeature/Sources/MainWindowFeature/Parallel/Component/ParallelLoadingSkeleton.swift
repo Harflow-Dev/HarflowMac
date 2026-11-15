@@ -28,14 +28,17 @@ struct ParallelLoadingSkeleton: View {
                 HStack(alignment: .top, spacing: HfRadius.Metrics.zero) {
                     ForEach(0 ..< max(1, laneCount), id: \.self) { index in
                         lane(index: index)
-                            .frame(width: ParallelLayout.columnWidth(memberCount: max(1, laneCount), availableWidth: proxy.size.width),
+                            .frame(width: ParallelLayout.columnWidth(memberCount: max(1, laneCount), availableWidth: proxy.size.width,
+                                                                     chrome: .lane),
                                    height: max(0, proxy.size.height))
-                        ParallelLaneSeparator(chrome: .lane)
+                        if index < max(1, laneCount) - 1 { ParallelLaneSeparator(chrome: .lane) }
                     }
                 }
                 .background(ScrollChrome())
             }
         }
+        // The same leading recovery as the loaded row, so the lanes do not move when the group's membership resolves.
+        .parallelLeadingRecovery()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading Parallel group")
     }

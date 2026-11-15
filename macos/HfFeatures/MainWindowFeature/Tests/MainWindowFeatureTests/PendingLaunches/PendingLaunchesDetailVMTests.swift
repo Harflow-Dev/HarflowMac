@@ -11,7 +11,7 @@ import Testing
 
 /// Records every owner call, can hold checks and recorded-status calls open, and flags overlapping calls.
 @MainActor
-private final class ScriptedUseCase: PendingLaunchesUseCase {
+final class ScriptedUseCase: PendingLaunchesUseCase {
     let subject: CurrentValueSubject<PendingLaunchSnapshot, Never>
     var offered: PendingLaunchReadLease?
     var holdCalls = false
@@ -120,6 +120,8 @@ struct PendingLaunchesDetailVMTests {
         let routed: Counter
         let sut: PendingLaunchesVM
         let lease: PendingLaunchReadLease
+        /// The VM holds the top bar transport weakly.
+        let topBar: MockPendingLaunchesTopBarRouting
     }
 
     private func rig(lease: PendingLaunchReadLease? = PendingLaunchReadLease(), recorded: Bool = false) -> Rig {
@@ -129,8 +131,9 @@ struct PendingLaunchesDetailVMTests {
         let routed = Counter()
         let routing = MockPendingLaunchesRouting()
         given(routing).openRecordedTask(.any).willProduce { routed.add($0) }
-        let sut = PendingLaunchesVM(useCase: useCase, routing: routing)
-        return Rig(useCase: useCase, routing: routing, routed: routed, sut: sut, lease: lease ?? PendingLaunchReadLease())
+        let topBar = PendingLaunchesTopBarRoutingMock.make()
+        let sut = PendingLaunchesVM(useCase: useCase, routing: routing, topBarRouting: topBar)
+        return Rig(useCase: useCase, routing: routing, routed: routed, sut: sut, lease: lease ?? PendingLaunchReadLease(), topBar: topBar)
     }
 
     private func appeared(_ rig: Rig) async {

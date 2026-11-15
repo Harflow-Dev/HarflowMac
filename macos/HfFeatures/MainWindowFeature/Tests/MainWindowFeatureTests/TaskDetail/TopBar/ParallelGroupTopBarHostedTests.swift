@@ -322,7 +322,7 @@ import Testing
         let documentFrame: CGRect
         /// The part of the scroll view that shows lanes: its clip view inside the scroll view's content insets.
         let contentFrame: CGRect
-        /// Where the detail pane's content may begin: the sidebar's edge while it is shown, else the pane's own edge.
+        /// Where the detail pane's content begins: the sidebar's 264 pt column edge while it is shown, else the pane's own edge.
         let leadingEdge: CGFloat
         let contentWidth: CGFloat
     }
@@ -336,7 +336,9 @@ import Testing
               let document = scroll.documentView, let split = views.compactMap({ $0 as? NSSplitView }).first else { return nil }
         let sidebar = split.arrangedSubviews.first
         let sidebarShown = sidebar.map { !split.isSubviewCollapsed($0) } ?? false
-        let leadingEdge = sidebarShown ? (sidebar.map { $0.convert($0.bounds, to: nil).maxX } ?? 0)
+        // The floating sidebar's panel ends 8 pt past its 264 pt column; the lanes start at the column edge (the design's detail
+        // column), 8 pt under the panel's glass margin.
+        let leadingEdge = sidebarShown ? (sidebar.map { $0.convert($0.bounds, to: nil).maxX } ?? 0) - ParallelLayout.floatingSidebarMargin
             : split.convert(split.bounds, to: nil).minX
         let clip = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
         let insets = scroll.contentInsets
@@ -355,7 +357,7 @@ import Testing
         defer { mounted.close() }
         let placement = try #require(lanePlacement(mounted.window), "no lane scroll view at \(size)")
 
-        // then — nothing of the lanes sits under the sidebar, and they run to the detail pane's trailing edge
+        // then — the lanes start at the sidebar's column edge (8 pt under the floating panel's margin, as drawn), and run to the detail pane's trailing edge
         #expect(size.2 ? placement.leadingEdge < 100 : placement.leadingEdge > 200, "leading edge \(placement.leadingEdge) at \(size)")
         #expect(abs(placement.documentFrame.minX - placement.leadingEdge) <= 0.5,
                 "lane 1 starts at \(placement.documentFrame.minX), not at the leading edge \(placement.leadingEdge) at \(size)")

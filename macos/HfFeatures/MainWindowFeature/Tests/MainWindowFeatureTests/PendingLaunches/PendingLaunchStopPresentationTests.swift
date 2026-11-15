@@ -415,4 +415,59 @@ enum StopFixture {
         // then
         #expect(card.notes == [notSent, availability])
     }
+
+    // MARK: - Top bar title on outcome cards
+
+    @Test(arguments: [PendingLaunchStopEvidence.Phase.requested, .uncertain, .refused(reason: "no"), .didNotStart])
+    func givenAnOutcomeCardOverAQualifiedLaunch_whenMapped_thenTheTopBarTitleIsTheLaunchTitle(_ phase: PendingLaunchStopEvidence.Phase) {
+        // given / when
+        let card = detail(PendingLaunchesFixture.item(id: id, title: "Review launch admission checks"), stop: [Fixture.evidence(phase)])
+        // then
+        #expect(card.title != "Waiting for resources")
+        #expect(card.topBarTitle == "Review launch admission checks")
+    }
+
+    @Test func givenAnOutcomeCardOverABlankTitledLaunch_whenMapped_thenTheTopBarTitleFallsBack() {
+        // given / when
+        let card = detail(PendingLaunchesFixture.item(id: id, title: "  "), stop: [Fixture.evidence(.requested)])
+        // then
+        #expect(card.kind == .stopRequested)
+        #expect(card.topBarTitle == "Pending launch")
+    }
+
+    @Test(arguments: ["not_found", "recorded"])
+    func givenAnOutcomeCardWithoutLaunchMetadata_whenMapped_thenTheTopBarTitleIsThePendingLaunchTitle(_ disposition: String) {
+        // given / when
+        let card = plain(disposition, stop: [Fixture.evidence(.requested)])
+        // then
+        #expect(card.kind == .stopRequested)
+        #expect(card.topBarTitle == "Pending launch")
+    }
+
+    @Test func givenAnOutcomeCardOverNoLookupYet_whenMapped_thenTheTopBarTitleIsThePendingLaunchTitle() {
+        // given / when
+        let card = PendingLaunchDetailPresentation.make(
+            taskID: id, evidence: .none, flags: .init(), stop: Fixture.projection([Fixture.evidence(.requested)]), runtimeKnown: true, timeZone: utc)
+        // then
+        #expect(card.kind == .stopRequested)
+        #expect(card.topBarTitle == "Pending launch")
+    }
+
+    @Test func givenAnAcknowledgedAttempt_whenMapped_thenTheStatusCardKeepsItsQualifiedTitle() {
+        // given / when
+        let card = detail(PendingLaunchesFixture.item(id: id, title: "Launch under review"), stop: [Fixture.evidence(.requested)],
+                          flags: PendingLaunchDetailFlags(firstCheckSettled: true, acknowledgedAttempt: true))
+        // then
+        #expect(card.kind == .waiting)
+        #expect(card.topBarTitle == "Launch under review")
+    }
+
+    @Test func givenAnOutcomeForAnotherGeneration_whenMapped_thenTheStatusCardKeepsItsQualifiedTitle() {
+        // given / when
+        let card = detail(PendingLaunchesFixture.item(id: id, title: "Launch under review"),
+                          stop: [Fixture.evidence(.requested, generation: Fixture.otherGeneration)])
+        // then
+        #expect(card.kind == .waiting)
+        #expect(card.topBarTitle == "Launch under review")
+    }
 }

@@ -24,6 +24,7 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
     @GlobalEnvironment(\.eventStreamRepository) private var eventStreamRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.takeoverService) private var takeoverService
+    @GlobalEnvironment(\.modelCatalogRepository) private var modelCatalogRepository
 
     // MARK: - Init
 
@@ -33,7 +34,8 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
         taskActionRepository: (any TaskActionRepository)? = nil,
         eventStreamRepository: (any EventStreamRepository)? = nil,
         takeoverService: (any TakeoverService)? = nil,
-        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil
+        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
+        modelCatalogRepository: (any ModelCatalogRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let taskSnapshotRepository { self.taskSnapshotRepository = taskSnapshotRepository }
@@ -41,9 +43,12 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
         if let eventStreamRepository { self.eventStreamRepository = eventStreamRepository }
         if let takeoverService { self.takeoverService = takeoverService }
         if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
+        if let modelCatalogRepository { self.modelCatalogRepository = modelCatalogRepository }
     }
 
     // MARK: - ParallelUseCase Methods
+
+    func modelOptions(backend: String) async -> [ModelOption] { await modelCatalogRepository.models(for: backend) }
 
     func activityReadyPublisher() -> AnyPublisher<Bool, Never> {
         taskListRepository.hasListedPublisher()

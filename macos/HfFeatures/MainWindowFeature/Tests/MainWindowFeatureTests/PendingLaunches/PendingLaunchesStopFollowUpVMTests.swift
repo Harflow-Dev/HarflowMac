@@ -20,6 +20,8 @@ struct PendingLaunchesStopFollowUpVMTests {
         let routing: MockPendingLaunchesRouting
         let box: RequestBox
         let sut: PendingLaunchesVM
+        /// The VM holds the top bar transport weakly.
+        let topBar: MockPendingLaunchesTopBarRouting
     }
 
     private func rig() -> Rig {
@@ -28,7 +30,9 @@ struct PendingLaunchesStopFollowUpVMTests {
         let routing = MockPendingLaunchesRouting()
         given(routing).presentPendingLaunchStop(.any).willProduce { box.add($0) }
         given(routing).dismissPendingLaunchStop().willProduce { box.dismissed() }
-        return Rig(useCase: useCase, routing: routing, box: box, sut: PendingLaunchesVM(useCase: useCase, routing: routing))
+        let topBar = PendingLaunchesTopBarRoutingMock.make()
+        return Rig(useCase: useCase, routing: routing, box: box,
+                   sut: PendingLaunchesVM(useCase: useCase, routing: routing, topBarRouting: topBar), topBar: topBar)
     }
 
     /// Selected, checked and showing an enabled Stop.

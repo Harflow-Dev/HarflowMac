@@ -58,6 +58,17 @@ struct ParallelColumnInput: Equatable, Sendable {
     let snapshot: TaskInfo?
     var previousActivitySnapshot: ActivityFeedSnapshot?
     var previousMarkdown: [String: StreamingMarkdownState] = [:]
+
+    /// The caption is not part of what a build depends on: it is drawn from the descriptor and patched when the engine's model
+    /// labels arrive, so a new label never makes an input dirty or reschedules a build.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        var left = lhs.base
+        var right = rhs.base
+        left.caption = ""
+        right.caption = ""
+        return left == right && lhs.members == rhs.members && lhs.events == rhs.events && lhs.snapshot == rhs.snapshot
+            && lhs.previousActivitySnapshot == rhs.previousActivitySnapshot && lhs.previousMarkdown == rhs.previousMarkdown
+    }
 }
 
 typealias ParallelColumnsBuild = @Sendable ([String: ParallelColumnInput]) async -> [String: ParallelColumnPresentation]?

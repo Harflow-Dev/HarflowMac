@@ -65,6 +65,8 @@ struct PendingLaunchDetailPresentation: Equatable, Sendable {
     var stop: StopControl?
     /// Lines between the action row and the detail note, in drawn order.
     var notes: [String] = []
+    /// The window top bar's title: the launch's qualified title when this card states qualified facts, otherwise "Pending launch".
+    var topBarTitle = PendingLaunchesPresentation.neutralRowTitle
 
     static let note = "Harflow has not confirmed a running task yet. Messages and activity remain unavailable."
     static let checkingLabel = "Checking launch status"
@@ -164,7 +166,14 @@ extension PendingLaunchDetailPresentation {
         case .unrecognized:
             return unavailable(item.taskID, flags)
         }
-        return .init(kind: kind, title: title, message: message, facts: facts, action: .checkAgain, isActionEnabled: !flags.isBusy)
+        return .init(kind: kind, title: title, message: message, facts: facts, action: .checkAgain, isActionEnabled: !flags.isBusy,
+                     topBarTitle: topBarTitle(for: launch))
+    }
+
+    /// The launch's own title, trimmed, when it has a non-blank one; otherwise "Pending launch". Inventory row metadata
+    /// never reaches the title: only a card built from the selected launch's stored metadata calls this.
+    static func topBarTitle(for launch: TaskPendingLaunchMetadata?) -> String {
+        launch?.title.flatMap(trimmed) ?? PendingLaunchesPresentation.neutralRowTitle
     }
 
     static func qualifiedFacts(_ launch: TaskPendingLaunchMetadata, taskID: String, timeZone: TimeZone) -> [Fact] {

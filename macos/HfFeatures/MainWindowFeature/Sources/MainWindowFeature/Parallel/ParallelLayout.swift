@@ -2,6 +2,7 @@ import Foundation
 import HfUI
 import HfUtilities
 import MonitorCore
+import SwiftUI
 
 // MARK: - ParallelLayout
 
@@ -11,16 +12,64 @@ import MonitorCore
 /// and the row scrolls horizontally instead of squeezing further. A pure function so it is testable without a SwiftUI rendering
 /// harness.
 enum ParallelLayout {
-    /// The width of the 1 pt separator drawn after every column (`ParallelView`'s `ForEach`) —
-    /// subtracted from `availableWidth` before dividing, so `memberCount` columns plus their dividers
-    /// together account for the whole row rather than overflowing it by a few points.
+    /// The width of the 1 pt separator between columns. A `.lane` row draws it between lanes only (HarflowDesign
+    /// `2153ab1`, `gap: 1px`: no rule after the last lane); an `.inspector` column keeps one after itself. It is
+    /// subtracted from `availableWidth` before dividing, so the columns plus their separators account for the whole row
+    /// rather than overflowing it by a few points.
     static let dividerWidth: CGFloat = 1
     static let minimumColumnWidth: CGFloat = 360
+    /// The floating sidebar's outer margin: the sidebar column is 264 pt wide, but the panel is drawn 8 pt in from the
+    /// window edge, so AppKit's safe area for the detail column ends at 272 pt where the design's detail column starts
+    /// at 264 pt (HarflowDesign `2153ab1`, 736 pt at 1000 pt). While the sidebar is expanded the lane row takes this
+    /// margin back, so lane 1 starts under the panel's glass margin exactly as drawn.
+    static let floatingSidebarMargin: CGFloat = 8
 
-    static func columnWidth(memberCount: Int, availableWidth: CGFloat) -> CGFloat {
+    /// The leading margin the lane row recovers: the floating sidebar's margin while the sidebar is expanded, otherwise
+    /// zero (the collapsed rail is a separate 57 pt column, outside the split view). The single gated value that drives
+    /// both the lane row's leading inset and the width the columns divide.
+    static func leadingRecovery(sidebarExpanded: Bool) -> CGFloat {
+        sidebarExpanded ? floatingSidebarMargin : 0
+    }
+
+    /// The width of each of `memberCount` columns inside `availableWidth`. `.lane` columns are separated by one rule
+    /// each (`count - 1` in all); an `.inspector` column draws its own after it (`count`), as it always has.
+    static func columnWidth(memberCount: Int, availableWidth: CGFloat, chrome: ParallelColumnChrome) -> CGFloat {
         let count = max(1, memberCount)
-        let usableWidth = max(0, availableWidth - CGFloat(count) * dividerWidth)
+        let separators = chrome == .lane ? count - 1 : count
+        let usableWidth = max(0, availableWidth - CGFloat(separators) * dividerWidth)
         return max(minimumColumnWidth, usableWidth / CGFloat(count))
+    }
+
+    /// The width a row of `memberCount` columns of `columnWidth` occupies: a stride per column, less the trailing
+    /// separator a `.lane` row does not draw.
+    static func documentWidth(memberCount: Int, columnWidth: CGFloat, chrome: ParallelColumnChrome) -> CGFloat {
+        CGFloat(memberCount) * (columnWidth + dividerWidth) - trailingTrim(chrome: chrome)
+    }
+
+    /// What a row's document is shorter than `memberCount * stride` by.
+    static func trailingTrim(chrome: ParallelColumnChrome) -> CGFloat {
+        chrome == .lane ? dividerWidth : 0
+    }
+}
+
+// MARK: - Leading recovery modifier
+
+extension View {
+    /// Takes back the floating sidebar's 8 pt outer margin on the leading safe area while the sidebar is expanded, so a
+    /// lane row's scroll view carries the design's 264 pt column edge as its content inset and its columns divide the
+    /// design's 736 pt at the minimum window. A zero-width leading inset with a negative spacing does it: measured in the
+    /// production shell, the system's 272 pt becomes 264 pt, whereas `safeAreaPadding` clamps a negative value and
+    /// `ignoresSafeArea` drops the inset altogether. With the sidebar collapsed the spacing is zero and nothing changes.
+    func parallelLeadingRecovery() -> some View { modifier(ParallelLeadingRecovery()) }
+}
+
+private struct ParallelLeadingRecovery: ViewModifier {
+    @Environment(\.isFloatingSidebarExpanded) private var sidebarExpanded
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .leading, spacing: -ParallelLayout.leadingRecovery(sidebarExpanded: sidebarExpanded)) {
+            Color.clear.frame(width: 0)
+        }
     }
 }
 

@@ -182,6 +182,7 @@ struct PendingLaunchesOwnerFlowTests {
         /// The VM holds routing weakly.
         let routing: MockPendingLaunchesRouting
         let requests: PresentedRequests
+        let topBar: MockPendingLaunchesTopBarRouting
     }
 
     /// The real owner and the real task list (recorded admission) over one fake public ctl boundary.
@@ -204,10 +205,11 @@ struct PendingLaunchesOwnerFlowTests {
         given(routing).openRecordedTask(.any).willProduce { routed.add($0) }
         let requests = PresentedRequests()
         given(routing).presentPendingLaunchStop(.any).willProduce { requests.add($0) }
-        let sut = PendingLaunchesVM(useCase: OwnerUseCase(owner: owner), routing: routing)
+        let topBar = PendingLaunchesTopBarRoutingMock.make()
+        let sut = PendingLaunchesVM(useCase: OwnerUseCase(owner: owner), routing: routing, topBarRouting: topBar)
         sut.didAppear()
         await waitUntil { sut.presentation.kind == .inventory }
-        return Flow(ctl: ctl, owner: owner, sut: sut, routed: routed, routing: routing, requests: requests)
+        return Flow(ctl: ctl, owner: owner, sut: sut, routed: routed, routing: routing, requests: requests, topBar: topBar)
     }
 
     private func selectRecorded(_ flow: Flow) async {

@@ -16,12 +16,24 @@ import MonitorCore
 
 enum ParallelLaneStatus {
     /// "Claude · Opus 5.5", "Codex" when the model is unknown or blank, plus " · taken over" when the current member
-    /// was taken over in a terminal. The model is shown as the listing carries it.
-    nonisolated static func caption(current: TaskInfo) -> String {
+    /// was taken over in a terminal. The model is `modelLabel`, the engine's display label for it, else the raw id as the
+    /// listing carries it (trimmed). A label is never invented: a blank one counts as none.
+    nonisolated static func caption(current: TaskInfo, modelLabel: String? = nil) -> String {
         var parts = [BackendStyle.displayName(current.backend)]
-        if let model = current.model?.trimmingCharacters(in: .whitespacesAndNewlines), !model.isEmpty { parts.append(model) }
+        if let model = current.model?.trimmingCharacters(in: .whitespacesAndNewlines), !model.isEmpty {
+            let label = modelLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+            parts.append(label.flatMap { $0.isEmpty ? nil : $0 } ?? model)
+        }
         if current.takenOver { parts.append("taken over") }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// The engine's label for `model`: the option whose `value` equals the trimmed model exactly, nil when the model is
+    /// blank or no option matches (the caption then shows the raw id). `labels` maps option value to label for the
+    /// member's backend.
+    nonisolated static func modelLabel(model: String?, labels: [String: String]?) -> String? {
+        guard let model = model?.trimmingCharacters(in: .whitespacesAndNewlines), !model.isEmpty else { return nil }
+        return labels?[model]
     }
 
     /// The harness name used by the lane's composer labels: "Claude", "Codex".

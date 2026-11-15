@@ -11,7 +11,7 @@ enum ParallelActivityViewport {
             guard width.isFinite, width > 0, let selectedID else { return [] }
             return [selectedID]
         }
-        let stride = ParallelLayout.columnWidth(memberCount: conversations.count, availableWidth: width)
+        let stride = ParallelLayout.columnWidth(memberCount: conversations.count, availableWidth: width, chrome: .lane)
             + ParallelLayout.dividerWidth
         let shown = ParallelResidency.visibleIndices(count: conversations.count, offset: offset, width: width, stride: stride)
         return Set(shown.map { conversations[$0].id })

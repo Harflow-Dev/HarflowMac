@@ -99,6 +99,6 @@ extension PendingLaunchDetailPresentation {
         }
         let facts = launch.map { qualifiedFacts($0, taskID: taskID, timeZone: timeZone) } ?? [selectedID(taskID)]
         return .init(kind: kind, title: title, message: message, facts: facts, action: .checkAgain, isActionEnabled: !flags.isBusy,
-                     stop: nil, notes: notes)
+                     stop: nil, notes: notes, topBarTitle: topBarTitle(for: launch))
     }
 }

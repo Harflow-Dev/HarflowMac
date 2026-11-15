@@ -39,6 +39,58 @@ import Testing
         #expect(ParallelLaneStatus.caption(current: task("cancelled", model: "Opus 5.5", takenOver: true)) == "Claude · Opus 5.5 · taken over")
     }
 
+    @Test func givenACatalogLabel_whenBuildingTheCaption_thenTheLabelReplacesTheRawModel() {
+        #expect(ParallelLaneStatus.caption(current: task("running", model: "claude-opus-5-5"), modelLabel: "Opus 5.5") == "Claude · Opus 5.5")
+    }
+
+    @Test(arguments: [nil, "", "   "] as [String?])
+    func givenAMissingOrBlankLabel_whenBuildingTheCaption_thenTheRawModelIsShown(_ label: String?) {
+        #expect(ParallelLaneStatus.caption(current: task("running", model: "claude-opus-5-5"), modelLabel: label) == "Claude · claude-opus-5-5")
+    }
+
+    @Test func givenAPaddedLabelAndModel_whenBuildingTheCaption_thenBothAreTrimmed() {
+        #expect(ParallelLaneStatus.caption(current: task("running", model: " opus "), modelLabel: "  Opus 5.5\n") == "Claude · Opus 5.5")
+        #expect(ParallelLaneStatus.caption(current: task("running", model: " opus ")) == "Claude · opus")
+    }
+
+    @Test(arguments: [nil, "", "  "] as [String?])
+    func givenABlankModelAndALabel_whenBuildingTheCaption_thenTheLabelIsNotInvented(_ model: String?) {
+        #expect(ParallelLaneStatus.caption(current: task("running", model: model), modelLabel: "Opus 5.5") == "Claude")
+    }
+
+    @Test func givenALabelAndATakenOverMember_whenBuildingTheCaption_thenTakenOverStillFollows() {
+        let caption = ParallelLaneStatus.caption(current: task("cancelled", model: "opus", takenOver: true), modelLabel: "Opus 5.5")
+        #expect(caption == "Claude · Opus 5.5 · taken over")
+    }
+
+    // MARK: - Model label
+
+    @Test func givenAModelInTheCatalog_whenLookingUpItsLabel_thenTheLabelIsReturned() {
+        #expect(ParallelLaneStatus.modelLabel(model: "opus", labels: ["opus": "Opus 5.5", "sonnet": "Sonnet 5.5"]) == "Opus 5.5")
+    }
+
+    @Test func givenAPaddedModel_whenLookingUpItsLabel_thenItIsTrimmedBeforeTheExactMatch() {
+        #expect(ParallelLaneStatus.modelLabel(model: "  opus\n", labels: ["opus": "Opus 5.5"]) == "Opus 5.5")
+    }
+
+    @Test func givenAModelNotInTheCatalog_whenLookingUpItsLabel_thenThereIsNone() {
+        #expect(ParallelLaneStatus.modelLabel(model: "haiku", labels: ["opus": "Opus 5.5"]) == nil)
+    }
+
+    @Test func givenAModelDifferingOnlyInCase_whenLookingUpItsLabel_thenTheMatchIsExact() {
+        #expect(ParallelLaneStatus.modelLabel(model: "Opus", labels: ["opus": "Opus 5.5"]) == nil)
+    }
+
+    @Test(arguments: [nil, "", "  \n"] as [String?])
+    func givenANilOrBlankModel_whenLookingUpItsLabel_thenThereIsNone(_ model: String?) {
+        #expect(ParallelLaneStatus.modelLabel(model: model, labels: ["": "Empty", "opus": "Opus 5.5"]) == nil)
+    }
+
+    @Test func givenNoCatalogOrAnEmptyOne_whenLookingUpALabel_thenThereIsNone() {
+        #expect(ParallelLaneStatus.modelLabel(model: "opus", labels: nil) == nil)
+        #expect(ParallelLaneStatus.modelLabel(model: "opus", labels: [:]) == nil)
+    }
+
     // MARK: - Status
 
     @Test func givenARunningMember_whenBuildingTheStatus_thenItIsRunningWithALiveClock() {

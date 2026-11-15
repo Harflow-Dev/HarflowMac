@@ -133,7 +133,15 @@ no embedded terminal anywhere in this package:
   `.lane` is the same transcript metrics (`isTranscript` is true for both, so every row view follows) at the
   lane's insets: 16 point side padding, 16 point top padding, 12 point row gap, no 760 column (the feed fills
   its lane; `ParallelColumnView` passes `style.horizontalPadding` and the lane body adds none around the feed),
-  the single-dot working row, and no "N activity items" line. `.laneAfterBlock` is `.lane` with content above the feed (history boundary, prompt, result; a lane's outcome line is in the feed tail, not above it): the first entry then sits one 12 point row gap under it instead of the 16 point body inset, so nothing overlaps. Lane head (`ParallelLaneHead`): glyph, task title (two lines at most), caption ("Claude · Opus 5.5", plus "· taken over"), status caption ("Running 03:24", from `ParallelLaneStatus` over `TaskBadgeModel`) and the Lane actions menu; the history notice is a bordered boundary block drawn only while a notice exists, and when "Load current activity" completes the head takes focus and announces "Current activity loaded". Parallel lanes (`ParallelColumnChrome.lane`, group
+  the single-dot working row, and no "N activity items" line. `.laneAfterBlock` is `.lane` with content above the feed (history boundary, prompt, result; a lane's outcome line is in the feed tail, not above it): the first entry then sits one 12 point row gap under it instead of the 16 point body inset, so nothing overlaps. Lane head (`ParallelLaneHead`): glyph, task title (two lines at most), caption ("Claude · Opus 5.5", plus "· taken over"; the model is the engine's `backend-models` label whose `value` equals the lane's
+  trimmed model exactly, else the raw model id, and left out when the model is blank: `ParallelLaneStatus.caption(current:modelLabel:)`.
+  `ParallelVM` asks `ParallelUseCase.modelOptions(backend:)` once per member backend per appearance (never for the Graph inspector,
+  which does not draw the caption), keeps the labels for that view model's life only (a new group selection builds a fresh one; what persists across opens is the
+  repository's per-backend cache), asks for the backend of the snapshot-merged current member (the one the caption reads), ignores an
+  empty answer until the next appearance or a new backend, and on a changed non-empty answer patches the cached descriptors,
+  presentations and inputs' captions on the main actor and publishes the columns once, without rescheduling: the caption is not part of
+  `ParallelColumnInput` equality, so an in-flight build is neither cancelled nor made dirty, and a build that commits later stores the
+  descriptor's current caption; `didDisappear` cancels in-flight requests), status caption ("Running 03:24", from `ParallelLaneStatus` over `TaskBadgeModel`) and the Lane actions menu; the history notice is a bordered boundary block drawn only while a notice exists, and when "Load current activity" completes the head takes focus and announces "Current activity loaded". Parallel lanes (`ParallelColumnChrome.lane`, group
   and workflow run) use it; the Graph inspector's column stays `.standard` with the three-dot live step. Tool bodies are unbounded in height (no 220 point cap): a recorded deviation pending owner review.
   `MessageBoxStyle` follows the same mounts through `TaskDetailView`: `.transcript` is the solid
   `.hd-composer` surface, `.standard` keeps glass for the Graph inspector and workflow composers, and `.lane` is the Parallel lane's
@@ -224,6 +232,16 @@ no embedded terminal anywhere in this package:
   takeover note (including the prior banner fallback). Group/embedded retain the legacy header and controls.
   No explicit toolbar id may be reused or duplicated.
   **Group subject.** `TaskTopBarHolder` writers are keyed by `TopBarSubject` (`.task(conversation)` or `.group(name)`); the coordinator sets the shown subject from the selection (`shownTopBarSubject()`), and `activate`/`retry` compare subjects. A standalone group's `ParallelVM` (`publishesTopBar`, true only from `buildParallelView`) publishes `GroupTopBarContent` (title, `TaskBadgeModel.group` over `ParallelStatusCounts`, the enforcement sentence or the fallback, nil when empty) through `ParallelRouting`, loading content first, then activates its tag; the holder shows it in `shownGroup`. `TopBarPrincipalLayout.solve(metaMayTruncate: false, titleFloor: 160)` makes a group's meta whole or dropped; its cap is `GroupTopBarBudget.cap(detailWidth:)` (the detail column's width from `TopBarLayoutState.detailWidth`, minus both buttons' fixed widths, reserved even while Cancel all is hidden, minus the bar's margins). View prompt and Cancel all use `TopBarButtonStyle` (ghost, danger); Cancel all confirms with `Cancel` and `Cancel all`. The group content header, enforcement pills and claim strip are gone.
+  **Page subject.** `TopBarSubject.pendingLaunches` carries `PageTopBarContent` (a title and one `TaskBadgeModel`) through
+  `PendingLaunchesTopBarRouting` (a separate `@Mockable` dependency of `PendingLaunchesVM`, held weakly) into
+  `TaskTopBarHolder.shownPage`. The principal draws it as the title (14/20 semibold, one line) plus the base-tone "Pending launch" badge
+  (`TaskBadgeModel.pendingLaunch`, HarflowDesign `83d820f`). The title is "Pending launches" for every inventory state and "Pending launch"
+  for any detail state, except a qualified detail (and a Stop outcome card built from qualified metadata), which shows the launch's own
+  trimmed, non-blank `title` (`PendingLaunchDetailPresentation.topBarTitle`; inventory row metadata is never promoted). The VM publishes
+  from one place (`publishTopBar()`, called wherever the detail or selection changes) only when the content changes, activates in
+  `didAppear` and clears in `didDisappear`. Before it publishes, the shell hands the principal the page shape (`fallbackPage`, only while
+  the page is mounted), so the bar draws the same layout at once; `contextTitle` is only the principal's fallback text for other
+  selections.
 - **Standalone state treatments.** Snapshot-derived `TaskStateTreatment` cases require status-matching snapshot evidence
   and suppress those treatments for taken-over tasks. Only running + owner `dead` claims capture
   loss; `undecidable` keeps uncertainty. Completed without an exit is reconstructed; failed
@@ -298,9 +316,23 @@ no embedded terminal anywhere in this package:
 - Parallel keeps complete group membership for summaries and actions, but acquires activity leases
   only for members of viewport-intersecting conversations; do not prefetch neighboring columns.
   Lanes are 360 points wide at minimum (`ParallelLayout.minimumColumnWidth`, HarflowDesign `2934681`) with a
-  1 point separator, so a minimum-size window shows two whole lanes plus a narrow peek (the detail column is 736 points, but the lanes start at the floating sidebar's edge, 8 points further in, so the measured peek in the shell is 6 points, not the drawn 14),
-  and the peek lane is intersecting, hence resident and leased (every member of each visible conversation holds a
-  lease). `ParallelColumnModel.chrome` (`.lane`, set from the VM role) selects the v2 lane surface (`--bg`, no status
+  1 point separator between lanes and none after the last (HarflowDesign `2153ab1`, `gap: 1px`;
+  `ParallelLayout.columnWidth(memberCount:availableWidth:chrome:)` subtracts `count - 1` separators for `.lane` and `count` for
+  `.inspector`, whose single Graph column keeps its divider; the lane row's document is `count * stride - 1`, which
+  `ParallelScrollObserver.documentTrim` tells the observer), so a minimum-size window shows two whole lanes plus a 14 point peek:
+  the detail column is 736 points (it starts at the sidebar's 264 point column edge), and the peek lane is intersecting, hence
+  resident and leased (every member of each visible conversation holds a lease). AppKit's safe area for the floating sidebar ends at
+  the panel's visible edge, 272 points, 8 points past the column edge, which left a 728 point viewport and a 6 point peek. While the
+  sidebar is expanded the lane row takes that margin back (`parallelLeadingRecovery()`, used by `ParallelView`'s row and
+  `ParallelLoadingSkeleton`): a zero-width leading `safeAreaInset` with a spacing of minus `ParallelLayout.floatingSidebarMargin` (8),
+  measured in the production shell to turn the system inset 272 into 264 (`safeAreaPadding` clamps a negative value and
+  `ignoresSafeArea` drops the inset). The scroll view's `contentInsets.left` and the width the columns divide are then both
+  264-relative, and `ParallelScrollObservationView` keeps reading the applied inset. The state is the shell's own `NavigationSplitView`
+  column visibility, written to the `isFloatingSidebarExpanded` environment value on the detail column (never inferred from a measured
+  inset): collapsed, the rail is a separate 57 point column, the spacing is zero and nothing changes. During the sidebar's show/hide
+  transition the 8 point step is accepted. The recovery covers the non-empty lane row only (an empty group's text keeps the system safe area). The workflow run/editor activity row
+  (`WorkflowActivityColumns`, `.lane` chrome through the non-inspector `ParallelVM`) gets the chrome-aware widths, no trailing separator and
+  the labels, but no leading recovery: it keeps the 272 point start, a 728 point viewport and a 6 point peek at 1000 x 620. `ParallelColumnModel.chrome` (`.lane`, set from the VM role) selects the v2 lane surface (`--bg`, no status
   strip, `--border` separators, head/body/foot frames); the Graph inspector's VM sets `.inspector`, and
   `WorkflowSelectedActivityView` forces it, so the inspector keeps its `cardFill` surface, strip and `Divider`.
   When KEYBOARD focus (Tab, Shift-Tab; the first-responder change happens inside a key-down event) ENTERS a
@@ -315,8 +347,9 @@ no embedded terminal anywhere in this package:
   with the sentence appears on hover or focus without taking key focus, and Escape dismisses it until hover and focus have both left.
   There is no `.help`, and no dot while loading or for an empty group.
   The standalone group and workflow Parallel view share the measured horizontal viewport surface. A horizontal lane row measures
-  its offset and viewport inside its scroll view's content insets (the detail column's safe area under a floating sidebar), so offset
-  0 is lane 1 at the sidebar edge and a changed inset keeps the logical position (`ParallelViewport+Horizontal.swift`).
+  its offset and viewport inside its scroll view's content insets (the detail column's safe area under a floating sidebar, less its
+  recovered 8 point margin), so offset 0 is lane 1 at the sidebar's column edge and a changed inset keeps the logical position
+  (`ParallelViewport+Horizontal.swift`).
   A settled lane draws one end row in the feed tail (`ActivityFeedTailPresentation.Standard.settled`, built by
   `ParallelLaneStatus.settledLine` from the lane status), after the pinned bubbles and the outcome, and no result card
   (the inspector keeps `resultCallout`). View prompt: `ParallelVM+Request.swift` reads a resident lane's first member's stored

@@ -16,6 +16,8 @@ import Observation
 enum TopBarSubject: Hashable, Sendable {
     case task(String)
     case group(String)
+    /// The pending launches page.
+    case pendingLaunches
 }
 
 // MARK: - TaskTopBarHolder
@@ -23,7 +25,7 @@ enum TopBarSubject: Hashable, Sendable {
 /// Owned by the main window coordinator. A writer is identified by `Tag`: its object identity plus the subject it
 /// was built for, so a late write from an outgoing view, or from an earlier generation of the same subject, can be
 /// stored but is never shown. Task content and group content travel the same way: `shown` for a task,
-/// `shownGroup` for a group, each written only when its content changes.
+/// `shownGroup` for a group and `shownPage` for a page, each written only when its content changes.
 @MainActor
 @Observable
 public final class TaskTopBarHolder {
@@ -48,6 +50,7 @@ public final class TaskTopBarHolder {
             switch subject {
             case .task(let id): id
             case .group(let name): name
+            case .pendingLaunches: "pending-launches"
             }
         }
     }
@@ -56,6 +59,7 @@ public final class TaskTopBarHolder {
     enum Content: Equatable, Sendable {
         case task(TaskTopBarContent)
         case group(GroupTopBarContent)
+        case page(PageTopBarContent)
     }
 
     /// The task content the principal draws, `nil` when no active writer has published for the shown conversation.
@@ -63,6 +67,8 @@ public final class TaskTopBarHolder {
     private(set) var shown: TaskTopBarContent?
     /// The group content the principal draws, `nil` when no active group writer has published for the shown group.
     private(set) var shownGroup: GroupTopBarContent?
+    /// The page content the principal draws, `nil` when no active page writer has published for the shown page.
+    private(set) var shownPage: PageTopBarContent?
     /// The subject the window shows content for, `nil` for every other selection.
     @ObservationIgnored private(set) var shownSubject: TopBarSubject?
     /// The only writer whose content is shown.
@@ -86,6 +92,12 @@ public final class TaskTopBarHolder {
     /// Records group `content` for `tag`.
     func publish(_ content: GroupTopBarContent, tag: Tag) {
         entries[tag] = .group(content)
+        refreshShown()
+    }
+
+    /// Records page `content` for `tag`.
+    func publish(_ content: PageTopBarContent, tag: Tag) {
+        entries[tag] = .page(content)
         refreshShown()
     }
 
@@ -140,12 +152,15 @@ public final class TaskTopBarHolder {
         let content: Content? = if let activeTag, activeTag.subject == shownSubject { entries[activeTag] } else { nil }
         var task: TaskTopBarContent?
         var group: GroupTopBarContent?
+        var page: PageTopBarContent?
         switch content {
         case .task(let value): task = value
         case .group(let value): group = value
+        case .page(let value): page = value
         case nil: break
         }
         if shown != task { shown = task }
         if shownGroup != group { shownGroup = group }
+        if shownPage != page { shownPage = page }
     }
 }
