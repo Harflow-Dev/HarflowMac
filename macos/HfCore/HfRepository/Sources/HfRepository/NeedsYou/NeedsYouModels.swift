@@ -79,6 +79,9 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
     /// The complete approval, for approval items.
     public var approval: CallerApprovalRequest?
     /// The task an approval belongs to.
+    public var approvalOutcome: ApprovalResponseOutcome?
+    public var approvalCanRespond: Bool
+    public var approvalContext: ApprovalResponseContext?
     public var taskID: String?
 
     /// Creates an item.
@@ -86,7 +89,8 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
         id: String, kind: Kind, rootRunID: String = "", sourceRunID: String = "", runTitle: String, pathTitles: [String] = [],
         text: String, questionItems: [String] = [], offeredAnswers: [String]? = nil, resumeHint: String? = nil,
         ownership: Ownership, startedBy: String, waitingSince: Date? = nil, canAddAttempts: Bool = false,
-        decisionID: String? = nil, attentionCheckpointID: String? = nil, approval: CallerApprovalRequest? = nil, taskID: String? = nil
+        decisionID: String? = nil, attentionCheckpointID: String? = nil, approval: CallerApprovalRequest? = nil, taskID: String? = nil,
+        approvalContext: ApprovalResponseContext? = nil, approvalCanRespond: Bool = true, approvalOutcome: ApprovalResponseOutcome? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -106,6 +110,9 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
         self.attentionCheckpointID = attentionCheckpointID
         self.approval = approval
         self.taskID = taskID
+        self.approvalContext = approvalContext
+        self.approvalCanRespond = approvalCanRespond
+        self.approvalOutcome = approvalOutcome
     }
 
     /// The first line of the request, for notifications and compact rows.
@@ -176,6 +183,8 @@ public enum NeedsYouEvent: Equatable, Sendable {
 /// The result of sending an answer.
 public enum NeedsYouAnswerOutcome: Equatable, Sendable {
     case accepted
+    /// Typed response facts retained by the composition-shared approval owner.
+    case approvalOutcome(ApprovalResponseOutcome)
     /// Another response won the exact interaction. The unsent local draft remains available.
     case alreadyAnswered(answer: String, answeredBy: CallerApprovalOwner, answeredAt: Double, answerTruncated: Bool = false)
     /// The original caller is alive again and owns the interaction.

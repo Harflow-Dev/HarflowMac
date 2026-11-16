@@ -21,14 +21,11 @@ public final class Module: HfModule {
         let agentUsage = AgentUsageRepositoryImpl()
         let layout = ManagedRuntimeLayout(home: ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory())
         let baseEnvironment = ProcessInfo.processInfo.environment
-        let installer: any ManagedRuntimeInstalling
-        do {
-            installer = ManagedRuntimeInstaller(layout: layout, specification: try .bundled(), baseEnvironment: baseEnvironment)
-        } catch {
-            installer = UnavailableManagedRuntimeInstaller(message: error.localizedDescription)
-        }
+        let installer = makeInstaller(layout: layout, baseEnvironment: baseEnvironment)
         let runtime = ManagedRuntimeCoordinator(installer: installer)
         let toolEnvironment = ManagedToolEnvironmentRepository(coordinator: runtime, layout: layout, baseEnvironment: baseEnvironment)
+        let approvals = ApprovalResponseOwner(environment: toolEnvironment, now: { .now })
+        approvals.bindRuntimeChanges(runtime.statePublisher())
         let stateRecovery = StateRecoveryRepositoryImpl(toolEnvironment: toolEnvironment)
         let snapshot = TaskSnapshotRepositoryImpl(toolEnvironment: toolEnvironment)
         let taskPrompt = TaskPromptRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery)
@@ -58,6 +55,7 @@ public final class Module: HfModule {
             .environment(\.settingsRepository, settings)
             .environment(\.agentUsageRepository, agentUsage)
             .environment(\.toolEnvironmentRepository, toolEnvironment)
+            .environment(\.approvalResponseOwner, approvals)
             .environment(\.stateRecoveryRepository, stateRecovery)
             .environment(\.taskSnapshotRepository, snapshot)
             .environment(\.resourceSlotsRepository, ResourceSlotsRepositoryImpl(tooling: toolEnvironment, scheduler: scheduler))
@@ -75,7 +73,15 @@ public final class Module: HfModule {
 
         registerPublicReaders(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery, taskList: taskList, actions: taskAction, runtime: runtime)
         let shared = NeedsYouDependencies(scheduler: scheduler, visibility: visibility, settings: settings, install: install)
-        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode)
+        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode, approvals: approvals)
+    }
+
+    private func makeInstaller(layout: ManagedRuntimeLayout, baseEnvironment: [String: String]) -> any ManagedRuntimeInstalling {
+        do {
+            return ManagedRuntimeInstaller(layout: layout, specification: try .bundled(), baseEnvironment: baseEnvironment)
+        } catch {
+            return UnavailableManagedRuntimeInstaller(message: error.localizedDescription)
+        }
     }
 
     private func makeEventStream(toolEnvironment: any ToolEnvironmentRepository, snapshot: any TaskSnapshotRepository,
@@ -120,11 +126,11 @@ public final class Module: HfModule {
 
     private func registerNeedsYou(
         toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository, shared: NeedsYouDependencies,
-        notificationMode: NotificationDeliveryMode
+        notificationMode: NotificationDeliveryMode, approvals: any ApprovalResponding
     ) {
         let needsYou = NeedsYouRepositoryImpl(
             toolEnvironment: toolEnvironment, workflows: workflows, scheduler: shared.scheduler, visibility: shared.visibility,
-            install: shared.install
+            install: shared.install, approvals: approvals
         )
         let legacy = NeedsYouNotifierImpl(repository: needsYou, settings: shared.settings, scheduler: shared.scheduler,
                                           isEnabled: { notificationMode.allowsLegacy })

@@ -16,6 +16,7 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
     var tasks: [TaskInfo] = []
     var taskBatchFails = false
     var approvalRows: [String: [CallerApprovalRequest]] = [:]
+    var approvalDetailRead: (@Sendable (String, String) async throws -> CallerApprovalRequest)?
     var approvalDetails: [String: CallerApprovalRequest] = [:]
     var capability = true
     var pageSize = 100
@@ -76,6 +77,7 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
 
     func approvalDetail(taskID: String, requestID: String) async throws -> CallerApprovalRequest {
         record("approvalGet:\(requestID)")
+        if let approvalDetailRead { return try await approvalDetailRead(taskID, requestID) }
         guard let detail = approvalDetails[requestID] else { throw ToolError.timedOut(tool: "harflow-ctl", seconds: 1) }
         return detail
     }

@@ -51,6 +51,8 @@ protocol MenuBarViewModel: ViewModel {
     var installBannerModel: InstallBanner.Model? { get }
     /// The Needs you section, or nil while loading.
     var needsYou: MenuBarNeedsYouSection? { get }
+    func didDecideApproval(_ row: MenuBarNeedsYouSection.Row, decision: String)
+    func didRefreshApprovals()
     func didSelectNeedsYou(_ itemID: String)
     func didTapShowAllNeedsYou()
 
@@ -78,6 +80,8 @@ protocol MenuBarViewModel: ViewModel {
 
 extension MenuBarViewModel {
     var needsYou: MenuBarNeedsYouSection? { nil }
+    func didDecideApproval(_: MenuBarNeedsYouSection.Row, decision _: String) {}
+    func didRefreshApprovals() {}
     func didSelectNeedsYou(_: String) {}
     func didTapShowAllNeedsYou() {}
 }
@@ -267,7 +271,8 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
     private var needsYou: some View {
         if let section = viewModel.needsYou {
             MenuBarNeedsYouSectionView(
-                section: section, open: { viewModel.didSelectNeedsYou($0) }, showAll: { viewModel.didTapShowAllNeedsYou() }
+                section: section, open: { viewModel.didSelectNeedsYou($0) }, showAll: { viewModel.didTapShowAllNeedsYou() },
+                decide: { viewModel.didDecideApproval($0, decision: $1) }, refresh: { viewModel.didRefreshApprovals() }
             )
         }
     }

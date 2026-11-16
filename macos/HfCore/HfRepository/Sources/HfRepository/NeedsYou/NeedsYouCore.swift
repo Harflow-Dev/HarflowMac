@@ -6,22 +6,6 @@ import MonitorCore
 /// The acquisition state machine behind Needs you. All mutable state is actor-isolated; engine
 /// calls suspend the actor, so every step is written to leave the state consistent at each `await`.
 actor NeedsYouCore {
-    struct Output {
-        let revision: Int
-        let snapshot: NeedsYouSnapshot
-        let events: [NeedsYouEvent]
-    }
-
-    /// Process launches per pass. `CtlClient` launches a `version-info` handshake before every command, so a
-    /// command costs `launchesPerCommand`; the budget is therefore about 24 commands.
-    static let invocationBudget = 48
-    static let launchesPerCommand = 2
-    static let inventoryLaunchBudget = 20
-    static let maxStatusReads = 12
-    static let maxWorkflowPages = 6
-    static let maxTaskPages = 4
-    static let suppressionSeconds: TimeInterval = 60
-
     private struct Header {
         let id: String
         let name: String
@@ -442,7 +426,11 @@ actor NeedsYouCore {
             guard case .eligible(let request)? = progress.details[row.id] else { continue }
             switch await eligible(request, &budget, capability: &capability) {
             case .failure(let failure): return failure.observation
-            case .success(let ok): if ok { items.append(NeedsYouMapper.approval(request: request, task: info)) }
+            case .success(let ok): if ok {
+                var item = NeedsYouMapper.approval(request: request, task: info)
+                item.approvalCanRespond = request.isMonitorOwned || capability == true
+                items.append(item)
+            }
             }
         }
         progress = ApprovalProgress()
@@ -528,7 +516,7 @@ actor NeedsYouCore {
             }
             capability = value
         }
-        return .success(request.isEligibleForMonitorResponse(supportsCallerResponses: capability == true, now: now()))
+        return .success(request.isEligibleForMonitorResponse(supportsCallerResponses: true, now: now()))
     }
 
     // MARK: - Applying observations

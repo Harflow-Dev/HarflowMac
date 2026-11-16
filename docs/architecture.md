@@ -485,3 +485,37 @@ sequence nor later ledger rows reconcile it. Accepted queued refusals preserve q
 Cancel. Delivery uncertainty preserves the engine note and never prompts an automatic resend.
 
 Terminal standalone tasks without workflow ownership hide Send now and reject stale direct Send now invocations against the fresh admitted status. Queued Send remains available. Only an unambiguous standalone queued `target_settled` advisory is omitted; workflow, refusal, reason and uncertain notes remain visible. Continue shares the synchronous message-submission exclusion and never resends queued messages. Source-ledger status supplies delivered outcomes and successor identity after continuation.
+
+## Shared approval response authority
+
+The task, Needs you and menu bar share one `ApprovalResponseOwner` constructed by
+HfRepository's Module. `CallerApprovalController` remains a MainWindow UI controller.
+Displayed evidence carries the selected executable, effective environment and
+compatibility binding plus a synchronous runtime epoch. Inline runtime changes
+invalidate old closures, including A→B→A. A response captures one ctl client and
+re-reads the exact task/request, digest, generation, owner revision and full action,
+then checks the deadline, permitted owner and caller-response capability before
+invoking `approval-respond --monitor`.
+
+Admission is atomic across surfaces. UI disappearance does not cancel an admitted
+engine invocation or imply delivery cancellation. Known pre-invocation failures
+release admission; invoked outcomes remain app-session evidence. An unresolved
+invocation stays read-only through remount, pending-only refresh and a return to
+the same runtime; there is no automatic or manual duplicate response path for that
+identity. A stale card's Refresh performs reads only. Explicit Refresh may clear a local
+never-invoked refusal only after the shared owner freshly requalifies the same
+runtime/action, deadline and capability and proves no retained invocation record
+exists before and after those reads. Shared busy, definitive invocation and unknown
+records prevent that recovery; nothing is submitted by Refresh. Persisted winning responses
+show channel, approve/reject and engine time, without attributing a person or device.
+Decision, effective/delivered decision, delivery and observed execution stay separate.
+Needs you compares and publishes the derived shared-owner projection as well as the
+engine facts, so an unchanged pending inventory still reports busy, recovered
+availability and uncertainty transitions without changing its engine-backed counts.
+
+The approved UI reference is HarflowDesign `30b7e9d`,
+`v2/scripts/screens-approval-states.js`: task approval states, Needs you approval and
+stale checkpoint states, and menu-bar busy/stale/answered-elsewhere cards. Menu
+approval cards offer Approve once and Reject only; a caller-response capability
+missing from the selected runtime leaves the card read-only. Question Answer still
+opens the app. The 380 × 560 popover retains fixed header/footer and a scrolling body.

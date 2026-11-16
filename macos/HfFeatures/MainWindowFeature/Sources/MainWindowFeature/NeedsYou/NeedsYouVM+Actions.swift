@@ -33,7 +33,7 @@ extension NeedsYouVM {
     }
 
     func didDecide(approve: Bool) {
-        guard let item = currentItem, item.kind == .approval else { return }
+        guard let item = currentItem, item.kind == .approval, item.approvalCanRespond else { return }
         submittingIDs.insert(item.id)
         sendError = nil
         rebuild()
@@ -82,21 +82,7 @@ extension NeedsYouVM {
             rebuild()
             return
         }
-        if case .alreadyAnswered(let winningAnswer, let responder, let timestamp, let truncated) = outcome {
-            var detail = NeedsYouPresentationMapper.detail(item)
-            let label = responder == .caller ? "Already answered by the caller" : "Answered in Harflow"
-            let time = Date(timeIntervalSince1970: timestamp).formatted(date: .abbreviated, time: .shortened)
-            detail.phase = .settled(decision: label, answer: winningAnswer, note: (truncated ? "Answer excerpt · " : "") + time)
-            detail.savedDraft = answer.isEmpty ? nil : answer
-            recordSettled(detail, for: item)
-            sendError = nil
-            if lifecycle == started {
-                fadeOut(item)
-                rebuild()
-            }
-            useCase.refresh()
-            return
-        }
+        if finishWinningAnswer(outcome, item: item, answer: answer, lifecycle: started) { return }
 
         guard current else {
             if lifecycle == started { rebuild() }
@@ -111,17 +97,53 @@ extension NeedsYouVM {
             routing.showNeedsYou(itemID: nil)
             useCase.refresh()
             return
-        case .stale(let message), .failed(let message):
+        case .approvalOutcome(.busy):
+            snapshot = useCase.snapshot
+            sendError = nil
+            useCase.refresh()
+        case .approvalOutcome(let facts):
+            var detail = NeedsYouPresentationMapper.detail(item)
+            detail.phase = .readOnly(lines: CallerApprovalPresentation.outcomeLines(facts), refresh: CallerApprovalPresentation.canRefresh(facts))
+            recordSettled(detail, for: item)
+            sendError = nil
+        case .stale(let message):
+            if item.kind == .recovery, message == NeedsYouAnswerOutcome.changedMessage {
+                var detail = NeedsYouPresentationMapper.detail(item)
+                detail.phase = .readOnly(lines: [message], refresh: true)
+                detail.savedDraft = answer.isEmpty ? nil : answer
+                recordSettled(detail, for: item)
+                sendError = nil
+            } else { sendError = message }
+        case .failed(let message):
             sendError = message
         case .changed(let refreshed):
             if let refreshed { overrides[item.id] = refreshed }
-            reviewNotes[item.id] = NeedsYouAnswerOutcome.changedMessage
+            var detail = NeedsYouPresentationMapper.detail(item)
+            detail.phase = .readOnly(lines: [NeedsYouAnswerOutcome.changedMessage], refresh: true)
+            recordSettled(detail, for: item)
             sendError = nil
             useCase.refresh()
         case .accepted, .alreadyAnswered:
             break
         }
         rebuild()
+    }
+
+    private func finishWinningAnswer(_ outcome: NeedsYouAnswerOutcome, item: NeedsYouItem, answer: String, lifecycle started: Int) -> Bool {
+        guard case .alreadyAnswered(let winningAnswer, let responder, let timestamp, let truncated) = outcome else { return false }
+            var detail = NeedsYouPresentationMapper.detail(item)
+            let label = responder == .caller ? "Already answered by the caller" : "Answered in Harflow"
+            let time = Date(timeIntervalSince1970: timestamp).formatted(date: .abbreviated, time: .shortened)
+            detail.phase = .settled(decision: label, answer: winningAnswer, note: (truncated ? "Answer excerpt · " : "") + time)
+            detail.savedDraft = answer.isEmpty ? nil : answer
+            recordSettled(detail, for: item)
+            sendError = nil
+            if lifecycle == started {
+                fadeOut(item)
+                rebuild()
+            }
+            useCase.refresh()
+        return true
     }
 
     /// Keeps the answered row for the 180 ms fade; under Reduce Motion it leaves at once.

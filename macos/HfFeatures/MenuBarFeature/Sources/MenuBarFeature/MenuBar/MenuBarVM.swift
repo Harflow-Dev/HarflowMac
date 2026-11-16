@@ -127,6 +127,8 @@ final class MenuBarVM: MenuBarViewModel {
     private(set) var installBannerModel: InstallBanner.Model?
     /// The Needs you section; nil until the first complete pass. Subscribed while the popover is open.
     var needsYou: MenuBarNeedsYouSection?
+    @ObservationIgnored var approvalSubmitting: Set<String> = []
+    @ObservationIgnored var approvalResults: [String: MenuBarApprovalHeldResult] = [:]
 
     // MARK: - Private Properties
 

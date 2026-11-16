@@ -28,13 +28,14 @@ import Testing
         #expect(fake.calls.contains("approvalList:t1") && fake.calls.contains("approvalGet:r1"))
     }
 
-    @Test func givenCallerOwnedWithoutCapability_whenPassRuns_thenItIsExcluded() async {
+    @Test func givenCallerOwnedWithoutCapability_whenPassRuns_thenItIsReadOnly() async {
         // given
         let sut = makeSUT(engine(owner: "caller", capability: false))
         // when
         await sut.runPass()
         // then
-        #expect(sut.snapshot.items.isEmpty)
+        #expect(sut.snapshot.items.count == 1)
+        #expect(sut.snapshot.items.first?.approvalCanRespond == false)
     }
 
     @Test func givenCallerOwnedWithCapability_whenPassRuns_thenItIsListed() async {

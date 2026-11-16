@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import MonitorCore
 
 enum CallerApprovalPresentation {
@@ -26,6 +27,29 @@ enum CallerApprovalPresentation {
         }
     }
 
+    static func canRefresh(_ outcome: ApprovalResponseOutcome) -> Bool {
+        if case .refused(let error, _) = outcome {
+            return error.callerApprovalWinner == nil && error.callerApprovalResponseReason != .expired && error.callerApprovalResponseReason != .settled
+        }
+        return false
+    }
+
+    static func outcomeLines(_ outcome: ApprovalResponseOutcome) -> [String] {
+        switch outcome {
+        case .uncertain: return [ApprovalResponseOutcome.uncertainMessage]
+        case .busy: return ["An approval response is already in progress."]
+        case .recorded(let request): return CallerApprovalPresentation.resultLines(request)
+        case .refused(let error, let current):
+            if let current, current.text("disposition") == "expired" { return CallerApprovalPresentation.resultLines(current) }
+            if let winner = error.callerApprovalWinner {
+                let channel = winner.answeredBy == .caller ? "Already answered by the caller" : "Answered in Harflow"
+                return [channel, Date(timeIntervalSince1970: winner.answeredAt).formatted(date: .abbreviated, time: .shortened),
+                        "Recorded decision: " + winner.decision]
+            }
+            return [error.callerApprovalResponseReason.map(CallerApprovalPresentation.refusalMessage) ?? error.message]
+        }
+    }
+
     static func priority(_ request: CallerApprovalRequest) -> Int {
         if request.text("delivery") == "delivery_unknown" { return 1 }
         if request.text("disposition") == "pending" || ["reserved", "sending"].contains(request.text("delivery")) { return 0 }
@@ -39,6 +63,22 @@ enum CallerApprovalPresentation {
         let leftTime = lhs.raw["created_at"]?.doubleValue ?? 0
         let rightTime = rhs.raw["created_at"]?.doubleValue ?? 0
         return leftTime == rightTime ? lhs.id < rhs.id : leftTime < rightTime
+    }
+
+    static func resultLines(_ request: CallerApprovalRequest) -> [String] {
+        var lines = decisionSummary(request)
+        if request.text("disposition") == "expired" {
+            lines.insert("Expired", at: 0)
+            if request.raw["expiry_rejection"]?.boolValue == true, request.text("delivery") == "sent",
+               request.text("effective_decision") == "reject", request.text("delivered_decision") == "reject" {
+                lines.append("Harflow rejected the request when it expired.")
+            } else { lines.append(refusalMessage(.expired)) }
+        }
+        lines.append("Delivery: " + request.text("delivery"))
+        lines.append("Observed execution: " + request.text("execution_outcome"))
+        if request.text("delivery") == "delivery_unknown" { lines.append("Delivery is unknown. The decision will not be retried.") }
+        if request.text("disposition") == "expired" { lines.append("It can't be approved later. After the task finishes, continue it in a new session.") }
+        return lines
     }
 
     static func decisionSummary(_ request: CallerApprovalRequest) -> [String] {

@@ -12,7 +12,14 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     static let hiddenInterval: TimeInterval = 15
 
     private let engine: any NeedsYouEngine
-    private let core: NeedsYouCore
+    private let approvals: (any ApprovalResponding)?
+    private struct CoreScope: Sendable {
+        let id: UUID
+        let context: ApprovalResponseContext?
+        let core: NeedsYouCore
+    }
+
+    private var scope: CoreScope
     private let toolEnvironment: any ToolEnvironmentRepository
     private let scheduler: any Scheduling
     private let visibility: any MonitorVisibility
@@ -22,33 +29,52 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     private var loop: Task<Void, Never>?
     private var subscriptions: [AnyCancellable] = []
     private var published = 0
+    private var pendingPublication: NeedsYouCore.Output?
+    private var publicationScopeID: UUID?
+    private var publishing = false
     private let events = PassthroughSubject<NeedsYouEvent, Never>()
 
+    private var rawSnapshot = NeedsYouSnapshot()
     @Subjected private var snapshotValue = NeedsYouSnapshot()
 
     /// Creates the production repository over the shared workflow and tool seams.
     public convenience init(
         toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository,
-        scheduler: any Scheduling, visibility: any MonitorVisibility, install: any InstallRepository
+        scheduler: any Scheduling, visibility: any MonitorVisibility, install: any InstallRepository, approvals: any ApprovalResponding
     ) {
         self.init(engine: CtlNeedsYouEngine(toolEnvironment: toolEnvironment, workflows: workflows),
-                  toolEnvironment: toolEnvironment, scheduler: scheduler, visibility: visibility, install: install)
+                  toolEnvironment: toolEnvironment, scheduler: scheduler, visibility: visibility, install: install, approvals: approvals)
     }
 
     init(
         engine: any NeedsYouEngine, toolEnvironment: any ToolEnvironmentRepository, scheduler: any Scheduling,
-        visibility: any MonitorVisibility, install: any InstallRepository
+        visibility: any MonitorVisibility, install: any InstallRepository, approvals: (any ApprovalResponding)? = nil
     ) {
+        self.approvals = approvals
         self.install = install
         self.engine = engine
         self.toolEnvironment = toolEnvironment
         self.scheduler = scheduler
         self.visibility = visibility
         let clock = scheduler
-        self.core = NeedsYouCore(engine: engine, now: { clock.now() })
+        self.scope = CoreScope(id: UUID(), context: nil, core: NeedsYouCore(engine: engine, now: { clock.now() }))
     }
 
-    public var snapshot: NeedsYouSnapshot { snapshotValue }
+    public var snapshot: NeedsYouSnapshot { approvalEvidence(lock.withLock { rawSnapshot }) }
+
+    private func approvalEvidence(_ snapshot: NeedsYouSnapshot) -> NeedsYouSnapshot {
+        guard let approvals else { return snapshot }
+        var value = snapshot
+        value.items = value.items.map { item in
+            var current = item
+            if let request = item.approval, let context = item.approvalContext {
+                current.approvalOutcome = approvals.retained(request, context: context)
+                current.approvalCanRespond = item.approvalCanRespond && approvals.isCurrent(context) && current.approvalOutcome == nil
+            }
+            return current
+        }
+        return value
+    }
 
     public func snapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never> { $snapshotValue.removeDuplicates().eraseToAnyPublisher() }
 
@@ -80,20 +106,74 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         visibility.mainWindowVisible || visibility.menuBarPopoverOpen ? Self.visibleInterval : Self.hiddenInterval
     }
 
-    /// Runs one acquisition pass and publishes it. Exposed to tests, which drive passes directly.
-    func runPass() async {
-        publish(await core.runPass())
+    /// A runtime epoch owns its acquisition actor and every cursor, source and deferred detail in it.
+    /// Superseded actors may finish suspended reads, but can neither contaminate nor publish into a new scope.
+    private func coreScope(context: ApprovalResponseContext?) -> (scope: CoreScope, replaced: Bool) {
+        lock.withLock {
+            guard scope.context != context else { return (scope, false) }
+            let clock = scheduler
+            scope = CoreScope(id: UUID(), context: context, core: NeedsYouCore(engine: engine, now: { clock.now() }))
+            published = -1
+            return (scope, true)
+        }
     }
 
-    private func publish(_ output: NeedsYouCore.Output) {
-        let accepted: Bool = lock.withLock {
-            guard output.revision > published else { return false }
+    private func currentScope() -> CoreScope { lock.withLock { scope } }
+
+    /// Runs one acquisition pass and publishes it. Exposed to tests, which drive passes directly.
+    func runPass() async {
+        let context = try? approvals?.context()
+        let selected = coreScope(context: context)
+        guard approvals == nil || context != nil else { return }
+        if selected.replaced {
+            publish(NeedsYouCore.Output(revision: 0, snapshot: NeedsYouSnapshot(), events: []), from: selected.scope)
+        }
+        publish(await selected.scope.core.runPass(), from: selected.scope)
+    }
+
+    private func publish(_ output: NeedsYouCore.Output, from captured: CoreScope) {
+        if let approvals {
+            guard let context = captured.context, approvals.isCurrent(context) else { return }
+        }
+        var snapshot = output.snapshot
+        snapshot.items = snapshot.items.map { bind($0, to: captured.context) }
+        snapshot.withdrawn = snapshot.withdrawn.map { bind($0, to: captured.context) }
+        let boundEvents = output.events.map { event -> NeedsYouEvent in
+            if case .appeared(let item, let baseline) = event { return .appeared(bind(item, to: captured.context), sourceBaseline: baseline) }
+            return event
+        }
+        let drains = lock.withLock {
+            guard scope.id == captured.id, output.revision > published else { return false }
             published = output.revision
+            let retainedEvents = publicationScopeID == captured.id ? (pendingPublication?.events ?? []) : []
+            pendingPublication = NeedsYouCore.Output(revision: output.revision, snapshot: snapshot, events: retainedEvents + boundEvents)
+            publicationScopeID = captured.id
+            if publishing { return false }
+            publishing = true
             return true
         }
-        guard accepted else { return }
-        if snapshotValue != output.snapshot { snapshotValue = output.snapshot }
-        for event in output.events { events.send(event) }
+        guard drains else { return }
+        // A single nonblocking drain orders accepted publications; callbacks never run under the state lock.
+        while let next = takePublication() {
+            lock.withLock { rawSnapshot = next.snapshot }
+            let projected = approvalEvidence(next.snapshot)
+            if snapshotValue != projected { snapshotValue = projected }
+            for event in next.events { events.send(event) }
+        }
+    }
+
+    private func takePublication() -> NeedsYouCore.Output? {
+        lock.withLock {
+            guard let next = pendingPublication else { publishing = false; return nil }
+            pendingPublication = nil
+            return next
+        }
+    }
+
+    private func bind(_ item: NeedsYouItem, to context: ApprovalResponseContext?) -> NeedsYouItem {
+        var value = item
+        if value.kind == .approval { value.approvalContext = context }
+        return value
     }
 
     // MARK: - Answers
@@ -120,24 +200,36 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     private func offered(_ item: NeedsYouItem) -> Bool { item.offeredAnswers != nil }
 
     private func send(_ item: NeedsYouItem, root: String, decision: String?, text: String, attempts: Int?) async -> NeedsYouAnswerOutcome {
+        let captured = currentScope()
         do {
             try await engine.resume(root: root, decisionID: decision,
                                     attentionCheckpointID: decision == nil ? item.attentionCheckpointID : nil,
                                     text: text, additionalAttempts: attempts)
         } catch let error as ToolError {
-            if error.workflowInteractionWinner != nil { await settle(item.id) }
+            if error.workflowInteractionWinner != nil { await settle(item.id, in: captured) }
             if error.refusalCode == "attention_checkpoint_stale" { refresh() }
             return NeedsYouAnswerOutcome.classify(error)
         } catch {
             return .failed(error.localizedDescription)
         }
-        await settle(item.id)
+        await settle(item.id, in: captured)
         return .accepted
     }
 
     public func respond(_ item: NeedsYouItem, decision: String) async -> NeedsYouAnswerOutcome {
         guard item.kind == .approval, let shown = item.approval, ["approve", "reject"].contains(decision) else {
             return .failed("This request cannot be approved or rejected.")
+        }
+        let captured = currentScope()
+        if let approvals {
+            guard let context = item.approvalContext else { return .changed(nil) }
+            let outcome = await approvals.respond(shown, decision: decision, context: context)
+            if case .recorded = outcome {
+                if captured.context == context { await settle(item.id, in: captured) }
+                return .accepted
+            }
+            refresh()
+            return .approvalOutcome(outcome)
         }
         let current: CallerApprovalRequest
         switch await review(shown) {
@@ -152,7 +244,7 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         } catch let error as ToolError {
             return NeedsYouAnswerOutcome.classify(error)
         } catch { return .failed(error.localizedDescription) }
-        await settle(item.id)
+        await settle(item.id, in: captured)
         return .accepted
     }
 
@@ -182,8 +274,8 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         return .success(current)
     }
 
-    private func settle(_ id: String) async {
-        publish(await core.markAnswered(id))
+    private func settle(_ id: String, in captured: CoreScope) async {
+        publish(await captured.core.markAnswered(id), from: captured)
         gate.wake()
     }
 }

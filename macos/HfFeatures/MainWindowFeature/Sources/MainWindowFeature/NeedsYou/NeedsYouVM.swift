@@ -16,7 +16,12 @@ protocol NeedsYouUseCase: Sendable {
     /// Requests an immediate engine pass.
     func refresh()
     func answer(_ item: NeedsYouItem, text: String, additionalAttempts: Int?) async -> NeedsYouAnswerOutcome
+    func canReviewApprovalAgain(_ item: NeedsYouItem) async -> Bool
     func respond(_ item: NeedsYouItem, decision: String) async -> NeedsYouAnswerOutcome
+}
+
+extension NeedsYouUseCase {
+    func canReviewApprovalAgain(_: NeedsYouItem) async -> Bool { false }
 }
 
 // MARK: - NeedsYouRouting
@@ -131,6 +136,16 @@ final class NeedsYouVM: NeedsYouViewModel {
 
     func didTapRetry() {
         useCase.refresh()
+        guard let id = selectedID, let item = settledMeta[id]?.item, item.kind == .approval else { return }
+        let started = lifecycle
+        Task { [weak self] in
+            guard let self, await useCase.canReviewApprovalAgain(item), lifecycle == started,
+                  selectedID == id, settledMeta[id]?.item.isSameRequest(as: item) == true else { return }
+            snapshot = useCase.snapshot
+            guard snapshot.items.first(where: { $0.id == id })?.isSameRequest(as: item) == true else { return }
+            dropSettled(id)
+            rebuild()
+        }
     }
 
     func didDismissNotice() {
@@ -226,6 +241,11 @@ extension NeedsYouItem {
     func isSameRequest(as other: NeedsYouItem) -> Bool {
         id == other.id && kind == other.kind && decisionID == other.decisionID && rootRunID == other.rootRunID
             && sourceRunID == other.sourceRunID && taskID == other.taskID
-            && approval?.id == other.approval?.id && approval?.revision == other.approval?.revision
+            && approvalContext == other.approvalContext
+            && approval?.id == other.approval?.id && approval?.taskID == other.approval?.taskID
+            && approval?.revision == other.approval?.revision && approval?.digest == other.approval?.digest
+            && approval?.raw["generation"] == other.approval?.raw["generation"]
+            && approval?.raw["interaction_owner"] == other.approval?.raw["interaction_owner"]
+            && approval?.raw["action"] == other.approval?.raw["action"] && approval?.raw["scope"] == other.approval?.raw["scope"]
     }
 }

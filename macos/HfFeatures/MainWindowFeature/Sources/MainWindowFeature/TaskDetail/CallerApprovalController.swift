@@ -1,4 +1,5 @@
 import Foundation
+import HfRepository
 import MonitorCore
 import Observation
 
@@ -32,12 +33,16 @@ final class CallerApprovalController {
         let message: String
         var capabilityLoss = false
         var winner: CallerApprovalWinner?
+        var current: CallerApprovalRequest?
+        var temporaryBusy = false
+        var refreshable = false
     }
 
     @ObservationIgnored private var blocked: [String: BlockedResult] = [:]
     @ObservationIgnored private var pollingEnabled = true
     @ObservationIgnored private var pendingFocus: CallerApprovalReveal?
     @ObservationIgnored private var listCurrent = false
+    @ObservationIgnored private var responseContext: ApprovalResponseContext?
     @ObservationIgnored private var responseWork: Task<Void, Never>?
     @ObservationIgnored private var refreshWork: Task<Void, Never>?
     @ObservationIgnored private var pendingReveal = false
@@ -101,20 +106,27 @@ final class CallerApprovalController {
         await refresh()
     }
 
-    func refresh(loadMore: Bool = false) async {
+    func refresh(loadMore: Bool = false, recoverPreflight: Bool = false) async {
         guard !isLoading, !isSubmitting, targetTask != nil || targetRun != nil else { return }
         let token = generation
         isLoading = true
         defer { if generation == token { isLoading = false } }
         do {
+            let context = try useCase.responseContext()
             let capability = (try? await useCase.supportsMonitorResponseForCallerApprovals()) ?? false
             guard generation == token, !Task.isCancelled else { return }
             if supportsCallerResponses != capability { supportsCallerResponses = capability }
             let acquired = try await acquirePage(loadMore: loadMore, token: token)
             guard generation == token, !Task.isCancelled else { return }
+            try validateResponseContext(context)
+            responseContext = context
             applyPage(acquired.page)
             if acquisitionLimited != acquired.limited { acquisitionLimited = acquired.limited }
             await acquireDetails(acquired.page.requests, token: token)
+            if recoverPreflight, let context {
+                await recoverRefusals(context: context, token: token)
+            }
+            try validateResponseContext(context)
             await publishCards(token: token, finishingRefresh: true)
         } catch {
             guard generation == token, !Task.isCancelled else { return }
@@ -126,11 +138,26 @@ final class CallerApprovalController {
         }
     }
 
+    private func validateResponseContext(_ context: ApprovalResponseContext?) throws {
+        if let context, !useCase.isResponseContextCurrent(context) {
+            throw ToolError.unknownOutcome(message: "Refresh to review the current action.")
+        }
+    }
+
+    private func recoverRefusals(context: ApprovalResponseContext, token: UUID) async {
+        for (id, value) in blocked where value.refreshable {
+            guard await useCase.canReviewAgain(value.request, context: context) else { continue }
+            guard generation == token, useCase.isResponseContextCurrent(context), responseContext == context else { return }
+            blocked[id] = nil
+            if error == value.message { error = nil }
+        }
+    }
+
     private func applyPage(_ page: CallerApprovalPage) {
         listCurrent = true
         blocked = blocked.filter { id, result in
             guard let current = page.requests.first(where: { $0.id == id }) else { return false }
-            return Self.sameCurrent(result.request, current) && !(result.capabilityLoss && supportsCallerResponses)
+            return Self.sameCurrent(result.request, current)
         }
         let retainedError = blocked.values
 .filter { result in
@@ -278,7 +305,7 @@ final class CallerApprovalController {
 
     func requestRefresh(loadMore: Bool = false) {
         refreshWork?.cancel()
-        refreshWork = Task { [weak self] in await self?.refresh(loadMore: loadMore) }
+        refreshWork = Task { [weak self] in await self?.refresh(loadMore: loadMore, recoverPreflight: !loadMore) }
     }
 
     func submit(_ decision: String, requestID: String) {
@@ -287,7 +314,8 @@ final class CallerApprovalController {
     }
 
     func respond(_ decision: String, requestID: String? = nil) async {
-        guard listCurrent, !isLoading, ["approve", "reject"].contains(decision), !isSubmitting,
+        guard responseContext.map({ useCase.isResponseContextCurrent($0) }) != false,
+              listCurrent, !isLoading, ["approve", "reject"].contains(decision), !isSubmitting,
               let id = requestID ?? selectedID,
               let card = cards.first(where: { $0.id == id }), card.canRespond,
               let request = details[id], Self.awaiting(request), request.complete, Self.validIdentity(request),
@@ -300,7 +328,7 @@ final class CallerApprovalController {
         await publishCards(token: token)
         guard generation == token, !Task.isCancelled, listCurrent else { return }
         do {
-            let response = try await useCase.respond(request, decision: decision)
+            let response = try await useCase.respond(request, decision: decision, context: responseContext)
             guard generation == token, !Task.isCancelled else { return }
             guard Self.confirmsResponse(response, for: request, decision: decision) else {
                 throw ToolError.unknownOutcome(message: "The approval response did not confirm the submitted decision.")
@@ -322,7 +350,12 @@ final class CallerApprovalController {
     }
 
     private func recordResponseFailure(_ error: Error, request: CallerApprovalRequest) {
-        let toolError = error as? ToolError
+        if error is ApprovalResponseBusy {
+            blocked[request.id] = BlockedResult(request: request, message: "An approval response is already in progress.", temporaryBusy: true)
+            return
+        }
+        let refusal = error as? ApprovalResponseRefusal
+        let toolError = refusal?.error ?? (error as? ToolError)
         let reason = toolError?.callerApprovalResponseReason
         if let winner = toolError?.callerApprovalWinner, winner.requestID == request.id, winner.taskID == request.taskID {
             let label = winner.answeredBy == .caller ? "Already answered by the caller" : "Answered in Harflow"
@@ -336,8 +369,11 @@ final class CallerApprovalController {
             blocked[request.id] = BlockedResult(request: request, message: message, capabilityLoss: reason == .unsupported)
         } else {
             blocked[request.id] = BlockedResult(request: request,
-                message: "The result could not be confirmed. This request is read-only here and your answer will not be retried.")
+                message: refusal != nil ? (toolError?.message ?? ApprovalResponseOutcome.uncertainMessage) : ApprovalResponseOutcome.uncertainMessage)
         }
+        blocked[request.id]?.current = refusal?.current
+        blocked[request.id]?.refreshable = refusal != nil && toolError?.callerApprovalWinner == nil
+            && reason != .expired && reason != .settled
         self.error = blocked[request.id]?.message
     }
 
@@ -357,16 +393,46 @@ final class CallerApprovalController {
         return nil
     }
 
-    private func publishCards(token: UUID, finishingRefresh: Bool = false) async {
-        let values = requests.map { listed -> CallerApprovalRequest in
-            let request = details[listed.id] ?? listed
+    private func reconcileBlockedResponses(context responseContext: ApprovalResponseContext) {
+            for (id, value) in blocked where value.temporaryBusy {
+                if useCase.retainedResponse(value.request, context: responseContext) != .busy {
+                    blocked[id] = nil
+                    if error == value.message { error = nil }
+                }
+            }
+            for request in details.values {
+                guard let held = useCase.retainedResponse(request, context: responseContext) else { continue }
+                switch held {
+                case .refused(let error, _): recordResponseFailure(error, request: request)
+                case .uncertain: recordResponseFailure(ToolError.unknownOutcome(message: ApprovalResponseOutcome.uncertainMessage), request: request)
+                case .busy:
+                    blocked[request.id] = BlockedResult(request: request, message: "An approval response is already in progress.", temporaryBusy: true)
+                case .recorded: break
+                }
+            }
+    }
+
+    private func presentedRequest(_ listed: CallerApprovalRequest) -> CallerApprovalRequest {
+            var request = details[listed.id] ?? listed
+            if let responseContext, let held = useCase.retainedResponse(request, context: responseContext) {
+                switch held {
+                case .recorded(let response): request = response
+                case .refused(_, let current): if let current, !current.isVisuallyPending { request = current }
+                default: break
+                }
+            }
+            if let current = blocked[request.id]?.current, !current.isVisuallyPending { request = current }
             guard let winner = blocked[request.id]?.winner else { return request }
             var raw = request.raw
             raw["decision"] = .string(winner.decision)
             raw["responder"] = .string(winner.answeredBy.rawValue)
             raw["decided_at"] = .number(winner.answeredAt)
             return CallerApprovalRequest(raw: raw)
-        }
+    }
+
+    private func publishCards(token: UUID, finishingRefresh: Bool = false) async {
+        if let responseContext { reconcileBlockedResponses(context: responseContext) }
+        let values = requests.map(presentedRequest)
         let actions = await Task.detached(priority: .userInitiated) {
             values.map { CallerApprovalAction.build($0) }
         }.value
@@ -381,8 +447,12 @@ final class CallerApprovalController {
             let canRespond = details[request.id] != nil && listCurrent && blocked[request.id] == nil && !isSubmitting
                 && request.isEligibleForMonitorResponse(supportsCallerResponses: supportsCallerResponses, now: now)
             let notice = notice(for: request, ownerSupported: ownerSupported, full: full, now: now, knownEnums: action.knownEnums)
-            return CallerApprovalCardModel(request: request, action: action, pending: pending, expanded: pending || expanded.contains(request.id),
-                canRespond: canRespond, showsDecisionControls: pending && Self.knownState(request) && ownerSupported,
+            let isExpanded = pending || blocked[request.id] != nil || request.text("disposition") == "expired"
+                || request.text("delivery") == "delivery_unknown" || expanded.contains(request.id)
+            return CallerApprovalCardModel(request: request, action: action,
+                pending: pending && blocked[request.id] == nil, expanded: isExpanded,
+                canRespond: canRespond, showsDecisionControls: pending && Self.knownState(request) && ownerSupported && blocked[request.id] == nil,
+                showsRefresh: blocked[request.id]?.refreshable == true,
                 notice: notice, submitting: isSubmitting,
                 focusToken: pendingFocus?.requestID == request.id ? pendingFocus?.token : nil)
         }

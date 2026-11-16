@@ -30,8 +30,6 @@ protocol NeedsYouEngine: Sendable {
 final class CtlNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
     private let toolEnvironment: any ToolEnvironmentRepository
     private let workflows: any WorkflowRepository
-    private let lock = NSLock()
-    private var capability: (runtime: String, supported: Bool)?
 
     init(toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository) {
         self.toolEnvironment = toolEnvironment
@@ -64,11 +62,7 @@ final class CtlNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
 
     func supportsMonitorApprovalResponses() async throws -> Bool {
         let client = try toolEnvironment.ctl().get()
-        let runtime = client.executable
-        if let cached = lock.withLock({ capability }), cached.runtime == runtime { return cached.supported }
-        let supported = try await client.supportsMonitorResponseForCallerApprovals().get()
-        lock.withLock { capability = (runtime, supported) }
-        return supported
+        return try await client.supportsMonitorResponseForCallerApprovals().get()
     }
 
     func resume(root: String, decisionID: String?, attentionCheckpointID: String?, text: String, additionalAttempts: Int?) async throws {

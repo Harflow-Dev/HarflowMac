@@ -218,7 +218,7 @@ import Testing
         #expect(rig.sut.presentation.detail?.phase == .answerable)
     }
 
-    @Test func givenChangedApproval_whenDecided_thenRefreshedActionIsShownWithReviewNote() async {
+    @Test func givenChangedApproval_whenDecided_thenDisplayedActionIsReadOnlyUntilRefreshed() async {
         // given
         var approval = item("approval:t1:r1", kind: .approval)
         approval.approval = CallerApprovalRequest(raw: ["request_id": .string("r1"), "task_id": .string("t1"), "owner_revision": .number(1),
@@ -232,10 +232,9 @@ import Testing
         await waitUntil { rig.sut.presentation.detail != nil }
         // when
         rig.sut.didDecide(approve: true)
-        await waitUntil { rig.sut.presentation.detail?.reviewNote != nil }
+        await waitUntil { rig.sut.presentation.detail?.phase == .readOnly(lines: ["This request changed. Review it again."], refresh: true) }
         // then
-        #expect(rig.sut.presentation.detail?.reviewNote == "This request changed. Review it again.")
-        #expect(rig.sut.presentation.detail?.approval?.fields.contains { $0.value == "rm" } == true)
+        #expect(rig.sut.presentation.detail?.approval?.fields.contains { $0.value == "ls" } == true)
     }
 
     @Test func givenApprovalAccepted_whenRejected_thenSettledSaysRejected() async {
@@ -386,5 +385,116 @@ import Testing
         await waitUntil { if case .settled? = rig.sut.presentation.detail?.phase { true } else { false } }
         // then
         verify(rig.useCase).respond(.value(shown), decision: .value("approve")).called(1)
+    }
+}
+
+extension NeedsYouVMTests {
+    @Test func givenStaleCheckpoint_whenAnswerIsRefused_thenRefreshReplacesDecisionControlsWithoutChangingCounts() async {
+        // given
+        var request = item(kind: .recovery)
+        request.attentionCheckpointID = "checkpoint-one"
+        let rig = rig(items: [request], outcome: .stale(NeedsYouAnswerOutcome.changedMessage))
+        rig.sut.didAppear()
+        rig.sut.show(itemID: request.id)
+        await waitUntil { rig.sut.displayedItem != nil }
+        rig.sut.answerText = "Continue"
+        // when
+        rig.sut.didSubmitAnswer()
+        await waitUntil { rig.sut.presentation.detail?.phase == .readOnly(lines: ["This request changed. Review it again."], refresh: true) }
+        rig.sut.didTapRetry()
+        // then
+        #expect(rig.sut.presentation.rows.count == 1)
+        #expect(rig.sut.snapshot.items.count == 1)
+        verify(rig.useCase).answer(.any, text: .any, additionalAttempts: .any).called(1)
+    }
+
+    @Test func givenApprovalUncertainty_whenScreenRemounts_thenThereIsNoManualDuplicatePath() async {
+        // given
+        var request = item(kind: .approval)
+        request.approvalOutcome = .uncertain
+        request.approvalCanRespond = false
+        let rig = rig(items: [request])
+        // when
+        rig.sut.didAppear()
+        rig.sut.show(itemID: request.id)
+        await waitUntil { rig.sut.presentation.detail != nil }
+        rig.sut.didDecide(approve: true)
+        // then
+        #expect(rig.sut.presentation.detail?.phase == .readOnly(lines: ["Delivery is unknown. The decision will not be retried."], refresh: false))
+        verify(rig.useCase).respond(.any, decision: .any).called(0)
+    }
+}
+
+extension NeedsYouVMTests {
+    @Test func givenRuntimeAUncertaintyIsLocallyRetained_whenBPublishesSameIDsAndRevision_thenBDoesNotInheritAReadOnlyCard() async {
+        // given
+        var requestA = item(kind: .approval)
+        let runtimeA = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: ["TEST_RUNTIME": "A"]))
+        requestA.approvalContext = ApprovalResponseContext(runtime: runtimeA, epoch: UUID())
+        requestA.approval = CallerApprovalRequest(raw: ["request_id": .string("r"), "task_id": .string("t"), "owner_revision": .number(1),
+                                                      "action_digest": .string("digest"), "generation": .string("g"),
+                                                      "action": .object(["input": .object(["command": .string("same")])])])
+        let rig = rig(items: [requestA], outcome: .approvalOutcome(.uncertain))
+        rig.sut.didAppear()
+        rig.sut.show(itemID: requestA.id)
+        await waitUntil { rig.sut.displayedItem != nil }
+        rig.sut.didDecide(approve: true)
+        await waitUntil { rig.sut.settled[requestA.id] != nil }
+        // when
+        var requestB = requestA
+        let runtimeB = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: ["TEST_RUNTIME": "B"]))
+        requestB.approvalContext = ApprovalResponseContext(runtime: runtimeB, epoch: UUID())
+        rig.subject.send(NeedsYouSnapshot(phase: .ready, items: [requestB]))
+        await waitUntil { rig.sut.presentation.detail?.phase == .answerable }
+        // then
+        #expect(rig.sut.settled[requestA.id] == nil)
+        #expect(rig.sut.displayedItem?.approvalContext == requestB.approvalContext)
+        #expect(!requestA.isSameRequest(as: requestB))
+    }
+
+    @Test(arguments: ["action_digest", "generation", "action"])
+    func givenLocalApprovalResult_whenSameRevisionCarriesDifferentIdentity_thenPresentationDoesNotMatch(field: String) {
+        // given
+        var first = item(kind: .approval)
+        first.approval = CallerApprovalRequest(raw: ["request_id": .string("r"), "task_id": .string("t"), "owner_revision": .number(1),
+                                                   "action_digest": .string("digest"), "generation": .string("g"),
+                                                   "action": .object(["input": .object(["command": .string("one")])])])
+        var second = first
+        var raw = first.approval?.raw ?? [:]
+        raw[field] = field == "action" ? .object(["input": .object(["command": .string("two")])]) : .string("different")
+        second.approval = CallerApprovalRequest(raw: raw)
+        // when / then
+        #expect(!first.isSameRequest(as: second))
+    }
+}
+
+extension NeedsYouVMTests {
+    @Test func givenNeverInvokedApprovalFailure_whenExplicitFreshReviewSucceeds_thenSameIdentityNeedsYouCardRecoversWithoutAnotherResponse() async throws {
+        // given
+        var request = item(kind: .approval)
+        request.approval = try approvalStateRequest("ctl-approval-get-claude-bash")
+        request.approvalContext = ApprovalResponseContext(
+            runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])), epoch: UUID()
+        )
+        let outcome = ApprovalResponseOutcome.refused(.structuredRefusal(code: "approval_error", message: "unsupported",
+                                                                        data: ["reason": .string("unsupported")]), current: nil)
+        let rig = rig(items: [request], outcome: .approvalOutcome(outcome))
+        let reviews = LockedRouted()
+        given(rig.useCase).canReviewApprovalAgain(.any).willProduce { _ in reviews.add("read"); return reviews.all.count > 1 }
+        rig.sut.didAppear()
+        rig.sut.show(itemID: request.id)
+        await waitUntil { rig.sut.displayedItem != nil }
+        rig.sut.didDecide(approve: true)
+        await waitUntil { rig.sut.settled[request.id] != nil }
+        // when
+        rig.sut.didTapRetry()
+        await waitUntil { reviews.all.count == 1 }
+        #expect(rig.sut.settled[request.id] != nil)
+        rig.sut.didTapRetry()
+        await waitUntil { rig.sut.presentation.detail?.phase == .answerable }
+        // then
+        #expect(rig.sut.settled[request.id] == nil)
+        verify(rig.useCase).respond(.any, decision: .any).called(1)
+        #expect(reviews.all.count == 2)
     }
 }

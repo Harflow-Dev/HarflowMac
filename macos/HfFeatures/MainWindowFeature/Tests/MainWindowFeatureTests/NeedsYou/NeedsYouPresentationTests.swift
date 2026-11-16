@@ -1,6 +1,7 @@
 import Foundation
 import HfRepository
 @testable import MainWindowFeature
+import MonitorCore
 import Testing
 
 // MARK: - NeedsYouPresentationTests
@@ -70,5 +71,44 @@ struct NeedsYouPresentationTests {
         #expect(NeedsYouBadge.none.accessibilityLabel == "Needs you, nothing pending")
         #expect(NeedsYouBadge.loading.accessibilityLabel == "Needs you, loading")
         #expect(NeedsYouBadge.none.capsuleText == nil && NeedsYouBadge.count(3, atLeast: true).capsuleText == "3+")
+    }
+}
+
+extension NeedsYouPresentationTests {
+    @Test func givenExpiredUnansweredApproval_whenMapped_thenExpiredDeliveryAndExecutionFactsStaySeparate() throws {
+        // given
+        let request = try approvalStateRequest("ctl-approval-state-expired-unanswered")
+        let error = ToolError.structuredRefusal(code: "approval_error", message: "expired", data: ["reason": .string("expired")])
+        let item = NeedsYouItem(id: "approval:t:r", kind: .approval, runTitle: "Task", text: "Bash",
+                               ownership: .init(owner: "caller", callerEnded: false, engineNote: "", handover: nil), startedBy: "Original caller",
+                               approval: request, approvalOutcome: .refused(error, current: request))
+        // when
+        let detail = NeedsYouPresentationMapper.detail(item)
+        // then
+        guard case .readOnly(let lines, let refresh) = detail.phase else { Issue.record("Expected read-only expired card"); return }
+        #expect(!refresh)
+        #expect(lines.contains("Expired"))
+        #expect(lines.contains("Effective decision: reject"))
+        #expect(lines.contains("Delivered decision: reject"))
+        #expect(lines.contains("Observed execution: unknown"))
+        #expect(!lines.contains { $0.hasPrefix("Recorded decision:") })
+    }
+}
+
+extension NeedsYouPresentationTests {
+    @Test func givenExpiryRejectionDeliveryIsUnknown_whenMapped_thenNoSentRejectionIsClaimed() throws {
+        // given
+        var raw = try approvalStateRequest("ctl-approval-state-expired-override").raw
+        raw["delivery"] = .string("delivery_unknown")
+        raw["delivered_decision"] = .null
+        let request = CallerApprovalRequest(raw: raw)
+        // when
+        let lines = CallerApprovalPresentation.resultLines(request)
+        // then
+        #expect(lines.contains("Expired"))
+        #expect(lines.contains("Effective decision: reject"))
+        #expect(lines.contains("Delivery is unknown. The decision will not be retried."))
+        #expect(lines.contains("Observed execution: unknown"))
+        #expect(!lines.contains("Harflow rejected the request when it expired."))
     }
 }

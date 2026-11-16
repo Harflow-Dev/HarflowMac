@@ -14,6 +14,19 @@ import Testing
     private final class FakeNeedsYou: MenuBarNeedsYouUseCase {
         let subject: CurrentValueSubject<NeedsYouSnapshot, Never>
         var publishesOnBackgroundQueue = false
+        var responses: [(NeedsYouItem, String)] = []
+        var outcome: NeedsYouAnswerOutcome = .approvalOutcome(.uncertain)
+        var refreshCount = 0
+        var contextCurrent = true
+        var freshReviewSucceeded = false
+        var reviewCalls = 0
+        func canReviewApprovalAgain(_: NeedsYouItem) async -> Bool { reviewCalls += 1; return freshReviewSucceeded }
+        func isApprovalContextCurrent(_: NeedsYouItem) -> Bool { contextCurrent }
+        func respondToApproval(_ item: NeedsYouItem, decision: String) async -> NeedsYouAnswerOutcome {
+            responses.append((item, decision)); return outcome
+        }
+
+        func refreshNeedsYou() { refreshCount += 1 }
         init(_ snapshot: NeedsYouSnapshot) { self.subject = CurrentValueSubject(snapshot) }
         var needsYouSnapshot: NeedsYouSnapshot { subject.value }
         func needsYouSnapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never> {
@@ -136,5 +149,110 @@ import Testing
         #expect(sut.needsYou?.count == 1)
         #expect(sut.needsYou?.rows.first?.title == "Run input:a:2")
         sut.didDisappear()
+    }
+}
+
+extension MenuBarVMNeedsYouTests {
+    private func approvalItem() -> NeedsYouItem {
+        var value = item("approval:t:r")
+        value.kind = .approval
+        value.approval = CallerApprovalRequest(raw: ["request_id": .string("r"), "task_id": .string("t"), "action_digest": .string("digest")])
+        value.approvalContext = ApprovalResponseContext(
+            runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])), epoch: UUID()
+        )
+        return value
+    }
+
+    @Test func givenExactDisplayedApproval_whenMenuActionRuns_thenCapturedItemAndDecisionReachSharedUseCase() async throws {
+        // given
+        let item = approvalItem()
+        let (sut, feed, _) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [item]))
+        sut.didAppear()
+        let row = try #require(sut.needsYou?.rows.first)
+        // when
+        sut.didDecideApproval(row, decision: "approve")
+        await waitUntil { feed.responses.count == 1 && sut.needsYou?.rows.first?.canDecide == false }
+        sut.didDecideApproval(row, decision: "reject")
+        // then
+        #expect(feed.responses.count == 1)
+        #expect(feed.responses.first?.0 == item && feed.responses.first?.1 == "approve")
+        #expect(sut.needsYou?.rows.first?.resultLines == ["Delivery is unknown. The decision will not be retried."])
+    }
+
+    @Test func givenDisplayedMenuRowIsReplaced_whenOldClosureRuns_thenNoResponseRuns() async throws {
+        // given
+        let item = approvalItem()
+        let (sut, feed, _) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [item]))
+        sut.didAppear()
+        let old = try #require(sut.needsYou?.rows.first)
+        var changed = item
+        changed.text = "A different exact action"
+        // when
+        feed.subject.send(NeedsYouSnapshot(phase: .ready, items: [changed]))
+        await waitUntil { sut.needsYou?.rows.first?.item?.text == changed.text }
+        sut.didDecideApproval(old, decision: "approve")
+        // then
+        #expect(feed.responses.isEmpty)
+    }
+
+    @Test func givenNotCurrentMenuResponse_whenRefreshIsTapped_thenOnlyReadOnlyRefreshRuns() async throws {
+        // given
+        let (sut, feed, _) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [approvalItem()]))
+        feed.outcome = .approvalOutcome(.refused(
+            .structuredRefusal(code: "approval_error", message: "stale", data: ["reason": .string("not_current")]), current: nil
+        ))
+        sut.didAppear()
+        let row = try #require(sut.needsYou?.rows.first)
+        // when
+        sut.didDecideApproval(row, decision: "approve")
+        await waitUntil { sut.needsYou?.rows.first?.showsRefresh == true }
+        sut.didRefreshApprovals()
+        // then
+        #expect(feed.responses.count == 1)
+        #expect(feed.refreshCount == 1)
+        #expect(sut.needsYou?.rows.first?.canDecide == false)
+        #expect(sut.needsYou?.count == 1)
+    }
+}
+
+extension MenuBarVMNeedsYouTests {
+    @Test func givenOtherSurfaceBusyThenPreflightFails_whenMenuReprojects_thenBusyDoesNotBecomePermanentLocalResult() async throws {
+        // given
+        let (sut, feed, _) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [approvalItem()]))
+        feed.outcome = .approvalOutcome(.busy)
+        sut.didAppear()
+        let row = try #require(sut.needsYou?.rows.first)
+        // when
+        sut.didDecideApproval(row, decision: "approve")
+        await waitUntil { feed.responses.count == 1 && sut.approvalSubmitting.isEmpty }
+        sut.updateNeedsYou(feed.needsYouSnapshot) // Shared owner no longer holds admission.
+        // then
+        #expect(sut.approvalResults[row.id] == nil)
+        #expect(sut.needsYou?.rows.first?.canDecide == true)
+        #expect(feed.responses.count == 1)
+    }
+}
+
+extension MenuBarVMNeedsYouTests {
+    @Test func givenNeverInvokedCapabilityFailure_whenExplicitFreshReviewSucceeds_thenSameIdentityMenuActionsRecoverWithoutRespondingAgain() async throws {
+        // given
+        let (sut, feed, _) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [approvalItem()]))
+        feed.outcome = .approvalOutcome(.refused(.structuredRefusal(code: "approval_error", message: "unsupported",
+                                                                  data: ["reason": .string("unsupported")]), current: nil))
+        sut.didAppear()
+        let row = try #require(sut.needsYou?.rows.first)
+        sut.didDecideApproval(row, decision: "approve")
+        await waitUntil { sut.needsYou?.rows.first?.showsRefresh == true }
+        // when
+        sut.didRefreshApprovals()
+        await waitUntil { feed.reviewCalls == 1 }
+        #expect(sut.needsYou?.rows.first?.canDecide == false)
+        feed.freshReviewSucceeded = true
+        sut.didRefreshApprovals()
+        await waitUntil { sut.needsYou?.rows.first?.canDecide == true }
+        // then
+        #expect(feed.responses.count == 1)
+        #expect(feed.reviewCalls == 2)
+        #expect(sut.approvalResults[row.id] == nil)
     }
 }

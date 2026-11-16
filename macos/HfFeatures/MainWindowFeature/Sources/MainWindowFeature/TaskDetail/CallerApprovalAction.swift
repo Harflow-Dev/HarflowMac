@@ -81,6 +81,7 @@ struct CallerApprovalCardModel: Equatable, Identifiable, Sendable {
     let expanded: Bool
     var canRespond: Bool
     var showsDecisionControls = true
+    var showsRefresh = false
     let notice: String?
     let submitting: Bool
     var focusToken: UUID?

@@ -42,6 +42,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.taskActionRepository) private var taskActionRepository
     @GlobalEnvironment(\.eventStreamRepository) private var eventStreamRepository
     @GlobalEnvironment(\.takeoverService) private var takeoverService
+    @GlobalEnvironment(\.approvalResponseOwner) private var approvalResponseOwner
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
 
     // MARK: - Init
@@ -93,7 +94,7 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
     }
 
     func callerApprovalUseCase() -> (any CallerApprovalUseCase)? {
-        CallerApprovalRepository(environment: toolEnvironmentRepository)
+        CallerApprovalRepository(environment: toolEnvironmentRepository, owner: approvalResponseOwner)
     }
 
     // MARK: - TaskDetailUseCase Methods

@@ -359,3 +359,24 @@ struct ActivityFeedApprovalHostedTests {
         }
     }
 }
+
+extension ActivityFeedApprovalHostedTests {
+    @Test(arguments: ["ctl-approval-state-expired-override", "ctl-approval-state-delivery-unknown"])
+    func givenApprovedSettledApproval_whenNativeCardHosts_thenNoDecisionButtonsAreMounted(name: String) async throws {
+        // given
+        let request = try approvalStateRequest(name)
+        let model = CallerApprovalCardModel(request: request, action: CallerApprovalAction.build(request), pending: false,
+                                            expanded: true, canRespond: false, showsDecisionControls: false,
+                                            notice: request.text("delivery") == "delivery_unknown"
+                                                ? "Delivery is unknown. The decision will not be retried." : nil,
+                                            submitting: false)
+        let host = NSHostingView(rootView: CallerApprovalRequestCard(model: model, respond: { _ in Issue.record("Read-only state dispatched") }, toggle: {}))
+        let (window, previousActivationPolicy, previousEnhancedAX) = try open(host)
+        defer { close(window, previousActivationPolicy: previousActivationPolicy, previousEnhancedAX: previousEnhancedAX) }
+        // when
+        host.layoutSubtreeIfNeeded()
+        // then
+        #expect(!nativeDescendants(host).compactMap { $0 as? NSButton }.contains { ["Approve once", "Reject"].contains($0.title) })
+        #expect(model.canRespond == false)
+    }
+}

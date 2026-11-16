@@ -21,8 +21,25 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     @GlobalEnvironment(\.eventStreamRepository) private var eventStreamRepository
     @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
+    @GlobalEnvironment(\.approvalResponseOwner) private var approvalResponseOwner
     @GlobalEnvironment(\.needsYouRepository) private var needsYouRepository
 
+    func respondToApproval(_ item: NeedsYouItem, decision: String) async -> NeedsYouAnswerOutcome { await needsYouRepository.respond(item, decision: decision) }
+    func isApprovalContextCurrent(_ item: NeedsYouItem) -> Bool {
+        item.approvalContext.map { approvalResponseOwner.isCurrent($0) } == true
+    }
+
+    func retainedApprovalResult(_ item: NeedsYouItem) -> ApprovalResponseOutcome? {
+        guard let request = item.approval, let context = item.approvalContext, approvalResponseOwner.isCurrent(context) else { return nil }
+        return approvalResponseOwner.retained(request, context: context)
+    }
+
+    func canReviewApprovalAgain(_ item: NeedsYouItem) async -> Bool {
+        guard let request = item.approval, let context = item.approvalContext else { return false }
+        return await approvalResponseOwner.canReviewAgain(request, context: context)
+    }
+
+    func refreshNeedsYou() { needsYouRepository.refresh() }
     var needsYouSnapshot: NeedsYouSnapshot { needsYouRepository.snapshot }
     func needsYouSnapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never> { needsYouRepository.snapshotPublisher() }
 

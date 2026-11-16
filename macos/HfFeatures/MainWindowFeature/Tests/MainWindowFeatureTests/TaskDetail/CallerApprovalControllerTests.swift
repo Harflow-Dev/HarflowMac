@@ -508,3 +508,71 @@ private extension CallerApprovalRequest {
         return CallerApprovalRequest(raw: copy)
     }
 }
+
+extension CallerApprovalControllerTests {
+    @Test(arguments: ["ctl-approval-error-not-current", "ctl-approval-error-settled"])
+    func givenVendoredRefusal_whenResponding_thenReadOnlyCardHasExactCopyAndNeverRetries(name: String) async throws {
+        // given
+        let request = controllerRequest()
+        let fake = CallerApprovalFake(request: request)
+        let refusal = try approvalStateError(name)
+        fake.responseError = refusal
+        let controller = CallerApprovalController(useCase: fake)
+        await controller.selectTarget(taskID: request.taskID, workflowRunID: nil)
+        // when
+        await controller.respond("approve", requestID: request.id)
+        await controller.respond("reject", requestID: request.id)
+        // then
+        #expect(fake.responseCount == 1)
+        #expect(controller.cards.first?.showsDecisionControls == false)
+        #expect(controller.cards.first?.notice == refusal.callerApprovalResponseReason.map(CallerApprovalPresentation.refusalMessage))
+    }
+
+    @Test(arguments: ["ctl-approval-state-expired-override", "ctl-approval-state-expired-unanswered", "ctl-approval-state-delivery-unknown"])
+    func givenVendoredSettledState_whenProjected_thenDecisionsDeliveryAndExecutionStaySeparate(name: String) async throws {
+        // given
+        let request = try approvalStateRequest(name)
+        let fake = CallerApprovalFake(request: request)
+        let controller = CallerApprovalController(useCase: fake)
+        // when
+        await controller.selectTarget(taskID: request.taskID, workflowRunID: nil)
+        let lines = CallerApprovalPresentation.resultLines(request)
+        // then
+        #expect(controller.cards.first?.canRespond == false)
+        #expect(controller.cards.first?.showsDecisionControls == false)
+        #expect(lines.contains("Observed execution: unknown"))
+        if request.text("disposition") == "expired" {
+            #expect(lines.contains("Effective decision: reject"))
+            #expect(lines.contains("Delivered decision: reject"))
+            #expect(lines.contains("Harflow rejected the request when it expired."))
+        } else {
+            #expect(lines.contains("Delivery is unknown. The decision will not be retried."))
+        }
+        #expect(fake.responseCount == 0)
+    }
+
+    @Test(arguments: ["approve", "reject"])
+    func givenOtherResponderWins_whenRefusalArrives_thenChannelDecisionAndTimeAreShown(decision: String) async throws {
+        // given
+        let request = controllerRequest()
+        let fake = CallerApprovalFake(request: request)
+        let fixture = try approvalStateError("ctl-approval-error-already-answered")
+        var data = fixture.refusalData ?? [:]
+        var receipt = data["interaction"]?.objectValue ?? [:]
+        receipt["interaction_id"] = .string(request.id)
+        receipt["task_id"] = .string(request.taskID)
+        receipt["answer"] = .string(decision)
+        data["interaction"] = .object(receipt)
+        fake.responseError = ToolError.structuredRefusal(code: "approval_error", message: fixture.message, data: data)
+        let controller = CallerApprovalController(useCase: fake)
+        await controller.selectTarget(taskID: request.taskID, workflowRunID: nil)
+        // when
+        await controller.respond("approve", requestID: request.id)
+        // then
+        let card = try #require(controller.cards.first)
+        #expect(card.showsDecisionControls == false)
+        #expect(card.notice?.contains("Answered in Harflow") == true)
+        #expect(CallerApprovalPresentation.decisionSummary(card.request).contains("Recorded decision: " + decision))
+        #expect(card.request.answeredAt != nil)
+    }
+}

@@ -28,6 +28,7 @@ struct NeedsYouRow: Equatable, Sendable, Identifiable {
 /// Everything the detail pane renders for one request.
 struct NeedsYouDetail: Equatable, Sendable, Identifiable {
     enum Phase: Equatable, Sendable {
+        case readOnly(lines: [String], refresh: Bool)
         case answerable, submitting
         /// The source is unreadable at the moment: last known request, controls disabled, Retry offered.
         case withdrawn
@@ -186,11 +187,16 @@ enum NeedsYouPresentationMapper {
             let action = CallerApprovalAction.build(request)
             return .init(title: action.title, fields: action.fields)
         }
+        let phase: NeedsYouDetail.Phase = if let outcome = item.approvalOutcome {
+            .readOnly(lines: CallerApprovalPresentation.outcomeLines(outcome), refresh: CallerApprovalPresentation.canRefresh(outcome))
+        } else if item.kind == .approval, !item.approvalCanRespond {
+            .readOnly(lines: ["This engine cannot accept a Harflow response for a caller-owned approval."], refresh: false)
+        } else { .answerable }
         return NeedsYouDetail(
             id: item.id, kind: item.kind, kindLabel: kindLabel(item.kind), title: item.runTitle, pathTitles: item.pathTitles,
             text: item.text, questionItems: item.questionItems, offeredAnswers: item.offeredAnswers, resumeHint: item.resumeHint,
             approval: body, provenance: provenance(item), ownershipNote: ownershipNote(item), canAddAttempts: item.canAddAttempts,
-            phase: .answerable, error: nil, reviewNote: nil
+            phase: phase, error: nil, reviewNote: nil
         )
     }
 

@@ -41,6 +41,17 @@ struct NeedsYouDetailView<VM: NeedsYouViewModel>: View {
 
     @ViewBuilder private func card(_ detail: NeedsYouDetail) -> some View {
         switch detail.phase {
+        case .readOnly(let lines, let refresh):
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                Text(detail.sourceLine).font(.hf(.secondary, weight: .semibold))
+                requestBody(detail)
+                ForEach(lines, id: \.self) { Text($0).font(.hf(.secondary)).textSelection(.enabled) }
+                if refresh { Button("Refresh") { viewModel.didTapRetry() } }
+            }
+            .padding(HfRadius.Metrics.spacing12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
+            .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.hairline))
         case .settled(let decision, let answer, let note):
             settledCard(detail, decision: decision, answer: answer, note: note)
         case .expired:

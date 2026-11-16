@@ -8,6 +8,7 @@ import SwiftEnvironment
 /// Concrete `NeedsYouUseCase` backed by `NeedsYouRepository`.
 @MainActor
 final class NeedsYouViewRepository: NeedsYouUseCase {
+    @GlobalEnvironment(\.approvalResponseOwner) private var approvals
     @GlobalEnvironment(\.needsYouRepository) private var repository
 
     var snapshot: NeedsYouSnapshot { repository.snapshot }
@@ -16,6 +17,11 @@ final class NeedsYouViewRepository: NeedsYouUseCase {
 
     func answer(_ item: NeedsYouItem, text: String, additionalAttempts: Int?) async -> NeedsYouAnswerOutcome {
         await repository.answer(item, text: text, additionalAttempts: additionalAttempts)
+    }
+
+    func canReviewApprovalAgain(_ item: NeedsYouItem) async -> Bool {
+        guard let request = item.approval, let context = item.approvalContext else { return false }
+        return await approvals.canReviewAgain(request, context: context)
     }
 
     func respond(_ item: NeedsYouItem, decision: String) async -> NeedsYouAnswerOutcome {

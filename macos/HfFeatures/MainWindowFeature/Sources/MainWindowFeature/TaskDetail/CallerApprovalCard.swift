@@ -13,14 +13,37 @@ protocol CallerApprovalUseCase {
     func page(taskID: String?, workflowRunID: String?, cursor: String?) async throws -> CallerApprovalPage
     func detail(_ request: CallerApprovalRequest) async throws -> CallerApprovalRequest
     func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest
+    func canReviewAgain(_ request: CallerApprovalRequest, context: ApprovalResponseContext) async -> Bool
+    func responseContext() throws -> ApprovalResponseContext?
+    func isResponseContextCurrent(_ context: ApprovalResponseContext) -> Bool
+    func retainedResponse(_ request: CallerApprovalRequest, context: ApprovalResponseContext) -> ApprovalResponseOutcome?
+    func respond(_ request: CallerApprovalRequest, decision: String, context: ApprovalResponseContext?) async throws -> CallerApprovalRequest
     func supportsMonitorResponseForCallerApprovals() async throws -> Bool
 }
 
 extension CallerApprovalUseCase {
+    func canReviewAgain(_: CallerApprovalRequest, context _: ApprovalResponseContext) async -> Bool { false }
+    func responseContext() throws -> ApprovalResponseContext? { nil }
+    func isResponseContextCurrent(_: ApprovalResponseContext) -> Bool { false }
+    func retainedResponse(_: CallerApprovalRequest, context _: ApprovalResponseContext) -> ApprovalResponseOutcome? { nil }
+    func respond(_ request: CallerApprovalRequest, decision: String, context _: ApprovalResponseContext?) async throws -> CallerApprovalRequest {
+        try await respond(request, decision: decision)
+    }
+
     func supportsMonitorResponseForCallerApprovals() async throws -> Bool { false }
 }
 
-extension CallerApprovalRepository: CallerApprovalUseCase {}
+extension CallerApprovalRepository: CallerApprovalUseCase {
+    func responseContext() throws -> ApprovalResponseContext? { try responseContextValue() }
+    func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest {
+        throw ToolError.unknownOutcome(message: "Refresh to review the current action.")
+    }
+
+    func respond(_ request: CallerApprovalRequest, decision: String, context: ApprovalResponseContext?) async throws -> CallerApprovalRequest {
+        guard let context else { throw ToolError.unknownOutcome(message: "Refresh to review the current action.") }
+        return try await respond(request, decision: decision, context: context)
+    }
+}
 
 // MARK: - CallerApprovalPanel
 
@@ -31,6 +54,7 @@ struct CallerApprovalPanel: View {
     var polls = true
     @State private var controller: CallerApprovalController?
     @GlobalEnvironment(\.toolEnvironmentRepository) private var environment
+    @GlobalEnvironment(\.approvalResponseOwner) private var approvalResponseOwner
 
     static func containsOptIn(_ value: JSONValue) -> Bool {
         if let object = value.objectValue {
@@ -46,7 +70,7 @@ struct CallerApprovalPanel: View {
             }
         }
         .task(id: "\(taskID ?? ""):\(workflowRunID ?? "")") {
-            let value = CallerApprovalController(useCase: CallerApprovalRepository(environment: environment))
+            let value = CallerApprovalController(useCase: CallerApprovalRepository(environment: environment, owner: approvalResponseOwner))
             controller = value
             await value.selectTarget(taskID: taskID, workflowRunID: workflowRunID)
             while polls, !Task.isCancelled {
@@ -68,7 +92,7 @@ struct CallerApprovalCard: View {
             ForEach(controller.cards) { card in
                 CallerApprovalRequestCard(model: card, respond: { decision in
                     controller.submit(decision, requestID: card.id)
-                }, toggle: { controller.toggle(card.id) })
+                }, toggle: { controller.toggle(card.id) }, refresh: { controller.requestRefresh() })
             }
             if controller.nextCursor != nil {
                 Button("More requests available · Load more") { controller.requestRefresh(loadMore: true) }
@@ -85,6 +109,7 @@ struct CallerApprovalRequestCard: View {
     let model: CallerApprovalCardModel
     let respond: (String) -> Void
     let toggle: () -> Void
+    var refresh: (() -> Void)?
     var onFocusAcknowledged: ((UUID) -> Void)?
     var isFocusReady: () -> Bool = { true }
 
@@ -160,14 +185,13 @@ struct CallerApprovalRequestCard: View {
 .fixedSize(horizontal: false, vertical: true)
             }
             if !model.pending {
-                ForEach(CallerApprovalPresentation.decisionSummary(model.request), id: \.self) { Text($0).font(.hf(.caption)) }
-                if model.request.text("responder") == "monitor" { Text("Answered from Harflow").font(.hf(.caption)) }
-                Text("Delivery: \(model.request.text("delivery"))").font(.hf(.caption))
-                Text("Observed execution: \(model.request.text("execution_outcome"))").font(.hf(.caption))
-                if !model.request.text("system_rejection").isEmpty { Text(model.request.text("system_rejection")).font(.hf(.caption)).textSelection(.enabled) }
+                ForEach(CallerApprovalPresentation.resultLines(model.request), id: \.self) { Text($0).font(.hf(.caption)) }
             }
             if let notice = model.notice {
                 Text(notice).font(.hf(.caption)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
+            }
+            if model.showsRefresh || model.notice == CallerApprovalPresentation.refusalMessage(.notCurrent) {
+                Button("Refresh") { refresh?() }.disabled(refresh == nil || model.submitting)
             }
             if model.pending, model.showsDecisionControls {
                 HStack {
