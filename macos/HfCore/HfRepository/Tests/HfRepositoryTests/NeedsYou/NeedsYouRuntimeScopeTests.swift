@@ -134,6 +134,90 @@ import Testing
         subscription.cancel()
     }
 
+    @Test func givenWorkflowWithoutRuntimeObservation_whenAnswered_thenRefusesBeforeAnyMutation() async throws {
+        // given
+        let engine = workflowEngine()
+        let sut = NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: CapturingScheduler(),
+                                        visibility: FakeMonitorVisibility(), install: readyInstall())
+        await sut.runPass()
+        let shown = try #require(sut.snapshot.items.first)
+        // when
+        let result = await sut.answer(shown, text: "answer", additionalAttempts: nil)
+        // then
+        #expect(result == .stale(NeedsYouAnswerOutcome.changedMessage))
+        #expect(engine.resumes.isEmpty)
+    }
+
+    @Test(arguments: [false, true])
+    func givenDisplayedWorkflowA_whenRuntimeChangesWithCopiedIDs_thenOldRequestCannotSend(returnToA: Bool) async throws {
+        // given
+        let engine = workflowEngine()
+        let owner = NeedsYouScopeOwner()
+        let sut = repository(engine, owner: owner)
+        await sut.runPass()
+        let shown = try #require(sut.snapshot.items.first)
+        // when — even an unobserved B→A selection revokes the displayed epoch.
+        owner.select("B")
+        if returnToA { owner.select("A") }
+        let result = await sut.answer(shown, text: "answer", additionalAttempts: nil)
+        // then
+        #expect(result == .stale(NeedsYouAnswerOutcome.changedMessage))
+        #expect(engine.resumes.isEmpty)
+        await sut.runPass()
+        #expect(sut.snapshot.items.first?.workflowContext != shown.workflowContext)
+    }
+
+    @Test func givenSuspendedWorkflowSubmit_whenRuntimeEpochChanges_thenNoMutationStarts() async throws {
+        // given
+        let engine = workflowEngine()
+        let owner = NeedsYouScopeOwner()
+        let sut = repository(engine, owner: owner)
+        await sut.runPass()
+        let shown = try #require(sut.snapshot.items.first)
+        let gate = NeedsYouScopeGate()
+        engine.resumeRead = { await gate.wait() }
+        let response = Task { await sut.answer(shown, text: "answer", additionalAttempts: nil) }
+        await waitUntil { gate.isWaiting }
+        // when
+        owner.select("B")
+        owner.select("A")
+        gate.release()
+        _ = await response.value
+        // then
+        #expect(engine.resumes.isEmpty)
+        #expect(sut.snapshot.items.count == 1)
+    }
+
+    @Test func givenInvokedWorkflowA_whenSameIDBPublishesBeforeCompletion_thenOldSettlementCannotSuppressB() async throws {
+        // given
+        let engine = workflowEngine()
+        let owner = NeedsYouScopeOwner()
+        let sut = repository(engine, owner: owner)
+        await sut.runPass()
+        let shown = try #require(sut.snapshot.items.first)
+        let gate = NeedsYouScopeGate()
+        engine.resumeCompletion = { await gate.wait() }
+        let response = Task { await sut.answer(shown, text: "answer", additionalAttempts: nil) }
+        await waitUntil { gate.isWaiting }
+        // when
+        owner.select("B")
+        await sut.runPass()
+        let replacement = try #require(sut.snapshot.items.first)
+        gate.release()
+        #expect(await response.value == .accepted)
+        await sut.runPass()
+        // then
+        #expect(sut.snapshot.items.first == replacement)
+        #expect(replacement.workflowContext != shown.workflowContext)
+    }
+
+    private func workflowEngine() -> FakeNeedsYouEngine {
+        let engine = FakeNeedsYouEngine()
+        engine.headers = [rootHeader("w1")]
+        engine.statuses["w1"] = treeRoot("w1", selected: "d1", inputs: [inputEntry(run: "w1", decision: "d1")])
+        return engine
+    }
+
     private func repository(_ engine: FakeNeedsYouEngine, owner: NeedsYouScopeOwner) -> NeedsYouRepositoryImpl {
         NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: CapturingScheduler(),
                                visibility: FakeMonitorVisibility(), install: readyInstall(), approvals: owner)
@@ -157,7 +241,8 @@ private final class NeedsYouScopeOwner: ApprovalResponding, @unchecked Sendable 
     func select(_ name: String) { selected.mutate { $0 = Self.makeContext(name) } }
     private static func makeContext(_ name: String) -> ApprovalResponseContext {
         ApprovalResponseContext(
-            runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: ["TEST_RUNTIME": name])), epoch: UUID()
+            runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl",
+                                                                environment: ["TEST_RUNTIME": name, "HOME": "/fixture/" + name])), epoch: UUID()
         )
     }
 }

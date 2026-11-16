@@ -27,3 +27,8 @@ with no manifest show no registered artifacts after a successful read. Workflow 
 supported.
 
 Statistics is a native Overview destination. Its mounted VM preserves filters, ranking disclosure and node navigation. An actor completes bounded engine pagination before deriving charts/rankings outside the main actor, and equality checks suppress unchanged presentations. The existing paired engine stays pinned; unsupported Statistics has an explicit screen state.
+
+Needs you retains workflow answer cards and submission state for the exact displayed runtime
+epoch, root/source run, decision and attention checkpoint. A replacement request with a reused
+row ID cannot inherit an older answer card, submission completion or draft-clearing effect.
+Runtime observations do not grant answer authority; the engine still validates each interaction.

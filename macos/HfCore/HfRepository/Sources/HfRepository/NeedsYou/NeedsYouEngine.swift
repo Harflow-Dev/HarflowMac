@@ -1,6 +1,17 @@
 import Foundation
 import MonitorCore
 
+// MARK: - NeedsYouWorkflowAnswer
+
+/// The exact displayed interaction and explicit answer payload.
+struct NeedsYouWorkflowAnswer: Sendable {
+    let root: String
+    let decisionID: String?
+    let attentionCheckpointID: String?
+    let text: String
+    let additionalAttempts: Int?
+}
+
 // MARK: - NeedsYouEngine
 
 /// The engine reads and writes Needs you performs, behind a seam so passes can be tested with a
@@ -20,7 +31,7 @@ protocol NeedsYouEngine: Sendable {
     /// Whether the selected runtime accepts Monitor responses for caller-owned approvals; cached per runtime.
     func supportsMonitorApprovalResponses() async throws -> Bool
     /// Answers a question (`decisionID` set) or a recovery checkpoint (`decisionID` nil) on a workflow root.
-    func resume(root: String, decisionID: String?, attentionCheckpointID: String?, text: String, additionalAttempts: Int?) async throws
+    func resume(_ answer: NeedsYouWorkflowAnswer, runtime: QualificationRuntimeToken, isCurrent: @escaping @Sendable () -> Bool) async throws
     func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest
 }
 
@@ -65,12 +76,12 @@ final class CtlNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
         return try await client.supportsMonitorResponseForCallerApprovals().get()
     }
 
-    func resume(root: String, decisionID: String?, attentionCheckpointID: String?, text: String, additionalAttempts: Int?) async throws {
-        var options = ["--monitor", "--instructions=\(text)"]
-        if let decisionID { options.append("--decision-id=\(decisionID)") }
-        if let attentionCheckpointID { options.append("--attention-checkpoint-id=\(attentionCheckpointID)") }
-        if let additionalAttempts { options.append("--additional-attempts=\(additionalAttempts)") }
-        _ = try await workflows.command("resume", options: options, positionals: [root])
+    func resume(_ answer: NeedsYouWorkflowAnswer, runtime: QualificationRuntimeToken, isCurrent: @escaping @Sendable () -> Bool) async throws {
+        var options = ["--monitor", "--instructions=\(answer.text)"]
+        if let decisionID = answer.decisionID { options.append("--decision-id=\(decisionID)") }
+        if let attentionCheckpointID = answer.attentionCheckpointID { options.append("--attention-checkpoint-id=\(attentionCheckpointID)") }
+        if let additionalAttempts = answer.additionalAttempts { options.append("--additional-attempts=\(additionalAttempts)") }
+        _ = try await workflows.command("resume", options: options, positionals: [answer.root], runtime: runtime, isCurrent: isCurrent)
     }
 
     func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest {

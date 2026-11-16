@@ -65,6 +65,7 @@ final class NeedsYouVM: NeedsYouViewModel {
     @ObservationIgnored var lastDetails: [String: NeedsYouDetail] = [:]
     @ObservationIgnored var leavingRows: [String: NeedsYouRow] = [:]
     @ObservationIgnored var submittingIDs: Set<String> = []
+    @ObservationIgnored var submittingItems: [String: NeedsYouItem] = [:]
     @ObservationIgnored var sendError: String?
     @ObservationIgnored var notice: String?
     @ObservationIgnored var reduceMotion = false
@@ -159,6 +160,18 @@ final class NeedsYouVM: NeedsYouViewModel {
     /// Maps the latest inputs to presentation off the main actor and applies only a changed result.
     func rebuild() {
         reconcileSettled()
+        for (id, submitted) in submittingItems {
+            if let live = snapshot.items.first(where: { $0.id == id }), !live.isSameRequest(as: submitted) {
+                submittingIDs.remove(id)
+                submittingItems[id] = nil
+            }
+        }
+        for (id, override) in overrides {
+            if let live = snapshot.items.first(where: { $0.id == id }), !live.isSameRequest(as: override) {
+                overrides[id] = nil
+                reviewNotes[id] = nil
+            }
+        }
         // Resolution and withdrawal are authoritative over a local review override.
         for id in overrides.keys where !snapshot.items.contains(where: { $0.id == id }) {
             overrides[id] = nil
@@ -241,6 +254,7 @@ extension NeedsYouItem {
     func isSameRequest(as other: NeedsYouItem) -> Bool {
         id == other.id && kind == other.kind && decisionID == other.decisionID && rootRunID == other.rootRunID
             && sourceRunID == other.sourceRunID && taskID == other.taskID
+            && attentionCheckpointID == other.attentionCheckpointID && workflowContext == other.workflowContext
             && approvalContext == other.approvalContext
             && approval?.id == other.approval?.id && approval?.taskID == other.approval?.taskID
             && approval?.revision == other.approval?.revision && approval?.digest == other.approval?.digest

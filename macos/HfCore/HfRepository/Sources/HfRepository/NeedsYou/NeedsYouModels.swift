@@ -1,6 +1,22 @@
 import Foundation
 import MonitorCore
 
+// MARK: - WorkflowResponseContext
+
+/// Runtime observation for a displayed workflow request; it grants no decision authority.
+public struct WorkflowResponseContext: Equatable, Sendable {
+    /// The selected tooling and state-root binding used for observation.
+    public let runtime: QualificationRuntimeToken
+    /// Revoked by a runtime transition, including returning to the same binding.
+    public let epoch: UUID
+
+    /// Captures the selected runtime and its observation epoch.
+    public init(runtime: QualificationRuntimeToken, epoch: UUID) {
+        self.runtime = runtime
+        self.epoch = epoch
+    }
+}
+
 // MARK: - NeedsYouItem
 
 /// One request the Monitor can answer now. Every rendered field takes part in equality except the
@@ -82,6 +98,8 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
     public var approvalOutcome: ApprovalResponseOutcome?
     public var approvalCanRespond: Bool
     public var approvalContext: ApprovalResponseContext?
+    /// The runtime observation that produced this workflow request.
+    public var workflowContext: WorkflowResponseContext?
     public var taskID: String?
 
     /// Creates an item.
@@ -90,7 +108,8 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
         text: String, questionItems: [String] = [], offeredAnswers: [String]? = nil, resumeHint: String? = nil,
         ownership: Ownership, startedBy: String, waitingSince: Date? = nil, canAddAttempts: Bool = false,
         decisionID: String? = nil, attentionCheckpointID: String? = nil, approval: CallerApprovalRequest? = nil, taskID: String? = nil,
-        approvalContext: ApprovalResponseContext? = nil, approvalCanRespond: Bool = true, approvalOutcome: ApprovalResponseOutcome? = nil
+        approvalContext: ApprovalResponseContext? = nil, workflowContext: WorkflowResponseContext? = nil,
+        approvalCanRespond: Bool = true, approvalOutcome: ApprovalResponseOutcome? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -111,6 +130,7 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
         self.approval = approval
         self.taskID = taskID
         self.approvalContext = approvalContext
+        self.workflowContext = workflowContext
         self.approvalCanRespond = approvalCanRespond
         self.approvalOutcome = approvalOutcome
     }

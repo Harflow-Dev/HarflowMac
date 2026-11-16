@@ -18,6 +18,9 @@ public protocol WorkflowRepository: Sendable {
     func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue]
     /// Binds this operation to the runtime that produced its qualification evidence.
     func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken) async throws -> [String: JSONValue]
+    /// Binds a command to the captured runtime and caller observation throughout its handshake.
+    func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken,
+                 isCurrent: @escaping @Sendable () -> Bool) async throws -> [String: JSONValue]
     /// Validates an editable graph without saving workflow state.
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
     /// Saves against the revision the editor loaded, refusing concurrent edits.
@@ -66,6 +69,15 @@ public struct WorkflowRepositoryImpl: WorkflowRepository {
     /// Binds this operation to the runtime that produced its qualification evidence.
     public func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken) async throws -> [String: JSONValue] {
         try await self.command(command, options: options, positionals: positionals, using: runtime.boundClient(tooling: toolEnvironment))
+    }
+
+    public func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken,
+                        isCurrent: @escaping @Sendable () -> Bool) async throws -> [String: JSONValue] {
+        var client = try runtime.boundClient(tooling: toolEnvironment)
+        let originalCheck = client.operationIsCurrent
+        client.operationIsCurrent = { originalCheck() && isCurrent() }
+        guard client.operationIsCurrent() else { throw QualificationSessionError.runtimeChanged }
+        return try await self.command(command, options: options, positionals: positionals, using: client)
     }
 
     private func command(_ command: String, options: [String], positionals: [String], using ctl: CtlClient) async throws -> [String: JSONValue] {
@@ -144,5 +156,12 @@ public extension GlobalValues {
 public extension WorkflowRepository {
     func command(_: String, options _: [String], positionals _: [String], runtime _: QualificationRuntimeToken) async throws -> [String: JSONValue] {
         throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "workflow", detail: "Runtime-bound command unavailable")
+    }
+}
+
+public extension WorkflowRepository {
+    func command(_: String, options _: [String], positionals _: [String], runtime _: QualificationRuntimeToken,
+                 isCurrent _: @escaping @Sendable () -> Bool) async throws -> [String: JSONValue] {
+        throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "workflow", detail: "Runtime-bound observation unavailable")
     }
 }

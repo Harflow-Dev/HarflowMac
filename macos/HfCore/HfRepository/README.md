@@ -49,6 +49,14 @@ HARFLOW_NATIVE_BENCHMARK=1 python3 ../../../scripts/test-swift-package.py --pack
 
 `NeedsYouRepository` publishes one deduplicated snapshot of every request the Monitor can answer now, plus disposable `NeedsYouEvent`s for notifications. It is started once by the app shell. `NeedsYouNotifier` posts notifications with user-info keys `needs_you_item` (an item id beginning `input:`, `attention:` or `approval:`) and `needs_you_list` (`"1"` for the grouped summary); the app routes both to the Needs you screen. Approval notifications name only the tool.
 
+Workflow questions and recovery requests carry the runtime observation and epoch that produced
+the displayed request. Answer submission rejects a superseded observation, including A→B→A,
+and uses a captured runtime client whose currentness is checked again after the compatibility
+probe. A late result settles only its original acquisition scope. The observation is local
+runtime provenance, not authenticated caller identity or approval decision authority. Existing
+engine refusals and drafts remain explicit; answers are never replayed automatically. This does
+not add workflow-wide unknown-outcome retention or an uncertainty recovery interface.
+
 `InteractionEventNotifier` consumes the capability-gated public interaction feed for individual macOS pending, answered, completed and failed banners. It persists app-owned event deduplication per selected state root and disables the legacy Needs you and finish sources while the durable feed is supported. Missing capability retains the legacy sources. It never writes engine records.
 
 ## Task-list observation

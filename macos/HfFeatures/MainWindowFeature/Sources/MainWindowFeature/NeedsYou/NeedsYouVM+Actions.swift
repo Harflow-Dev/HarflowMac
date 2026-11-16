@@ -35,6 +35,7 @@ extension NeedsYouVM {
     func didDecide(approve: Bool) {
         guard let item = currentItem, item.kind == .approval, item.approvalCanRespond else { return }
         submittingIDs.insert(item.id)
+        submittingItems[item.id] = item
         sendError = nil
         rebuild()
         let decision = approve ? "approve" : "reject"
@@ -50,6 +51,7 @@ extension NeedsYouVM {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         submittingIDs.insert(item.id)
+        submittingItems[item.id] = item
         sendError = nil
         rebuild()
         let attempts = item.kind == .recovery && item.canAddAttempts ? max(0, additionalAttempts) : nil
@@ -64,7 +66,7 @@ extension NeedsYouVM {
     /// Applies a completion. The engine result already updated the repository; what is shown changes only if the
     /// request is still the one selected and the screen has not been torn down since the send started.
     private func finish(_ outcome: NeedsYouAnswerOutcome, item: NeedsYouItem, answer: String, rejected: Bool, lifecycle started: Int) {
-        submittingIDs.remove(item.id)
+        guard admitsCompletion(item, lifecycle: started) else { return }
         let current = selectedID == item.id && lifecycle == started
         if case .accepted = outcome {
             // A settled card is kept for the request itself, wherever the reviewer has navigated since.
@@ -127,6 +129,20 @@ extension NeedsYouVM {
             break
         }
         rebuild()
+    }
+
+    private func admitsCompletion(_ item: NeedsYouItem, lifecycle started: Int) -> Bool {
+        if submittingItems[item.id]?.isSameRequest(as: item) == true {
+            submittingIDs.remove(item.id)
+            submittingItems[item.id] = nil
+        }
+        let live = snapshot.items.first { $0.id == item.id } ?? snapshot.withdrawn.first { $0.id == item.id }
+        // An old completion cannot clear a replacement request's draft or populate its local card.
+        guard live == nil || live?.isSameRequest(as: item) == true else {
+            if lifecycle == started { rebuild() }
+            return false
+        }
+        return true
     }
 
     private func finishWinningAnswer(_ outcome: NeedsYouAnswerOutcome, item: NeedsYouItem, answer: String, lifecycle started: Int) -> Bool {

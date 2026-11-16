@@ -6,6 +6,41 @@ import MonitorCore
 import Testing
 
 struct WorkflowControlTransportTests {
+    @Test func givenResumeHandshakeSuspended_whenRuntimeReturnsWithNewEpoch_thenNoWorkflowMutationLaunches() async throws {
+        // given — the selected token is identical after A→B→A; only the epoch detects the change.
+        let epoch = LockedBox(UUID())
+        let capturedEpoch = epoch.value
+        let waiting = LockedBox(false)
+        let gate = AsyncGate()
+        defer { gate.open() }
+        let compatible = compatibleRunner { _ in .success(stdout("{}")) }
+        let runner = StubProcessRunner { call in
+            if call.arguments.first == "version-info" {
+                waiting.mutate { $0 = true }
+                gate.waitSync()
+            }
+            return compatible.answer(call)
+        }
+        let environment = MockToolEnvironmentRepository()
+        let client = CtlClient(executable: "/fixture/ctl", environment: [:], runner: runner)
+        given(environment).ctl().willReturn(.success(client))
+        let sut = WorkflowRepositoryImpl(toolEnvironment: environment)
+        let runtime = QualificationRuntimeToken(client: client)
+        let response = Task {
+            try? await sut.command("resume", options: ["--monitor", "--instructions=answer", "--decision-id=d1"],
+                                   positionals: ["w1"], runtime: runtime, isCurrent: { epoch.value == capturedEpoch })
+        }
+        await waitUntil { waiting.value }
+        // when
+        epoch.mutate { $0 = UUID() }
+        epoch.mutate { $0 = UUID() }
+        gate.open()
+        // then
+        #expect(await response.value == nil)
+        #expect(runner.calls.filter { $0.arguments.first == "workflow-resume" }.isEmpty)
+        #expect(runner.calls.filter { $0.arguments.first == "version-info" }.count == 1)
+    }
+
     @Test(arguments: ["list", "get"], [false, true])
     func givenLogicalWorkflowCommand_whenExecuted_thenOnlyListUsesBoundedMonitorView(command: String, explicitFlag: Bool) async throws {
         let options = explicitFlag ? ["--monitor-view"] : []

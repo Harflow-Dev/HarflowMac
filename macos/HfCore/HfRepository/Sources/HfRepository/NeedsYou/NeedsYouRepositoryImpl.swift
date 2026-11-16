@@ -16,10 +16,12 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     private struct CoreScope: Sendable {
         let id: UUID
         let context: ApprovalResponseContext?
+        let workflowContext: WorkflowResponseContext?
         let core: NeedsYouCore
     }
 
     private var scope: CoreScope
+    private let runtimeObservation: (@Sendable () -> WorkflowResponseContext?)?
     private let toolEnvironment: any ToolEnvironmentRepository
     private let scheduler: any Scheduling
     private let visibility: any MonitorVisibility
@@ -48,8 +50,10 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
 
     init(
         engine: any NeedsYouEngine, toolEnvironment: any ToolEnvironmentRepository, scheduler: any Scheduling,
-        visibility: any MonitorVisibility, install: any InstallRepository, approvals: (any ApprovalResponding)? = nil
+        visibility: any MonitorVisibility, install: any InstallRepository, approvals: (any ApprovalResponding)? = nil,
+        runtimeObservation: (@Sendable () -> WorkflowResponseContext?)? = nil
     ) {
+        self.runtimeObservation = runtimeObservation
         self.approvals = approvals
         self.install = install
         self.engine = engine
@@ -57,7 +61,7 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         self.scheduler = scheduler
         self.visibility = visibility
         let clock = scheduler
-        self.scope = CoreScope(id: UUID(), context: nil, core: NeedsYouCore(engine: engine, now: { clock.now() }))
+        self.scope = CoreScope(id: UUID(), context: nil, workflowContext: nil, core: NeedsYouCore(engine: engine, now: { clock.now() }))
     }
 
     public var snapshot: NeedsYouSnapshot { approvalEvidence(lock.withLock { rawSnapshot }) }
@@ -108,11 +112,11 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
 
     /// A runtime epoch owns its acquisition actor and every cursor, source and deferred detail in it.
     /// Superseded actors may finish suspended reads, but can neither contaminate nor publish into a new scope.
-    private func coreScope(context: ApprovalResponseContext?) -> (scope: CoreScope, replaced: Bool) {
+    private func coreScope(context: ApprovalResponseContext?, workflowContext: WorkflowResponseContext?) -> (scope: CoreScope, replaced: Bool) {
         lock.withLock {
-            guard scope.context != context else { return (scope, false) }
+            guard scope.context != context || scope.workflowContext != workflowContext else { return (scope, false) }
             let clock = scheduler
-            scope = CoreScope(id: UUID(), context: context, core: NeedsYouCore(engine: engine, now: { clock.now() }))
+            scope = CoreScope(id: UUID(), context: context, workflowContext: workflowContext, core: NeedsYouCore(engine: engine, now: { clock.now() }))
             published = -1
             return (scope, true)
         }
@@ -123,7 +127,8 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     /// Runs one acquisition pass and publishes it. Exposed to tests, which drive passes directly.
     func runPass() async {
         let context = try? approvals?.context()
-        let selected = coreScope(context: context)
+        let workflowContext = observation(context: context)
+        let selected = coreScope(context: context, workflowContext: workflowContext)
         guard approvals == nil || context != nil else { return }
         if selected.replaced {
             publish(NeedsYouCore.Output(revision: 0, snapshot: NeedsYouSnapshot(), events: []), from: selected.scope)
@@ -132,14 +137,15 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     }
 
     private func publish(_ output: NeedsYouCore.Output, from captured: CoreScope) {
+        if let context = captured.workflowContext, !isCurrent(context) { return }
         if let approvals {
             guard let context = captured.context, approvals.isCurrent(context) else { return }
         }
         var snapshot = output.snapshot
-        snapshot.items = snapshot.items.map { bind($0, to: captured.context) }
-        snapshot.withdrawn = snapshot.withdrawn.map { bind($0, to: captured.context) }
+        snapshot.items = snapshot.items.map { bind($0, to: captured) }
+        snapshot.withdrawn = snapshot.withdrawn.map { bind($0, to: captured) }
         let boundEvents = output.events.map { event -> NeedsYouEvent in
-            if case .appeared(let item, let baseline) = event { return .appeared(bind(item, to: captured.context), sourceBaseline: baseline) }
+            if case .appeared(let item, let baseline) = event { return .appeared(bind(item, to: captured), sourceBaseline: baseline) }
             return event
         }
         let drains = lock.withLock {
@@ -170,10 +176,20 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
         }
     }
 
-    private func bind(_ item: NeedsYouItem, to context: ApprovalResponseContext?) -> NeedsYouItem {
+    private func bind(_ item: NeedsYouItem, to captured: CoreScope) -> NeedsYouItem {
         var value = item
-        if value.kind == .approval { value.approvalContext = context }
+        if value.kind == .approval { value.approvalContext = captured.context } else { value.workflowContext = captured.workflowContext }
         return value
+    }
+
+    private func observation(context: ApprovalResponseContext?) -> WorkflowResponseContext? {
+        if let context { return WorkflowResponseContext(runtime: context.runtime, epoch: context.epoch) }
+        return runtimeObservation?()
+    }
+
+    private func isCurrent(_ context: WorkflowResponseContext) -> Bool {
+        let current = observation(context: try? approvals?.context())
+        return current == context
     }
 
     // MARK: - Answers
@@ -201,10 +217,14 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
 
     private func send(_ item: NeedsYouItem, root: String, decision: String?, text: String, attempts: Int?) async -> NeedsYouAnswerOutcome {
         let captured = currentScope()
+        guard let context = item.workflowContext, captured.workflowContext == context, isCurrent(context) else {
+            return .stale(NeedsYouAnswerOutcome.changedMessage)
+        }
         do {
-            try await engine.resume(root: root, decisionID: decision,
-                                    attentionCheckpointID: decision == nil ? item.attentionCheckpointID : nil,
-                                    text: text, additionalAttempts: attempts)
+            let answer = NeedsYouWorkflowAnswer(root: root, decisionID: decision,
+                                                attentionCheckpointID: decision == nil ? item.attentionCheckpointID : nil,
+                                                text: text, additionalAttempts: attempts)
+            try await engine.resume(answer, runtime: context.runtime, isCurrent: { [weak self] in self?.isCurrent(context) == true })
         } catch let error as ToolError {
             if error.workflowInteractionWinner != nil { await settle(item.id, in: captured) }
             if error.refusalCode == "attention_checkpoint_stale" { refresh() }

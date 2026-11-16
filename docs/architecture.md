@@ -310,6 +310,16 @@ checkpoint and remains available alongside engine-backed history. Goal revision 
 approval refusals retain the same provenance. Older engines retain their previous eligibility,
 checkpoint capability requirements and missing-attribution behavior.
 
+Existing Needs you workflow questions and recoveries also carry a local runtime token and
+observation epoch, distinct from approval decision authority. Submission rejects an absent or
+superseded observation, including A→B→A, and the bound workflow command chains the epoch fence
+through the compatibility handshake before launching the mutation. Late results settle only the
+captured acquisition scope. Retained UI identity includes the runtime epoch and attention
+checkpoint, so reused row IDs cannot transfer a settled card or an old completion's draft-clearing
+effect to a replacement request. This observation is not authenticated caller identity and does
+not establish a general workflow unknown-outcome recovery interface. See the bounded follow-up
+and validation limits in [the M07 receipt](migration-receipts/M07.md).
+
 ## Public task-list observation
 
 TaskList's observation source emits invalidations only; public task-history/status operations remain the source of displayed facts. Module currently injects polling (one-second urgent/visible checks, thirty-second hidden-idle refreshes), with idle-only admission that drops periodic demand during a busy refresh. Action refresh barriers are independent. Runtime generations fence stale callbacks and initial passes, and subscriptions cancel without retaining the repository. The source can later be replaced by a qualified public ctl watcher without rebuilding the task-list data pipeline. Captured activity uses the separate public observation pipeline below. Neither polling nor event fixture adoption qualifies or selects another managed runtime.

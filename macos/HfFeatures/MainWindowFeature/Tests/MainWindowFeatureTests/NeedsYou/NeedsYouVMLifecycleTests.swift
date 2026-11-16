@@ -60,6 +60,36 @@ private final class Routed: @unchecked Sendable {
         return (sut, useCase, routed)
     }
 
+    @Test(arguments: [true, false])
+    func givenRuntimeAAnswerInFlight_whenSameIDBReplacesIt_thenLateResultCannotSettleOrClearB(accepted: Bool) async {
+        // given
+        var first = item("input:w:same")
+        let runtime = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: ["HOME": "/fixture/A"]))
+        first.workflowContext = WorkflowResponseContext(runtime: runtime, epoch: UUID())
+        let (sut, useCase, _) = rig(NeedsYouSnapshot(phase: .ready, items: [first]))
+        sut.didAppear()
+        sut.show(itemID: first.id)
+        await waitUntil { sut.displayedItem == first }
+        sut.answerText = "answer for A"
+        sut.didSubmitAnswer()
+        await waitUntil { useCase.started == [first.id] }
+        // when
+        var second = first
+        let other = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: ["HOME": "/fixture/B"]))
+        second.workflowContext = WorkflowResponseContext(runtime: other, epoch: UUID())
+        useCase.subject.send(NeedsYouSnapshot(phase: .ready, items: [second]))
+        await waitUntil { sut.displayedItem == second && sut.submittingIDs.isEmpty }
+        sut.answerText = "draft for B"
+        let before = sut.rebuildCompletions
+        useCase.complete(first.id, accepted ? .accepted : .stale(NeedsYouAnswerOutcome.changedMessage))
+        await waitUntil { sut.rebuildCompletions > before }
+        // then
+        #expect(sut.settled[first.id] == nil)
+        #expect(sut.answerText == "draft for B")
+        #expect(sut.sendError == nil && sut.presentation.detail?.phase == .answerable)
+        #expect(sut.displayedItem == second)
+    }
+
     @Test func givenAnswerForAInFlight_whenReviewerMovesToBAndTypes_thenACompletionLeavesBUntouched() async {
         // given
         let first = item("input:w:a"), second = item("input:w:b")

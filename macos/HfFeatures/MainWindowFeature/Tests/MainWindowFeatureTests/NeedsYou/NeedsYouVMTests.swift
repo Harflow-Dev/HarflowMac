@@ -452,6 +452,33 @@ extension NeedsYouVMTests {
         #expect(!requestA.isSameRequest(as: requestB))
     }
 
+    @Test(arguments: ["runtime", "epoch", "checkpoint"])
+    func givenWorkflowRetainedCard_whenIdentityChanges_thenReplacementIsNotShadowed(field: String) {
+        // given
+        var first = item(kind: .recovery)
+        let runtime = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: ["HOME": "/fixture/A"]))
+        let epoch = UUID()
+        first.workflowContext = WorkflowResponseContext(runtime: runtime, epoch: epoch)
+        first.attentionCheckpointID = "checkpoint-A"
+        var second = first
+        switch field {
+        case "runtime":
+            let other = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: ["HOME": "/fixture/B"]))
+            second.workflowContext = WorkflowResponseContext(runtime: other, epoch: epoch)
+        case "epoch": second.workflowContext = WorkflowResponseContext(runtime: runtime, epoch: UUID())
+        default: second.attentionCheckpointID = "checkpoint-B"
+        }
+        let rig = rig(items: [first])
+        rig.sut.snapshot = NeedsYouSnapshot(phase: .ready, items: [first])
+        rig.sut.recordSettled(NeedsYouPresentationMapper.detail(first), for: first)
+        // when
+        rig.sut.snapshot = NeedsYouSnapshot(phase: .ready, items: [second])
+        rig.sut.reconcileSettled()
+        // then
+        #expect(!first.isSameRequest(as: second))
+        #expect(rig.sut.settled[first.id] == nil)
+    }
+
     @Test(arguments: ["action_digest", "generation", "action"])
     func givenLocalApprovalResult_whenSameRevisionCarriesDifferentIdentity_thenPresentationDoesNotMatch(field: String) {
         // given

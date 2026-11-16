@@ -21,6 +21,8 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
     var capability = true
     var pageSize = 100
     var resumeError: ToolError?
+    var resumeRead: (@Sendable () async -> Void)?
+    var resumeCompletion: (@Sendable () async -> Void)?
     var respondResult: Result<CallerApprovalRequest, ToolError>?
     var resumes: [(root: String, decision: String?, checkpoint: String?, text: String, attempts: Int?)] = []
     var workflowPageFails = false
@@ -88,9 +90,12 @@ final class FakeNeedsYouEngine: NeedsYouEngine, @unchecked Sendable {
         return capability
     }
 
-    func resume(root: String, decisionID: String?, attentionCheckpointID: String?, text: String, additionalAttempts: Int?) async throws {
-        record("resume:\(root)")
-        lock.withLock { resumes.append((root, decisionID, attentionCheckpointID, text, additionalAttempts)) }
+    func resume(_ answer: NeedsYouWorkflowAnswer, runtime _: QualificationRuntimeToken, isCurrent: @escaping @Sendable () -> Bool) async throws {
+        if let resumeRead { await resumeRead() }
+        guard isCurrent() else { throw QualificationSessionError.runtimeChanged }
+        record("resume:\(answer.root)")
+        lock.withLock { resumes.append((answer.root, answer.decisionID, answer.attentionCheckpointID, answer.text, answer.additionalAttempts)) }
+        if let resumeCompletion { await resumeCompletion() }
         if let resumeError { throw resumeError }
     }
 
@@ -174,5 +179,7 @@ func makeSUT(
     _ engine: FakeNeedsYouEngine, scheduler: CapturingScheduler = CapturingScheduler(), visibility: FakeMonitorVisibility = FakeMonitorVisibility(),
     install: MockInstallRepository = readyInstall()
 ) -> NeedsYouRepositoryImpl {
-    NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: scheduler, visibility: visibility, install: install)
+    let context = WorkflowResponseContext(runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])), epoch: UUID())
+    return NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: scheduler,
+                                  visibility: visibility, install: install, runtimeObservation: { context })
 }
