@@ -6,7 +6,7 @@ import MonitorCore
 /// Describes the engine's delivery evidence without turning an uncertain launch into a queue claim.
 enum WorkMessageOutcome {
     static func describe(_ result: [String: JSONValue]) -> String {
-        let parts = [result["refusal"]?["message"]?.stringValue, result["note"]?.stringValue, result["reason"]?.stringValue]
+        let parts = [result["refusal"]?["message"]?.stringValue, advisoryNote(result), result["reason"]?.stringValue]
         var distinct: [String] = []
         for part in parts.compactMap(\.self) where !part.isEmpty && !distinct.contains(part) { distinct.append(part) }
         let explanation = distinct.isEmpty ? nil : distinct.joined(separator: "\n")
@@ -24,6 +24,19 @@ enum WorkMessageOutcome {
         default:
             return explanation ?? "Message delivery status is unavailable."
         }
+    }
+
+    /// Only the standalone settled queue advisory has no drawn copy. Ambiguous or unsafe
+    /// receipts retain their engine note; no prose is interpreted as authority.
+    static func advisoryNote(_ result: [String: JSONValue]) -> String? {
+        let standalone = result["task_id"]?.stringValue != nil
+            && result["workflow_run_id"] == nil && result["workflow_id"] == nil
+            && result["node_id"] == nil && result["delivery_task_id"] == nil
+            && result["workflow_node_id"] == nil && result["workflow_role"] == nil
+        let settledQueue = result["status"]?.stringValue == "queued"
+            && result["delivery"]?.stringValue == "queue" && result["target_settled"] == .bool(true)
+            && result["refusal"] == nil && result["reason"] == nil
+        return standalone && settledQueue ? nil : result["note"]?.stringValue
     }
 
     static func notice(_ result: [String: JSONValue]) -> String? {

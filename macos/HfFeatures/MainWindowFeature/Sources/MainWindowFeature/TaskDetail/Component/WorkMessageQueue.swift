@@ -76,7 +76,7 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
             return "Send now isn't available. This operation can't be interrupted safely."
         }
         let explanation = refusal?["message"]?.stringValue
-        let note = result["note"]?.stringValue
+        let note = WorkMessageOutcome.advisoryNote(result)
         let lines = [explanation, note].compactMap(\.self).reduce(into: [String]()) { result, line in
             if !line.isEmpty, !result.contains(line) { result.append(line) }
         }

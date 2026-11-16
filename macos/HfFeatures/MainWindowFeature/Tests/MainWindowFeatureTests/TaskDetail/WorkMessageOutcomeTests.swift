@@ -59,4 +59,25 @@ struct WorkMessageOutcomeTests {
         #expect(WorkMessageOutcome.describe(["status": .string("future")]) == "Message delivery status is unavailable.")
     }
 
+    @Test(arguments: ["clean", "refusal", "reason", "workflow_run_id", "workflow_id", "workflow_node_id",
+                      "workflow_role", "node_id", "delivery_task_id", "missing-task", "delivering", "now"])
+    func givenSettledTargetNote_whenReceiptIsClassified_thenOnlyUnambiguousStandaloneQueueOmitsAdvisory(variant: String) {
+        // given
+        var raw: [String: JSONValue] = ["task_id": .string("source"), "status": .string("queued"),
+            "delivery": .string("queue"), "target_settled": .bool(true), "note": .string("Engine advisory")]
+        switch variant {
+        case "refusal": raw["refusal"] = .object(["message": .string("Refused")])
+        case "reason": raw["reason"] = .string("Uncertain")
+        case "missing-task": raw["task_id"] = nil
+        case "delivering": raw["status"] = .string("delivering")
+        case "now": raw["delivery"] = .string("now")
+        case "clean": break
+        default: raw[variant] = .string("workflow identity")
+        }
+        // when / then
+        #expect(WorkMessageOutcome.describe(raw).contains("Engine advisory") == (variant != "clean"))
+        #expect((WorkMessageBubble.refusalNote(in: raw)?.contains("Engine advisory") == true) == (variant != "clean"))
+        if variant == "clean" { #expect(WorkMessageOutcome.describe(raw) == "Queued — not yet delivered.") }
+    }
+
 }

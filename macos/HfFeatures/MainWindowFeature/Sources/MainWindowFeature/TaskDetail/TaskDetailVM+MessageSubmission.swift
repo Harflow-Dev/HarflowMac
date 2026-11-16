@@ -50,7 +50,8 @@ extension TaskDetailVM {
     private func submitMessage(_ text: String, now: Bool, acknowledging: UUID?, completion: @escaping (Bool) -> Void) {
         guard isMounted, !messageSendInFlight, !isBusy, messagingSupported == true,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let task = latestActionTask(), !task.takenOver else { completion(false); return }
+              let task = latestActionTask(), !task.takenOver,
+              !(now && settledStandaloneMessagingTarget(task)) else { completion(false); return }
         let context: MessagingInvocationContext
         do { context = try useCase.messagingInvocationContext() } catch { completion(false); return }
         guard messagingSupportContext == context, useCase.isMessagingContextCurrent(context) else { completion(false); return }
@@ -84,13 +85,13 @@ extension TaskDetailVM {
         messageSendEpoch = epoch
         let generation = continuationSession.generation
         let capturedUseCase = useCase
-        if let task { recomputeMessageBox(task: task) }
+        if let task { prepareContinuation(task: task); recomputeMessageBox(task: task) }
         Task { [weak self] in
             guard let self else { completion(false); return }
             defer {
                 if messageSendEpoch == epoch {
                     messageSendInFlight = false
-                    if let task = self.task { recomputeMessageBox(task: task) }
+                    if let task = self.task { prepareContinuation(task: task); recomputeMessageBox(task: task) }
                 }
             }
             guard isMounted, currentTaskID == id, continuationSession.generation == generation else {

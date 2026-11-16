@@ -113,7 +113,7 @@ extension TaskDetailVM {
         guard useCase.continuationRuntime() != nil, continuationSession.supported, !task.takenOver, [.failed, .cancelled, .timedOut].contains(task.status),
               matchingExit(task) != nil, !isWorkflowBuilder, !WorkflowNodePresentation.isNativeControl(task) else { return nil }
         return .init(taskID: task.taskID, phase: .eligible, exitCode: matchingExit(task), status: task.status,
-                     canContinue: continuationSession.supported && hasStatusAuthority && !isBusy)
+                     canContinue: continuationSession.supported && hasStatusAuthority && !isBusy && !messageSendInFlight)
     }
 
     private func matchingExit(_ task: TaskInfo) -> Int? {
@@ -126,7 +126,7 @@ extension TaskDetailVM {
         guard isMounted, chrome == .standalone, renderedID == currentTaskID,
               let task = latestActionTask(), matchingExit(task) != nil,
               [.failed, .cancelled, .timedOut].contains(task.status), !task.takenOver,
-              !isWorkflowBuilder, !WorkflowNodePresentation.isNativeControl(task), !isBusy,
+              !isWorkflowBuilder, !WorkflowNodePresentation.isNativeControl(task), !isBusy, !messageSendInFlight,
               continuationSession.supported, let request = continuationRequest,
               continuationSession.runtime == request.runtime, useCase.continuationRuntime() == request.runtime else { return }
         let owner = useCase.continuationOwner()
