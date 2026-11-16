@@ -98,3 +98,5 @@ preflight; see `docs/releasing.md` and `docs/ci-signing.md`. Signed runs upload 
 like pushes and releases, need explicit owner authorization in the active task.
 
 Interaction presentation and public routes are documented in [interaction surfaces](interaction-surfaces.md). Native fixture captures are separate evidence from browser specimens.
+
+`WorkMessageBubblesHostedTests` is a guarded hosted suite covering queued-message controls and read-only delivery states. Run it only through the package runner; desktop execution remains a separate validation gate.

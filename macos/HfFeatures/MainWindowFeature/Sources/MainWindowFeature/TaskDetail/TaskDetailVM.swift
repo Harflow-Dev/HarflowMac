@@ -71,7 +71,9 @@ protocol TaskDetailUseCase: Sendable {
     @discardableResult func cancel(_ id: String) async throws -> Bool
     @discardableResult func send(_ id: String, text: String) async throws -> Bool
     func sendNow(_ id: String, text: String) async throws -> [String: JSONValue]
-    func cancelMessage(_ id: String, messageID: String) async throws
+    func messageCancellationContext() throws -> MessagingCancellationContext
+    func cancelMessage(_ id: String, messageID: String, context: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt
+    func isMessagingAttemptCurrent(_ attempt: MessagingSubmissionAttempt) -> Bool
     /// `onResumed` fires right after the new task id comes back — before busy releases, the outcome
     /// writes, or either refresh runs (see `TaskActionRepository.resume(_:text:onResumed:)`'s doc
     /// for the exact ordering guarantee). Continue no longer navigates on success (Monitor piece 7,
@@ -125,31 +127,6 @@ protocol TaskDetailUseCase: Sendable {
         async -> Result<TaskChangesRead<TaskChangesPatch>, TaskChangesReadFailure>
 }
 
-// MARK: - TaskDetailRouting
-
-/// Navigation the task detail screen performs: moving the selection to an ancestor or a sub-task.
-/// A successful `resume` (Continue) does **not** navigate any more (Monitor piece 7): the
-/// conversation stays selected, and the new turn appears under it once the listing refreshes.
-@Mockable
-@MainActor
-protocol TaskDetailRouting: Sendable {
-    func showNewTask()
-    func showResourceSlots()
-    func presentStopConfirmation(_ confirmation: TaskStopConfirmation)
-    func selectTask(_ taskID: String)
-    func publishTopBar(_ content: TaskTopBarContent, tag: TaskTopBarHolder.Tag)
-    /// Publishes the loading or not-found state of the task slot (the loaded state travels as content).
-    func publishTopBarSlot(_ slot: TaskTopBarSlot, tag: TaskTopBarHolder.Tag)
-    func clearTopBar(tag: TaskTopBarHolder.Tag)
-    func activateTopBar(tag: TaskTopBarHolder.Tag)
-    func deactivateTopBar(tag: TaskTopBarHolder.Tag)
-    func retryTopBarActivation(tag: TaskTopBarHolder.Tag)
-    /// Writes `text` to the system pasteboard (Monitor piece 3/3's "Copy resume command"),
-    /// returning whether the write succeeded. AppKit lives in the coordinator, never the VM — see
-    /// `MainWindowCoordinator.chooseDirectory()` for the same pattern.
-    func copyToPasteboard(_ text: String) -> Bool
-}
-
 // MARK: - TaskDetailVM
 
 /// View model for the task detail screen. `taskID` may be ANY member of a conversation (a resume
@@ -183,6 +160,10 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// Send-now refusals keyed by message id. The engine keeps the message queued and does not
     /// store the refusal on it, so the bubble reads the note from the send result.
     var messageNotes: [String: String] = [:]
+    var messageCancellationEpoch = UUID()
+    var messageCancellationAttempt: MessagingSubmissionAttempt?
+    var messageCancellationOutcome: String?
+    var messageOutcomeFocus: UUID?
     private(set) var takenOverBannerText: String?
     private(set) var spawnedByBannerText: String?
     private(set) var canTakeover = false
@@ -358,6 +339,8 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// re-acquires leases fresh.
     func didDisappear() {
         isMounted = false
+        messageCancellationEpoch = UUID()
+        messageOutcomeFocus = nil
         stopContinuationPresentation()
         topBarPaneOpen = false
         releaseTopBar()
@@ -481,6 +464,7 @@ final class TaskDetailVM: TaskDetailViewModel {
             return
         }
         task = detail
+        reconcileMessageCancellation(taskID: detail.taskID)
         currentTaskID = detail.taskID
         if chrome == .standalone { statusReadAvailability = latestStatusReadAvailability() }
         prepareContinuation(task: detail)
@@ -566,6 +550,7 @@ final class TaskDetailVM: TaskDetailViewModel {
     }
 
     private func resetForMissingTask() {
+        reconcileMessageCancellation(taskID: "")
         statusReadAvailability = .unread
         resetResourceContext()
         resetChanges(keepPaneReport: true)

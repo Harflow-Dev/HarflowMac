@@ -43,7 +43,7 @@ import Testing
         vm.didTapCancel()
         await withCheckedContinuation { continuation in Task { @MainActor in continuation.resume() } }
         verify(fixture.vm.routing).presentStopConfirmation(.any).called(0)
-        verify(fixture.vm.useCase).cancelMessage(.any, messageID: .any).called(0)
+        verify(fixture.vm.useCase).cancelMessage(.any, messageID: .any, context: .any).called(0)
         verify(fixture.vm.useCase).send(.any, text: .any).called(0)
         verify(fixture.vm.useCase).beginTakeover(taskID: .any).called(0)
         verify(fixture.vm.routing).copyToPasteboard(.any).called(0)

@@ -42,6 +42,7 @@ import Testing
         }
         // then — a status refresh, even with identical text from another caller, never rewrites this evidence.
         #expect(first.isUnconfirmed)
+        #expect(sut.isMessagingAttemptCurrent(first))
         #expect(sut.messageAttempts() == [first])
         #expect(runner.calls.filter { $0.arguments.first == "send" }.count == 1)
     }
@@ -85,6 +86,7 @@ import Testing
         #expect(sut.messageAttempts().first?.id == attempt.id)
         #expect(sut.messageAttempts().first?.runtime == attempt.runtime)
         #expect(attempt.runtimeEpoch != sut.messagingEpoch)
+        #expect(!sut.isMessagingAttemptCurrent(attempt))
         verify(snapshots).refresh(.any).called(0)
     }
 
@@ -126,4 +128,25 @@ import Testing
         #expect(calls.first?.arguments == ["send", "--delivery=\(now ? "now" : "queue")", "--monitor", "--json", "--", taskID, text])
     }
 
+    @Test(arguments: [false, true])
+    func givenClickTimeContext_whenRuntimeChangesBeforeAdmission_thenNoCancellationIsDispatched(aba: Bool) async throws {
+        // given
+        let states = CurrentValueSubject<ManagedRuntimeState, Never>(.preparing)
+        let tooling = MockToolEnvironmentRepository()
+        let runner = StubProcessRunner(output: ProcessOutput(exitCode: 0, stdout: Data(), stderr: "", timedOut: true))
+        given(tooling).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: PositiveCtlRunner(runner))))
+        let sut = makeSUT(toolEnvironment: tooling)
+        sut.bindMessagingRuntimeChanges(states.eraseToAnyPublisher())
+        let context = try sut.messageCancellationContext()
+        states.send(.installing)
+        if aba { states.send(.preparing) }
+        // when
+        do {
+            _ = try await sut.cancelQueuedMessage("full-task-id", messageID: String(repeating: "b", count: 32), context: context)
+            Issue.record("Stale click-time authority must refuse admission")
+        } catch { #expect(error as? MessagingAdmissionError == .runtimeChanged) }
+        // then
+        #expect(sut.messageAttempts().isEmpty)
+        #expect(runner.calls.isEmpty)
+    }
 }

@@ -363,6 +363,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             self.actions.onApprovalToggle = actions.onApprovalToggle
             self.actions.onApprovalLoadMore = actions.onApprovalLoadMore
             self.actions.onCancelQueuedMessage = actions.onCancelQueuedMessage
+            self.actions.consumeMessageOutcomeFocus = actions.consumeMessageOutcomeFocus
             self.actions.onApprovalFocusAcknowledged = actions.onApprovalFocusAcknowledged
             self.actions.onApprovalScrollAcknowledged = actions.onApprovalScrollAcknowledged
             self.actions.onStateContinue = actions.onStateContinue

@@ -50,6 +50,7 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
     let liveStep: LiveStep?
     let pendingMessages: [PendingMessage]
     var workMessages: [WorkMessageBubble] = []
+    var messageOutcome: String?
     let history: EventHistoryState
 
     var activitySnapshot: ActivityFeedSnapshot?
@@ -63,7 +64,7 @@ struct TaskDetailTimelinePresentation: Equatable, Sendable {
         Self(rows: rows, activityRows: activityRows, children: children, start: start, stepCount: stepCount,
             stepCountText: stepCountText, turnsText: turnsText, noToolCallsText: nil,
             emptyText: emptyText, isLoading: isLoading, liveStep: liveStep, pendingMessages: pendingMessages,
-            workMessages: workMessages,
+            workMessages: workMessages, messageOutcome: messageOutcome,
             history: EventHistoryState(hasMore: history.hasMore, isLoading: true, error: nil, generation: history.generation),
             activitySnapshot: activitySnapshot, markdown: markdown,
             summaryEntryShown: summaryEntryShown, summaryDecision: summaryDecision)
@@ -135,6 +136,7 @@ enum TaskDetailTimelineBuilder {
             liveStep: LiveStep(rows: rows, isRunning: input.task.status.isRunning),
             pendingMessages: PendingMessage.visible(snapshot: input.snapshot, events: input.events),
             workMessages: WorkMessageBubble.project(raw: input.snapshot?.raw ?? input.task.raw),
+            messageOutcome: WorkMessageOutcome.ledger(input.snapshot?.raw ?? input.task.raw),
             history: input.history,
             activitySnapshot: ActivityFeedSnapshot.preparing(activity, previous: input.previousActivitySnapshot), markdown: markdown,
             summaryEntryShown: summaryText != nil,
@@ -209,7 +211,10 @@ extension TaskDetailVM {
             pendingMessages: value.pendingMessages, history: value.history,
             paginationRevision: activityPaginationRevision, onLoadMore: { [weak self] in self?.loadMoreConversationActivity() ?? false })
         timelineModel.activitySnapshot = value.activitySnapshot
-        timelineModel.workMessages = WorkMessageBubble.applying(value.workMessages, notes: messageNotes)
+        timelineModel.workMessages = applyingConfirmedCancellation(WorkMessageBubble.applying(value.workMessages, notes: messageNotes))
+        timelineModel.messageOutcome = messageCancellationOutcome ?? value.messageOutcome
+        timelineModel.messageOutcomeFocus = messageOutcomeFocus
+        timelineModel.consumeMessageOutcomeFocus = { [weak self] token in self?.consumeMessageOutcomeFocus(token) ?? false }
         timelineModel.onCancelQueuedMessage = { [weak self] id in self?.cancelQueuedMessage(id) }
         timelineModel.onSelectTask = { [weak self] id in self?.didTapTask(id) }
         if summaryEntryShown != value.summaryEntryShown { summaryEntryShown = value.summaryEntryShown }

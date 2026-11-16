@@ -104,7 +104,7 @@ import Testing
         verify(harness.routing).presentStopConfirmation(.any).called(0)
         verify(harness.useCase).beginTakeover(taskID: .any).called(0)
         verify(harness.routing).copyToPasteboard(.any).called(0)
-        verify(harness.useCase).cancelMessage(.any, messageID: .any).called(0)
+        verify(harness.useCase).cancelMessage(.any, messageID: .any, context: .any).called(0)
         harness.sut.didDisappear()
     }
 

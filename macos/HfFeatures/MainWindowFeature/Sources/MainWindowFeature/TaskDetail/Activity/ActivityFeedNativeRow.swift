@@ -92,6 +92,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var onApprovalToggle: (String) -> Void = { _ in }
     var onApprovalLoadMore: () -> Void = {}
     var onCancelQueuedMessage: (String) -> Void = { _ in }
+    var consumeMessageOutcomeFocus: (UUID) -> Bool = { _ in false }
     var onApprovalFocusAcknowledged: (String, UUID) -> Void = { _, _ in }
     var onApprovalScrollAcknowledged: (String, UUID) -> Void = { _, _ in }
     var onStateContinue: (String) -> Void = { _ in }
@@ -112,6 +113,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
         onApprovalToggle = { _ in }
         onApprovalLoadMore = {}
         onCancelQueuedMessage = { _ in }
+        consumeMessageOutcomeFocus = { _ in false }
         onApprovalFocusAcknowledged = { _, _ in }
         onApprovalScrollAcknowledged = { _, _ in }
         onStateContinue = { _ in }
@@ -253,7 +255,9 @@ struct ActivityFeedNativeRowRoot: View {
                 Text(text).font(.hf(.body)).foregroundStyle(Color.secondaryText)
             }
         case .row(let row): rowContent(row)
-        case .tail(let presentation, _): ActivityFeedNativeTailContent(presentation: presentation, actions: actions, style: style)
+        case .tail(let presentation, _):
+            ActivityFeedNativeTailContent(presentation: presentation, actions: actions, style: style,
+                                          allowsOutcomeFocus: onHostedHeight != nil)
         case .approval(let card, _):
             CallerApprovalRequestCard(model: card, respond: { actions.onApprovalResponse(card.id, $0) },
                                       toggle: { actions.onApprovalToggle(card.id) },
@@ -315,6 +319,7 @@ struct ActivityFeedNativeTailContent: View {
     let presentation: ActivityFeedTailPresentation
     let actions: ActivityFeedNativeActions
     var style = ActivityFeedStyle.standard
+    var allowsOutcomeFocus = false
 
     @ViewBuilder var body: some View {
         switch presentation {
@@ -358,13 +363,18 @@ struct ActivityFeedNativeTailContent: View {
                                            isCancelDisabled: standard.cancel == .disabled)
                 }
                 if let outcome = standard.outcome {
-                    Text(outcome)
-                        .font(TaskScreenStyle.sans(size: 12))
-                        .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 12, lineHeight: 17)))
-                        .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityAddTraits(.isStaticText)
+                    if standard.outcomeUsesFocusTarget {
+                        WorkMessageOutcomeView(text: outcome, focusToken: allowsOutcomeFocus ? standard.outcomeFocus : nil,
+                                               consumeFocus: actions.consumeMessageOutcomeFocus)
+                    } else {
+                        Text(outcome)
+                            .font(TaskScreenStyle.sans(size: 12))
+                            .lineSpacing(TaskScreenStyle.lineSpacing(.init(size: 12, lineHeight: 17)))
+                            .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityAddTraits(.isStaticText)
+                    }
                 }
                 if let settled = standard.settled { settledRow(settled) }
             }

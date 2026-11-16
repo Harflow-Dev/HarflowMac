@@ -252,16 +252,4 @@ extension TaskDetailVM {
         timelineModel.workMessages = WorkMessageBubble.applying(timelineModel.workMessages, notes: messageNotes)
     }
 
-    func cancelQueuedMessage(_ messageID: String) {
-        guard chrome != .standalone || (latestActionTask() != nil && !isBusy) else { return }
-        let capturedUseCase = useCase
-        let id = currentTaskID
-        Task {
-            do {
-                try await capturedUseCase.cancelMessage(id, messageID: messageID)
-            } catch {
-                capturedUseCase.setOutcome(id, "Couldn't cancel the message: \(error.localizedDescription)")
-            }
-        }
-    }
 }

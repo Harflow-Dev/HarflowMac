@@ -26,6 +26,8 @@ enum ActivityFeedTailPresentation: Equatable {
         var cancel = CancelAvailability.enabled
         /// A lane's outcome line (refusal, "Queued message cancelled."), drawn after the pinned bubbles.
         var outcome: String?
+        var outcomeFocus: UUID?
+        var outcomeUsesFocusTarget = false
         /// A lane's end row ("Done · 04:51"), drawn last, after the outcome.
         var settled: SettledLine?
     }

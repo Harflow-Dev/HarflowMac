@@ -1,3 +1,4 @@
+import HfRepository
 import MonitorCore
 
 // MARK: - WorkMessageOutcome
@@ -25,5 +26,31 @@ enum WorkMessageOutcome {
     static func notice(_ result: [String: JSONValue]) -> String? {
         guard result["refusal"] != nil || result["status"]?.stringValue == "undeliverable" else { return nil }
         return describe(result)
+    }
+}
+
+extension WorkMessageOutcome {
+    /// A deterministic phase line from the current task ledger; this never requests focus.
+    static func ledger(_ raw: [String: JSONValue]) -> String? {
+        let states = QueuedMessageState.project(raw: raw, source: WorkMessageQueue.source(raw))
+        switch states.last?.state {
+        case .delivering: return "Delivery is in progress."
+        case .delivered: return "Message delivered."
+        case .cancelled: return "Queued message cancelled."
+        default: return nil
+        }
+    }
+
+    static func cancellation(_ attempt: MessagingSubmissionAttempt, messageID: String) -> String {
+        guard case .cancel(let result) = attempt.outcome else { return "Cancellation could not be confirmed." }
+        switch result {
+        case .receipt(let receipt):
+            guard receipt.messageID == messageID else { return "Cancellation could not be confirmed." }
+            return describe(receipt.raw)
+        case .refused(let error): return error.message
+        case .unconfirmed: return "Cancellation could not be confirmed. The message may still be queued."
+        case .messagingUnsupported: return "This engine does not support queued messages."
+        case .notDispatched: return "Cancellation was not sent."
+        }
     }
 }

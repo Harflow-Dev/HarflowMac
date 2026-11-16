@@ -13,6 +13,14 @@ extension TaskActionRepositoryImpl {
         }
     }
 
+    public func isMessagingAttemptCurrent(_ attempt: MessagingSubmissionAttempt) -> Bool {
+        guard case .success(let client) = toolEnvironment.ctl(),
+              QualificationRuntimeToken(client: client) == attempt.runtime else { return false }
+        return messagingLock.withLock {
+            messagingEpoch == attempt.runtimeEpoch && messagingAttempts.contains(attempt)
+        }
+    }
+
     public func messageAttempts() -> [MessagingSubmissionAttempt] {
         messagingLock.withLock { messagingAttempts }
     }
@@ -27,9 +35,25 @@ extension TaskActionRepositoryImpl {
         return completed
     }
 
+    public func messageCancellationContext() throws -> MessagingCancellationContext {
+        let epoch = messagingLock.withLock { messagingEpoch }
+        let client = try toolEnvironment.ctl().get()
+        let runtime = QualificationRuntimeToken(client: client)
+        return try messagingLock.withLock {
+            guard messagingEpoch == epoch else { throw MessagingAdmissionError.runtimeChanged }
+            return MessagingCancellationContext(runtime: runtime, runtimeEpoch: epoch)
+        }
+    }
+
     public func cancelQueuedMessage(_ taskID: String, messageID: String) async throws -> MessagingSubmissionAttempt {
+        try await cancelQueuedMessage(taskID, messageID: messageID, context: messageCancellationContext())
+    }
+
+    public func cancelQueuedMessage(_ taskID: String, messageID: String,
+                                    context: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt {
         guard Self.messagingID(messageID) else { throw MessagingAdmissionError.invalidIdentity }
-        let (attempt, client) = try beginMessaging(taskID, operation: .cancel(messageID: messageID), acknowledging: nil)
+        let (attempt, client) = try beginMessaging(taskID, operation: .cancel(messageID: messageID), acknowledging: nil,
+                                                 cancellationContext: context)
         defer { endBusy(taskID) }
         let result = await client.cancelQueuedMessage(taskID, messageID: messageID)
         let completed = finishMessaging(attempt, outcome: .cancel(result))
@@ -48,7 +72,8 @@ extension TaskActionRepositoryImpl {
     }
 
     private func beginMessaging(_ taskID: String, operation: MessagingSubmissionAttempt.Operation,
-                                acknowledging: UUID?) throws -> (MessagingSubmissionAttempt, CtlClient) {
+                                acknowledging: UUID?, cancellationContext: MessagingCancellationContext? = nil
+    ) throws -> (MessagingSubmissionAttempt, CtlClient) {
         guard Self.messagingTaskID(taskID) else { throw MessagingAdmissionError.invalidIdentity }
         guard tryBeginBusy(taskID) else { throw MessagingAdmissionError.busy }
         do {
@@ -61,6 +86,9 @@ extension TaskActionRepositoryImpl {
             guard bindingBytes <= 65536 else { throw MessagingAdmissionError.capacity }
             let attempt = try messagingLock.withLock {
                 guard messagingEpoch == capturedEpoch else { throw MessagingAdmissionError.runtimeChanged }
+                if let context = cancellationContext {
+                    guard context.runtimeEpoch == capturedEpoch, context.runtime == runtime else { throw MessagingAdmissionError.runtimeChanged }
+                }
                 guard messagingAttempts.count < 256,
                       messagingCosts.values.reduce(0, +) <= 16 * 1024 * 1024 - Self.messagingReservation else {
                     throw MessagingAdmissionError.capacity

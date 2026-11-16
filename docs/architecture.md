@@ -474,3 +474,5 @@ Existing composer callers still use the raw adapters until their typed-outcome
 integration. The submission owner does not yet establish composer resend/draft UI
 behavior. A superseded error without structured successor data preserves the engine
 message; prose is not parsed into routing authority.
+
+Task transcript messaging uses the typed `TaskActionRepository` cancellation owner. Click-time runtime and epoch are captured before scheduling and checked atomically at owner admission, so runtime changes cannot retarget the command. A cancellation receipt, its attempt, task identity and current runtime epoch must agree before the transcript confirms cancellation or requests focus. Refused and unconfirmed commands preserve the ledger and never retry automatically. Historical ledger phase lines are presentation only and do not request focus. Explicit cancellation focus is consumed once by the actual outcome row, and is applied only while the app and its window remain active.

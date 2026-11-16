@@ -38,3 +38,11 @@ public enum MessagingAdmissionError: Error, Equatable, Sendable {
     case busy, capacity, invalidIdentity, runtimeChanged
     case previousUnconfirmed(UUID)
 }
+
+// MARK: - MessagingCancellationContext
+
+/// Click-time cancellation authority. Runtime tokens alone cannot distinguish A→B→A.
+public struct MessagingCancellationContext: Equatable, Sendable {
+    public let runtime: QualificationRuntimeToken
+    public let runtimeEpoch: UUID
+}

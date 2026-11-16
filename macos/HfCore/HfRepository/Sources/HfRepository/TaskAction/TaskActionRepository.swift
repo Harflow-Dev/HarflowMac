@@ -33,8 +33,14 @@ public protocol TaskActionRepository: Sendable {
 
     /// Retained invocation evidence, keyed by attempt and captured runtime rather than ledger text.
     func messageAttempts() -> [MessagingSubmissionAttempt]
+    /// True only while the retained attempt belongs to the current runtime epoch.
+    func isMessagingAttemptCurrent(_ attempt: MessagingSubmissionAttempt) -> Bool
     /// Explicit resend acknowledgement names the earlier unresolved invocation, never a guessed record.
     func submitMessage(_ taskID: String, text: String, now: Bool, acknowledgingUnconfirmed: UUID?) async throws -> MessagingSubmissionAttempt
+    /// Capture cancellation authority synchronously before scheduling the invocation.
+    func messageCancellationContext() throws -> MessagingCancellationContext
+    /// Admit only the click-time runtime epoch.
+    func cancelQueuedMessage(_ taskID: String, messageID: String, context: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt
     /// A cancel failure refreshes status without fabricating a cancelled state.
     func cancelQueuedMessage(_ taskID: String, messageID: String) async throws -> MessagingSubmissionAttempt
 
@@ -135,10 +141,19 @@ public extension GlobalValues {
 }
 
 public extension TaskActionRepository {
+    func messageCancellationContext() throws -> MessagingCancellationContext { throw MessagingAdmissionError.runtimeChanged }
+    func cancelQueuedMessage(_: String, messageID _: String, context _: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt {
+        throw MessagingAdmissionError.runtimeChanged
+    }
+
     func isStopping(_: String) -> Bool { false }
     func stoppingChangesPublisher() -> AnyPublisher<Void, Never> { Just(()).eraseToAnyPublisher() }
 
     func run(_: RunRequest, runtime _: QualificationRuntimeToken) async throws -> String {
         throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "run", detail: "Runtime-bound launch unavailable")
     }
+}
+
+public extension TaskActionRepository {
+    func isMessagingAttemptCurrent(_: MessagingSubmissionAttempt) -> Bool { false }
 }

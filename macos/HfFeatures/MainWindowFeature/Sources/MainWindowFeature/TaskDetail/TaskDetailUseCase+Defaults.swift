@@ -6,6 +6,8 @@ import MonitorCore
 // MARK: - TaskDetailUseCase Defaults
 
 extension TaskDetailUseCase {
+    func messageCancellationContext() throws -> MessagingCancellationContext { throw MessagingAdmissionError.runtimeChanged }
+    func isMessagingAttemptCurrent(_: MessagingSubmissionAttempt) -> Bool { false }
     func continuationOwner() -> any TaskContinuationRepository { NullTaskContinuationRepository() }
     func continuationRuntime() -> QualificationRuntimeToken? { nil }
     func continuationSupport(runtime _: QualificationRuntimeToken) async -> Bool { false }

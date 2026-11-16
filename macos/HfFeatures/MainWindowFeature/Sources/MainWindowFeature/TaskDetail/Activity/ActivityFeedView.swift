@@ -38,6 +38,7 @@ struct ActivityFeedView: View {
     var onApprovalResponse: ((String, String) -> Void)?
     var onApprovalToggle: ((String) -> Void)?
     var onApprovalLoadMore: (() -> Void)?
+    var consumeMessageOutcomeFocus: ((UUID) -> Bool)?
     var onApprovalFocusAcknowledged: ((String, UUID) -> Void)?
     var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
     var onCancelQueuedMessage: ((String) -> Void)?
@@ -57,6 +58,7 @@ struct ActivityFeedView: View {
          tailPresentation: ActivityFeedTailPresentation = .absent, onSelectChildTask: ((String) -> Void)? = nil,
          approvalReveal: CallerApprovalReveal? = nil, onApprovalResponse: ((String, String) -> Void)? = nil,
          onApprovalToggle: ((String) -> Void)? = nil, onApprovalLoadMore: (() -> Void)? = nil,
+         consumeMessageOutcomeFocus: ((UUID) -> Bool)? = nil,
          onApprovalFocusAcknowledged: ((String, UUID) -> Void)? = nil,
          onApprovalScrollAcknowledged: ((String, UUID) -> Void)? = nil,
          onCancelQueuedMessage: ((String) -> Void)? = nil, stateTreatment: TaskStateTreatment? = nil,
@@ -92,6 +94,7 @@ struct ActivityFeedView: View {
         self.onApprovalResponse = onApprovalResponse
         self.onApprovalToggle = onApprovalToggle
         self.onApprovalLoadMore = onApprovalLoadMore
+        self.consumeMessageOutcomeFocus = consumeMessageOutcomeFocus
         self.onApprovalFocusAcknowledged = onApprovalFocusAcknowledged
         self.onApprovalScrollAcknowledged = onApprovalScrollAcknowledged
         self.onCancelQueuedMessage = onCancelQueuedMessage
@@ -153,6 +156,7 @@ struct ActivityFeedView: View {
         actions.onApprovalResponse = { id, decision in onApprovalResponse?(id, decision) }
         actions.onApprovalToggle = { onApprovalToggle?($0) }
         actions.onApprovalLoadMore = { onApprovalLoadMore?() }
+        actions.consumeMessageOutcomeFocus = { consumeMessageOutcomeFocus?($0) ?? false }
         actions.onApprovalFocusAcknowledged = { onApprovalFocusAcknowledged?($0, $1) }
         actions.onApprovalScrollAcknowledged = { onApprovalScrollAcknowledged?($0, $1) }
         actions.onCancelQueuedMessage = { onCancelQueuedMessage?($0) }

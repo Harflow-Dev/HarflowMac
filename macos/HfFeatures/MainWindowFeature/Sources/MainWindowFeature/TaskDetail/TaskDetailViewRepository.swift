@@ -173,11 +173,14 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         return result
     }
 
-    func cancelMessage(_ id: String, messageID: String) async throws {
-        let client = try toolEnvironmentRepository.ctl().get()
-        _ = try await client.cancelMessage(id, messageID: messageID).get()
-        taskActionRepository.setOutcome(id, "Queued message cancelled.")
-        await taskSnapshotRepository.refresh(id)
+    func messageCancellationContext() throws -> MessagingCancellationContext { try taskActionRepository.messageCancellationContext() }
+
+    func cancelMessage(_ id: String, messageID: String, context: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt {
+        try await taskActionRepository.cancelQueuedMessage(id, messageID: messageID, context: context)
+    }
+
+    func isMessagingAttemptCurrent(_ attempt: MessagingSubmissionAttempt) -> Bool {
+        taskActionRepository.isMessagingAttemptCurrent(attempt)
     }
 
     @discardableResult func resume(_ id: String, text: String, onResumed: @escaping @Sendable (String) async -> Void) async throws -> String? {

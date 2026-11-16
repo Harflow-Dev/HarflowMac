@@ -61,7 +61,9 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
     var note: String? {
         switch kind {
         case .queued(_, let note): note
-        case .undeliverable(let reason), .uncertain(let reason): reason
+        case .undeliverable(let reason): reason
+        case .uncertain(let reason):
+            ["Delivery could not be confirmed. The message is not requeued.", reason].compactMap(\.self).joined(separator: "\n")
         case .unknown(let status): status
         }
     }
@@ -168,7 +170,10 @@ private struct QueuedBubblePreview: View {
                      "refusal": .object(["code": .string("interrupt_unsupported"), "message": .string("busy")])]),
             .object(["id": .string("b"), "seq": .number(2), "status": .string("delivering"), "text": .string("Still on its way.")]),
             .object(["id": .string("c"), "seq": .number(3), "status": .string("undeliverable"), "text": .string("The earlier note."),
-                     "reason": .string("The workflow ended before this message could be delivered.")])
+                     "reason": .string("The workflow ended before this message could be delivered.")]),
+            .object(["id": .string("d"), "seq": .number(4), "status": .string("delivering"), "text": .string("An uncertain delivery."),
+                     "reason": .string("The engine could not confirm delivery.")]),
+            .object(["id": .string("e"), "seq": .number(5), "status": .string("future-status"), "text": .string("A read-only unknown state.")])
         ])])
         WorkMessageBubblesView(bubbles: bubbles, onCancel: { _ in })
             .padding(HfRadius.Metrics.spacing16)

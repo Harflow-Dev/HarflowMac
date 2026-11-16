@@ -53,6 +53,9 @@ struct TimelinePaneModel {
     let updateToken: ActivityUpdateToken
     let pendingMessages: [PendingMessage]
     var workMessages: [WorkMessageBubble] = []
+    var messageOutcome: String?
+    var messageOutcomeFocus: UUID?
+    var consumeMessageOutcomeFocus: ((UUID) -> Bool)?
     var onCancelQueuedMessage: ((String) -> Void)?
     let history: EventHistoryState
     let paginationRevision: Int
@@ -200,12 +203,15 @@ struct TimelinePaneView: View {
                             approvals: approvalController?.cards ?? [],
                             approvalNotice: approvalNotice,
                             approvalNoticeActionTitle: approvalController?.nextCursor != nil ? "Load more approval history" : "Refresh approval history",
-                            cancel: model.onCancelQueuedMessage == nil ? .hidden : (isCancelDisabled ? .disabled : .enabled)
+                            cancel: model.onCancelQueuedMessage == nil ? .hidden : (isCancelDisabled ? .disabled : .enabled),
+                            outcome: model.messageOutcome,
+                            outcomeFocus: model.messageOutcomeFocus, outcomeUsesFocusTarget: true
                          )), onSelectChildTask: model.onSelectTask ?? model.subTaskStrip?.onSelectTask,
                          approvalReveal: approvalController?.reveal,
                          onApprovalResponse: { id, decision in approvalController?.submit(decision, requestID: id) },
                          onApprovalToggle: { approvalController?.toggle($0) },
                          onApprovalLoadMore: { approvalController?.requestRefresh(loadMore: approvalController?.nextCursor != nil) },
+                         consumeMessageOutcomeFocus: model.consumeMessageOutcomeFocus,
                          onApprovalFocusAcknowledged: { approvalController?.acknowledgeFocus(requestID: $0, token: $1) },
                          onApprovalScrollAcknowledged: { approvalController?.acknowledgeScroll(requestID: $0, token: $1) },
                          onCancelQueuedMessage: model.onCancelQueuedMessage,

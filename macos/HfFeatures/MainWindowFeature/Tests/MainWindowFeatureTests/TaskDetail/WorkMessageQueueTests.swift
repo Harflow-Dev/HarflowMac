@@ -157,4 +157,41 @@ struct WorkMessageQueueTests {
         #expect(bubble?.kind == .queued(canCancel: false, note: nil))
     }
 
+    @Test func givenUncertainDelivery_whenProjected_thenApprovedCopyPrecedesEngineReason() {
+        // given
+        let raw: [String: JSONValue] = ["messages": .array([message("m", 1, "delivering", reason: "Engine explanation")])]
+        // when
+        let bubble = WorkMessageBubble.project(raw: raw).first
+        // then
+        #expect(bubble?.isPinned == false)
+        #expect(bubble?.canCancel == false)
+        #expect(bubble?.note == "Delivery could not be confirmed. The message is not requeued.\nEngine explanation")
+    }
+
+    @Test(arguments: ["delivering", "delivered", "cancelled"])
+    func givenCurrentLedgerPhase_whenProjectingOutcome_thenPhaseCopyHasNoMessageText(status: String) {
+        // given
+        let raw: [String: JSONValue] = ["messages": .array([message("sensitive text", 1, status)])]
+        // when
+        let outcome = WorkMessageOutcome.ledger(raw)
+        // then
+        #expect(outcome == ["delivering": "Delivery is in progress.", "delivered": "Message delivered.", "cancelled": "Queued message cancelled."][status])
+        #expect(outcome?.contains("sensitive text") == false)
+    }
+
+    @Test(arguments: ["queued", "delivery_unknown", "future-status"])
+    func givenOlderSettlementAndNewerMessage_whenProjectingPhase_thenOlderOutcomeIsSuppressed(status: String) {
+        // given
+        let raw: [String: JSONValue] = ["messages": .array([message("old", 1, "delivered"), message("new", 2, status)])]
+        // when / then
+        #expect(WorkMessageOutcome.ledger(raw) == nil)
+    }
+
+    @Test func givenRemainingQueuedAndLaterCancellation_whenProjectingPhase_thenCancelledOutcomeIsShown() {
+        // given
+        let raw: [String: JSONValue] = ["messages": .array([message("remaining", 1, "queued"), message("cancelled", 2, "cancelled")])]
+        // when / then
+        #expect(WorkMessageOutcome.ledger(raw) == "Queued message cancelled.")
+        #expect(WorkMessageBubble.project(raw: raw).map(\.id) == ["remaining"])
+    }
 }
