@@ -41,6 +41,17 @@ import Testing
         }
     }
 
+    private func requireForeground(_ fixture: TopBarIntegratedFixture) async throws {
+        await waitUntil(timeout: 15) {
+            if !fixture.window.isVisible { fixture.window.orderFront(nil) }
+            fixture.keepActive()
+            fixture.pump()
+            return NSApp.isActive && fixture.window.isVisible && fixture.window.isKeyWindow
+        }
+        try #require(NSApp.isActive && fixture.window.isVisible && fixture.window.isKeyWindow,
+                     "Capture foreground unavailable: active=\(NSApp.isActive), visible=\(fixture.window.isVisible), key=\(fixture.window.isKeyWindow)")
+    }
+
     @Test(arguments: Scenario.allCases, [false, true])
     func givenAScenario_whenTheCaptureDirectoryIsSet_thenThePrincipalAndTheTaskToolbarAreCaptured(scenario: Scenario, dark: Bool) async throws {
         guard let output = ProcessInfo.processInfo.environment["HARFLOW_M05_TOPBAR_CAPTURE_DIR"], !output.isEmpty else { return }
@@ -52,14 +63,10 @@ import Testing
         config.dark = dark
         let fixture = await TopBarIntegratedFixture(config)
         defer { fixture.close() }
-        // The activation is re-asserted while waiting: a one-off request can be lost to another application.
-        await waitUntil(timeout: 15) {
-            fixture.keepActive()
-            fixture.pump()
-            return NSApp.isActive && fixture.window.isKeyWindow
-        }
+        try await requireForeground(fixture)
         var passes = 0
         await waitUntil(timeout: 8) {
+            fixture.keepActive()
             fixture.pump()
             fixture.publish()
             passes += 1
@@ -82,6 +89,7 @@ import Testing
         #expect(fixture.window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == expectedAppearance,
                 "the window is not \(expectedAppearance.rawValue) in \(scenario.rawValue)")
         let name = "m05-d1-\(scenario.rawValue)-\(dark ? "dark" : "light")-\(Int(config.width))x\(Int(config.height))"
+        try await requireForeground(fixture)
         try await M04NativeWindowEvidence.record(window: fixture.window, name: name, directory: directory)
     }
 }

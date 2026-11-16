@@ -110,17 +110,20 @@ import Testing
         #expect(turns.isEditable)
         #expect(!model.showsEffort)
         #expect(model.effort == "retained-effort")
-        for candidate in ownedPopovers(of: window) {
-            if let content = candidate.contentView, content !== host {
-                try capture(content, name: "composer-options-minimum")
-                // The popover inherits the system scroller style (nothing forces overlay there), so this checks
-                // only that the options stay in a scroll view; it no longer assumes the overlay setting.
-                let scrolls = descendants(content).compactMap { $0 as? NSScrollView }
-                let systemStyle = NSScroller.preferredScrollerStyle
-                #expect(!scrolls.isEmpty)
-                #expect(scrolls.contains { $0.scrollerStyle == systemStyle })
-            }
+        let popup = try #require(ownedPopovers(of: window).first { effort.window === $0 })
+        let content = try #require(popup.contentView)
+        try capture(content, name: "composer-options-minimum")
+        await waitUntil(timeout: 5) {
+            guard let scroll = CenteredComposerEvidence.optionsScrollView(containing: effort, in: popup) else { return false }
+            return scroll.scrollerStyle == .overlay && scroll.verticalScroller?.controlSize == .small
         }
+        let scroll = try #require(CenteredComposerEvidence.optionsScrollView(containing: effort, in: popup))
+        #expect(scroll.documentView.map { effort.isDescendant(of: $0) } == true)
+        #expect(scroll.hasVerticalScroller)
+        let styles = "Owned options style: \(scroll.scrollerStyle.rawValue); preferred system style: \(NSScroller.preferredScrollerStyle.rawValue)"
+        #expect(scroll.scrollerStyle == .overlay, "\(styles)")
+        #expect(scroll.verticalScroller?.controlSize == .small,
+                "Owned options size: \(String(describing: scroll.verticalScroller?.controlSize)); \(styles)")
     }
 
     @Test(arguments: [HarnessQualificationModel.State.checking, .unavailable])

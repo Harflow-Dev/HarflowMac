@@ -36,6 +36,22 @@ import Testing
         return store
     }
 
+    private func keepActive(_ window: NSWindow, host: NSView) {
+        if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
+        if !window.isVisible || !window.isKeyWindow { window.makeKeyAndOrderFront(nil) }
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()
+    }
+
+    private func requireForeground(_ window: NSWindow, host: NSView) async throws {
+        await waitUntil(timeout: 15) {
+            keepActive(window, host: host)
+            return NSApp.isActive && window.isVisible && window.isKeyWindow
+        }
+        try #require(NSApp.isActive && window.isVisible && window.isKeyWindow,
+                     "Capture foreground unavailable: active=\(NSApp.isActive), visible=\(window.isVisible), key=\(window.isKeyWindow)")
+    }
+
     @Test(arguments: Capture.allCases, [false, true])
     func givenTheDoneState_whenCaptureDirectorySet_thenTheScreenIsCaptured(capture: Capture, dark: Bool) async throws {
         guard let output = ProcessInfo.processInfo.environment["HARFLOW_M05_G1B_CAPTURE_DIR"], !output.isEmpty else { return }
@@ -59,18 +75,11 @@ import Testing
         window.makeKey()
         defer { window.contentViewController = nil; window.close() }
         let host = controller.view
-        await waitUntil(timeout: 15) {
-            if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
-            if !window.isKeyWindow { window.makeKey() }
-            host.layoutSubtreeIfNeeded()
-            host.displayIfNeeded()
-            return NSApp.isActive && window.isKeyWindow
-        }
+        try await requireForeground(window, host: host)
         var passes = 0
         await waitUntil(timeout: 8) {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-            host.layoutSubtreeIfNeeded()
-            host.displayIfNeeded()
+            keepActive(window, host: host)
             passes += 1
             return passes >= 60
         }
@@ -78,6 +87,7 @@ import Testing
 
         // then
         let name = "m05-g1b-\(capture.rawValue)-\(dark ? "dark" : "light")-1280x800"
+        try await requireForeground(window, host: host)
         try await M04NativeWindowEvidence.record(window: window, name: name, directory: directory)
     }
 }

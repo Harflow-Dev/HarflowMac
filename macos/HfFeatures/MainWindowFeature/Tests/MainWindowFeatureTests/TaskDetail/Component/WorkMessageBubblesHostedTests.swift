@@ -151,18 +151,26 @@ extension WorkMessageBubblesHostedTests {
         let token = UUID()
         var consumed: Set<UUID> = []
         var accepted = 0
-        func content() -> some View {
-            WorkMessageOutcomeView(text: "Queued message cancelled.", focusToken: token) { value in
+        func content(_ focusToken: UUID?) -> some View {
+            WorkMessageOutcomeView(text: "Queued message cancelled.", focusToken: focusToken) { value in
                 let first = consumed.insert(value).inserted
                 if first { accepted += 1 }
                 return first
             }.frame(width: 420)
         }
-        let fixture = RedesignHost(content(), size: CGSize(width: 420, height: 200))
+        let fixture = RedesignHost(content(nil), size: CGSize(width: 420, height: 200))
         defer { fixture.close() }
-        fixture.window.makeKeyAndOrderFront(nil)
-        try #require(NSApp.isActive, "UNVERIFIED: hosted focus requires an active test application")
-        // when
+        await waitUntil(timeout: 15) {
+            if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
+            if !fixture.window.isVisible || !fixture.window.isKeyWindow { fixture.window.makeKeyAndOrderFront(nil) }
+            fixture.host.layoutSubtreeIfNeeded()
+            fixture.host.displayIfNeeded()
+            return NSApp.isActive && fixture.window.isVisible && fixture.window.isKeyWindow
+        }
+        try #require(NSApp.isActive && fixture.window.isVisible && fixture.window.isKeyWindow,
+                     "Focus foreground unavailable: active=\(NSApp.isActive), visible=\(fixture.window.isVisible), key=\(fixture.window.isKeyWindow)")
+        // when — publish the one-shot request only after this fixture owns foreground focus.
+        fixture.host.rootView = AnyView(content(token))
         await fixture.settle { fixture.window.firstResponder is WorkMessageOutcomeFocusTarget }
         let target = try #require(fixture.window.firstResponder as? WorkMessageOutcomeFocusTarget)
         // then
@@ -174,7 +182,7 @@ extension WorkMessageBubblesHostedTests {
         #expect(accepted == 1)
         // Reuse the row with the same one-shot request, after moving keyboard focus elsewhere.
         fixture.window.makeFirstResponder(nil)
-        fixture.host.rootView = AnyView(content())
+        fixture.host.rootView = AnyView(content(token))
         await fixture.settle { fixture.element("Queued message cancelled.") != nil }
         #expect(accepted == 1)
         #expect(!(fixture.window.firstResponder is WorkMessageOutcomeFocusTarget))
