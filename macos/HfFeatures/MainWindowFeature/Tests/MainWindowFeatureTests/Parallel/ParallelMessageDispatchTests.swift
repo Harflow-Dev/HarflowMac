@@ -56,6 +56,16 @@ import Testing
         verify(fixture.actions).endBusy(.value("task")).called(1)
     }
 
+    @Test func givenCancelReplyStillDelivering_whenCancelled_thenActualReceiptDecidesOutcome() async throws {
+        // given
+        let runner = ParallelMessageRunner(supportsMessaging: true, cancelStatus: "delivering")
+        let fixture = fixture(runner)
+        // when
+        try await fixture.repository.cancelMessage("current-task", messageID: "queued-id")
+        // then
+        verify(fixture.actions).setOutcome(.value("current-task"), .value("Delivery is in progress.")).called(1)
+    }
+
     private func fixture(_ runner: ParallelMessageRunner) -> (
         repository: ParallelViewRepository, actions: MockTaskActionRepository,
         snapshots: MockTaskSnapshotRepository, listing: MockTaskListRepository
@@ -78,7 +88,11 @@ import Testing
 private actor ParallelMessageRunner: ProcessRunning {
     let supportsMessaging: Bool
     var operations: [[String]] = []
-    init(supportsMessaging: Bool) { self.supportsMessaging = supportsMessaging }
+    let cancelStatus: String
+    init(supportsMessaging: Bool, cancelStatus: String = "cancelled") {
+        self.supportsMessaging = supportsMessaging
+        self.cancelStatus = cancelStatus
+    }
 
     func run(executable: String, arguments: [String], environment: [String: String],
              currentDirectory: String?, timeout: Double) async -> Result<ProcessOutput, ToolError> {
@@ -92,7 +106,7 @@ private actor ParallelMessageRunner: ProcessRunning {
         } else {
             operations.append(arguments)
             let result: [String: Any] = arguments.first == "cancel-message"
-                ? ["status": "cancelled", "reason": "Queued message cancelled."]
+                ? ["status": cancelStatus]
                 : ["status": "queued", "refusal": ["code": "pending_approval", "message": "Pending approval prevents immediate delivery."]]
             json = ["product": "harflow", "format": "harflow.ctl", "v": 1, "product_version": HarflowVersion.current, "result": result]
         }

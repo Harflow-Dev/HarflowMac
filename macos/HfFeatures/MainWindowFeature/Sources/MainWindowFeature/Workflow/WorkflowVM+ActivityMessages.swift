@@ -10,7 +10,7 @@ extension WorkflowVM {
         let raw = runID == selectedRun?.id ? selectedRun?.raw
             : activityMessageSnapshotRunID == runID ? activityMessageSnapshot : nil
         let messages = raw?["messages"]?.arrayValue?.filter(target.includes) ?? []
-        return WorkMessageQueue.items(raw: ["messages": .array(messages)])
+        return WorkMessageQueue.items(raw: ["messages": .array(messages)], source: .workflowRun)
     }
 
     func refreshActivityMessageState() async {

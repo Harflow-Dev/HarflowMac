@@ -88,7 +88,7 @@ struct WorkMessageQueueTests {
         #expect(bubbles.map(\.id) == ["b"])
     }
 
-    @Test(arguments: ["delivered", "consumed", "cancelled", "unknown_status"])
+    @Test(arguments: ["delivered", "consumed", "cancelled"])
     func givenOmittedStatusAsQueueItem_whenProjected_thenNoBubbleIsProduced(status: String) {
         // given
         let items = [WorkMessageQueue.Item(id: "a", text: "x", status: status, reason: nil)]
@@ -126,4 +126,35 @@ struct WorkMessageQueueTests {
         // when / then
         #expect(WorkMessageBubble.project(raw: ["queued_followups": ledger]).isEmpty)
     }
+
+    @Test func givenUnknownStatus_whenProjected_thenReadOnlyBubblePreservesEvidence() {
+        // given
+        let raw: [String: JSONValue] = ["messages": .array([message("future", 1, "future-status")])]
+        // when
+        let bubble = WorkMessageBubble.project(raw: raw).first
+        // then
+        #expect(bubble?.kind == .unknown("future-status"))
+        #expect(bubble?.canCancel == false)
+    }
+
+    @Test func givenStandaloneDeliveringReason_whenProjected_thenDeliveryIsUncertain() {
+        // given
+        let raw: [String: JSONValue] = ["messages": .array([message("uncertain", 1, "delivering", reason: "inspect")])]
+        // when
+        let bubble = WorkMessageBubble.project(raw: raw).first
+        // then
+        #expect(bubble?.kind == .uncertain("inspect"))
+        #expect(bubble?.canCancel == false)
+    }
+
+    @Test func givenWorkflowDeliveringReason_whenProjectedThroughItems_thenNotStandaloneUncertainty() {
+        // given
+        let raw: [String: JSONValue] = ["messages": .array([message("workflow", 1, "delivering", reason: "engine note")])]
+        let items = WorkMessageQueue.items(raw: raw, source: .workflowRun)
+        // when
+        let bubble = WorkMessageBubble.project(items: items).first
+        // then
+        #expect(bubble?.kind == .queued(canCancel: false, note: nil))
+    }
+
 }

@@ -7,12 +7,17 @@ import MonitorCore
 
 public final class TaskActionRepositoryImpl: TaskActionRepository, @unchecked Sendable {
 
-    private let toolEnvironment: any ToolEnvironmentRepository
-    private let taskListRepository: any TaskListRepository
-    private let snapshotRepository: any TaskSnapshotRepository
+    let toolEnvironment: any ToolEnvironmentRepository
+    let taskListRepository: any TaskListRepository
+    let snapshotRepository: any TaskSnapshotRepository
 
     @Subjected private var busyValue: Set<String> = []
     @Subjected private var outcomesValue: [String: String] = [:]
+    let messagingLock = NSLock()
+    var messagingEpoch = UUID()
+    var messagingAttempts: [MessagingSubmissionAttempt] = []
+    var messagingCosts: [UUID: Int] = [:]
+    var messagingRuntimeSubscription: AnyCancellable?
     private let outcomeLock = NSLock()
     private let busyLock = NSRecursiveLock()
     private struct StopRequest {

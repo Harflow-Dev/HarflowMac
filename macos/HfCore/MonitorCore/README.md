@@ -159,3 +159,21 @@ list, or refuse one it does. `HfRepository`'s `ModelCatalogRepository` maps ever
 `ModelListing` (state, reason, source, `truncated`, `droppedCount`, rows with their default flag;
 `unreadable` for a missing capability, a refusal, a failure or no runtime yet), and New task shows
 one note under the Model field for it.
+
+## messaging.v1 receipts
+
+`sendMessage(_:text:now:)` and `cancelQueuedMessage(_:messageID:)` are typed,
+phase-aware adapters for the existing public `send` and `cancel-message` commands.
+They require `messaging.v1` on the fresh handshake and never retry. Unknown statuses
+remain read-only evidence; a receipt's status, rather than its refusal note, decides
+its meaning. Post-launch timeout, malformed output or mismatched identity is
+`unconfirmed`, separately from ledger delivery uncertainty. The older raw send and
+cancel adapters remain temporarily for composer migration in M06 S3.
+
+`QueuedMessageState` projects standalone messages from the source task's `messages`
+(or its available legacy follow-up ledger), and workflow-owned messages only from
+the run-ledger `messages` returned by public status. Delivered/cancelled records
+have no display text. Standalone delivery targets use `successor_task_id`;
+workflow delivery targets use `delivery_task_id`. Unknown fields confer no action.
+A superseded refusal currently names its successor in prose only in the canonical
+specimen; routing requires fresh structured status evidence, never parsing that prose.

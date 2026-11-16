@@ -39,4 +39,12 @@ struct WorkMessageOutcomeTests {
         #expect(WorkMessageOutcome.describe(result) == "Queued — not yet delivered.")
         #expect(WorkMessageOutcome.notice(result) == nil)
     }
+
+    @Test func givenEngineCancelResult_whenDescribed_thenStatusRatherThanLocalSuccessDecidesOutcome() {
+        // given / when / then
+        #expect(WorkMessageOutcome.describe(["status": .string("cancelled")]) == "Queued message cancelled.")
+        #expect(WorkMessageOutcome.describe(["status": .string("delivering")]) == "Delivery is in progress.")
+        #expect(WorkMessageOutcome.describe(["status": .string("future")]) == "Message delivery status is unavailable.")
+    }
+
 }

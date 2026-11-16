@@ -15,8 +15,10 @@ enum WorkMessageOutcome {
             return explanation ?? "Delivery is in progress."
         case "delivered":
             return explanation ?? "Message delivered."
+        case "cancelled":
+            return explanation ?? "Queued message cancelled."
         default:
-            return explanation ?? "Immediate delivery requested."
+            return explanation ?? "Message delivery status is unavailable."
         }
     }
 

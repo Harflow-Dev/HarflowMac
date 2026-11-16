@@ -45,6 +45,7 @@ public final class Module: HfModule {
             stateRecovery: stateRecovery
         )
         let taskAction = TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskList, snapshotRepository: snapshot)
+        taskAction.bindMessagingRuntimeChanges(runtime.statePublisher())
         let harness = HarnessRepositoryImpl(toolEnvironment: toolEnvironment)
         let install = ManagedInstallRepository(coordinator: runtime, taskListRepository: taskList)
         let takeover = TakeoverServiceImpl(actions: taskAction, toolEnvironment: toolEnvironment, taskList: taskList, snapshots: snapshot)

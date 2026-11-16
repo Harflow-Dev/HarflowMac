@@ -202,3 +202,21 @@ receipts stay verbatim; shortened unstructured diagnostics carry both a textual 
 `diagnosticsTruncated` flag. These are bounded payload budgets, not measured heap ceilings. Bind runtime
 notifications inline so A→B→A revokes old work. Snapshot `currentRuntime` is an in-memory comparison
 binding only; filter retained attempts by it and full ID, and never display or log its environment.
+
+## Messaging submission evidence
+
+`TaskActionRepository` owns additive typed `submitMessage` and `cancelQueuedMessage`
+operations and retains their per-invocation evidence independently from public
+status snapshots. Every attempt captures its UUID, full task ID, operation, runtime
+binding and runtime epoch. Inline managed-runtime changes fence old command guards
+and refreshes, including A→B→A transitions, while retaining unresolved attempts.
+No lock spans dependency calls, awaits or publication. No new polling is added.
+
+Admission reserves 1 MiB per attempt within a 16 MiB/256-attempt app-session limit;
+capacity refuses before dispatch and never evicts unsafe evidence. Captured runtime
+bindings are capped at 64 KiB, kept private and never logged. Oversized retained
+results become unresolved diagnostic evidence. A subsequent send requires explicit
+acknowledgement of the prior unconfirmed attempt; cancellation is never replayed
+automatically. Status refreshes never associate records by identical text or sequence
+and never turn an unresolved submission into success. These additive APIs await the
+M06 S3 composer migration; existing raw callers are not yet covered by this owner.

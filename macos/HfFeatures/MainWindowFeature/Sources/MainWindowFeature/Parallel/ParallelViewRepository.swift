@@ -115,8 +115,7 @@ final class ParallelViewRepository: ParallelUseCase, ParallelActivityReadiness, 
 
     func cancelMessage(_ id: String, messageID: String) async throws {
         try await performMessage(id) { client in
-            _ = try await client.cancelMessage(id, messageID: messageID).get()
-            return ["status": .string("cancelled"), "reason": .string("Queued message cancelled.")]
+            try await client.cancelMessage(id, messageID: messageID).get()
         }
     }
 

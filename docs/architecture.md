@@ -445,3 +445,32 @@ An accepted task may be pending; unknown or incomplete reads cannot reopen messa
 launch. Adopted descendants need positive owner path proof and actual predecessor ancestry through
 the acknowledged member. Generic engine refusal text is displayed without interpreting diagnostic
 data whose capability provenance is absent. Independent caller approvals keep their own checks.
+
+## Messaging receipt and ledger boundaries
+
+MonitorCore's typed messaging client preserves status separately from refusal notes,
+and distinguishes pre-dispatch refusal from an unconfirmed mutation. A malformed
+receipt or unusable task/run identity cannot establish acceptance. Each mutation
+retains the fresh `messaging.v1` handshake; it never falls back to conversation
+commands. Public task IDs retain the engine's bounded ASCII grammar and exact case.
+
+`QueuedMessageState` takes an explicit standalone, workflow-node or workflow-run
+source. Standalone reads prefer `messages`, with the contract's available follow-up
+ledger as a legacy fallback; workflow sources never use that fallback. Delivery
+targets use standalone successor IDs or workflow delivery task IDs. Only `queued`
+permits cancellation. Delivered/cancelled rows retain metadata rather than text;
+unknown states remain read-only. Parallel cancellation preserves the engine reply.
+
+The typed TaskAction submission owner retains per-attempt evidence bound to the
+captured runtime and exact task. Runtime epochs fence stale refresh adoption without
+erasing unresolved attempts across runtime changes. Read-only status refreshes never
+associate a ledger row with an unconfirmed submission by matching its text or sequence.
+Another send, including switching Queue/Now, requires explicit acknowledgement of
+the prior unconfirmed attempt. Capacity refuses before dispatch rather than evicting
+unsafe evidence: 256 attempts, 16 MiB retained budget, a 1 MiB response reservation
+and a 64 KiB runtime-binding bound.
+
+Existing composer callers still use the raw adapters until their typed-outcome
+integration. The submission owner does not yet establish composer resend/draft UI
+behavior. A superseded error without structured successor data preserves the engine
+message; prose is not parsed into routing authority.

@@ -31,6 +31,13 @@ import SwiftEnvironment
 @Mockable
 public protocol TaskActionRepository: Sendable {
 
+    /// Retained invocation evidence, keyed by attempt and captured runtime rather than ledger text.
+    func messageAttempts() -> [MessagingSubmissionAttempt]
+    /// Explicit resend acknowledgement names the earlier unresolved invocation, never a guessed record.
+    func submitMessage(_ taskID: String, text: String, now: Bool, acknowledgingUnconfirmed: UUID?) async throws -> MessagingSubmissionAttempt
+    /// A cancel failure refreshes status without fabricating a cancelled state.
+    func cancelQueuedMessage(_ taskID: String, messageID: String) async throws -> MessagingSubmissionAttempt
+
     /// Whether a fresh public read qualifies an acknowledged stop request.
     func isStopping(_ taskID: String) -> Bool
     /// Invalidation only: consumers reread `isStopping`.
@@ -94,6 +101,13 @@ public protocol TaskActionRepository: Sendable {
 
 public struct NullTaskActionRepository: TaskActionRepository {
     public init() {}
+    public func messageAttempts() -> [MessagingSubmissionAttempt] { [] }
+    public func submitMessage(_: String, text _: String, now _: Bool, acknowledgingUnconfirmed _: UUID?) async throws -> MessagingSubmissionAttempt {
+        throw MessagingAdmissionError.runtimeChanged
+    }
+
+    public func cancelQueuedMessage(_: String, messageID _: String) async throws -> MessagingSubmissionAttempt { throw MessagingAdmissionError.runtimeChanged }
+
     public var busy: Set<String> { [] }
     public func busyPublisher() -> AnyPublisher<Set<String>, Never> { Just([]).eraseToAnyPublisher() }
     public func outcome(_: String) -> String? { nil }

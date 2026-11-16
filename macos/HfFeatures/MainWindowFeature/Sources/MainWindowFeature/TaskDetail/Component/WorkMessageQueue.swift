@@ -11,16 +11,20 @@ enum WorkMessageQueue {
         let text: String
         let status: String
         let reason: String?
+        var source: QueuedMessageState.Source = .standalone
         var canCancel: Bool { status == "queued" }
     }
 
-    static func items(raw: [String: JSONValue]) -> [Item] {
-        let values = raw["messages"]?.arrayValue ?? raw["queued_followups"]?["items"]?.arrayValue ?? []
-        return values.compactMap { value in
-            guard let id = value["id"]?.stringValue, let status = value["status"]?.stringValue else { return nil }
-            return Item(id: id, text: value["text"]?.stringValue ?? "", status: status,
-                        reason: value["reason"]?.stringValue)
+    static func items(raw: [String: JSONValue], source: QueuedMessageState.Source? = nil) -> [Item] {
+        QueuedMessageState.project(raw: raw, source: source ?? Self.source(raw)).map { value in
+            Item(id: value.id, text: value.text ?? "", status: value.raw["status"]?.stringValue ?? "unknown", reason: value.reason, source: value.source)
         }
+    }
+
+    static func source(_ raw: [String: JSONValue]) -> QueuedMessageState.Source {
+        guard raw["workflow_run_id"]?.stringValue != nil else { return .standalone }
+        if let taskID = raw["task_id"]?.stringValue { return .workflowNode(taskID: taskID) }
+        return .workflowRun
     }
 }
 
@@ -33,6 +37,7 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
         case queued(canCancel: Bool, note: String?)
         case undeliverable(String?)
         case uncertain(String?)
+        case unknown(String)
     }
 
     let id: String
@@ -49,6 +54,7 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
         case .queued: "Queued"
         case .undeliverable: "Undeliverable"
         case .uncertain: "Delivery uncertain"
+        case .unknown: "Delivery status unavailable"
         }
     }
 
@@ -56,6 +62,7 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
         switch kind {
         case .queued(_, let note): note
         case .undeliverable(let reason), .uncertain(let reason): reason
+        case .unknown(let status): status
         }
     }
 
@@ -82,41 +89,37 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
     /// is the same queue. Cancelled records are omitted, and so are delivered and consumed ones: once
     /// delivered, the transcript owns the message. Order is send order.
     static func project(raw: [String: JSONValue], notes: [String: String] = [:]) -> [WorkMessageBubble] {
-        if let messages = raw["messages"]?.arrayValue {
-            return applying(project(messages), notes: notes)
-        }
-        guard let ledger = raw["queued_followups"]?.objectValue, ledger["state"]?.stringValue == "available" else { return [] }
-        return applying(project(ledger["items"]?.arrayValue ?? []), notes: notes)
+        let values = QueuedMessageState.project(raw: raw, source: WorkMessageQueue.source(raw))
+        return project(states: values, notes: notes)
     }
 
-    static func project(items: [WorkMessageQueue.Item], notes: [String: String] = [:]) -> [WorkMessageBubble] {
-        applying(items.enumerated().compactMap { index, item in
-            guard let kind = kind(status: item.status, reason: item.reason, refusal: nil) else { return nil }
-            return WorkMessageBubble(id: item.id, seq: index, kind: kind, text: item.text)
+    private static func project(states values: [QueuedMessageState], notes: [String: String]) -> [WorkMessageBubble] {
+        applying(values.compactMap { value in
+            let kind: Kind
+            switch value.state {
+            case .queued:
+                let note = value.refusal.map { refusalNote(in: ["refusal": .object(["code": .string($0.code), "message": .string($0.message)])]) } ?? nil
+                kind = .queued(canCancel: true, note: note)
+            case .delivering: kind = .queued(canCancel: false, note: value.refusal?.message)
+            case .uncertain: kind = .uncertain(value.reason)
+            case .undeliverable: kind = .undeliverable(value.reason)
+            case .unknown(let status): kind = .unknown(status)
+            case .delivered, .cancelled: return nil
+            }
+            return WorkMessageBubble(id: value.id, seq: value.sequence, kind: kind, text: value.text ?? "")
         }, notes: notes)
     }
 
-    private static func project(_ values: [JSONValue]) -> [WorkMessageBubble] {
-        values.compactMap { value in
-            guard let id = value["id"]?.stringValue, let status = value["status"]?.stringValue else { return nil }
-            let text = value["text"]?.stringValue ?? ""
-            let reason = value["reason"]?.stringValue
-            let refusal = value["refusal"]?.objectValue.flatMap { refusalNote(in: ["refusal": .object($0)]) }
-            guard let kind = kind(status: status, reason: reason, refusal: refusal) else { return nil }
-            return WorkMessageBubble(id: id, seq: value["seq"]?.intValue ?? Int.max, kind: kind, text: text)
+    static func project(items: [WorkMessageQueue.Item], notes: [String: String] = [:]) -> [WorkMessageBubble] {
+        let states = items.enumerated().flatMap { index, item in
+            var value: [String: JSONValue] = ["id": .string(item.id), "seq": .number(Double(index)),
+                "status": .string(item.status), "text": .string(item.text)]
+            if let reason = item.reason { value["reason"] = .string(reason) }
+            return QueuedMessageState.project(raw: ["messages": .array([.object(value)])], source: item.source)
         }
-        .sorted { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
+        return project(states: states, notes: notes)
     }
 
-    private static func kind(status: String, reason: String?, refusal: String?) -> Kind? {
-        switch status {
-        case "queued": .queued(canCancel: true, note: refusal)
-        case "delivering", "reserved": .queued(canCancel: false, note: refusal)
-        case "undeliverable": .undeliverable(reason)
-        case "delivery_unknown": .uncertain(reason)
-        default: nil // cancelled, delivered and consumed: the transcript owns delivered messages
-        }
-    }
 }
 
 // MARK: - WorkMessageBubblesView
