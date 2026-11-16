@@ -38,8 +38,7 @@ observable, so reading it from the view builder or a listing callback invalidate
 `TaskDraftCell` holding only its text, stored only while nonempty (whitespace-only text counts as nonempty and is
 kept byte for byte). The builder resolves a read-only `TaskDraftMount` for the conversation, held in the task view's
 `@State`, and the composer receives only a text binding (`MessageBoxView.text`); without it the composer keeps its
-text locally, as the Group, Parallel, workflow and New task mounts do. The text clears only when the view model
-accepts the send locally (an asynchronous engine refusal afterwards loses it, as before). Drafts are app-session state: nothing is written to disk or sent to the engine.
+text locally, as the Group, Parallel, workflow and New task mounts do. Typed task-detail sends clear only the captured original draft cell and edit revision after a recognized accepted receipt. Concurrent edits, navigation and draft re-keying preserve newer drafts; errors and unconfirmed submissions retain them. Other composer callers retain their existing local admission behavior. Drafts are app-session state: nothing is written to disk or sent to the engine.
 
 A conversation's key and members come from one function, `conversationKeyAndMembers(for:)`, with the same rules as
 the task view's identity: orchestrator and harness-session membership first, else the qualified continuation and
@@ -476,3 +475,11 @@ behavior. A superseded error without structured successor data preserves the eng
 message; prose is not parsed into routing authority.
 
 Task transcript messaging uses the typed `TaskActionRepository` cancellation owner. Click-time runtime and epoch are captured before scheduling and checked atomically at owner admission, so runtime changes cannot retarget the command. A cancellation receipt, its attempt, task identity and current runtime epoch must agree before the transcript confirms cancellation or requests focus. Refused and unconfirmed commands preserve the ledger and never retry automatically. Historical ledger phase lines are presentation only and do not request focus. Explicit cancellation focus is consumed once by the actual outcome row, and is applied only while the app and its window remain active.
+
+Task-detail Send and Send now share a synchronous in-flight guard and the owner's click-time
+runtime/epoch authority. A current `messaging.v1` capability read enables submission; a failed
+read remains unknown, while confirmed missing support locks the input without placeholder or
+hint and hides Send now. Submission uncertainty survives navigation in the owner. A deliberate
+resend requires a warning acknowledgement naming the retained attempt internally; neither text,
+sequence nor later ledger rows reconcile it. Accepted queued refusals preserve queued status and
+Cancel. Delivery uncertainty preserves the engine note and never prompts an automatic resend.

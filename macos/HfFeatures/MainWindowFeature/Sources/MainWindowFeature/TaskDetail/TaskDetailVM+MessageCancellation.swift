@@ -8,9 +8,9 @@ extension TaskDetailVM {
     func cancelQueuedMessage(_ messageID: String) {
         guard isMounted, latestActionTask() != nil, !isBusy,
               timelineModel.workMessages.contains(where: { $0.id == messageID && $0.canCancel }) else { return }
-        let context: MessagingCancellationContext
+        let context: MessagingInvocationContext
         do {
-            context = try useCase.messageCancellationContext()
+            context = try useCase.messagingInvocationContext()
         } catch {
             messageCancellationOutcome = "Cancellation was not sent."
             updateMessageCancellationPresentation()

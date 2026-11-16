@@ -24,6 +24,7 @@ final class TaskDraftCell {
     let id = UUID()
     /// Written only by the store, through a mount's binding, so its bookkeeping cannot be bypassed.
     fileprivate(set) var text = ""
+    fileprivate(set) var editRevision: UInt64 = 0
 }
 
 // MARK: - TaskDraftPartition
@@ -169,6 +170,7 @@ final class TaskDraftStore {
     /// owner (the mounted view model's live current task) and the edit time; nonempty to empty drops the cell.
     fileprivate func write(_ value: String, to cell: TaskDraftCell, through mount: TaskDraftMount) {
         guard cell.text != value else { return }
+        cell.editRevision &+= 1
         cell.text = value
         let id = cell.id
         if value.isEmpty {
@@ -267,6 +269,17 @@ final class TaskDraftMount {
         self.key = key
         self.members = members
         self.currentTaskID = currentTaskID
+    }
+
+    /// Capture ownership only: this closure cannot supply any engine action identity.
+    /// Clearing always addresses the original cell, even when reconciliation rebinds this mount.
+    func captureAcceptedDraftClear() -> () -> Void {
+        let capturedCell = cell
+        let revision = capturedCell.editRevision
+        return { [self] in
+            guard capturedCell.editRevision == revision else { return }
+            store.write("", to: capturedCell, through: self)
+        }
     }
 
     /// The composer's text. Writes go through the store; nothing else is exposed.

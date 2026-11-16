@@ -223,34 +223,9 @@ extension TaskDetailVMTests {
         #expect(harness.sut.inspectorModel?.hasSnapshot == true)
     }
     
-    // MARK: - Item t: resume still completes even after the VM is released
+    // In-flight lifetime and accepted draft clearing after unmount are exercised with a
+    // suspended invocation in TaskDetailMessagingLifecycleTests.
 
-    @Test func givenResumeSucceeds_whenTheVMIsReleasedBeforeItCompletes_thenTheDispatchStillCompletes() async {
-        // given — Monitor piece 7, Design point 7: Continue no longer navigates, so this no longer
-        // checks routing; it still must check that releasing the VM right after submit does not
-        // cancel the in-flight resume (`submitMessage`'s resume branch captures `useCase` strongly,
-        // never `self`).
-        weak var weakSUT: TaskDetailVM?
-        var capturedUseCase: MockTaskDetailUseCase!
-        do {
-            let harness = makeSUT()
-            weakSUT = harness.sut
-            capturedUseCase = harness.useCase
-            let done = task(status: "completed")
-            harness.detailBox.value = done
-            harness.sut.didAppear()
-            harness.tasksSubject.send([done])
-            await waitUntil { harness.sut.task != nil }
-
-            // when — submit while the VM is still alive.
-            #expect(harness.sut.submitMessage("follow up"))
-        }
-
-        // then — nothing above kept `sut` alive, yet the resume dispatch still completes.
-        #expect(weakSUT == nil)
-        await verify(capturedUseCase).send(.value("abc12345"), text: .value("follow up")).calledEventually(1, before: .seconds(5))
-    }
-    
     // MARK: - Item u: sub-task strip and "Open parent" routing
     
     @Test func givenASubTaskStripTap_whenInvoked_thenItRoutesToTheSubTask() async {

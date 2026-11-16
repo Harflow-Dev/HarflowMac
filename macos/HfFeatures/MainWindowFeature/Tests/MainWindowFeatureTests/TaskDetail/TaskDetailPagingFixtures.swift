@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-import HfRepository
+@testable import HfRepository
 @testable import MainWindowFeature
 import Mockable
 import MonitorCore
@@ -8,15 +8,39 @@ import Testing
 
 @MainActor
 extension MockTaskDetailUseCase {
+    func configureTypedSendSuccess() {
+        given(self).isMessagingAttemptCurrent(.any).willReturn(true)
+        given(self)
+.submitTypedMessage(.any, text: .any, now: .any, acknowledgingUnconfirmed: .any, context: .any)
+            .willProduce { id, _, now, _, context in
+                let receipt = MessagingSendReceipt(raw: ["message_id": .string("message"), "seq": .number(1),
+                                                         "status": .string("queued"), "delivery": .string(now ? "now" : "queue")])!
+                return MessagingSubmissionAttempt(id: UUID(), runtime: context.runtime, runtimeEpoch: context.runtimeEpoch,
+                                                 taskID: id, operation: .send(now: now), outcome: .send(.receipt(receipt)))
+            }
+    }
+
+    private func configureMessagingDefaults() {
+        let runtime = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))
+        let context = MessagingInvocationContext(runtime: runtime, runtimeEpoch: UUID())
+        given(self).messagingInvocationContext().willReturn(context)
+        given(self).isMessagingContextCurrent(.any).willReturn(true)
+        given(self).messagingSupport(context: .any).willReturn(true)
+        given(self).messageAttempts().willReturn([])
+    }
+
+    private func configureContinuationDefaults() {
+        configureMessagingDefaults()
+        given(self).continuationOwner().willReturn(NullTaskContinuationRepository())
+        given(self).continuationRuntime().willReturn(nil)
+        given(self).continuationSupport(runtime: .any).willReturn(false)
+    }
+
     func configurePagingDefaults(eventHistory: @escaping (String) -> EventHistoryState = { _ in EventHistoryState() },
                                  observationSubjects: [String: PassthroughSubject<EventObservationFrame, Never>] = [:],
                                  includeObservationDefaults: Bool = true, includeContinuationDefaults: Bool = true,
                                  successorObservation: @escaping (String) throws -> Bool = { _ in false }) {
-        if includeContinuationDefaults {
-            given(self).continuationOwner().willReturn(NullTaskContinuationRepository())
-            given(self).continuationRuntime().willReturn(nil)
-            given(self).continuationSupport(runtime: .any).willReturn(false)
-        }
+        if includeContinuationDefaults { configureContinuationDefaults() }
         if includeObservationDefaults {
         given(self).observation(for: .any).willProduce { [weak self] id in
             guard let self else { return FeatureObservationFixture.frame(id: id) }

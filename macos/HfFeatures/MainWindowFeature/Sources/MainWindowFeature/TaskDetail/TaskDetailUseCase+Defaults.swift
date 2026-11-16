@@ -6,7 +6,15 @@ import MonitorCore
 // MARK: - TaskDetailUseCase Defaults
 
 extension TaskDetailUseCase {
-    func messageCancellationContext() throws -> MessagingCancellationContext { throw MessagingAdmissionError.runtimeChanged }
+    func messagingSupport(context _: MessagingInvocationContext) async -> Bool? { nil }
+    func isMessagingContextCurrent(_: MessagingInvocationContext) -> Bool { false }
+    func messageAttempts() -> [MessagingSubmissionAttempt] { [] }
+    func submitTypedMessage(_: String, text _: String, now _: Bool, acknowledgingUnconfirmed _: UUID?,
+                            context _: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt {
+        throw MessagingAdmissionError.runtimeChanged
+    }
+
+    func messagingInvocationContext() throws -> MessagingInvocationContext { throw MessagingAdmissionError.runtimeChanged }
     func isMessagingAttemptCurrent(_: MessagingSubmissionAttempt) -> Bool { false }
     func continuationOwner() -> any TaskContinuationRepository { NullTaskContinuationRepository() }
     func continuationRuntime() -> QualificationRuntimeToken? { nil }
@@ -90,4 +98,12 @@ extension TaskDetailViewModel {
     func didTapContinue(taskID _: String) {}
     func didTapCheckContinuation(taskID _: String, attemptID _: UUID) {}
     func didTapNewTask() {}
+}
+
+// MARK: - TaskDetailViewModel completion fallback
+
+extension TaskDetailViewModel {
+    func submitMessage(_ text: String, now: Bool, completion: @escaping (Bool) -> Void) {
+        completion(now ? submitMessageNow(text) : submitMessage(text))
+    }
 }

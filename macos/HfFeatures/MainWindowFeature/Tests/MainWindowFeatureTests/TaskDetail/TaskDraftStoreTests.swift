@@ -47,6 +47,52 @@ import Testing
         }
     }
 
+    @Test @MainActor
+    func givenCapturedDraft_whenTextEditedAwayAndBack_thenAcceptedClearPreservesNewRevision() {
+        // given
+        let rig = Rig([task("a", minute: 0)])
+        let mount = rig.mount("a")
+        rig.type("original", in: mount)
+        let clear = mount.captureAcceptedDraftClear()
+        // when
+        rig.type("changed", in: mount)
+        rig.type("original", in: mount)
+        clear()
+        // then
+        #expect(mount.text.wrappedValue == "original")
+    }
+
+    @Test @MainActor
+    func givenCapturedDraft_whenOriginalMountIsGone_thenAcceptedClearRemovesRetainedCell() {
+        // given
+        let rig = Rig([task("a", minute: 0)])
+        var mount: TaskDraftMount? = rig.mount("a")
+        rig.type("original", in: mount!)
+        let clear = mount!.captureAcceptedDraftClear()
+        mount = nil
+        // when
+        clear()
+        // then
+        #expect(rig.mount("a").text.wrappedValue.isEmpty)
+        #expect(rig.store.storedCount == 0)
+    }
+
+    @Test @MainActor
+    func givenCapturedDraft_whenAnotherConversationIsEdited_thenOnlyOriginalCellClears() {
+        // given
+        let rig = Rig([task("a", minute: 0), task("b", minute: 1)])
+        let original = rig.mount("a")
+        rig.type("first", in: original)
+        let clear = original.captureAcceptedDraftClear()
+        let other = rig.mount("b")
+        rig.type("second", in: other)
+        // when
+        clear()
+        // then
+        #expect(original.text.wrappedValue.isEmpty)
+        #expect(other.text.wrappedValue == "second")
+    }
+
     private func task(_ id: String, parent: String? = nil, spawnedBy: String? = nil, minute: Int) -> TaskInfo {
         var raw: [String: JSONValue] = [
             "task_id": .string(id), "backend": .string("claude"), "status": .string("completed"),

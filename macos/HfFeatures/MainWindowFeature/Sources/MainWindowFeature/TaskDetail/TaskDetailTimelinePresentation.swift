@@ -212,7 +212,7 @@ extension TaskDetailVM {
             paginationRevision: activityPaginationRevision, onLoadMore: { [weak self] in self?.loadMoreConversationActivity() ?? false })
         timelineModel.activitySnapshot = value.activitySnapshot
         timelineModel.workMessages = applyingConfirmedCancellation(WorkMessageBubble.applying(value.workMessages, notes: messageNotes))
-        timelineModel.messageOutcome = messageCancellationOutcome ?? value.messageOutcome
+        timelineModel.messageOutcome = messageCancellationOutcome ?? messageSendOutcome ?? value.messageOutcome
         timelineModel.messageOutcomeFocus = messageOutcomeFocus
         timelineModel.consumeMessageOutcomeFocus = { [weak self] token in self?.consumeMessageOutcomeFocus(token) ?? false }
         timelineModel.onCancelQueuedMessage = { [weak self] id in self?.cancelQueuedMessage(id) }

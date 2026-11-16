@@ -6,6 +6,18 @@ import Testing
 
 struct WorkMessageOutcomeTests {
     @Test(arguments: ["delivering", "delivered"])
+    func givenContinuationUncertaintyWithRefusalAndNote_whenPresented_thenBothEngineExplanationsRemain(status: String) {
+        // given
+        let explanation = "Continuation outcome is uncertain."
+        let note = "Do not resend automatically; reconcile the successor first."
+        let raw: [String: JSONValue] = ["status": .string(status), "note": .string(note),
+                                       "refusal": .object(["code": .string("continuation_uncertain"), "message": .string(explanation)])]
+        // when / then
+        #expect(WorkMessageOutcome.describe(raw) == explanation + "\n" + note)
+        #expect(WorkMessageBubble.refusalNote(in: raw) == explanation + "\n" + note)
+    }
+
+    @Test(arguments: ["delivering", "delivered"])
     func givenContinuationWasClaimedBeforeLaunchError_whenDescribed_thenUncertaintyNeverClaimsQueued(_ status: String) {
         // given
         let explanation = "Continuation requires inspection before resending."

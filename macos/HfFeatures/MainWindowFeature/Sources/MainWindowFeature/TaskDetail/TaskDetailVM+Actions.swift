@@ -189,6 +189,10 @@ extension TaskDetailVM {
 
     /// The engine owns authorization; a non-live task can still queue a follow-up.
     func recomputeMessageBox(task: TaskInfo) {
+        prepareMessagingSupport()
+        let supportCurrent = messagingSupportContext.map { useCase.isMessagingContextCurrent($0) } ?? false
+        let supported = supportCurrent && messagingSupported == true
+        let unsupported = supportCurrent && messagingSupported == false
         let eligible = !task.takenOver && !isStatusUnavailable && !continuationLocksActions
         let stopAction: (@MainActor () -> Void)? = if chrome == .standalone, canCancel, eligible {
             { [weak self] in self?.didTapCancel() }
@@ -196,15 +200,15 @@ extension TaskDetailVM {
             nil
         }
         messageBoxModel = MessageBoxModel(
-            canSend: eligible && hasStatusAuthority, canContinue: false, isBusy: isBusy,
+            canSend: eligible && hasStatusAuthority && supported, canContinue: false, isBusy: isBusy || messageSendInFlight,
             label: isWorkflowBuilder ? "Message the workflow builder" : "Message this task",
-            hint: isStatusUnavailable ? "" : "Send queues; Send now requests immediate delivery when safe",
-            placeholder: isStatusUnavailable ? "Unavailable until status can be read"
+            hint: unsupported || !supported || isStatusUnavailable ? "" : "Send queues; Send now requests immediate delivery when safe",
+            placeholder: unsupported ? "" : isStatusUnavailable ? "Unavailable until status can be read"
                 : continuationLocksActions ? continuationPlaceholder
-                : eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
-            buttonLabel: "Send", isLocked: !eligible,
-            isStopping: isStopping, stopAction: stopAction,
-            allowsDraftEditing: chrome == .standalone && statusReadAvailability == .unread && !task.takenOver
+                : !supported ? "Checking message support…" : eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
+            buttonLabel: "Send", isLocked: !eligible || unsupported,
+            isStopping: isStopping, showsSendNow: !unsupported, stopAction: stopAction,
+            allowsDraftEditing: !unsupported && chrome == .standalone && statusReadAvailability == .unread && !task.takenOver
         )
     }
 
@@ -219,31 +223,9 @@ extension TaskDetailVM {
     }
 
     private func dispatchMessage(_ text: String, now: Bool) -> Bool {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let task = latestActionTask(), !task.takenOver, !isBusy else { return false }
-        let capturedUseCase = useCase
-        let id = currentTaskID
-        // The queue path must not capture `self`: Continue stays in flight after the view model
-        // is released. Send now records a refusal on the view model only while it is still alive.
-        if now {
-            Task { [weak self] in
-                do {
-                    let result = try await capturedUseCase.sendNow(id, text: text)
-                    self?.rememberMessageResult(result)
-                } catch {
-                    capturedUseCase.setOutcome(id, "Couldn't send the message: \(error.localizedDescription)")
-                }
-            }
-        } else {
-            Task {
-                do {
-                    _ = try await capturedUseCase.send(id, text: text)
-                } catch {
-                    capturedUseCase.setOutcome(id, "Couldn't send the message: \(error.localizedDescription)")
-                }
-            }
-        }
-        return true
+        submitMessage(text, now: now) { _ in }
+        // Typed completion clears only confirmed accepted drafts.
+        return false
     }
 
     func rememberMessageResult(_ result: [String: JSONValue]) {

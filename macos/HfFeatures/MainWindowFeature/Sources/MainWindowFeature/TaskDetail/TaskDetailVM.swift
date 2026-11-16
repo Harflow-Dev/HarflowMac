@@ -71,8 +71,13 @@ protocol TaskDetailUseCase: Sendable {
     @discardableResult func cancel(_ id: String) async throws -> Bool
     @discardableResult func send(_ id: String, text: String) async throws -> Bool
     func sendNow(_ id: String, text: String) async throws -> [String: JSONValue]
-    func messageCancellationContext() throws -> MessagingCancellationContext
-    func cancelMessage(_ id: String, messageID: String, context: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt
+    func messagingSupport(context: MessagingInvocationContext) async -> Bool?
+    func isMessagingContextCurrent(_ context: MessagingInvocationContext) -> Bool
+    func messageAttempts() -> [MessagingSubmissionAttempt]
+    func submitTypedMessage(_ id: String, text: String, now: Bool, acknowledgingUnconfirmed: UUID?,
+                            context: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt
+    func messagingInvocationContext() throws -> MessagingInvocationContext
+    func cancelMessage(_ id: String, messageID: String, context: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt
     func isMessagingAttemptCurrent(_ attempt: MessagingSubmissionAttempt) -> Bool
     /// `onResumed` fires right after the new task id comes back — before busy releases, the outcome
     /// writes, or either refresh runs (see `TaskActionRepository.resume(_:text:onResumed:)`'s doc
@@ -160,6 +165,13 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// Send-now refusals keyed by message id. The engine keeps the message queued and does not
     /// store the refusal on it, so the bubble reads the note from the send result.
     var messageNotes: [String: String] = [:]
+    var messagingSupportContext: MessagingInvocationContext?
+    var messagingSupported: Bool?
+    var messageSendOutcome: String?
+    var messagingOutcomeTaskID: String?
+    @ObservationIgnored var messagingSupportRead: Task<Void, Never>?
+    var messageSendInFlight = false
+    var messageSendEpoch = UUID()
     var messageCancellationEpoch = UUID()
     var messageCancellationAttempt: MessagingSubmissionAttempt?
     var messageCancellationOutcome: String?
@@ -339,6 +351,10 @@ final class TaskDetailVM: TaskDetailViewModel {
     /// re-acquires leases fresh.
     func didDisappear() {
         isMounted = false
+        messagingSupportRead?.cancel()
+        messagingSupportRead = nil
+        messagingSupportContext = nil
+        messagingSupported = nil
         messageCancellationEpoch = UUID()
         messageOutcomeFocus = nil
         stopContinuationPresentation()

@@ -66,6 +66,7 @@ struct MessageBoxModel {
     /// Show the lock icon and `placeholder` in place of the text field.
     var isLocked = false
     var isStopping = false
+    var showsSendNow = true
     /// Optional task-level Stop action, rendered only by the transcript composer.
     var stopAction: (@MainActor () -> Void)?
 
@@ -115,45 +116,6 @@ private struct UndimmedButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - TranscriptComposerHint
-
-/// The transcript composer's printed hint, shared with the skeleton so the two reserve the same row.
-struct TranscriptComposerHint: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(TaskScreenStyle.sans(size: MessageBoxStyle.hintSize))
-            .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
-            .padding(.leading, TaskScreenStyle.Composer.paddingLeading)
-    }
-}
-
-// MARK: - TranscriptComposerSurface
-
-/// `.hd-composer`'s surface: `surface` fill, 1 pt `border`, and the two `--shadow-composer` layers in black ink.
-/// Shared with the loading skeleton's composer placeholder so the two cannot drift.
-struct TranscriptComposerSurface: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        let composer = TaskScreenStyle.Composer.self
-        let shape = RoundedRectangle(cornerRadius: composer.cornerRadius)
-        ZStack {
-            ForEach(Array(composer.shadow.enumerated()), id: \.offset) { _, layer in
-                shape.fill(composer.fill.color)
-                    .shadow(
-                        color: Color.shadow.opacity(colorScheme == .dark ? layer.darkOpacity : layer.lightOpacity),
-                        // CSS blur is the full blur diameter; SwiftUI's radius is half of it.
-                        radius: layer.blur / 2,
-                        y: layer.offsetY
-                    )
-            }
-            shape.strokeBorder(composer.borderColor.color, lineWidth: composer.borderWidth)
-        }
-    }
-}
-
 // MARK: - MessageBoxView
 
 /// "Message this task" while a live-input run is going; "Continue" (a resume) once it settled.
@@ -172,12 +134,22 @@ struct MessageBoxView: View {
     var style: MessageBoxStyle = .standard
     /// An external home for the draft; `nil` keeps it in local state.
     var text: Binding<String>?
+    /// Typed callers finish only after receipt acceptance. Legacy callers retain Bool semantics.
+    var onSubmitCompletion: ((String, Bool, @escaping (Bool) -> Void) -> Void)?
+    var captureDraftClear: (() -> (() -> Void))?
     let onSubmit: (String) -> Bool
     @State private var localText = ""
+    @State private var localEditRevision: UInt64 = 0
     @State private var isHoveringSend = false
     @FocusState private var fieldFocused: Bool
     private var isEnabled: Bool { model.canSend || model.canContinue }
-    private var draft: Binding<String> { text ?? $localText }
+    private var draft: Binding<String> {
+        text ?? Binding(get: { localText }, set: { value in
+            guard value != localText else { return }
+            localEditRevision &+= 1
+            localText = value
+        })
+    }
 
     var body: some View {
         switch style {
@@ -349,7 +321,7 @@ struct MessageBoxView: View {
                 .disabled(model.isBusy || model.isStopping)
                 .accessibilityIdentifier("task-composer.stop")
         }
-        if let onSubmitNow {
+        if model.showsSendNow, let onSubmitNow {
             sendNowButton(onSubmitNow)
         }
         if !isCompact || fieldFocused {
@@ -363,13 +335,13 @@ struct MessageBoxView: View {
     private func sendNowButton(_ onSubmitNow: @escaping (String) -> Bool) -> some View {
         switch style {
         case .standard:
-            Button("Send now") { if onSubmitNow(draft.wrappedValue) { draft.wrappedValue = "" } }
+            Button("Send now") { submit(now: true, legacy: onSubmitNow) }
                 .buttonStyle(.plain)
                 .foregroundStyle(sendNowColor)
                 .disabled(!canSubmit)
                 .help("Ask for immediate delivery; an engine refusal keeps the message queued")
         case .transcript, .lane:
-            Button("Send now") { if onSubmitNow(draft.wrappedValue) { draft.wrappedValue = "" } }
+            Button("Send now") { submit(now: true, legacy: onSubmitNow) }
                 .buttonStyle(UndimmedButtonStyle())
                 .font(TaskScreenStyle.sans(size: MessageBoxStyle.sendNowSize))
                 .foregroundStyle(sendNowColor)
@@ -516,7 +488,24 @@ struct MessageBoxView: View {
     }
 
     private func submit() {
-        if onSubmit(draft.wrappedValue) { draft.wrappedValue = "" }
+        submit(now: false, legacy: onSubmit)
+    }
+
+    private func submit(now: Bool, legacy: (String) -> Bool) {
+        guard canSubmit else { return }
+        guard let onSubmitCompletion else {
+            if legacy(draft.wrappedValue) { draft.wrappedValue = "" }
+            return
+        }
+        let revision = localEditRevision
+        let clear = captureDraftClear?() ?? {
+            guard text == nil, localEditRevision == revision else { return }
+            localEditRevision &+= 1
+            localText = ""
+        }
+        onSubmitCompletion(draft.wrappedValue, now) { accepted in
+            if accepted { clear() }
+        }
     }
 }
 

@@ -37,10 +37,15 @@ public protocol TaskActionRepository: Sendable {
     func isMessagingAttemptCurrent(_ attempt: MessagingSubmissionAttempt) -> Bool
     /// Explicit resend acknowledgement names the earlier unresolved invocation, never a guessed record.
     func submitMessage(_ taskID: String, text: String, now: Bool, acknowledgingUnconfirmed: UUID?) async throws -> MessagingSubmissionAttempt
-    /// Capture cancellation authority synchronously before scheduling the invocation.
-    func messageCancellationContext() throws -> MessagingCancellationContext
+    /// Admit a send only against the runtime and epoch captured at the user's action.
+    func submitMessage(_ taskID: String, text: String, now: Bool, acknowledgingUnconfirmed: UUID?,
+                       context: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt
+    /// Whether capability or action evidence still belongs to the same runtime epoch.
+    func isMessagingContextCurrent(_ context: MessagingInvocationContext) -> Bool
+    /// Capture messaging authority synchronously before scheduling the invocation.
+    func messagingInvocationContext() throws -> MessagingInvocationContext
     /// Admit only the click-time runtime epoch.
-    func cancelQueuedMessage(_ taskID: String, messageID: String, context: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt
+    func cancelQueuedMessage(_ taskID: String, messageID: String, context: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt
     /// A cancel failure refreshes status without fabricating a cancelled state.
     func cancelQueuedMessage(_ taskID: String, messageID: String) async throws -> MessagingSubmissionAttempt
 
@@ -141,8 +146,14 @@ public extension GlobalValues {
 }
 
 public extension TaskActionRepository {
-    func messageCancellationContext() throws -> MessagingCancellationContext { throw MessagingAdmissionError.runtimeChanged }
-    func cancelQueuedMessage(_: String, messageID _: String, context _: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt {
+    func isMessagingContextCurrent(_: MessagingInvocationContext) -> Bool { false }
+    func submitMessage(_: String, text _: String, now _: Bool, acknowledgingUnconfirmed _: UUID?,
+                       context _: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt {
+        throw MessagingAdmissionError.runtimeChanged
+    }
+
+    func messagingInvocationContext() throws -> MessagingInvocationContext { throw MessagingAdmissionError.runtimeChanged }
+    func cancelQueuedMessage(_: String, messageID _: String, context _: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt {
         throw MessagingAdmissionError.runtimeChanged
     }
 

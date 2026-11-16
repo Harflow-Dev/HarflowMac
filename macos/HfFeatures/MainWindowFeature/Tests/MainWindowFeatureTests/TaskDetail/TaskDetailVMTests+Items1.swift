@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 import HfCommon
-import HfRepository
+@testable import HfRepository
 import HfTestUtilities
 import HfUI
 @testable import MainWindowFeature
@@ -37,7 +37,7 @@ extension TaskDetailVMTests {
             harness.tasksSubject.send([builtTask])
             await waitUntil {
                 harness.sut.task?.liveInput == combo.liveInput && harness.sut.task?.takenOver == combo.takenOver
-                && harness.sut.task?.status == TaskStatus(combo.status)
+                && harness.sut.task?.status == TaskStatus(combo.status) && harness.sut.messagingSupported == true
             }
             
             // then
@@ -66,7 +66,10 @@ extension TaskDetailVMTests {
             let builtTask = task(status: combo.status, sessionID: combo.sessionID)
             harness.detailBox.value = builtTask
             harness.tasksSubject.send([builtTask])
-            await waitUntil { harness.sut.task?.sessionID == combo.sessionID && harness.sut.task?.status == TaskStatus(combo.status) }
+            await waitUntil {
+                harness.sut.task?.sessionID == combo.sessionID && harness.sut.task?.status == TaskStatus(combo.status)
+                    && harness.sut.messagingSupported == true
+            }
             
             // then
             #expect(
@@ -81,96 +84,61 @@ extension TaskDetailVMTests {
     @Test func givenMessageWithSurroundingWhitespace_whenSubmittedAsSendOrResume_thenExactTextIsQueued() async {
         // given — Send, eligible
         let send = makeSUT()
+        send.useCase.configureTypedSendSuccess()
         let running = task(status: "running", liveInput: true)
         send.detailBox.value = running
         send.sut.didAppear()
         send.tasksSubject.send([running])
-        await waitUntil { send.sut.task != nil }
+        await waitUntil { send.sut.task != nil && send.sut.messagingSupported == true }
         
         // when
-        #expect(send.sut.submitMessage("  hello there  "))
+        send.sut.submitMessage("  hello there  ", now: false) { _ in }
         
         // then
-        await verify(send.useCase).send(.value("abc12345"), text: .value("  hello there  ")).calledEventually(1, before: .seconds(5))
+        await verify(send.useCase)
+.submitTypedMessage(.value("abc12345"), text: .value("  hello there  "), now: .value(false),
+            acknowledgingUnconfirmed: .any, context: .any)
+.calledEventually(1, before: .seconds(5))
         
         // given — Continue (resume), eligible
         let resume = makeSUT()
+        resume.useCase.configureTypedSendSuccess()
         let done = task(status: "completed")
         resume.detailBox.value = done
         resume.sut.didAppear()
         resume.tasksSubject.send([done])
-        await waitUntil { resume.sut.task != nil }
+        await waitUntil { resume.sut.task != nil && resume.sut.messagingSupported == true }
         
         // when
-        #expect(resume.sut.submitMessage("  follow up  "))
+        resume.sut.submitMessage("  follow up  ", now: false) { _ in }
         
         // then
-        await verify(resume.useCase).send(.value("abc12345"), text: .value("  follow up  ")).calledEventually(1, before: .seconds(5))
+        await verify(resume.useCase)
+.submitTypedMessage(.value("abc12345"), text: .value("  follow up  "), now: .value(false),
+            acknowledgingUnconfirmed: .any, context: .any)
+.calledEventually(1, before: .seconds(5))
     }
     
-    // MARK: - Item d: the busy guard rejecting the action still clears the text
-    
-    @Test func givenSendWillBeRejectedByTheBusyGuard_whenAnEligibleMessageIsSubmitted_thenTheTextStillClearsImmediately() async {
-        // given — a standalone fixture (not `makeSUT()`) so `send` can be stubbed to throw from the
-        // very first call, standing in for `TaskActionRepository`'s own busy check-and-insert
-        // refusing it. The settled plan is explicit: the field clears "even if ... the busy guard
-        // rejects it" (`2026-09-25-monitor-architecture-plan-settled.md:172`).
-        let useCase = MockTaskDetailUseCase()
-        useCase.configurePagingDefaults()
-        let routing = MockTaskDetailRouting()
-        let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
-        given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
-        given(useCase).hasListedPublisher().willReturn(PassthroughSubject<Bool, Never>().eraseToAnyPublisher())
-        given(useCase).titlesPublisher().willReturn(PassthroughSubject<[String: String], Never>().eraseToAnyPublisher())
-        given(useCase).snapshotsPublisher().willReturn(PassthroughSubject<[String: TaskInfo], Never>().eraseToAnyPublisher())
-        given(useCase).isStopping(.any).willReturn(false)
-        given(useCase).stoppingChangesPublisher().willReturn(Empty().eraseToAnyPublisher())
-        given(useCase).busyPublisher().willReturn(PassthroughSubject<Set<String>, Never>().eraseToAnyPublisher())
-        given(useCase).outcomesPublisher().willReturn(PassthroughSubject<[String: String], Never>().eraseToAnyPublisher())
-        given(useCase).itemsPublisher(for: .any).willReturn(PassthroughSubject<[TimelineItem], Never>().eraseToAnyPublisher())
-        
-        let running = task(status: "running", repoPath: "", liveInput: true)
-        // This action fixture represents a completed successful status read.
-        given(useCase).statusReadOutcome(.any).willReturn(TaskSnapshotReadOutcome(revision: 1, task: running))
-        given(useCase).statusReadChangesPublisher().willReturn(Empty().eraseToAnyPublisher())
-        given(useCase).detail(.any).willReturn(running)
-        given(useCase).title(.any).willReturn("Task abc12345")
-        given(useCase).ancestors(of: .any).willReturn([])
-        given(useCase).conversationMembers(of: .any).willReturn([running])
-        given(useCase).children(of: .any).willReturn([])
-        given(useCase).children(ofEach: .any).willReturn([:])
-        given(useCase).siblings(of: .any).willReturn([])
-        given(useCase).snapshot(.any).willReturn(nil)
-        let lease = MockEventStreamLease()
-        given(lease).taskID.willReturn("abc12345")
-        given(lease).release().willReturn()
-        given(useCase).acquireEventLease(.any).willReturn(lease)
-        given(useCase).items(for: .any).willReturn([])
-        given(useCase).events(for: .any).willReturn([])
-        given(useCase).eventsAvailability(for: .any).willReturn(.available)
-        given(useCase).eventsAvailabilityPublisher(for: .any).willReturn(PassthroughSubject<EventAvailability, Never>().eraseToAnyPublisher())
-        given(useCase).activity(for: .any).willReturn(ActivityCounts())
-        given(useCase).current(for: .any).willReturn(nil)
-        given(useCase).prompt(for: .any).willReturn(nil)
-        given(useCase).send(.any, text: .any).willThrow(TestError.expectedError)
-        given(useCase).setOutcome(.any, .any).willReturn()
-        
-        let sut = TaskDetailVM(taskID: "abc12345", useCase: useCase, routing: routing, continuityHistory: TaskContinuityHistoryStore(), chrome: .group,
-                                scheduler: NullScheduling())
-        sut.didAppear()
-        tasksSubject.send([running])
-        await waitUntil { sut.task != nil }
-        
+    // MARK: - Typed admission failures
+
+    @Test func givenSendRejectedByOwner_whenSubmissionCompletes_thenDraftIsKeptAndErrorIsVisible() async {
+        // given
+        let harness = makeSUT()
+        harness.detailBox.value = task(status: "running", liveInput: true)
+        given(harness.useCase)
+.submitTypedMessage(.any, text: .any, now: .any,
+                                                acknowledgingUnconfirmed: .any, context: .any)
+.willThrow(TestError.expectedError)
+        harness.sut.didAppear()
+        defer { harness.sut.didDisappear() }
+        await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
+        var accepted: Bool?
         // when
-        let cleared = sut.submitMessage("hello")
-        
-        // then — clears synchronously; the dispatch's own (here: rejected) outcome never reaches
-        // this return, because it is decided before the `Task { }` closure ever runs.
-        #expect(cleared)
-        await verify(useCase).send(.value("abc12345"), text: .value("hello")).calledEventually(1, before: .seconds(5))
-        await verify(useCase)
-.setOutcome(.value("abc12345"), .value("Couldn't send the message: \(TestError.expectedError.localizedDescription)"))
-            .calledEventually(1, before: .seconds(5))
+        harness.sut
+.submitMessage("hello", now: false) { accepted = $0 }
+        await waitUntil { accepted != nil }
+        // then
+        #expect(accepted == false)
+        #expect(harness.sut.messageSendOutcome == TestError.expectedError.localizedDescription)
     }
-    
 }

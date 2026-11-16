@@ -75,7 +75,12 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
         if refusal?["code"]?.stringValue == "interrupt_unsupported" {
             return "Send now isn't available. This operation can't be interrupted safely."
         }
-        return refusal?["message"]?.stringValue
+        let explanation = refusal?["message"]?.stringValue
+        let note = result["note"]?.stringValue
+        let lines = [explanation, note].compactMap(\.self).reduce(into: [String]()) { result, line in
+            if !line.isEmpty, !result.contains(line) { result.append(line) }
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     static func applying(_ bubbles: [WorkMessageBubble], notes: [String: String]) -> [WorkMessageBubble] {
@@ -100,9 +105,9 @@ struct WorkMessageBubble: Identifiable, Equatable, Sendable {
             let kind: Kind
             switch value.state {
             case .queued:
-                let note = value.refusal.map { refusalNote(in: ["refusal": .object(["code": .string($0.code), "message": .string($0.message)])]) } ?? nil
+                let note = refusalNote(in: value.raw)
                 kind = .queued(canCancel: true, note: note)
-            case .delivering: kind = .queued(canCancel: false, note: value.refusal?.message)
+            case .delivering: kind = .queued(canCancel: false, note: refusalNote(in: value.raw))
             case .uncertain: kind = .uncertain(value.reason)
             case .undeliverable: kind = .undeliverable(value.reason)
             case .unknown(let status): kind = .unknown(status)

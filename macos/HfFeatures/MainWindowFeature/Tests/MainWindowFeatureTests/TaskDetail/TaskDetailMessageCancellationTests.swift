@@ -19,11 +19,11 @@ extension TaskDetailVMTests {
     @Test(arguments: ["queued", "delivering", "new-status", "cancelled"])
     func givenTypedCancelReceipt_whenCancelCompletes_thenOnlyCancelledRequestsFocus(status: String) async {
         // given
-        let harness = makeSUT()
         let attempt = cancellationAttempt(status: status)
-        given(harness.useCase)
-.messageCancellationContext()
-            .willReturn(MessagingCancellationContext(runtime: attempt.runtime, runtimeEpoch: attempt.runtimeEpoch))
+        let fixtures = Fixtures()
+        fixtures.detailBox.value = task()
+        fixtures.messagingContext.value = MessagingInvocationContext(runtime: attempt.runtime, runtimeEpoch: attempt.runtimeEpoch)
+        let harness = makeSUT(fixtures: fixtures)
         given(harness.useCase).cancelMessage(.any, messageID: .any, context: .any).willReturn(attempt)
         given(harness.useCase).isMessagingAttemptCurrent(.any).willReturn(true)
         harness.sut.didAppear()
@@ -45,11 +45,11 @@ extension TaskDetailVMTests {
 
     @Test func givenUnconfirmedCancellation_whenReceiptReturns_thenBubbleRemainsAndFocusIsNotRequested() async {
         // given
-        let harness = makeSUT()
         let attempt = cancellationAttempt(unconfirmed: true)
-        given(harness.useCase)
-.messageCancellationContext()
-            .willReturn(MessagingCancellationContext(runtime: attempt.runtime, runtimeEpoch: attempt.runtimeEpoch))
+        let fixtures = Fixtures()
+        fixtures.detailBox.value = task()
+        fixtures.messagingContext.value = MessagingInvocationContext(runtime: attempt.runtime, runtimeEpoch: attempt.runtimeEpoch)
+        let harness = makeSUT(fixtures: fixtures)
         given(harness.useCase).cancelMessage(.any, messageID: .any, context: .any).willReturn(attempt)
         given(harness.useCase).isMessagingAttemptCurrent(.any).willReturn(true)
         harness.sut.didAppear()

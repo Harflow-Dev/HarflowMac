@@ -173,9 +173,30 @@ final class TaskDetailViewRepository: TaskDetailUseCase, @unchecked Sendable {
         return result
     }
 
-    func messageCancellationContext() throws -> MessagingCancellationContext { try taskActionRepository.messageCancellationContext() }
+    func isMessagingContextCurrent(_ context: MessagingInvocationContext) -> Bool {
+        taskActionRepository.isMessagingContextCurrent(context)
+    }
 
-    func cancelMessage(_ id: String, messageID: String, context: MessagingCancellationContext) async throws -> MessagingSubmissionAttempt {
+    func messagingSupport(context: MessagingInvocationContext) async -> Bool? {
+        guard isMessagingContextCurrent(context), let client = continuationClient(),
+              QualificationRuntimeToken(client: client) == context.runtime else { return nil }
+        let result = await VersionInfoClient(executable: client.executable, environment: client.environment,
+                                           context: client.compatibilityContext, runner: client.runner).check()
+        guard isMessagingContextCurrent(context), client.operationIsCurrent(), !Task.isCancelled,
+              case .success(let info) = result else { return nil }
+        return info.capabilities.contains("messaging.v1")
+    }
+
+    func messageAttempts() -> [MessagingSubmissionAttempt] { taskActionRepository.messageAttempts() }
+
+    func submitTypedMessage(_ id: String, text: String, now: Bool, acknowledgingUnconfirmed: UUID?,
+                            context: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt {
+        try await taskActionRepository.submitMessage(id, text: text, now: now, acknowledgingUnconfirmed: acknowledgingUnconfirmed, context: context)
+    }
+
+    func messagingInvocationContext() throws -> MessagingInvocationContext { try taskActionRepository.messagingInvocationContext() }
+
+    func cancelMessage(_ id: String, messageID: String, context: MessagingInvocationContext) async throws -> MessagingSubmissionAttempt {
         try await taskActionRepository.cancelQueuedMessage(id, messageID: messageID, context: context)
     }
 

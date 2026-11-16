@@ -24,6 +24,53 @@ import Testing
         return TaskActionRepositoryImpl(toolEnvironment: toolEnvironment, taskListRepository: taskListRepository, snapshotRepository: snapshotRepository)
     }
 
+    @Test func givenCapturedSendContext_whenRuntimeEpochChangesABA_thenNoAttemptOrMutationIsReserved() async throws {
+        // given
+        let states = CurrentValueSubject<ManagedRuntimeState, Never>(.preparing)
+        let tooling = MockToolEnvironmentRepository()
+        let runner = StubProcessRunner(output: ProcessOutput(exitCode: 0, stdout: Data(), stderr: "", timedOut: true))
+        given(tooling).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: PositiveCtlRunner(runner))))
+        let sut = makeSUT(toolEnvironment: tooling)
+        sut.bindMessagingRuntimeChanges(states.eraseToAnyPublisher())
+        let context = try sut.messagingInvocationContext()
+        // when
+        states.send(.installing)
+        states.send(.preparing)
+        do {
+            _ = try await sut.submitMessage(String(repeating: "a", count: 32), text: "keep", now: true,
+                                            acknowledgingUnconfirmed: nil, context: context)
+            Issue.record("Stale click authority must be rejected")
+        } catch { #expect(error as? MessagingAdmissionError == .runtimeChanged) }
+        // then
+        #expect(!sut.isMessagingContextCurrent(context))
+        #expect(sut.messageAttempts().isEmpty)
+        #expect(sut.busy.isEmpty)
+        #expect(runner.calls.isEmpty)
+    }
+
+    @Test(arguments: ["cancelled", "future-status"])
+    func givenUnexpectedSendReceipt_whenSendingAgainInAnotherMode_thenExplicitAttemptAcknowledgementIsRequired(status: String) async throws {
+        // given
+        let taskID = String(repeating: "a", count: 32)
+        let raw: [String: JSONValue] = ["message_id": .string(String(repeating: "b", count: 32)), "seq": .number(1),
+                                       "status": .string(status), "delivery": .string("queue"), "task_id": .string(taskID)]
+        let envelope: [String: JSONValue] = ["product": .string("harflow"), "format": .string("harflow.ctl"),
+                                            "v": .number(1), "product_version": .string(HarflowVersion.current), "result": .object(raw)]
+        let tooling = MockToolEnvironmentRepository()
+        let runner = StubProcessRunner(output: ProcessOutput(exitCode: 0, stdout: Data(JSONValue.object(envelope).rendered().utf8), stderr: ""))
+        given(tooling).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: PositiveCtlRunner(runner))))
+        let sut = makeSUT(toolEnvironment: tooling)
+        let first = try await sut.submitMessage(taskID, text: "keep", now: false, acknowledgingUnconfirmed: nil)
+        // when
+        do {
+            _ = try await sut.submitMessage(taskID, text: "keep", now: true, acknowledgingUnconfirmed: nil)
+            Issue.record("Unexpected receipt must not grant retry permission")
+        } catch { #expect(error as? MessagingAdmissionError == .previousUnconfirmed(first.id)) }
+        // then
+        #expect(first.isUnconfirmed)
+        #expect(runner.calls.filter { $0.arguments.first == "send" }.count == 1)
+    }
+
     @Test(arguments: [false, true])
     func givenUnconfirmedSend_whenCalledAgain_thenEarlierAttemptIsRetainedAndNoReplay(now: Bool) async throws {
         // given
@@ -137,7 +184,7 @@ import Testing
         given(tooling).ctl().willReturn(.success(CtlClient(executable: "/fake/ctl", environment: [:], runner: PositiveCtlRunner(runner))))
         let sut = makeSUT(toolEnvironment: tooling)
         sut.bindMessagingRuntimeChanges(states.eraseToAnyPublisher())
-        let context = try sut.messageCancellationContext()
+        let context = try sut.messagingInvocationContext()
         states.send(.installing)
         if aba { states.send(.preparing) }
         // when

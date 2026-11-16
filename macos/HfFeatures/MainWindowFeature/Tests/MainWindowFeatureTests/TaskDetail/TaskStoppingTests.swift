@@ -33,6 +33,7 @@ import Testing
         #expect(remount.sut.isStopping)
         remount.sut.didDisappear()
         harness.sut.didAppear()
+        await waitUntil { harness.sut.messagingSupported == true }
         #expect(harness.sut.isStopping)
         #expect(harness.sut.stateTreatment?.kind == .stopping)
         #expect(harness.sut.messageBoxModel.isStopping)

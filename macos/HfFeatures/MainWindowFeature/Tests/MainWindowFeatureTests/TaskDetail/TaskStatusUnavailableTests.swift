@@ -203,7 +203,7 @@ import Testing
         harness.sut.didDisappear()
     }
 
-    @Test func givenOtherMount_whenStatusMetadataFails_thenExistingControlsRemainIndependent() {
+    @Test func givenOtherMount_whenStatusMetadataFails_thenExistingControlsRemainIndependent() async {
         // given / when / then
         for chrome in [TaskDetailChrome.group, .embedded] {
             let fixtures = TaskDetailVMTests.Fixtures()
@@ -211,6 +211,7 @@ import Testing
             let harness = TaskDetailVMTests().makeSUT(chrome: chrome, fixtures: fixtures)
             harness.detailBox.value = TaskDetailVMTests().task()
             harness.sut.didAppear()
+            await waitUntil { harness.sut.messagingSupported == true }
             #expect(harness.sut.hasStatusAuthority && !harness.sut.isStatusUnavailable)
             #expect(harness.sut.messageBoxModel.canSend)
             harness.sut.didDisappear()

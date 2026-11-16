@@ -11,6 +11,37 @@ import Testing
 /// The send button, "Send now", the placeholder colour, the locked states and the disabled-reason mapping.
 extension MessageBoxTranscriptStyleHostedTests {
 
+    @Test func givenUnsupportedMessaging_whenComposerMounted_thenInputIsLockedAndOnlyDisabledSendRemains() async throws {
+        // given
+        var model = MessageBoxModel(canSend: false, canContinue: false, isBusy: false,
+                                    label: "Messages", hint: "", placeholder: "", buttonLabel: "Send", isLocked: true)
+        model.showsSendNow = false
+        let page = fixture(Self.composerStack(model, style: .transcript, withSendNow: true, dark: false),
+                           size: CGSize(width: 1400, height: 600), dark: false)
+        defer { page.close() }
+        await page.settle { page.element("Send") != nil }
+        // when / then
+        #expect(page.element("Send now") == nil)
+        #expect(Self.editableField(in: page) == nil)
+        #expect(page.element("Send") != nil)
+    }
+
+    @Test func givenSubmissionInFlight_whenComposerMounted_thenBothModesRemainVisibleWithoutDispatch() async throws {
+        // given
+        var model = Self.enabledModel
+        model = MessageBoxModel(canSend: model.canSend, canContinue: model.canContinue, isBusy: true,
+                                label: model.label, hint: model.hint, placeholder: model.placeholder, buttonLabel: model.buttonLabel)
+        let sink = SubmitSink()
+        let page = fixture(Self.composerStack(model, style: .transcript, sink: sink, withSendNow: true, dark: false),
+                           size: CGSize(width: 1400, height: 600), dark: false)
+        defer { page.close() }
+        await page.settle { page.element("Send now") != nil && page.element("Send") != nil }
+        // when / then
+        #expect(page.element("Send now") != nil)
+        #expect(page.element("Send") != nil)
+        #expect(sink.values.isEmpty)
+    }
+
     // MARK: Send button
 
     @Test(arguments: [false, true])

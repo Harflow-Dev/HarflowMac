@@ -6,7 +6,10 @@ import MonitorCore
 /// Describes the engine's delivery evidence without turning an uncertain launch into a queue claim.
 enum WorkMessageOutcome {
     static func describe(_ result: [String: JSONValue]) -> String {
-        let explanation = result["refusal"]?["message"]?.stringValue ?? result["reason"]?.stringValue
+        let parts = [result["refusal"]?["message"]?.stringValue, result["note"]?.stringValue, result["reason"]?.stringValue]
+        var distinct: [String] = []
+        for part in parts.compactMap(\.self) where !part.isEmpty && !distinct.contains(part) { distinct.append(part) }
+        let explanation = distinct.isEmpty ? nil : distinct.joined(separator: "\n")
         switch result["status"]?.stringValue {
         case "queued":
             return explanation.map { "Queued — " + $0 } ?? "Queued — not yet delivered."
@@ -34,8 +37,9 @@ extension WorkMessageOutcome {
     static func ledger(_ raw: [String: JSONValue]) -> String? {
         let states = QueuedMessageState.project(raw: raw, source: WorkMessageQueue.source(raw))
         switch states.last?.state {
-        case .delivering: return "Delivery is in progress."
-        case .delivered: return "Message delivered."
+        case .delivering, .delivered:
+            guard let last = states.last else { return nil }
+            return describe(last.raw)
         case .cancelled: return "Queued message cancelled."
         default: return nil
         }
@@ -51,6 +55,21 @@ extension WorkMessageOutcome {
         case .unconfirmed: return "Cancellation could not be confirmed. The message may still be queued."
         case .messagingUnsupported: return "This engine does not support queued messages."
         case .notDispatched: return "Cancellation was not sent."
+        }
+    }
+}
+
+// MARK: - Submission outcome presentation
+
+extension WorkMessageOutcome {
+    static func submission(_ attempt: MessagingSubmissionAttempt) -> String? {
+        guard case .send(let result) = attempt.outcome else { return nil }
+        switch result {
+        case .receipt(let receipt): return describe(receipt.raw)
+        case .refused(let error): return error.message
+        case .unconfirmed: return "Sending could not be confirmed. The message may already have been queued."
+        case .messagingUnsupported: return "This engine does not support queued messages."
+        case .notDispatched: return "The message was not sent. Your draft has been kept."
         }
     }
 }

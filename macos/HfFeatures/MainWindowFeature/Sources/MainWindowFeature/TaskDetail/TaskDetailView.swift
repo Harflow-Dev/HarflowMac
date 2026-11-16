@@ -125,6 +125,7 @@ protocol TaskDetailViewModel: ViewModel {
     var loadingHeader: TaskLoadingHeader? { get }
     /// Copies the task's repository path (the header's folder menu).
     func didTapCopyRepoPath()
+    func submitMessage(_ text: String, now: Bool, completion: @escaping (Bool) -> Void)
     @discardableResult func submitMessage(_ text: String) -> Bool
     @discardableResult func submitMessageNow(_ text: String) -> Bool
     func cancelQueuedMessage(_ messageID: String)
@@ -539,7 +540,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             content
             MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow,
                            style: transcriptStyle.isTranscript ? .transcript : .standard,
-                           text: isStandalone ? draftMount?.text : nil) { text in viewModel.submitMessage(text) }
+                           text: isStandalone ? draftMount?.text : nil,
+                           onSubmitCompletion: viewModel.submitMessage,
+                           captureDraftClear: draftMount.map { mount in { mount.captureAcceptedDraftClear() } }) { text in viewModel.submitMessage(text) }
                 .readingColumn()
         }
     }

@@ -43,24 +43,34 @@ extension TaskDetailVMTests {
     func givenBuilderWithoutLiveInput_whenChatting_thenQueuesThroughBuilderSendAndDisablesOrdinaryControls(_ status: String) async {
         // given
         let harness = makeSUT(isWorkflowBuilder: true)
+        harness.useCase.configureTypedSendSuccess()
         let builder = task(status: status, liveInput: false)
         harness.detailBox.value = builder
         harness.sut.didAppear()
         harness.tasksSubject.send([builder])
-        await waitUntil { harness.sut.task != nil }
+        await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
         // when
         // Synchronize on the actual invocation, not a deadline racing the shared MainActor queue.
         let invocation = AsyncStream<Bool>.makeStream()
-        when(harness.useCase).send(.value("abc12345"), text: .value("  add review  ")).perform { invocation.continuation.yield(true) }
-        let accepted = harness.sut.submitMessage("  add review  ")
+        when(harness.useCase)
+.submitTypedMessage(.value("abc12345"), text: .value("  add review  "), now: .value(false),
+            acknowledgingUnconfirmed: .any, context: .any)
+.perform { invocation.continuation.yield(true) }
+        var accepted: Bool?
+        harness.sut
+.submitMessage("  add review  ", now: false) { accepted = $0 }
+        await waitUntil { accepted != nil }
         // then
-        #expect(accepted)
+        #expect(accepted == true)
         #expect(harness.sut.messageBoxModel.canSend || harness.sut.messageBoxModel.canContinue)
         #expect(!harness.sut.canTakeover)
         #expect(!harness.sut.canCancel)
         #expect(harness.sut.resumeCommand == nil)
         #expect(await invocation.stream.first(where: { @Sendable value in value }) == true)
-        verify(harness.useCase).send(.value("abc12345"), text: .value("  add review  ")).called(1)
+        verify(harness.useCase)
+.submitTypedMessage(.value("abc12345"), text: .value("  add review  "), now: .value(false),
+            acknowledgingUnconfirmed: .any, context: .any)
+.called(1)
         verify(harness.useCase).resume(.any, text: .any, onResumed: .any).called(0)
         harness.sut.didDisappear()
     }

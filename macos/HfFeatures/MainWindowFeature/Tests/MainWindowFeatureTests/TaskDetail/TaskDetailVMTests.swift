@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 import HfCommon
-import HfRepository
+@testable import HfRepository
 import HfTestUtilities
 import HfUI
 @testable import MainWindowFeature
@@ -73,6 +73,11 @@ import Testing
     /// The fixtures `makeSUT` builds before wiring up `useCase`'s stubs — split out purely to keep
     /// `makeSUT`/`configureStubs` each under the house function-length limit; no behavior change.
     struct Fixtures {
+        let messagingContext = Box<MessagingInvocationContext?>(MessagingInvocationContext(
+            runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])), runtimeEpoch: UUID()))
+        let messagingSupported = Box<Bool?>(true)
+        let messagingCurrent = Box<Bool>(true)
+        let messagingAttempts = Box<[MessagingSubmissionAttempt]>([])
         let successorObservationEffect = Box<((String) throws -> Bool)?>(nil)
         let continuationOwner = Box<any TaskContinuationRepository>(NullTaskContinuationRepository())
         let continuationRuntime = Box<QualificationRuntimeToken?>(nil)
@@ -154,6 +159,7 @@ import Testing
 
     @discardableResult
     func configureStubs(useCase: MockTaskDetailUseCase, routing: MockTaskDetailRouting, taskID: String, fixtures: Fixtures) -> MockEventStreamLease {
+        configureMessagingStubs(useCase: useCase, fixtures: fixtures)
         configureObservationStubs(useCase: useCase, taskID: taskID, fixtures: fixtures)
         configureStatusReadStubs(useCase: useCase, taskID: taskID, fixtures: fixtures)
         configureContinuationStubs(useCase: useCase, routing: routing, fixtures: fixtures)
@@ -220,6 +226,16 @@ import Testing
         given(useCase).current(for: .value(taskID)).willReturn(nil)
         given(useCase).prompt(for: .value(taskID)).willReturn(nil)
 
+        configureActionStubs(useCase: useCase, fixtures: fixtures)
+        stubTopBarRouting(routing)
+        // No default `copyToPasteboard` stub: Mockable matches FIFO (first-added wins on overlap),
+        // so a blanket `.any` stub here would shadow any test-specific `.willReturn(false)` added
+        // later (see `TaskDetailVMTests+Actions.swift`'s copy-resume-command tests, each of which
+        // stubs it explicitly for the outcome it needs).
+        return lease
+    }
+
+    private func configureActionStubs(useCase: MockTaskDetailUseCase, fixtures: Fixtures) {
         given(useCase).cancel(.any).willProduce { fixtures.cancelEffect.value?($0) ?? true }
         given(useCase).send(.any, text: .any).willReturn(true)
         // Routing happens via `onResumed` (item 4), not the return value. Mockable producers are
@@ -230,12 +246,16 @@ import Testing
         }
         given(useCase).beginTakeover(taskID: .any).willReturn()
         given(useCase).setOutcome(.any, .any).willReturn()
-        stubTopBarRouting(routing)
-        // No default `copyToPasteboard` stub: Mockable matches FIFO (first-added wins on overlap),
-        // so a blanket `.any` stub here would shadow any test-specific `.willReturn(false)` added
-        // later (see `TaskDetailVMTests+Actions.swift`'s copy-resume-command tests, each of which
-        // stubs it explicitly for the outcome it needs).
-        return lease
+    }
+
+    private func configureMessagingStubs(useCase: MockTaskDetailUseCase, fixtures: Fixtures) {
+        given(useCase).messagingInvocationContext().willProduce {
+            guard let context = fixtures.messagingContext.value else { throw MessagingAdmissionError.runtimeChanged }
+            return context
+        }
+        given(useCase).messagingSupport(context: .any).willProduce { _ in fixtures.messagingSupported.value }
+        given(useCase).isMessagingContextCurrent(.any).willProduce { _ in fixtures.messagingCurrent.value }
+        given(useCase).messageAttempts().willProduce { fixtures.messagingAttempts.value }
     }
 
     private func configureContinuationStubs(useCase: MockTaskDetailUseCase, routing: MockTaskDetailRouting, fixtures: Fixtures) {

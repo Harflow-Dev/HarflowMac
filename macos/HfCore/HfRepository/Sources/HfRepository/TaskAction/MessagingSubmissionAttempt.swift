@@ -26,6 +26,11 @@ public struct MessagingSubmissionAttempt: Equatable, Sendable, Identifiable {
     public var isUnconfirmed: Bool {
         switch outcome {
         case .send(.unconfirmed), .cancel(.unconfirmed), .sending: true
+        case .send(.receipt(let receipt)):
+            switch receipt.status {
+            case .cancelled, .unknown: true
+            case .queued, .delivering, .delivered, .undeliverable: false
+            }
         default: false
         }
     }
@@ -39,10 +44,10 @@ public enum MessagingAdmissionError: Error, Equatable, Sendable {
     case previousUnconfirmed(UUID)
 }
 
-// MARK: - MessagingCancellationContext
+// MARK: - MessagingInvocationContext
 
-/// Click-time cancellation authority. Runtime tokens alone cannot distinguish A→B→A.
-public struct MessagingCancellationContext: Equatable, Sendable {
+/// Click-time messaging authority. Runtime tokens alone cannot distinguish A→B→A.
+public struct MessagingInvocationContext: Equatable, Sendable {
     public let runtime: QualificationRuntimeToken
     public let runtimeEpoch: UUID
 }
