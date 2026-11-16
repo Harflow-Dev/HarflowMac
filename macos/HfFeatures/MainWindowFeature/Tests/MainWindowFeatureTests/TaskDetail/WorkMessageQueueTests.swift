@@ -9,9 +9,9 @@ struct WorkMessageQueueTests {
     @Test func givenWorkflowMessageStates_whenProjected_thenOnlyQueuedItemsCanBeCancelled() {
         // given
         let raw: [String: JSONValue] = ["messages": .array([
-            .object(["id": .string("one"), "status": .string("queued"), "text": .string("  exact text  ")]),
-            .object(["id": .string("two"), "status": .string("delivering")]),
-            .object(["id": .string("three"), "status": .string("delivered")])])]
+            .object(["id": .string("one"), "seq": .number(1), "status": .string("queued"), "text": .string("  exact text  ")]),
+            .object(["id": .string("two"), "seq": .number(2), "status": .string("delivering")]),
+            .object(["id": .string("three"), "seq": .number(3), "status": .string("delivered")])])]
         // when
         let items = WorkMessageQueue.items(raw: raw)
         // then

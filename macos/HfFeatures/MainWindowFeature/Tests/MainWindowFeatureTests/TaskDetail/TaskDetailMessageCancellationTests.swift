@@ -16,20 +16,26 @@ extension TaskDetailVMTests {
                                           outcome: .cancel(unconfirmed ? .unconfirmed(.outputTooLarge(bytes: 1)) : .receipt(receipt)))
     }
 
+    private func cancellationTask() -> TaskInfo {
+        var raw = task().raw
+        raw["messages"] = .array([.object([
+            "id": .string("message"), "seq": .number(1), "status": .string("queued"), "text": .string("keep")])])
+        return TaskInfo(.object(raw))!
+    }
+
     @Test(arguments: ["queued", "delivering", "new-status", "cancelled"])
     func givenTypedCancelReceipt_whenCancelCompletes_thenOnlyCancelledRequestsFocus(status: String) async {
         // given
         let attempt = cancellationAttempt(status: status)
         let fixtures = Fixtures()
-        fixtures.detailBox.value = task()
+        fixtures.detailBox.value = cancellationTask()
         fixtures.messagingContext.value = MessagingInvocationContext(runtime: attempt.runtime, runtimeEpoch: attempt.runtimeEpoch)
         let harness = makeSUT(fixtures: fixtures)
         given(harness.useCase).cancelMessage(.any, messageID: .any, context: .any).willReturn(attempt)
         given(harness.useCase).isMessagingAttemptCurrent(.any).willReturn(true)
         harness.sut.didAppear()
         defer { harness.sut.didDisappear() }
-        await waitUntil { harness.sut.task != nil }
-        harness.sut.timelineModel.workMessages = [.init(id: "message", seq: 1, kind: .queued(canCancel: true, note: nil), text: "keep")]
+        await waitUntil { harness.sut.timelineModel.workMessages.first?.text == "keep" }
         // when
         harness.sut.cancelQueuedMessage("message")
         await waitUntil { harness.sut.messageCancellationAttempt != nil }
@@ -47,15 +53,14 @@ extension TaskDetailVMTests {
         // given
         let attempt = cancellationAttempt(unconfirmed: true)
         let fixtures = Fixtures()
-        fixtures.detailBox.value = task()
+        fixtures.detailBox.value = cancellationTask()
         fixtures.messagingContext.value = MessagingInvocationContext(runtime: attempt.runtime, runtimeEpoch: attempt.runtimeEpoch)
         let harness = makeSUT(fixtures: fixtures)
         given(harness.useCase).cancelMessage(.any, messageID: .any, context: .any).willReturn(attempt)
         given(harness.useCase).isMessagingAttemptCurrent(.any).willReturn(true)
         harness.sut.didAppear()
         defer { harness.sut.didDisappear() }
-        await waitUntil { harness.sut.task != nil }
-        harness.sut.timelineModel.workMessages = [.init(id: "message", seq: 1, kind: .queued(canCancel: true, note: nil), text: "keep")]
+        await waitUntil { harness.sut.timelineModel.workMessages.first?.text == "keep" }
         // when
         harness.sut.cancelQueuedMessage("message")
         await waitUntil { harness.sut.messageCancellationAttempt != nil }

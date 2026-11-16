@@ -213,6 +213,7 @@ extension TaskDetailVMTests {
         defer { subscription.cancel() }
         // when
         fixture.sut.submitMessage("resend", now: false) { _ in }
+        await waitUntil { if case .dialog = event { true } else { false } }
         guard case .dialog(let dialog) = event else { Issue.record("Expected resend warning"); return }
         #expect(dialog.description?.contains("may already have been accepted") == true)
         dialog.actions.first?.action()

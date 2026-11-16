@@ -38,11 +38,13 @@ import Testing
         // when
         let bubbles = WorkMessageBubble.project(raw: ["queued_followups": ledger])
         // then
-        #expect(bubbles.map(\.id) == ["a", "b", "d", "e"])
+        #expect(bubbles.map(\.id) == ["a", "b", "d", "e", "g"])
         #expect(bubbles[0].caption == "Queued" && bubbles[0].text == "  keep  spacing\n" && bubbles[0].isPinned && bubbles[0].canCancel)
         #expect(bubbles[1].caption == "Queued" && bubbles[1].isPinned && !bubbles[1].canCancel)
         #expect(bubbles[2].caption == "Undeliverable" && bubbles[2].note == "superseded by s2; resend to it" && !bubbles[2].isPinned)
-        #expect(bubbles[3].caption == "Delivery uncertain" && bubbles[3].note == "spawn interrupted" && !bubbles[3].canCancel)
+        #expect(bubbles[4].kind == .unknown("mystery") && bubbles[4].text == "ignored" && !bubbles[4].canCancel)
+        #expect(bubbles[3].caption == "Delivery uncertain" && !bubbles[3].canCancel)
+        #expect(bubbles[3].note == "Delivery could not be confirmed. The message is not requeued.\nspawn interrupted")
     }
 
     @Test func givenLivePendingAndQueuedFollowups_whenRead_thenPendingBubblesAreUnchangedAndComeFirst() throws {
