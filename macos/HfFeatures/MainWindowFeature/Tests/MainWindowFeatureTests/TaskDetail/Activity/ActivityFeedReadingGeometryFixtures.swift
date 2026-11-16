@@ -33,7 +33,7 @@ import Testing
 
     final class PageRequests { var total = 0 }
 
-    func rows(prepending: Bool) -> [ActivityRow] {
+    func rows(prepending: Bool, olderText: Bool = false) -> [ActivityRow] {
         let before = ConversationTimelineRow(id: "before", taskID: "synthetic", timestamp: nil,
             kind: .item(PreviewFixtures.textItem(String(repeating: "Synthetic preceding text reflows at different widths.\n\n", count: 4))), live: false)
         let after = ConversationTimelineRow(id: "after", taskID: "synthetic", timestamp: nil,
@@ -45,7 +45,10 @@ import Testing
                 kind: .item(PreviewFixtures.toolItem(outputTail: String(repeating: "Synthetic output line that wraps at the reading width.\n", count: 12),
                     seq: index * 2 + 10, callID: id)), live: false)
         }
-        return ActivityRowsBuilder.build(from: [before] + calls + [after])
+        let older = ConversationTimelineRow(id: "older-text", taskID: "synthetic", timestamp: nil,
+            kind: .item(PreviewFixtures.textItem(
+                String(repeating: "Synthetic older text prepended above the reading anchor.\n\n", count: 6), seq: 0)), live: false)
+        return ActivityRowsBuilder.build(from: (olderText ? [older] : []) + [before] + calls + [after])
     }
 
     func pagedRows(prefix: String, count: Int, sequence: Int) -> [ActivityRow] {
@@ -228,14 +231,6 @@ import Testing
         let frame = view.convert(view.bounds, to: document)
         guard frame.width > 0, frame.height > 0, frame.intersects(scroll.documentVisibleRect) else { return nil }
         return frame
-    }
-
-    func measurementGeneration(in view: NSView) -> Int {
-        descendants(view)
-.compactMap { $0 as? ActivityFeedNativeCell }
-.filter(\.isCoherentNativeMeasurement)
-            .map(\.nativeSnapshotRevision)
-.max() ?? -1
     }
 
     func requireFreshPausedAnchor(host: NSView, scroll: NSScrollView, state: ParallelColumnUIState,

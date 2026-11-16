@@ -142,15 +142,54 @@ import Testing
     }
 
     @Test func givenPausedLiveActivityFeed_whenPrependingHistoryArrives_thenReadingPositionIsPreserved() async throws {
-        _ = NSApplication.shared
-        let state = ParallelColumnUIState()
-        let host = NSHostingView(rootView: feed(rows(prepending: false), state: state))
-        let window = activityMountedTestWindow(host, style: [.titled, .resizable])
-        defer { window.contentView = nil; window.close() }
-        await waitUntil(timeout: 5) { @MainActor in state.viewportPositioned && state.followLive.isFollowing }
-        try #require(state.viewportPositioned && state.followLive.isFollowing,
-                     "The feed must finish initial positioning while still following live output")
-        let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.hasVerticalScroller })
+        // Older calls join the leading tool group in place (`tool-first` becomes `tool-older`),
+        // so this case covers in-place regrouping: the document height does not change.
+        try await exercisePausedPrepend(olderText: false)
+    }
+
+    @Test func givenPausedLiveActivityFeed_whenOlderTextRowArrivesAboveAnchor_thenReadingPositionIsPreserved() async throws {
+        // While paused, rows older than the retained first row stay hidden until a page is
+        // requested near the top. Publishing the older page grows the document above the
+        // reading position, so the anchor compensation itself is exercised.
+        try await exercisePausedPrepend(olderText: true)
+    }
+
+    private func climbToOlderPageThreshold(scroll: NSScrollView, state: ParallelColumnUIState,
+                                           requests: PageRequests) async throws {
+        // Continue up into the paging threshold so the older page is requested.
+        try #require(requests.total == 0, "The page must not be requested before the climb")
+        let readingAnchor = state.anchor
+        // Climb in steps, as a reader would, so each step is recorded as reading movement.
+        var climb = scroll.documentVisibleRect.minY
+        var step = 0
+        while climb > 150 {
+            step += 1
+            climb = max(150, climb - 100)
+            scroll.contentView.scroll(to: CGPoint(x: scroll.contentView.bounds.minX, y: climb))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            await waitUntil(timeout: 2) { @MainActor in abs(state.scrollOffset - climb) < 2 }
+            // Steps inside the paging threshold may be absorbed by the pending page request; the
+            // final wait below covers them.
+            guard climb > 200 else { continue }
+            try #require(abs(state.scrollOffset - climb) < 2,
+                         "Climb step \(step) must be recorded as reading movement (target=\(climb) offset=\(state.scrollOffset))")
+        }
+        await waitUntil(timeout: 5) {
+            @MainActor in requests.total > 0 && !state.followLive.isFollowing && state.anchor != nil
+                && state.anchor != readingAnchor
+                && abs(state.scrollOffset - scroll.documentVisibleRect.minY) < 2
+                && scroll.documentVisibleRect.minY <= 200
+        }
+        try #require(requests.total > 0 && !state.followLive.isFollowing && state.anchor != nil
+                         && state.anchor != readingAnchor
+                         && abs(state.scrollOffset - scroll.documentVisibleRect.minY) < 2
+                         && scroll.documentVisibleRect.minY <= 200,
+                     Comment(rawValue: "The paused feed must request the older page near the top "
+                         + "requests=\(requests.total) anchor=\(String(describing: state.anchor)) "
+                         + "scrollOffset=\(state.scrollOffset) viewport=\(scroll.documentVisibleRect.minY)"))
+     }
+
+    private func settleAtLiveBottom(scroll: NSScrollView, state: ParallelColumnUIState) async throws {
         let document = try #require(scroll.documentView)
         let legalBottom = scroll.contentView
 .constrainBoundsRect(
@@ -167,6 +206,22 @@ import Testing
         try #require(state.viewportPositioned && state.followLive.isFollowing
                          && scroll.documentVisibleRect.maxY >= document.bounds.maxY - 2,
                      "The feed must settle at the live bottom before pausing")
+    }
+
+    private func exercisePausedPrepend(olderText: Bool) async throws {
+        _ = NSApplication.shared
+        let state = ParallelColumnUIState()
+        let requests = PageRequests()
+        let pageLoader: (() -> Bool)? = olderText ? { requests.total += 1; return true } : nil
+        let host = NSHostingView(rootView: feed(rows(prepending: false), state: state,
+            history: olderText ? EventHistoryState(hasMore: true) : EventHistoryState(), onLoadMore: pageLoader))
+        let window = activityMountedTestWindow(host, style: [.titled, .resizable])
+        defer { window.contentView = nil; window.close() }
+        await waitUntil(timeout: 5) { @MainActor in state.viewportPositioned && state.followLive.isFollowing }
+        try #require(state.viewportPositioned && state.followLive.isFollowing,
+                     "The feed must finish initial positioning while still following live output")
+        let scroll = try #require(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.hasVerticalScroller })
+        try await settleAtLiveBottom(scroll: scroll, state: state)
         let initialOffset = scroll.documentVisibleRect.minY
         let liveAnchor = try #require(state.anchor)
 
@@ -187,18 +242,34 @@ import Testing
                          && abs(state.scrollOffset - scroll.documentVisibleRect.minY) < 2
                          && scroll.documentVisibleRect.minY <= initialOffset - 24,
                      "The paused feed must record a meaningful upward reading position")
+        if olderText { try await climbToOlderPageThreshold(scroll: scroll, state: state, requests: requests) }
         let pausedAnchor = try #require(state.anchor)
         let pausedViewport = scroll.documentVisibleRect
         let pausedRowFrame = try #require(firstVisibleMeasurementFrame(in: host, scroll: scroll),
                                           "The paused anchor must have a mounted row measurement")
         #expect(abs(pausedRowFrame.minY - pausedViewport.minY - pausedAnchor.relativeOffset) < 3,
                 "The captured anchor must describe the measured row's position in the viewport")
-        let generationBeforePublication = measurementGeneration(in: host)
+        let heightBeforePublication = try #require(scroll.documentView).bounds.height
 
-        host.rootView = feed(rows(prepending: true), state: state)
+        host.rootView = feed(rows(prepending: !olderText, olderText: olderText), state: state,
+            history: EventHistoryState(hasMore: false), onLoadMore: pageLoader)
         try await verifyPublishedHistory(host: host, state: state, scroll: scroll,
-                                               pausedAnchor: pausedAnchor,
-                                               generationBeforePublication: generationBeforePublication)
+                                         pausedAnchor: pausedAnchor,
+                                         published: olderText ? ("older-text", nil) : ("tool-older", "tool-first"))
+        let heightAfterPublication = try #require(scroll.documentView).bounds.height
+        if olderText {
+            #expect(heightAfterPublication > heightBeforePublication + 1,
+                    "The published row must grow the document above the anchor")
+            let growth = heightAfterPublication - heightBeforePublication
+            let viewportDelta = scroll.documentVisibleRect.minY - pausedViewport.minY
+            #expect(abs(viewportDelta - growth) < 3,
+                    "The viewport must move by the growth: delta=\(viewportDelta) growth=\(growth)")
+            let anchorFrame = try #require(measurementFrame(for: pausedAnchor, in: host, scroll: scroll))
+            #expect(abs(anchorFrame.minY - scroll.documentVisibleRect.minY - pausedAnchor.relativeOffset) < 3)
+        } else {
+            #expect(abs(heightAfterPublication - heightBeforePublication) < 1,
+                    "In-place regrouping must not change the document height")
+        }
     }
 
     @Test func givenAPausedActivityFeed_whenLegacyChromeIsReasserted_thenReadingAnchorAndFollowStateSurvive() async throws {

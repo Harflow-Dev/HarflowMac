@@ -202,15 +202,20 @@ extension ActivityFeedReadingGeometryTests {
         try await exerciseContinuedWheel(direction: .down)
     }
 
+    /// Waits until the native table has applied the published rows (`published.id` present,
+    /// `published.replacing`, when given, gone), then checks that the paused reading position survived.
     func verifyPublishedHistory(
                                 host: NSView,
                                 state: ParallelColumnUIState,
                                 scroll: NSScrollView,
                                 pausedAnchor: ParallelVerticalAnchor,
-                                generationBeforePublication: Int
+                                published: (id: String, replacing: String?)
                                 ) async throws {
+        func entryIDs() -> [String] {
+            (scroll.documentView as? ActivityFeedNativeTableView)?.owner?.entries.map(\.id) ?? []
+        }
         await waitUntil(timeout: 5) {
-            @MainActor in measurementGeneration(in: host) > generationBeforePublication
+            @MainActor in entryIDs().contains(published.id)
                 && state.viewportPositioned && !state.followLive.isFollowing
                 && state.anchor?.id == pausedAnchor.id
                 && firstVisibleMeasurementFrame(in: host, scroll: scroll).map {
@@ -218,7 +223,10 @@ extension ActivityFeedReadingGeometryTests {
                 } == true
                 && abs(state.scrollOffset - scroll.documentVisibleRect.minY) < 2
         }
-        try #require(measurementGeneration(in: host) > generationBeforePublication)
+        try #require(entryIDs().contains(published.id), "The published rows must reach the native table")
+        if let replacedID = published.replacing {
+            try #require(!entryIDs().contains(replacedID), "The replaced group id must leave the native table")
+        }
         #expect(state.viewportPositioned)
         #expect(!state.followLive.isFollowing)
         let restoredAnchor = try #require(state.anchor)

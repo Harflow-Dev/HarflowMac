@@ -199,8 +199,10 @@ private let expectedRunningAXSignatures: [[String]] = [
     ["AXStaticText||Fix the login bug|", "AXUnknown|Running||", "AXButton|Collapse Fix the login bug|Expanded|",
      "AXStaticText||Claude · repo · 1 sub-task|"],
     ["AXStaticText||Write the migration|", "AXUnknown|Running||", "AXStaticText||Codex · repo|"],
-    ["AXStaticText||review-bot|", "AXUnknown|Claude, Codex||", "AXStaticText||Parallel run · 1 of 2 finished|",
-     "AXUnknown|Running||", "AXButton|Expand or collapse review-bot|Collapsed|"]
+    // A running group's parallel glyph labelled "Parallel group, running" replaces the backend mark, and the row has
+    // no trailing spinner (4a05fa9, the approved v2 glyph set).
+    ["AXStaticText||review-bot|", "AXUnknown|Parallel group, running||", "AXStaticText||Parallel run · 1 of 2 finished|",
+     "AXButton|Expand or collapse review-bot|Collapsed|"]
 ]
 
 private let expectedUnifiedAXSignatures: [[String]] = [

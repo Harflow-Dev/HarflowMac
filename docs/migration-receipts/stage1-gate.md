@@ -1,6 +1,6 @@
 # Stage 1 gate
 
-Status: run 1 complete on 2026-11-16, not passed. One regression (`ActivityFeedReadingGeometryTests`) and one earlier failure (`SidebarNativeParityBaselineTests`) are being fixed; this receipt is updated with the targeted rerun. Owner sign-off pending.
+Status: run 1 complete on 2026-11-16 with five failing suites; both deterministic failures were fixed in tests and a targeted rerun of all five passed. Owner sign-off pending.
 
 ## Scope (owner decisions of 2026-11-16, relayed by the coordinator)
 
@@ -44,6 +44,19 @@ Kit `.claude-work/mac/smoke-s1`, built from a `git archive` of HEAD `da8e3b9`; e
 - `public-reads.sh gate-run1`: `version-info` (0.0.14, contracts v1, `backend-models.v1` advertised), `list` twice (the same four tasks; the raw outputs differ only in the responding server's pid and duration), `status` for each task, `task-events` for one task (empty page; the seed has no normalized events) and `backend-models` for six harnesses (`not_installed`, since PATH holds system directories only). All 14 exited 0. The eight task record files hashed identically before and after; the engine created its own index and lock files in the scratch state root. The owner's preference files were unchanged by size and modification time.
 - Not exercised: the app launch (owner decision), `status --observer-parent`, and a poll-driven second list (the second list ran directly).
 
+## Fixes after run 1
+
+Both deterministic failures were test expectations, not product defects. The product code is unchanged.
+
+- `ActivityFeedReadingGeometryTests` (regression from `feac4e8`, bug-fix workflow). The test waited for `nativeSnapshotRevision`, a table-wide count of rows plus their summed revisions, to rise after earlier history was published while paused. That publication replaces one tool-group entry with another (`tool-first` becomes `tool-older`), both at revision 0, so the value stayed at 3. It rose before `feac4e8` only because pausing flipped every row's fade flag. A probe on a scratch copy of HEAD showed the publication applied and every reading-position assertion holding. The test now waits for the published entry and requires the replaced one to be gone, keeps every reading-position assertion, and asserts the document height is unchanged for this in-place regrouping. A new test publishes an older page through the real paging path (rows older than the retained window stay hidden until a page is requested), so the document grows 311 pt above the anchor; the anchor offset is unchanged and the viewport moves by the growth. The CPU fix is kept: live append measured 0.237 core (against 0.247 when it landed).
+- `SidebarNativeParityBaselineTests` (earlier failure). It last passed at `8d50751` and first failed at `4a05fa9` ("Draw task status with the approved v2 glyph set on every surface"), which gave a running parallel group the parallel glyph labelled "Parallel group, running" in place of its backend mark and dropped the separate trailing spinner, as the approved glyph set requires. That commit did not update this baseline; the stored row was updated, and no other copy of the old row exists.
+
+Review: Claude Opus and Codex (gpt-6-astra) reviewed the bug-fix plan in two rounds (the publication signal must be the published content, not the reconcile count; the test also needed a case where the document grows) and the code in one round (approved; minor test-strength findings folded in). The Vibe reviewer was paused.
+
+## Targeted rerun
+
+The five failing suites, one at a time on the fixed tree (focused runner, evidence `gate-s1/run2-targeted/summary.txt`): `ActivityFeedReadingGeometryTests`, `SidebarNativeParityBaselineTests`, `WorkflowRecoveryFormTests`, `WorkflowScreenLayoutTests` and `NewSessionComposerHostedTests` all passed. `NewSessionComposerHostedTests`, which depends on this account's scroll bar setting, passed in this run. A full suite rerun on the final commit belongs to the next idle window.
+
 ## Owner sign-off
 
-Pending the fixes and the targeted rerun below.
+Pending.

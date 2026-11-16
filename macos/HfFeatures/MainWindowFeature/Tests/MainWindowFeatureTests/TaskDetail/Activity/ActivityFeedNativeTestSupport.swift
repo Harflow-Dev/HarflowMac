@@ -33,6 +33,7 @@ import AppKit
     var stableID: String? { isCoherentNativeMeasurement ? entryID : nil }
 
     /// Timeline-row commit evidence; independently changing tail revisions are excluded.
+    /// Not monotonic: an entry id swap (a new id starts at revision 0) can leave it unchanged.
     var nativeSnapshotRevision: Int {
         guard let owner = (enclosingScrollView?.documentView as? ActivityFeedNativeTableView)?.owner else { return -1 }
         let rows = owner.boxes.filter { box in
