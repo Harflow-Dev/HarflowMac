@@ -28,6 +28,8 @@ protocol WorkflowViewModel: ViewModel {
     var initialLoadingKind: String? { get }
     var initialLoadFailed: Bool { get }
     var errorText: String? { get }
+    var deleteFailureText: String? { get }
+    var canDeleteWorkflow: Bool { get }
     var readFailureText: String? { get }
     func retryReadFailure()
     var editorConflict: String? { get }
@@ -131,6 +133,12 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
+    var deleteFailureText: String? { nil }
+    var canDeleteWorkflow: Bool {
+        isEditing && !loadedName.isEmpty && !isBusy && selectedRun == nil
+            && initialLoadingKind == nil && !initialLoadFailed && !(isRefining && showsGenerateSheet)
+    }
+
     var activityMessageTarget: WorkflowActivityMessageTarget { .resolve(run: selectedRun, sidebar: runSidebar) }
     var activityMessageItems: [WorkMessageQueue.Item] { [] }
     var messageNotes: [String: String] { [:] }

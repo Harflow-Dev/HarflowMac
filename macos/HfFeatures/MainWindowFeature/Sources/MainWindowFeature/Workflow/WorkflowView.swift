@@ -77,6 +77,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             }
             Divider()
             answerHistoryHeader
+            deleteFailureBanner
             if let error = viewModel.errorText, error != viewModel.readFailureText {
                 Text(error)
 .font(.hf(.secondary))
@@ -237,8 +238,8 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             HStack(spacing: HfRadius.Metrics.spacing2) {
                 Menu {
                     Button("Generate with agent…") { viewModel.prepareGeneration(refining: false) }
-                    Button("Duplicate") { viewModel.duplicate() }
-                    Button("Delete", role: .destructive) { viewModel.deleteWorkflow() }.disabled(viewModel.loadedName.isEmpty)
+                    Divider()
+                    Button("Delete…", role: .destructive) { viewModel.deleteWorkflow() }.disabled(!viewModel.canDeleteWorkflow)
                 } label: {
                     Image(systemName: "ellipsis")
                         .frame(width: HfRadius.Metrics.workflowHeaderMenuWidth,

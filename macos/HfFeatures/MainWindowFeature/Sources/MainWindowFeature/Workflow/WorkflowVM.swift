@@ -214,6 +214,8 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var pendingEditorName: String?
     @ObservationIgnored var draftID = UUID()
     @ObservationIgnored var discardRequestID: UUID?
+    @ObservationIgnored var deleteRequestID: UUID?
+    var deleteFailure: WorkflowDeleteFailure?
     @ObservationIgnored var validationTask: Task<Void, Never>?
     @ObservationIgnored var validationID = UUID()
     var canonicalValidationDefinition: [String: JSONValue]?
@@ -336,6 +338,8 @@ final class WorkflowVM: WorkflowViewModel {
 
     func didDisappear() {
         discardRequestID = nil
+        deleteRequestID = nil
+        deleteFailure = nil
         catalogReadID = UUID()
         catalogPreparationTask?.cancel()
         catalogPreparationTask = nil
@@ -406,25 +410,6 @@ final class WorkflowVM: WorkflowViewModel {
         savedDefinition = [:]
         draftPersistenceSuspended = false
         persistDraft()
-    }
-
-    func deleteWorkflow() {
-        let target = loadedName
-        guard !target.isEmpty else {
-            return
-        }
-        publishDialog("Delete workflow ‘\(target)’?", description: "Existing run snapshots remain available.") {
-            AlertAction(title: "Delete", role: .destructive) { [weak self] in
-                self?.perform { [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    _ = try await useCase.command("delete", options: [], positionals: [target])
-                    routing.openWorkflowEditor(name: nil)
-                    await refresh()
-                }
-            }
-        }
     }
 
     func chooseRepo() {

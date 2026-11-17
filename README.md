@@ -47,6 +47,8 @@ Model suggestions come from the engine's advisory model listing (`backend-models
 Saved workflows ask for confirmation before Discard. Cancel preserves the draft; Discard returns to the confirmed saved revision only while that revision and the editor remain unchanged.
 
 The workflow editor enables Save after the current named draft passes engine validation. Checking, invalid, unnamed and unavailable validation states keep Save disabled and explain what needs attention.
+Saved workflows offer Delete… in More workflow actions. Cancel is the default; the confirmation warns about unsaved changes only when present. Failed or unconfirmed deletion keeps the editor and draft available.
+
 
 Retained workflow read failures appear as a counted entry above the sidebar appearance and Settings controls. Open it to read each failure and retry; the entry disappears when all sources recover. The top incident notification remains dismissible.
 
