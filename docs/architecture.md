@@ -579,3 +579,21 @@ invalidation and draft persistence; leaving the field retains the draft. It adds
 submit, cancel, rename or engine operation. Saved workflows and runs keep static
 titles. Field fitting uses the approved 96–260 point range; canvas node dimensions
 are unchanged.
+
+### Private workflow files
+
+Workflow validation/save input uses the selected `CtlClient` effective environment's
+explicit `TMPDIR` when supplied. An explicit root must be nonblank, absolute, free of
+NUL, writable and an existing directory; invalid roots refuse before CLI dispatch and
+never fall back to ambient temporary storage. With no explicit root, the existing
+Foundation temporary-directory default remains. Each input owns an exclusively created
+0700 UUID directory and an exclusively opened 0600 definition file. The complete bytes
+are written and the handle closed before the CLI receives the path; cleanup is limited
+to the directory whose exclusive creation succeeded.
+
+Editor draft replacement writes a private 0600 exclusively created, no-follow UUID file
+inside the draft directory, closes it once, and renames it to the draft name in that same
+parent. Failure preserves the previous draft and removes only the owned temporary file.
+This avoids Foundation atomic-write staging in another temporary directory while retaining
+atomic name replacement; it makes no new fsync or crash-durability guarantee. Wire bytes,
+CLI options and engine-owned persistence remain unchanged.

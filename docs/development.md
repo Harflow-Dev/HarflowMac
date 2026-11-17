@@ -34,6 +34,14 @@ Never launch development builds against real user state. Use an isolated generat
 
 Managed runtime launchers are published by exclusively creating a UUID sibling in their destination directory, writing and setting mode 0700 through its descriptor, closing it, then renaming it over the destination. This keeps temporary writes inside the managed runtime under restrictive development profiles; Foundation's atomic-write option can fail in those profiles even when direct writes succeed. Failures before publication preserve the existing launcher and remove the owned sibling. This provides atomic replacement, without a crash-durability guarantee.
 
+Do not assume `TMPDIR` redirects Foundation's per-user temporary directory on macOS.
+Qualify actual write paths under the development profile. Workflow validation/save input
+files honor the ctl client's explicit `TMPDIR`; an invalid explicit root refuses without
+ambient fallback. A missing key retains the platform default. Inputs are private,
+exclusively created and complete before their paths reach ctl. Workflow drafts stage
+their private replacement beside the destination and rename only after write/close
+success. These operations do not need a broader sandbox temp-directory allowance.
+
 Temporary HOME does not by itself establish application-preference isolation. On the S02 macOS 26.6.2 host, Foundation resolved the scratch home but did not read the preseeded scratch preferences, including notification flags. Before launching a development app, verify the effective preference domain and notification settings as well as the managed engine root. Use a separate test bundle identity without URL schemes, and do not write owner preferences without explicit authorization. See the [S02 fixture evidence](migration-receipts/S02-fixture.md).
 
 ## Swift Testing runner

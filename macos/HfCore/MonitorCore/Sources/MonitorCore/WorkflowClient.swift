@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 // MARK: - WorkflowClient
@@ -57,7 +58,7 @@ public extension CtlClient {
     /// Validates through Harflow without creating a saved definition or run.
     func validateWorkflow(definition: JSONValue) async -> Result<[String: JSONValue], ToolError> {
         do {
-            let input = try WorkflowDefinitionInput(definition: definition)
+            let input = try WorkflowDefinitionInput(definition: definition, baseDirectory: environment["TMPDIR"])
             defer { input.cleanUp() }
             return await workflow("validate", options: ["--definition=\(input.file.path)"])
         } catch {
@@ -70,7 +71,7 @@ public extension CtlClient {
         name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String? = nil
     ) async -> Result<[String: JSONValue], ToolError> {
         do {
-            let input = try WorkflowDefinitionInput(definition: definition)
+            let input = try WorkflowDefinitionInput(definition: definition, baseDirectory: environment["TMPDIR"])
             defer { input.cleanUp() }
             let identity = expectedWorkflowID.map { ["--expected-workflow-id=\($0)"] } ?? []
             return await workflow("save", options: ["--definition=\(input.file.path)", "--expected-revision=\(expectedRevision)"] + identity,
@@ -88,20 +89,48 @@ struct WorkflowDefinitionInput {
     let file: URL
     private let directory: URL
 
-    init(definition: JSONValue) throws {
+    init(definition: JSONValue, baseDirectory: String?, identifier: UUID = UUID()) throws {
         let manager = FileManager.default
-        let directory = manager.temporaryDirectory.appendingPathComponent("harflow-workflow-\(UUID().uuidString)", isDirectory: true)
-        try manager.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let base = try Self.baseDirectory(baseDirectory)
+        let directory = base.appendingPathComponent("harflow-workflow-\(identifier.uuidString)", isDirectory: true)
+        guard mkdir(directory.path, S_IRWXU) == 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        // A successful exclusive mkdir, never an existing path, grants cleanup ownership.
         let file = directory.appendingPathComponent("definition.json")
         do {
-            try Data(definition.rendered().utf8).write(to: file, options: .atomic)
-            try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            try Self.writeDefinition(Data(definition.rendered().utf8), to: file)
         } catch {
             try? manager.removeItem(at: directory)
             throw error
         }
         self.directory = directory
         self.file = file
+    }
+
+    private static func baseDirectory(_ path: String?) throws -> URL {
+        guard let path else { return FileManager.default.temporaryDirectory }
+        guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              path.hasPrefix("/"), !path.contains("\0") else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        guard FileManager.default.isWritableFile(atPath: path) else { throw CocoaError(.fileWriteNoPermission) }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    private static func writeDefinition(_ data: Data, to file: URL) throws {
+        let descriptor = open(file.path, O_CREAT | O_EXCL | O_NOFOLLOW | O_WRONLY, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: false)
+        var closeAttempted = false
+        defer { if !closeAttempted { try? handle.close() } }
+        try handle.write(contentsOf: data)
+        closeAttempted = true
+        try handle.close()
     }
 
     func cleanUp() {

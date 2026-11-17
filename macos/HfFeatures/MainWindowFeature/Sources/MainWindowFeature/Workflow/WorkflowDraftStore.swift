@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 import MonitorCore
 
@@ -36,8 +37,22 @@ final class WorkflowDraftStore: WorkflowDraftStoring {
 
     func save(_ draft: [String: JSONValue], key: String) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        try Data(JSONValue.object(draft).rendered().utf8).write(to: url(key), options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url(key).path)
+        let temporary = directory.appendingPathComponent(".draft-" + UUID().uuidString)
+        let descriptor = open(temporary.path, O_CREAT | O_EXCL | O_NOFOLLOW | O_WRONLY, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+        // Ownership begins only after exclusive creation; failure never removes a foreign path.
+        var published = false
+        defer { if !published { unlink(temporary.path) } }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: false)
+        var closeAttempted = false
+        defer { if !closeAttempted { try? handle.close() } }
+        try handle.write(contentsOf: Data(JSONValue.object(draft).rendered().utf8))
+        closeAttempted = true
+        try handle.close()
+        guard rename(temporary.path, url(key).path) == 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        published = true
     }
 
     func remove(key: String) throws {
