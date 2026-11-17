@@ -550,3 +550,21 @@ and view identity to the new navigation UUID. The approved library states are Ha
 `3101abe348a0757db8989074c8e554dd19463f08`, `v2/scripts/screens-workflows.js` (list/empty) and
 `v2/scripts/screens-loading-more.js` (loading); the menu is commit
 `b710856a31702e46e3b8f3a54be19f3cb7c422dc`, `v2/scripts/states-workflow-gaps.js`, workflows/new-menu.
+
+### Workflow editor validation readiness
+
+The editor follows approved HarflowDesign `b710856a31702e46e3b8f3a54be19f3cb7c422dc`,
+`v2/scripts/states-workflow-gaps.js`: `checking`, `invalid`, `validate-unavailable`,
+and `name-required`. `WorkflowValidationState` keeps presentation typed; strings never
+establish Save authority. Save requires a nonblank name, an exact current
+`validatedDefinition == effectiveDefinition`, a successful current validation state,
+and the existing loading, baseline, conflict, busy, run and dirty guards. Each scheduled
+edit clears the prior validation synchronously; cancelled or superseded responses fail
+the existing generation and snapshot checks. The running and failed status glyphs use
+the shared native status component at the approved 14-point size. Validation failures
+retain engine detail without command-line installation instructions.
+
+Readiness does not replace the save transaction: immutable snapshots, save validation,
+baseline identity/revision checks, compare-and-set submission, draft retention and late
+save reconciliation remain in force. This uses the existing Python engine 0.0.14
+public validate/save operations and changes no engine pin or wire contract.

@@ -147,7 +147,8 @@ final class WorkflowVM: WorkflowViewModel {
     var checkingEditorBaseline = false
     var missingReferences: [[String: JSONValue]] = []
     var missingReferencesTruncated = false
-    var validationMessage: String?
+    var validationState: WorkflowValidationState = .nameRequired
+    var validationMessage: String? { validationState.message }
     var repo = "" { didSet { if repo != oldValue { scheduleLaunchPreview() } } }
     var prompt = ""
     var goal = ""
@@ -264,10 +265,6 @@ final class WorkflowVM: WorkflowViewModel {
     // Only the small available harness menu is ordered here; the draft remains untouched.
     var backendIDs: [String] { agentUsageSnapshot.rankedBackends(useCase.backendIDs.isEmpty ? BackendStyle.known : useCase.backendIDs) }
     var selectedEdge: WorkflowEdgeModel? { edges.first { $0.id == selectedEdgeID } }
-    var canSave: Bool {
-        initialLoadingKind == nil && !initialLoadFailed && !checkingEditorBaseline
-            && editorConflict == nil && !isBusy && selectedRun == nil && hasUnsavedChanges
-    }
 
     var canDiscard: Bool {
         !checkingEditorBaseline && canEditHistory && (name != loadedName
@@ -370,6 +367,7 @@ final class WorkflowVM: WorkflowViewModel {
         validationTask = nil
         validationID = UUID()
         validatedDefinition = nil
+        validationState = .checking
         poll?.cancel()
         poll = nil
         generationID = UUID()

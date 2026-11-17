@@ -254,9 +254,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 Button("Discard") { viewModel.discardChanges() }
                     .buttonStyle(QuietButtonStyle(isFilled: false))
                     .disabled(!viewModel.canDiscard)
-                Button("Save") { viewModel.save() }
-                    .buttonStyle(QuietButtonStyle(isFilled: false))
-                    .disabled(!viewModel.canSave)
+                saveButton
             }
             .glassEffect(.regular, in: Capsule())
             Button("Run", systemImage: "play") {

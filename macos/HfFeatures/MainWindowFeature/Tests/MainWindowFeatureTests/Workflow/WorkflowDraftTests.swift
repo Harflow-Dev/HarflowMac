@@ -29,7 +29,7 @@ import Testing
                 visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
     }
 
-    @Test func givenUnchangedSavedWorkflow_whenEditingNameInstructionsOrPosition_thenSaveReflectsDirtyState() {
+    @Test func givenUnchangedSavedWorkflow_whenEditingNameInstructionsOrPosition_thenDirtyStateTracksChangesBeforeValidation() {
         // given
         let sut = vm(store: store())
         sut.newWorkflow()
@@ -37,25 +37,26 @@ import Testing
         sut.loadedName = sut.name
         sut.savedDefinition = sut.definition
         // when / then
-        #expect(!sut.canSave)
+        #expect(!sut.hasUnsavedChanges)
         sut.name = "Renamed workflow"
-        #expect(sut.canSave)
+        #expect(sut.hasUnsavedChanges)
         sut.name = sut.loadedName
-        #expect(!sut.canSave)
+        #expect(!sut.hasUnsavedChanges)
         sut.updateNode("planning", key: "instructions", value: .string("Changed instructions"))
-        #expect(sut.canSave)
+        #expect(sut.hasUnsavedChanges)
         sut.definition = sut.savedDefinition
-        #expect(!sut.canSave)
+        #expect(!sut.hasUnsavedChanges)
         sut.moveNode("start", to: CGPoint(x: 200, y: 200))
-        #expect(sut.canSave)
+        #expect(sut.hasUnsavedChanges)
         sut.savedDefinition = sut.definition
-        #expect(!sut.canSave)
+        #expect(!sut.hasUnsavedChanges)
         sut.newWorkflow()
-        #expect(sut.canSave)
+        #expect(sut.hasUnsavedChanges)
+        #expect(!sut.canSave)
     }
 
     @Test(arguments: ["absent", "false", "true"])
-    func givenSavedOptionalFlag_whenToggledAndReverted_thenSaveReflectsBehavioralChange(baseline: String) {
+    func givenSavedOptionalFlag_whenToggledAndReverted_thenDirtyStateReflectsBehavioralChange(baseline: String) {
         // given
         let sut = vm(store: store())
         sut.newWorkflow()
@@ -63,12 +64,12 @@ import Testing
         sut.loadedName = sut.name
         if baseline != "absent" { sut.updateNode("planning", key: "optional", value: .bool(baseline == "true")) }
         sut.savedDefinition = sut.definition
-        #expect(!sut.canSave)
+        #expect(!sut.hasUnsavedChanges)
         // when
         sut.updateNode("planning", key: "optional", value: .bool(baseline != "true"))
         // then
         #expect(sut.hasUnsavedChanges)
-        #expect(sut.canSave)
+        #expect(!sut.canSave)
         // when
         sut.updateNode("planning", key: "optional", value: .bool(baseline == "true"))
         // then
@@ -181,7 +182,9 @@ import Testing
                 visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         sut.newWorkflow()
         sut.name = "Saved later"
-        sut.validatedDefinition = sut.effectiveDefinition
+        try #require(await useCase.waitForRequestCount(1))
+        useCase.finish(0, result: .success(["valid": .bool(true)]))
+        await waitUntil { sut.canSave }
         let submitted = sut.effectiveDefinition
         // when
         sut.save()
@@ -267,7 +270,9 @@ import Testing
                 visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         sut.newWorkflow()
         sut.name = "Saved later"
-        sut.validatedDefinition = sut.effectiveDefinition
+        try #require(await useCase.waitForRequestCount(1))
+        useCase.finish(0, result: .success(["valid": .bool(true)]))
+        await waitUntil { sut.canSave }
         let submitted = sut.effectiveDefinition
         sut.save()
         await waitUntil { !useCase.savedRequests.isEmpty }

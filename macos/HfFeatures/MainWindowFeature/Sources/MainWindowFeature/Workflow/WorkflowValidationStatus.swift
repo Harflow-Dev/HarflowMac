@@ -16,7 +16,13 @@ struct WorkflowValidationStatus<VM: WorkflowViewModel>: View {
                 Text(conflict).font(.hf(.caption)).lineLimit(2).help(conflict)
                 Button("Save copy and reload") { viewModel.preserveDraftAndReload() }
             } else if let message = viewModel.validationMessage, !message.isEmpty {
-                Text(message + " · \(stepCount) nodes · \(viewModel.standaloneNodes.count) on demand")
+                HStack(spacing: HfRadius.Metrics.spacing6) {
+                    if let glyph = viewModel.validationState.glyph {
+                        StatusIcon(status: glyph, size: HfRadius.Metrics.statusBadgeGlyphFrame)
+                            .accessibilityLabel(viewModel.validationState.accessibilityLabel)
+                    }
+                    Text(message + " · \(stepCount) nodes · \(viewModel.standaloneNodes.count) on demand")
+                }
                     .font(.hf(.caption))
                     .foregroundStyle(Color.secondaryText)
                     .lineLimit(1)

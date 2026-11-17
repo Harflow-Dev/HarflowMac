@@ -443,6 +443,7 @@ PARALLEL_GROUP_LOADING_SUITE = "MainWindowFeatureTests.ParallelGroupLoadingHoste
 PARALLEL_GROUP_MINIMUM_SUITE = "MainWindowFeatureTests.ParallelGroupMinimumHostedTests"
 HOSTED_SUITE_NAMES = (
     "MainWindowFeatureTests.WorkflowLibraryHostedTests",
+    "MainWindowFeatureTests.WorkflowValidationHostedTests",
     "MainWindowFeatureTests.NeedsYouQuestionCardHostedTests",
     "MainWindowFeatureTests.WorkMessageBubblesHostedTests",
     APPROVAL_SUITE,

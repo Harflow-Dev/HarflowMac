@@ -36,6 +36,7 @@ protocol WorkflowViewModel: ViewModel {
     func preserveDraftAndReload()
     func replaceMissingReferences(_ target: String, with replacement: String)
     var validationMessage: String? { get }
+    var validationState: WorkflowValidationState { get }
     var validationDependencies: [String: JSONValue] { get }
     var nativeSubagentsAvailable: Bool { get }
     var artifacts: WorkflowArtifactModel { get }
@@ -175,6 +176,7 @@ extension WorkflowViewModel {
 }
 
 extension WorkflowViewModel {
+    var validationState: WorkflowValidationState { .inactive }
     var qualificationCards: [QualificationCard] { [] }
     func didTapQualification() {}
 }

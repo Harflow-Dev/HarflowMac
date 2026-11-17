@@ -44,6 +44,8 @@ New session and workflow launch show the engine’s required harness feature che
 
 Model suggestions come from the engine's advisory model listing (`backend-models.v1`, engine 0.0.14 and later) for the chosen harness; where the engine offers none (harness not installed, listing unavailable, older engine, runtime still preparing), the Model field is free text and a note says why. A suggestion the harness reports as its default is tagged "default"; "Default" first in the suggestions, or an empty field, keeps the harness's own model. Harness and model menus share lifetime usage ranking from successful app submissions. Workflow node menus prefer a supported orchestrator agent and model while preserving saved selections.
 
+The workflow editor enables Save after the current named draft passes engine validation. Checking, invalid, unnamed and unavailable validation states keep Save disabled and explain what needs attention.
+
 Retained workflow read failures appear as a counted entry above the sidebar appearance and Settings controls. Open it to read each failure and retry; the entry disappears when all sources recover. The top incident notification remains dismissible.
 
 The title bar shows Harflow's engine connection status. Choose Light, Dark, or System from the sidebar footer icons to set the appearance across Harflow. System follows this Mac's appearance setting.

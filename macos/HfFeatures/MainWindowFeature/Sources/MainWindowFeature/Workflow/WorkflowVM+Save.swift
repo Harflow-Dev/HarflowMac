@@ -5,6 +5,13 @@ import MonitorCore
 // MARK: - WorkflowVM Save
 
 extension WorkflowVM {
+    var canSave: Bool {
+        initialLoadingKind == nil && !initialLoadFailed && !checkingEditorBaseline
+            && editorConflict == nil && !isBusy && selectedRun == nil && hasUnsavedChanges
+            && !validationSuspended && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && validationState == .valid && validatedDefinition == effectiveDefinition
+    }
+
     var effectiveDefinition: [String: JSONValue] {
         var value = WorkflowStandalone.normalized(definition)
         value["name"] = .string(name)
@@ -30,12 +37,12 @@ extension WorkflowVM {
             canonicalValidationDefinition = nil
             canonicalValidationSource = nil
         }
-        guard selectedRun == nil else { validationMessage = nil; return }
+        guard selectedRun == nil else { validationState = .inactive; return }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            validationMessage = "Enter a workflow name."
+            validationState = .nameRequired
             return
         }
-        validationMessage = "Checking workflow…"
+        validationState = .checking
         guard !validationSuspended else { return }
         let snapshot = effectiveDefinition
         let requestID = validationID
@@ -53,14 +60,13 @@ extension WorkflowVM {
                     validatedDefinition = snapshot
                     canonicalValidationDefinition = response["definition"]?.objectValue
                     canonicalValidationSource = snapshot
-                    validationMessage = nil
+                    validationState = .valid
                 } else {
-                    validationMessage = response["error"]?.stringValue ?? "Workflow is invalid."
+                    validationState = .invalid(response["error"]?.stringValue ?? "Workflow is invalid.")
                 }
             } catch {
                 guard !Task.isCancelled, requestID == validationID, snapshot == effectiveDefinition else { return }
-                validationMessage = "Unable to validate workflow. Update or reinstall the Harflow CLI from this repo "
-                    + "(uv tool install . --force --no-cache). \(Self.message(error))"
+                validationState = .unavailable(Self.message(error))
             }
         }
     }
@@ -175,7 +181,8 @@ extension WorkflowVM {
             return false
         } catch {
             if snapshot.matches(self) {
-                showSaveWarning("Unable to validate workflow. Update or reinstall the Harflow CLI from this repo. " + Self.message(error))
+                validationState = .unavailable(Self.message(error))
+                showSaveWarning(validationState.message ?? "Unable to validate workflow.")
             }
             return false
         }
@@ -184,12 +191,12 @@ extension WorkflowVM {
         missingReferencesTruncated = validation["missing_references_truncated"]?.boolValue ?? false
         guard validation["valid"]?.boolValue == true else {
             let reason = validation["error"]?.stringValue ?? "Workflow is invalid."
-            validationMessage = reason
+            validationState = .invalid(reason)
             showSaveWarning(reason)
             return false
         }
         validatedDefinition = snapshot.definition
-        validationMessage = nil
+        validationState = .valid
         return true
     }
 

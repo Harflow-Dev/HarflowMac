@@ -64,6 +64,7 @@ import Testing
         #expect(try store.load(key: "new")?["definition"] == .object(edits))
         #expect(try store.load(key: "saved:Saved") == nil)
         sut.definition["description"] = .string("reconciled")
+        await waitUntil { sut.canSave }
         #expect(sut.canSave)
     }
 
@@ -109,7 +110,7 @@ import Testing
     @Test func givenConcurrentSavedRevision_whenSaving_thenStaleSaveNeverReachesRepository() async {
         // given
         let (sut, _, useCase) = makeVM()
-        sut.validatedDefinition = sut.effectiveDefinition
+        await waitUntil { sut.canSave }
         // when
         sut.save()
         await waitUntil { !sut.isBusy }
@@ -139,9 +140,12 @@ import Testing
         #expect(copy.loadedName.isEmpty)
         #expect(copy.editorConflict == nil)
         #expect(!copy.checkingEditorBaseline)
-        #expect(copy.canSave)
+        #expect(!copy.canSave)
         #expect(copy.definition == sut.definition)
+        #expect(await controlled.waitForRequestCount(1))
         controlled.finishAllValidations()
+        await waitUntil { copy.canSave }
+        #expect(copy.canSave)
     }
 
     @Test func givenImmediateSaveValidationFailure_whenReferenceMissing_thenStructuredDiagnosticsRemainActionable() async {
@@ -161,13 +165,13 @@ import Testing
         sut.newWorkflow()
         sut.name = "New"
         // when
+        await waitUntil { sut.validationState == .invalid("Missing workflow") }
         sut.save()
-        await waitUntil { !sut.isBusy }
         // then
         #expect(sut.missingReferences == WorkflowJSON.objects(.array(references)))
         #expect(sut.missingReferencesTruncated)
         #expect(sut.editorConflict == nil)
-        #expect(sut.canSave)
+        #expect(!sut.canSave)
     }
 
 }

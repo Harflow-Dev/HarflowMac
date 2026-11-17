@@ -197,7 +197,7 @@ import Testing
         #expect(harness.sut.definition == original)
     }
 
-    @Test func givenValidatedGraph_whenDraftChanges_thenSaveRemainsEnabledWhileRevalidated() async {
+    @Test func givenValidatedGraph_whenDraftChanges_thenSaveWaitsForCurrentValidation() async {
         // given
         let harness = makeVM()
         harness.sut.definition = WorkflowVM.starterDefinition()
@@ -206,11 +206,13 @@ import Testing
         // when
         harness.sut.moveNode("start", to: CGPoint(x: 123, y: 123))
         // then
-        #expect(harness.sut.canSave)
-        #expect(harness.sut.validationMessage == "Checking workflow…")
+        #expect(!harness.sut.canSave)
+        #expect(harness.sut.validationState == .checking)
         await waitUntil { harness.sut.validationMessage == nil }
-        harness.sut.name = ""
         #expect(harness.sut.canSave)
+        harness.sut.name = ""
+        #expect(!harness.sut.canSave)
+        #expect(harness.sut.validationState == .nameRequired)
     }
 
     @Test func givenDelayedValidation_whenDraftChanges_thenOldSuccessCannotClearNewWarning() async throws {
@@ -226,15 +228,16 @@ import Testing
         vm.name = "new-name"
         useCase.finish(0, result: .success(["valid": .bool(true)]))
         // then
-        #expect(vm.canSave)
+        #expect(!vm.canSave)
         try #require(await useCase.waitForRequestCount(2), "Validation request did not enter the controlled use case")
         #expect(useCase.requests[1]["name"] == .string("new-name"))
         useCase.finish(1, result: .success(["valid": .bool(false), "error": .string("No end node")]))
         await waitUntil { vm.validationMessage == "No end node" }
-        #expect(vm.canSave)
+        #expect(!vm.canSave)
+        #expect(vm.validationState == .invalid("No end node"))
     }
 
-    @Test func givenValidationFailureAndDisappearance_whenResponsesArrive_thenSaveStaysClickable() async throws {
+    @Test func givenValidationFailureAndDisappearance_whenResponsesArrive_thenSaveStaysDisabled() async throws {
         // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
@@ -251,7 +254,7 @@ import Testing
         vm.didDisappear()
         useCase.finish(1, result: .success(["valid": .bool(true)]))
         // then
-        #expect(vm.canSave)
+        #expect(!vm.canSave)
         #expect(vm.errorText == nil)
     }
 
@@ -281,7 +284,7 @@ import Testing
         #expect(vm.revision == 0)
         #expect(vm.definition == freshDraft)
         #expect(vm.savedDefinition.isEmpty)
-        #expect(vm.canSave)
+        #expect(!vm.canSave)
     }
 
     @Test func givenReviewStep_whenRenamingTitle_thenRoleSettingsAndConnectionsRemainUnchanged() {
@@ -409,41 +412,37 @@ import Testing
         #expect(harness.sut.nodes.first { $0.id == "planning" }?.raw["freedom"] == .string("unrestricted"))
     }
 
-    @Test func givenEmptyName_whenSaving_thenSharedAlertExplainsAndNothingPersists() async {
+    @Test func givenEmptyName_whenSaving_thenSaveIsDisabledAndNothingPersists() {
+        // given
         let harness = makeVM()
         harness.sut.newWorkflow()
-        var alert: AlertContent?
-        let subscription = harness.sut.objectDidPublishViewEvent.publisher.sink { if case .alert(let value) = $0 { alert = value } }
-        #expect(harness.sut.canSave)
+        // when
         harness.sut.save()
-        await waitUntil { alert != nil }
-        #expect(alert?.description == "Enter a workflow name.")
+        // then
+        #expect(!harness.sut.canSave)
+        #expect(harness.sut.validationState == .nameRequired)
         verify(harness.useCase).save(name: .any, definition: .any, expectedRevision: .any, expectedWorkflowID: .any).called(0)
-        withExtendedLifetime(subscription) {}
     }
 
-    @Test func givenInvalidGraph_whenSaving_thenCanonicalWarningShowsWithoutPersistence() async throws {
+    @Test func givenInvalidGraph_whenSaving_thenCanonicalReasonRemainsWithoutPersistence() async throws {
+        // given
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
-                                    visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
+                            draftStore: WorkflowDraftTests().store(), visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.newWorkflow()
         vm.name = "draft"
-        var alert: AlertContent?
-        let subscription = vm.objectDidPublishViewEvent.publisher.sink { if case .alert(let value) = $0 { alert = value } }
-        #expect(vm.canSave)
-        vm.save()
-        #expect(vm.isBusy)
-        try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
+        try #require(await useCase.waitForRequestCount(1))
         useCase.finish(0, result: .success(["valid": .bool(false), "error": .string("Orphan node has no outgoing connection")]))
-        await waitUntil { alert != nil && !vm.isBusy }
-        #expect(alert?.description == "Orphan node has no outgoing connection")
+        await waitUntil { vm.validationState == .invalid("Orphan node has no outgoing connection") }
+        // when
+        vm.save()
+        // then
+        #expect(!vm.canSave)
+        #expect(!vm.isBusy)
         #expect(useCase.savedRequests.isEmpty)
-        #expect(vm.canSave)
-        withExtendedLifetime(subscription) {}
     }
 
-    @Test func givenPendingValidGraph_whenSaveClicked_thenValidatesExactSnapshotBeforePersisting() async throws {
+    @Test func givenPendingValidGraph_whenSaveClicked_thenOnlyCurrentSuccessAllowsPersistence() async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
@@ -455,6 +454,8 @@ import Testing
         #expect(useCase.requests[0]["name"] == .string("pending-draft"))
         #expect(useCase.savedRequests.isEmpty)
         useCase.finish(0, result: .success(["valid": .bool(true)]))
+        await waitUntil { vm.canSave }
+        vm.save()
         try #require(await useCase.waitForRequestCount(1, saving: true), "Save request did not enter the controlled use case")
         #expect(useCase.savedRequests[0] == useCase.requests[0])
         var response = useCase.savedRequests[0]
@@ -467,8 +468,8 @@ import Testing
         useCase.finishAllValidations()
     }
 
-    @Test(arguments: ["definition", "name", "revision", "new-draft", "disappear"])
-    func givenSaveValidationInFlight_whenDraftChanges_thenStaleSuccessCannotPersist(_ change: String) async throws {
+    @Test(arguments: ["definition", "name", "new-draft", "disappear"])
+    func givenValidationInFlight_whenDraftChanges_thenStaleSuccessCannotPersist(_ change: String) async throws {
         let useCase = ControlledWorkflowValidationUseCase()
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
@@ -477,15 +478,16 @@ import Testing
         vm.name = "draft"
         vm.save()
         try #require(await useCase.waitForRequestCount(1), "Validation request did not enter the controlled use case")
+        let pending = vm.validationTask
         switch change {
         case "name": vm.name = "renamed"
-        case "revision": vm.revision = 10
         case "new-draft": vm.newWorkflow()
         case "disappear": vm.didDisappear()
         default: vm.updateNode("review", key: "title", value: .string("Changed during validation"))
         }
         useCase.finish(0, result: .success(["valid": .bool(true)]))
-        await waitUntil { !vm.isBusy }
+        await pending?.value
+        #expect(!vm.canSave)
         #expect(useCase.savedRequests.isEmpty)
         #expect(vm.loadedName.isEmpty)
         vm.didDisappear()
