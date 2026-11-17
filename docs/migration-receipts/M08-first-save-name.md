@@ -31,5 +31,6 @@ Evidence is retained outside the repository under
 `.claude-work/codex-2026-11-17/usable-mac-first-task/mac/` (`name-models-r1`,
 `name-hosted-r2`). Hosted name tests compose the production title, Save and status
 components; full-header fitting and actual keyboard behavior are separate manual
-checks. Current-source controlled Python-backed Save → library → reopen remains
-pending at this checkpoint. No provider, installation, push or release is included.
+checks. The later private-file checkpoint completed the controlled Python-backed Save →
+library → reopen journey; see [verification](M08-private-workflow-files.md). No
+provider, installation, push or release is included.
