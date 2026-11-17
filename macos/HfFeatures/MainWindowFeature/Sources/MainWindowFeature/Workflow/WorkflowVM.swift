@@ -204,6 +204,8 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var nativeActivityRequestID = UUID()
     @ObservationIgnored var nativeActivityRequest: WorkflowNativeActivityRequest?
     @ObservationIgnored var runPolling = WorkflowRunPolling()
+    @ObservationIgnored var catalogReadID = UUID()
+    @ObservationIgnored var catalogPreparationTask: Task<WorkflowDefinitionCatalog, Error>?
     @ObservationIgnored var generationID = UUID()
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored var editorReadTask: Task<Void, Never>?
@@ -335,6 +337,9 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        catalogReadID = UUID()
+        catalogPreparationTask?.cancel()
+        catalogPreparationTask = nil
         qualification?.stop()
         usageSubscription = nil
         catalogSubscription = nil
@@ -590,11 +595,4 @@ final class WorkflowVM: WorkflowViewModel {
         }
     }
 
-}
-
-// MARK: - WorkflowUIError
-
-enum WorkflowUIError: LocalizedError {
-    case missingRun
-    var errorDescription: String? { "Harflow returned no workflow run identifier." }
 }

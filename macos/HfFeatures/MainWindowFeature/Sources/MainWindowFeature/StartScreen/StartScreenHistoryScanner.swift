@@ -99,16 +99,14 @@ struct StartScreenHistoryRepository: StartScreenHistorySource {
     }
 
     static func parseDefinitions(response: [String: JSONValue]) throws -> [WorkflowRecord] {
-        if CatalogState(raw: response).status == .preparing { throw StartScreenHistoryScanner.ScanError.preparing }
-        guard CatalogState(raw: response).isReady else { throw StartScreenHistoryScanner.ScanError.incomplete }
-        guard let items = response["workflows"]?.arrayValue else { throw StartScreenHistoryScanner.ScanError.incomplete }
-        var names: Set<String> = []
-        return try items.map { value in
-            guard let object = value.objectValue, let name = object["name"]?.stringValue,
-                  !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, names.insert(name).inserted else {
-                throw StartScreenHistoryScanner.ScanError.incomplete
+        do {
+            switch try WorkflowDefinitionCatalog.prepare(response) {
+            case .preparing: throw StartScreenHistoryScanner.ScanError.preparing
+            case .blocked: throw StartScreenHistoryScanner.ScanError.incomplete
+            case let .ready(records): return records
             }
-            return WorkflowRecord(raw: object)
+        } catch is WorkflowDefinitionCatalog.ReadError {
+            throw StartScreenHistoryScanner.ScanError.incomplete
         }
     }
 }

@@ -50,6 +50,13 @@ extension WorkflowVM {
     func refresh(generation: UUID? = nil) async {
         reconnectBuilderSession()
         let context = WorkflowReadContext(runID: selectedRun?.id, loadingID: initialLoadingID, generation: generation)
+        if context.runID == nil {
+            await refreshCatalog(context)
+            return
+        }
+        catalogReadID = UUID()
+        catalogPreparationTask?.cancel()
+        catalogPreparationTask = nil
         var preparing = false
         defer { finishRunRead(context, preparing: preparing) }
         do {
@@ -73,6 +80,47 @@ extension WorkflowVM {
         }
     }
 
+    private func refreshCatalog(_ context: WorkflowReadContext) async {
+        let readID = UUID()
+        catalogReadID = readID
+        catalogPreparationTask?.cancel()
+        catalogPreparationTask = nil
+        do {
+            let response = try await readWorkflow(context)
+            guard context.isCurrent(self), catalogReadID == readID else { return }
+            let preparation = WorkflowCatalogPreparation.start(response)
+            catalogPreparationTask = preparation
+            defer {
+                if catalogReadID == readID { catalogPreparationTask = nil }
+            }
+            let catalog = try await WorkflowCatalogPreparation.value(of: preparation)
+            guard context.isCurrent(self), catalogReadID == readID else { return }
+            switch catalog {
+            case .preparing: return
+            case let .blocked(reason):
+                reportReadFailure(reason ?? "Workflow catalog is blocked.", source: context.source, retry: readRetry(context))
+            case let .ready(records):
+                applyCatalog(records)
+                resolveReadFailure(source: context.source)
+                await refreshActivityMessageState()
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard context.isCurrent(self), catalogReadID == readID else { return }
+            let failure: any Error = error is WorkflowDefinitionCatalog.ReadError
+                ? StartScreenHistoryScanner.ScanError.incomplete : error
+            reportReadFailure(Self.message(failure), source: context.source, retry: readRetry(context))
+        }
+    }
+
+    private func applyCatalog(_ records: [WorkflowRecord]) {
+        let metricStart = MonitorMetrics.begin()
+        defer { MonitorMetrics.end(metricStart, stage: .workflowViewUpdate) }
+        if workflows != records { workflows = records }
+        if !hasLoadedWorkflowList { hasLoadedWorkflowList = true }
+    }
+
     private func readWorkflow(_ context: WorkflowReadContext) async throws -> [String: JSONValue] {
         if let id = context.runID {
             guard WorkflowRunIdentity.isValid(id) else { throw WorkflowReadResponseError.invalidIdentity }
@@ -91,11 +139,6 @@ extension WorkflowVM {
     private func applyWorkflowRead(_ response: [String: JSONValue], context: WorkflowReadContext) throws {
         let metricStart = MonitorMetrics.begin()
         defer { MonitorMetrics.end(metricStart, stage: .workflowViewUpdate) }
-        guard context.runID != nil else {
-            workflows = try StartScreenHistoryRepository.parseDefinitions(response: response)
-            hasLoadedWorkflowList = true
-            return
-        }
         let raw = response["run"]?.objectValue ?? response
         guard raw["workflow_run_id"]?.stringValue == context.runID,
               let status = raw["status"]?.stringValue, !status.isEmpty else {
@@ -134,4 +177,11 @@ private enum WorkflowReadResponseError: LocalizedError {
         case .invalidIdentity: "This workflow link has an invalid run identifier. Select a workflow from the sidebar."
         }
     }
+}
+
+// MARK: - WorkflowUIError
+
+enum WorkflowUIError: LocalizedError {
+    case missingRun
+    var errorDescription: String? { "Harflow returned no workflow run identifier." }
 }
