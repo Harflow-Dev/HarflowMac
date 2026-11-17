@@ -213,6 +213,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var editorLoadID = UUID()
     @ObservationIgnored var pendingEditorName: String?
     @ObservationIgnored var draftID = UUID()
+    @ObservationIgnored var discardRequestID: UUID?
     @ObservationIgnored var validationTask: Task<Void, Never>?
     @ObservationIgnored var validationID = UUID()
     var canonicalValidationDefinition: [String: JSONValue]?
@@ -334,6 +335,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        discardRequestID = nil
         catalogReadID = UUID()
         catalogPreparationTask?.cancel()
         catalogPreparationTask = nil

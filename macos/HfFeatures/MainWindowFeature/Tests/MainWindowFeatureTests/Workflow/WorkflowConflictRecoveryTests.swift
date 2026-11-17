@@ -11,7 +11,10 @@ import Testing
 
 @MainActor
 @Suite struct WorkflowConflictRecoveryTests {
-    func makeVM(failRead: Bool = false, failSave: Bool = false) -> (WorkflowVM, WorkflowDraftStore, MockWorkflowUseCase) {
+    func makeVM(
+        failRead: Bool = false, failSave: Bool = false,
+        readResponse: (@Sendable () throws -> [String: JSONValue])? = nil
+    ) -> (WorkflowVM, WorkflowDraftStore, MockWorkflowUseCase) {
         let store = WorkflowDraftTests().store()
         let useCase = MockWorkflowUseCase()
         useCase.stubBackendCatalog()
@@ -21,7 +24,11 @@ import Testing
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         given(useCase).validate(definition: .any).willReturn(["valid": .bool(true)])
-        if failRead {
+        if let readResponse {
+            given(useCase).command(.value("get"), options: .any, positionals: .any, runtime: .any).willProduce { _, _, _, _ in
+                try readResponse()
+            }
+        } else if failRead {
             given(useCase).command(.value("get"), options: .any, positionals: .any, runtime: .any).willThrow(WorkflowUIError.missingRun)
         } else {
             given(useCase).command(.value("get"), options: .any, positionals: .any, runtime: .any).willReturn(current)

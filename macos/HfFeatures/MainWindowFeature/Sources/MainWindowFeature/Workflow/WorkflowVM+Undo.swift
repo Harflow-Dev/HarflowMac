@@ -51,27 +51,8 @@ extension WorkflowVM {
         persistDraft()
     }
 
-    func discardChanges() {
-        guard canDiscard else { return }
-        guard builderSession == nil, !builderDispatchPending else { return }
-        guard !loadedName.isEmpty else { discardChanges(using: nil); return }
-        let identity = draftID
-        let loadID = editorLoadID
-        let snapshot = definition
-        let originalName = name
-        let target = loadedName
-        perform { [weak self] in
-            guard let self else { return }
-            let response = try await useCase.command("get", options: [], positionals: [target])
-            guard draftID == identity, editorLoadID == loadID, definition == snapshot, name == originalName,
-                  builderSession == nil, !builderDispatchPending else { return }
-            let current = WorkflowRecord(raw: response["workflow"]?.objectValue ?? response)
-            guard !current.id.isEmpty, !current.definition.isEmpty else { return }
-            discardChanges(using: current)
-        }
-    }
-
-    private func discardChanges(using current: WorkflowRecord?) {
+    func discardChanges(using current: WorkflowRecord?, isCurrent: () -> Bool = { true }) {
+        guard isCurrent() else { return }
         endNodeDrag()
         guard builderSession == nil, !builderDispatchPending else { return }
         do {
@@ -86,23 +67,12 @@ extension WorkflowVM {
         }
         reconnectBuilderSession()
         guard builderSession == nil, !builderDispatchPending else { return }
-        // Adopt a save that completed in another editor before choosing the baseline.
+        guard isCurrent() else { return }
+        // Saved discard must reject a late completion before persistence can adopt or delete it.
         guard persistDraft(reconnectBuilder: false) else { return }
         reconnectBuilderSession()
-        guard builderSession == nil, !builderDispatchPending else { return }
-        do {
-            if let key = draftKey, let draft = try draftStore.load(key: key) {
-                guard draft["draft_id"]?.stringValue == draftID.uuidString,
-                      draft["builder_session"] == nil, draft["builder_dispatch_pending"]?.boolValue != true else {
-                    errorText = "The workflow draft changed in another editor. Reopen it before discarding changes."
-                    return
-                }
-                try draftStore.remove(key: key)
-            }
-        } catch {
-            errorText = "Unable to discard workflow draft: \(Self.message(error))"
-            return
-        }
+        guard builderSession == nil, !builderDispatchPending, isCurrent() else { return }
+        guard removeDiscardedDraft(isCurrent: isCurrent) else { return }
         draftWriteTask?.cancel()
         draftWriteTask = nil
         draftPersistenceSuspended = true
@@ -122,6 +92,24 @@ extension WorkflowVM {
         resetEditHistory()
         pruneEditorSelection()
         errorText = nil
+    }
+
+    private func removeDiscardedDraft(isCurrent: () -> Bool) -> Bool {
+        do {
+            if let key = draftKey, let draft = try draftStore.load(key: key) {
+                guard draft["draft_id"]?.stringValue == draftID.uuidString,
+                      draft["builder_session"] == nil, draft["builder_dispatch_pending"]?.boolValue != true else {
+                    errorText = "The workflow draft changed in another editor. Reopen it before discarding changes."
+                    return false
+                }
+                guard isCurrent() else { return false }
+                try draftStore.remove(key: key)
+            }
+        } catch {
+            errorText = "Unable to discard workflow draft: \(Self.message(error))"
+            return false
+        }
+        return true
     }
 
     private func pruneEditorSelection() {

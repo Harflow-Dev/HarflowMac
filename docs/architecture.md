@@ -597,3 +597,9 @@ parent. Failure preserves the previous draft and removes only the owned temporar
 This avoids Foundation atomic-write staging in another temporary directory while retaining
 atomic name replacement; it makes no new fsync or crash-durability guarantee. Wire bytes,
 CLI options and engine-owned persistence remain unchanged.
+
+## Saved workflow discard
+
+`WorkflowVM+Discard` prepares the shared HfUI confirmation with a fresh public `get` result, showing its saved revision. Cancel is the default action. Confirmation consumes one request token, rechecks the captured editor and draft context, then reads the saved record again and requires the prepared name, workflow identity, revision and definition to match. Malformed or failed reads and newer draft-save completions refuse the discard and preserve the draft. The existing local discard transaction checks the captured authority before persistence and deletion, so persistence cannot silently adopt a newer completion and remove its draft. Never-saved drafts retain the existing direct reset.
+
+Design: HarflowDesign `b710856a31702e46e3b8f3a54be19f3cb7c422dc`, `v2/scripts/states-workflow-gaps.js`, `discard-confirm`.

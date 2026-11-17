@@ -1,4 +1,5 @@
 import Foundation
+import HfCommon
 import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
@@ -46,8 +47,13 @@ import Testing
         sut.draftKey = "saved:Saved"
         #expect(sut.restoreDraft())
         // when
+        var dialog: AlertContent?
+        let subscription = sut.objectDidPublishViewEvent.publisher.sink { dialog = $0.dialog }
         sut.discardChanges()
+        await waitUntil { !sut.isBusy && dialog != nil }
+        dialog?.actions.first { $0.title == "Discard" }?.action()
         await waitUntil { !sut.isBusy }
+        withExtendedLifetime(subscription) {}
         sut.persistDraft()
         // then
         #expect(sut.name == "Saved")
@@ -156,8 +162,13 @@ import Testing
         given(useCase)
 .command(.value("get"), options: .any, positionals: .any, runtime: .any)
             .willReturn(["name": .string("Saved"), "revision": .number(9), "definition": .object(saved)])
+        var dialog: AlertContent?
+        let subscription = sut.objectDidPublishViewEvent.publisher.sink { dialog = $0.dialog }
         sut.discardChanges()
+        await waitUntil { !sut.isBusy && dialog != nil }
+        dialog?.actions.first { $0.title == "Discard" }?.action()
         await waitUntil { !sut.isBusy }
+        withExtendedLifetime(subscription) {}
         #expect(sut.definition == saved)
         #expect(!sut.canSave)
     }

@@ -76,6 +76,7 @@ SUITE_TIMEOUT_SECONDS = 300
 AGGREGATE_TIMEOUT_SECONDS = 1200
 TERM_GRACE_SECONDS = 5.0
 HOSTED_SUITES = frozenset({
+    "MainWindowFeatureTests.WorkflowDiscardHostedTests",
     "MainWindowFeatureTests.WorkflowLibraryHostedTests",
     "MainWindowFeatureTests.WorkflowValidationHostedTests",
     "MainWindowFeatureTests.NeedsYouQuestionCardHostedTests",

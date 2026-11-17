@@ -442,6 +442,7 @@ PARALLEL_GROUP_TOP_BAR_SUITE = "MainWindowFeatureTests.ParallelGroupTopBarHosted
 PARALLEL_GROUP_LOADING_SUITE = "MainWindowFeatureTests.ParallelGroupLoadingHostedTests"
 PARALLEL_GROUP_MINIMUM_SUITE = "MainWindowFeatureTests.ParallelGroupMinimumHostedTests"
 HOSTED_SUITE_NAMES = (
+    "MainWindowFeatureTests.WorkflowDiscardHostedTests",
     "MainWindowFeatureTests.WorkflowLibraryHostedTests",
     "MainWindowFeatureTests.WorkflowValidationHostedTests",
     "MainWindowFeatureTests.NeedsYouQuestionCardHostedTests",
