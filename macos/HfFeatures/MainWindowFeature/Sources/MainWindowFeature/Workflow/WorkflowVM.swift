@@ -17,6 +17,8 @@ protocol WorkflowUseCase: Sendable {
                   runtime: QualificationRuntimeToken) async throws -> WorkflowActivityPage
     func qualificationSession() -> QualificationSession
     func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken?) async throws -> [String: JSONValue]
+    func boundBuilderCommand(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken,
+                             isCurrent: @escaping @Sendable () -> Bool) async throws -> [String: JSONValue]
     func validate(definition: JSONValue) async throws -> [String: JSONValue]
     func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue]
     func artifactPage(runID: String, executionID: String, cursor: String?) async -> Result<WorkflowArtifactPage, ToolError>
@@ -29,30 +31,6 @@ protocol WorkflowUseCase: Sendable {
     var backendCatalog: BackendCatalog { get }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never>
     func modelOptions(backend: String) async -> [ModelOption]
-}
-
-extension WorkflowUseCase {
-    func activityRuntime() throws -> QualificationRuntimeToken {
-        throw ToolError.notFound(tool: "harflow-ctl", searched: [])
-    }
-
-    func activity(runID _: String, executionID _: String, intent _: WorkflowActivityReadIntent,
-                  runtime _: QualificationRuntimeToken) async throws -> WorkflowActivityPage {
-        throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "workflow-inspect", detail: "Runtime-bound activity unavailable")
-    }
-
-    func command(_ command: String, options: [String], positionals: [String]) async throws -> [String: JSONValue] {
-        try await self.command(command, options: options, positionals: positionals, runtime: nil)
-    }
-
-    func qualificationSession() -> QualificationSession { QualificationSession(repository: NullQualificationRepository()) }
-    var agentUsageSnapshot: AgentUsageSnapshot { .init() }
-    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
-    func recordAgentUsage(_: AgentUsageIdentity, acknowledgementID _: String) async {}
-    var callerApprovalBackends: Set<String> { [] }
-    func artifactPage(runID _: String, executionID _: String, cursor _: String?) async -> Result<WorkflowArtifactPage, ToolError> {
-        .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
-    }
 }
 
 // MARK: - WorkflowRouting
@@ -81,14 +59,29 @@ final class WorkflowVM: WorkflowViewModel {
     var workflows: [WorkflowRecord] = []
     var hasLoadedWorkflowList = false
     var runs: [WorkflowRunModel] = []
-    var definition: [String: JSONValue] = [:] { didSet { recordEdit(name: name, definition: oldValue); scheduleValidation(); scheduleDraftPersistence() } }
-    var name = "" { didSet { if name != oldValue { recordEdit(name: oldValue, definition: definition); scheduleValidation(); scheduleDraftPersistence() } } }
-    var loadedName = "" { didSet { if loadedName != oldValue { scheduleLaunchPreview() } } }
+    var definition: [String: JSONValue] = [:] { didSet {
+        builderSubmissionFence?.invalidate()
+        recordEdit(name: name, definition: oldValue)
+        scheduleValidation()
+        scheduleDraftPersistence()
+    } }
+    var name = "" { didSet {
+        builderSubmissionFence?.invalidate()
+        if name != oldValue {
+            recordEdit(name: oldValue, definition: definition)
+            scheduleValidation()
+            scheduleDraftPersistence()
+        }
+    } }
+    var loadedName = "" { didSet { builderSubmissionFence?.invalidate(); if loadedName != oldValue { scheduleLaunchPreview() } } }
     var initialLoadingID = UUID()
     var initialLoadingKind: String? { didSet { initialLoadingID = UUID() } }
     var initialLoadFailed = false
-    var revision = 0
-    var savedDefinition: [String: JSONValue] = [:] { didSet { if savedDefinition != oldValue { scheduleLaunchPreview() } } }
+    var revision = 0 { didSet { builderSubmissionFence?.invalidate() } }
+    var savedDefinition: [String: JSONValue] = [:] { didSet {
+        builderSubmissionFence?.invalidate()
+        if savedDefinition != oldValue { scheduleLaunchPreview() }
+    } }
     var primaryNodeID: String?
     var selectedNodeIDs: Set<String> = []
     var selectedNodeID: String? {
@@ -105,6 +98,7 @@ final class WorkflowVM: WorkflowViewModel {
     var selectedEdgeID: String?
     var connectionSourceID: String?
     var selectedRun: WorkflowRunModel? { didSet {
+        builderSubmissionFence?.invalidate()
         updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence()
         if selectedRun?.id != oldValue?.id { selectedActivationID = nil }
         if selectedRun != oldValue { scheduleRunSidebar() }
@@ -112,7 +106,7 @@ final class WorkflowVM: WorkflowViewModel {
     var branchSelection = WorkflowBranchSelection()
     var selectedActivationID: String?
     var isEditing = false
-    private var operationBusy = false
+    var operationBusy = false
     var isBusy: Bool {
         get { operationBusy || builderDispatchPending }
         set { operationBusy = newValue }
@@ -195,6 +189,9 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored let useCase: any WorkflowUseCase
     @ObservationIgnored let draftStore: any WorkflowDraftStoring
     var builderDispatchPending = false
+    @ObservationIgnored var builderRuntime: QualificationRuntimeToken?
+    @ObservationIgnored var builderAttempt: WorkflowBuilderAttempt?
+    @ObservationIgnored var builderSubmissionFence: WorkflowBuilderFence?
     @ObservationIgnored var draftWriteTask: Task<Void, Never>?
     @ObservationIgnored var draftKey: String?
     @ObservationIgnored var draftPersistenceSuspended = false
@@ -207,12 +204,12 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var runPolling = WorkflowRunPolling()
     @ObservationIgnored var catalogReadID = UUID()
     @ObservationIgnored var catalogPreparationTask: Task<WorkflowDefinitionCatalog, Error>?
-    @ObservationIgnored var generationID = UUID()
+    @ObservationIgnored var generationID = UUID() { didSet { builderSubmissionFence?.invalidate() } }
     @ObservationIgnored private var didSubscribe = false
     @ObservationIgnored var editorReadTask: Task<Void, Never>?
-    @ObservationIgnored var editorLoadID = UUID()
+    @ObservationIgnored var editorLoadID = UUID() { didSet { builderSubmissionFence?.invalidate() } }
     @ObservationIgnored var pendingEditorName: String?
-    @ObservationIgnored var draftID = UUID()
+    @ObservationIgnored var draftID = UUID() { didSet { builderSubmissionFence?.invalidate() } }
     @ObservationIgnored var discardRequestID: UUID?
     @ObservationIgnored var deleteRequestID: UUID?
     var deleteFailure: WorkflowDeleteFailure?
@@ -222,7 +219,7 @@ final class WorkflowVM: WorkflowViewModel {
     var canonicalValidationSource: [String: JSONValue]?
     @ObservationIgnored var validatedDefinition: [String: JSONValue]?
     @ObservationIgnored var validationSuspended = false
-    @ObservationIgnored private var operation: Task<Void, Never>?
+    @ObservationIgnored var operation: Task<Void, Never>?
 
     @ObservationIgnored let routesStartedRun: Bool
     /// Whether anyone can see the Monitor — pauses this screen's poll while the window is hidden,
@@ -566,18 +563,6 @@ final class WorkflowVM: WorkflowViewModel {
             "backward": .bool(false)
         ])
         definition["connections"] = .array(entries.map(JSONValue.object))
-    }
-
-    func perform(_ work: @escaping @MainActor () async throws -> Void) {
-        guard !operationBusy else {
-            return
-        }
-        isBusy = true
-        errorText = nil
-        operation = Task { [weak self] in
-            do { try await work() } catch { self?.errorText = Self.message(error) }
-            self?.isBusy = false
-        }
     }
 
 }

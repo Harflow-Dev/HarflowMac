@@ -69,6 +69,11 @@ final class WorkflowRunPolling {
         return raw
     }
 
+    func cached(id: String, runtime: QualificationRuntimeToken?) -> [String: JSONValue]? {
+        guard let runtime, selectedRuntime == runtime else { return nil }
+        return cached(id: id)
+    }
+
     private func remember(_ raw: [String: JSONValue], id: String) {
         guard WorkflowRunIdentity.isValid(id), raw["workflow_run_id"]?.stringValue == id,
               raw["status"]?.stringValue?.isEmpty == false else { return }
@@ -89,10 +94,11 @@ final class WorkflowRunPolling {
     private var executions: [String: JSONValue] = [:]
     private var executionDigests: [String: String] = [:]
 
-    func load(id: String, useCase: any WorkflowUseCase) async throws -> [String: JSONValue] {
+    func load(id: String, useCase: any WorkflowUseCase, expectedRuntime: QualificationRuntimeToken? = nil) async throws -> [String: JSONValue] {
         let metricStart = MonitorMetrics.begin()
         defer { MonitorMetrics.end(metricStart, stage: .workflowLoad) }
         let runtime = try? useCase.activityRuntime()
+        guard expectedRuntime == nil || runtime == expectedRuntime else { throw CancellationError() }
         alignRuntime(runtime)
         let generation = UUID()
         loadID = generation

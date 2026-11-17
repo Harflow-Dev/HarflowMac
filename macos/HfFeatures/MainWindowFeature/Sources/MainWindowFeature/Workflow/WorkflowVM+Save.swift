@@ -148,6 +148,10 @@ extension WorkflowVM {
             guard var draft = try draftStore.load(key: key),
                   draft["draft_id"]?.stringValue == snapshot.draftID.uuidString,
                   draft["revision"]?.intValue == snapshot.revision else { return }
+            guard !hasBuilderMetadata(draft) else {
+                errorText = "Workflow saved; its unresolved workflow agent association is preserved in the original draft."
+                return
+            }
             let current = draft["definition"]?.objectValue ?? [:]
             var effective = current
             effective["name"] = draft["name"]

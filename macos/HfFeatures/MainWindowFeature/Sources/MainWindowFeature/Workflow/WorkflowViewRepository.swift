@@ -23,6 +23,11 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
         return try await repository.command(command, options: options, positionals: positionals)
     }
 
+    func boundBuilderCommand(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken,
+                             isCurrent: @escaping @Sendable () -> Bool) async throws -> [String: JSONValue] {
+        try await repository.command(command, options: options, positionals: positionals, runtime: runtime, isCurrent: isCurrent)
+    }
+
     func activityRuntime() throws -> QualificationRuntimeToken { try repository.activityRuntime() }
 
     func activity(runID: String, executionID: String, intent: WorkflowActivityReadIntent,

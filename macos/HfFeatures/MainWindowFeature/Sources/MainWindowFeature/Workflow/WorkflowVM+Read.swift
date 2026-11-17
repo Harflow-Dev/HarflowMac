@@ -48,7 +48,9 @@ extension WorkflowVM {
     }
 
     func refresh(generation: UUID? = nil) async {
+        guard validateBuilderRuntime() else { return }
         reconnectBuilderSession()
+        guard validateBuilderRuntime(), !builderDispatchPending || selectedRun != nil else { return }
         let context = WorkflowReadContext(runID: selectedRun?.id, loadingID: initialLoadingID, generation: generation)
         if context.runID == nil {
             await refreshCatalog(context)
@@ -61,7 +63,7 @@ extension WorkflowVM {
         defer { finishRunRead(context, preparing: preparing) }
         do {
             let response = try await readWorkflow(context)
-            guard context.isCurrent(self) else { return }
+            guard validateBuilderRuntime(), context.isCurrent(self) else { return }
             let state = CatalogState(raw: response)
             switch state.status {
             case .preparing: preparing = true
@@ -75,7 +77,7 @@ extension WorkflowVM {
             // A newer poll or command refresh superseded this read; it is not a load failure.
             return
         } catch {
-            guard context.isCurrent(self) else { return }
+            guard validateBuilderRuntime(), context.isCurrent(self) else { return }
             reportReadFailure(Self.message(error), source: context.source, retry: readRetry(context))
         }
     }
@@ -124,7 +126,7 @@ extension WorkflowVM {
     private func readWorkflow(_ context: WorkflowReadContext) async throws -> [String: JSONValue] {
         if let id = context.runID {
             guard WorkflowRunIdentity.isValid(id) else { throw WorkflowReadResponseError.invalidIdentity }
-            return try await runPolling.load(id: id, useCase: useCase)
+            return try await runPolling.load(id: id, useCase: useCase, expectedRuntime: selectedRun?.isBuilder == true ? builderRuntime : nil)
         }
         return try await useCase.command("list", options: [], positionals: [])
     }

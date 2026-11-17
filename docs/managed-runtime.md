@@ -47,3 +47,25 @@ Interpreter provenance: [python-build-standalone release 20261020](https://githu
 ## Current distribution limits
 
 Local native fixture qualification establishes offline installation, relocation, and app integration on the tested machine. It does not establish that the paired release is published on PyPI, ownership of the `harflow-mcp` account, or Developer ID/notarized distribution. Confirm account ownership before distribution. Release wiring is documented in [releasing](releasing.md). First PyPI publication, actual signed app validation, and notarization remain unverified and deferred. Endpoint/spec injection exists only in constructors for deterministic tests; no environment variable, preference, or debug/release switch changes production endpoints or TLS policy.
+
+### Workflow builder ownership
+
+A workflow draft records a version 1 builder binding containing only the selected executable,
+lexical expected state root and product version. Child environments, tokens and credentials are
+never persisted in that binding. While the app is running, builder submissions and selected
+builder reads/actions also require exact equality with the captured runtime token, including its
+child environment. Runtime loss or change revokes the selected builder and its activity.
+
+Each submission reserves its draft slot with a unique attempt ID and process owner. Only that
+exact attempt may clear the reservation or replace it with an acknowledged builder session; late
+results cannot recreate a deleted or replaced slot. An acknowledgement remains attached to its
+original runtime even if the editor has moved elsewhere. A command error, cancellation or absent
+run acknowledgement leaves the reservation intact because submission may have occurred. The app
+does not retry automatically.
+
+Reopening a draft restores a builder only when its recorded binding matches the selected runtime.
+Legacy, unavailable and mismatched associations remain preserved and block builder dispatch,
+reads and controls; no association is inferred from a run ID. Ordinary edits retain unresolved
+metadata, and save completion or rename cleanup refuses to remove or re-key it. Explicit Return
+to canvas or Apply proposal can release only the exact verified session currently displayed.
+Recovery of an association whose original runtime cannot be verified remains outside this flow.

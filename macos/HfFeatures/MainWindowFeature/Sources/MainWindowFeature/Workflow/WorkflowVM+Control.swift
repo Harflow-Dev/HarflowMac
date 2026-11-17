@@ -64,7 +64,7 @@ extension WorkflowVM {
         perform { [weak self] in
             guard let self else { return }
             do {
-                let result = try await useCase.command(command, options: capturedOptions, positionals: [runID])
+                let result = try await builderCommand(command, options: capturedOptions, positionals: [runID])
                 if let receipt = WorkflowMonitorStatus(result).interactionHistory.last(where: { $0.interactionID == continuation.interactionID }) {
                     retainInteractionOutcome(receipt, draft: nil, rootID: runID)
                 }

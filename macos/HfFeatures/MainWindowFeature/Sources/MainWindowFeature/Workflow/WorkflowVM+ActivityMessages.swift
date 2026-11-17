@@ -20,7 +20,7 @@ extension WorkflowVM {
             return
         }
         do {
-            let result = try await useCase.command("status", options: ["--monitor-view"], positionals: [runID])
+            let result = try await builderCommand("status", options: ["--monitor-view"], positionals: [runID])
             guard !Task.isCancelled, activityMessageTarget == target else { return }
             let raw = result["run"]?.objectValue ?? result
             guard raw["workflow_run_id"]?.stringValue == runID else { throw WorkflowUIError.missingRun }
@@ -42,7 +42,7 @@ extension WorkflowVM {
             + (target.taskID.map { ["--task-id=\($0)"] } ?? [])
         perform { [weak self] in
             guard let self else { return }
-            let result = try await useCase.command("send", options: options, positionals: [runID, text])
+            let result = try await builderCommand("send", options: options, positionals: [runID, text])
             if activityMessageTarget == target { errorText = WorkMessageOutcome.notice(result) }
             if let id = result["message_id"]?.stringValue, let note = WorkMessageBubble.refusalNote(in: result) {
                 messageNotes[id] = note
@@ -57,7 +57,7 @@ extension WorkflowVM {
         guard !isBusy, let runID = target.runID, target.unavailableReason == nil else { return }
         perform { [weak self] in
             guard let self else { return }
-            _ = try await useCase.command("cancel-message", options: ["--monitor"], positionals: [runID, messageID])
+            _ = try await builderCommand("cancel-message", options: ["--monitor"], positionals: [runID, messageID])
             if activityMessageTarget == target { errorText = "Queued message cancelled." }
             await refresh()
         }

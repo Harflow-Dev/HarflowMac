@@ -29,6 +29,7 @@ import Testing
         // given
         let useCase = PollingUseCase()
         useCase.snapshotMode = true
+        useCase.runtimeToken = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))
         let loader = WorkflowRunPolling()
         let raw = try await loader.load(id: "run", useCase: useCase)
         let vm = WorkflowTests().makeVM().sut
@@ -37,6 +38,34 @@ import Testing
         // then
         #expect(vm.initialLoadingKind == nil)
         #expect(vm.selectedRun?.raw == raw)
+    }
+
+    @Test func givenSameRunIDCachedForRuntimeA_whenOpeningUnderRuntimeB_thenAIsNotAdoptedBeforeFreshRead() async throws {
+        // given
+        let runtimeA = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/a", environment: [:]))
+        let runtimeB = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/b", environment: [:]))
+        let useCase = PollingUseCase()
+        useCase.runtimeToken = runtimeA
+        useCase.runName = "Run A"
+        let loader = WorkflowRunPolling()
+        let cached = try await loader.load(id: "run", useCase: useCase, expectedRuntime: runtimeA)
+        #expect(cached["workflow_name"]?.stringValue == "Run A")
+        useCase.runtimeToken = runtimeB
+        useCase.runName = "Run B"
+        let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
+                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                            visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
+        // when
+        vm.prepareRun(id: "run", polling: loader)
+        // then
+        #expect(vm.selectedRun?.id == "run")
+        #expect(vm.selectedRun?.isBuilder != true)
+        #expect(vm.initialLoadingKind == "run")
+        // Fresh read under B may adopt its own run.
+        await vm.refresh()
+        #expect(vm.selectedRun?.name == "Run B")
+        #expect(vm.selectedRun?.isBuilder == true)
+        #expect(vm.builderRuntime == runtimeB)
     }
 
     @Test func givenSameContentDigestsAndChangedStatus_whenPolling_thenStatusAdvances() async throws {
@@ -148,6 +177,13 @@ private final class PollingUseCase: WorkflowUseCase, @unchecked Sendable {
     var editingContent = "null"
     var staleOnce = false
     var staleRaised = false
+    var runtimeToken: QualificationRuntimeToken?
+    var runName = "Workflow"
+    func activityRuntime() throws -> QualificationRuntimeToken {
+        guard let runtimeToken else { throw CocoaError(.fileReadUnknown) }
+        return runtimeToken
+    }
+
     func command(_ command: String, options: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         if command == "status" {
             statusOptions.append(options)
@@ -172,7 +208,7 @@ private final class PollingUseCase: WorkflowUseCase, @unchecked Sendable {
                         "chunk": .string(String(text.dropFirst(offset).prefix(end - offset))),
                         "next_cursor": end < text.count ? .string("page-two") : .null]
             }
-            return ["workflow_run_id": .string("run"), "status": .string("completed"),
+            return ["workflow_run_id": .string("run"), "workflow_name": .string(runName), "status": .string("completed"),
                     "kind": .string("builder"),
                     "monitor_digests": .object(["execution_index": .string("execution_index"), "editing_definition": .string("editing_definition")])]
         }

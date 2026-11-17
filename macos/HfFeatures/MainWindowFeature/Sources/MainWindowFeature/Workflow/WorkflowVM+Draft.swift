@@ -23,7 +23,13 @@ extension WorkflowVM {
         guard adoptDraftCompletion() else { return false }
         guard let key = draftKey else { return false }
         do {
-            if builderSession == nil, !builderDispatchPending, (!loadedName.isEmpty && name == loadedName && definition == savedDefinition)
+            let existing = try draftStore.load(key: key)
+            if let existing, existing["draft_id"]?.stringValue != draftID.uuidString {
+                errorText = "The workflow draft belongs to another editor. Reopen it before saving."
+                return false
+            }
+            let retained = existing.map(hasBuilderMetadata) ?? false
+            if !retained, builderSession == nil, !builderDispatchPending, (!loadedName.isEmpty && name == loadedName && definition == savedDefinition)
                 || (loadedName.isEmpty && name.isEmpty && definition == Self.starterDefinition()) {
                 try draftStore.remove(key: key)
             } else {
@@ -31,11 +37,7 @@ extension WorkflowVM {
                     "draft_id": .string(draftID.uuidString), "name": .string(name), "loaded_name": .string(loadedName), "revision": .number(Double(revision)),
                     "definition": .object(definition), "saved_definition": .object(savedDefinition)
                  ]
-                if let builderSession { draft["builder_session"] = .object(builderSession) }
-                if builderDispatchPending {
-                    draft["builder_dispatch_pending"] = .bool(true)
-                    draft["builder_dispatch_owner"] = .string(Self.builderDispatchOwner)
-                }
+                draft = retainingBuilderMetadata(in: draft, existing: existing)
                 try draftStore.save(draft, key: key)
             }
             return true
@@ -45,9 +47,32 @@ extension WorkflowVM {
         }
     }
 
+    private func retainingBuilderMetadata(in value: [String: JSONValue], existing: [String: JSONValue]?) -> [String: JSONValue] {
+        var draft = value
+        let retained = existing.map(hasBuilderMetadata) ?? false
+        for (field, value) in existing ?? [:] where field.hasPrefix("builder_") { draft[field] = value }
+        if let builderSession, canUpdateBuilderSession(builderSession, existing: existing) {
+            draft["builder_session"] = .object(builderSession)
+        }
+        if builderDispatchPending, !retained, let builderAttempt {
+            draft["builder_dispatch_pending"] = .bool(true)
+            draft["builder_dispatch_owner"] = .string(Self.builderDispatchOwner)
+            draft["builder_dispatch_attempt"] = .object(builderAttempt.raw)
+        }
+        return draft
+    }
+
+    private func canUpdateBuilderSession(_ session: [String: JSONValue], existing: [String: JSONValue]?) -> Bool {
+        guard let existing, hasBuilderMetadata(existing) else { return true }
+        return existing["builder_session"]?["run"]?["workflow_run_id"] == session["run"]?["workflow_run_id"]
+            && existing["builder_session"]?["runtime_binding"] == session["runtime_binding"]
+            && existing["builder_dispatch_attempt"] == nil
+    }
+
     private func adoptDraftCompletion() -> Bool {
         guard let completion = WorkflowDraftCompletion.completed[draftID], completion.revision > revision else { return true }
-        guard canUseDraftSlot("saved:" + completion.name) else { return false }
+        guard !blocksBuilderDraftCleanup(), !blocksBuilderDraftCleanup(key: "saved:" + completion.name),
+              canUseDraftSlot("saved:" + completion.name) else { return false }
         let unchanged = effectiveDefinition == completion.submitted
         draftPersistenceSuspended = true
         revision = completion.revision
@@ -88,6 +113,19 @@ extension WorkflowVM {
         }
     }
 
+    func blocksBuilderDraftCleanup(key: String? = nil) -> Bool {
+        do {
+            if let key = key ?? draftKey, let draft = try draftStore.load(key: key), hasBuilderMetadata(draft) {
+                errorText = "The workflow agent association must be resolved before draft cleanup or renaming."
+                return true
+            }
+            return false
+        } catch {
+            errorText = "Unable to inspect workflow agent association: \(Self.message(error))"
+            return true
+        }
+    }
+
     func canUseDraftSlot(_ key: String) -> Bool {
         do {
             guard let existing = try draftStore.load(key: key), existing["draft_id"]?.stringValue != draftID.uuidString else { return true }
@@ -100,7 +138,9 @@ extension WorkflowVM {
     }
 
     func finishDraftSave(previousKey: String?) {
+        guard !blocksBuilderDraftCleanup(key: previousKey) else { return }
         let target = "saved:" + loadedName
+        guard !blocksBuilderDraftCleanup(key: target) else { return }
         do {
             if hasUnsavedChanges {
                 guard canUseDraftSlot(target) else { return }

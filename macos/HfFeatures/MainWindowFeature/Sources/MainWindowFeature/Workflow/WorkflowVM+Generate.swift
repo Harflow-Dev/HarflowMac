@@ -2,6 +2,24 @@ import Foundation
 import HfRepository
 import MonitorCore
 
+// MARK: - WorkflowBuilderSubmission
+
+private struct WorkflowBuilderSubmission {
+    let context: WorkflowRefinementContext
+    let key: String
+    let attempt: WorkflowBuilderAttempt
+    let fence: WorkflowBuilderFence
+    let generation: UUID
+    let candidate: [String: JSONValue]
+    let options: [String]
+    let refining: Bool
+
+    @MainActor func isCurrent(_ vm: WorkflowVM) -> Bool {
+        !Task.isCancelled && fence.isCurrent() && vm.generationID == generation
+            && vm.builderContextIsCurrent(context, attempt: attempt)
+    }
+}
+
 // MARK: - WorkflowVM generation
 
 extension WorkflowVM {
@@ -13,56 +31,74 @@ extension WorkflowVM {
             return
         }
         if draftKey == nil { draftKey = loadedName.isEmpty ? "new" : "saved:" + loadedName }
+        guard let runtime = try? useCase.activityRuntime() else {
+            errorText = "The workflow agent runtime is unavailable."
+            return
+        }
+        let attempt = WorkflowBuilderAttempt(draftID: draftID, runtime: runtime)
+        builderAttempt = attempt
         builderDispatchPending = true
         guard persistDraft(reconnectBuilder: false) else { builderDispatchPending = false; return }
-        let capturedName = name
-        let capturedRepo = repo
-        let capturedPrompt = prompt
-        let candidate = generationAgent
-        let editorContext = WorkflowRefinementContext(draftID: draftID, loadID: editorLoadID, definition: definition,
-                                                      name: name, loadedName: loadedName, revision: revision, baseline: savedDefinition)
-        let capturedKey = draftKey
-        let context = isRefining ? editorContext : nil
-        let submittedOptions = generationOptions(candidate: candidate, repo: capturedRepo, prompt: capturedPrompt, context: context)
-        perform { [weak self] in
-            guard let self else { return }
-            let response: [String: JSONValue]
-            do {
-                response = try await useCase.command("build", options: submittedOptions, positionals: [capturedName])
-            } catch {
-                clearBuilderDispatch(context: editorContext, key: capturedKey)
-                throw error
-            }
-            guard let id = response["workflow_run_id"]?.stringValue, !id.isEmpty else {
-                clearBuilderDispatch(context: editorContext, key: capturedKey)
-                throw WorkflowUIError.missingRun
-            }
-            let identity = AgentUsageIdentity(backend: candidate["backend"]?.stringValue ?? "", model: candidate["model"]?.stringValue)
-            await useCase.recordAgentUsage(identity, acknowledgementID: "workflow:" + id)
-            var initialRun: [String: JSONValue] = ["workflow_run_id": .string(id), "workflow_name": .string(capturedName),
-                                                 "kind": .string("builder"), "status": .string("starting")]
-            if let context { initialRun["editing_definition"] = .object(context.definition) }
-            recordBuilderDispatch(context: editorContext, key: capturedKey, run: initialRun)
-            let context = editorContext
-            do {
-                guard draftID == context.draftID, editorLoadID == context.loadID,
-                      definition == context.definition, name == context.name, loadedName == context.loadedName,
-                      revision == context.revision, savedDefinition == context.baseline else {
-                    errorText = "The canvas changed while the agent started. Your edits are preserved; find the proposal in workflow history."
-                    return
-                }
-                var active = context
-                active.runID = id
-                refinementContext = active
-                builderDispatchPending = false
-            }
-            showsGenerateSheet = false
-            selectedRun = WorkflowRunModel(raw: initialRun)
-            persistDraft()
-            isEditing = false
-            await useCase.refreshTasks()
-            await refresh()
+        guard let key = draftKey, let reserved = try? draftStore.load(key: key),
+              ownsBuilderAttempt(reserved, attempt: attempt) else { return }
+        let fence = WorkflowBuilderFence()
+        builderSubmissionFence?.invalidate()
+        builderSubmissionFence = fence
+        let context = WorkflowRefinementContext(draftID: draftID, loadID: editorLoadID, definition: definition,
+                                                name: name, loadedName: loadedName, revision: revision, baseline: savedDefinition)
+        let submission = WorkflowBuilderSubmission(context: context, key: key, attempt: attempt, fence: fence,
+            generation: generationID, candidate: generationAgent,
+            options: generationOptions(candidate: generationAgent, repo: repo, prompt: prompt, context: isRefining ? context : nil),
+            refining: isRefining)
+        perform { [weak self] in await self?.submitBuilder(submission) }
+    }
+
+    private func submitBuilder(_ submission: WorkflowBuilderSubmission) async {
+        guard submission.isCurrent(self) else {
+            clearBuilderDispatch(context: submission.context, key: submission.key, attempt: submission.attempt)
+            return
         }
+        let response: [String: JSONValue]
+        let fence = submission.fence
+        do {
+            response = try await useCase.boundBuilderCommand("build", options: submission.options, positionals: [submission.context.name],
+                runtime: submission.attempt.runtime, isCurrent: { fence.isCurrent() })
+        } catch {
+            if submission.isCurrent(self) { errorText = Self.message(error) }
+            return
+        }
+        guard let id = response["workflow_run_id"]?.stringValue, !id.isEmpty else {
+            if submission.isCurrent(self) { errorText = Self.message(WorkflowUIError.missingRun) }
+            return
+        }
+        var run: [String: JSONValue] = ["workflow_run_id": .string(id), "workflow_name": .string(submission.context.name),
+                                        "kind": .string("builder"), "status": .string("starting")]
+        if submission.refining { run["editing_definition"] = .object(submission.context.definition) }
+        guard preserveBuilderDispatch(context: submission.context, key: submission.key, run: run, attempt: submission.attempt) else { return }
+        let identity = AgentUsageIdentity(backend: submission.candidate["backend"]?.stringValue ?? "",
+                                          model: submission.candidate["model"]?.stringValue)
+        await useCase.recordAgentUsage(identity, acknowledgementID: "workflow:" + id)
+        await adoptBuilderAcknowledgement(submission, run: run, id: id)
+    }
+
+    private func adoptBuilderAcknowledgement(_ submission: WorkflowBuilderSubmission, run: [String: JSONValue], id: String) async {
+        guard submission.isCurrent(self),
+              builderAcknowledgementIsCurrent(key: submission.key, draftID: submission.context.draftID,
+                                               runID: id, runtime: submission.attempt.runtime) else { return }
+        var active = submission.context
+        active.runID = id
+        builderRuntime = submission.attempt.runtime
+        builderAttempt = nil
+        refinementContext = active
+        builderDispatchPending = false
+        showsGenerateSheet = false
+        selectedRun = WorkflowRunModel(raw: run)
+        persistDraft()
+        isEditing = false
+        await useCase.refreshTasks()
+        guard selectedRun?.id == id, editorLoadID == submission.context.loadID,
+              (try? useCase.activityRuntime()) == submission.attempt.runtime else { _ = validateBuilderRuntime(); return }
+        await refresh()
     }
 
     private func generationOptions(
@@ -79,16 +115,6 @@ extension WorkflowVM {
             options.append("--source=\(source.rendered())")
         }
         return options
-    }
-
-    private func recordBuilderDispatch(context: WorkflowRefinementContext, key: String?, run: [String: JSONValue]) {
-        let changed = definition != context.definition || name != context.name || loadedName != context.loadedName
-            || revision != context.revision || savedDefinition != context.baseline
-        if draftID == context.draftID, changed {
-            clearBuilderDispatch(context: context, key: key)
-        } else {
-            preserveBuilderDispatch(context: context, key: key, run: run)
-        }
     }
 
 }

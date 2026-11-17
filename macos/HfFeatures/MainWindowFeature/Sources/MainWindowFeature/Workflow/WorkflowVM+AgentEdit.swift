@@ -26,7 +26,7 @@ extension WorkflowVM {
     }
 
     func returnToCanvas() {
-        guard canReturnToCanvas else { return }
+        guard canReturnToCanvas, releaseBuilderSession() else { return }
         selectedRun = nil
         refinementContext = nil
         persistDraft(reconnectBuilder: false)
@@ -35,7 +35,7 @@ extension WorkflowVM {
     }
 
     func applyAgentProposal() {
-        guard let run = selectedRun, run.status == "completed",
+        guard validateBuilderRuntime(), let run = selectedRun, run.status == "completed",
               !appliedProposalIDs.contains(run.id),
               let proposal = run.raw["generated_definition"]?.objectValue,
               run.isBuilderProposal else { return }
@@ -48,6 +48,7 @@ extension WorkflowVM {
                 errorText = "The canvas changed after this request. Return to the canvas to keep your edits; open the proposal from history separately."
                 return
             }
+            guard releaseBuilderSession() else { return }
             loadedName = context.loadedName
             revision = context.revision
             savedDefinition = context.baseline

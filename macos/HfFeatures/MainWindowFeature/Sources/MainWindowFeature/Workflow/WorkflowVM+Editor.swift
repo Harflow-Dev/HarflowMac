@@ -99,8 +99,11 @@ extension WorkflowVM {
     func prepareRun(id: String, polling: WorkflowRunPolling) {
         let metricStart = MonitorMetrics.begin()
         runPolling = polling
-        selectedRun = WorkflowRunModel(raw: polling.cached(id: id) ?? ["workflow_run_id": .string(id)])
-        initialLoadingKind = polling.cached(id: id) == nil ? "run" : nil
+        let runtime = try? useCase.activityRuntime()
+        let cached = polling.cached(id: id, runtime: runtime)
+        builderRuntime = runtime
+        selectedRun = WorkflowRunModel(raw: cached ?? ["workflow_run_id": .string(id)])
+        initialLoadingKind = cached == nil ? "run" : nil
         if initialLoadingKind == nil { MonitorMetrics.end(metricStart, stage: .workflowContentReady) }
     }
 
@@ -114,6 +117,9 @@ extension WorkflowVM {
         draftID = UUID()
         initialLoadingKind = "run"
         initialLoadFailed = false
+        builderRuntime = run.isBuilder ? try? useCase.activityRuntime() : nil
+        builderDispatchPending = false
+        builderAttempt = nil
         selectedRun = run
         isEditing = false
         selectedNodeID = nil
@@ -135,6 +141,9 @@ extension WorkflowVM {
         if restoreDraft() { return }
         draftPersistenceSuspended = true
         draftID = UUID()
+        builderRuntime = nil
+        builderAttempt = nil
+        builderDispatchPending = false
         selectedRun = nil
         name = ""
         loadedName = ""

@@ -58,6 +58,7 @@ struct WorkflowNativeActivityView: View {
 
 extension WorkflowVM {
     func updateActivityMembership() {
+        guard validateBuilderRuntime() else { return }
         scheduleRunSidebar()
     }
 
@@ -69,6 +70,7 @@ extension WorkflowVM {
     }
 
     func updateNativeActivity() {
+        guard validateBuilderRuntime() else { return }
         guard runGraphVisible, let run = selectedRun,
               let activation = runSidebar.activation,
               let executionID = activation["id"]?.stringValue,

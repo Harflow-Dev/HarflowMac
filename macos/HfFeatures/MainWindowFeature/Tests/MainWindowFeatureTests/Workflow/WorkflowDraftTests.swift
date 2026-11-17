@@ -162,6 +162,7 @@ import Testing
         sut.newWorkflow()
         var proposal = sut.definition
         proposal["description"] = .string("Approved agent edit")
+        sut.builderRuntime = try sut.useCase.activityRuntime()
         sut.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("proposal"), "workflow_name": .string("Generated"),
                                                 "kind": .string("builder"), "status": .string("completed"),
                                                 "builder_followup": .bool(true), "generated_definition": .object(proposal)])

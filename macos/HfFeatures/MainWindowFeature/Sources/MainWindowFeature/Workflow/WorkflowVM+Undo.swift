@@ -98,7 +98,7 @@ extension WorkflowVM {
         do {
             if let key = draftKey, let draft = try draftStore.load(key: key) {
                 guard draft["draft_id"]?.stringValue == draftID.uuidString,
-                      draft["builder_session"] == nil, draft["builder_dispatch_pending"]?.boolValue != true else {
+                      !hasBuilderMetadata(draft) else {
                     errorText = "The workflow draft changed in another editor. Reopen it before discarding changes."
                     return false
                 }

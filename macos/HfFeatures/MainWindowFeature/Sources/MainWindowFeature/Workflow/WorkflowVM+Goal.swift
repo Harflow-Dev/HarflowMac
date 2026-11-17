@@ -13,7 +13,7 @@ extension WorkflowVM {
         perform { [weak self] in
             guard let self else { return }
             do {
-                _ = try await useCase.command("revise-goal",
+                _ = try await builderCommand("revise-goal",
                                           options: ["--monitor", "--goal=\(goal)", "--expected-revision=\(expectedRevision)"], positionals: [runID])
             } catch {
                 if let winner = (error as? ToolError)?.workflowInteractionWinner {

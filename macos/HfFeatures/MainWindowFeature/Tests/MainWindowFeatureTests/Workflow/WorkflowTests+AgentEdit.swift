@@ -27,7 +27,7 @@ extension WorkflowTests {
         vm.generationAgent = ["backend": .string("vibe"), "model": .string("fast")]
         useCase.pending?.resume(returning: ["workflow_run_id": .string("builder-1")])
         useCase.pending = nil
-        await waitUntil { !vm.isBusy }
+        await waitUntil { !vm.operationBusy && useCase.recordedAcknowledgementID == "workflow:builder-1" }
 
         // then
         #expect(useCase.recordedIdentity == AgentUsageIdentity(backend: "codex", model: "gpt-5"))
@@ -44,19 +44,21 @@ extension WorkflowTests {
         vm.prompt = "build this"
         vm.generationAgent = ["backend": .string("codex"), "model": .string("gpt-5")]
         given(harness.useCase)
-.command(.value("build"), options: .any, positionals: .value(["generated"]), runtime: .any)
+.boundBuilderCommand(.value("build"), options: .any, positionals: .value(["generated"]), runtime: .any, isCurrent: .any)
             .willReturn([:])
 
         // when
         vm.generate()
-        await waitUntil { !vm.isBusy }
+        await waitUntil { !vm.operationBusy && vm.errorText == WorkflowUIError.missingRun.errorDescription }
 
         // then
         verify(harness.useCase).recordAgentUsage(.any, acknowledgementID: .any).called(0)
         #expect(vm.errorText == WorkflowUIError.missingRun.errorDescription)
+        #expect(vm.builderDispatchPending)
+        #expect(vm.isBusy)
         verify(harness.useCase)
-.command(.value("build"), options: .matching { $0.contains("--monitor") },
-                                       positionals: .value(["generated"]), runtime: .any)
+.boundBuilderCommand(.value("build"), options: .matching { $0.contains("--monitor") },
+                                              positionals: .value(["generated"]), runtime: .any, isCurrent: .any)
 .called(1)
     }
 
@@ -70,16 +72,18 @@ extension WorkflowTests {
         vm.prompt = "build this"
         vm.generationAgent = ["backend": .string("vibe"), "model": .string("fast")]
         given(harness.useCase)
-.command(.value("build"), options: .any, positionals: .value(["generated"]), runtime: .any)
+.boundBuilderCommand(.value("build"), options: .any, positionals: .value(["generated"]), runtime: .any, isCurrent: .any)
             .willThrow(WorkflowUIError.missingRun)
 
         // when
         vm.generate()
-        await waitUntil { !vm.isBusy }
+        await waitUntil { !vm.operationBusy && vm.errorText == WorkflowUIError.missingRun.errorDescription }
 
         // then
         verify(harness.useCase).recordAgentUsage(.any, acknowledgementID: .any).called(0)
         #expect(vm.errorText == WorkflowUIError.missingRun.errorDescription)
+        #expect(vm.builderDispatchPending)
+        #expect(vm.isBusy)
     }
 
     @Test func givenBuilderPublishingDrafts_whenMapped_thenSourceIsInitialAndLatestPreviewDoesNotMutateEditor() throws {
@@ -87,6 +91,7 @@ extension WorkflowTests {
         let vm = makeVM().sut
         let source = try fixture("definition")
         vm.definition = source
+        try qualifyBuilderRuntime(vm)
         var raw: [String: JSONValue] = ["kind": .string("builder"), "editing_definition": .object(source)]
         let initial = WorkflowRunModel(raw: raw)
         var draft = source
@@ -108,6 +113,7 @@ extension WorkflowTests {
         // given
         let vm = makeVM().sut
         let original = try fixture("definition")
+        try qualifyBuilderRuntime(vm)
         var refined = original
         refined["max_parallel"] = .number(9)
         let run = WorkflowRunModel(raw: ["kind": .string("builder"), "builder_followup": .bool(true),
@@ -131,14 +137,16 @@ extension WorkflowTests {
     func givenPlacedUnsavedCanvas_whenBuilderStartsThenCanvasChanges_thenCapturedInputIsSentAndNewEditsSurvive(_ repo: String) async throws {
         // given
         let useCase = RecordingWorkflowBuilderUseCase()
+        let store = WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
-                            draftStore: WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                            draftStore: store,
                                     visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         vm.definition = try fixture("definition")
         vm.name = "current"
         vm.repo = repo
         vm.prompt = "add review"
         vm.isRefining = true
+        try qualifyBuilderRuntime(vm)
         let expected = vm.effectiveDefinition
         // when
         vm.generate()
@@ -151,11 +159,19 @@ extension WorkflowTests {
         let newer = vm.definition
         useCase.pending?.resume(returning: ["workflow_run_id": .string("proposal")])
         useCase.pending = nil
-        await waitUntil { !vm.isBusy }
+        await waitUntil { !vm.operationBusy && useCase.recordedAcknowledgementID == "workflow:proposal" }
         // then
         #expect(vm.definition == newer)
         #expect(vm.selectedRun == nil)
-        #expect(vm.errorText?.contains("canvas changed") == true)
+        #expect(vm.builderDispatchPending)
+        #expect(vm.isBusy)
+        #expect(vm.errorText == nil)
+        let storedDraft = try store.load(key: "new")
+        let preserved = try #require(storedDraft)
+        #expect(preserved["builder_dispatch_pending"] == nil)
+        #expect(preserved["builder_dispatch_attempt"] == nil)
+        #expect(preserved["builder_session"]?["runtime_binding"]?.objectValue == WorkflowBuilderBinding(try useCase.activityRuntime()).raw)
+        #expect(preserved["builder_session"]?["run"]?["workflow_run_id"]?.stringValue == "proposal")
     }
 
     @Test func givenUnsavedPlacedCanvas_whenApplyingProposal_thenBaselineAndRevisionArePreserved() throws {
@@ -166,6 +182,7 @@ extension WorkflowTests {
         vm.loadedName = "placed"
         vm.revision = 7
         vm.savedDefinition = ["name": .string("placed")]
+        try qualifyBuilderRuntime(vm)
         let baseline = vm.savedDefinition
         vm.refinementContext = WorkflowRefinementContext(draftID: vm.draftID, loadID: vm.editorLoadID,
                                                         definition: vm.definition, name: vm.name, loadedName: vm.loadedName,
@@ -173,7 +190,7 @@ extension WorkflowTests {
         var proposed = vm.definition
         proposed["max_parallel"] = .number(2)
         proposed["revision"] = .number(999)
-        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("proposal"), "status": .string("completed"),
+        vm.selectedRun = WorkflowRunModel(raw: ["kind": .string("builder"), "workflow_run_id": .string("proposal"), "status": .string("completed"),
                                                "editing_definition": .object(vm.definition), "generated_definition": .object(proposed)])
         // when
         vm.applyAgentProposal()
@@ -192,10 +209,11 @@ extension WorkflowTests {
         let vm = makeVM().sut
         vm.definition = try fixture("definition")
         vm.name = "placed"
+        try qualifyBuilderRuntime(vm)
         vm.refinementContext = WorkflowRefinementContext(draftID: vm.draftID, loadID: vm.editorLoadID,
                                                         definition: vm.definition, name: vm.name, loadedName: "",
                                                         revision: 0, baseline: [:], runID: "proposal")
-        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("proposal"), "status": .string("completed"),
+        vm.selectedRun = WorkflowRunModel(raw: ["kind": .string("builder"), "workflow_run_id": .string("proposal"), "status": .string("completed"),
                                                "editing_definition": .object(vm.definition), "generated_definition": .object(vm.definition)])
         vm.definition["max_parallel"] = .number(8)
         let current = vm.definition
@@ -214,10 +232,11 @@ extension WorkflowTests {
         let vm = makeVM().sut
         vm.definition = try fixture("definition")
         vm.name = "placed"
+        try qualifyBuilderRuntime(vm)
         vm.refinementContext = WorkflowRefinementContext(draftID: vm.draftID, loadID: vm.editorLoadID,
                                                         definition: vm.definition, name: vm.name, loadedName: "",
                                                         revision: 0, baseline: [:], runID: "proposal")
-        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string("proposal"), "status": .string("completed"),
+        vm.selectedRun = WorkflowRunModel(raw: ["kind": .string("builder"), "workflow_run_id": .string("proposal"), "status": .string("completed"),
                                                "editing_definition": .object(vm.definition), "generated_definition": .object([:])])
         // when
         switch change {
@@ -255,6 +274,11 @@ extension WorkflowTests {
     }
 }
 
+@MainActor
+private func qualifyBuilderRuntime(_ vm: WorkflowVM) throws {
+    vm.builderRuntime = try vm.useCase.activityRuntime()
+}
+
 // MARK: - RecordingWorkflowBuilderUseCase
 
 @MainActor
@@ -264,6 +288,10 @@ private final class RecordingWorkflowBuilderUseCase: WorkflowUseCase, @unchecked
     var recordedIdentity: AgentUsageIdentity?
     var recordedAcknowledgementID: String?
     var backendIDs: [String] { ["codex"] }
+    func activityRuntime() throws -> QualificationRuntimeToken {
+        QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))
+    }
+
     func command(_ command: String, options: [String], positionals _: [String], runtime _: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         guard command == "build" else { return [:] }
         self.options = options

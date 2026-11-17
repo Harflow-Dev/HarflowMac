@@ -6,6 +6,7 @@ import MonitorCore
 
 extension WorkflowVM {
     func checkEditorBaseline(_ workflow: WorkflowRecord, retainConflict: Bool = false) {
+        guard validateBuilderRuntime(), !builderDispatchPending else { return }
         let identity = draftID
         let loadID = editorLoadID
         checkingEditorBaseline = true
