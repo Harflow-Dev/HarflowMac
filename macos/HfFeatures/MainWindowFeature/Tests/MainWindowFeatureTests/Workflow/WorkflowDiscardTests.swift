@@ -223,7 +223,7 @@ import Testing
 
 // MARK: - WorkflowDiscardReadResponse
 
-private final class WorkflowDiscardReadResponse: @unchecked Sendable {
+final class WorkflowDiscardReadResponse: @unchecked Sendable {
     private let lock = NSLock()
     private var result: Result<[String: JSONValue], any Error>
     private var count = 0

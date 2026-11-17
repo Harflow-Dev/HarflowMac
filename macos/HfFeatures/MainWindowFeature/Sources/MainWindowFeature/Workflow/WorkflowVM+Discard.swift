@@ -101,12 +101,27 @@ extension WorkflowVM {
     }
 
     private static func discardRecord(_ response: [String: JSONValue], named name: String) -> WorkflowRecord? {
+        guard response["workflow"] == nil || response["workflow"]?.objectValue != nil else { return nil }
         let raw = response["workflow"]?.objectValue ?? response
         guard raw["name"]?.stringValue == name, !name.isEmpty,
               let revision = raw["revision"]?.intValue, revision > 0,
-              raw["revision"]?.doubleValue == Double(revision),
-              let definition = raw["definition"]?.objectValue, !definition.isEmpty else { return nil }
+              raw["revision"]?.doubleValue == Double(revision) else { return nil }
+        if let value = raw["definition"] {
+            guard let definition = value.objectValue, !definition.isEmpty else { return nil }
+        } else {
+            guard isFlatDiscardDefinition(raw) else { return nil }
+        }
         return WorkflowRecord(raw: raw)
+    }
+
+    private static func isFlatDiscardDefinition(_ raw: [String: JSONValue]) -> Bool {
+        // Python workflow-get returns its qualified definition directly, without a definition envelope.
+        guard let nodes = raw["nodes"]?.arrayValue, let connections = raw["connections"]?.arrayValue,
+              raw["orchestrator"]?.objectValue != nil,
+              nodes.allSatisfy({ $0.objectValue != nil }), connections.allSatisfy({ $0.objectValue != nil }) else { return false }
+        if let schema = raw["schema_version"], schema != .number(1) { return false }
+        if let identity = raw["workflow_id"], identity.stringValue == nil { return false }
+        return true
     }
 
     private func refuseDiscard() {
