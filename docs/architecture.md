@@ -529,3 +529,24 @@ stale checkpoint states, and menu-bar busy/stale/answered-elsewhere cards. Menu
 approval cards offer Approve once and Reject only; a caller-response capability
 missing from the selected runtime leaves the card read-only. Question Answer still
 opens the app. The 380 × 560 popover retains fixed header/footer and a scrolling body.
+
+
+## Native workflow library
+
+`WorkflowLibrary/` is the lightweight Workflows destination, independent of the retained editor,
+Parallel view model and permission-preview runner. One appearance owns one cancellable public
+`workflow list --monitor-view` lifecycle, gated by injected main-window visibility and scheduling.
+The M08-A0 catalog parser and row mapping run in cancellation-bridged background tasks; unchanged
+presentations do not write observable state. The composition-shared observation context supplies
+the selected runtime and epoch without requiring approval capabilities. The runtime-bound command
+checks that epoch during the CLI handshake. Rows additionally carry the mount identity, so old
+callbacks and late reads cannot cross runtime A→B→A or a disappearance/reappearance.
+
+Only successful empty reads show the empty state. Preparing stays loading; blocked or failed reads
+use a source-scoped incident and retained refresh details. Same-scope refresh failures keep the last
+successful rows. Edit and Run route exact saved names; Run never starts from the list. New workflow
+routes to the retained editor, preserves its draft collision protections, and binds generation intent
+and view identity to the new navigation UUID. The approved library states are HarflowDesign commit
+`3101abe348a0757db8989074c8e554dd19463f08`, `v2/scripts/screens-workflows.js` (list/empty) and
+`v2/scripts/screens-loading-more.js` (loading); the menu is commit
+`b710856a31702e46e3b8f3a54be19f3cb7c422dc`, `v2/scripts/states-workflow-gaps.js`, workflows/new-menu.

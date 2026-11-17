@@ -56,6 +56,9 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public var selection: MonitorDestination? {
         didSet {
             guard selection != oldValue else { return }
+            if case let .newWorkflow(identity) = selection {
+                if workflowGenerationIntent != identity { workflowGenerationIntent = nil }
+            } else { workflowGenerationIntent = nil }
             resourceSlotsVM?.readingState.setSelected(selection == .resourceSlots)
             if selection != resourceSlotsReturnDestination {
                 resourceSlotsReturnDestination = nil
@@ -110,20 +113,13 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         }
     }
 
-    public func presentWorkflowRunner() { openWorkflowRunner(name: nil) }
-
     var stopConfirmation: TaskStopConfirmation?
     /// The pending-launch Stop request whose sheet is shown; see `MainWindowCoordinator+PendingStop`.
     var pendingStopRequest: PendingLaunchStopRequest?
     /// Requests whose sheet was closed and whose native dismissal callback has not arrived yet.
     var awaitingStopDismissal: [PendingLaunchStopRequest] = []
     var initialWorkflowRunnerName: String?
-
-    func openWorkflowRunner(name: String?) {
-        guard runtimeIsReady else { return }
-        initialWorkflowRunnerName = name
-        isWorkflowRunnerPresented = true
-    }
+    var workflowGenerationIntent: UUID?
 
     public func buildStartScreenView() -> AnyView {
         StartScreenView(sharedStartScreenVM()).eraseToAnyView()

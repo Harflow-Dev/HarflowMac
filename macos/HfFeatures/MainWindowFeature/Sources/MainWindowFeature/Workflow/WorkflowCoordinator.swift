@@ -20,8 +20,8 @@ public extension MainWindowNavigationCoordinator {
     /// Empty launcher content for preview coordinators.
     func buildWorkflowRunnerView() -> AnyView { EmptyView().eraseToAnyView() }
 
-    /// Reuses the retained chooser until the workflow library's own redesign stage.
-    func buildWorkflowLibraryView() -> AnyView { buildWorkflowRunnerView() }
+    /// Lightweight preview coordinators may omit library content.
+    func buildWorkflowLibraryView() -> AnyView { EmptyView().eraseToAnyView() }
 
     /// Safe default for lightweight preview/test coordinators that do not mount workflows.
     func buildWorkflowEditorView(name _: String?) -> AnyView { Text("Workflow editor").eraseToAnyView() }
@@ -29,7 +29,28 @@ public extension MainWindowNavigationCoordinator {
     func buildWorkflowRunView(id _: String) -> AnyView { buildWorkflowEditorView(name: nil) }
 }
 
-extension MainWindowCoordinator: WorkflowRouting {
+extension MainWindowCoordinator: WorkflowRouting, WorkflowLibraryRouting {
+    func openWorkflowRunner(name: String?) {
+        guard runtimeIsReady else { return }
+        initialWorkflowRunnerName = name
+        isWorkflowRunnerPresented = true
+    }
+
+    public func presentWorkflowRunner() { openWorkflowRunner(name: nil) }
+
+    public func buildWorkflowLibraryView() -> AnyView {
+        WorkflowLibraryView(WorkflowLibraryVM(useCase: WorkflowLibraryViewRepository(), routing: self,
+                                             visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)).eraseToAnyView()
+    }
+
+    func editLibraryWorkflow(name: String) { openWorkflowEditor(name: name) }
+    func runLibraryWorkflow(name: String) { openWorkflowRunner(name: name) }
+    func newLibraryWorkflow(generate: Bool) {
+        let identity = UUID()
+        workflowGenerationIntent = generate ? identity : nil
+        selection = .newWorkflow(identity)
+    }
+
     public func buildWorkflowRunnerView() -> AnyView {
         let parallel = ParallelVM(groupName: "Workflow", useCase: ParallelViewRepository(), routing: self)
         let vm = WorkflowVM(useCase: WorkflowViewRepository(), routing: self, parallel: parallel,
@@ -45,7 +66,16 @@ extension MainWindowCoordinator: WorkflowRouting {
                             draftStore: WorkflowDraftStore.applicationStore(),
                             visibility: GlobalValues.monitorVisibility, scheduler: GlobalValues.scheduling)
         vm.prepareEditor(name: name)
-        return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id(name ?? "new-workflow").eraseToAnyView()
+        if name == nil, case let .newWorkflow(identity) = selection, workflowGenerationIntent == identity {
+            vm.showsGenerateSheet = true
+        }
+        return WorkflowView(vm, builderTaskView: buildWorkflowBuilderTaskView).id(workflowEditorMountIdentity(name: name)).eraseToAnyView()
+    }
+
+    func workflowEditorMountIdentity(name: String?) -> String {
+        if let name { return name }
+        if case let .newWorkflow(identity) = selection { return identity.uuidString }
+        return "new-workflow"
     }
 
     private func buildWorkflowBuilderTaskView(taskID: String, runID: String) -> AnyView {
