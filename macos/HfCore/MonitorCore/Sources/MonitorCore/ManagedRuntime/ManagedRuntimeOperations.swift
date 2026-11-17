@@ -74,8 +74,33 @@ enum ManagedRuntimeFiles {
         if let kind = kind(path), kind != .typeRegular {
             throw ManagedRuntimeFailure("Refusing a foreign managed runtime launcher.")
         }
-        try Data(text.utf8).write(to: URL(fileURLWithPath: path), options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: path)
+        let parent = URL(fileURLWithPath: path).deletingLastPathComponent()
+        let temporaryPath = parent.appendingPathComponent(".launcher-" + UUID().uuidString).path
+        let descriptor = open(temporaryPath, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW, S_IRWXU)
+        guard descriptor >= 0 else {
+            let code = errno
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+        }
+        // Only a successful exclusive open grants ownership of this cleanup path.
+        var published = false
+        defer { if !published { unlink(temporaryPath) } }
+        // Close exactly once, including on write/chmod failure; never retry a
+        // failed close against a descriptor the system may already have reused.
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: false)
+        var closeAttempted = false
+        defer { if !closeAttempted { try? handle.close() } }
+        try handle.write(contentsOf: Data(text.utf8))
+        guard fchmod(descriptor, S_IRWXU) == 0 else {
+            let code = errno
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+        }
+        closeAttempted = true
+        try handle.close()
+        guard rename(temporaryPath, path) == 0 else {
+            let code = errno
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+        }
+        published = true
     }
 
     static func quote(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'" }
