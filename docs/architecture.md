@@ -568,3 +568,14 @@ Readiness does not replace the save transaction: immutable snapshots, save valid
 baseline identity/revision checks, compare-and-set submission, draft retention and late
 save reconciliation remain in force. This uses the existing Python engine 0.0.14
 public validate/save operations and changes no engine pin or wire contract.
+
+The first-save name field follows owner-approved HarflowDesign
+`533c5798873139a17d5519288e2df57b2de38ab7`, `v2/scripts/states-workflow-naming.js`,
+`workflow-editor/name-entry-empty`, `name-entry-focused`, `name-entry-named`,
+`name-entry-long` and their `-minimum` states. `WorkflowTitle` exposes a native
+single-line “Workflow name” field in the existing title slot only while editing a
+never-saved workflow with no selected run. Its direct name binding reuses validation
+invalidation and draft persistence; leaving the field retains the draft. It adds no
+submit, cancel, rename or engine operation. Saved workflows and runs keep static
+titles. Field fitting uses the approved 96–260 point range; canvas node dimensions
+are unchanged.

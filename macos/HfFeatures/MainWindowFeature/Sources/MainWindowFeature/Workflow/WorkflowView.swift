@@ -118,8 +118,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             HStack(spacing: HfRadius.Metrics.spacing12) {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
                     HStack(spacing: HfRadius.Metrics.spacing10) {
-                    Text(viewModel.selectedRun?.name ?? (viewModel.isEditing ? (viewModel.name.isEmpty ? "New workflow" : viewModel.name) : "Workflows"))
-                        .font(.hf(.title, weight: .semibold))
+                    workflowTitle
                     if let run = viewModel.selectedRun {
                         WorkflowRecoveryBadge(run: run, isEligible: recoveryEligibleRunID != nil,
                                               focus: $recoveryBadgeFocused, onOpen: { recoveryOverlay.openFromBadge() })

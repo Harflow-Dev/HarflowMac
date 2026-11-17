@@ -107,6 +107,35 @@ extension WorkflowTests {
         vm.didDisappear()
     }
 
+    @Test func givenValidatedName_whenNativeEditingWritesSameName_thenReadinessAndDraftWorkStayUnchanged() async throws {
+        // given
+        let useCase = ControlledWorkflowValidationUseCase()
+        let vm = readinessVM(useCase)
+        vm.newWorkflow()
+        vm.name = "Release checklist"
+        try #require(await useCase.waitForRequestCount(1))
+        let validation = vm.validationTask
+        useCase.finish(0, result: .success(["valid": .bool(true)]))
+        await validation?.value
+        await vm.draftWriteTask?.value
+        let generation = vm.validationID
+        let validatedDefinition = vm.validatedDefinition
+        let historyCount = vm.editHistory.count
+        let currentName = vm.name
+        #expect(vm.canSave)
+        // when: native end-editing may write the already bound value again.
+        vm.name = currentName
+        // then
+        #expect(vm.canSave)
+        #expect(vm.validationState == .valid)
+        #expect(vm.validationID == generation)
+        #expect(vm.validatedDefinition == validatedDefinition)
+        #expect(vm.editHistory.count == historyCount)
+        #expect(vm.draftWriteTask == nil)
+        #expect(useCase.requests.count == 1)
+        vm.didDisappear()
+    }
+
     private func readinessVM(_ useCase: ControlledWorkflowValidationUseCase) -> WorkflowVM {
         let vm = WorkflowVM(useCase: useCase, routing: MockWorkflowRouting(), parallel: ParallelVMTests().makeSUT().sut,
                             draftStore: WorkflowDraftTests().store(), visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())

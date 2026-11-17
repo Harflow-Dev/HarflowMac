@@ -82,7 +82,7 @@ final class WorkflowVM: WorkflowViewModel {
     var hasLoadedWorkflowList = false
     var runs: [WorkflowRunModel] = []
     var definition: [String: JSONValue] = [:] { didSet { recordEdit(name: name, definition: oldValue); scheduleValidation(); scheduleDraftPersistence() } }
-    var name = "" { didSet { recordEdit(name: oldValue, definition: definition); scheduleValidation(); scheduleDraftPersistence() } }
+    var name = "" { didSet { if name != oldValue { recordEdit(name: oldValue, definition: definition); scheduleValidation(); scheduleDraftPersistence() } } }
     var loadedName = "" { didSet { if loadedName != oldValue { scheduleLaunchPreview() } } }
     var initialLoadingID = UUID()
     var initialLoadingKind: String? { didSet { initialLoadingID = UUID() } }

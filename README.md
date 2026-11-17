@@ -2,7 +2,7 @@
 
 Harflow is a native macOS interface for harness sessions, agent tasks, and workflow nodes. Installed command-line tools are harnesses; the AI workers they run are agents.
 
-Workflows lists saved definitions with their available descriptions and node counts. Edit opens the saved workflow; Run opens its permission-preview launcher. New workflow offers a blank draft or generation with an agent. Reads use the selected runtime; unavailable reads remain visible and can be refreshed.
+Workflows lists saved definitions with their available descriptions and node counts. Edit opens the saved workflow; Run opens its permission-preview launcher. New workflow offers a blank draft or generation with an agent. Name a blank draft in the title field before its first save; saved workflow titles remain static. Reads use the selected runtime; unavailable reads remain visible and can be refreshed.
 
 Needs you shows workflow questions as inline answer cards. Each question keeps its own draft; offered answers use only the engine's choices. Unreadable sources disable answers and offer Try again. Receipts and unavailable cards remain for the current Needs you appearance, outside the pending count, and clear when leaving the screen or changing runtime scope. Open run opens the question's workflow. Native verification of this source change is pending; see [M07](docs/migration-receipts/M07.md).
 
