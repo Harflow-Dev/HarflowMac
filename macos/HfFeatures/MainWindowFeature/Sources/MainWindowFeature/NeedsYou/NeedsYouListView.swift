@@ -63,7 +63,7 @@ struct NeedsYouListView<VM: NeedsYouViewModel>: View {
             ProgressView("Checking tasks and workflow runs…")
                 .frame(maxWidth: .infinity, minHeight: 160)
                 .accessibilityLabel("Loading requests")
-        } else if presentation.rows.isEmpty {
+        } else if presentation.rows.isEmpty, presentation.questions.isEmpty {
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
                 Text("Nothing needs you").font(.hf(.headline))
                 Text("Approvals, questions and recovery checkpoints you can answer appear here, whoever started the run.")
@@ -74,16 +74,31 @@ struct NeedsYouListView<VM: NeedsYouViewModel>: View {
         } else {
             VStack(spacing: HfRadius.Metrics.spacing10) {
                 ForEach(presentation.rows) { row in
-                    NeedsYouRowView(row: row, isExpanded: expanded.contains(row.id), open: { viewModel.didSelect(row.id) },
-                                    toggle: { toggle(row.id) })
-                        .opacity(row.isLeaving ? 0 : 1)
-                        .transition(reduceMotion ? .identity : .opacity)
+                    if let card = presentation.questions.last(where: { $0.item.id == row.id && !$0.absentSeen }) {
+                        question(card)
+                    } else {
+                        NeedsYouRowView(row: row, isExpanded: expanded.contains(row.id), open: { viewModel.didSelect(row.id) },
+                                        toggle: { toggle(row.id) })
+                            .opacity(row.isLeaving ? 0 : 1)
+                            .transition(reduceMotion ? .identity : .opacity)
+                    }
                 }
+                ForEach(presentation.questions.filter { card in
+                    card.absentSeen || !presentation.rows.contains { $0.id == card.item.id }
+                }) { card in question(card) }
             }
             .animation(reduceMotion ? nil : HfMotion.arrival, value: presentation.rows)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Pending requests")
         }
+    }
+
+    private func question(_ card: NeedsYouQuestion) -> some View {
+        NeedsYouQuestionCard(detail: card.detail,
+                             draft: Binding(get: { viewModel.questionDraft(for: card) }, set: { viewModel.setQuestionDraft($0, for: card) }),
+                             send: { viewModel.submitQuestion(card, offered: $0) },
+                             retry: { viewModel.retryQuestion(card) }, openRun: { viewModel.openQuestionRun(card) })
+            .id(card.id)
     }
 
     private func toggle(_ id: String) {

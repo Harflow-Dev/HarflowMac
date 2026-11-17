@@ -16,6 +16,8 @@ struct NeedsYouAssemblyInput: Sendable {
     let sendError: String?
     let notice: String?
     var savedDraft: String = ""
+    var questions: [NeedsYouQuestion] = []
+    var questionSuppressed: [NeedsYouQuestionIdentity] = []
 }
 
 struct NeedsYouAssemblyResult: Sendable {
@@ -23,6 +25,7 @@ struct NeedsYouAssemblyResult: Sendable {
     let detail: NeedsYouDetail?
     /// The exact item the detail was rendered from; answers are sent for this item and no other.
     let item: NeedsYouItem?
+    var questionSuppressed: [NeedsYouQuestionIdentity] = []
 }
 
 // MARK: - NeedsYouAssembly
@@ -38,15 +41,36 @@ enum NeedsYouAssembly {
                 ($0.waitingSince ?? .distantFuture, $0.id) < ($1.waitingSince ?? .distantFuture, $1.id)
             }
         }
+        let questionResult = NeedsYouQuestionAssembly.reconcile(input.questions, suppressed: input.questionSuppressed, snapshot: input.snapshot)
+        presentation.questions = questionResult.cards
+        let answered = presentation.questions.filter { !$0.isPending && !$0.absentSeen }.map { NeedsYouQuestionIdentity($0.item) }
+            + questionResult.suppressed
+        let answeredByID = Dictionary(grouping: answered, by: \.id)
+        let suppressedByID = Dictionary(grouping: questionResult.suppressed, by: \.id)
+        let suppressedIDs = Set(input.snapshot
+.items
+.filter { item in
+            suppressedByID[item.id]?.contains(where: { $0.matches(item) }) == true
+        }
+.map(\.id))
+        presentation.rows.removeAll { suppressedIDs.contains($0.id) }
+        if !answered.isEmpty {
+            var countSnapshot = input.snapshot
+            countSnapshot.items.removeAll { item in answeredByID[item.id]?.contains(where: { $0.matches(item) }) == true }
+            presentation.summary = NeedsYouPresentationMapper.summary(countSnapshot)
+        }
         presentation.notice = input.notice
-        guard let id = input.selectedID else { return NeedsYouAssemblyResult(presentation: presentation, detail: nil, item: nil) }
+        guard let id = input.selectedID else {
+            return NeedsYouAssemblyResult(presentation: presentation, detail: nil, item: nil, questionSuppressed: questionResult.suppressed)
+        }
         let item = liveItem(id, input)
         let detail = detail(id: id, input: input, loading: presentation.isLoading)
         presentation.detail = detail
         presentation.detailIsLoading = detail == nil
         presentation.showsDetail = true
         let answerable = input.settled[id] == nil && detail?.phase != .expired && detail?.phase != .withdrawn
-        return NeedsYouAssemblyResult(presentation: presentation, detail: detail, item: answerable ? item : nil)
+        return NeedsYouAssemblyResult(presentation: presentation, detail: detail, item: answerable ? item : nil,
+                                      questionSuppressed: questionResult.suppressed)
     }
 
     /// The request as it may be answered now. Source availability and resolution are authoritative: a withdrawn or

@@ -160,6 +160,8 @@ public struct NeedsYouSnapshot: Equatable, Sendable {
     }
 
     public var phase: Phase
+    /// Captured runtime observation for this entire snapshot, including empty and loading states.
+    public var workflowContext: WorkflowResponseContext?
     /// Answerable requests, oldest first.
     public var items: [NeedsYouItem]
     /// Sources that failed to read or were not qualified.
@@ -174,9 +176,11 @@ public struct NeedsYouSnapshot: Equatable, Sendable {
     /// Creates a snapshot.
     public init(
         phase: Phase = .loading, items: [NeedsYouItem] = [], unreadableSourceCount: Int = 0,
-        deferredSourceCount: Int = 0, workflowInputsUnsupported: Bool = false, withdrawn: [NeedsYouItem] = []
+        deferredSourceCount: Int = 0, workflowInputsUnsupported: Bool = false, withdrawn: [NeedsYouItem] = [],
+        workflowContext: WorkflowResponseContext? = nil
     ) {
         self.phase = phase
+        self.workflowContext = workflowContext
         self.items = items
         self.unreadableSourceCount = unreadableSourceCount
         self.deferredSourceCount = deferredSourceCount

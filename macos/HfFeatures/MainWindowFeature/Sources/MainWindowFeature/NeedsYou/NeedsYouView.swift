@@ -9,6 +9,11 @@ protocol NeedsYouViewModel: ViewModel {
     var presentation: NeedsYouPresentation { get }
     var answerText: String { get set }
     var additionalAttempts: Int { get set }
+    func questionDraft(for rendered: NeedsYouQuestion) -> String
+    func setQuestionDraft(_ text: String, for rendered: NeedsYouQuestion)
+    func submitQuestion(_ rendered: NeedsYouQuestion, offered: String?)
+    func retryQuestion(_ rendered: NeedsYouQuestion)
+    func openQuestionRun(_ rendered: NeedsYouQuestion)
     func didAppear()
     func didDisappear()
     func show(itemID: String?)
@@ -20,6 +25,14 @@ protocol NeedsYouViewModel: ViewModel {
     func didChooseOffered(_ answer: String)
     func didDecide(approve: Bool)
     func didChangeReduceMotion(_ value: Bool)
+}
+
+extension NeedsYouViewModel {
+    func questionDraft(for rendered: NeedsYouQuestion) -> String { rendered.draft }
+    func setQuestionDraft(_: String, for _: NeedsYouQuestion) {}
+    func submitQuestion(_: NeedsYouQuestion, offered _: String?) {}
+    func retryQuestion(_: NeedsYouQuestion) {}
+    func openQuestionRun(_: NeedsYouQuestion) {}
 }
 
 // MARK: - NeedsYouView

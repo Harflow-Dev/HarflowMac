@@ -78,6 +78,7 @@ struct NeedsYouDetail: Equatable, Sendable, Identifiable {
 struct NeedsYouPresentation: Equatable, Sendable {
     var isLoading = true
     var rows: [NeedsYouRow] = []
+    var questions: [NeedsYouQuestion] = []
     var summary = ""
     /// Status notice, e.g. "The caller is answering this again."
     var notice: String?

@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 @testable import HfRepository
 import HfTestUtilities
@@ -66,6 +67,7 @@ import Testing
         await oldPass.value
         // then
         #expect(sut.snapshot.items.first?.approval == second)
+        #expect(sut.snapshot.workflowContext == WorkflowResponseContext(runtime: try owner.context().runtime, epoch: try owner.context().epoch))
         #expect(sut.snapshot.items.first?.approvalContext == (try owner.context()))
         await sut.runPass()
         #expect(sut.snapshot.items.first?.approval == second)
@@ -209,6 +211,112 @@ import Testing
         // then
         #expect(sut.snapshot.items.first == replacement)
         #expect(replacement.workflowContext != shown.workflowContext)
+    }
+
+    @Test func givenEmptyInventory_whenRuntimeChangesAndReturns_thenEverySnapshotRetainsItsCapturedObservation() async throws {
+        // given
+        let engine = FakeNeedsYouEngine()
+        let owner = NeedsYouScopeOwner()
+        let sut = repository(engine, owner: owner)
+        let observed = LockedBox<[NeedsYouSnapshot]>([])
+        let subscription = sut.snapshotPublisher().sink { value in observed.mutate { $0.append(value) } }
+        await sut.runPass()
+        let first = try #require(sut.snapshot.workflowContext)
+        // when
+        owner.select("B")
+        await sut.runPass()
+        let second = try #require(sut.snapshot.workflowContext)
+        owner.select("A")
+        await sut.runPass()
+        let returned = try #require(sut.snapshot.workflowContext)
+        // then — empty/loading publications carry provenance independently of item identity.
+        #expect(first != second && first != returned && second != returned)
+        #expect(first.runtime == returned.runtime)
+        let allInventoriesAreEmpty = observed.value.allSatisfy(\.items.isEmpty)
+        #expect(allInventoriesAreEmpty)
+        for context in [first, second, returned] {
+            #expect(observed.value.contains { $0.phase == .loading && $0.workflowContext == context })
+            #expect(observed.value.contains { $0.phase == .ready && $0.workflowContext == context })
+        }
+        subscription.cancel()
+    }
+
+    @Test func givenSuspendedPass_whenQualificationIsLost_thenResetRetiresScopeAndLateOutputCannotRestoreIt() async throws {
+        // given
+        let engine = FakeNeedsYouEngine()
+        let owner = NeedsYouScopeOwner()
+        let state = CurrentValueSubject<RuntimeSetupState, Never>(.ready)
+        let request = approval(command: "runtime-A")
+        engine.tasks = [awaitingTask("t1")]
+        engine.approvalRows["t1"] = [request]
+        let gate = NeedsYouScopeGate()
+        engine.approvalDetailRead = { _, _ in await gate.wait(); return request }
+        let sut = NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: CapturingScheduler(),
+                                        visibility: FakeMonitorVisibility(), install: readyInstall(state), approvals: owner)
+        let observed = LockedBox<[NeedsYouSnapshot]>([])
+        let subscription = sut.snapshotPublisher().sink { value in observed.mutate { $0.append(value) } }
+        let oldPass = Task { await sut.runPass() }
+        await waitUntil { gate.isWaiting }
+        #expect(sut.snapshot.workflowContext != nil)
+        // when — keep owner.context current to prove qualification reset has its own retirement fence.
+        state.send(.checking)
+        await sut.runPass()
+        let resetCount = observed.value.count
+        #expect(sut.snapshot == NeedsYouSnapshot())
+        state.send(.ready)
+        gate.release()
+        await oldPass.value
+        // then — even requalification with the same owner context cannot revive the retired actor.
+        #expect(sut.snapshot == NeedsYouSnapshot())
+        #expect(observed.value.count == resetCount)
+        #expect(observed.value.last?.workflowContext == nil)
+        engine.approvalDetailRead = nil
+        engine.approvalDetails = [request.id: request]
+        await sut.runPass()
+        #expect(sut.snapshot.items.first?.approval == request)
+        #expect(sut.snapshot.workflowContext != nil)
+        subscription.cancel()
+    }
+
+    @Test func givenStartedLoopWithSuspendedRead_whenQualificationIsLost_thenSnapshotResetsBeforeReadReturns() async {
+        // given
+        let engine = FakeNeedsYouEngine()
+        let owner = NeedsYouScopeOwner()
+        let state = CurrentValueSubject<RuntimeSetupState, Never>(.ready)
+        let request = approval(command: "retired-pass")
+        engine.tasks = [awaitingTask("t1")]
+        engine.approvalRows["t1"] = [request]
+        let oldRead = NeedsYouScopeGate()
+        let newRead = NeedsYouScopeGate()
+        let calls = LockedBox(0)
+        engine.approvalDetailRead = { _, _ in
+            var first = false
+            calls.mutate { $0 += 1; first = $0 == 1 }
+            if first { await oldRead.wait() } else { await newRead.wait() }
+            return request
+        }
+        let sut = NeedsYouRepositoryImpl(engine: engine, toolEnvironment: NullToolEnvironmentRepository(), scheduler: CapturingScheduler(),
+                                        visibility: FakeMonitorVisibility(), install: readyInstall(state), approvals: owner)
+        let observed = LockedBox<[NeedsYouSnapshot]>([])
+        let subscription = sut.snapshotPublisher().sink { value in observed.mutate { $0.append(value) } }
+        sut.start()
+        sut.start() // Subscription admission stays idempotent outside the state lock.
+        await waitUntil { oldRead.isWaiting }
+        #expect(sut.snapshot.workflowContext != nil)
+        // when — no second runPass call, scheduler tick or completion of the old read.
+        state.send(.checking)
+        #expect(oldRead.isWaiting)
+        #expect(sut.snapshot == NeedsYouSnapshot())
+        let resetCount = observed.value.count
+        state.send(.ready)
+        oldRead.release()
+        await waitUntil { newRead.isWaiting }
+        // then — only replacement loading state may follow the reset, never the retired ready output.
+        #expect(observed.value.dropFirst(resetCount).allSatisfy { $0.items.isEmpty && $0.phase == .loading })
+        #expect(sut.snapshot.items.isEmpty)
+        state.send(.checking)
+        newRead.release()
+        subscription.cancel()
     }
 
     private func workflowEngine() -> FakeNeedsYouEngine {

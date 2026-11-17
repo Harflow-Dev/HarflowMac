@@ -21,6 +21,7 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     }
 
     private var scope: CoreScope
+    private var scopeRetired = false
     private let runtimeObservation: (@Sendable () -> WorkflowResponseContext?)?
     private let toolEnvironment: any ToolEnvironmentRepository
     private let scheduler: any Scheduling
@@ -29,6 +30,7 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     private let gate = NeedsYouWakeGate()
     private let lock = NSLock()
     private var loop: Task<Void, Never>?
+    private var started = false
     private var subscriptions: [AnyCancellable] = []
     private var published = 0
     private var pendingPublication: NeedsYouCore.Output?
@@ -85,22 +87,33 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     public func eventsPublisher() -> AnyPublisher<NeedsYouEvent, Never> { events.eraseToAnyPublisher() }
 
     public func start() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard loop == nil else { return }
-        subscriptions = [
+        let admitted = lock.withLock {
+            guard !started else { return false }
+            started = true
+            return true
+        }
+        guard admitted else { return }
+        // Subscription construction may deliver synchronously. Never hold the state lock here.
+        let subscriptions = [
             visibility.mainWindowVisiblePublisher().dropFirst().sink { [gate] _ in gate.wake() },
             visibility.menuBarPopoverOpenPublisher().dropFirst().sink { [gate] _ in gate.wake() },
-            // Passes run only while the managed runtime is qualified; becoming ready starts one at once.
-            install.setupStatePublisher().removeDuplicates().sink { [gate] _ in gate.wake() }
+            // Revoke suspended acquisition immediately; the poll loop may be awaiting an engine read.
+            install.setupStatePublisher().removeDuplicates().sink { [weak self, gate] state in
+                if !state.isReady { self?.retireScope() }
+                gate.wake()
+            }
         ]
-        loop = Task { [weak self] in
+        let loop = Task { [weak self] in
             _ = await self?.toolEnvironment.discoverEnvironment()
             while !Task.isCancelled {
                 guard let self else { return }
-                if install.setupState.isReady { await runPass() }
+                await runPass()
                 await gate.wait(interval: currentInterval, scheduler: scheduler)
             }
+        }
+        lock.withLock {
+            self.subscriptions = subscriptions
+            self.loop = loop
         }
     }
 
@@ -114,7 +127,8 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     /// Superseded actors may finish suspended reads, but can neither contaminate nor publish into a new scope.
     private func coreScope(context: ApprovalResponseContext?, workflowContext: WorkflowResponseContext?) -> (scope: CoreScope, replaced: Bool) {
         lock.withLock {
-            guard scope.context != context || scope.workflowContext != workflowContext else { return (scope, false) }
+            guard scopeRetired || scope.context != context || scope.workflowContext != workflowContext else { return (scope, false) }
+            scopeRetired = false
             let clock = scheduler
             scope = CoreScope(id: UUID(), context: context, workflowContext: workflowContext, core: NeedsYouCore(engine: engine, now: { clock.now() }))
             published = -1
@@ -126,6 +140,7 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
 
     /// Runs one acquisition pass and publishes it. Exposed to tests, which drive passes directly.
     func runPass() async {
+        guard install.setupState.isReady else { retireScope(); return }
         let context = try? approvals?.context()
         let workflowContext = observation(context: context)
         let selected = coreScope(context: context, workflowContext: workflowContext)
@@ -137,11 +152,13 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
     }
 
     private func publish(_ output: NeedsYouCore.Output, from captured: CoreScope) {
+        guard install.setupState.isReady else { return }
         if let context = captured.workflowContext, !isCurrent(context) { return }
         if let approvals {
             guard let context = captured.context, approvals.isCurrent(context) else { return }
         }
         var snapshot = output.snapshot
+        snapshot.workflowContext = captured.workflowContext
         snapshot.items = snapshot.items.map { bind($0, to: captured) }
         snapshot.withdrawn = snapshot.withdrawn.map { bind($0, to: captured) }
         let boundEvents = output.events.map { event -> NeedsYouEvent in
@@ -159,6 +176,28 @@ public final class NeedsYouRepositoryImpl: NeedsYouRepository, @unchecked Sendab
             return true
         }
         guard drains else { return }
+        drainPublications()
+    }
+
+    /// Qualification loss revokes acquisition before enqueueing a display-only invalidation.
+    /// This deliberately bypasses ordinary output admission without authorizing nil-context reads.
+    private func retireScope() {
+        let drains = lock.withLock {
+            guard !scopeRetired else { return false }
+            scopeRetired = true
+            let clock = scheduler
+            scope = CoreScope(id: UUID(), context: nil, workflowContext: nil, core: NeedsYouCore(engine: engine, now: { clock.now() }))
+            published = -1
+            pendingPublication = NeedsYouCore.Output(revision: 0, snapshot: NeedsYouSnapshot(), events: [])
+            publicationScopeID = scope.id
+            if publishing { return false }
+            publishing = true
+            return true
+        }
+        if drains { drainPublications() }
+    }
+
+    private func drainPublications() {
         // A single nonblocking drain orders accepted publications; callbacks never run under the state lock.
         while let next = takePublication() {
             lock.withLock { rawSnapshot = next.snapshot }

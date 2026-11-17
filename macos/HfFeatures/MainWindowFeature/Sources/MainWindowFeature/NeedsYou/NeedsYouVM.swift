@@ -32,6 +32,11 @@ extension NeedsYouUseCase {
 protocol NeedsYouRouting: Sendable {
     /// Opens Needs you, showing one request's detail or the list when `itemID` is nil.
     func showNeedsYou(itemID: String?)
+    func openNeedsYouRun(_ runID: String)
+}
+
+extension NeedsYouRouting {
+    func openNeedsYouRun(_: String) {}
 }
 
 // MARK: - NeedsYouVM
@@ -50,6 +55,10 @@ final class NeedsYouVM: NeedsYouViewModel {
     @ObservationIgnored var cancellables = Set<AnyCancellable>()
     @ObservationIgnored var didSubscribe = false
     @ObservationIgnored var snapshot = NeedsYouSnapshot()
+    var questions: [NeedsYouQuestion] = []
+    @ObservationIgnored var questionSuppressed: [NeedsYouQuestionIdentity] = []
+    @ObservationIgnored var questionContext: WorkflowResponseContext?
+    @ObservationIgnored var questionLifecycle = 0
     @ObservationIgnored var selectedID: String?
     @ObservationIgnored var overrides: [String: NeedsYouItem] = [:]
     @ObservationIgnored var reviewNotes: [String: String] = [:]
@@ -99,6 +108,7 @@ final class NeedsYouVM: NeedsYouViewModel {
 
     func didDisappear() {
         lifecycle += 1
+        clearQuestions()
         for task in fadeTasks.values { task.cancel() }
         fadeTasks = [:]
         leavingRows = [:]
@@ -110,6 +120,11 @@ final class NeedsYouVM: NeedsYouViewModel {
     }
 
     func didChangeReduceMotion(_ value: Bool) { reduceMotion = value }
+
+    /// Clears inline rendering at the lifecycle boundary without exposing the presentation setter.
+    func clearInlineQuestionPresentation() {
+        if !presentation.questions.isEmpty { presentation.questions = [] }
+    }
 
     // MARK: - Navigation
 
@@ -159,6 +174,7 @@ final class NeedsYouVM: NeedsYouViewModel {
 
     /// Maps the latest inputs to presentation off the main actor and applies only a changed result.
     func rebuild() {
+        reconcileQuestionScope()
         reconcileSettled()
         for (id, submitted) in submittingItems {
             if let live = snapshot.items.first(where: { $0.id == id }), !live.isSameRequest(as: submitted) {
@@ -182,7 +198,8 @@ final class NeedsYouVM: NeedsYouViewModel {
         generation = token
         let input = NeedsYouAssemblyInput(
             snapshot: snapshot, selectedID: selectedID, overrides: overrides, reviewNotes: reviewNotes, settled: settled,
-            lastDetails: lastDetails, leavingRows: leavingRows, submittingIDs: submittingIDs, sendError: sendError, notice: notice, savedDraft: answerText
+            lastDetails: lastDetails, leavingRows: leavingRows, submittingIDs: submittingIDs, sendError: sendError, notice: notice,
+            savedDraft: answerText, questions: questions, questionSuppressed: questionSuppressed
         )
         rebuildTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) { NeedsYouAssembly.assemble(input) }.value
@@ -192,6 +209,8 @@ final class NeedsYouVM: NeedsYouViewModel {
     }
 
     private func apply(_ result: NeedsYouAssemblyResult) {
+        questionSuppressed = result.questionSuppressed
+        if questions != result.presentation.questions { questions = result.presentation.questions }
         if let detail = result.detail, detail.phase == .answerable || detail.phase == .submitting {
             if lastDetails[detail.id]?.id != detail.id || lastDetails[detail.id]?.text != detail.text { lastDetails[detail.id] = detail }
         }
@@ -216,9 +235,10 @@ struct SettledMeta {
 }
 
 extension NeedsYouVM {
-    static let settledLimit = 32
+    nonisolated static let settledLimit = 32
 
     func recordSettled(_ detail: NeedsYouDetail, for item: NeedsYouItem) {
+        let detail = mirrorInlineReceipt(detail, for: item)
         settled[item.id] = detail
         settledMeta[item.id] = SettledMeta(item: item, absentSeen: false)
         settledOrder.removeAll { $0 == item.id }
