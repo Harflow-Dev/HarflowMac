@@ -93,3 +93,29 @@ or M12 acceptance follows from this repair.
   attempt stopped before any suite ran because the AppKit test host could not become active while
   the Mac was in use. The second attempt was stopped on request after 22 suites, all passing, so
   the Mac could be used; no test host was left running. Run it when the Mac is free.
+
+## Selected-node activity surface (2026-11-18)
+
+The Graph selected-node activity pane drew a 3 point status-coloured strip across its top on a
+card-fill surface, a leftover of the pre-v2 inspector. The approved pane (HarflowDesign
+`7de89a47137c261e5a1baaf4ef6504eb9e67a267`, `.hd-pane` in `v2/styles/bundle.css`; states
+`workflow-run/graph-needs-you` and `workflow-run/on-demand` in `v2/scripts/screens-workflow-run.js`)
+uses the page background and shows status only as a badge. The strip and its tint mapping are
+removed, and the whole selected-node pane, including the native activity view that shares it, now
+draws the page background. The status badge remains beside the node's title in the activity column's
+header. The default run sidebar, the run inspector loading skeleton and the editor inspector still
+use the card fill and are left for a consistency follow-up.
+
+Observed: the package and its tests compile through the guarded runner. The rewritten rendering
+tests have not run yet (see the pending hosted batch below).
+
+## Pending hosted batch
+
+Not run while the owner uses the Mac; to run in one batch through the guarded runner when it is
+free. Suites that open on-screen windows:
+
+- MainWindowFeature full `--mode suites` gate (postponed, see "Verification status at cb36456e").
+- `ParallelColumnsRenderingTests`: `givenAnInspectorColumn_whenRendered_thenItHasThePageBackgroundAndNoStatusStrip`
+  (light and dark) and the corner check of `givenAParallelLane_whenRenderedAtItsActualBoundary_thenItsBottomCornersAreTheChromeSurface`.
+- HfUI package aggregate (several of its suites order windows front).
+- Workflow selected-activity hosted coverage that mounts `WorkflowSelectedSidebar`.

@@ -46,34 +46,16 @@ struct ParallelColumnsContent: View {
 
 // MARK: - ParallelLaneSurface
 
-/// The lane surface. `.lane` is HarflowDesign v2's `.hd-lane`: a square, full-lane `--bg` fill with no
-/// status strip, rounded surround or border of its own (the separator between lanes is drawn by the cell, never after the last).
-/// `.inspector` keeps the Graph inspector's earlier surface: `cardFill` with an optional 3 pt status
-/// strip across its top edge. Presentation only — the cell's equality, the resident placeholder, the
-/// stable IDs, arrival, the viewport observer and the column stride are owned by their own contracts.
+/// The surface of every Parallel column, lane or inspector: HarflowDesign v2's `.hd-lane` and `.hd-pane` share a square,
+/// full-bleed `--bg` fill with no status strip, rounded surround or border of its own (a lane's separator is drawn by the
+/// cell, never after the last). Status shows only as the `TaskStatusLabel` badge in the column's header. Presentation
+/// only — the cell's equality, the resident placeholder, the stable IDs, arrival, the viewport observer and the column
+/// stride are owned by their own contracts.
 struct ParallelLaneSurface<Content: View>: View {
-    var chrome = ParallelColumnChrome.lane
-    /// The status-tinted top strip's colour (`.inspector` only); `nil` (the default) draws no strip —
-    /// an unknown status never gets an invented one.
-    var statusTint: Color?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        switch chrome {
-        case .lane:
-            content().background(TaskScreenStyle.Colors.pageBackground.color)
-        case .inspector:
-            content()
-                .background(Color.cardFill)
-                .overlay(alignment: .top) {
-                    if let statusTint {
-                        Rectangle()
-                            .fill(statusTint)
-                            .frame(height: HfRadius.Metrics.parallelLaneStatusStripHeight)
-                            .accessibilityHidden(true)
-                    }
-                }
-        }
+        content().background(TaskScreenStyle.Colors.pageBackground.color)
     }
 }
 
@@ -118,8 +100,7 @@ struct ParallelColumnCell: View, @MainActor Equatable {
 
     var body: some View {
         HStack(spacing: HfRadius.Metrics.zero) {
-            ParallelLaneSurface(chrome: model.chrome,
-                                statusTint: model.chrome == .inspector ? ParallelLaneTint.color(for: model.task.status) : nil) {
+            ParallelLaneSurface {
                 content
             }
             .frame(width: size.width, height: size.height)
@@ -184,24 +165,9 @@ struct ParallelColumnCell: View, @MainActor Equatable {
     }
 }
 
-// MARK: - ParallelLaneTint
-
-/// Pure status mapping, independent of the lane's generic content type.
-enum ParallelLaneTint {
-    static func color(for status: TaskStatus) -> Color? {
-        switch status {
-        case .running: Color.runningFG
-        case .completed: Color.doneGreen
-        case .failed, .timedOut: Color.failedRed
-        case .cancelled: Color.cancelledGray
-        case .other: nil
-        }
-    }
-}
-
 #if DEBUG
-/// One inspector lane's flush boundary: full-bleed `cardFill`, the truthful
-/// status strip, and the lane's own internal header/skeleton content — no invented data.
+/// One inspector lane's flush boundary: full-bleed page background and the lane's own
+/// internal header/skeleton content — no invented data.
 @ViewBuilder
 @MainActor
 private func parallelLaneSurfacePreview() -> some View {
@@ -211,7 +177,7 @@ private func parallelLaneSurfacePreview() -> some View {
         "status": .string("running"),
         "repo_path": .string("/tmp")
     ]))!
-    ParallelLaneSurface(chrome: .inspector, statusTint: ParallelLaneTint.color(for: task.status)) {
+    ParallelLaneSurface {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 StatusIcon(status: task.status)

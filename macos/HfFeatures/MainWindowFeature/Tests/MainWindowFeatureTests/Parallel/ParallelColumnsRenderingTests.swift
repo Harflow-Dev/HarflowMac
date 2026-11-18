@@ -27,7 +27,7 @@ import Testing
             columns: [model], availableSize: CGSize(width: width, height: 320),
             stateForColumn: { _ in ParallelColumnUIState() }, onViewport: { _, _ in }
         )
-        let surface: Color = chrome == .lane ? TaskScreenStyle.Colors.pageBackground.color : Color.cardFill
+        let surface = TaskScreenStyle.Colors.pageBackground.color
         let image = try render(view.frame(width: width, height: 320), scheme: scheme)
         let reference = try render(surface.frame(width: width, height: 320), scheme: scheme)
         let clearReference = try render(Color.clear.frame(width: width, height: 320), scheme: scheme)
@@ -82,7 +82,8 @@ import Testing
         #expect(close(last, expectedBackground), "the last lane's trailing edge is --bg, not a rule")
     }
 
-    @Test func givenAnInspectorColumn_whenRendered_thenItKeepsTheCardFillStatusStripAndSystemDivider() throws {
+    @Test(arguments: [ColorScheme.light, .dark])
+    func givenAnInspectorColumn_whenRendered_thenItHasThePageBackgroundAndNoStatusStrip(scheme: ColorScheme) throws {
         // given
         var model = makeModel(state: .loaded)
         model.chrome = .inspector
@@ -93,16 +94,16 @@ import Testing
         )
 
         // when
-        let image = try render(view.frame(width: width, height: 320), scheme: .light)
-        let stripColor = try #require(ParallelLaneTint.color(for: model.task.status))
-        let strip = try render(stripColor.frame(width: 4, height: 4), scheme: .light)
+        let image = try render(view.frame(width: width, height: 320), scheme: scheme)
+        let page = try render(TaskScreenStyle.Colors.pageBackground.color.frame(width: 4, height: 4), scheme: scheme)
+        let card = try render(Color.cardFill.frame(width: 4, height: 4), scheme: scheme)
 
-        // then — a 3 pt status-tinted strip across the top edge; the old geometry is unchanged.
+        // then
         let top = try #require(image.colorAt(x: 100, y: 1))
-        #expect(close(top, try #require(strip.colorAt(x: 1, y: 1))))
+        #expect(close(top, try #require(page.colorAt(x: 1, y: 1))), "\(scheme) top edge is the page background")
+        #expect(!close(top, try #require(card.colorAt(x: 1, y: 1))), "\(scheme) top edge is not cardFill")
         let below = try #require(image.colorAt(x: 100, y: 6))
-        #expect(!close(below, top))
-        #expect(HfRadius.Metrics.parallelLaneStatusStripHeight == 3)
+        #expect(close(below, top), "\(scheme) no strip tints the top edge")
     }
 
     @Test func givenALongSettledResult_whenTheInspectorHostsIt_thenResultIsBoundedAndActivityRemainsScrollable() async throws {

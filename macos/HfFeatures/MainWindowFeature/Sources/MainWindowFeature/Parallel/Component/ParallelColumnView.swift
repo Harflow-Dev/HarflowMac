@@ -23,7 +23,7 @@ import SwiftUI
 // MARK: - ParallelColumnChrome
 
 /// Which surface draws a column. `.lane` is the HarflowDesign v2 lane (group and workflow-run Parallel);
-/// `.inspector` keeps the Graph selected-node inspector's earlier chrome until it has its own v2 design.
+/// `.inspector` is the Graph selected-node inspector's column: the page background, no status strip, and the system divider.
 enum ParallelColumnChrome: Equatable, Sendable {
     case lane
     case inspector
@@ -114,8 +114,8 @@ struct ParallelColumnModel: Identifiable {
         return parts.joined(separator: " · ")
     }
 
-    /// The same column drawn by another surface. The Graph inspector forces `.inspector` so it keeps its
-    /// earlier chrome until it receives a v2 design.
+    /// The same column drawn by another surface. The Graph inspector forces `.inspector`, which draws the
+    /// pane's page background and the system divider.
     func withChrome(_ chrome: ParallelColumnChrome) -> ParallelColumnModel {
         var copy = self
         copy.chrome = chrome

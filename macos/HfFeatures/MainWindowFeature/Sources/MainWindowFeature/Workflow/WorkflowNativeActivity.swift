@@ -209,7 +209,7 @@ private struct WorkflowNativeActivityPreview: View {
             error: "Showing the latest 200 activity events.",
             hasEarlierActivity: true
         ))
-        .background(Color.cardFill)
+        .background(TaskScreenStyle.Colors.pageBackground.color)
     }
 }
 

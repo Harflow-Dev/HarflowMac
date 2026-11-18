@@ -358,7 +358,7 @@ no embedded terminal anywhere in this package:
   (`WorkflowActivityColumns`, `.lane` chrome through the non-inspector `ParallelVM`) gets the chrome-aware widths, no trailing separator and
   the labels, but no leading recovery: it keeps the 272 point start, a 728 point viewport and a 6 point peek at 1000 x 620. `ParallelColumnModel.chrome` (`.lane`, set from the VM role) selects the v2 lane surface (`--bg`, no status
   strip, `--border` separators, head/body/foot frames); the Graph inspector's VM sets `.inspector`, and
-  `WorkflowSelectedActivityView` forces it, so the inspector keeps its `cardFill` surface, strip and `Divider`.
+  `WorkflowSelectedActivityView` forces it, so the inspector draws the page-background surface (`--bg`, as `.hd-pane`) with no status strip and keeps the system `Divider`; the enclosing `WorkflowSelectedSidebar` uses the same surface.
   When KEYBOARD focus (Tab, Shift-Tab; the first-responder change happens inside a key-down event) ENTERS a
   different lane, `ParallelScrollObservationView` cancels pending horizontal restoration and scrolls to show the whole
   lane plus its separator and 1 point of the neighbouring lane in the scroll direction, so that neighbour intersects the

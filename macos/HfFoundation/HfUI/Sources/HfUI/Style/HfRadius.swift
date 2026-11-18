@@ -286,8 +286,6 @@ public enum HfRadius {
         public static let workflowDiagnosticsMaximumHeight: CGFloat = 180
         public static let workflowLaunchSheetWidth: CGFloat = 580
         public static let workflowLaunchSheetHeight: CGFloat = 650
-        /// Parallel lanes (§6.5): the 3 pt status strip across a lane card's top edge.
-        public static let parallelLaneStatusStripHeight: CGFloat = 3
         /// Maximum height of a settled lane's independently scrollable result callout.
         public static let parallelResultMaximumHeight: CGFloat = 160
         /// Width of the Parallel screen's deferred title skeleton.

@@ -56,7 +56,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.cardFill)
+        .background(TaskScreenStyle.Colors.pageBackground.color)
         .accessibilityIdentifier("workflow-selected-sidebar")
     }
 }
