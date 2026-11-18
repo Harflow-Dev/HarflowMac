@@ -80,3 +80,16 @@ viewport 0 points tall (header, request and captured-activity lines and the comp
 column), while the approved design shows a scrollable conversation. Under this layout the windowed
 test's activity predicate proves only that the feed table exists, not that it is visible. No M08
 or M12 acceptance follows from this repair.
+
+### Verification status at cb36456e
+
+- The three originally failing suites pass through the guarded runner at `cb36456e` on a clean
+  tree: WorkflowScreenLayoutTests (9 tests), WindowedWorkflowLayoutTests and
+  WorkflowDeleteHostedTests. WorkflowDiscardHostedTests, the new PresentationEscapeHostedTests
+  (7 tests), eleven neighbouring builder, canvas, composer, transcript and stop-confirmation
+  suites, the HfUI package (270 tests) and the runner's own tests (759) also passed.
+- Independent review (Opus and Astra) closed at round 3 with no open findings.
+- **Full MainWindowFeature suites gate: PENDING, postponed by the owner, not failed.** The first
+  attempt stopped before any suite ran because the AppKit test host could not become active while
+  the Mac was in use. The second attempt was stopped on request after 22 suites, all passing, so
+  the Mac could be used; no test host was left running. Run it when the Mac is free.
