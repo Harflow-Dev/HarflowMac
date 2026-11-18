@@ -57,3 +57,25 @@ in this slice. Node geometry was unchanged.
 
 External check evidence is retained in the parent workspace under
 `.claude-work/codex-2026-11-17/next-mac-rust/`.
+
+## Escape repair (2026-11-18)
+
+The first guarded hosted run of `WorkflowDeleteHostedTests` failed both Escape cases: the
+confirmation sheet stayed attached and the delete request stayed set. The delete dialog makes its
+Cancel action the default, and SwiftUI binds Return to it, which left no button holding Escape
+(the native sheet's Cancel carried Return; Delete carried no key).
+
+The window presentation context now answers Escape for an alert or dialog whose default action is
+a cancel: a local key monitor clicks the sheet's own default button once per presentation, through
+the native button path rather than the action closure. It acts only on the sheet that began on the
+host window after the presentation started, never on a sheet already attached, a nested sheet or
+another window; the residual case of a foreign sheet with an identically titled default is
+documented in `macos/HfFoundation/HfUI/AGENTS.md`. Discard and the Parallel message dialog use the
+same pattern and are covered by the same change.
+
+Observed through the guarded runner: `WorkflowDeleteHostedTests` and `WorkflowDiscardHostedTests`
+(Return and Escape, now with an explicit sheet-dismissed assertion) passed, as did the new
+`PresentationEscapeHostedTests` (alert and dialog, repeated Escape, Return, a non-cancel default
+keeping native Escape, a nested sheet, a pre-attached foreign sheet, two windows) and the HfUI
+package with the eligibility, decision and monitor-lifecycle tests. Desktop acceptance of dialog
+keyboard and focus behaviour still requires the owner's cue.

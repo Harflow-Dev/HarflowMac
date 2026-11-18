@@ -41,6 +41,7 @@ struct ViewPresentationContextModifier: ViewModifier {
             .environment(\.viewEvent, presentationBinding)
             .environment(\.incidentPresentation, incidents)
             .overlay(alignment: .top) { snackbar }
+            .background(PresentationEscapeAnchor(presentation: PresentationEscapePolicy.eligibleContent(for: viewEvent)))
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: incidents.current?.id)
             .onAppear {
                 clock.mount { now, seed in incidents.tick(now: now, paused: seed || interacting || !NSApp.isActive) }

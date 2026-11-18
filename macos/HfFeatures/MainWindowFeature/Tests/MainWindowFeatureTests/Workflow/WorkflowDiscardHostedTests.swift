@@ -9,7 +9,8 @@ import Testing
 // MARK: - WorkflowDiscardHostedTests
 
 @MainActor @Suite(.serialized) struct WorkflowDiscardHostedTests {
-    @Test func givenFreshSavedRevision_whenReturnDismissesNativeConfirmation_thenCancelPreservesDraft() async throws {
+    @Test(arguments: [false, true])
+    func givenFreshSavedRevision_whenReturnOrEscapeDismissesNativeConfirmation_thenCancelPreservesDraft(escape: Bool) async throws {
         // given
         let (vm, store, _) = WorkflowConflictRecoveryTests().makeVM()
         let before = try store.load(key: "saved:Saved")
@@ -30,11 +31,13 @@ import Testing
         #expect(element("The workflow returns to revision 2, its last saved revision.") != nil)
         #expect(element("Discard") != nil)
         #expect(sheet.defaultButtonCell?.title == "Cancel")
+        let characters = escape ? "\u{1B}" : "\r"
         let key = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                                              windowNumber: sheet.windowNumber, context: nil, characters: "\r",
-                                              charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+                                              windowNumber: sheet.windowNumber, context: nil, characters: characters,
+                                              charactersIgnoringModifiers: characters, isARepeat: false, keyCode: escape ? 53 : 36))
         NSApp.sendEvent(key)
         await page.settle { page.window.attachedSheet == nil }
+        #expect(page.window.attachedSheet == nil)
         #expect(vm.discardRequestID == nil)
         #expect(vm.revision == 1)
         #expect(try store.load(key: "saved:Saved") == before)

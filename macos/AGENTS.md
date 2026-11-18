@@ -51,6 +51,13 @@ by the window presentation context. Preparation is neutral state, never an incid
 failure details accessible; a successful read resolves only its own source. Outcome lines (refusal
 text, "queued", cascade summaries) remain durable VM/repository state.
 
+An alert or dialog whose `isDefault` action has role `.cancel` is answered on Escape by the presentation
+context: SwiftUI binds Return to that default cancel button, leaving none for Escape. A key monitor clicks the
+sheet's own default button (never the action closure) once per presentation, and only for the sheet
+recorded for it: the first sheet to begin on the host window after the presentation starts whose default button
+carries the presentation's cancel title. Sheets already attached, nested sheets and other windows are untouched
+(residual risk in `HfFoundation/HfUI/AGENTS.md`).
+
 ## Repository concurrency
 
 Repositories are `nonisolated` and `Sendable`. They keep async state in private actors and publish

@@ -6,6 +6,7 @@ Shared components and style tokens used by more than one feature. A component th
 package needs belongs in that feature's own `Component/` folder, not here.
 
 - Swift 6 language mode (tools 6.2 default).
+- `withPresentationContext()` also answers Escape for alerts and dialogs whose default action has role `.cancel` (`PresentationEscape.swift`): the pure `PresentationEscapePolicy` decides, and the anchor view clicks the recorded sheet's default button. Residual risk: SwiftUI exposes no handle linking an alert or dialog to its sheet window, so the first sheet that begins on the host window after the presentation starts and whose default button carries the same title as the presentation's cancel default is taken as its own; a foreign sheet matching both would receive that Escape. Hosted behaviour is covered by `PresentationEscapeHostedTests` in MainWindowFeature, the only package the runner hosts.
 - Visual changes use the shared design tokens: every
   colour comes from `Palette`, every font size from `HfTextStyle`, and shared component dimensions
   from `HfRadius`/`HfRadius.Metrics` — never a stray literal.

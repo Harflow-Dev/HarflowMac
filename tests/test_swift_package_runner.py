@@ -444,6 +444,7 @@ PARALLEL_GROUP_MINIMUM_SUITE = "MainWindowFeatureTests.ParallelGroupMinimumHoste
 HOSTED_SUITE_NAMES = (
     "MainWindowFeatureTests.WorkflowDiscardHostedTests",
     "MainWindowFeatureTests.WorkflowDeleteHostedTests",
+    "MainWindowFeatureTests.PresentationEscapeHostedTests",
     "MainWindowFeatureTests.WorkflowLibraryHostedTests",
     "MainWindowFeatureTests.WorkflowValidationHostedTests",
     "MainWindowFeatureTests.NeedsYouQuestionCardHostedTests",

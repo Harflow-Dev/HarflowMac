@@ -41,6 +41,7 @@ import Testing
                                               charactersIgnoringModifiers: characters, isARepeat: false, keyCode: escape ? 53 : 36))
         NSApp.sendEvent(key)
         await page.settle { page.window.attachedSheet == nil }
+        #expect(page.window.attachedSheet == nil)
         #expect(vm.deleteRequestID == nil)
         #expect(try store.load(key: "saved:Saved") == before)
     }

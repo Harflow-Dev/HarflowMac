@@ -78,6 +78,7 @@ TERM_GRACE_SECONDS = 5.0
 HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.WorkflowDiscardHostedTests",
     "MainWindowFeatureTests.WorkflowDeleteHostedTests",
+    "MainWindowFeatureTests.PresentationEscapeHostedTests",
     "MainWindowFeatureTests.WorkflowLibraryHostedTests",
     "MainWindowFeatureTests.WorkflowValidationHostedTests",
     "MainWindowFeatureTests.NeedsYouQuestionCardHostedTests",
