@@ -57,6 +57,20 @@ Review: Claude Opus and Codex (gpt-6-astra) reviewed the bug-fix plan in two rou
 
 The five failing suites, one at a time on the fixed tree (focused runner, evidence `gate-s1/run2-targeted/summary.txt`): `ActivityFeedReadingGeometryTests`, `SidebarNativeParityBaselineTests`, `WorkflowRecoveryFormTests`, `WorkflowScreenLayoutTests` and `NewSessionComposerHostedTests` all passed. `NewSessionComposerHostedTests`, which depends on this account's scroll bar setting, passed in this run. A full suite rerun on the final commit belongs to the next idle window.
 
+## Full suite rerun (run 4)
+
+2026-11-18, HEAD `d4a72451` (pushed, clean tree), the owner's idle window, Mac unlocked and idle. Guarded runner only, with the selected xcrun toolchain's `swift` (an attempt with a two-job wrapper passed as `--swift`, run 3, was refused by the runner's AppKit host check before any test ran; its build, made with two jobs, completed in 331 s and was reused, so run 4's build took 10 s). No app launch, no other build during the suite, a watchdog with a hard stop at 11:02. The suite covers the M06, M07 and M08 suites added on 2026-11-16 to 2026-11-18. Evidence: `gate-s1/run4/` (log, `failed-suites.txt`, runner output in `MainWindow/`), focused reruns in `gate-s1/run4-focused/`.
+
+Result: failed, 400 of 403 suites and 3,826 of 3,836 tests passed, 10:15 to 10:48 (WIB). The five suites that failed in run 1 all passed, including `ActivityFeedReadingGeometryTests` and `SidebarNativeParityBaselineTests` after `f4c04d2`.
+
+| Suite | Failure | Classification |
+| --- | --- | --- |
+| `WorkflowScreenLayoutTests` (`+Builder.swift:86-128`) | the `embedded-builder-activity` element and "Task facts and reported result" are absent; the builder workspace is wider than the window (1110 at 1000, 1550 at 1440) and the activity frame does not match the canvas and workspace edges | Deterministic (fails again on a focused rerun). The builder surface changed in `d4a72451` ("Move workflow builder activity into the right pane"); its hosted tests had been prepared but not run |
+| `WindowedWorkflowLayoutTests` (`:88`) | no `ActivityFeedNativeTableView` in the windowed workflow fixture | Deterministic; same area |
+| `WorkflowDeleteHostedTests` (`:44`) | `deleteRequestID` remains set after the delete flow | Deterministic; workflow surface |
+
+None of the three are in the task screen stage 1 covers; they belong to the M08 builder work and need their own reproduction and fix. Stage 1's own suites pass.
+
 ## Owner sign-off
 
-Pending.
+Pending: the owner's decision whether the three workflow-builder failures block stage 1 or move to the M08 follow-up, the owner's look with the Check copy, and sign-off.
