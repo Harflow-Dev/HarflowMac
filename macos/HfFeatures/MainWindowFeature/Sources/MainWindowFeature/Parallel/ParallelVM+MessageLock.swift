@@ -25,6 +25,7 @@ extension ParallelVM {
         case .lane: column.messageLock = composerLocks.runCancelled ? .runCancelled : nil
         case .inspector: column.messageLock = composerLocks.messagingUnsupported ? .messagingUnsupported : nil
         }
+        column.inspectorApproval = column.chrome == .inspector && inspectorApprovalGate.mounts ? inspectorApprovalGate : nil
     }
 
     /// Locks every lane composer of a cancelled run. Cleared on `didDisappear`, so the workflow VM reapplies it on
@@ -39,6 +40,17 @@ extension ParallelVM {
     func setMessagingUnsupported(_ unsupported: Bool) {
         guard composerLocks.messagingUnsupported != unsupported else { return }
         composerLocks.messagingUnsupported = unsupported
+        if didSubscribe { publishColumns() }
+    }
+}
+
+// MARK: - Inspector approval
+
+extension ParallelVM {
+    /// Sets the approval panel the node pane draws between the feed and the composer. Republishes only on change.
+    func setInspectorApproval(_ gate: WorkflowSelectedApprovalGate) {
+        guard inspectorApprovalGate != gate else { return }
+        inspectorApprovalGate = gate
         if didSubscribe { publishColumns() }
     }
 }

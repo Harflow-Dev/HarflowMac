@@ -22,6 +22,15 @@ enum WorkflowOnDemandPreview {
         [call(number: 1, status: "succeeded", kind: "routing"), call(number: 2, status: status, kind: "node_question")]
     }
 
+    /// Two call rows (newest first) as the sidebar presentation builds them.
+    static func callRows() -> [WorkflowOnDemandCallRow] {
+        let calls = calls()
+        return WorkflowOnDemandCallRow.rows(
+            activationIDs: calls.map { "specialist-\($0.number)" },
+            numbers: Dictionary(uniqueKeysWithValues: calls.map { ("specialist-\($0.number)", $0.number) }),
+            calls: Dictionary(uniqueKeysWithValues: calls.map { ("specialist-\($0.number)", $0.raw) }))
+    }
+
     static func call(number: Int, status: String, kind: String) -> WorkflowOnDemandCall {
         var raw: [String: JSONValue] = [
             "id": .string("call-\(number)"), "node_id": .string("preview-run:research"), "call_number": .number(Double(number)),
@@ -170,23 +179,15 @@ enum WorkflowOnDemandPreview {
     WorkflowStandaloneBar(viewModel: WorkflowOnDemandPreview.make(run: true, status: "succeeded")).preferredColorScheme(.dark)
 }
 
-#Preview("Call list running light") { WorkflowOnDemandCallsView(
-    node: WorkflowOnDemandPreview.node,
-    calls: WorkflowOnDemandPreview.calls(),
-    onOpenTask: { _ in }
-).preferredColorScheme(.light) }
-#Preview("Call list failed dark") { WorkflowOnDemandCallsView(
-    node: WorkflowOnDemandPreview.node,
-    calls: WorkflowOnDemandPreview.calls(status: "failed"),
-    onOpenTask: { _ in }
-).preferredColorScheme(.dark) }
-#Preview("Call badge light") {
-    WorkflowOnDemandCallBadge(call: WorkflowOnDemandPreview.call(number: 1, status: "succeeded", kind: "routing"))
-    .preferredColorScheme(.light)
+#Preview("On-demand selected pane light") {
+    WorkflowSelectedSidebar(viewModel: WorkflowOnDemandPreview.make(run: true))
+        .frame(width: HfRadius.Metrics.workflowRunActivityPanelIdealWidth, height: HfRadius.Metrics.workflowPreviewHeight)
+        .preferredColorScheme(.light)
 }
 
-#Preview("Call badge dark") {
-    WorkflowOnDemandCallBadge(call: WorkflowOnDemandPreview.call(number: 1, status: "running", kind: "routing"))
-    .preferredColorScheme(.dark)
+#Preview("On-demand selected pane dark") {
+    WorkflowSelectedSidebar(viewModel: WorkflowOnDemandPreview.make(run: true))
+        .frame(width: HfRadius.Metrics.workflowRunActivityPanelIdealWidth, height: HfRadius.Metrics.workflowPreviewHeight)
+        .preferredColorScheme(.dark)
 }
 #endif

@@ -11,7 +11,7 @@ import Testing
     }
 
     @Test func givenRunPane_whenUsingInitialWidth_thenInspectorMatchesActivityColumn() {
-        #expect(WorkflowRunLayout.inspectorIdeal == 420)
+        #expect(WorkflowRunLayout.inspectorIdeal == 460)
     }
 
     @Test func givenResizeRequest_whenClamping_thenInspectorStaysBetween220And500() {

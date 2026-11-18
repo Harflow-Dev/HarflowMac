@@ -56,7 +56,7 @@ struct CallerApprovalPanel: View {
     @GlobalEnvironment(\.toolEnvironmentRepository) private var environment
     @GlobalEnvironment(\.approvalResponseOwner) private var approvalResponseOwner
 
-    static func containsOptIn(_ value: JSONValue) -> Bool {
+    nonisolated static func containsOptIn(_ value: JSONValue) -> Bool {
         if let object = value.objectValue {
             return object["caller_approvals"]?.boolValue == true || object.values.contains(where: containsOptIn)
         }
@@ -69,7 +69,7 @@ struct CallerApprovalPanel: View {
                 CallerApprovalCard(controller: controller).padding(HfRadius.Metrics.spacing12)
             }
         }
-        .task(id: "\(taskID ?? ""):\(workflowRunID ?? "")") {
+        .task(id: "\(taskID ?? ""):\(workflowRunID ?? ""):\(polls)") {
             let value = CallerApprovalController(useCase: CallerApprovalRepository(environment: environment, owner: approvalResponseOwner))
             controller = value
             await value.selectTarget(taskID: taskID, workflowRunID: workflowRunID)

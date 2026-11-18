@@ -42,7 +42,9 @@ extension WorkflowRunSidebarPresentation {
         let relevant: [[String: JSONValue]]
         let label: String
         var callNumbers: [String: Int] = [:]
+        var callByActivation: [String: [String: JSONValue]] = [:]
         if nodeID == WorkflowStandalone.orchestratorID {
+            header = WorkflowSelectedHeader(kind: .orchestrator)
             node = ["id": .string(nodeID), "title": .string("Orchestrator"), "type": .string("agent")]
             relevant = WorkflowStandaloneActivity.orchestratorActivations(run)
             label = "Decision"
@@ -68,7 +70,9 @@ extension WorkflowRunSidebarPresentation {
                 }
                 let number = call?["call_number"]?.intValue ?? index + 1
                 callNumbers[id] = number > 0 ? number : index + 1
+                if let call { callByActivation[id] = call }
             }
+            header = WorkflowSelectedHeader(kind: .onDemand, caption: "On demand")
             label = "Call"
         }
         attempts = relevant.enumerated().compactMap { index, raw in
@@ -81,6 +85,17 @@ extension WorkflowRunSidebarPresentation {
         if let activation {
             taskIDs = WorkflowJSON.objects(activation["tasks"])
                 .compactMap { $0["task_id"]?.stringValue }
+        }
+        if isOnDemand {
+            callRows = WorkflowOnDemandCallRow.rows(activationIDs: attempts.map(\.id), numbers: callNumbers, calls: callByActivation)
+            let selected = activationID.flatMap { callByActivation[$0] }
+            callDetails = selected.map { WorkflowCallDetails(call: WorkflowOnDemandCall(raw: $0)) }
+            let agent = WorkflowSelectedCaption.agent(activation: activation, node: node)
+            caption = activationID.flatMap { id in
+                WorkflowSelectedCaption.make(
+                    prefix: callRows.first { $0.id == id }.map { "Call \($0.number)" }, backend: agent.backend, model: agent.model,
+                    repository: WorkflowRunMetadata.repoName(WorkflowRunModel(raw: run)))
+            }
         }
         return true
     }

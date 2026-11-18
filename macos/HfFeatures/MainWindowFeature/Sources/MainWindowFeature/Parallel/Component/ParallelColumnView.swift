@@ -39,138 +39,6 @@ enum ParallelMessageLock: Equatable, Sendable {
     case messagingUnsupported
 }
 
-// MARK: - ParallelColumnModel
-
-/// Presentation data for one Parallel column: the conversation's fresh CURRENT member (status,
-/// take-over and buttons all act on it), everything today's outcome line/busy state/event stream say
-/// about it, and the two actions its buttons perform.
-struct ParallelColumnModel: Identifiable {
-    let id: String
-    let task: TaskInfo
-    let title: String
-    /// "<Backend> · <repo name>", plus "· N turns" once the conversation has more than one turn.
-    let subtitle: String
-    let isBusy: Bool
-    let outcomeMessage: String?
-    let showPrompt: Bool
-    /// The conversation's stored first request while View prompt is on; `nil` otherwise. Not rendered state of its own: the VM reads it.
-    var request: TaskRequestReadState?
-    var onReadRequest: ((Int) -> Void)?
-    var onCopyRequest: ((String) -> Void)?
-    /// "Copied", or the fallback hint after a failed copy.
-    var requestFeedback: String?
-    /// Raw timeline items and separators for the complete step count.
-    let rows: [ConversationTimelineRow]
-    /// What the feed renders: `rows` with adjacent tool calls folded into cards.
-    var activitySnapshot: ActivityFeedSnapshot?
-    let activityRows: [ActivityRow]
-    /// The "what is it doing now" line under the feed; `nil` unless a call is pending in a running turn.
-    var liveStep: LiveStep?
-    var pendingMessages: [PendingMessage] = []
-    var workMessages: [WorkMessageBubble] = []
-    /// True while NO member of this conversation has any timeline item yet AND at least one
-    /// member's own event stream is still `.loading` (Monitor piece 12, Design point 4, extended
-    /// across every member for piece 13) — the column shows `SkeletonRows` instead of the empty
-    /// timeline while this holds.
-    var isLoading: Bool
-    var emptyText: String?
-    /// From the current member's snapshot only — no fallback to `task.summary` (F4-40, a deliberate
-    /// difference from `ChangesPane`). A settled lane shows it first, as its result callout.
-    let summary: String?
-    /// The lane feed's activity-item count; `nil` while no item row is loaded —
-    /// a zero, still-loading or unavailable feed omits the count rather than claiming "0 activity items".
-    var stepCountText: String?
-    /// "No tool calls recorded", proven only for a terminal current task from the UNFILTERED
-    /// member inputs — never inferred from the visible page having none.
-    var noToolCallsText: String?
-    /// Take over in a terminal; only the Graph inspector offers it (a lane's actions menu holds Open task only).
-    var onTapTakeover: (() -> Void)?
-    let onTapOpenTask: () -> Void
-    /// Opens another task by id (a consumed follow-up's successor).
-    var onSelectTask: ((String) -> Void)?
-    /// When the conversation's FIRST turn started — every row's elapsed time counts from here, as
-    /// TaskDetail's Timeline does; the current turn's own start would clamp earlier turns to 0.
-    var start: Date?
-    var animatesArrival = false
-    var onDidPresent: () -> Void = {}
-    var memberTaskIDs: Set<String> = []
-    var isResident = true
-    var isVisible = true
-    var history = EventHistoryState()
-    var paginationRevision = 0
-    var onLoadMore: (() -> Bool)?
-    var cachedHistoryNotice: String?
-    var onAdoptWindow: (() -> Void)?
-    var onSubmitMessage: ((String, Bool) -> Bool)?
-    var onCancelMessage: ((String) -> Void)?
-    /// The surface that draws this column; the VM sets `.inspector` for the Graph inspector's VM.
-    var chrome = ParallelColumnChrome.lane
-    /// Set only by a workflow VM; `nil` for Group lanes. Takeover keeps its own copy and wins on its own lane.
-    var messageLock: ParallelMessageLock?
-    /// The lane caption under the title: "Claude · Opus 5.5", plus " · taken over". Empty means derive from `task`.
-    var caption = ""
-    /// The harness name for the composer labels. Empty means derive from `task`.
-    var harnessName = ""
-    /// The lane head's status. `nil` means derive from `task` alone.
-    var status: TaskBadgeModel?
-
-    var laneCaption: String { caption.isEmpty ? ParallelLaneStatus.caption(current: task) : caption }
-    var laneHarnessName: String { harnessName.isEmpty ? ParallelLaneStatus.harnessName(current: task) : harnessName }
-    var laneStatus: TaskBadgeModel { status ?? ParallelLaneStatus.make(current: task, snapshot: nil, frame: nil) }
-
-    /// Why a lane composer is locked: takeover first, since it is the more specific reason on its own lane.
-    var laneComposerLock: MessageBoxDisabledReason? {
-        if task.takenOver { return .takenOver }
-        return messageLock == .runCancelled ? .runCancelled : nil
-    }
-
-    /// The node pane composer locks bare on an unsupported runtime unless takeover already explains the lock.
-    var inspectorMessagingUnsupported: Bool { !task.takenOver && messageLock == .messagingUnsupported }
-
-    /// The lane's composer: Queue only (no Send now), labelled for the harness.
-    var laneMessageBoxModel: MessageBoxModel {
-        let harness = laneHarnessName
-        let lock = laneComposerLock
-        return MessageBoxModel(
-            canSend: lock == nil && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
-            label: "Message \(harness)", hint: "", placeholder: lock?.text ?? "Message \(harness)",
-            buttonLabel: "Send", isLocked: lock != nil,
-            fieldAccessibilityLabel: "Message \(harness)", sendAccessibilityLabel: "Send to \(harness)")
-    }
-
-    /// The node pane's composer. Unsupported messaging locks it with no placeholder or hint and no Send now,
-    /// like the task screen's.
-    var inspectorMessageBoxModel: MessageBoxModel {
-        let unsupported = inspectorMessagingUnsupported
-        return MessageBoxModel(
-            canSend: !task.takenOver && !unsupported && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
-            label: "Message this task", hint: unsupported ? "" : "Send queues; Send now requests immediate delivery when safe",
-            placeholder: task.takenOver ? MessageBoxDisabledReason.takenOver.text : unsupported ? "" : "Queue a message…",
-            buttonLabel: "Send", isLocked: task.takenOver || unsupported, showsSendNow: !unsupported)
-    }
-
-    /// "<Backend> · <repo name>" plus "· N turns" when `turns > 1` — the lane header's subtitle,
-    /// without the session id.
-    static func subtitle(repoPath: String, backend: String, turns: Int) -> String {
-        var parts = [BackendStyle.displayName(backend), Format.repoName(repoPath)].filter { !$0.isEmpty }
-        if turns > 1 { parts.append("\(turns) turns") }
-        return parts.joined(separator: " · ")
-    }
-
-    /// The same column drawn by another surface. The Graph inspector forces `.inspector`, which draws the
-    /// pane's page background and the system divider.
-    func withChrome(_ chrome: ParallelColumnChrome) -> ParallelColumnModel {
-        var copy = self
-        copy.chrome = chrome
-        return copy
-    }
-
-    /// Raw item count excludes conversation separators.
-    static func itemCount(_ rows: [ConversationTimelineRow]) -> Int {
-        rows.filter { if case .item = $0.kind { return true }; return false }.count
-    }
-}
-
 // MARK: - ParallelColumnView
 
 struct ParallelColumnView: View {
@@ -181,6 +49,13 @@ struct ParallelColumnView: View {
     @State private var laneBodyHeight: CGFloat = 0
     /// The leading block's natural height; it is shown whole up to the cap, then scrolls.
     @State private var leadingBlockHeight: CGFloat = 0
+    /// The inspector column's height and its approval panel's natural height, which cap the approval region.
+    @State private var inspectorHeight: CGFloat = 0
+    @State private var approvalNaturalHeight: CGFloat = 0
+    @State private var headerHeight: CGFloat = 0
+    @State private var outcomeHeight: CGFloat = 0
+    @State private var boundaryHeight: CGFloat = 0
+    @State private var composerHeight: CGFloat = 0
     @State private var adoptionFocus = AdoptionFocusTracker()
     @State private var state: ParallelColumnUIState
     @State private var resultContentSize = CGSize(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.parallelResultMaximumHeight)
@@ -308,11 +183,11 @@ struct ParallelColumnView: View {
     /// The Graph inspector's earlier column, unchanged.
     private var inspectorBody: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
-            header
+            header.measured(into: $headerHeight)
             if let message = model.outcomeMessage {
-                Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText).measured(into: $outcomeHeight)
             }
-            inspectorHistoryBoundary
+            inspectorHistoryBoundary.measured(into: $boundaryHeight)
             Divider()
             resultCallout
             SkeletonContent(isLoading: model.isLoading && model.liveStep == nil, state: state.activityHandoff) {
@@ -322,10 +197,45 @@ struct ParallelColumnView: View {
             } content: {
                 feed
             }
-            composer
+            inspectorApprovalRegion
+            composer.measured(into: $composerHeight)
         }
         .padding(HfRadius.Metrics.spacing16)
         .frame(maxHeight: .infinity, alignment: .top)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { inspectorHeight = $0 }
+        .preference(key: WorkflowSelectedColumnChromeKey.self, value: inspectorChrome)
+    }
+
+    /// The approval region's height: derived from measured inputs only, never from itself or from `inspectorChrome`'s feed.
+    private var approvalRegionHeight: CGFloat {
+        model.inspectorApproval == nil ? 0
+            : WorkflowSelectedPaneSizing.approvalHeight(natural: approvalNaturalHeight, columnHeight: inspectorHeight, chrome: inspectorChrome)
+    }
+
+    /// Everything in the column that is neither the feed nor the approval region, from directly measured pieces: header,
+    /// outcome line, history boundary, divider, result callout and composer, plus the stack's padding and spacing.
+    private var inspectorChrome: CGFloat {
+        let outcome = model.outcomeMessage == nil ? 0 : outcomeHeight
+        let callout = showsResultCallout ? min(resultContentSize.height, HfRadius.Metrics.parallelResultMaximumHeight) : 0
+        // The 5 assumes the header, history boundary, divider, feed and composer are always mounted.
+        let count = 5 + (model.outcomeMessage == nil ? 0 : 1) + (showsResultCallout ? 1 : 0) + (model.inspectorApproval == nil ? 0 : 1)
+        return WorkflowSelectedPaneSizing.columnChrome(
+            pieces: [headerHeight, outcome, boundaryHeight, ParallelLayout.dividerWidth, callout, composerHeight], itemCount: count)
+    }
+
+    /// The node task's approval panel between the feed and the composer: it takes its natural height up to
+    /// `WorkflowSelectedPaneSizing.approvalShare` of the column, then scrolls, so the feed keeps its floor.
+    @ViewBuilder private var inspectorApprovalRegion: some View {
+        if let gate = model.inspectorApproval {
+            ScrollView {
+                CallerApprovalPanel(taskID: model.task.taskID, polls: gate.polls)
+                    .frame(maxWidth: .infinity)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { approvalNaturalHeight = $0 }
+                    .background(ScrollChrome())
+            }
+            .frame(height: approvalRegionHeight)
+            .accessibilityIdentifier("workflow-selected-approval")
+        }
     }
 
     /// The lane's boundary block (`.hd-d2b-boundary`): drawn only while there is a notice.
@@ -421,19 +331,23 @@ struct ParallelColumnView: View {
 
     // MARK: Inspector header
 
+    /// The inspector header: the actions row, preceded by the task's title, subtitle and status row only where the pane head
+    /// does not already name the node and its status (the orchestrator pane).
     private var header: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
-                StatusIcon(status: model.task.status)
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
-                    Text(model.title).font(.hf(.headline, weight: .semibold)).lineLimit(2)
-                    HStack(spacing: HfRadius.Metrics.spacing6) {
-                        BackendDot(backend: model.task.backend)
-                        Text(model.subtitle).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
+            if model.showsInspectorTitle {
+                HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
+                    StatusIcon(status: model.task.status)
+                    VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
+                        Text(model.title).font(.hf(.headline, weight: .semibold)).lineLimit(2)
+                        HStack(spacing: HfRadius.Metrics.spacing6) {
+                            BackendDot(backend: model.task.backend)
+                            Text(model.subtitle).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText).lineLimit(1)
+                        }
                     }
+                    Spacer(minLength: HfRadius.Metrics.spacing8)
+                    TaskStatusLabel(task: model.task).fixedSize()
                 }
-                Spacer(minLength: HfRadius.Metrics.spacing8)
-                TaskStatusLabel(task: model.task).fixedSize()
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: HfRadius.Metrics.spacing10) {
@@ -563,5 +477,14 @@ struct ParallelComposerBounds: PreferenceKey {
     static var defaultValue: [String: Anchor<CGRect>] { [:] }
     static func reduce(value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]) {
         value.merge(nextValue(), uniquingKeysWith: { _, newest in newest })
+    }
+}
+
+// MARK: - Measured height
+
+private extension View {
+    /// Writes this view's laid-out height into `height` when it changes.
+    func measured(into height: Binding<CGFloat>) -> some View {
+        onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height.wrappedValue = $0 }
     }
 }

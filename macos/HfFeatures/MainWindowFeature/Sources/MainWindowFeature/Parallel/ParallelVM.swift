@@ -12,6 +12,7 @@ import MonitorCore
 /// Presents complete membership with bounded leases and equality-guarded off-main presentation.
 @Observable
 @MainActor
+// swiftlint:disable:next type_body_length
 final class ParallelVM: ParallelViewModel {
     let horizontalPosition: ParallelViewportPosition?
     let groupName: String
@@ -25,6 +26,8 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored var isWorkflowInspector = false
     /// Workflow-set composer locks (see `ParallelVM+MessageLock.swift`); Group lanes never set them.
     @ObservationIgnored var composerLocks = ParallelComposerLocks()
+    /// The Graph inspector's approval panel gate; lane columns never read it.
+    @ObservationIgnored var inspectorApprovalGate = WorkflowSelectedApprovalGate()
     @ObservationIgnored var messagingFailureHandler: (@MainActor () -> (@MainActor (any Error) -> Void))?
     /// True only for the standalone group mount (`buildParallelView`); workflow and inspector VMs never publish.
     @ObservationIgnored let publishesTopBar: Bool

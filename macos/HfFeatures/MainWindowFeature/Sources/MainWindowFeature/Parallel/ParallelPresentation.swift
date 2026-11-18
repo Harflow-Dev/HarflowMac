@@ -255,6 +255,8 @@ struct ParallelColumnRenderValue: Equatable {
     var hasMessageCancellation = false
     var chrome = ParallelColumnChrome.lane
     var messageLock: ParallelMessageLock?
+    var inspectorApproval: WorkflowSelectedApprovalGate?
+    var showsInspectorTitle = false
     var request: TaskRequestReadState?
     var requestFeedback: String?
 
@@ -276,7 +278,9 @@ struct ParallelColumnRenderValue: Equatable {
             && left.memberTaskIDs == right.memberTaskIDs && lhs.animatesArrival == rhs.animatesArrival
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
             && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
-            && lhs.chrome == rhs.chrome && lhs.messageLock == rhs.messageLock && lhs.request == rhs.request
+            && lhs.chrome == rhs.chrome && lhs.messageLock == rhs.messageLock && lhs.inspectorApproval == rhs.inspectorApproval
+            && lhs.showsInspectorTitle == rhs.showsInspectorTitle
+            && lhs.request == rhs.request
             && lhs.requestFeedback == rhs.requestFeedback
     }
 }
@@ -301,6 +305,7 @@ extension ParallelColumnModel {
         value.cachedHistoryNotice = cachedHistoryNotice
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
                                         hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil,
-                                        chrome: chrome, messageLock: messageLock, request: request, requestFeedback: requestFeedback)
+                                        chrome: chrome, messageLock: messageLock, inspectorApproval: inspectorApproval,
+                                        showsInspectorTitle: showsInspectorTitle, request: request, requestFeedback: requestFeedback)
     }
 }

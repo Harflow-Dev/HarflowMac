@@ -24,6 +24,18 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
     var latestTaskIDs: Set<String> = []
     var titles: [String: String] = [:]
     var selectedNodeExists = true
+    /// The selected-node pane's head: the node's status badge, or "On demand" for an on-demand node.
+    var header = WorkflowSelectedHeader()
+    /// "backend · model · repository" above the shown transcript; for an on-demand call it leads with "Call N".
+    var caption: String?
+    /// An on-demand node's calls, newest first.
+    var callRows: [WorkflowOnDemandCallRow] = []
+    /// The selected call's assignment, reason and result, shown when it has no transcript.
+    var callDetails: WorkflowCallDetails?
+    /// Whether the pane mounts the node task's approval panel, and whether it polls.
+    var approval = WorkflowSelectedApprovalGate()
+    /// Whether the worker pane shows the run goal block.
+    var showsGoal = false
     var isDefault: Bool { node == nil }
     var announcementIdentity: String { (node?["id"]?.stringValue ?? "default") + ":" + (activationID ?? "") }
     var title: String { node?["title"]?.stringValue ?? node?["id"]?.stringValue ?? "Workflow" }
@@ -75,6 +87,15 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
                 ?? activation["child_workflow_run_id"]?.stringValue
                 ?? activation["workflow_run_id"]?.stringValue
         }
+        let runModel = WorkflowRunModel(raw: run)
+        result.header = WorkflowSelectedHeader(
+            kind: .worker, attemptStatus: result.activation?["status"]?.stringValue,
+            isLatestAttempt: result.activationID == result.attempts.last?.id)
+        let agent = WorkflowSelectedCaption.agent(activation: result.activation, node: node)
+        result.caption = WorkflowSelectedCaption.make(
+            backend: agent.backend, model: agent.model, repository: WorkflowRunMetadata.repoName(runModel))
+        result.showsGoal = runModel.goal != nil || runModel.canReviseGoal
+        result.approval = WorkflowSelectedApprovalGate.make(run: run)
         return result
     }
 
@@ -152,6 +173,7 @@ extension WorkflowVM {
         selectedActivity = activity
     }
     activity?.setWorkflowTaskIDs(next.taskIDs, titles: next.titles)
+    activity?.setInspectorApproval(next.approval)
     if runGraphVisible { activity?.didAppear() }
     if runGraphVisible { parallel.suspendWorkflowActivity() } else { applyRunMessageLock(); parallel.didAppear() }
     updateNativeActivity()

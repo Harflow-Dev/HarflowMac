@@ -6,11 +6,17 @@ import SwiftUI
 /// A single retained conversation fits the inspector; its feed owns vertical scrolling.
 struct WorkflowSelectedActivityView: View {
     var activity: ParallelVM
+    /// An on-demand call's assignment, reason and result, shown above the placeholder while its conversation cannot be shown.
+    var unavailableDetails: WorkflowCallDetails?
+    /// True for the orchestrator pane, whose task title and status the pane head does not carry.
+    var showsTaskTitle = false
+    @State private var pickerHeight: CGFloat = 0
     @State private var residencyHandoffs = ParallelResidencyHandoffStore()
 
     var body: some View {
         VStack(spacing: 0) {
             if activity.columns.count > 1 {
+                VStack(spacing: 0) {
                 Picker("Conversation", selection: Binding(get: { activity.selectedConversationID ?? "" },
                                                           set: { activity.selectConversation($0) })) {
                     ForEach(activity.columns) { column in
@@ -20,10 +26,13 @@ struct WorkflowSelectedActivityView: View {
                 .accessibilityIdentifier("workflow-activity-conversation-picker")
                 .padding(12)
                 Divider()
+                }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pickerHeight = $0 }
+                .preference(key: WorkflowSelectedColumnChromeKey.self, value: pickerHeight)
             }
             GeometryReader { viewport in
                 if let column = activity.columns.first(where: { $0.id == activity.selectedConversationID }) {
-                    ParallelColumnCell(model: column.withChrome(.inspector),
+                    ParallelColumnCell(model: column.withChrome(.inspector, showsInspectorTitle: showsTaskTitle),
                                        state: column.isResident ? activity.columnState(for: column.id) : nil,
                                        residencyState: residencyHandoffs.state(for: column.id),
                                        size: CGSize(width: max(0, viewport.size.width - ParallelLayout.dividerWidth),
@@ -31,8 +40,14 @@ struct WorkflowSelectedActivityView: View {
                         .equatable()
                         .id(column.id)
                 } else {
-                    ContentUnavailableView("Activity unavailable", systemImage: "text.alignleft",
-                                           description: Text("The task record is not available."))
+                    VStack(spacing: 0) {
+                        if let unavailableDetails {
+                            WorkflowCallDetailsView(details: unavailableDetails)
+                            Divider()
+                        }
+                        ContentUnavailableView("Activity unavailable", systemImage: "text.alignleft",
+                                               description: Text("The task record is not available."))
+                    }
                 }
                 Color.clear
                     .allowsHitTesting(false)
