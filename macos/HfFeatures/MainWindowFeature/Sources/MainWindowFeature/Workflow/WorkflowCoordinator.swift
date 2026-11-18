@@ -81,9 +81,9 @@ extension MainWindowCoordinator: WorkflowRouting, WorkflowLibraryRouting {
     private func buildWorkflowBuilderTaskView(taskID: String, runID: String) -> AnyView {
         let useCase = TaskDetailViewRepository(builderRunID: runID)
         let vm = TaskDetailVM(taskID: taskID, useCase: useCase, routing: self, continuityHistory: continuityHistory,
-                              chrome: .embedded, scheduler: GlobalValues.scheduling, isWorkflowBuilder: true)
+                              chrome: .builder, scheduler: GlobalValues.scheduling, isWorkflowBuilder: true)
         let conversationID = useCase.conversationMembers(of: taskID).first?.id ?? taskID
-        return TaskDetailView(vm, chrome: .embedded).id(conversationID).eraseToAnyView()
+        return TaskDetailView(vm, chrome: .builder, transcriptStyle: .transcript).id(conversationID).eraseToAnyView()
     }
 
     func didSaveWorkflow(name: String) { selection = .workflow(name) }

@@ -3,10 +3,14 @@ import Foundation
 // MARK: - WorkflowBuilderLayout
 
 enum WorkflowBuilderLayout {
-    static func minimums(height: CGFloat) -> (canvas: CGFloat, task: CGFloat) {
-        let available = max(0, height - 2)
-        let task = min(260, available)
-        return (min(170, min(available * 0.3, max(0, available - task))), task)
+    /// Budgets the actual detail viewport, including exactly one divider. The canvas retains its
+    /// normal node geometry and scrolls; a narrow viewport never selects a different layout.
+    static func widths(viewport: CGFloat) -> (canvas: CGFloat, activity: CGFloat, divider: CGFloat) {
+        let width = viewport.isFinite ? max(0, viewport) : 0
+        let divider = min(1, width)
+        let available = width - divider
+        let activity = min(460, available)
+        return (available - activity, activity, divider)
     }
 
     static func canSubmit(isGenerating: Bool, isBusy: Bool, name: String, repo: String, prompt: String) -> Bool {

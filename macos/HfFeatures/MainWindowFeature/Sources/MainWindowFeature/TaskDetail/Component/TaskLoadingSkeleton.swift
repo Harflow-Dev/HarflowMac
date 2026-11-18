@@ -32,7 +32,14 @@ struct TaskLoadingSkeleton: View {
 
     var body: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
-            if chrome != .standalone {
+            if chrome == .builder {
+                HStack {
+                    Text("Workflow builder").font(.hf(.secondary, weight: .semibold))
+                    Spacer(minLength: 0)
+                    ProgressView().controlSize(.small)
+                }.padding(16)
+                Divider()
+            } else if chrome != .standalone {
                 title
                     .padding(.horizontal, isEmbedded ? HfRadius.Metrics.spacing16 : HfRadius.Metrics.spacing24)
                     .padding(.top, HfRadius.Metrics.spacing12)
@@ -231,7 +238,9 @@ private struct LoadingToolbar: ViewModifier {
     let chrome: TaskDetailChrome
 
     func body(content: Content) -> some View {
-        if chrome == .embedded {
+        if chrome == .builder {
+            content
+        } else if chrome == .embedded {
             VStack(spacing: HfRadius.Metrics.zero) {
                 HStack {
                     Spacer(minLength: HfRadius.Metrics.zero)

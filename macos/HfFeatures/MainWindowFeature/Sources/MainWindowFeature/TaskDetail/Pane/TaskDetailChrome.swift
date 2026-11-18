@@ -18,6 +18,10 @@ enum TaskDetailChrome: Equatable, Sendable {
     case group
     /// The workflow builder's inline row: no window toolbar, the 280 point pane.
     case embedded
+    /// Workflow builder activity: compact heading and inline facts, without a legacy side pane.
+    case builder
+
+    var showsLegacyPane: Bool { self == .group || self == .embedded }
 }
 
 // MARK: - TaskPaneBinding

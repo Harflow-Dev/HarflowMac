@@ -5,7 +5,7 @@
 //  The activity feed's presentation style. `.standard` is the look every surface had before the task
 //  screen's transcript metrics: it is the default everywhere and renders unchanged. `.transcript` applies
 //  `TaskScreenStyle`'s transcript, prose, bubble, tool-row and working-row metrics, and is requested only
-//  by the standalone task and Group mounts of the task detail. `.lane` is the transcript's row metrics inside
+//  by the standalone task, Group and workflow builder mounts of the task detail. `.lane` is the transcript's row metrics inside
 //  a Parallel lane: the same prose, tool and working rows with a 16 pt inset, a 12 pt row gap and no 760 column.
 //
 

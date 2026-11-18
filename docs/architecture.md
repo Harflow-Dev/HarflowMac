@@ -606,3 +606,27 @@ CLI options and engine-owned persistence remain unchanged.
 
 
 Design: HarflowDesign `b710856a31702e46e3b8f3a54be19f3cb7c422dc`, `v2/scripts/states-workflow-gaps.js`, `discard-confirm`.
+
+### Workflow builder activity workspace
+
+`WorkflowBuilderWorkspace` measures the main detail viewport below the standalone node row.
+`WorkflowBuilderLayout.widths(viewport:)` allocates one divider, up to 460 points of activity,
+and the remaining canvas width. The activity has priority within the bounded viewport.
+Every width is nonnegative. The canvas retains its existing geometry and scrolling; no stacked
+layout or node scaling is selected for narrow space. Selecting a node during a builder session
+does not add a second inspector.
+
+The explicit `TaskDetailChrome.builder` mount uses the existing workflow-builder VM and
+transcript/composer, including approval and Always allow Harflow tools. It publishes no task
+window toolbar and mounts no legacy Events side pane. A compact Workflow builder heading
+shows backend and task status; notices, continuity, outcomes, takeover/spawned facts and
+expandable public task facts, reported results and event material live within the activity
+column. The loading mount follows the same chrome. Group, embedded and standalone task
+mounts keep their existing behavior. Generation, runtime/session/attempt authority, saving and
+Return to canvas eligibility remain owned by the existing workflow paths.
+
+Design references: HarflowDesign `34c3b0576e221d17b1096136db6c5d0fbb4c5000`,
+`v2/scripts/screens-workflow-editor.js`, `edit-with-agent`; subsequent agent/generate
+states in `b710856a31702e46e3b8f3a54be19f3cb7c422dc`,
+`v2/scripts/states-workflow-gaps.js`. Source layout does not establish desktop geometry
+or accessibility acceptance.

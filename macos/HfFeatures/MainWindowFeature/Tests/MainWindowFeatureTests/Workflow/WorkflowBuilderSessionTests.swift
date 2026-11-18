@@ -355,6 +355,7 @@ private func runtime(change: String) -> QualificationRuntimeToken {
 @MainActor
 final class BuilderSessionUseCase: WorkflowUseCase, @unchecked Sendable {
     var status: String
+    var hostedRun: [String: JSONValue]?
     var delayBuild = false
     var buildCount = 0
     var buildResponse = "success"
@@ -385,6 +386,7 @@ final class BuilderSessionUseCase: WorkflowUseCase, @unchecked Sendable {
             }
             return ["workflow_run_id": .string("builder-run")]
         }
+        if command == "status", let hostedRun { return ["run": .object(hostedRun)] }
         if command == "status" {
             var proposal = WorkflowVM.starterDefinition()
             proposal["description"] = .string("Agent proposal")

@@ -10,35 +10,8 @@ import Testing
 // MARK: - WorkflowScreenLayoutTests
 
 @MainActor @Suite(.serialized) struct WorkflowScreenLayoutTests {
-    @Test func givenBuilderTaskEmbeddedInEditor_whenRendered_thenItsTaskComposerHasNoDuplicateGlobalComposer() async throws {
-        // given
-        let vm = WorkflowPreview.make()
-        defer { vm.didDisappear() }
-        vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(String(repeating: "a", count: 32)),
-            "kind": .string("builder"), "status": .string("running"), "builder_draft": .object(vm.definition),
-            "activations": .array([.object(["role": .string("builder"), "tasks": .array([
-                .object(["task_id": .string("builder-task")])])])])])
-        let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { _, _ in
-            AnyView(Text("Embedded builder Activity").accessibilityIdentifier("embedded-builder-activity"))
-        }), size: CGSize(width: 1200, height: 800))
-        defer { fixture.close() }
-        // when
-        await fixture.settle { fixture.element("embedded-builder-activity") != nil }
-        // then
-        #expect(!fixture.hasElement(containing: Self.composerLabel))
-    }
-
-    private static let composerLabel = "Message the workflow builder"
-    private nonisolated static let windowSizes = [CGSize(width: 1000, height: 620), CGSize(width: 1440, height: 900)]
-
-    private func builderRun(_ vm: WorkflowVM, taskID: String?) -> WorkflowRunModel {
-        var raw: [String: JSONValue] = ["workflow_run_id": .string(String(repeating: "b", count: 32)),
-            "kind": .string("builder"), "status": .string("running"), "builder_draft": .object(vm.definition)]
-        if let taskID {
-            raw["activations"] = .array([.object(["role": .string("builder"), "tasks": .array([.object(["task_id": .string(taskID)])])])])
-        }
-        return WorkflowRunModel(raw: raw)
-    }
+    static let composerLabel = "Message the workflow builder"
+    nonisolated static let windowSizes = [CGSize(width: 1000, height: 620), CGSize(width: 1440, height: 900)]
 
     @Test(arguments: windowSizes, [ColorScheme.light, .dark])
     func givenEditorWithNoRunSelected_whenHosted_thenNoComposerAndOnlyTheStepTrayIsBelowTheCanvas(size: CGSize, appearance: ColorScheme) async throws {
@@ -378,42 +351,6 @@ import Testing
     private func writeLayoutJSON(_ value: [String: Any], to url: URL) throws {
         let data = try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: url, options: .atomic)
-    }
-
-    @Test(arguments: windowSizes, [ColorScheme.light, .dark])
-    func givenBuilderRunAwaitingItsTask_whenHosted_thenNoComposerAndStartingLabelIsShown(size: CGSize, appearance: ColorScheme) async throws {
-        // given
-        let vm = WorkflowPreview.make()
-        defer { vm.didDisappear() }
-        vm.selectedRun = builderRun(vm, taskID: nil)
-        #expect(vm.selectedRun?.builderTaskID == nil)
-        let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { _, _ in AnyView(Text("unexpected")) }).preferredColorScheme(appearance),
-                                   size: size, appearance: appearance)
-        defer { fixture.close() }
-        // when
-        await fixture.settle { fixture.element("Starting workflow builder…") != nil }
-        // then
-        #expect(fixture.element("Starting workflow builder…") != nil)
-        #expect(fixture.element("unexpected") == nil)
-        #expect(!fixture.hasElement(containing: Self.composerLabel))
-    }
-
-    @Test(arguments: windowSizes, [ColorScheme.light, .dark])
-    func givenBuilderRunWithTaskAndInjectedView_whenHosted_thenInjectedViewIsShownWithoutOuterComposer(size: CGSize, appearance: ColorScheme) async throws {
-        // given
-        let vm = WorkflowPreview.make()
-        defer { vm.didDisappear() }
-        vm.selectedRun = builderRun(vm, taskID: "builder-task")
-        #expect(vm.selectedRun?.builderTaskID == "builder-task")
-        let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { taskID, _ in
-            AnyView(Text("Embedded \(taskID)").accessibilityIdentifier("embedded-builder-activity"))
-        }).preferredColorScheme(appearance), size: size, appearance: appearance)
-        defer { fixture.close() }
-        // when
-        await fixture.settle { fixture.element("embedded-builder-activity") != nil }
-        // then
-        #expect(fixture.element("embedded-builder-activity") != nil)
-        #expect(fixture.element("Starting workflow builder…") == nil)
     }
 
     @Test

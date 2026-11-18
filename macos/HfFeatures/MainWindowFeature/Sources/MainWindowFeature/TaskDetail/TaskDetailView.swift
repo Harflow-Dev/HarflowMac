@@ -142,11 +142,11 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
-    @State private var activityState: ParallelColumnUIState
+    @State var activityState: ParallelColumnUIState
     @State var paneHolder: TaskPaneHolder
     /// The standalone mount's draft home. Held in `@State` so a rebuild of this view for the same conversation
     /// never swaps the composer's binding mid-typing; the store rebinds it itself when membership changes.
-    @State private var draftMount: TaskDraftMount?
+    @State var draftMount: TaskDraftMount?
     let chrome: TaskDetailChrome
     let transcriptStyle: ActivityFeedStyle
     private let onToolbarEvaluation: (() -> Void)?
@@ -167,7 +167,7 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     
     /// `chrome` selects the mount: `.standalone` draws the adaptive right pane and keeps its choices through
     /// `paneBinding` (a private store when none is given); `.group`, the default, and `.embedded` keep the
-    /// always-mounted legacy pane. `draft` keeps the standalone composer's text across navigation and is ignored
+    /// always-mounted legacy pane. `.builder` keeps task facts inline without a window toolbar. `draft` keeps the standalone composer's text across navigation and is ignored
     /// by the other mounts, whose composers keep a local draft.
     init(_ viewModel: VM, chrome: TaskDetailChrome = .group, paneBinding: TaskPaneBinding? = nil,
          activityState: ParallelColumnUIState? = nil, transcriptStyle: ActivityFeedStyle = .standard,
@@ -218,6 +218,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             withToolbar(task: task) {
                 if isStandalone {
                     standaloneLayout(task)
+                } else if chrome == .builder {
+                    columnStack(task).opensFileLinks(repoPath: task.repoPath)
                 } else {
                     legacyLayout(task)
                 }
@@ -253,6 +255,8 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
             }
             if isStandalone {
                 standaloneOutcomeFeedback
+            } else if chrome == .builder {
+                TaskBuilderHeader(viewModel: viewModel, task: task)
             } else {
                 legacyHeader(task)
             }
@@ -361,7 +365,9 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     /// Attaches the toolbar layout the running OS supports; the glass-free one needs macOS 26 APIs.
     @ViewBuilder
     private func withToolbar(task: TaskInfo, @ViewBuilder content: () -> some View) -> some View {
-        if isEmbedded {
+        if chrome == .builder {
+            content()
+        } else if isEmbedded {
             VStack(spacing: HfRadius.Metrics.zero) {
                 HStack(spacing: HfRadius.Metrics.spacing12) {
                     Spacer(minLength: HfRadius.Metrics.zero)
@@ -531,43 +537,6 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
         .fixedSize()
         .help("More actions")
         .accessibilityLabel("More actions")
-    }
-
-    /// Content over the composer. The feed centres its own content with `readingColumn()` inside its
-    /// scroll view (settled plan D13), so scrollbars sit at the pane's edge.
-    private var column: some View {
-        VStack(spacing: HfRadius.Metrics.zero) {
-            content
-            MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow,
-                           style: transcriptStyle.isTranscript ? .transcript : .standard,
-                           text: isStandalone ? draftMount?.text : nil,
-                           onSubmitCompletion: viewModel.submitMessage,
-                           captureDraftClear: draftMount.map { mount in { mount.captureAcceptedDraftClear() } }) { text in viewModel.submitMessage(text) }
-                .readingColumn()
-        }
-    }
-
-    private var content: some View {
-        VStack(spacing: 0) {
-            StoredRequestView(state: viewModel.requestReadState, read: viewModel.didReadRequest, copy: viewModel.didCopyObservationText)
-                .padding(16)
-            standaloneProvenanceLine
-            ForEach(viewModel.orderedHistoryFrames, id: \.taskID) { frame in
-                ObservationHistoryView(frame: frame) { viewModel.didRequestObservation($0, taskID: frame.taskID) }
-                    .padding(.horizontal, 16)
-.padding(.bottom, 8)
-            }
-            if let feedback = viewModel.copyFeedback { Text(feedback).font(.hf(.caption)).textSelection(.enabled) }
-            TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
-                             isCancelDisabled: viewModel.continuationPresentation?.locksActions == true || viewModel.isBusy
-                                 || (chrome == .standalone && !viewModel.hasStatusAuthority), style: transcriptStyle,
-                             stateTreatment: isStandalone ? viewModel.stateTreatment : nil,
-                             onStateContinue: viewModel.didTapContinue,
-                             onStateCheck: viewModel.didTapCheckContinuation, onStateNewTask: viewModel.didTapNewTask,
-                             onStateStop: viewModel.didTapCancel, onStateRefresh: viewModel.didTapRefreshState,
-                             onStateCopyResumeCommand: viewModel.didTapCopyResumeCommand,
-                             onStateOpenEvents: { pane.animated { pane.select(.events) } })
-        }
     }
 
     private var eventsPane: some View {

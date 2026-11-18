@@ -51,15 +51,44 @@ import Testing
         #expect(WorkflowBuilderPresentation.conversationMember(task: task, items: items, prompt: "injected scaffold", isBuilder: false).items == items)
     }
 
-    @Test(arguments: [0, 180, 300, 600, 1000] as [CGFloat])
-    func givenConstrainedHeight_whenBudgetingPanes_thenMinimaFitAndComposerHasPriority(_ height: CGFloat) {
+    @Test(arguments: [0, 0.5, 1, 180, 460, 500, 720, 760, 1000, 1440] as [CGFloat])
+    func givenMainViewportWidth_whenBudgetingBuilderWorkspace_thenPanesAndDividerFitWithoutNegativeCanvas(_ width: CGFloat) {
         // given / when
-        let minimums = WorkflowBuilderLayout.minimums(height: height)
+        let layout = WorkflowBuilderLayout.widths(viewport: width)
         // then
-        #expect(minimums.canvas >= 0)
-        #expect(minimums.task >= 0)
-        #expect(minimums.canvas + minimums.task <= max(0, height - 2))
-        #expect(minimums.task == min(260, max(0, height - 2)))
+        #expect(layout.canvas >= 0)
+        #expect(layout.activity >= 0)
+        #expect(layout.activity <= 460)
+        #expect(layout.divider >= 0)
+        #expect(layout.divider <= 1)
+        #expect(abs(layout.canvas + layout.activity + layout.divider - width) < 0.001)
+        if width > 0 { #expect(layout.divider == min(1, width)) }
+        #expect(layout.activity == min(460, max(0, width - 1)))
+        if width >= 461 {
+            #expect(layout.activity == 460)
+            #expect(layout.canvas == width - 461)
+            #expect(layout.divider == 1)
+        }
+    }
+
+    @Test(arguments: [-100, CGFloat.infinity, -CGFloat.infinity, CGFloat.nan])
+    func givenInvalidViewport_whenBudgetingBuilderWorkspace_thenNoUnboundedOrNegativeFrameIsProduced(_ width: CGFloat) {
+        // given / when
+        let layout = WorkflowBuilderLayout.widths(viewport: width)
+        // then
+        #expect(layout.canvas == 0)
+        #expect(layout.activity == 0)
+        #expect(layout.divider == 0)
+    }
+
+    @Test func givenBuilderMount_whenChoosingChrome_thenOnlyBuilderOmitsBothLegacyAndStandalonePanes() {
+        // given / when / then
+        #expect(!TaskDetailChrome.builder.showsLegacyPane)
+        #expect(TaskDetailChrome.embedded.showsLegacyPane)
+        #expect(TaskDetailChrome.group.showsLegacyPane)
+        #expect(!TaskDetailChrome.standalone.showsLegacyPane)
+        #expect(TaskDetailChrome.builder != .embedded)
+        #expect(TaskDetailChrome.builder != .standalone)
     }
 
     @Test func givenBlankRepository_whenSubmitting_thenOnlyGenerationAllowsOmission() {

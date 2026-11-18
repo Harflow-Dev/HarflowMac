@@ -398,45 +398,20 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     .padding(.vertical, HfRadius.Metrics.spacing10)
                 Divider()
             }
-            GeometryReader { viewport in
-                let standaloneHeight = WorkflowStandaloneLayout.height
-                let minimums = WorkflowBuilderLayout.minimums(height: viewport.size.height - standaloneHeight)
-                WorkflowPaneViewport {
-                VSplitView {
-                    VStack(spacing: HfRadius.Metrics.zero) {
-                        WorkflowStandaloneBar(viewModel: viewModel)
-                        HSplitView {
-                        canvas.frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity)
-                        if viewModel.selectedNode != nil || viewModel.selectedEdge != nil
-                            || viewModel.selectedOnDemandNode != nil || viewModel.isOrchestratorSelected {
-                            WorkflowInspector(viewModel: viewModel)
-
-        .frame(minWidth: HfRadius.Metrics.workflowInspectorMinimumWidth,
-                idealWidth: HfRadius.Metrics.taskSkeletonStartWidth,
-                maxWidth: HfRadius.Metrics.workflowInspectorMaximumWidth)
-                        }
-                    }
-                    }
-                    .frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity,
-                           minHeight: minimums.canvas + standaloneHeight,
-                           idealHeight: max(standaloneHeight, viewport.size.height * 0.42))
-                    .clipped()
-                    GeometryReader { taskPane in
-                        if let run = viewModel.selectedRun, let taskID = run.builderTaskID, let builderTaskView {
-                            builderTaskView(taskID, run.id)
-                                .frame(width: taskPane.size.width, height: taskPane.size.height)
-                                .clipped()
-                        } else {
-                            HStack(spacing: HfRadius.Metrics.spacing8) {
-                                ProgressView().controlSize(.small)
-                                Text("Starting workflow builder…").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-                            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                    }.frame(minHeight: minimums.task)
+            WorkflowBuilderWorkspace {
+                WorkflowStandaloneBar(viewModel: viewModel)
+                    .accessibilityIdentifier("workflow-builder.standalone")
+            } canvas: {
+                canvas
+            } activity: {
+                if let run = viewModel.selectedRun, let taskID = run.builderTaskID, let builderTaskView {
+                    builderTaskView(taskID, run.id)
+                } else {
+                    HStack(spacing: HfRadius.Metrics.spacing8) {
+                        ProgressView().controlSize(.small)
+                        Text("Starting workflow builder…").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                }
-                .frame(width: viewport.size.width, height: viewport.size.height)
-                .clipped()
             }
         }
     }
