@@ -238,39 +238,62 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
     }
 
     /// The transcript column: approval banner, optional feedback, resource card, activity and composer.
+    @ViewBuilder
     func columnStack(_ task: TaskInfo) -> some View {
-        VStack(spacing: HfRadius.Metrics.zero) {
-            if let backend = viewModel.harflowApprovalBackend {
-                HStack(spacing: HfRadius.Metrics.spacing12) {
-                    Text("\(backend.capitalized) needs approval to update this canvas.")
-                        .font(.hf(.secondary))
-                        .foregroundStyle(Color.warningFG)
-                    Spacer(minLength: HfRadius.Metrics.zero)
-                    Button("Always allow Harflow tools") { viewModel.didTapAllowHarflowTools() }
-                        .buttonStyle(QuietButtonStyle())
-                        .disabled(viewModel.isBusy)
+        Group {
+            if chrome == .builder {
+                TaskBuilderColumnLayout {
+                    TaskBuilderTopRegion(viewModel: viewModel, task: task) { approvalBanner } trailing: { resourceCard }
+                    column
                 }
-                .padding(.horizontal, HfRadius.Metrics.spacing16)
-                .padding(.vertical, HfRadius.Metrics.spacing8)
-            }
-            if isStandalone {
-                standaloneOutcomeFeedback
-            } else if chrome == .builder {
-                TaskBuilderHeader(viewModel: viewModel, task: task)
             } else {
-                legacyHeader(task)
+                VStack(spacing: HfRadius.Metrics.zero) {
+                    columnTop(task)
+                    column
+                }
             }
-            if let context = viewModel.resourceContext {
-                TaskResourceContextView(context: context, blockersExpanded: viewModel.resourceBlockersExpanded,
-                                        onToggleBlockers: viewModel.didToggleResourceBlockers,
-                                        onOpenResourceSlots: viewModel.didOpenResourceSlots, usesM05Metrics: isStandalone)
-                    .padding(.horizontal, HfRadius.Metrics.spacing16)
-                    .padding(.bottom, HfRadius.Metrics.spacing8)
-            }
-            column
         }
         .frame(minWidth: HfRadius.Metrics.zero, maxWidth: .infinity, minHeight: HfRadius.Metrics.zero, maxHeight: .infinity)
         .background(transcriptStyle.isTranscript ? TaskScreenStyle.Colors.pageBackground.color : Color.windowBG)
+    }
+
+    @ViewBuilder
+    private func columnTop(_ task: TaskInfo) -> some View {
+        approvalBanner
+        if isStandalone {
+            standaloneOutcomeFeedback
+        } else {
+            legacyHeader(task)
+        }
+        resourceCard
+    }
+
+    @ViewBuilder
+    private var approvalBanner: some View {
+        if let backend = viewModel.harflowApprovalBackend {
+            HStack(spacing: HfRadius.Metrics.spacing12) {
+                Text("\(backend.capitalized) needs approval to update this canvas.")
+                    .font(.hf(.secondary))
+                    .foregroundStyle(Color.warningFG)
+                Spacer(minLength: HfRadius.Metrics.zero)
+                Button("Always allow Harflow tools") { viewModel.didTapAllowHarflowTools() }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(viewModel.isBusy)
+            }
+            .padding(.horizontal, HfRadius.Metrics.spacing16)
+            .padding(.vertical, HfRadius.Metrics.spacing8)
+        }
+    }
+
+    @ViewBuilder
+    private var resourceCard: some View {
+        if let context = viewModel.resourceContext {
+            TaskResourceContextView(context: context, blockersExpanded: viewModel.resourceBlockersExpanded,
+                                    onToggleBlockers: viewModel.didToggleResourceBlockers,
+                                    onOpenResourceSlots: viewModel.didOpenResourceSlots, usesM05Metrics: isStandalone)
+                .padding(.horizontal, HfRadius.Metrics.spacing16)
+                .padding(.bottom, HfRadius.Metrics.spacing8)
+        }
     }
 
     /// Group and embedded mounts: the column beside the always-mounted pane.

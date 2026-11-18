@@ -19,6 +19,9 @@ extension TaskDetailView {
         }
     }
 
+    /// The builder column's feed never collapses below this, so the conversation stays scrollable at the minimum window.
+    static var builderFeedMinimumHeight: CGFloat { 80 }
+
     var content: some View {
         VStack(spacing: 0) {
             StoredRequestView(state: viewModel.requestReadState, read: viewModel.didReadRequest, copy: viewModel.didCopyObservationText)
@@ -38,7 +41,8 @@ extension TaskDetailView {
                              onStateCheck: viewModel.didTapCheckContinuation, onStateNewTask: viewModel.didTapNewTask,
                              onStateStop: viewModel.didTapCancel, onStateRefresh: viewModel.didTapRefreshState,
                              onStateCopyResumeCommand: viewModel.didTapCopyResumeCommand,
-                             onStateOpenEvents: { pane.animated { pane.select(.events) } })
+                             onStateOpenEvents: { pane.animated { pane.select(.events) } },
+                             feedMinimumHeight: chrome == .builder ? Self.builderFeedMinimumHeight : nil)
         }
     }
 

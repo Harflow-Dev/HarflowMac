@@ -125,6 +125,8 @@ struct TimelinePaneView: View {
     var onStateRefresh: () -> Void = {}
     var onStateCopyResumeCommand: () -> Void = {}
     var onStateOpenEvents: () -> Void = {}
+    /// The builder mount's floor for the feed (or its skeleton); other mounts leave it `nil`.
+    var feedMinimumHeight: CGFloat?
     @State private var state: ParallelColumnUIState
 
     init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil,
@@ -133,7 +135,8 @@ struct TimelinePaneView: View {
          onStateContinue: @escaping (String) -> Void = { _ in },
          onStateCheck: @escaping (String, UUID) -> Void = { _, _ in }, onStateNewTask: @escaping () -> Void = {}, onStateStop: @escaping () -> Void = {},
          onStateRefresh: @escaping () -> Void = {}, onStateCopyResumeCommand: @escaping () -> Void = {},
-         onStateOpenEvents: @escaping () -> Void = {}) {
+         onStateOpenEvents: @escaping () -> Void = {}, feedMinimumHeight: CGFloat? = nil) {
+        self.feedMinimumHeight = feedMinimumHeight
         self.stateTreatment = stateTreatment
         self.onStateContinue = onStateContinue
         self.onStateCheck = onStateCheck
@@ -175,6 +178,7 @@ struct TimelinePaneView: View {
             } content: {
                 feed
             }
+            .modifier(FeedMinimumHeight(minimum: feedMinimumHeight))
         }
     }
 
@@ -219,6 +223,18 @@ struct TimelinePaneView: View {
                          onStateNewTask: onStateNewTask, onStateStop: onStateStop, onStateRefresh: onStateRefresh,
                          onStateCopyResumeCommand: onStateCopyResumeCommand, onStateOpenEvents: onStateOpenEvents)
         .readingColumn()
+    }
+}
+
+// MARK: - FeedMinimumHeight
+
+/// Adds the builder's floor only when there is one, so other mounts get no modifier at all.
+private struct FeedMinimumHeight: ViewModifier {
+    let minimum: CGFloat?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let minimum { content.frame(minHeight: minimum) } else { content }
     }
 }
 

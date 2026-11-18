@@ -145,6 +145,198 @@ extension WorkflowScreenLayoutTests {
         }
         #expect(overflowing.isEmpty, "\(overflowing.map { String(describing: type(of: $0)) })")
     }
+
+    // MARK: Builder feed height (PENDING hosted run)
+
+    enum FeedScenario: CaseIterable, CustomTestStringConvertible {
+        case factsCollapsed, factsExpanded, longNotices, bannerAndResourceCard
+        var testDescription: String { String(describing: self) }
+    }
+
+    @MainActor private struct BuilderMount {
+        let vm: WorkflowVM
+        let fixture: RedesignHost
+        let column: BuilderColumnProbe
+
+        func close() { vm.didDisappear(); fixture.close() }
+        var columnFrame: CGRect? { column.view.map { $0.convert($0.bounds, to: nil) } }
+        var feedFrame: CGRect? {
+            fixture.descendants
+.compactMap { $0 as? ActivityFeedNativeTableView }
+.first?
+.enclosingScrollView
+                .map { $0.convert($0.bounds, to: nil) }
+        }
+
+        func element(containing text: String) -> NSObject? {
+            fixture.descendants.flatMap { fixture.elements(in: $0) }.first { object in
+                ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { fixture.string(object, $0)?.contains(text) == true }
+            }
+        }
+    }
+
+    private static let longNotice = "A deliberately long builder notice that wraps over several lines of the narrow activity column "
+        + "so that the header has to scroll instead of squeezing the activity feed to nothing."
+
+    private func mountBuilder(_ task: TaskDetailViewModelMock, size: CGSize, appearance: ColorScheme) throws -> BuilderMount {
+        let vm = try QualifiedBuilderFixture.makeVM(name: "code-review")
+        vm.selectedRun = QualifiedBuilderFixture.builderRun(vm, taskID: "builder-task")
+        let column = BuilderColumnProbe()
+        let fixture = RedesignHost(NavigationSplitView {
+            Text("Fixture sidebar").navigationSplitViewColumnWidth(240)
+        } detail: {
+            WorkflowView(vm, builderTaskView: { _, _ in
+                AnyView(TaskDetailView(task, chrome: .builder, transcriptStyle: .transcript)
+                    .background(BuilderColumnProbe.Representable(probe: column)))
+            })
+        }
+        .environment(\.hfReduceMotionOverride, true)
+        .preferredColorScheme(appearance), size: size, appearance: appearance)
+        return BuilderMount(vm: vm, fixture: fixture, column: column)
+    }
+
+    private func scenarioTask(_ scenario: FeedScenario) -> TaskDetailViewModelMock {
+        switch scenario {
+        case .factsCollapsed, .factsExpanded: PaneMocks.running(notices: [])
+        case .longNotices: PaneMocks.running(notices: [Self.longNotice, Self.longNotice, Self.longNotice])
+        case .bannerAndResourceCard:
+            {
+                let task = PaneMocks.running(notices: [])
+                task.harflowApprovalBackend = "codex"
+                task.resourceContext = TaskResourceContext(
+                    title: "Waiting for a resource slot", message: "Another run holds the slot this task needs.",
+                    detail: "It starts as soon as the slot is free.", blockers: nil)
+                return task
+            }()
+        }
+    }
+
+    struct FeedCase: Sendable, CustomTestStringConvertible {
+        let size: CGSize
+        let appearance: ColorScheme
+        let scenario: FeedScenario
+        var testDescription: String { "\(Int(size.width))x\(Int(size.height)) \(appearance) \(scenario)" }
+
+        static let all: [FeedCase] = WorkflowScreenLayoutTests.windowSizes.flatMap { size in
+            [ColorScheme.light, .dark].flatMap { appearance in
+                FeedScenario.allCases.map { FeedCase(size: size, appearance: appearance, scenario: $0) }
+            }
+        }
+    }
+
+    @Test(arguments: FeedCase.all)
+    func givenBuilderColumnScenario_whenHosted_thenFeedKeepsAScrollableHeightAndEverythingIsInsideTheColumn(feedCase: FeedCase) async throws {
+        let (size, appearance, scenario) = (feedCase.size, feedCase.appearance, feedCase.scenario)
+        // given
+        let mount = try mountBuilder(scenarioTask(scenario), size: size, appearance: appearance)
+        defer { mount.close() }
+        await mount.fixture.settle { mount.fixture.element("Task facts and reported result") != nil && mount.feedFrame != nil }
+        // when
+        if scenario == .factsExpanded {
+            #expect(mount.fixture.press(try #require(mount.fixture.element("Task facts and reported result"))))
+            await mount.fixture.settle { mount.feedFrame != nil }
+        }
+        // then
+        let column = try #require(mount.columnFrame)
+        let feed = try #require(mount.feedFrame)
+        #expect(feed.height >= 79.5, "Feed viewport \(feed.height) must keep at least 80 pt in \(scenario)")
+        #expect(feed.minX >= column.minX - 1 && feed.maxX <= column.maxX + 1)
+        #expect(feed.minY >= column.minY - 1 && feed.maxY <= column.maxY + 1, "Feed \(feed) must lie inside the column \(column)")
+        let header = try #require(mount.fixture.element("workflow-builder-header"))
+        let headerFrame = try #require(mount.fixture.frame(header))
+        #expect(headerFrame.maxY <= column.maxY + 1 && headerFrame.minY >= column.minY - 1)
+        let composer = try #require(mount.fixture.element("Queue a message…"))
+        let composerFrame = try #require(mount.fixture.frame(composer))
+        #expect(composerFrame.minY >= column.minY - 1 && composerFrame.maxY <= column.maxY + 1)
+        let hint = try #require(mount.element(containing: "Send queues"))
+        let hintFrame = try #require(mount.fixture.frame(hint))
+        #expect(hintFrame.minY >= column.minY - 1 && hintFrame.maxY <= column.maxY + 1)
+        if scenario == .bannerAndResourceCard {
+            let banner = try #require(mount.element(containing: "needs approval to update this canvas"))
+            let card = try #require(mount.element(containing: "Waiting for a resource slot"))
+            for object in [banner, card] {
+                let frame = try #require(mount.fixture.frame(object))
+                #expect(frame.minY >= column.minY - 1 && frame.maxY <= column.maxY + 1)
+                #expect(frame.minX >= column.minX - 1 && frame.maxX <= column.maxX + 1)
+            }
+        }
+    }
+
+    @Test(arguments: windowSizes, [ColorScheme.light, .dark])
+    func givenFactsExpandedWithBannerAndCard_whenHosted_thenTopRegionScrollsAndItsLastControlWorks(size: CGSize, appearance: ColorScheme) async throws {
+        // given
+        let task = scenarioTask(.bannerAndResourceCard)
+        let mount = try mountBuilder(task, size: size, appearance: appearance)
+        defer { mount.close() }
+        await mount.fixture.settle { mount.fixture.element("Task facts and reported result") != nil && mount.feedFrame != nil }
+        #expect(mount.fixture.press(try #require(mount.fixture.element("Task facts and reported result"))))
+        await mount.fixture.settle { mount.fixture.element("workflow-builder-top-scroll") != nil }
+        // when
+        let region = try #require(mount.fixture.element("workflow-builder-top-scroll"))
+        let regionFrame = try #require(mount.fixture.frame(region))
+        let scroll = try #require(mount.fixture.descendants.compactMap { $0 as? NSScrollView }.first { scroll in
+            !(scroll.documentView is ActivityFeedNativeTableView)
+                && scroll.convert(scroll.bounds, to: nil).intersects(regionFrame)
+                && (scroll.documentView?.frame.height ?? 0) > scroll.contentView.bounds.height + 1
+        })
+        let document = try #require(scroll.documentView)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        await mount.fixture.settle { true }
+        // then
+        #expect(document.frame.height > scroll.contentView.bounds.height)
+        let last = try #require(mount.fixture.element("Open resource slots"))
+        let lastFrame = try #require(mount.fixture.frame(last))
+        let clip = scroll.convert(scroll.bounds, to: nil)
+        #expect(lastFrame.minY >= clip.minY - 1 && lastFrame.maxY <= clip.maxY + 1,
+                "The last control must be reachable inside the top region's scroll region")
+        #expect(mount.fixture.press(last))
+        #expect(task.openedResourceSlots == 1)
+    }
+
+    /// Measured from leaf accessibility frames, not the header container's union: the gap between the facts
+    /// disclosure and the request that opens the column is the top region's padding, so the column starts where the
+    /// top region ends rather than after a stretched slot.
+    @Test(arguments: windowSizes, [ColorScheme.light, .dark])
+    func givenFactsCollapsed_whenHosted_thenColumnStartsRightBelowTheNaturalTopRegion(size: CGSize, appearance: ColorScheme) async throws {
+        // given
+        let mount = try mountBuilder(PaneMocks.running(notices: []), size: size, appearance: appearance)
+        defer { mount.close() }
+        await mount.fixture.settle { mount.fixture.element("Task facts and reported result") != nil && mount.element(containing: "Original request") != nil }
+        // when
+        let column = try #require(mount.columnFrame)
+        let disclosure = try #require(mount.fixture.element("Task facts and reported result"))
+        let disclosureFrame = try #require(mount.fixture.frame(disclosure))
+        let request = try #require(mount.element(containing: "Original request"))
+        let requestFrame = try #require(mount.fixture.frame(request))
+        // then
+        let gap = disclosureFrame.minY - requestFrame.maxY
+        #expect(gap >= -1 && gap < 60, "The column must start right below the top region, measured gap \(gap)")
+        #expect(column.maxY - disclosureFrame.maxY < 160, "Collapsed top region must keep its natural height, not a stretched slot")
+    }
+
+    /// Regression smoke for the non-builder mounts, which must keep their plain VStack column: a feed with height
+    /// and a composer wholly inside the window. Exact pixel baselines need a before/after run on the same data.
+    @Test(arguments: [TaskDetailChrome.standalone, .group, .embedded], [ColorScheme.light, .dark])
+    func givenNonBuilderMount_whenHosted_thenFeedAndComposerKeepTheirColumn(chrome: TaskDetailChrome, appearance: ColorScheme) async throws {
+        // given
+        let size = CGSize(width: 1000, height: 620)
+        let task = PaneMocks.running(notices: [])
+        let view: AnyView = chrome == .standalone
+            ? AnyView(PaneMocks.standalone(task, store: TaskPaneStateStore()))
+            : AnyView(TaskDetailView(task, chrome: chrome, transcriptStyle: .standard))
+        let fixture = RedesignHost(view.preferredColorScheme(appearance), size: size, appearance: appearance)
+        defer { fixture.close() }
+        // when
+        await fixture.settle { fixture.element("Queue a message…") != nil && fixture.descendants.contains { $0 is ActivityFeedNativeTableView } }
+        // then
+        let feed = try #require(fixture.descendants.compactMap { $0 as? ActivityFeedNativeTableView }.first?.enclosingScrollView)
+        #expect(feed.bounds.height > 80)
+        let composer = try #require(fixture.element("Queue a message…"))
+        let composerFrame = try #require(fixture.frame(composer))
+        #expect(composerFrame.minY >= -1 && composerFrame.maxY <= size.height + 1)
+        #expect(fixture.element("workflow-builder-header") == nil)
+    }
 }
 
 // MARK: - BuilderColumnProbe

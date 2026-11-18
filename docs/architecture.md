@@ -627,7 +627,12 @@ transcript/composer, including approval and Always allow Harflow tools. It publi
 window toolbar and mounts no legacy Events side pane. A compact Workflow builder heading
 shows backend and task status; notices, continuity, outcomes, takeover/spawned facts and
 expandable public task facts, reported results and event material live within the activity
-column. The loading mount follows the same chrome, and its placeholder blocks shrink to the column
+column. The heading's title and backend rows stay pinned; the approval banner, the heading's
+feedback and the resource card form one region above the transcript that scrolls with a 48 point
+floor when it does not fit. `TaskBuilderColumnLayout` gives the transcript column at least its
+minimum (the feed keeps 80 points), places it directly under that region's actual height and caps
+the region at half the column; its sizing is the pure `TaskBuilderColumnSizing`. The loading mount
+follows the same chrome, and its placeholder blocks shrink to the column
 instead of using the fixed widths of the other mounts. Group, embedded and standalone task
 mounts keep their existing behavior. Generation, runtime/session/attempt authority, saving and
 Return to canvas eligibility remain owned by the existing workflow paths.

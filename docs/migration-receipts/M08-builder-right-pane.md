@@ -109,6 +109,33 @@ use the card fill and are left for a consistency follow-up.
 Observed: the package and its tests compile through the guarded runner. The rewritten rendering
 tests have not run yet (see the pending hosted batch below).
 
+## Builder feed height at the minimum window (2026-11-18)
+
+Closes in code the acceptance blocker recorded above; the hosted proof is pending.
+
+At a 1000x620 window the builder's activity feed viewport was 0 points tall. The header's feedback
+area had a flexible frame (height cap only), so the column's stack gave the header half of the 433
+point column and the column's fixed parts used the rest. The approved design
+(`34c3b0576e221d17b1096136db6c5d0fbb4c5000`, `v2/scripts/screens-workflow-editor.js`,
+`workflow-editor/edit-with-agent`) shows a fixed pane head over a scrolling conversation.
+
+- The builder's title and backend rows stay pinned. The approval banner, the header feedback
+  (outcome, banners, notices, continuity, the facts disclosure) and the resource card form one
+  region that scrolls with a 48 point floor when it does not fit. The approval banner now sits below
+  the pinned rows instead of above them.
+- A builder-only layout gives the column at least its minimum, places it directly under the top
+  region's actual height, and caps the top region at half of the column, so tall windows keep most
+  of the space for the conversation. Its sizing is a pure function covered by
+  `TaskBuilderColumnSizingTests`.
+- The builder feed keeps a minimum of 80 points; other mounts are unchanged.
+
+Observed: `TaskBuilderColumnSizingTests` (9 tests) passed through the guarded runner; the package
+and its tests compile. Estimated, not observed: at 1000x620 the feed is about 113 points with the
+facts collapsed and at its 80 point floor with the facts expanded, three long notices, or the
+approval banner and resource card, with about 21 points of margin. Two or more history rows or a
+copy-feedback line could exceed it; the hosted run settles this. Acceptance of the minimum-window
+builder still depends on that run.
+
 ## Pending hosted batch
 
 Not run while the owner uses the Mac; to run in one batch through the guarded runner when it is
@@ -119,3 +146,11 @@ free. Suites that open on-screen windows:
   (light and dark) and the corner check of `givenAParallelLane_whenRenderedAtItsActualBoundary_thenItsBottomCornersAreTheChromeSurface`.
 - HfUI package aggregate (several of its suites order windows front).
 - Workflow selected-activity hosted coverage that mounts `WorkflowSelectedSidebar`.
+- `WorkflowScreenLayoutTests` builder feed cases:
+  `givenBuilderColumnScenario_whenHosted_thenFeedKeepsAScrollableHeightAndEverythingIsInsideTheColumn`
+  (16 cases; its banner-and-card containment does not prove the card is visible),
+  `givenFactsExpandedWithBannerAndCard_whenHosted_thenTopRegionScrollsAndItsLastControlWorks`,
+  `givenFactsCollapsed_whenHosted_thenColumnStartsRightBelowTheNaturalTopRegion` (leaf frame gap;
+  only its gap check is evidence) and `givenNonBuilderMount_whenHosted_thenFeedAndComposerKeepTheirColumn`
+  (a smoke check only, not proof of unchanged geometry).
+- `WindowedWorkflowLayoutTests`: the builder feed viewport height assertion.

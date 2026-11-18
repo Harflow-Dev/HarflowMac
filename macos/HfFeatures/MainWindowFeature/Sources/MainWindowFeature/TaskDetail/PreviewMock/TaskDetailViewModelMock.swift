@@ -23,7 +23,10 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     var title = "Fix the login bug"
     var ancestorCrumbs: [AncestorCrumb] = []
     var isBusy = false
-    var harflowApprovalBackend: String? { nil }
+    var harflowApprovalBackend: String?
+    var resourceContext: TaskResourceContext?
+    var openedResourceSlots = 0
+    func didOpenResourceSlots() { openedResourceSlots += 1 }
     func didTapAllowHarflowTools() {}
     var outcomeMessage: String?
     var takenOverBannerText: String?

@@ -2,16 +2,39 @@ import HfUI
 import MonitorCore
 import SwiftUI
 
-// MARK: - TaskBuilderHeader
+// MARK: - TaskBuilderTopRegion
 
 /// Builder chrome keeps task facts in the activity column without linking to an absent inspector.
 /// All values and actions use the existing task presentation and its authority checks.
-struct TaskBuilderHeader<VM: TaskDetailViewModel>: View {
+///
+/// The title and backend rows stay pinned, like the design's pane head. Everything else above the conversation (the
+/// approval banner, the task's feedback and facts disclosure, the resource card) is one region that takes its natural
+/// height and otherwise becomes a single scroll region with a 48 pt floor, so nothing is clipped and the feed is
+/// never squeezed to make room for it. The disclosure state lives here, outside `ViewThatFits`, so it survives
+/// switching between the two forms.
+struct TaskBuilderTopRegion<VM: TaskDetailViewModel, Leading: View, Trailing: View>: View {
     let viewModel: VM
     let task: TaskInfo
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
     @State private var detailsExpanded = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            pinnedRows
+            ViewThatFits(in: .vertical) {
+                region
+                ScrollView { region }
+                    .frame(minHeight: 48)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("workflow-builder-top-scroll")
+            }
+        }
+        .font(.hf(.secondary))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var pinnedRows: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("Workflow builder").font(.hf(.secondary, weight: .semibold))
@@ -25,17 +48,22 @@ struct TaskBuilderHeader<VM: TaskDetailViewModel>: View {
                 if let freedom = task.freedom { Text("· \(AccessLabel.text(freedom: freedom))") }
                 if let turns = viewModel.turnsText { Text("· \(turns)") }
             }.foregroundStyle(Color.secondaryText)
-            ViewThatFits(in: .vertical) {
-                feedback
-                ScrollView { feedback }
-            }
-            .frame(maxHeight: 220, alignment: .top)
         }
-        .font(.hf(.secondary))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("workflow-builder-header")
+    }
+
+    private var region: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            leading
+            feedback.padding(.horizontal, 16)
+            trailing
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 16)
     }
 
     private var feedback: some View {

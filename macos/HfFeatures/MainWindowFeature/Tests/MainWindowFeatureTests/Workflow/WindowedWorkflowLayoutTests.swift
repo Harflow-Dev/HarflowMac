@@ -51,7 +51,7 @@ import Testing
     private func hasActivity(in fixture: RedesignHost) -> Bool {
         fixture.descendants
 .compactMap { $0 as? ActivityFeedNativeTableView }
-            .contains { $0.bounds.width > 0 && $0.bounds.height > 0 }
+            .contains { $0.bounds.width > 0 && $0.bounds.height > 0 && ($0.enclosingScrollView?.bounds.height ?? 0) > 0 }
     }
 
     private func assertHeaders(in fixture: RedesignHost, builderHeadingID: String?) throws {
@@ -81,6 +81,7 @@ import Testing
         if let builderHeadingID {
             let table = try #require(fixture.descendants.compactMap { $0 as? ActivityFeedNativeTableView }.first)
             let activityViewport = try #require(table.enclosingScrollView)
+            #expect(activityViewport.bounds.height > 0, "The builder feed viewport must have height, not just exist")
             let activityBounds = activityViewport.convert(activityViewport.bounds, to: nil)
             #expect(activityBounds.minX >= detailBounds.minX && activityBounds.maxX <= detailBounds.maxX,
                     "Real native activity viewport must remain within the navigation detail pane")
