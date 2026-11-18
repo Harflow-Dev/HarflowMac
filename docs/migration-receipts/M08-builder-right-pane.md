@@ -138,6 +138,11 @@ builder still depends on that run.
 
 ## Pending hosted batch
 
+Run at `24f247b7` on 2026-11-19; results in `M09.md`, "Hosted batch at 24f247b7". HfUI aggregate,
+`ParallelColumnsRenderingTests` and `WindowedWorkflowLayoutTests` pass; two `WorkflowScreenLayoutTests`
+cases (facts expanded with banner and card; non-builder mount) fail deterministically, and the full
+MainWindowFeature gate is not green. The list below is kept as the original scope.
+
 Not run while the owner uses the Mac; to run in one batch through the guarded runner when it is
 free. Suites that open on-screen windows:
 
