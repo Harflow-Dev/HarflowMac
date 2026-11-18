@@ -348,9 +348,11 @@ import Testing
 private struct RecoveryOverlayTestHarness<VM: WorkflowViewModel>: View {
     let viewModel: VM
     @State private var presentation = WorkflowRecoveryOverlayPresentation()
+    @State private var focusRequest = WorkflowRecoveryFocusRequest()
 
     var body: some View {
-        WorkflowRecoveryOverlayHost(viewModel: viewModel, presentation: $presentation, onExplicitClose: {})
+        WorkflowRecoveryOverlayHost(viewModel: viewModel, presentation: $presentation,
+                                    focusRequest: $focusRequest, onExplicitClose: {})
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

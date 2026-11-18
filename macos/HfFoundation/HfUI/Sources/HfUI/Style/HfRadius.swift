@@ -232,6 +232,8 @@ public enum HfRadius {
         public static let workflowRunPanelIdealWidth: CGFloat = 288
         /// Selected Graph activity keeps its own reading width (HarflowDesign `.hd-pane`, 460), independently of Parallel lanes.
         public static let workflowRunActivityPanelIdealWidth: CGFloat = 460
+        /// The recovery pane's width in the approved `workflow-run/recovery` state (`.hd-inspector`; the CSS default is 340).
+        public static let workflowRunRecoveryPanelIdealWidth: CGFloat = 360
         public static let workflowRunPanelMaximumWidth: CGFloat = 500
         /// The run plan checklist's 4 pt progress strip.
         public static let workflowPlanProgressHeight: CGFloat = 4

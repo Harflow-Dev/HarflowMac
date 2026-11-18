@@ -14,7 +14,6 @@ struct WorkflowRecoveryOverlayPresentationTests {
 
         // then
         #expect(presentation.isOpen)
-        #expect(!presentation.isEditorFocusRequested)
         #expect(presentation.autoPresentedRunIDs == ["run-a"])
         #expect(presentation.currentRunID == "run-a")
         #expect(presentation.isVisible(runID: "run-a"))
@@ -33,7 +32,6 @@ struct WorkflowRecoveryOverlayPresentationTests {
 
         // then
         #expect(!presentation.isOpen)
-        #expect(!presentation.isEditorFocusRequested)
         #expect(!presentation.isVisible(runID: "run-a"))
     }
 
@@ -64,7 +62,6 @@ struct WorkflowRecoveryOverlayPresentationTests {
 
         // then — identical refreshes cannot close or recreate the panel.
         #expect(presentation.isOpen)
-        #expect(!presentation.isEditorFocusRequested)
     }
 
     @Test func givenPreviouslySeenRunB_whenRunBBecomesEligibleAgain_thenItDoesNotAutoOpenOrFocus() {
@@ -78,7 +75,6 @@ struct WorkflowRecoveryOverlayPresentationTests {
 
         // then
         #expect(!presentation.isOpen)
-        #expect(!presentation.isEditorFocusRequested)
     }
 
     @Test func givenOpenRunA_whenAlreadySeenRunBBecomesCurrent_thenItHidesWithoutFocusRequest() {
@@ -94,7 +90,6 @@ struct WorkflowRecoveryOverlayPresentationTests {
 
         // then — changing the selected run cannot leave A's panel over B's content.
         #expect(!presentation.isOpen)
-        #expect(!presentation.isEditorFocusRequested)
     }
 
     @Test func givenIneligibleOrEmptyRun_whenSynchronizing_thenItClosesWithoutConsumingAnID() {
@@ -123,7 +118,7 @@ struct WorkflowRecoveryOverlayPresentationTests {
         #expect(presentation.autoPresentedRunIDs == ["run-a"])
     }
 
-    @Test func givenOpenPanel_whenOpeningFromEligibleBadge_thenItRemainsOpenAndRequestsFocus() {
+    @Test func givenOpenPanel_whenOpeningFromEligibleBadge_thenItRemainsOpen() {
         // given
         var presentation = WorkflowRecoveryOverlayPresentation()
         presentation.syncEligibility(runID: "run-a")
@@ -134,11 +129,10 @@ struct WorkflowRecoveryOverlayPresentationTests {
 
         // then
         #expect(presentation.isOpen)
-        #expect(presentation.isEditorFocusRequested)
         #expect(presentation.autoPresentedRunIDs == ["run-a"])
     }
 
-    @Test func givenBadgeOpenedRun_whenPollingTheSameRun_thenFocusRequestRemainsPending() {
+    @Test func givenBadgeOpenedRun_whenPollingTheSameRun_thenItStaysOpen() {
         // given
         var presentation = WorkflowRecoveryOverlayPresentation()
         presentation.syncEligibility(runID: "run-a")
@@ -147,9 +141,39 @@ struct WorkflowRecoveryOverlayPresentationTests {
         // when
         presentation.syncEligibility(runID: "run-a")
 
-        // then — polling must not undo an explicit focus request.
+        // then — polling must not close an explicitly opened panel.
         #expect(presentation.isOpen)
-        #expect(presentation.isEditorFocusRequested)
+    }
+
+    @Test func givenOpenParallelOverlay_whenGraphResumesThenSecondCheckpointArrives_thenParallelStaysClosed() {
+        // given — Parallel auto-opens the run.
+        var presentation = WorkflowRecoveryOverlayPresentation()
+        presentation.reconcile(runID: "run-a", isActive: true)
+        #expect(presentation.isOpen)
+
+        // when — Graph: still eligible, then Resume ends eligibility, then a second checkpoint makes it eligible again.
+        presentation.reconcile(runID: "run-a", isActive: false)
+        presentation.reconcile(runID: nil, isActive: false)
+        presentation.reconcile(runID: "run-a", isActive: false)
+        presentation.reconcile(runID: "run-a", isActive: true)
+
+        // then
+        #expect(!presentation.isOpen)
+        #expect(presentation.autoPresentedRunIDs == ["run-a"])
+    }
+
+    @Test func givenNeverPresentedRun_whenGraphVisitedThenParallelShown_thenItAutoOpensThere() {
+        // given
+        var presentation = WorkflowRecoveryOverlayPresentation()
+
+        // when
+        presentation.reconcile(runID: "run-a", isActive: false)
+        let afterGraph = presentation.autoPresentedRunIDs
+        presentation.reconcile(runID: "run-a", isActive: true)
+
+        // then
+        #expect(afterGraph.isEmpty)
+        #expect(presentation.isOpen)
     }
 
     @Test(arguments: ["needs_attention", "paused", "needs_input"])

@@ -80,17 +80,18 @@ final class WorkflowRunSplitProbe: NSView {
 
                 if didApply {
                     let defaultScroll = snapshot.defaultInspectorScroll
-                    if presentationChanged, snapshot.appliedPresentation == .default {
+                    if presentationChanged, snapshot.appliedPresentation?.ownsDefaultInspectorScroll == true {
                         snapshot.defaultInspectorOrigin = defaultScroll?.contentView.bounds.origin
                     }
                     let preferred = snapshot.inspectorWidths[requested] ?? WorkflowRunLayout.inspectorIdeal(for: requested)
                     let width = WorkflowInspectorWidth.clamped(preferred, available: boundsWidth)
                     snapshot.restoring = true
                     split.setPosition(boundsWidth - width - split.dividerThickness, ofDividerAt: 0)
-                    if presentationChanged, requested == .default,
+                    if presentationChanged, requested.ownsDefaultInspectorScroll,
                        let origin = snapshot.defaultInspectorOrigin, let defaultScroll {
                         restore(origin, in: defaultScroll, afterLayoutOf: split)
                     }
+                    if presentationChanged, requested == .recovery { showRecoveryTop(in: split) }
                     snapshot.restoring = false
                     snapshot.appliedPresentation = requested
                     snapshot.lastObservedInspectorWidth = split.arrangedSubviews[1].frame.width
@@ -107,7 +108,7 @@ final class WorkflowRunSplitProbe: NSView {
                 snapshot.lastObservedInspectorWidth = width
                 snapshot.lastInspectorIdentity = identity
                 snapshot.lastInspectorBoundsWidth = boundsWidth
-                if requested == .default {
+                if requested.ownsDefaultInspectorScroll {
                     // Capture the owner while only the default inspector is visible;
                     // an activity feed may precede it in the native tree when selected.
                     snapshot.defaultInspectorScroll = firstScrollView(in: split.arrangedSubviews[1])
@@ -128,11 +129,21 @@ final class WorkflowRunSplitProbe: NSView {
     private func restore(_ origin: NSPoint, in scroll: NSScrollView, afterLayoutOf split: NSSplitView) {
         // The hidden inspector can clamp its origin while it reflows at the activity width.
         // Restore only after its saved divider width and document layout apply again.
+        moveScroll(to: origin, in: scroll, afterLayoutOf: split)
+        snapshot.defaultInspectorOrigin = nil
+    }
+
+    /// The shared sidebar scroll view keeps its offset; show the failure sentence and Resume.
+    private func showRecoveryTop(in split: NSSplitView) {
+        guard let scroll = snapshot.defaultInspectorScroll ?? firstScrollView(in: split.arrangedSubviews[1]) else { return }
+        moveScroll(to: .zero, in: scroll, afterLayoutOf: split)
+    }
+
+    private func moveScroll(to origin: NSPoint, in scroll: NSScrollView, afterLayoutOf split: NSSplitView) {
         split.layoutSubtreeIfNeeded()
         scroll.layoutSubtreeIfNeeded()
         scroll.contentView.scroll(to: origin)
         scroll.reflectScrolledClipView(scroll.contentView)
-        snapshot.defaultInspectorOrigin = nil
     }
 
     private func firstScrollView(in view: NSView) -> NSScrollView? {

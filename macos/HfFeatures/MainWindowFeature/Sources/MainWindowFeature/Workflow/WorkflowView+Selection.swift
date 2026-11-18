@@ -60,6 +60,16 @@ extension WorkflowView {
     }
 }
 
+// MARK: - Recovery slot
+
+extension WorkflowView {
+    /// What the run view's right-hand slot shows; the one source for drawing, summary suppression and Escape.
+    var runSidebarSlot: WorkflowRunSidebarSlot {
+        WorkflowRunSidebarSlot.resolve(isGraph: viewMode == "Graph", isRecoveryEligible: recoveryEligibleRunID != nil,
+                                       hasNodeSelection: !viewModel.runSidebar.isDefault)
+    }
+}
+
 // MARK: - WorkflowViewModel defaults
 
 extension WorkflowViewModel {

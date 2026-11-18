@@ -15,6 +15,8 @@ import SwiftUI
 struct WorkflowRecoveryOverlayHost<VM: WorkflowViewModel>: View {
     var viewModel: VM
     @Binding var presentation: WorkflowRecoveryOverlayPresentation
+    /// The explicit-open focus request, consumed by the visible editor.
+    @Binding var focusRequest: WorkflowRecoveryFocusRequest
     /// Presentation-only follow-up on explicit dismissal: the caller may return focus to the
     /// eligible badge, best-effort. Auto-hide never calls it.
     var onExplicitClose: () -> Void
@@ -51,7 +53,8 @@ struct WorkflowRecoveryOverlayHost<VM: WorkflowViewModel>: View {
             ScrollView {
                 WorkflowRecoveryForm(
                     viewModel: viewModel,
-                    isEditorFocusRequested: presentation.isEditorFocusRequested,
+                    focusRequest: focusRequest,
+                    onFocusConsumed: { focusRequest.consume() },
                     isInNamedPanel: true,
                     onClose: dismissExplicitly
                 )
@@ -97,11 +100,15 @@ struct WorkflowRecoveryOverlayHost<VM: WorkflowViewModel>: View {
 struct WorkflowRecoveryOverlayLifecycle: ViewModifier {
     @Binding var presentation: WorkflowRecoveryOverlayPresentation
     let eligibleRunID: String?
+    /// Whether the overlay's view mode (Parallel) is showing. Bookkeeping is reconciled only then, so a Graph visit
+    /// neither uses up the one automatic open nor opens a stale panel; only a loss of eligibility is applied there.
+    let isActive: Bool
 
     func body(content: Content) -> some View {
         content
-            .onAppear { presentation.syncEligibility(runID: eligibleRunID) }
-            .onChange(of: eligibleRunID) { _, runID in presentation.syncEligibility(runID: runID) }
+            .onAppear { presentation.reconcile(runID: eligibleRunID, isActive: isActive) }
+            .onChange(of: eligibleRunID) { _, runID in presentation.reconcile(runID: runID, isActive: isActive) }
+            .onChange(of: isActive) { _, active in presentation.reconcile(runID: eligibleRunID, isActive: active) }
             .onDisappear { presentation.syncEligibility(runID: nil) }
     }
 }
@@ -146,6 +153,7 @@ struct WorkflowRecoveryBadge: View {
 
 private struct WorkflowRecoveryOverlayPreview: View {
     @State private var presentation = WorkflowRecoveryOverlayPresentation()
+    @State private var focusRequest = WorkflowRecoveryFocusRequest()
     @State private var viewModel: WorkflowVM
 
     init(longQuestion: Bool = false) {
@@ -155,7 +163,8 @@ private struct WorkflowRecoveryOverlayPreview: View {
     var body: some View {
         ZStack {
             Color.cardFill
-            WorkflowRecoveryOverlayHost(viewModel: viewModel, presentation: $presentation, onExplicitClose: {})
+            WorkflowRecoveryOverlayHost(viewModel: viewModel, presentation: $presentation,
+                                        focusRequest: $focusRequest, onExplicitClose: {})
         }
     }
 }

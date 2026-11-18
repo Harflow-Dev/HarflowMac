@@ -19,9 +19,6 @@ struct WorkflowRecoveryOverlayPresentation: Equatable {
     /// run to be eligible (see `eligibleRunID`), so an ineligible or disappeared run hides the
     /// panel without touching anything else.
     private(set) var isOpen = false
-    /// An explicit-open editor focus request. Automatic presentation never sets it, so the
-    /// first load never steals keyboard focus; only the eligible badge's open action does.
-    private(set) var isEditorFocusRequested = false
 
     /// Visibility belongs to the current eligible run, even before lifecycle reconciliation.
     func isVisible(runID: String?) -> Bool {
@@ -52,14 +49,19 @@ struct WorkflowRecoveryOverlayPresentation: Equatable {
         guard let runID, !runID.isEmpty else {
             currentRunID = nil
             isOpen = false
-            isEditorFocusRequested = false
             return
         }
         guard currentRunID != runID else { return }
         currentRunID = runID
         isOpen = false
-        isEditorFocusRequested = false
         autoPresentIfNeeded(runID: runID)
+    }
+
+    /// Reconciles from the view: while the overlay's view mode is shown it follows eligibility; while it is not (Graph),
+    /// only the loss of eligibility is applied. That closes a stale panel without ever touching the auto-presented set, so
+    /// a later checkpoint of the same run cannot reappear open.
+    mutating func reconcile(runID: String?, isActive: Bool) {
+        if isActive || runID == nil { syncEligibility(runID: runID) }
     }
 
     /// Opens the panel once at the first eligible loaded presentation of a nonempty, unseen run
@@ -74,11 +76,10 @@ struct WorkflowRecoveryOverlayPresentation: Equatable {
     }
 
     /// The eligible badge's open action: open-only, never a toggle — activating it while the
-    /// panel is already open leaves it open. Only this path requests editor focus, and the
-    /// native focus system stays free to decline it.
+    /// panel is already open leaves it open. The editor focus request is a separate token
+    /// (`WorkflowRecoveryFocusRequest`) the caller issues, so automatic presentation never steals focus.
     mutating func openFromBadge() {
         isOpen = true
-        isEditorFocusRequested = true
     }
 
     /// Explicit dismissal: presentation only. Instructions, additional attempts, selection and
@@ -86,6 +87,5 @@ struct WorkflowRecoveryOverlayPresentation: Equatable {
     /// follow-up, never part of this state.
     mutating func closeExplicitly() {
         isOpen = false
-        isEditorFocusRequested = false
     }
 }

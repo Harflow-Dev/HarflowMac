@@ -15,6 +15,8 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     @State private var summaryExpanded = false
     @State private var lastLoadingWasRun = false
     @State private var recoveryOverlay = WorkflowRecoveryOverlayPresentation()
+    /// The incrementing editor focus request issued by the eligible badge; the visible editor consumes it.
+    @State var recoveryFocus = WorkflowRecoveryFocusRequest()
     /// Focus return to the eligible badge after an explicit dismissal only (best effort).
     @FocusState private var recoveryBadgeFocused: Bool
     init(_ viewModel: VM, builderTaskView: ((String, String) -> AnyView)? = nil) {
@@ -29,7 +31,9 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             screenContent
         }
         .background(Color.windowBG)
-        .modifier(WorkflowRecoveryOverlayLifecycle(presentation: $recoveryOverlay, eligibleRunID: recoveryEligibleRunID))
+        .modifier(WorkflowRecoveryOverlayLifecycle(presentation: $recoveryOverlay, eligibleRunID: recoveryEligibleRunID,
+                                                   isActive: viewMode != "Graph"))
+        .onChange(of: recoveryEligibleRunID) { _, _ in recoveryFocus.cancel() }
         .sheet(isPresented: Binding(get: { viewModel.showsRunSheet }, set: { viewModel.showsRunSheet = $0 })) {
             WorkflowLaunchSheet(viewModel: viewModel, isGenerating: false)
         }
@@ -122,7 +126,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     workflowTitle
                     if let run = viewModel.selectedRun {
                         WorkflowRecoveryBadge(run: run, isEligible: recoveryEligibleRunID != nil,
-                                              focus: $recoveryBadgeFocused, onOpen: { recoveryOverlay.openFromBadge() })
+                                              focus: $recoveryBadgeFocused, onOpen: openRecoveryFromBadge)
                     }
                     }
                     stateLine
@@ -416,79 +420,6 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         }
     }
 
-    @ViewBuilder private var defaultRunSidebar: some View {
-        if let run = viewModel.selectedRun {
-            ScrollView {
-            VStack(spacing: HfRadius.Metrics.zero) {
-                if run.parentRunID != nil {
-                    Text("Child workflow · Plan and checklist belong to this run")
-.font(.hf(.caption))
-.foregroundStyle(Color.tertiaryText)
-        .padding(HfRadius.Metrics.spacing16)
-                }
-                if run.sessionOwnerRunID != run.id {
-                    Button("Open owning orchestrator") { viewModel.openRun(run.sessionOwnerRunID) }
-                        .buttonStyle(QuietButtonStyle())
-.padding(.horizontal, HfRadius.Metrics.spacing16)
-                }
-                if CallerApprovalPanel.containsOptIn(.object(run.raw)) || (run.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 {
-                    CallerApprovalPanel(workflowRunID: run.id,
-                                        polls: (viewMode != "Graph" || viewModel.runSidebar.isDefault)
-                                            && ["running", "needs_attention", "needs_input"].contains(run.status))
-                }
-                WorkflowChildLinks(groups: WorkflowChildLinkGroup.build(run: run), onOpen: viewModel.openRun)
-                    .padding(.horizontal, HfRadius.Metrics.spacing16)
-                    .padding(.vertical, HfRadius.Metrics.spacing4)
-                if let assignment = run.raw["prompt"]?.stringValue, !assignment.isEmpty {
-                    DisclosureGroup(run.parentRunID == nil ? "Original request" : "Assignment for this child") {
-                        ScrollView {
-                            ReadingMarkdownView(text: assignment)
-.frame(maxWidth: .infinity, alignment: .leading)
-.padding(.vertical, HfRadius.Metrics.spacing6)
-                                // The document probe (§6.4): inside this nested disclosure's own
-                                // document, never the outer run inspector's.
-                                .background(ScrollChrome())
-                        }.frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
-                    }
-.font(.hf(.secondary, weight: .medium))
-.padding(HfRadius.Metrics.spacing16)
-                    // Native disclosure triangles extend before their label's layout origin.
-                    .padding(.leading, HfRadius.Metrics.spacing8)
-                }
-                if WorkflowGoalPresentation.showsBlock(run: run) {
-                    WorkflowGoalView(viewModel: viewModel, run: run)
-                        .padding(HfRadius.Metrics.spacing16)
-                        .padding(.leading, HfRadius.Metrics.spacing8)
-                }
-                WorkflowRunPlan(run: run)
-                    .padding(HfRadius.Metrics.spacing16)
-                    .padding(.leading, HfRadius.Metrics.spacing8)
-                if let plan = run.technicalPlan {
-                    DisclosureGroup("Technical plan") {
-                        ScrollView {
-                            ReadingMarkdownView(text: plan)
-.frame(maxWidth: .infinity, alignment: .leading)
-.padding(.vertical, HfRadius.Metrics.spacing6)
-                                // The document probe (§6.4): inside this nested disclosure's own
-                                // document, never the outer run inspector's.
-                                .background(ScrollChrome())
-                        }.frame(maxHeight: HfRadius.Metrics.formPreviewWidth)
-                    }
-.font(.hf(.secondary, weight: .medium))
-.padding(HfRadius.Metrics.spacing16)
-                    .padding(.leading, HfRadius.Metrics.spacing8)
-                }
-                Divider()
-            }
-            // The document probe (§6.4): inside the run inspector's own document, so it can only
-            // ever target this outer scroll view — never a nested disclosure's.
-            .background(ScrollChrome())
-            }
-.accessibilityIdentifier("workflow-run-inspector")
-.background(Color.cardFill)
-        }
-    }
-
     @ViewBuilder
     private var activity: some View {
         WorkflowActivityColumns(
@@ -503,11 +434,24 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
 // MARK: - Workflow activity selection
 
 private extension WorkflowView {
+    /// The eligible badge's action. Graph shows the pane: clear the node selection, no overlay. Parallel opens the
+    /// overlay. Both issue a new focus request, so a second activation focuses again after focus has moved.
+    func openRecoveryFromBadge() {
+        if viewMode == "Graph" {
+            viewModel.selectedNodeID = nil
+            viewModel.selectedEdgeID = nil
+        } else {
+            recoveryOverlay.openFromBadge()
+        }
+        recoveryFocus.request()
+    }
+
     @ViewBuilder
     func runSummary(maximumHeight: CGFloat) -> some View {
         let summary = WorkflowRunSummary(viewModel: viewModel, isExpanded: $summaryExpanded,
                                          maximumHeight: maximumHeight,
-                                         isRecoveryPanelVisible: recoveryOverlay.isVisible(runID: recoveryEligibleRunID))
+                                         isRecoveryPanelVisible: runSidebarSlot.suppressesSummaryQuestion(
+                                             overlayIsVisible: recoveryOverlay.isVisible(runID: recoveryEligibleRunID)))
         if viewModel.initialLoadFailed {
             summary.hidden()
         } else {
@@ -518,11 +462,12 @@ private extension WorkflowView {
     var runContent: some View {
         let isLoading = viewModel.initialLoadingKind == "run"
         let recoveryRunID = recoveryEligibleRunID
+        let slot = runSidebarSlot
         return GeometryReader { viewport in
             VStack(spacing: HfRadius.Metrics.zero) {
             WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading,
                              canvasChromeHeight: WorkflowStandaloneLayout.height,
-                             presentation: viewMode == "Graph" && !viewModel.runSidebar.isDefault ? .activity : .default) {
+                             presentation: slot.paneSizing) {
                 SkeletonContent(isLoading: isLoading) { WorkflowLoadingCanvas() } content: {
                     if viewModel.initialLoadFailed { runReadError } else {
                         VStack(spacing: HfRadius.Metrics.zero) {
@@ -535,11 +480,11 @@ private extension WorkflowView {
                 SkeletonContent(isLoading: isLoading) { WorkflowLoadingInspector(isRun: true) } content: {
                     if !viewModel.initialLoadFailed {
                         ZStack {
-                            defaultRunSidebar
-                                .opacity(viewMode == "Graph" && !viewModel.runSidebar.isDefault ? 0 : 1)
-                                .allowsHitTesting(viewMode != "Graph" || viewModel.runSidebar.isDefault)
-                                .accessibilityHidden(viewMode == "Graph" && !viewModel.runSidebar.isDefault)
-                            if viewMode == "Graph", !viewModel.runSidebar.isDefault {
+                            defaultRunSidebar(showsRecovery: slot == .recoveryPane)
+                                .opacity(slot == .selectedNode ? 0 : 1)
+                                .allowsHitTesting(slot != .selectedNode)
+                                .accessibilityHidden(slot == .selectedNode)
+                            if slot == .selectedNode {
                                 WorkflowSelectedSidebar(viewModel: viewModel)
                             }
                         }
@@ -551,16 +496,18 @@ private extension WorkflowView {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if !viewModel.initialLoadFailed {
+                if !viewModel.initialLoadFailed, slot.allowsOverlay {
                     WorkflowRecoveryOverlayHost(
                         viewModel: viewModel,
                         presentation: $recoveryOverlay,
+                        focusRequest: $recoveryFocus,
                         onExplicitClose: { recoveryBadgeFocused = true }
                     )
                 }
             }
             .onExitCommand {
-                guard !recoveryOverlay.isVisible(runID: recoveryRunID), !viewModel.showsRunSheet,
+                guard !slot.escapeBelongsToOverlay(overlayIsVisible: recoveryOverlay.isVisible(runID: recoveryRunID)),
+                      !viewModel.showsRunSheet,
                       !viewModel.showsGenerateSheet,
                       !(NSApp.keyWindow?.firstResponder is NSTextView) else { return }
                 viewModel.selectedNodeID = nil

@@ -49,7 +49,8 @@ import Testing
         defer { fixture.close() }
         await fixture.settle {
             fixture.element("Resume") != nil
-                && fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView }
+                && fixture.element("Recovery options") != nil
+                && !fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView }
                 && vm.selectedRun?.attentionCheckpointID == capture.initialRun.attentionCheckpointID
                 && vm.selectedRun?.raw["updated_at"] == .string("capture-initial")
         }

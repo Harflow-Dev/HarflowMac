@@ -14,8 +14,14 @@ enum WorkflowRunLayout {
     static let inspectorIdeal: CGFloat = HfRadius.Metrics.workflowRunActivityPanelIdealWidth
     static let inspectorMaximum: CGFloat = HfRadius.Metrics.workflowRunPanelMaximumWidth
 
+    static let recoveryInspectorIdeal: CGFloat = HfRadius.Metrics.workflowRunRecoveryPanelIdealWidth
+
     static func inspectorIdeal(for presentation: WorkflowRunPaneSizing) -> CGFloat {
-        presentation == .activity ? inspectorIdeal : defaultInspectorIdeal
+        switch presentation {
+        case .default: defaultInspectorIdeal
+        case .activity: inspectorIdeal
+        case .recovery: recoveryInspectorIdeal
+        }
     }
 
     static func minimums(height: CGFloat, canvasChromeHeight: CGFloat = 0) -> (canvas: CGFloat, activity: CGFloat) {
@@ -29,6 +35,12 @@ enum WorkflowRunLayout {
 enum WorkflowRunPaneSizing: Hashable {
     case `default`
     case activity
+    /// The recovery pane: the default sidebar's content re-headed, at the approved state's width.
+    case recovery
+
+    /// Whether the default inspector's scroll view belongs to this presentation. Only `.default` saves and restores
+    /// the default sidebar's scroll origin; the activity feed and the recovery pane never capture it.
+    var ownsDefaultInspectorScroll: Bool { self == .default }
 }
 
 // MARK: - WorkflowRunPanes

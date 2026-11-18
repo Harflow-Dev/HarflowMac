@@ -10,6 +10,8 @@ import Testing
 
 // MARK: - WorkflowRecoveryOverlayHostedTests
 
+/// The floating overlay, now Parallel-only: each test pins the view mode to Parallel with scratch defaults.
+
 @MainActor @Suite(.serialized) struct WorkflowRecoveryOverlayHostedTests {
     @Test func givenEligibleWorkflow_whenOverlayCloses_thenDiagnosticsGeometryAndInputRemainStable() async throws {
         // given
@@ -28,7 +30,9 @@ import Testing
         raw["input_question"] = .string("Choose the next approach.")
         vm.selectedRun = WorkflowRunModel(raw: raw)
         vm.instructions = "Keep the current implementation."
-        let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 1000, height: 700))
+        let scratch = parallelDefaults()
+        defer { scratch.remove() }
+        let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 1000, height: 700))
         defer { fixture.close() }
         await fixture.settle {
             fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView }
@@ -92,7 +96,9 @@ import Testing
         raw["exhausted_retry_edges"] = .array([.object(["edge_id": .string("retry")])])
         vm.selectedRun = WorkflowRunModel(raw: raw)
         vm.instructions = String(repeating: "Preserve existing behavior.\n", count: 8)
-        let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 420, height: 420))
+        let scratch = parallelDefaults()
+        defer { scratch.remove() }
+        let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 420, height: 420))
         defer { fixture.close() }
         await fixture.settle {
             fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView }
@@ -143,7 +149,9 @@ import Testing
             "definition": .object(["max_decision_attempts": .number(3)])
         ])
         WorkflowPreview.synchronizeRun(vm)
-        let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 1000, height: 700))
+        let scratch = parallelDefaults()
+        defer { scratch.remove() }
+        let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 1000, height: 700))
         defer { vm.didDisappear(); fixture.close() }
         await fixture.settle { fixture.element("Close recovery options") != nil }
         let panel = try #require(fixture.descendants.compactMap { $0 as? WorkflowRecoveryPanelRootView }.first)
@@ -174,7 +182,9 @@ import Testing
             "interaction_owner": .string("monitor"), "input_question": .string("Choose a path.")
         ])
         vm.instructions = "Keep this answer exactly."
-        let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 900, height: 620))
+        let scratch = parallelDefaults()
+        defer { scratch.remove() }
+        let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 900, height: 620))
         defer { vm.didDisappear(); fixture.close() }
         await fixture.settle { fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView } }
         let panel = try #require(fixture.descendants.compactMap { $0 as? WorkflowRecoveryPanelRootView }.first)
@@ -203,13 +213,22 @@ import Testing
             "status": .string("needs_attention"), "interaction_owner": .string("monitor"),
             "input_question": .string("Builder question")
         ])
-        let fixture = RedesignHost(WorkflowView(vm), size: CGSize(width: 900, height: 600))
+        let scratch = parallelDefaults()
+        defer { scratch.remove() }
+        let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 900, height: 600))
         defer { vm.didDisappear(); fixture.close() }
 
         // when / then
         await fixture.settle { fixture.element("Workflow nodes") != nil }
         #expect(!fixture.descendants.contains { $0 is WorkflowRecoveryPanelRootView })
         #expect(fixture.element("Close recovery options") == nil)
+    }
+
+    /// The overlay is a Parallel-only presentation; Graph shows the recovery pane instead.
+    private func parallelDefaults() -> ScratchDefaults {
+        let scratch = ScratchDefaults(label: "WorkflowRecoveryOverlayHosted")
+        scratch.defaults.set("Parallel", forKey: "workflowViewMode")
+        return scratch
     }
 
     private func splitFrames(in fixture: RedesignHost) -> [CGRect] {
