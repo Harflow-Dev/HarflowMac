@@ -21,7 +21,8 @@ struct RecentRepoModel: Identifiable, Equatable {
 
 // MARK: - RecentRepos
 
-/// The "Recent" row under the repository field. Renders nothing when there are no chips.
+/// The "Recent" row under the repository field: the label and one-line chips that wrap as whole chips.
+/// Renders nothing when there are no chips.
 struct RecentRepos: View {
 
     let repos: [RecentRepoModel]
@@ -29,28 +30,43 @@ struct RecentRepos: View {
 
     var body: some View {
         if !repos.isEmpty {
-            HStack(spacing: HfRadius.Metrics.spacing6) {
+            PillFlowLayout(spacing: HfRadius.Metrics.spacing6, rowAlignment: .center) {
                 Text("Recent").font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
                 ForEach(repos) { repo in
-                    Button { onSelect(repo.path) } label: {
-                        Text(repo.name)
-                            .font(.hf(.secondary))
-                            .foregroundStyle(repo.isSelected ? Color.accentLink : Color.primaryText)
-                            .padding(.horizontal, HfRadius.Metrics.spacing8)
-                            .padding(.vertical, HfRadius.Metrics.rowLineSpacing)
-                            // The selected chip is the design's tinted treatment: a running-tint
-                            // fill with accent text, in a capsule.
-                            .background(Capsule().fill(repo.isSelected ? Color.runningBG : Color.pillFill))
-                    }
-                    .buttonStyle(.plain)
-                    .help(repo.path)
-                    .accessibilityLabel("Recent repository \(repo.name)")
-                    .accessibilityHint(repo.path)
-                    .accessibilityAddTraits(repo.isSelected ? .isSelected : [])
+                    RecentRepoChip(repo: repo, onSelect: onSelect)
                 }
-                Spacer(minLength: HfRadius.Metrics.zero)
             }
         }
+    }
+}
+
+// MARK: - RecentRepoChip
+
+/// One "Recent" chip: one line, truncated at the tail past the design's pill maximum.
+struct RecentRepoChip: View {
+
+    let repo: RecentRepoModel
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        Button { onSelect(repo.path) } label: {
+            Text(repo.name)
+                .font(.hf(.secondary))
+                .foregroundStyle(repo.isSelected ? Color.accentLink : Color.primaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: HfRadius.Metrics.recentRepoChipMaxWidth)
+                .padding(.horizontal, HfRadius.Metrics.spacing8)
+                .padding(.vertical, HfRadius.Metrics.rowLineSpacing)
+                // The selected chip is the design's tinted treatment: a running-tint
+                // fill with accent text, in a capsule.
+                .background(Capsule().fill(repo.isSelected ? Color.runningBG : Color.pillFill))
+        }
+        .buttonStyle(.plain)
+        .help(repo.path)
+        .accessibilityLabel("Recent repository \(repo.name)")
+        .accessibilityHint(repo.path)
+        .accessibilityAddTraits(repo.isSelected ? .isSelected : [])
     }
 }
 

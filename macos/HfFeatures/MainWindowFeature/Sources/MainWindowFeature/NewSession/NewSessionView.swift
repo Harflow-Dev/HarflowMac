@@ -73,6 +73,8 @@ protocol NewSessionViewModel: ViewModel {
     func didChangeTurnLimit(_ value: String)
     func didChangeEffort(_ value: String)
     func didTapRecentRepo(_ path: String)
+    /// The repository popover opened: recheck which recent repositories still exist.
+    func didOpenRepositoryPicker()
     func didTapChooseDirectory()
     func didTapCancel()
     func didTapStart()
@@ -305,6 +307,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         .padding(HfRadius.Metrics.spacing16)
         .frame(width: Layout.optionsWidth)
         .disabled(viewModel.optionsLocked)
+        .onAppear { viewModel.didOpenRepositoryPicker() }
     }
 
     private var harnessOptions: some View {

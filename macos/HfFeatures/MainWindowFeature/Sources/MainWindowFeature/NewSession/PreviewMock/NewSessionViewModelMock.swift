@@ -162,6 +162,7 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     func didChangeTurnLimit(_ value: String) { turnLimit = value }
     func didChangeEffort(_ value: String) { effort = value }
     func didTapRecentRepo(_ path: String) { repo = path }
+    func didOpenRepositoryPicker() {}
     func didTapChooseDirectory() {}
     func didTapCancel() {}
     func didTapStart() {}

@@ -132,4 +132,24 @@ import Testing
         // then
         #expect(sut.tasks == [task])
     }
+
+    // MARK: - Existing directories
+
+    @Test func givenADirectoryAFileAMissingPathAndARelativePath_whenFiltered_thenOnlyTheDirectoryIsKept() async throws {
+        // given
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("hf-existing-\(UUID().uuidString)")
+        let directory = root.appendingPathComponent("repo")
+        let file = root.appendingPathComponent("file.txt")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let missing = root.appendingPathComponent("missing").path
+        let sut = NewSessionViewRepository()
+
+        // when
+        let kept = await sut.existingDirectories(among: [directory.path, file.path, missing, "relative/path"])
+
+        // then
+        #expect(kept == [directory.path])
+    }
 }

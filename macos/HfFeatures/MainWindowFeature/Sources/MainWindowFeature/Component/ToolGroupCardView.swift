@@ -186,48 +186,6 @@ struct FilePillsView: View {
     }
 }
 
-// MARK: - PillFlowLayout
-
-/// Places subviews left to right and wraps to a new line when the next one does not fit.
-struct PillFlowLayout: Layout {
-    var spacing: CGFloat = HfRadius.Metrics.spacing6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = arrange(width: proposal.width ?? .infinity, subviews: subviews)
-        return CGSize(width: proposal.width ?? result.usedWidth, height: result.height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(width: bounds.width, subviews: subviews)
-        for (index, frame) in result.frames.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
-        }
-    }
-
-    private func arrange(width: CGFloat, subviews: Subviews) -> (frames: [CGRect], usedWidth: CGFloat, height: CGFloat) {
-        var frames: [CGRect] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        var usedWidth: CGFloat = 0
-        for subview in subviews {
-            // Capped at the line width so a long file name truncates instead of overflowing the column.
-            let natural = subview.sizeThatFits(.unspecified)
-            let size = natural.width > width ? subview.sizeThatFits(ProposedViewSize(width: width, height: nil)) : natural
-            if x > 0, x + size.width > width {
-                x = 0
-                y += lineHeight + spacing
-                lineHeight = 0
-            }
-            frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-            usedWidth = max(usedWidth, x - spacing)
-        }
-        return (frames, usedWidth, y + lineHeight)
-    }
-}
-
 #if DEBUG
 private struct ToolGroupCardPreview: View {
     private static func member(_ seq: Int, name: String, pending: Bool = false) -> ToolGroupMember {

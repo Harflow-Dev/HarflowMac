@@ -19,6 +19,7 @@ import Testing
         let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn([])
+        given(useCase).existingDirectories(among: .any).willProduce { Set($0) }
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(useCase).modelListing(for: .any).willProduce { ModelListing(state: .available, options: models[$0] ?? []) }
         given(useCase).agentUsageSnapshot.willReturn(usage)

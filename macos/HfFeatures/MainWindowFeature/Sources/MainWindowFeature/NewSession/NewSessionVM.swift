@@ -31,6 +31,10 @@ protocol NewSessionUseCase: Sendable {
     /// The current task listing; the VM derives the "Recent" repositories from it.
     var tasks: [TaskInfo] { get }
 
+    /// The subset of `paths` that are absolute paths to directories that exist right now. Runs its
+    /// file-system checks off the main actor and stops early when the calling task is cancelled.
+    func existingDirectories(among paths: [String]) async -> Set<String>
+
     // MARK: Backend catalog (Monitor piece 6)
 
     var agentUsageSnapshot: AgentUsageSnapshot { get }
@@ -281,7 +285,12 @@ final class NewSessionVM: NewSessionViewModel {
 
     // MARK: - Private Properties
 
-    private var recentRepoPaths: [String] = []
+    // `internal(set)`: `NewSessionVM+Recents.swift`, a separate file, writes these.
+    internal(set) var recentRepoPaths: [String] = []
+    /// The one in-flight recents refresh; cancelled by a newer refresh and by `didDisappear`.
+    @ObservationIgnored var recentRepoTask: Task<Void, Never>?
+    /// Bumped by every refresh and by `didDisappear`; a result from an older generation is dropped.
+    @ObservationIgnored var recentRepoGeneration = 0
     // `internal(set)`: `NewSessionVM+ModelListing.swift`, a separate file, writes these.
     /// The ranked options of the loaded listing for `optionsBackend`; empty otherwise. Start gating reads it
     /// (through `effectiveControls`), so it is kept while a same-harness reload is in flight.
@@ -311,7 +320,6 @@ final class NewSessionVM: NewSessionViewModel {
         self.routing = routing
         self.usage = useCase.agentUsageSnapshot
         applyCatalog(useCase.backendCatalog)
-        refreshRecentRepos()
     }
 
     // MARK: - NewSessionViewModel Methods
@@ -334,6 +342,9 @@ final class NewSessionVM: NewSessionViewModel {
         modelsTask = nil
         rerankTask?.cancel()
         rerankTask = nil
+        recentRepoGeneration += 1
+        recentRepoTask?.cancel()
+        recentRepoTask = nil
     }
 
     func didChangeBackend(_ value: String) {
@@ -493,16 +504,6 @@ final class NewSessionVM: NewSessionViewModel {
             model: trimmedModel.isEmpty ? nil : trimmedModel,
             maxTurns: parsedTurnLimit, callerApprovals: callerApprovals
         )
-    }
-
-    private func refreshRecentRepos() {
-        var seen = Set<String>()
-        recentRepoPaths = useCase.tasks
-            .sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
-            .map(\.repoPath)
-            .filter { !$0.isEmpty && seen.insert($0).inserted }
-            .prefix(Self.recentRepoLimit)
-            .map(\.self)
     }
 
     // MARK: - Private Methods (Monitor piece 6)

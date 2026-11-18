@@ -61,6 +61,7 @@ struct NativePreferenceCaptureTests {
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn([])
+        given(useCase).existingDirectories(among: .any).willProduce { Set($0) }
         given(useCase).backendCatalogPublisher().willReturn(Just(catalog).eraseToAnyPublisher())
         let usage = AgentUsageSnapshot(counts: [
             AgentUsageIdentity(backend: "codex", model: "gpt-5"): 4,

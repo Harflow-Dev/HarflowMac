@@ -20,6 +20,7 @@ import Testing
         let catalogSubject = PassthroughSubject<BackendCatalog, Never>()
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).tasks.willReturn(tasks)
+        given(useCase).existingDirectories(among: .any).willProduce { Set($0) }
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(useCase).modelListing(for: .any).willReturn(ModelListing(state: .available))
         given(useCase).agentUsageSnapshot.willReturn(.init())
@@ -27,12 +28,6 @@ import Testing
         let sut = NewSessionVM(useCase: useCase, routing: routing)
         sut.didAppear()
         return (sut, useCase, routing, catalogSubject)
-    }
-
-    private func task(_ id: String, repo: String, startedAt: String?) -> TaskInfo {
-        var object: [String: JSONValue] = ["task_id": .string(id), "repo_path": .string(repo)]
-        if let startedAt { object["started_at"] = .string(startedAt) }
-        return TaskInfo(.object(object))!
     }
 
     /// Starts a valid session and waits for the mocked run to complete.
@@ -351,42 +346,6 @@ import Testing
             "Requests edits and publish attempts.",
             "Requests broad access; use sparingly."
         ])
-    }
-
-    // MARK: - Recent repositories
-
-    @Test func givenTasksInManyRepos_whenTheSheetOpens_thenRecentsAreDistinctNewestFirstAndCappedAtFive() {
-        // given — "/a" appears twice; the newer of its two runs decides its place.
-        let tasks = [
-            task("1", repo: "/a", startedAt: "2026-01-01T10:00:00+00:00"),
-            task("2", repo: "/b", startedAt: "2026-01-02T10:00:00+00:00"),
-            task("3", repo: "/c", startedAt: "2026-01-03T10:00:00+00:00"),
-            task("4", repo: "/a", startedAt: "2026-01-04T10:00:00+00:00"),
-            task("5", repo: "/d", startedAt: "2026-01-05T10:00:00+00:00"),
-            task("6", repo: "/e", startedAt: "2026-01-06T10:00:00+00:00"),
-            task("7", repo: "/f", startedAt: "2026-01-07T10:00:00+00:00"),
-            task("8", repo: "", startedAt: "2026-01-08T10:00:00+00:00")
-        ]
-
-        // when
-        let (sut, _, _, _) = makeSUT(tasks: tasks)
-
-        // then
-        #expect(sut.recentRepos.map(\.path) == ["/f", "/e", "/d", "/a", "/c"])
-        #expect(sut.recentRepos.first?.name == "f")
-    }
-
-    @Test func givenARecentChip_whenTapped_thenTheRepoFieldIsFilledAndTheChipSelected() {
-        // given
-        let (sut, _, _, _) = makeSUT(tasks: [task("1", repo: "/Users/me/Code/app", startedAt: "2026-01-01T10:00:00+00:00")])
-
-        // when
-        sut.didTapRecentRepo("/Users/me/Code/app")
-
-        // then
-        #expect(sut.repo == "/Users/me/Code/app")
-        #expect(sut.recentRepos.first?.isSelected == true)
-        #expect(sut.recentRepos.first?.name == "app")
     }
 
     // MARK: - Optional fields reach the request

@@ -33,6 +33,7 @@ private final class HostedListingUseCase: NewSessionUseCase {
     func resolvedRepoPath(_ input: String) -> String? { input }
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String { "task" }
     var tasks: [TaskInfo] { [] }
+    func existingDirectories(among paths: [String]) async -> Set<String> { Set(paths) }
     var agentUsageSnapshot: AgentUsageSnapshot { .init() }
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
     var backendCatalog: BackendCatalog { catalog }

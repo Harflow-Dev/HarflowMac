@@ -38,6 +38,7 @@ import Testing
         let suggestions = Suggestions(options)
         given(useCase).backendCatalog.willReturn(BackendCatalog(entries: [BackendControlFixtures.entry(backend)], state: .available))
         given(useCase).tasks.willReturn([])
+        given(useCase).existingDirectories(among: .any).willProduce { Set($0) }
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject.eraseToAnyPublisher())
         given(useCase).modelListing(for: .any).willProduce { _ in ModelListing(state: .available, options: suggestions.value) }
         given(useCase).agentUsageSnapshot.willReturn(.init())

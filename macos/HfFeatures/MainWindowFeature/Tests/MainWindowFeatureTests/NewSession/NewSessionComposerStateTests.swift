@@ -19,6 +19,7 @@ import Testing
         given(useCase).backendCatalog.willReturn(catalog)
         given(useCase).backendCatalogPublisher().willReturn(catalogSubject?.eraseToAnyPublisher() ?? Empty().eraseToAnyPublisher())
         given(useCase).tasks.willReturn([])
+        given(useCase).existingDirectories(among: .any).willProduce { Set($0) }
         given(useCase).modelListing(for: .any).willReturn(ModelListing(state: .available))
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).agentUsagePublisher().willReturn(Empty().eraseToAnyPublisher())
@@ -270,6 +271,7 @@ private final class GatedComposerUseCase: NewSessionUseCase {
     func qualificationSession() -> QualificationSession { base.qualificationSession() }
     func resolvedRepoPath(_ input: String) -> String? { base.resolvedRepoPath(input) }
     var tasks: [TaskInfo] { base.tasks }
+    func existingDirectories(among paths: [String]) async -> Set<String> { Set(paths) }
     var agentUsageSnapshot: AgentUsageSnapshot { base.agentUsageSnapshot }
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { base.agentUsagePublisher() }
     var backendCatalog: BackendCatalog { base.backendCatalog }

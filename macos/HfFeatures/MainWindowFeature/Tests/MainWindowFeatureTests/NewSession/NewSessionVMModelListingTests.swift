@@ -37,6 +37,7 @@ private final class ControlledListingUseCase: NewSessionUseCase {
     func resolvedRepoPath(_ input: String) -> String? { base.resolvedRepoPath(input) }
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String { try await base.run(request, runtime: runtime) }
     var tasks: [TaskInfo] { [] }
+    func existingDirectories(among paths: [String]) async -> Set<String> { Set(paths) }
     var agentUsageSnapshot: AgentUsageSnapshot { usageSubject.value }
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { usageSubject.eraseToAnyPublisher() }
     var backendCatalog: BackendCatalog { catalog }

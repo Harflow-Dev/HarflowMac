@@ -68,6 +68,24 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
 
     var tasks: [TaskInfo] { taskListRepository.tasks }
 
+    func existingDirectories(among paths: [String]) async -> Set<String> {
+        await Self.existingDirectoryPaths(among: paths)
+    }
+
+    /// Keeps the absolute paths that exist and are directories, checking cancellation between paths.
+    /// Not main-actor: `FileManager` calls do disk I/O.
+    @concurrent private static func existingDirectoryPaths(among paths: [String]) async -> Set<String> {
+        var existing = Set<String>()
+        for path in paths {
+            if Task.isCancelled { break }
+            var isDirectory: ObjCBool = false
+            if path.hasPrefix("/"), FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
+                existing.insert(path)
+            }
+        }
+        return existing
+    }
+
     // MARK: Backend catalog (Monitor piece 6)
 
     var backendCatalog: BackendCatalog { backendsRepository.catalog }
