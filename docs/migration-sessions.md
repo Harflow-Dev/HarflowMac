@@ -31,6 +31,18 @@ Each assignment is bounded and stops before the next. Record its lead receipt in
 `docs/migration-receipts/<ID>.md`; co-owned work is included in that lead receipt.
 No plan status authorizes live operations or publication. All new sessions are planned.
 
+## M09 slice 6 checkpoint — 2026-11-18
+
+The owner authorized this slice before M08 acceptance. See [M09 receipt](migration-receipts/M09.md)
+for exact design pins, review adjudication and remaining acceptance.
+
+- [x] Inspect existing message-truth implementation and preserve its baseline.
+- [x] Address Astra round-1 context-fencing and inspector-send findings; round 2 has no remaining actionable findings.
+- [x] Complete Opus review and record the disposition of its findings.
+- [x] Run final focused non-hosted suites and format/lint/guards after fixes.
+- [ ] Verify hosted M09 states after an explicit desktop cue; M08 acceptance remains open.
+- [x] Record the slice-6 code checkpoint on local `main`.
+
 ## Historical session evidence
 
 S01–S09 keep their original IDs, outputs and recorded limits. S09 bounded evidence

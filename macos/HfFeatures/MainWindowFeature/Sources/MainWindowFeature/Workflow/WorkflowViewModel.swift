@@ -109,6 +109,8 @@ protocol WorkflowViewModel: ViewModel {
     var activityMessageItems: [WorkMessageQueue.Item] { get }
     var messageNotes: [String: String] { get }
     var activityMessageReadError: String? { get }
+    /// True once the runtime is known not to support queued messaging; the node pane composers then lock bare.
+    var messagingUnsupported: Bool { get }
     func refreshActivityMessageState() async
     func submitActivityMessage(_ text: String, now: Bool) -> Bool
     func cancelActivityMessage(_ messageID: String)
@@ -147,6 +149,7 @@ extension WorkflowViewModel {
     }
 
     var activityMessageReadError: String? { nil }
+    var messagingUnsupported: Bool { false }
     func refreshActivityMessageState() async {}
     func submitActivityMessage(_: String, now _: Bool) -> Bool { false }
     func cancelActivityMessage(_: String) {}

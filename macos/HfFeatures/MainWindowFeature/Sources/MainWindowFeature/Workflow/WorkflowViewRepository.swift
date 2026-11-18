@@ -17,6 +17,8 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.backendsRepository) private var backends
     @GlobalEnvironment(\.modelCatalogRepository) private var models
     @GlobalEnvironment(\.agentUsageRepository) private var usage
+    @GlobalEnvironment(\.taskActionRepository) private var taskActions
+    @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironment
 
     func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken?) async throws -> [String: JSONValue] {
         if let runtime { return try await repository.command(command, options: options, positionals: positionals, runtime: runtime) }
@@ -63,4 +65,22 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     var backendCatalog: BackendCatalog { backends.catalog }
     func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never> { backends.catalogPublisher() }
     func modelOptions(backend: String) async -> [ModelOption] { await models.models(for: backend) }
+}
+
+// MARK: - WorkflowMessagingSupport
+
+extension WorkflowViewRepository: WorkflowMessagingSupport {
+    func messagingInvocationContext() throws -> MessagingInvocationContext { try taskActions.messagingInvocationContext() }
+
+    func isMessagingContextCurrent(_ context: MessagingInvocationContext) -> Bool { taskActions.isMessagingContextCurrent(context) }
+
+    func messagingSupport(context: MessagingInvocationContext) async -> Bool? {
+        guard isMessagingContextCurrent(context), let client = try? toolEnvironment.ctl().get(),
+              QualificationRuntimeToken(client: client) == context.runtime else { return nil }
+        let result = await VersionInfoClient(executable: client.executable, environment: client.environment,
+                                           context: client.compatibilityContext, runner: client.runner).check()
+        guard isMessagingContextCurrent(context), client.operationIsCurrent(), !Task.isCancelled,
+              case .success(let info) = result else { return nil }
+        return info.capabilities.contains("messaging.v1")
+    }
 }

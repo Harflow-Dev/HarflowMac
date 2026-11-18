@@ -51,6 +51,7 @@ extension WorkflowVM {
         guard validateBuilderRuntime() else { return }
         reconnectBuilderSession()
         guard validateBuilderRuntime(), !builderDispatchPending || selectedRun != nil else { return }
+        prepareMessagingSupport()
         let context = WorkflowReadContext(runID: selectedRun?.id, loadingID: initialLoadingID, generation: generation)
         if context.runID == nil {
             await refreshCatalog(context)

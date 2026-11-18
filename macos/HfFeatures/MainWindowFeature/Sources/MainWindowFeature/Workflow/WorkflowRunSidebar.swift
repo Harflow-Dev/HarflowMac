@@ -140,6 +140,10 @@ extension WorkflowVM {
         guard !next.taskIDs.isEmpty else { return nil }
         if let cached = activityCache[key] { return cached }
         let created = parallel.makeWorkflowActivity()
+        created.messagingFailureHandler = { [weak self] in
+            self?.makeMessagingFailureHandler() ?? { _ in }
+        }
+        created.setMessagingUnsupported(messagingUnsupported)
         activityCache[key] = created
         return created
     }
@@ -149,7 +153,7 @@ extension WorkflowVM {
     }
     activity?.setWorkflowTaskIDs(next.taskIDs, titles: next.titles)
     if runGraphVisible { activity?.didAppear() }
-    if runGraphVisible { parallel.suspendWorkflowActivity() } else { parallel.didAppear() }
+    if runGraphVisible { parallel.suspendWorkflowActivity() } else { applyRunMessageLock(); parallel.didAppear() }
     updateNativeActivity()
     }
 
@@ -161,6 +165,7 @@ extension WorkflowVM {
             selectedActivity?.didAppear()
         } else {
             selectedActivity?.suspendWorkflowActivity()
+            applyRunMessageLock()
             parallel.didAppear()
         }
         updateNativeActivity()

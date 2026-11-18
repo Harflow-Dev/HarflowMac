@@ -22,6 +22,8 @@ enum MessageBoxDisabledReason: Equatable {
     case notLiveInput
     /// A person took the session over in Terminal, which now owns the conversation.
     case takenOver
+    /// The workflow run owning this lane was cancelled; the engine settles anything sent into it as undeliverable.
+    case runCancelled
     /// A finished task with no session id to resume.
     case noSession
     /// Running with live input but not accepting messages for another reason.
@@ -32,13 +34,14 @@ enum MessageBoxDisabledReason: Equatable {
         switch self {
         case .notLiveInput: "Messages are off — this task wasn't started with live input"
         case .takenOver: "Messages are off — you took this task over in Terminal"
+        case .runCancelled: "Messages are off — this run was cancelled"
         case .noSession: "This task has no session to continue."
         case .other: "Messages are unavailable right now."
         }
     }
 
-    /// Whether the field shows a lock icon: the two "Messages are off" reasons.
-    var showsLock: Bool { self == .notLiveInput || self == .takenOver }
+    /// Whether the field shows a lock icon: the "Messages are off" reasons.
+    var showsLock: Bool { self == .notLiveInput || self == .takenOver || self == .runCancelled }
 
     /// The reason a task cannot take Send or Continue. Taken over wins over not-live-input, since it
     /// is the more specific explanation for a run a person is now driving.

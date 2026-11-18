@@ -29,6 +29,16 @@ enum ParallelColumnChrome: Equatable, Sendable {
     case inspector
 }
 
+// MARK: - ParallelMessageLock
+
+/// A workflow-owned reason, beyond takeover, that a column's composer cannot take a message.
+enum ParallelMessageLock: Equatable, Sendable {
+    /// The run whose lanes these are was cancelled; the lane composers lock with the approved copy.
+    case runCancelled
+    /// The runtime has no queued messaging; the node pane's inspector composer locks bare, like the task screen's.
+    case messagingUnsupported
+}
+
 // MARK: - ParallelColumnModel
 
 /// Presentation data for one Parallel column: the conversation's fresh CURRENT member (status,
@@ -95,6 +105,8 @@ struct ParallelColumnModel: Identifiable {
     var onCancelMessage: ((String) -> Void)?
     /// The surface that draws this column; the VM sets `.inspector` for the Graph inspector's VM.
     var chrome = ParallelColumnChrome.lane
+    /// Set only by a workflow VM; `nil` for Group lanes. Takeover keeps its own copy and wins on its own lane.
+    var messageLock: ParallelMessageLock?
     /// The lane caption under the title: "Claude · Opus 5.5", plus " · taken over". Empty means derive from `task`.
     var caption = ""
     /// The harness name for the composer labels. Empty means derive from `task`.
@@ -105,6 +117,37 @@ struct ParallelColumnModel: Identifiable {
     var laneCaption: String { caption.isEmpty ? ParallelLaneStatus.caption(current: task) : caption }
     var laneHarnessName: String { harnessName.isEmpty ? ParallelLaneStatus.harnessName(current: task) : harnessName }
     var laneStatus: TaskBadgeModel { status ?? ParallelLaneStatus.make(current: task, snapshot: nil, frame: nil) }
+
+    /// Why a lane composer is locked: takeover first, since it is the more specific reason on its own lane.
+    var laneComposerLock: MessageBoxDisabledReason? {
+        if task.takenOver { return .takenOver }
+        return messageLock == .runCancelled ? .runCancelled : nil
+    }
+
+    /// The node pane composer locks bare on an unsupported runtime unless takeover already explains the lock.
+    var inspectorMessagingUnsupported: Bool { !task.takenOver && messageLock == .messagingUnsupported }
+
+    /// The lane's composer: Queue only (no Send now), labelled for the harness.
+    var laneMessageBoxModel: MessageBoxModel {
+        let harness = laneHarnessName
+        let lock = laneComposerLock
+        return MessageBoxModel(
+            canSend: lock == nil && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
+            label: "Message \(harness)", hint: "", placeholder: lock?.text ?? "Message \(harness)",
+            buttonLabel: "Send", isLocked: lock != nil,
+            fieldAccessibilityLabel: "Message \(harness)", sendAccessibilityLabel: "Send to \(harness)")
+    }
+
+    /// The node pane's composer. Unsupported messaging locks it with no placeholder or hint and no Send now,
+    /// like the task screen's.
+    var inspectorMessageBoxModel: MessageBoxModel {
+        let unsupported = inspectorMessagingUnsupported
+        return MessageBoxModel(
+            canSend: !task.takenOver && !unsupported && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
+            label: "Message this task", hint: unsupported ? "" : "Send queues; Send now requests immediate delivery when safe",
+            placeholder: task.takenOver ? MessageBoxDisabledReason.takenOver.text : unsupported ? "" : "Queue a message…",
+            buttonLabel: "Send", isLocked: task.takenOver || unsupported, showsSendNow: !unsupported)
+    }
 
     /// "<Backend> · <repo name>" plus "· N turns" when `turns > 1` — the lane header's subtitle,
     /// without the session id.
@@ -345,13 +388,7 @@ struct ParallelColumnView: View {
     private var laneComposer: some View {
         let harness = model.laneHarnessName
         return VStack(alignment: .leading, spacing: HfRadius.Metrics.zero) {
-            MessageBoxView(model: MessageBoxModel(
-                canSend: !model.task.takenOver && model.onSubmitMessage != nil, canContinue: false, isBusy: model.isBusy,
-                label: "Message \(harness)", hint: "",
-                placeholder: model.task.takenOver ? MessageBoxDisabledReason.takenOver.text : "Message \(harness)",
-                buttonLabel: "Send", isLocked: model.task.takenOver,
-                fieldAccessibilityLabel: "Message \(harness)", sendAccessibilityLabel: "Send to \(harness)"
-            ), style: .lane) { model.onSubmitMessage?($0, false) ?? false }
+            MessageBoxView(model: model.laneMessageBoxModel, style: .lane) { model.onSubmitMessage?($0, false) ?? false }
             if model.onSubmitMessage == nil {
                 Text("Messaging is unavailable for this activity view.")
                     .font(TaskScreenStyle.sans(size: 13))
@@ -368,12 +405,8 @@ struct ParallelColumnView: View {
 
     private var inspectorComposer: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
-            MessageBoxView(model: MessageBoxModel(
-                canSend: !model.task.takenOver && model.onSubmitMessage != nil, canContinue: false, isBusy: model.isBusy,
-                label: "Message this task", hint: "Send queues; Send now requests immediate delivery when safe",
-                placeholder: model.task.takenOver ? MessageBoxDisabledReason.takenOver.text : "Queue a message…",
-                buttonLabel: "Send", isLocked: model.task.takenOver
-            ), onSubmitNow: { model.onSubmitMessage?($0, true) ?? false }, isCompact: true) { model.onSubmitMessage?($0, false) ?? false }
+            MessageBoxView(model: model.inspectorMessageBoxModel,
+                           onSubmitNow: { model.onSubmitMessage?($0, true) ?? false }, isCompact: true) { model.onSubmitMessage?($0, false) ?? false }
             if model.onSubmitMessage == nil {
                 Text("Messaging is unavailable for this activity view.")
                     .font(.hf(.caption))

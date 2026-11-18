@@ -50,8 +50,21 @@ struct WorkflowActivityMessageComposer<VM: WorkflowViewModel>: View {
     /// only transcript on the surface.
     var showsBubbles = true
 
+    /// An existing reason ("Not called yet.") keeps its own copy; unsupported applies to an otherwise sendable target,
+    /// locking with no placeholder, no hint and no Send now.
+    static func boxModel(target: WorkflowActivityMessageTarget, unsupported: Bool, isBusy: Bool) -> MessageBoxModel {
+        let unsupported = unsupported && target.unavailableReason == nil
+        return MessageBoxModel(
+            canSend: target.unavailableReason == nil && !unsupported, canContinue: false, isBusy: isBusy,
+            label: target.taskID == nil ? "Message the child workflow orchestrator" : "Message this node",
+            hint: unsupported ? "" : "Send queues; Send now requests immediate delivery when safe",
+            placeholder: unsupported ? "" : target.unavailableReason ?? "Queue a message…", buttonLabel: "Send",
+            isLocked: target.unavailableReason != nil || unsupported, showsSendNow: !unsupported)
+    }
+
     var body: some View {
         let target = viewModel.activityMessageTarget
+        let unsupported = viewModel.messagingUnsupported
         VStack(spacing: HfRadius.Metrics.zero) {
             if showsBubbles {
                 WorkMessageBubblesView(bubbles: viewModel.activityMessageBubbles, onCancel: viewModel.cancelActivityMessage,
@@ -60,13 +73,8 @@ struct WorkflowActivityMessageComposer<VM: WorkflowViewModel>: View {
             if let reason = viewModel.activityMessageReadError {
                 Text(reason).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }
-            MessageBoxView(model: MessageBoxModel(
-                canSend: target.unavailableReason == nil, canContinue: false, isBusy: viewModel.isBusy,
-                label: target.taskID == nil ? "Message the child workflow orchestrator" : "Message this node",
-                hint: "Send queues; Send now requests immediate delivery when safe",
-                placeholder: target.unavailableReason ?? "Queue a message…", buttonLabel: "Send",
-                isLocked: target.unavailableReason != nil
-            ), onSubmitNow: { viewModel.submitActivityMessage($0, now: true) }, isCompact: true) {
+            MessageBoxView(model: Self.boxModel(target: target, unsupported: unsupported, isBusy: viewModel.isBusy),
+                           onSubmitNow: { viewModel.submitActivityMessage($0, now: true) }, isCompact: true) {
                 viewModel.submitActivityMessage($0, now: false)
             }
             .id(target)

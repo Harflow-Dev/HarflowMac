@@ -23,14 +23,16 @@ final class ParallelVM: ParallelViewModel {
     private(set) var columns: [ParallelColumnModel] = []
     private(set) var selectedConversationID: String?
     @ObservationIgnored var isWorkflowInspector = false
-    static let fallbackFooter = "Enforcement differs between these agents; see each task's details."
+    /// Workflow-set composer locks (see `ParallelVM+MessageLock.swift`); Group lanes never set them.
+    @ObservationIgnored var composerLocks = ParallelComposerLocks()
+    @ObservationIgnored var messagingFailureHandler: (@MainActor () -> (@MainActor (any Error) -> Void))?
     /// True only for the standalone group mount (`buildParallelView`); workflow and inspector VMs never publish.
     @ObservationIgnored let publishesTopBar: Bool
     @ObservationIgnored var lastPublishedTopBar: GroupTopBarContent?
     @ObservationIgnored var topBarWriter: ObjectIdentifier?
     @ObservationIgnored let useCase: any ParallelUseCase
     @ObservationIgnored let routing: any ParallelRouting
-    @ObservationIgnored private let buildColumns: ParallelColumnsBuild
+    @ObservationIgnored let buildColumns: ParallelColumnsBuild
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var itemCancellables: [String: AnyCancellable] = [:]
     @ObservationIgnored let windowAdoption = ParallelWindowAdoption()
@@ -172,6 +174,7 @@ final class ParallelVM: ParallelViewModel {
         windowAdoption.reset()
         recoveryCancellables.removeAll()
         recoveryFrames.removeAll()
+        composerLocks.runCancelled = false
         for lease in leases.values { lease.release() }
         leases.removeAll()
         leaseGenerations.removeAll()
@@ -366,7 +369,7 @@ final class ParallelVM: ParallelViewModel {
         publishTopBar(initialMembershipResolved ? header.content(title: groupName) : loadingTopBarContent)
     }
 
-    private func updateResidency() -> [String: ParallelColumnInput] {
+    func updateResidency() -> [String: ParallelColumnInput] {
         visibleIDs = ParallelActivityViewport.conversationIDs(orderedConversations, inspector: isWorkflowInspector,
                                                               selectedID: selectedConversationID, offset: viewportOffset, width: viewportWidth)
         let returning = visibleIDs.subtracting(residentIDs).filter { presentations[$0] != nil }
@@ -490,7 +493,7 @@ final class ParallelVM: ParallelViewModel {
             column.onCancelMessage = { [weak self] messageID in self?.cancelMessage(messageID, conversationID: conversation.id) }
             windowAdoption.prepareColumn(&column, id: conversation.id) { [weak self] in self?.adoptObservationWindow(conversation.id) }
             column.workMessages = WorkMessageBubble.applying(column.workMessages, notes: messageNotes[metadata.task.taskID] ?? [:])
-            column.chrome = isWorkflowInspector ? .inspector : .lane
+            applyChrome(to: &column)
             applyRequest(to: &column, conversationID: conversation.id)
             if !isWorkflowInspector { column.status = laneStatus(metadata.task) }
             column.animatesArrival = arrivals.contains(column.id)
@@ -578,16 +581,9 @@ extension ParallelVM {
     }
 }
 
-// MARK: - Workflow inspector residency
+// MARK: - Workflow inspector selection
 
 extension ParallelVM {
-    /// Independent workflow inspector ownership with the same activity dependencies.
-    func makeWorkflowActivity() -> ParallelVM {
-        let activity = ParallelVM(groupName: groupName, useCase: useCase, routing: routing, buildColumns: buildColumns)
-        activity.isWorkflowInspector = true
-        return activity
-    }
-
     /// Explicit inspector selection changes residency even when its geometry is unchanged.
     func selectConversation(_ id: String) {
         guard isWorkflowInspector, conversationByID[id] != nil, selectedConversationID != id else { return }

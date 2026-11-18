@@ -25,6 +25,7 @@ extension ParallelVM {
         messageDispatches.insert(id)
         recompute()
         let capturedUseCase = useCase
+        let onFailure = messagingFailureHandler?()
         Task { [weak self] in
             defer {
                 self?.messageDispatches.remove(id)
@@ -36,6 +37,7 @@ extension ParallelVM {
                     self?.messageNotes[id, default: [:]][messageID] = note
                 }
             } catch {
+                onFailure?(error)
                 capturedUseCase.setOutcome(id, "Couldn't send the message: \((error as? ToolError)?.message ?? error.localizedDescription)")
             }
         }
@@ -63,11 +65,15 @@ extension ParallelVM {
 
     private func messageTarget(conversationID: String, allowTakenOver: Bool = false) -> TaskInfo? {
         guard didSubscribe, let conversation = conversationByID[conversationID] else { return nil }
+        // Cancelling stays allowed so a queued message can still be withdrawn, as for takeover.
+        guard allowTakenOver || !sendsAreLocked else { return nil }
         let current = WorkflowNodePresentation.merged(latestSnapshots[conversation.current.taskID], with: conversation.current)
         guard allowTakenOver || !current.takenOver, !latestBusy.contains(current.taskID),
               !messageDispatches.contains(current.taskID) else { return nil }
         return current
     }
+
+    private var sendsAreLocked: Bool { isRunMessageLocked || (isWorkflowInspector && isMessagingUnsupported) }
 
     func didTapTakeover(taskID: String) {
         let dialog = ParallelTakeover.dialog(taskID: taskID,

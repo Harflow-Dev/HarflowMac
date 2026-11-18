@@ -36,13 +36,20 @@ extension WorkflowVM {
 
     func submitActivityMessage(_ text: String, now: Bool) -> Bool {
         let target = activityMessageTarget
-        guard !isBusy, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard !isBusy, !messagingUnsupported, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let runID = target.runID, target.unavailableReason == nil else { return false }
         let options = ["--monitor", "--delivery=\(now ? "now" : "queue")"]
             + (target.taskID.map { ["--task-id=\($0)"] } ?? [])
+        let onFailure = makeMessagingFailureHandler()
         perform { [weak self] in
             guard let self else { return }
-            let result = try await builderCommand("send", options: options, positionals: [runID, text])
+            let result: [String: JSONValue]
+            do {
+                result = try await builderCommand("send", options: options, positionals: [runID, text])
+            } catch {
+                onFailure(error)
+                throw error
+            }
             if activityMessageTarget == target { errorText = WorkMessageOutcome.notice(result) }
             if let id = result["message_id"]?.stringValue, let note = WorkMessageBubble.refusalNote(in: result) {
                 messageNotes[id] = note

@@ -33,6 +33,19 @@ protocol WorkflowUseCase: Sendable {
     func modelOptions(backend: String) async -> [ModelOption]
 }
 
+// MARK: - WorkflowMessagingSupport
+
+/// The runtime's queued-messaging capability, probed the way the task screen does. Kept apart from `WorkflowUseCase`
+/// so a use case that cannot probe leaves the support unknown, which keeps sending enabled.
+@Mockable
+@MainActor
+protocol WorkflowMessagingSupport: Sendable {
+    func messagingInvocationContext() throws -> MessagingInvocationContext
+    func isMessagingContextCurrent(_ context: MessagingInvocationContext) -> Bool
+    /// `nil` when the capability cannot be read for `context` (changed runtime, failed or cancelled check).
+    func messagingSupport(context: MessagingInvocationContext) async -> Bool?
+}
+
 // MARK: - WorkflowRouting
 
 @Mockable
@@ -101,6 +114,7 @@ final class WorkflowVM: WorkflowViewModel {
         builderSubmissionFence?.invalidate()
         updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence()
         if selectedRun?.id != oldValue?.id { selectedActivationID = nil }
+        applyRunMessageLock()
         if selectedRun != oldValue { scheduleRunSidebar() }
     } }
     var branchSelection = WorkflowBranchSelection()
@@ -185,6 +199,13 @@ final class WorkflowVM: WorkflowViewModel {
     var refinementContext: WorkflowRefinementContext?
     var appliedProposalIDs: Set<String> = []
     var parallel: ParallelVM
+    /// Whether the current runtime supports queued messaging; `nil` while unread. Unknown keeps sending enabled,
+    /// unlike the task screen, because the engine still enforces the capability.
+    var messagingSupported: Bool?
+    @ObservationIgnored var messagingSupport: (any WorkflowMessagingSupport)?
+    @ObservationIgnored var messagingSupportContext: MessagingInvocationContext?
+    @ObservationIgnored var messagingSupportRead: Task<Void, Never>?
+    @ObservationIgnored var messagingAppearanceID = UUID()
 
     @ObservationIgnored let useCase: any WorkflowUseCase
     @ObservationIgnored let draftStore: any WorkflowDraftStoring
@@ -205,7 +226,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var catalogReadID = UUID()
     @ObservationIgnored var catalogPreparationTask: Task<WorkflowDefinitionCatalog, Error>?
     @ObservationIgnored var generationID = UUID() { didSet { builderSubmissionFence?.invalidate() } }
-    @ObservationIgnored private var didSubscribe = false
+    @ObservationIgnored var didSubscribe = false
     @ObservationIgnored var editorReadTask: Task<Void, Never>?
     @ObservationIgnored var editorLoadID = UUID() { didSet { builderSubmissionFence?.invalidate() } }
     @ObservationIgnored var pendingEditorName: String?
@@ -239,6 +260,7 @@ final class WorkflowVM: WorkflowViewModel {
         self.visibility = visibility
         self.scheduler = scheduler
         self.agentUsageSnapshot = useCase.agentUsageSnapshot
+        self.messagingSupport = useCase as? any WorkflowMessagingSupport
         applyCatalog(useCase.backendCatalog)
         parallel.setWorkflowTaskIDs([])
     }
@@ -308,6 +330,8 @@ final class WorkflowVM: WorkflowViewModel {
         }
         validationSuspended = false
         scheduleValidation()
+        prepareMessagingSupport()
+        applyRunMessageLock()
         parallel.didAppear()
         scheduleRunSidebar()
         let generation = UUID()
@@ -334,6 +358,7 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        invalidateMessagingSupport()
         discardRequestID = nil
         deleteRequestID = nil
         deleteFailure = nil

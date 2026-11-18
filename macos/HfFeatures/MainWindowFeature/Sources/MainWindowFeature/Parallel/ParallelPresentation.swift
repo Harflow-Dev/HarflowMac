@@ -254,6 +254,7 @@ struct ParallelColumnRenderValue: Equatable {
     var hasMessageActions = false
     var hasMessageCancellation = false
     var chrome = ParallelColumnChrome.lane
+    var messageLock: ParallelMessageLock?
     var request: TaskRequestReadState?
     var requestFeedback: String?
 
@@ -275,7 +276,7 @@ struct ParallelColumnRenderValue: Equatable {
             && left.memberTaskIDs == right.memberTaskIDs && lhs.animatesArrival == rhs.animatesArrival
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
             && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
-            && lhs.chrome == rhs.chrome && lhs.request == rhs.request
+            && lhs.chrome == rhs.chrome && lhs.messageLock == rhs.messageLock && lhs.request == rhs.request
             && lhs.requestFeedback == rhs.requestFeedback
     }
 }
@@ -300,6 +301,6 @@ extension ParallelColumnModel {
         value.cachedHistoryNotice = cachedHistoryNotice
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
                                         hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil,
-                                        chrome: chrome, request: request, requestFeedback: requestFeedback)
+                                        chrome: chrome, messageLock: messageLock, request: request, requestFeedback: requestFeedback)
     }
 }
