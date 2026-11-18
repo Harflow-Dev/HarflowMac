@@ -80,6 +80,7 @@ import Testing
         await fixture.settle { fixture.element("Open owning orchestrator") != nil }
         #expect(vm.runSidebar.isDefault)
         #expect(fixture.element("workflow-selected-sidebar") == nil)
+        #expect(fixture.element("Resume") == nil, "The fixture run is not recovery-eligible")
         vm.didDisappear()
         vm.selectedRun = WorkflowRunModel(raw: raw)
         vm.selectedNodeID = nil
@@ -108,13 +109,26 @@ import Testing
         // disclosure state and reading position. This observes the visible default
         // surface after the selected sidebar is dismissed.
         let retainedOrigin = scroll.contentView.bounds.origin
+        let originalProbeScroll = try #require(fixture.descendants.compactMap { $0 as? WorkflowRunSidebarScrollProbe }.first?.enclosingScrollView)
+        let originalIsElement = originalProbeScroll.isAccessibilityElement()
+        let originalIsHidden = originalProbeScroll.isAccessibilityHidden()
         vm.selectedNodeID = nodeID
         await fixture.settle { fixture.element("workflow-selected-sidebar") != nil }
         #expect(fixture.element("workflow-selected-sidebar") != nil)
+        let contentView = try #require(fixture.window.contentView)
+        func voiceOverSees(_ label: String) -> Bool { fixture.elements(in: contentView).contains { fixture.matches($0, label) } }
+        await fixture.settle { !voiceOverSees("Original request") }
+        #expect(!voiceOverSees("Original request"), "The hidden default sidebar is not reachable while a node is selected")
         vm.selectedNodeID = nil
+        await vm.sidebarTask?.value
         await fixture.settle { fixture.element("workflow-selected-sidebar") == nil && fixture.element("Original request") != nil }
         #expect(fixture.element("workflow-selected-sidebar") == nil)
         #expect(fixture.element("Original request") != nil)
+        await fixture.settle { voiceOverSees("Original request") }
+        #expect(voiceOverSees("Original request"), "The default sidebar is reachable again after deselecting")
+        let probe = try #require(fixture.descendants.compactMap { $0 as? WorkflowRunSidebarScrollProbe }.first)
+        #expect(probe.enclosingScrollView?.isAccessibilityElement() == originalIsElement)
+        #expect(probe.enclosingScrollView?.isAccessibilityHidden() == originalIsHidden)
         #expect(abs(scroll.contentView.bounds.origin.y - retainedOrigin.y) < 2)
         #expect(containsText("Prepare the release:", in: fixture))
     }
@@ -145,6 +159,8 @@ import Testing
         let preview = WorkflowPreview.makePopulatedChildRun()
         defer { preview.didDisappear() }
         var raw = try #require(preview.selectedRun?.raw)
+        // Running, not recovery-eligible: the default presentation owns the scroll capture and restore.
+        raw["status"] = .string("running")
         let nodeID = try #require(preview.selectedNodeID)
         raw["activations"] = .array([
             .object(["id": .string("older-attempt"), "role": .string("node"), "node_id": .string(nodeID),

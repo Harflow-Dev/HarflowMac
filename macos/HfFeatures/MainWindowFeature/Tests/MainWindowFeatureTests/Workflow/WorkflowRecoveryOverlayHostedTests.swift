@@ -18,6 +18,7 @@ import Testing
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         defer { vm.didDisappear() }
         var raw: [String: JSONValue] = [
             "workflow_run_id": .string("overlay-run"),
@@ -40,17 +41,22 @@ import Testing
         }
         let panel = try #require(fixture.descendants.compactMap { $0 as? WorkflowRecoveryPanelRootView }.first)
         #expect(matchingElements(in: fixture, label: "Recovery options").count == 1)
-        let splitFramesBefore = splitFrames(in: fixture)
-        let hostBoundsBefore = fixture.host.bounds
         let inputBefore = vm.instructions
         #expect(!(fixture.window.firstResponder is NSTextView), "Automatic opening must not steal editor focus")
         #expect(matchingElements(in: fixture, label: "Choose the next approach.").count == 1,
                 "The open panel suppresses only the duplicate reason announcement")
-        let zoom = try #require(fixture.element("Zoom in"))
-        let zoomFrame = try #require(fixture.frame(zoom))
+        let expand = try #require(fixture.element("Expand summary"))
+        let expandFrame = try #require(fixture.frame(expand))
         let panelFrame = try #require(fixture.frame(panel))
-        #expect(!zoomFrame.intersects(panelFrame), "Underlying canvas action remains outside the panel")
-        #expect(fixture.press(zoom))
+        #expect(!expandFrame.intersects(panelFrame), "The underlying Parallel control remains outside the panel")
+        #expect(fixture.press(expand))
+        await fixture.settle { fixture.element("Collapse summary") != nil }
+        let collapse = try #require(fixture.element("Collapse summary"))
+        #expect(fixture.press(collapse))
+        await fixture.settle { fixture.element("Expand summary") != nil }
+        #expect(fixture.element("Close recovery options") != nil, "The panel stays open across the summary round trip")
+        let splitFramesBefore = splitFrames(in: fixture)
+        let hostBoundsBefore = fixture.host.bounds
 
         // when
         let close = try #require(fixture.element("Close recovery options"))
@@ -62,7 +68,7 @@ import Testing
         #expect(splitFrames(in: fixture) == splitFramesBefore)
         #expect(vm.instructions == inputBefore)
         #expect(vm.selectedRun?.id == raw["workflow_run_id"]?.stringValue)
-        verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
+        verify(harness.useCase).command(.matching { $0 != "status" }, options: .any, positionals: .any, runtime: .any).called(0)
         #expect(!panel.keyboard.isAttached(panelRoot: panel))
 
         // when — the eligible status badge reopens the same panel without changing pane layout.
@@ -82,6 +88,7 @@ import Testing
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         defer { vm.didDisappear() }
         var raw: [String: JSONValue] = [
             "workflow_run_id": .string("long-overlay-run"),

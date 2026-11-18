@@ -43,23 +43,34 @@ import Testing
         await vm.sidebarTask?.value
         vm.selectStandalone("preview-run:research")
         await vm.sidebarTask?.value
-        try await openCallHistory(in: fixture)
+        await waitForCallRows(in: fixture)
 
         // then
+        #expect(fixture.element("workflow-on-demand-calls") != nil)
+        #expect(fixture.element("Runs only when the orchestrator calls it, one call at a time.") != nil)
+        #expect(fixture.element("CALLS") != nil)
         #expect(fixture.element("Open task") != nil)
-        #expect(fixture.element("2 calls · one at a time") != nil)
-        let first = try #require(fixture.element("#2 · Confirm the refresh endpoint's error response."))
-        let second = try #require(fixture.element("#1 · Identify the API endpoints used by the client."))
+        let first = try #require(callRow("Call 2 · Done", in: fixture))
+        let second = try #require(callRow("Call 1 · Done", in: fixture))
         let firstFrame = try #require(fixture.frame(first))
         let secondFrame = try #require(fixture.frame(second))
-        #expect(firstFrame.minY > secondFrame.minY)
+        #expect(firstFrame.minY > secondFrame.minY, "The newest call is listed first")
     }
 
-    private func openCallHistory(in fixture: RedesignHost) async throws {
-        await fixture.settle { fixture.element("Call history · 2 calls") != nil }
-        let disclosure = try #require(fixture.element("Call history · 2 calls"))
-        #expect(fixture.press(disclosure))
-        await fixture.settle { fixture.element("#2 · Confirm the refresh endpoint's error response.") != nil }
+    /// The call rows of the on-demand pane: the row text carries the status and a duration that varies, so match by containment.
+    private func callRow(_ text: String, in fixture: RedesignHost) -> NSObject? {
+        fixture.descendants.flatMap { fixture.elements(in: $0) }.first { element in
+            ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
+                fixture.string(element, $0)?.contains(text) == true
+            }
+        }
+    }
+
+    private func waitForCallRows(in fixture: RedesignHost) async {
+        await fixture.settle {
+            fixture.element("workflow-on-demand-calls") != nil
+                && callRow("Call 2", in: fixture) != nil && callRow("Call 1", in: fixture) != nil
+        }
     }
 
     @Test
@@ -86,7 +97,7 @@ import Testing
             if run {
                 vm.selectStandalone("preview-run:research")
                 await vm.sidebarTask?.value
-                try await openCallHistory(in: fixture)
+                await waitForCallRows(in: fixture)
             }
             await fixture.settle { fixture.hasStableRenderedFrame }
             try fixture.capturePNG(to: url.appendingPathComponent(suffix + ".png"))

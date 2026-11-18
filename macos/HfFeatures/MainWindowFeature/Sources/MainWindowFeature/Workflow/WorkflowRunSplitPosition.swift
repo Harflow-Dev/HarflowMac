@@ -21,6 +21,76 @@ struct WorkflowRunSplitPosition: NSViewRepresentable {
     }
 }
 
+// MARK: - WorkflowRunSidebarScrollMarker
+
+/// A native marker inside the default run sidebar's scroll document, so its scroll view resolves as
+/// `enclosingScrollView` (the pattern of `WorkflowCanvasScrollProbe`).
+struct WorkflowRunSidebarScrollMarker: NSViewRepresentable {
+    /// True while a selected node's pane covers the sidebar: the native scroll view then leaves the accessibility tree.
+    var isHidden = false
+
+    func makeNSView(context _: Context) -> WorkflowRunSidebarScrollProbe {
+        let probe = WorkflowRunSidebarScrollProbe()
+        probe.hidesScrollViewFromAccessibility = isHidden
+        return probe
+    }
+
+    func updateNSView(_ view: WorkflowRunSidebarScrollProbe, context _: Context) {
+        view.hidesScrollViewFromAccessibility = isHidden
+    }
+}
+
+final class WorkflowRunSidebarScrollProbe: NSView {
+    /// A scroll view this probe hid, with the accessibility values it had before.
+    private struct Original { var isElement: Bool; var isHidden: Bool }
+
+    private weak var hiddenScroll: NSScrollView?
+    private var original: Original?
+
+    var hidesScrollViewFromAccessibility = false {
+        didSet { if oldValue != hidesScrollViewFromAccessibility { applyAccessibility() } }
+    }
+
+    override func hitTest(_: NSPoint) -> NSView? { nil }
+    override var isOpaque: Bool { false }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyAccessibility()
+    }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        applyAccessibility()
+    }
+
+    /// Writes to a scroll view only while hiding it, and restores exactly what it had when it is shown again or replaced.
+    private func applyAccessibility() {
+        let current = enclosingScrollView
+        if let previous = hiddenScroll, previous !== current { restore(previous) }
+        guard let scroll = current else { return }
+        if hidesScrollViewFromAccessibility {
+            if hiddenScroll !== scroll {
+                original = Original(isElement: scroll.isAccessibilityElement(), isHidden: scroll.isAccessibilityHidden())
+                hiddenScroll = scroll
+            }
+            scroll.setAccessibilityElement(false)
+            scroll.setAccessibilityHidden(true)
+        } else if hiddenScroll === scroll {
+            restore(scroll)
+        }
+    }
+
+    private func restore(_ scroll: NSScrollView) {
+        if let original {
+            scroll.setAccessibilityElement(original.isElement)
+            scroll.setAccessibilityHidden(original.isHidden)
+        }
+        hiddenScroll = nil
+        original = nil
+    }
+}
+
 // MARK: - WorkflowRunSplitSnapshot
 
 /// Owned by the pane shell because SwiftUI can recreate a pane's platform background view.
@@ -111,7 +181,7 @@ final class WorkflowRunSplitProbe: NSView {
                 if requested.ownsDefaultInspectorScroll {
                     // Capture the owner while only the default inspector is visible;
                     // an activity feed may precede it in the native tree when selected.
-                    snapshot.defaultInspectorScroll = firstScrollView(in: split.arrangedSubviews[1])
+                    captureDefaultScroll(in: split.arrangedSubviews[1])
                 }
             } else {
                 if snapshot.loadingTransition, snapshot.canvasSplit === split, let canvasHeight = snapshot.canvasHeight {
@@ -135,7 +205,7 @@ final class WorkflowRunSplitProbe: NSView {
 
     /// The shared sidebar scroll view keeps its offset; show the failure sentence and Resume.
     private func showRecoveryTop(in split: NSSplitView) {
-        guard let scroll = snapshot.defaultInspectorScroll ?? firstScrollView(in: split.arrangedSubviews[1]) else { return }
+        guard let scroll = snapshot.defaultInspectorScroll ?? defaultSidebarScroll(in: split.arrangedSubviews[1]) else { return }
         moveScroll(to: .zero, in: scroll, afterLayoutOf: split)
     }
 
@@ -146,9 +216,15 @@ final class WorkflowRunSplitProbe: NSView {
         scroll.reflectScrolledClipView(scroll.contentView)
     }
 
-    private func firstScrollView(in view: NSView) -> NSScrollView? {
-        if let scroll = view as? NSScrollView { return scroll }
-        return view.subviews.lazy.compactMap { self.firstScrollView(in: $0) }.first
+    private func captureDefaultScroll(in view: NSView) {
+        if let scroll = defaultSidebarScroll(in: view) { snapshot.defaultInspectorScroll = scroll }
+    }
+
+    /// The default sidebar's own scroll view: the one enclosing its document marker, never whichever scroll view
+    /// comes first in the tree (a mounted selected pane's can precede it).
+    private func defaultSidebarScroll(in view: NSView) -> NSScrollView? {
+        if let marker = view as? WorkflowRunSidebarScrollProbe { return marker.enclosingScrollView }
+        return view.subviews.lazy.compactMap { self.defaultSidebarScroll(in: $0) }.first
     }
 
     private func ancestorSplits() -> [NSSplitView] {

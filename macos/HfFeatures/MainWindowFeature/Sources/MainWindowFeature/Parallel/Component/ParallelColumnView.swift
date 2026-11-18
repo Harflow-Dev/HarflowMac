@@ -56,6 +56,8 @@ struct ParallelColumnView: View {
     @State private var outcomeHeight: CGFloat = 0
     @State private var boundaryHeight: CGFloat = 0
     @State private var composerHeight: CGFloat = 0
+    /// The inspector's step-count line above the feed, measured so its height and the gap below it reach the pane's reserve.
+    @State private var countLineHeight: CGFloat = 0
     @State private var adoptionFocus = AdoptionFocusTracker()
     @State private var state: ParallelColumnUIState
     @State private var resultContentSize = CGSize(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.parallelResultMaximumHeight)
@@ -213,14 +215,15 @@ struct ParallelColumnView: View {
     }
 
     /// Everything in the column that is neither the feed nor the approval region, from directly measured pieces: header,
-    /// outcome line, history boundary, divider, result callout and composer, plus the stack's padding and spacing.
+    /// outcome line, history boundary, divider, result callout, the step-count line (while it is drawn) and composer, plus the stack's padding and spacing.
     private var inspectorChrome: CGFloat {
         let outcome = model.outcomeMessage == nil ? 0 : outcomeHeight
         let callout = showsResultCallout ? min(resultContentSize.height, HfRadius.Metrics.parallelResultMaximumHeight) : 0
+        let countLine = showsCountLine ? countLineHeight + HfRadius.Metrics.spacing8 : 0
         // The 5 assumes the header, history boundary, divider, feed and composer are always mounted.
         let count = 5 + (model.outcomeMessage == nil ? 0 : 1) + (showsResultCallout ? 1 : 0) + (model.inspectorApproval == nil ? 0 : 1)
         return WorkflowSelectedPaneSizing.columnChrome(
-            pieces: [headerHeight, outcome, boundaryHeight, ParallelLayout.dividerWidth, callout, composerHeight], itemCount: count)
+            pieces: [headerHeight, outcome, boundaryHeight, ParallelLayout.dividerWidth, callout, composerHeight, countLine], itemCount: count)
     }
 
     /// The node task's approval panel between the feed and the composer: it takes its natural height up to
@@ -437,10 +440,14 @@ struct ParallelColumnView: View {
         return Array(model.activityRows.dropLast())
     }
 
+    /// The inspector keeps the count line; the lane drops it (Simplify).
+    private var showsCountLine: Bool {
+        model.chrome == .inspector && !laneFeedIsLoading && (model.stepCountText != nil || model.noToolCallsText != nil)
+    }
+
     private var feed: some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
-            // The lane drops the count line (Simplify); the inspector keeps it.
-            if model.chrome == .inspector, model.stepCountText != nil || model.noToolCallsText != nil {
+            if showsCountLine {
                 HStack(spacing: HfRadius.Metrics.spacing8) {
                     if let stepCountText = model.stepCountText {
                         Text(stepCountText).font(.hf(.secondary)).monospacedDigit().foregroundStyle(Color.secondaryText)
@@ -450,6 +457,7 @@ struct ParallelColumnView: View {
                     }
                     Spacer()
                 }
+                .measured(into: $countLineHeight)
             }
             ActivityFeedView(rows: laneActivityRows, activitySnapshot: model.activitySnapshot, start: model.start, history: model.history,
                              isLoading: model.isLoading, tailValue: ActivityFeedTail(liveStep: model.liveStep, pendingMessages: model.pendingMessages),

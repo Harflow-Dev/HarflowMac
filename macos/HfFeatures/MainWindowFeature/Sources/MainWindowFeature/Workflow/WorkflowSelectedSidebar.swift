@@ -59,13 +59,14 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { paneHeight = $0 }
         .background(TaskScreenStyle.Colors.pageBackground.color)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("workflow-selected-sidebar")
     }
 
     /// The region above the transcript: the goal and caption of a worker, or an on-demand node's intro and calls.
     @ViewBuilder
     private func topRegion(_ state: WorkflowRunSidebarPresentation) -> some View {
-        let reserved = headBlockHeight + (showsFallbackComposer(state) ? composerHeight : 0) + columnChrome
+        let reserved = headBlockHeight + (showsFallbackComposer(state) ? composerHeight : 0) + columnChrome + ParallelLayout.dividerWidth
         switch state.header.kind {
         case .worker:
             if state.showsGoal || state.caption != nil {

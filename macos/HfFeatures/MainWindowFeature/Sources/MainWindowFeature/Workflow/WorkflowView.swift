@@ -480,9 +480,10 @@ private extension WorkflowView {
                 SkeletonContent(isLoading: isLoading) { WorkflowLoadingInspector(isRun: true) } content: {
                     if !viewModel.initialLoadFailed {
                         ZStack {
-                            defaultRunSidebar(showsRecovery: slot == .recoveryPane)
+                            defaultRunSidebar(showsRecovery: slot == .recoveryPane, isHiddenBehindSelection: slot == .selectedNode)
                                 .opacity(slot == .selectedNode ? 0 : 1)
                                 .allowsHitTesting(slot != .selectedNode)
+                                .accessibilityElement(children: slot == .selectedNode ? .ignore : .contain)
                                 .accessibilityHidden(slot == .selectedNode)
                             if slot == .selectedNode {
                                 WorkflowSelectedSidebar(viewModel: viewModel)

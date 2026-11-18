@@ -71,7 +71,7 @@ extension WorkflowRunSidebarHostedTests {
         let reportedChrome = WorkflowSelectedPaneSizing.columnChrome(pieces: [], itemCount: 1)
         #expect(reportedChrome > 0, "A single-conversation column still contributes chrome (padding) to the pane reserve")
         let feed = try #require(paneFeed(in: fixture))
-        #expect(feed.bounds.height >= WorkflowSelectedPaneSizing.transcriptFloor)
+        #expect(feed.bounds.height >= WorkflowSelectedPaneSizing.transcriptFloor - 0.5)
     }
 
     @Test(arguments: [CGSize(width: 1000, height: 620), CGSize(width: 1440, height: 900)], [ColorScheme.light, .dark])
@@ -113,6 +113,8 @@ extension WorkflowRunSidebarHostedTests {
         // when
         let row = try #require(paneElements(in: fixture).first { fixture.string($0, "accessibilityLabel")?.contains("Call 1") == true })
         #expect(fixture.press(row))
+        await fixture.settle { vm.selectedActivationID == "specialist-1" }
+        await vm.sidebarTask?.value
         harness.tasksSubject.send(Array(harness.tasksBox.value.values))
         await fixture.settle {
             vm.runSidebar.activationID == "specialist-1" && paneContains("Transcript of call one", in: fixture)

@@ -8,6 +8,29 @@ import MonitorCore
 import SwiftUI
 import Testing
 
+// MARK: - RecoveryRunStatusSource
+
+/// Serves the run's current raw payload to the view model's own two-second `status` poll, so the strict mock has a
+/// matching stub. A view model that is gone yields an empty payload.
+final class RecoveryRunStatusSource: @unchecked Sendable {
+    private weak var viewModel: WorkflowVM?
+
+    init(_ viewModel: WorkflowVM) { self.viewModel = viewModel }
+
+    func raw() -> [String: JSONValue] {
+        MainActor.assumeIsolated { viewModel?.selectedRun?.raw ?? [:] }
+    }
+}
+
+/// Stubs only `status`; every other command stays strict.
+@MainActor
+func stubRecoveryRunStatus(_ useCase: MockWorkflowUseCase, vm: WorkflowVM) {
+    let source = RecoveryRunStatusSource(vm)
+    given(useCase)
+        .command(.value("status"), options: .any, positionals: .any, runtime: .any)
+        .willProduce { _, _, _, _ in source.raw() }
+}
+
 // MARK: - WorkflowRecoveryPaneHostedTests
 
 /// Hosted (window-opening) coverage of the Graph recovery pane. Written for the owner's hosted batch; not run by the
@@ -19,6 +42,7 @@ import Testing
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         vm.selectedRun = pausedRun()
         WorkflowPreview.synchronizeRun(vm)
         let scratch = scratch(mode: "Graph")
@@ -43,8 +67,11 @@ import Testing
         // given
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
-        given(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).willReturn([:])
+        given(harness.useCase)
+            .command(.value("resume"), options: .any, positionals: .value(["recovery-pane-run"]), runtime: .any)
+            .willReturn([:])
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         vm.selectedRun = pausedRun()
         vm.instructions = "Try the narrower fix."
         WorkflowPreview.synchronizeRun(vm)
@@ -69,6 +96,7 @@ import Testing
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         var raw = pausedRun().raw
         raw["input_question"] = .string(String(repeating: "Decide whether to restore the previous public interface. ", count: 20))
         raw["optional_review_skip_available"] = .bool(true)
@@ -79,7 +107,9 @@ import Testing
         defer { scratch.remove(); vm.didDisappear() }
         let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 1000, height: 620))
         defer { fixture.close() }
-        await fixture.settle { fixture.element("Resume") != nil && fixture.recoveryTextView != nil }
+        await fixture.settle {
+            fixture.element("Resume") != nil && fixture.recoveryTextView != nil && fixture.element("Revise goal…") != nil
+        }
 
         // when
         let editor = try #require(fixture.recoveryTextView)
@@ -106,6 +136,7 @@ import Testing
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         vm.selectedRun = pausedRun()
         WorkflowPreview.synchronizeRun(vm)
         let scratch = scratch(mode: "Graph")
@@ -134,6 +165,7 @@ import Testing
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         vm.selectedRun = pausedRun()
         vm.instructions = "Keep this."
         WorkflowPreview.synchronizeRun(vm)
@@ -166,31 +198,54 @@ import Testing
     }
 
     @Test func givenScrolledDefaultSidebar_whenRecoveryBecomesEligibleAndEnds_thenFormIsAtTopAndSavedOriginIsRestored() async throws {
-        // given — a long default sidebar (original request) scrolled down while the run is running.
+        // given — a populated child-run sidebar with its disclosures open, scrolled down while the run is running.
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
-        var running = pausedRun().raw
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
+        var running = populated(pausedRun().raw)
         running["status"] = .string("running")
-        running["prompt"] = .string(String(repeating: "Original request line.\n", count: 80))
+        let paused = populated(pausedRun().raw)
         vm.selectedRun = WorkflowRunModel(raw: running)
         WorkflowPreview.synchronizeRun(vm)
         let scratch = scratch(mode: "Graph")
         defer { scratch.remove(); vm.didDisappear() }
         let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 1000, height: 620))
         defer { fixture.close() }
-        await fixture.settle { fixture.element("Workflow summary") != nil || fixture.element("Original request") != nil }
-        let sidebar = try #require(fixture.descendants.compactMap { $0 as? NSScrollView }.first {
-            ($0.documentView?.bounds.height ?? 0) > $0.contentView.bounds.height
-                && $0.convert($0.bounds, to: nil).midX > 600
-        })
+        await fixture.settle { fixture.element("Assignment for this child") != nil && fixture.element("Technical plan") != nil }
+        for label in ["Assignment for this child", "Technical plan"] {
+            let disclosure = try #require(fixture.element(label))
+            #expect(fixture.press(disclosure))
+        }
+        // The sidebar's scroll view, picked independently of production: the one whose document holds the "Assignment" label.
+        func sidebarScroll() -> NSScrollView? {
+            guard let label = fixture.element("Assignment for this child"), let frame = fixture.frame(label) else { return nil }
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+            // The Graph canvas document extends under the inspector, so it is excluded and the visible frame must also hold the label.
+            return fixture.descendants.compactMap { $0 as? NSScrollView }.first { scroll in
+                guard scroll !== fixture.canvasScroll, let document = scroll.documentView else { return false }
+                return scroll.convert(scroll.bounds, to: nil).contains(center) && document.convert(document.bounds, to: nil).contains(center)
+            }
+        }
+        var previousHeight: CGFloat = -1
+        await fixture.settle {
+            guard let scroll = sidebarScroll(), let height = scroll.documentView?.frame.height else { return false }
+            defer { previousHeight = height }
+            return height == previousHeight && height > scroll.contentView.bounds.height + 100
+        }
+        let sidebar = try #require(sidebarScroll())
+        #expect(abs(sidebar.frame.width - WorkflowRunLayout.defaultInspectorIdeal) < 2, "The picked scroll view is the inspector's")
         sidebar.contentView.scroll(to: NSPoint(x: 0, y: 120))
         sidebar.reflectScrolledClipView(sidebar.contentView)
+        var previousOrigin: CGFloat = -1
+        await fixture.settle {
+            defer { previousOrigin = sidebar.contentView.bounds.origin.y }
+            return sidebar.contentView.bounds.origin.y == previousOrigin
+        }
         let saved = sidebar.contentView.bounds.origin.y
+        try #require(saved >= 60, "The sidebar holds a real, stable offset before recovery starts")
 
         // when — the run pauses and becomes eligible.
-        var paused = running
-        paused["status"] = .string("paused")
         vm.selectedRun = WorkflowRunModel(raw: paused)
         WorkflowPreview.synchronizeRun(vm)
         await fixture.settle { fixture.element("Resume") != nil }
@@ -209,11 +264,68 @@ import Testing
         #expect(abs(sidebar.contentView.bounds.origin.y - saved) < 2)
     }
 
+    @Test func givenRecoveryEligibleRunSelectedFromTheStart_whenNodeIsDeselected_thenOnlyTheDefaultSidebarScrollsToTop() async throws {
+        // given — the run never passes through the default presentation: a node is selected before the first layout.
+        let harness = WorkflowTests().makeVM()
+        given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
+        let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
+        var raw = populated(pausedRun().raw)
+        raw["prompt"] = .string(String(repeating: "Original request line.\n", count: 120))
+        vm.selectedRun = WorkflowRunModel(raw: raw)
+        WorkflowPreview.synchronizeRun(vm)
+        vm.selectedNodeID = "work"
+        let scratch = scratch(mode: "Graph")
+        defer { scratch.remove(); vm.didDisappear() }
+        let fixture = RedesignHost(WorkflowView(vm).defaultAppStorage(scratch.defaults), size: CGSize(width: 1000, height: 620))
+        defer { fixture.close() }
+        await fixture.settle { fixture.element("workflow-selected-sidebar") != nil }
+        func defaultScroll() -> NSScrollView? {
+            fixture.descendants.compactMap { $0 as? WorkflowRunSidebarScrollProbe }.first?.enclosingScrollView
+        }
+        var previousHeight: CGFloat = -1
+        await fixture.settle {
+            guard let scroll = defaultScroll(), let height = scroll.documentView?.frame.height else { return false }
+            defer { previousHeight = height }
+            return height == previousHeight && height > scroll.contentView.bounds.height + 100
+        }
+        let sidebar = try #require(defaultScroll())
+        sidebar.contentView.scroll(to: NSPoint(x: 0, y: 120))
+        sidebar.reflectScrolledClipView(sidebar.contentView)
+        var previousOrigin: CGFloat = -1
+        await fixture.settle {
+            defer { previousOrigin = sidebar.contentView.bounds.origin.y }
+            return sidebar.contentView.bounds.origin.y == previousOrigin
+        }
+        try #require(sidebar.contentView.bounds.origin.y >= 60, "The default sidebar holds a real, stable offset")
+
+        let contentView = try #require(fixture.window.contentView)
+        func voiceOverSees(_ label: String) -> Bool { fixture.elements(in: contentView).contains { fixture.matches($0, label) } }
+        await fixture.settle { !voiceOverSees("Assignment for this child") }
+        #expect(!voiceOverSees("Assignment for this child"), "The hidden default sidebar is not reachable while a node is selected")
+
+        // when
+        vm.selectedNodeID = nil
+        await vm.sidebarTask?.value
+        await fixture.settle { fixture.element("workflow-selected-sidebar") == nil && fixture.element("Resume") != nil }
+
+        // then
+        await fixture.settle { abs(sidebar.contentView.bounds.origin.y) < 1 }
+        #expect(abs(sidebar.contentView.bounds.origin.y) < 1, "Recovery scrolls the default sidebar's own scroll view to the top")
+        await fixture.settle { voiceOverSees("Recovery options") }
+        #expect(voiceOverSees("Recovery options"), "The recovery pane is reachable again after deselecting")
+        let probe = try #require(fixture.descendants.compactMap { $0 as? WorkflowRunSidebarScrollProbe }.first)
+        // The run is mounted with a node selected, so there is no earlier original to compare against; exact restoration
+        // of both flags is covered by WorkflowRunSidebarHostedTests' select-then-deselect case.
+        #expect(probe.enclosingScrollView?.isAccessibilityHidden() == false)
+    }
+
     @Test func givenNeedsInputRunWithApprovalOptIn_whenGraphPaneIsShown_thenMountSmokeShowsPaneAndResume() async throws {
         // given
         let harness = WorkflowTests().makeVM()
         given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
         let vm = harness.sut
+        stubRecoveryRunStatus(harness.useCase, vm: vm)
         var raw = pausedRun().raw
         raw["status"] = .string("needs_input")
         raw["input_decision_id"] = .string("question-1")
@@ -238,6 +350,21 @@ import Testing
         let scratch = ScratchDefaults(label: "WorkflowRecoveryPaneHosted")
         scratch.defaults.set(mode, forKey: "workflowViewMode")
         return scratch
+    }
+
+    /// Adds child-run content (owner link, child links, assignment and plan) to a run, so its default sidebar scrolls.
+    private func populated(_ base: [String: JSONValue]) -> [String: JSONValue] {
+        var raw = base
+        raw["parent_workflow_run_id"] = .string("preview-parent-run")
+        raw["root_workflow_run_id"] = .string("preview-root-run")
+        raw["orchestrator_session_owner_run_id"] = .string("preview-owner-run")
+        raw["prompt"] = .string(String(repeating: "Prepare the release: update the version and run the suite.\n", count: 40))
+        raw["technical_plan"] = .string(String(repeating: "1. Bump the version constant.\n2. Run the regression suite.\n", count: 30))
+        raw["activations"] = .array([.object([
+            "id": .string("child-invocation"), "role": .string("node"), "node_id": .string("work"), "status": .string("completed"),
+            "invocation": .object(["child_workflow_run_id": .string("preview-child-run"), "workflow_name": .string("Review")])
+        ])])
+        return raw
     }
 
     private func pausedRun() -> WorkflowRunModel {

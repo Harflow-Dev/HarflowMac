@@ -55,6 +55,19 @@ extension WorkflowRunSidebarHostedTests {
         goalLabels(surface, in: fixture).contains { $0.contains(text) }
     }
 
+    private func accessibilityEnabledBySelector(_ element: NSObject) -> Bool? {
+        let selector = NSSelectorFromString("isAccessibilityEnabled")
+        guard element.responds(to: selector) else { return nil }
+        typealias Getter = @convention(c) (AnyObject, Selector) -> Bool
+        return unsafeBitCast(element.method(for: selector), to: Getter.self)(element, selector)
+    }
+
+    private func accessibilityEnabledByKVC(_ element: NSObject) -> Bool? {
+        guard element.responds(to: NSSelectorFromString("isAccessibilityEnabled"))
+            || element.responds(to: NSSelectorFromString("accessibilityEnabled")) else { return nil }
+        return (element.value(forKey: "accessibilityEnabled") as? NSNumber)?.boolValue
+    }
+
     private func goalElement(_ label: String, _ surface: GoalSurface, in fixture: RedesignHost) -> NSObject? {
         goalElements(surface, in: fixture).first { fixture.matches($0, label) }
     }
@@ -138,8 +151,11 @@ extension WorkflowRunSidebarHostedTests {
         // when
         await fixture.settle { goalContains("Waiting for workers to finish.", surface, in: fixture) }
         // then
-        let link = try #require(goalElement("Revise goal…", surface, in: fixture))
-        let isEnabled = (link as? any NSAccessibilityProtocol)?.isAccessibilityEnabled() ?? true
+        let candidates = goalElements(surface, in: fixture).filter { fixture.matches($0, "Revise goal…") }
+        let link = try #require(candidates.first { fixture.string($0, "accessibilityRole") == NSAccessibility.Role.button.rawValue },
+                                "The Revise goal link is exposed as a button")
+        let isEnabled = try #require(accessibilityEnabledBySelector(link) ?? accessibilityEnabledByKVC(link),
+                                     "The link reports its enabled state")
         #expect(!isEnabled, "The unavailable link is disabled")
         #expect(vm.selectedRun?.canReviseGoal == false)
     }
@@ -160,14 +176,19 @@ extension WorkflowRunSidebarHostedTests {
         raw["goal_revision"] = .number(4)
         raw["goal"] = .string("Caller goal text")
         vm.selectedRun = WorkflowRunModel(raw: raw)
+        WorkflowPreview.synchronizeRun(vm)
         await fixture.settle { goalContains("Your saved draft", surface, in: fixture) }
         // then
         #expect(goalContains("Already answered by the caller", surface, in: fixture))
         #expect(goalContains("Caller goal text", surface, in: fixture))
         #expect(goalContains("My unsaved goal", surface, in: fixture))
-        let copies = fixture.descendants
-.flatMap { fixture.elements(in: $0) }
-            .filter { fixture.string($0, "accessibilityLabel") == "Already answered by the caller" }
+        var seen = Set<ObjectIdentifier>()
+        let copies = fixture.elements(in: fixture.window.contentView ?? fixture.host).filter { element in
+            guard seen.insert(ObjectIdentifier(element)).inserted else { return false }
+            return ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
+                fixture.string(element, $0) == "Already answered by the caller"
+            }
+        }
         #expect(copies.count == 1, "The outcome shows once: the card, not the screen header")
     }
 }

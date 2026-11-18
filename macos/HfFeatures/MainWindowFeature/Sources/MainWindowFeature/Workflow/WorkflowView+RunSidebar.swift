@@ -9,7 +9,7 @@ extension WorkflowView {
     /// The default run sidebar. With `showsRecovery` it is re-headed as the recovery pane: a fixed head, then the
     /// recovery section and the goal block, then the same sections in the same order. It is one instance either way, so
     /// the approvals poller and the scroll view keep their identity when recovery eligibility changes.
-    @ViewBuilder func defaultRunSidebar(showsRecovery: Bool) -> some View {
+    @ViewBuilder func defaultRunSidebar(showsRecovery: Bool, isHiddenBehindSelection: Bool = false) -> some View {
         if let run = viewModel.selectedRun {
             VStack(spacing: HfRadius.Metrics.zero) {
                 if showsRecovery {
@@ -32,6 +32,7 @@ extension WorkflowView {
                     // The document probe (§6.4): inside the run inspector's own document, so it can only
                     // ever target this outer scroll view — never a nested disclosure's.
                     .background(ScrollChrome())
+                    .background(WorkflowRunSidebarScrollMarker(isHidden: isHiddenBehindSelection))
                 }
             }
             .accessibilityIdentifier("workflow-run-inspector")

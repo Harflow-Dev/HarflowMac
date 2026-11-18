@@ -85,6 +85,7 @@ struct WorkflowOnDemandCallList: View {
                                             onSelect: { onSelect(row.id) }, onOpenTask: onOpenTask)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("workflow-on-demand-calls")
     }
 }

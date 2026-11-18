@@ -280,14 +280,32 @@ extension WorkflowScreenLayoutTests {
                 && (scroll.documentView?.frame.height ?? 0) > scroll.contentView.bounds.height + 1
         })
         let document = try #require(scroll.documentView)
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
-        scroll.reflectScrolledClipView(scroll.contentView)
-        await mount.fixture.settle { true }
+        // Layout can still be growing: wait for the document height to hold over two passes, then reveal the last control.
+        var previousHeight: CGFloat = -1
+        await mount.fixture.settle {
+            let height = document.frame.height
+            defer { previousHeight = height }
+            return height == previousHeight && mount.fixture.element("Open resource slots") != nil
+        }
+        var previousFrame = CGRect.zero
+        var revealed = false
+        let deadline = Date().addingTimeInterval(5)
+        while !revealed, Date() < deadline {
+            await mount.fixture.settle { true }
+            guard let control = mount.fixture.element("Open resource slots"), let frame = mount.fixture.frame(control) else { continue }
+            document.scrollToVisible(document.convert(frame, from: nil))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            mount.fixture.host.layoutSubtreeIfNeeded()
+            guard let reached = mount.fixture.frame(control) else { continue }
+            let visible = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
+            revealed = reached == previousFrame && visible.insetBy(dx: -1, dy: -1).contains(reached)
+            previousFrame = reached
+        }
         // then
         #expect(document.frame.height > scroll.contentView.bounds.height)
         let last = try #require(mount.fixture.element("Open resource slots"))
         let lastFrame = try #require(mount.fixture.frame(last))
-        let clip = scroll.convert(scroll.bounds, to: nil)
+        let clip = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
         #expect(lastFrame.minY >= clip.minY - 1 && lastFrame.maxY <= clip.maxY + 1,
                 "The last control must be reachable inside the top region's scroll region")
         #expect(mount.fixture.press(last))
@@ -315,6 +333,15 @@ extension WorkflowScreenLayoutTests {
         #expect(column.maxY - disclosureFrame.maxY < 160, "Collapsed top region must keep its natural height, not a stretched slot")
     }
 
+    private static let queuePrompt = "Queue a message…"
+
+    private func queueComposerFrame(in fixture: RedesignHost) -> CGRect? {
+        if let element = fixture.element(Self.queuePrompt), let frame = fixture.frame(element) { return frame }
+        guard let field = fixture.descendants.compactMap({ $0 as? NSTextField }).first(where: { $0.placeholderString == Self.queuePrompt })
+        else { return nil }
+        return field.convert(field.bounds, to: nil)
+    }
+
     /// Regression smoke for the non-builder mounts, which must keep their plain VStack column: a feed with height
     /// and a composer wholly inside the window. Exact pixel baselines need a before/after run on the same data.
     @Test(arguments: [TaskDetailChrome.standalone, .group, .embedded], [ColorScheme.light, .dark])
@@ -328,12 +355,13 @@ extension WorkflowScreenLayoutTests {
         let fixture = RedesignHost(view.preferredColorScheme(appearance), size: size, appearance: appearance)
         defer { fixture.close() }
         // when
-        await fixture.settle { fixture.element("Queue a message…") != nil && fixture.descendants.contains { $0 is ActivityFeedNativeTableView } }
+        await fixture.settle {
+            queueComposerFrame(in: fixture) != nil && fixture.descendants.contains { $0 is ActivityFeedNativeTableView }
+        }
         // then
         let feed = try #require(fixture.descendants.compactMap { $0 as? ActivityFeedNativeTableView }.first?.enclosingScrollView)
         #expect(feed.bounds.height > 80)
-        let composer = try #require(fixture.element("Queue a message…"))
-        let composerFrame = try #require(fixture.frame(composer))
+        let composerFrame = try #require(queueComposerFrame(in: fixture))
         #expect(composerFrame.minY >= -1 && composerFrame.maxY <= size.height + 1)
         #expect(fixture.element("workflow-builder-header") == nil)
     }
