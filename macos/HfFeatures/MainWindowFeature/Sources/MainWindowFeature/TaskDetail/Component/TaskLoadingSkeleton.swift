@@ -29,6 +29,20 @@ struct TaskLoadingSkeleton: View {
     var style = ActivityFeedStyle.standard
 
     private var isEmbedded: Bool { chrome == .embedded }
+    private var fitsColumn: Bool { chrome == .builder }
+
+    /// The builder's activity column can be narrower than the fixed placeholder widths: its blocks keep the design
+    /// width while they fit and are clipped to the room they get otherwise. Every other mount keeps the exact widths.
+    @ViewBuilder
+    private func block(width: CGFloat, height: CGFloat, cornerRadius: CGFloat = 6) -> some View {
+        if fitsColumn {
+            SkeletonBlock(width: width, height: height, cornerRadius: cornerRadius)
+                .frame(minWidth: 0, maxWidth: width, alignment: .leading)
+                .clipped()
+        } else {
+            SkeletonBlock(width: width, height: height, cornerRadius: cornerRadius)
+        }
+    }
 
     var body: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
@@ -89,7 +103,7 @@ struct TaskLoadingSkeleton: View {
             promptBubble
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 SkeletonBlock(width: HfRadius.Metrics.spacing8, height: HfRadius.Metrics.spacing8, cornerRadius: HfRadius.Metrics.spacing4)
-                SkeletonBlock(width: HfRadius.Metrics.taskSkeletonStartWidth, height: HfRadius.Metrics.taskSkeletonCaptionHeight)
+                block(width: HfRadius.Metrics.taskSkeletonStartWidth, height: HfRadius.Metrics.taskSkeletonCaptionHeight)
             }
             collapsedCard(titleWidth: HfRadius.Metrics.taskSkeletonTitleWidth)
             VStack(alignment: .leading, spacing: HfRadius.Metrics.taskSkeletonLineSpacing) {
@@ -113,7 +127,8 @@ struct TaskLoadingSkeleton: View {
         }
         .padding(.vertical, style.isTranscript ? TaskScreenStyle.UserBubble.paddingVertical : HfRadius.Metrics.spacing14)
         .padding(.horizontal, style.isTranscript ? TaskScreenStyle.UserBubble.paddingHorizontal : HfRadius.Metrics.spacing14)
-        .frame(width: HfRadius.Metrics.taskSkeletonPromptWidth)
+        .frame(width: fitsColumn ? nil : HfRadius.Metrics.taskSkeletonPromptWidth)
+        .frame(maxWidth: fitsColumn ? HfRadius.Metrics.taskSkeletonPromptWidth : nil)
         .background {
             if style.isTranscript {
                 RoundedRectangle(cornerRadius: TaskScreenStyle.UserBubble.cornerRadius)
@@ -135,9 +150,9 @@ struct TaskLoadingSkeleton: View {
         ActivityCard {
             HStack(spacing: HfRadius.Metrics.spacing10) {
                 SkeletonBlock(width: HfRadius.Metrics.spacing16, height: HfRadius.Metrics.spacing16, cornerRadius: HfRadius.Metrics.spacing4)
-                SkeletonBlock(width: titleWidth, height: HfRadius.Metrics.spacing12)
+                block(width: titleWidth, height: HfRadius.Metrics.spacing12)
                 Spacer(minLength: HfRadius.Metrics.zero)
-                SkeletonBlock(width: HfRadius.Metrics.taskSkeletonResultWidth, height: HfRadius.Metrics.spacing10)
+                block(width: HfRadius.Metrics.taskSkeletonResultWidth, height: HfRadius.Metrics.spacing10)
             }
         }
     }
@@ -147,12 +162,12 @@ struct TaskLoadingSkeleton: View {
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
                 HStack(spacing: HfRadius.Metrics.spacing10) {
                     SkeletonBlock(width: HfRadius.Metrics.spacing16, height: HfRadius.Metrics.spacing16, cornerRadius: HfRadius.Metrics.spacing4)
-                    SkeletonBlock(width: HfRadius.Metrics.taskSkeletonExpandedTitleWidth, height: HfRadius.Metrics.spacing12)
+                    block(width: HfRadius.Metrics.taskSkeletonExpandedTitleWidth, height: HfRadius.Metrics.spacing12)
                     Spacer(minLength: HfRadius.Metrics.zero)
-                    SkeletonBlock(width: HfRadius.Metrics.taskSkeletonShortLineWidth, height: HfRadius.Metrics.spacing10)
+                    block(width: HfRadius.Metrics.taskSkeletonShortLineWidth, height: HfRadius.Metrics.spacing10)
                 }
                 HStack(spacing: HfRadius.Metrics.spacing6) {
-                    ForEach(HfRadius.Metrics.taskSkeletonPillWidths, id: \.self) { SkeletonBlock(width: $0, height: HfRadius.Metrics.taskSkeletonPillHeight) }
+                    ForEach(HfRadius.Metrics.taskSkeletonPillWidths, id: \.self) { block(width: $0, height: HfRadius.Metrics.taskSkeletonPillHeight) }
                 }
                 .padding(.leading, HfRadius.Metrics.taskSkeletonDetailInset)
             }
@@ -201,7 +216,7 @@ struct TaskLoadingSkeleton: View {
     private var transcriptComposer: some View {
         let composer = TaskScreenStyle.Composer.self
         return HStack(spacing: HfRadius.Metrics.spacing10) {
-            SkeletonBlock(width: HfRadius.Metrics.taskSkeletonComposerWidth, height: HfRadius.Metrics.spacing12)
+            block(width: HfRadius.Metrics.taskSkeletonComposerWidth, height: HfRadius.Metrics.spacing12)
             Spacer(minLength: HfRadius.Metrics.zero)
             SkeletonBlock(width: composer.sendSize, height: composer.sendSize, cornerRadius: composer.sendSize / 2)
         }
@@ -211,7 +226,7 @@ struct TaskLoadingSkeleton: View {
     /// Mirrors the loaded composer: a rounded-18 glass capsule with a circular 32 pt send button.
     private var composer: some View {
         HStack(spacing: HfRadius.Metrics.spacing10) {
-            SkeletonBlock(width: HfRadius.Metrics.taskSkeletonComposerWidth, height: HfRadius.Metrics.spacing12)
+            block(width: HfRadius.Metrics.taskSkeletonComposerWidth, height: HfRadius.Metrics.spacing12)
             Spacer(minLength: HfRadius.Metrics.zero)
             SkeletonBlock(
                 width: HfRadius.Metrics.composerSendButtonSize,

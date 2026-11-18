@@ -14,15 +14,9 @@ import Testing
         // given
         _ = NSApplication.shared
         let state = BuilderPaneGeometryState()
-        let vm = WorkflowPreview.make()
-        let run = WorkflowRunModel(raw: [
-            "workflow_run_id": .string("builder-layout"), "kind": .string("builder"),
-            "name": .string("Builder"), "status": .string("running"),
-            "builder_draft": .object(vm.definition),
-            "activations": .array([.object(["role": .string("builder"),
-                "tasks": .array([.object(["task_id": .string("builder-task")])])])])
-        ])
-        vm.selectedRun = run
+        let vm = try QualifiedBuilderFixture.makeVM(name: "Builder")
+        QualifiedBuilderFixture.selectBuilderRun(on: vm, taskID: "builder-task")
+        let run = try #require(vm.selectedRun)
         let host = NSHostingView(rootView: NavigationSplitView {
             Text("Sidebar")
 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -41,8 +35,10 @@ import Testing
 .frame(minWidth: 1000, minHeight: 620)
 .withPresentationContext())
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1440, height: 900),
-                              styleMask: [.titled], backing: .buffered, defer: false)
+                              styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.contentView = host
         defer { vm.didDisappear(); window.contentView = nil; window.close() }
         // when
@@ -59,6 +55,11 @@ import Testing
             let headerBounds = host.convert(header.bounds, from: header)
             let paneBounds = host.convert(pane.bounds, from: pane)
             #expect(paneBounds.minX >= 239, "Builder activity must remain to the right of the sidebar")
+            let canvasScroll = try #require(Self.allViews(host).compactMap { $0 as? WorkflowCanvasScrollProbe }.first?.enclosingScrollView)
+            let canvasBounds = host.convert(canvasScroll.bounds, from: canvasScroll)
+            #expect(canvasBounds.minX >= 239, "Builder canvas must start at the sidebar edge, not under it")
+            #expect(canvasBounds.width > 200, "Builder canvas must receive its budgeted width: \(canvasBounds)")
+            #expect(canvasBounds.maxX <= paneBounds.minX + 1)
             #expect(abs(headerBounds.minX - paneBounds.minX) < 1)
             #expect(headerBounds.maxX <= paneBounds.maxX + 1)
             #expect(headerBounds.minY >= paneBounds.minY - 1)
@@ -66,6 +67,8 @@ import Testing
             #expect(paneBounds.maxX <= host.bounds.maxX + 1)
         }
     }
+
+    private static func allViews(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(allViews) }
 
     @Test func givenPresentationEnvironment_whenHostedPaneUpdates_thenBindingsPreferencesAndStateSurvive() async throws {
         // given

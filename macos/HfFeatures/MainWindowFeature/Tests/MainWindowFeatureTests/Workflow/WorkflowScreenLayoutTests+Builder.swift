@@ -11,7 +11,7 @@ import Testing
 extension WorkflowScreenLayoutTests {
     @Test func givenBuilderTaskEmbeddedInEditor_whenRendered_thenItsTaskComposerHasNoDuplicateGlobalComposer() async throws {
         // given
-        let vm = try builderVM()
+        let vm = try QualifiedBuilderFixture.makeVM(name: "code-review")
         defer { vm.didDisappear() }
         vm.selectedRun = WorkflowRunModel(raw: ["workflow_run_id": .string(String(repeating: "a", count: 32)),
             "kind": .string("builder"), "status": .string("running"), "builder_draft": .object(vm.definition),
@@ -28,35 +28,12 @@ extension WorkflowScreenLayoutTests {
         #expect(!fixture.hasElement(containing: Self.composerLabel))
     }
 
-    private func builderRun(_ vm: WorkflowVM, taskID: String?) -> WorkflowRunModel {
-        var raw: [String: JSONValue] = ["workflow_run_id": .string(String(repeating: "b", count: 32)),
-            "kind": .string("builder"), "status": .string("running"), "builder_draft": .object(vm.definition)]
-        if let taskID {
-            raw["activations"] = .array([.object(["role": .string("builder"), "tasks": .array([.object(["task_id": .string(taskID)])])])])
-        }
-        (vm.useCase as? BuilderSessionUseCase)?.hostedRun = raw
-        return WorkflowRunModel(raw: raw)
-    }
-
-    private func builderVM() throws -> WorkflowVM {
-        let useCase = BuilderSessionUseCase(status: "running")
-        let store = WorkflowDraftStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let vm = WorkflowBuilderSessionTests().vm(store: store, useCase: useCase)
-        vm.newWorkflow()
-        vm.name = "code-review"
-        vm.loadedName = vm.name
-        vm.savedDefinition = vm.definition
-        vm.selectedNodeID = nil
-        vm.builderRuntime = try useCase.activityRuntime()
-        return vm
-    }
-
     @Test(arguments: windowSizes, [ColorScheme.light, .dark])
     func givenBuilderRunAwaitingItsTask_whenHosted_thenNoComposerAndStartingLabelIsShown(size: CGSize, appearance: ColorScheme) async throws {
         // given
-        let vm = try builderVM()
+        let vm = try QualifiedBuilderFixture.makeVM(name: "code-review")
         defer { vm.didDisappear() }
-        vm.selectedRun = builderRun(vm, taskID: nil)
+        vm.selectedRun = QualifiedBuilderFixture.builderRun(vm, taskID: nil)
         #expect(vm.selectedRun?.builderTaskID == nil)
         let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { _, _ in AnyView(Text("unexpected")) }).preferredColorScheme(appearance),
                                    size: size, appearance: appearance)
@@ -72,9 +49,9 @@ extension WorkflowScreenLayoutTests {
     @Test(arguments: windowSizes, [ColorScheme.light, .dark])
     func givenBuilderRunWithTaskAndInjectedView_whenHosted_thenInjectedViewIsShownWithoutOuterComposer(size: CGSize, appearance: ColorScheme) async throws {
         // given
-        let vm = try builderVM()
+        let vm = try QualifiedBuilderFixture.makeVM(name: "code-review")
         defer { vm.didDisappear() }
-        vm.selectedRun = builderRun(vm, taskID: "builder-task")
+        vm.selectedRun = QualifiedBuilderFixture.builderRun(vm, taskID: "builder-task")
         #expect(vm.selectedRun?.builderTaskID == "builder-task")
         let fixture = RedesignHost(WorkflowView(vm, builderTaskView: { taskID, _ in
             AnyView(Text("Embedded \(taskID)").accessibilityIdentifier("embedded-builder-activity"))
@@ -92,39 +69,51 @@ extension WorkflowScreenLayoutTests {
         size: CGSize, appearance: ColorScheme
     ) async throws {
         // given
-        let vm = try builderVM()
+        let vm = try QualifiedBuilderFixture.makeVM(name: "code-review")
         defer { vm.didDisappear() }
-        vm.selectedRun = builderRun(vm, taskID: "builder-task")
+        vm.selectedRun = QualifiedBuilderFixture.builderRun(vm, taskID: "builder-task")
         let task = PaneMocks.running(notices: ["Builder fixture notice"])
+        let column = BuilderColumnProbe()
         let fixture = RedesignHost(NavigationSplitView {
             Text("Fixture sidebar").navigationSplitViewColumnWidth(240)
         } detail: {
             WorkflowView(vm, builderTaskView: { _, _ in
-                AnyView(TaskDetailView(task, chrome: .builder, transcriptStyle: .transcript))
+                AnyView(TaskDetailView(task, chrome: .builder, transcriptStyle: .transcript)
+                    .background(BuilderColumnProbe.Representable(probe: column)))
             })
-        }.preferredColorScheme(appearance), size: size, appearance: appearance)
+        }
+        .environment(\.hfReduceMotionOverride, true)
+        .preferredColorScheme(appearance), size: size, appearance: appearance)
         defer { fixture.close() }
         // when
-        await fixture.settle { fixture.element("Queue a message…") != nil }
+        await fixture.settle { fixture.element("Task facts and reported result") != nil && column.view != nil }
         // then
         #expect(vm.builderRuntime == (vm.useCase as? BuilderSessionUseCase)?.runtimeToken)
         let canvas = try #require(fixture.element("workflow-builder-canvas"))
         let activity = try #require(fixture.element("workflow-builder-activity"))
+        #expect(fixture.string(activity, "accessibilityLabel") == "Workflow builder activity")
         let workspace = try #require(fixture.element("workflow-builder-workspace"))
         let canvasFrame = try #require(fixture.frame(canvas))
-        let activityFrame = try #require(fixture.frame(activity))
         let workspaceFrame = try #require(fixture.frame(workspace))
+        let columnView = try #require(column.view)
+        let columnFrame = columnView.convert(columnView.bounds, to: nil)
         #expect(workspaceFrame.width < size.width, "Budget must use the detail viewport after the navigation sidebar")
-        #expect(activityFrame.width > 0 && activityFrame.width <= 461)
+        #expect(columnFrame.width > 0 && columnFrame.width <= 461)
         #expect(canvasFrame.minX >= workspaceFrame.minX - 1)
-        #expect(abs(activityFrame.maxX - workspaceFrame.maxX) <= 1)
-        #expect(abs(activityFrame.minX - canvasFrame.maxX - 1) <= 1)
-        #expect(abs(activityFrame.minY - canvasFrame.minY) <= 1)
-        #expect(abs(activityFrame.maxY - canvasFrame.maxY) <= 1)
+        #expect(abs(columnFrame.maxX - workspaceFrame.maxX) <= 1)
+        #expect(abs(columnFrame.minX - canvasFrame.maxX - 1) <= 1)
+        #expect(abs(columnFrame.minY - canvasFrame.minY) <= 1)
+        #expect(abs(columnFrame.maxY - canvasFrame.maxY) <= 1)
         let composer = try #require(fixture.element("Queue a message…"))
         let composerFrame = try #require(fixture.frame(composer))
-        #expect(composerFrame.minX >= activityFrame.minX - 1 && composerFrame.maxX <= activityFrame.maxX + 1)
-        #expect(composerFrame.minY >= activityFrame.minY - 1 && composerFrame.maxY <= activityFrame.maxY + 1)
+        #expect(composerFrame.minX >= columnFrame.minX - 1 && composerFrame.maxX <= columnFrame.maxX + 1)
+        #expect(composerFrame.minY >= columnFrame.minY - 1 && composerFrame.maxY <= columnFrame.maxY + 1)
+        let overflowing = fixture.descendants.filter { view in
+            guard view !== columnView, !view.isHiddenOrHasHiddenAncestor, view.bounds.width > 0 else { return false }
+            let frame = view.convert(view.bounds, to: nil)
+            return frame.minX >= columnFrame.minX - 1 && frame.minX < columnFrame.maxX - 1 && frame.maxX > columnFrame.maxX + 1
+        }
+        #expect(overflowing.isEmpty, "Views inside the builder column must not extend past it: \(overflowing.map { String(describing: type(of: $0)) })")
         #expect(fixture.element("Task facts and reported result") != nil)
         #expect(fixture.element("Show event details") == nil)
         #expect(fixture.element("Hide event details") == nil)
@@ -135,4 +124,43 @@ extension WorkflowScreenLayoutTests {
         #expect(barFrame.minY >= canvasFrame.maxY - 1)
     }
 
+    @Test(arguments: [CGFloat(460), 300], [ColorScheme.light, .dark])
+    func givenBuilderSkeleton_whenLoadingInNarrowColumn_thenScrollDocumentFitsTheColumn(width: CGFloat, appearance: ColorScheme) async throws {
+        // given
+        let fixture = RedesignHost(TaskLoadingSkeleton(header: nil, chrome: .builder, style: .transcript)
+            .environment(\.hfReduceMotionOverride, true)
+            .preferredColorScheme(appearance), size: CGSize(width: width, height: 433), appearance: appearance)
+        defer { fixture.close() }
+        // when
+        await fixture.settle { fixture.descendants.contains { ($0 as? NSScrollView)?.documentView != nil } }
+        // then
+        let scrolls = fixture.descendants.compactMap { $0 as? NSScrollView }.filter { $0.documentView != nil }
+        #expect(!scrolls.isEmpty)
+        for scroll in scrolls {
+            let document = try #require(scroll.documentView)
+            #expect(document.frame.width <= width + 1, "Skeleton document \(document.frame.width) must fit the \(width) pt column")
+        }
+        let overflowing = fixture.descendants.filter { view in
+            !view.isHiddenOrHasHiddenAncestor && view.bounds.width > 0 && view.convert(view.bounds, to: nil).maxX > width + 1
+        }
+        #expect(overflowing.isEmpty, "\(overflowing.map { String(describing: type(of: $0)) })")
+    }
+}
+
+// MARK: - BuilderColumnProbe
+
+/// A test-side view filling the injected builder task view: the column's real layout frame, free of accessibility unions.
+@MainActor private final class BuilderColumnProbe {
+    var view: NSView?
+
+    struct Representable: NSViewRepresentable {
+        let probe: BuilderColumnProbe
+        func makeNSView(context _: Context) -> NSView {
+            let view = NSView()
+            probe.view = view
+            return view
+        }
+
+        func updateNSView(_: NSView, context _: Context) {}
+    }
 }

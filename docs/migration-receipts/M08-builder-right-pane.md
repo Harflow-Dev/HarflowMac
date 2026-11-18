@@ -43,3 +43,40 @@ real user-state launch, provider execution or full M08/M12 acceptance follows fr
 Generated build output is disposable and was scheduled for owner-requested account-switch
 cleanup after verification. Historical hashes do not imply that an executable remains present;
 rebuild the isolated controlled host with reconciled exact source guards before desktop testing.
+
+## Hosted failure repair (2026-11-18)
+
+The first guarded hosted run of the builder suites (MainWindowFeature at d4a7245, 400 of 403 suites
+passing) failed WorkflowScreenLayoutTests and WindowedWorkflowLayoutTests. Diagnosis used temporary
+probe tests through the guarded runner and two independent reviews; the probes were removed.
+
+- **Identifier override.** The canvas and activity identifiers were set on views that were not
+  accessibility containers, so SwiftUI applied them to every descendant and replaced the
+  descendants' own identifiers. Both regions are now containers with their own labels.
+- **Safe-area leak.** Without the local hosting boundary that d4a7245 removed, the floating
+  sidebar's leading safe area reached the canvas's AppKit scroll view a second time (canvas
+  observed at x=496 and 43 points wide in a 291 point budget). The whole workspace is wrapped in
+  `WorkflowPaneViewport` again; the canvas then spans the budget from the sidebar edge.
+- **Builder skeleton width.** The builder loading placeholder used fixed widths wider than the
+  460 point column and overflowed it during the loading handoff; its blocks now keep their design
+  widths only while they fit.
+- **Test measurement.** The layout test settled on the composer, which exists before the loading
+  handoff reveals the content, and measured the activity column from an accessibility container
+  frame, which is not a layout measure. It now settles with the reduce-motion override and measures
+  the column with a test-side view probe. The windowed fixture now qualifies its builder runtime
+  (the guard from de9fb1ab otherwise clears the run) and mounts production builder chrome; its
+  heading landmark replaces the task title the builder chrome does not draw. The builder layout
+  tests now start from the preview workflow graph.
+- **Regression guard.** WorkflowPaneViewportTests uses production window chrome; with the
+  hosting boundary removed it fails ("Builder canvas must start at the sidebar edge"), and the new
+  builder skeleton test fails with the fixed widths restored.
+
+Observed after the repair, through the guarded runner: WorkflowScreenLayoutTests (9 tests),
+WindowedWorkflowLayoutTests and WorkflowPaneViewportTests passed. The overflow check covers
+AppKit-backed views only; the skeleton overlay path is covered by the standalone skeleton test.
+
+**Open for M08 acceptance:** at a 1000x620 window the builder activity column leaves the feed
+viewport 0 points tall (header, request and captured-activity lines and the composer fill the
+column), while the approved design shows a scrollable conversation. Under this layout the windowed
+test's activity predicate proves only that the feed table exists, not that it is visible. No M08
+or M12 acceptance follows from this repair.

@@ -616,12 +616,19 @@ Every width is nonnegative. The canvas retains its existing geometry and scrolli
 layout or node scaling is selected for narrow space. Selecting a node during a builder session
 does not add a second inspector.
 
+The whole workspace (standalone row and split) is wrapped in `WorkflowPaneViewport`, a local
+`NSHostingView` with no sizing options. Under the floating sidebar the detail pane spans the window,
+and without this boundary the canvas's AppKit scroll view applies the sidebar's leading safe area a
+second time and collapses. The canvas and activity regions are accessibility containers with their
+own identifiers, so the identifiers do not override those of their descendants.
+
 The explicit `TaskDetailChrome.builder` mount uses the existing workflow-builder VM and
 transcript/composer, including approval and Always allow Harflow tools. It publishes no task
 window toolbar and mounts no legacy Events side pane. A compact Workflow builder heading
 shows backend and task status; notices, continuity, outcomes, takeover/spawned facts and
 expandable public task facts, reported results and event material live within the activity
-column. The loading mount follows the same chrome. Group, embedded and standalone task
+column. The loading mount follows the same chrome, and its placeholder blocks shrink to the column
+instead of using the fixed widths of the other mounts. Group, embedded and standalone task
 mounts keep their existing behavior. Generation, runtime/session/attempt authority, saving and
 Return to canvas eligibility remain owned by the existing workflow paths.
 

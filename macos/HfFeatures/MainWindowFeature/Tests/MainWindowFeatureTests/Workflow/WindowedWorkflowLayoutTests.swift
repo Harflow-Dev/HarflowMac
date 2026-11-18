@@ -8,28 +8,22 @@ import Testing
 // MARK: - WindowedWorkflowLayoutTests
 
 @MainActor @Suite(.serialized) struct WindowedWorkflowLayoutTests {
+    private static let builderHeading = "workflow-builder-header"
+
     @Test(arguments: [CGSize(width: 1440, height: 900), CGSize(width: 1000, height: 620)], [false, true])
     func givenWorkflow_whenWindowedWithUnifiedChrome_thenHeadersRemainInsideContent(_ size: CGSize, _ isBuilder: Bool) async throws {
         // given
         let sidebar = SidebarViewModelMock()
         sidebar.savedWorkflows = [WorkflowRecord(raw: ["name": .string("Android Feature Implementation")])]
-        let workflow = WorkflowPreview.make()
+        let workflow = isBuilder ? try QualifiedBuilderFixture.makeVM(name: "Android Feature Implementation") : WorkflowPreview.make()
         workflow.name = "Android Feature Implementation"
         workflow.loadedName = workflow.name
-        if isBuilder {
-            workflow.selectedRun = WorkflowRunModel(raw: [
-                "workflow_run_id": .string("windowed-builder"), "kind": .string("builder"),
-                "name": .string(workflow.name), "status": .string("running"),
-                "builder_draft": .object(workflow.definition),
-                "activations": .array([.object(["role": .string("builder"),
-                    "tasks": .array([.object(["task_id": .string("builder-task")])])])])
-            ])
-        }
+        if isBuilder { QualifiedBuilderFixture.selectBuilderRun(on: workflow, taskID: "builder-task") }
         let task = TaskDetailViewModelMock()
         let fixture = RedesignHost(NavigationSplitView {
             SidebarView(sidebar).navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
         } detail: {
-            WorkflowView(workflow, builderTaskView: { _, _ in AnyView(TaskDetailView(task, chrome: .embedded)) })
+            WorkflowView(workflow, builderTaskView: { _, _ in AnyView(TaskDetailView(task, chrome: .builder, transcriptStyle: .transcript)) })
         }
             .frame(minWidth: 1000, minHeight: 620)
             .toolbar(removing: .title), size: size)
@@ -46,11 +40,11 @@ import Testing
             await fixture.settle { fixture.element("New task") != nil && fixture.element("Android Feature Implementation") != nil
                 && fixture.host.frame.width == target.width
                 && fixture.element("New task").flatMap { fixture.frame($0) } != previousHeader
-                && (!isBuilder || hasActivity(in: fixture))
+                && (!isBuilder || (hasActivity(in: fixture) && fixture.element(Self.builderHeading) != nil))
             }
             workflow.didDisappear()
             // then
-            try assertHeaders(in: fixture, taskTitleLabel: isBuilder ? task.title : nil)
+            try assertHeaders(in: fixture, builderHeadingID: isBuilder ? Self.builderHeading : nil)
         }
     }
 
@@ -60,7 +54,7 @@ import Testing
             .contains { $0.bounds.width > 0 && $0.bounds.height > 0 }
     }
 
-    private func assertHeaders(in fixture: RedesignHost, taskTitleLabel: String?) throws {
+    private func assertHeaders(in fixture: RedesignHost, builderHeadingID: String?) throws {
         let nativeChromeHeight = fixture.window.frame.height - fixture.window.contentLayoutRect.height
         #expect(fixture.host.fittingSize.height <= 620 + nativeChromeHeight + 1,
                 "Workflow must not inflate navigation minimum height through wrapped headers or native panes")
@@ -84,18 +78,18 @@ import Testing
         let detailTitle = try #require(titles.compactMap { fixture.frame($0) }.first { $0.minX >= detailBounds.minX })
         #expect(detailTitle.maxY <= fixture.window.contentLayoutRect.maxY,
                 "Workflow title must fit below the native titlebar: \(detailTitle), content=\(fixture.window.contentLayoutRect)")
-        if let taskTitleLabel {
+        if let builderHeadingID {
             let table = try #require(fixture.descendants.compactMap { $0 as? ActivityFeedNativeTableView }.first)
             let activityViewport = try #require(table.enclosingScrollView)
             let activityBounds = activityViewport.convert(activityViewport.bounds, to: nil)
             #expect(activityBounds.minX >= detailBounds.minX && activityBounds.maxX <= detailBounds.maxX,
                     "Real native activity viewport must remain within the navigation detail pane")
-            let taskTitle = try #require(fixture.element(taskTitleLabel))
-            let taskBounds = try #require(fixture.frame(taskTitle))
+            let heading = try #require(fixture.element(builderHeadingID))
+            let taskBounds = try #require(fixture.frame(heading))
             #expect(taskBounds.minX >= detailBounds.minX && taskBounds.maxX <= detailBounds.maxX,
-                    "Real embedded task header must stay inside detail pane: \(taskBounds), detail=\(detailBounds)")
+                    "Real builder heading must stay inside detail pane: \(taskBounds), detail=\(detailBounds)")
             #expect(taskBounds.maxY <= detailTitle.minY,
-                    "Real embedded task header must remain below the workflow header")
+                    "Real builder heading must remain below the workflow header")
         }
     }
 }
