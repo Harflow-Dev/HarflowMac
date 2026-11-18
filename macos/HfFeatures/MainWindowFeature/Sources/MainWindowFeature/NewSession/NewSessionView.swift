@@ -86,7 +86,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     @Environment(\.viewEvent) var viewEvent
     @State var viewModel: VM
     @State private var optionsPresented: Bool
-    @State private var repositoryPresented = false
+    @State private var repositoryPresented: Bool
     @State private var harnessPresented: Bool
     /// Bumped when "Try again" is tapped; the Model field takes focus, since the button disappears while loading.
     @State private var modelFocusRequest = 0
@@ -103,10 +103,12 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         static var optionsMinimumHeight: CGFloat { 208 }
     }
 
-    /// `optionsPresented` and `harnessPresented` set the initial popover state, so hosted captures can open them.
-    init(_ viewModel: VM, optionsPresented: Bool = false, harnessPresented: Bool = false) {
+    /// `optionsPresented`, `repositoryPresented` and `harnessPresented` set the initial popover state, so hosted
+    /// captures can open them.
+    init(_ viewModel: VM, optionsPresented: Bool = false, repositoryPresented: Bool = false, harnessPresented: Bool = false) {
         _viewModel = State(initialValue: viewModel)
         _optionsPresented = State(initialValue: optionsPresented)
+        _repositoryPresented = State(initialValue: repositoryPresented)
         _harnessPresented = State(initialValue: harnessPresented)
     }
 

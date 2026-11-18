@@ -15,16 +15,24 @@ import Testing
 /// A use case with a fixed listing per harness; a harness listed in `pending` never answers, so its
 /// Model field stays in the loading state.
 @MainActor
-private final class HostedListingUseCase: NewSessionUseCase {
+final class HostedListingUseCase: NewSessionUseCase {
     let base = MockNewSessionUseCase()
     private let catalog: BackendCatalog
     private let listings: [String: ModelListing]
     private let pending: Set<String>
+    private let taskList: [TaskInfo]
+    private let missingPaths: Set<String>
 
-    init(catalog: BackendCatalog, listings: [String: ModelListing], pending: Set<String> = []) {
+    /// `taskList` is what the recents are built from; `missingPaths` are reported as not existing on disk.
+    init(
+        catalog: BackendCatalog, listings: [String: ModelListing], pending: Set<String> = [],
+        taskList: [TaskInfo] = [], missingPaths: Set<String> = []
+    ) {
         self.catalog = catalog
         self.listings = listings
         self.pending = pending
+        self.taskList = taskList
+        self.missingPaths = missingPaths
         given(base).qualificationSession().willReturn(QualificationFixture.readySession())
         given(base).tasks.willReturn([])
     }
@@ -32,8 +40,8 @@ private final class HostedListingUseCase: NewSessionUseCase {
     func qualificationSession() -> QualificationSession { base.qualificationSession() }
     func resolvedRepoPath(_ input: String) -> String? { input }
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String { "task" }
-    var tasks: [TaskInfo] { [] }
-    func existingDirectories(among paths: [String]) async -> Set<String> { Set(paths) }
+    var tasks: [TaskInfo] { taskList }
+    func existingDirectories(among paths: [String]) async -> Set<String> { Set(paths).subtracting(missingPaths) }
     var agentUsageSnapshot: AgentUsageSnapshot { .init() }
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
     var backendCatalog: BackendCatalog { catalog }
@@ -187,7 +195,7 @@ struct ModelPickerStatesHostedTests {
 
     // MARK: - Fixture
 
-    @MainActor private struct Fixture {
+    @MainActor struct Fixture {
         let window: NSWindow
         let host: NSView
         let previousActivationPolicy: NSApplication.ActivationPolicy
@@ -204,12 +212,15 @@ struct ModelPickerStatesHostedTests {
         }
     }
 
-    private func makeFixture(_ viewModel: NewSessionVM, size: NSSize, dark: Bool) -> Fixture {
+    func makeFixture(
+        _ viewModel: NewSessionVM, size: NSSize, dark: Bool, harnessPresented: Bool = true, repositoryPresented: Bool = false
+    ) -> Fixture {
         _ = NSApplication.shared
         let previous = NSApp.activationPolicy()
         NSApp.setActivationPolicy(.regular)
         let controller = NSHostingController(
-            rootView: NewSessionView(viewModel, harnessPresented: true).preferredColorScheme(dark ? .dark : .light)
+            rootView: NewSessionView(viewModel, repositoryPresented: repositoryPresented, harnessPresented: harnessPresented)
+                .preferredColorScheme(dark ? .dark : .light)
         )
         controller.sceneBridgingOptions = .all
         let host = controller.view
@@ -221,7 +232,7 @@ struct ModelPickerStatesHostedTests {
         return Fixture(window: window, host: host, previousActivationPolicy: previous)
     }
 
-    private func activate(_ window: NSWindow) async throws {
+    func activate(_ window: NSWindow) async throws {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         await waitUntil(timeout: 5) { NSApp.isActive && window.isKeyWindow }
@@ -230,7 +241,7 @@ struct ModelPickerStatesHostedTests {
 
     // MARK: - Inspection
 
-    private func ownedPopovers(of owner: NSWindow) -> [NSWindow] {
+    func ownedPopovers(of owner: NSWindow) -> [NSWindow] {
         func collect(_ window: NSWindow) -> [NSWindow] { (window.childWindows ?? []).flatMap { [$0] + collect($0) } }
         return collect(owner).filter(\.isVisible)
     }
@@ -283,7 +294,7 @@ struct ModelPickerStatesHostedTests {
         }
     }
 
-    private func tree(_ root: NSObject) -> [NSObject] {
+    func tree(_ root: NSObject) -> [NSObject] {
         var visited = Set<ObjectIdentifier>()
         func collect(_ object: NSObject) -> [NSObject] {
             guard visited.insert(ObjectIdentifier(object)).inserted else { return [] }
@@ -306,7 +317,7 @@ struct ModelPickerStatesHostedTests {
         return URL(fileURLWithPath: path, isDirectory: true)
     }
 
-    private func capture(_ view: NSView, name: String) throws {
+    func capture(_ view: NSView, name: String) throws {
         guard let directory = captureDirectory else { return }
         let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
         view.cacheDisplay(in: view.bounds, to: bitmap)
