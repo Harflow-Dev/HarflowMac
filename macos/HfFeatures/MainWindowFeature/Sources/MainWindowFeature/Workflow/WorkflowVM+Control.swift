@@ -104,8 +104,10 @@ extension WorkflowVM {
         return true
     }
 
-    func retainInteractionOutcome(_ receipt: WorkflowInteractionReceipt, draft: String?, rootID: String? = nil) {
+    func retainInteractionOutcome(_ receipt: WorkflowInteractionReceipt, draft: String?, rootID: String? = nil,
+                                  goalRaceRevision: Int? = nil) {
         let root = rootID ?? selectedRun?.id
+        if goalRaceExpectedRevision != goalRaceRevision { goalRaceExpectedRevision = goalRaceRevision }
         if interactionOutcomeRootID != root { interactionOutcomeRootID = root }
         if retainedInteractionOutcome != receipt { retainedInteractionOutcome = receipt }
         if interactionSavedDraft != draft { interactionSavedDraft = draft }

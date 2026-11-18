@@ -9,6 +9,8 @@ struct WorkflowInteractionOutcomeView: View {
     let receipt: WorkflowInteractionReceipt
     var savedDraft: String?
     var isRaceOutcome = false
+    /// `false` draws the content only, for a card that already provides its own container.
+    var showsChrome = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
@@ -29,8 +31,8 @@ struct WorkflowInteractionOutcomeView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(HfRadius.Metrics.spacing12)
-        .background(Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
+        .padding(showsChrome ? HfRadius.Metrics.spacing12 : 0)
+        .background { if showsChrome { RoundedRectangle(cornerRadius: HfRadius.row).fill(Color.composerFill) } }
     }
 }
 

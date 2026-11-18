@@ -83,7 +83,7 @@ struct WorkflowGoalRevisionTests {
         // when
         harness.sut.reviseGoal(goal, runID: "run", expectedRevision: 0)
         // then
-        #expect(harness.sut.errorText != nil)
+        #expect(harness.sut.errorText != nil, "With no draft open the message reaches the screen header")
         verify(harness.useCase).command(.any, options: .any, positionals: .any, runtime: .any).called(0)
     }
 }

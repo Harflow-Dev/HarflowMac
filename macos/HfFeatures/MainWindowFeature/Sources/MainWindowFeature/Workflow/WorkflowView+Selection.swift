@@ -8,7 +8,7 @@ import SwiftUI
 extension WorkflowView {
     @ViewBuilder
     var answerHistoryHeader: some View {
-            if let outcome = viewModel.interactionOutcome {
+            if let outcome = viewModel.interactionOutcome, !headerOutcomeShownByGoalBlock {
                 WorkflowInteractionOutcomeView(receipt: outcome, savedDraft: viewModel.interactionSavedDraft, isRaceOutcome: true)
             }
             if let run = viewModel.selectedRun, !run.interactionHistory.isEmpty {
@@ -25,6 +25,17 @@ extension WorkflowView {
                 .padding(.horizontal, HfRadius.Metrics.spacing12)
                 .padding(.vertical, HfRadius.Metrics.spacing6)
             }
+    }
+
+    /// Whether a mounted goal block already shows this run's revision outcome as its card, so the header drops its copy.
+    private var headerOutcomeShownByGoalBlock: Bool {
+        guard let run = viewModel.selectedRun, !run.isBuilder, !viewModel.initialLoadFailed else { return false }
+        let sidebar = viewModel.runSidebar
+        let selectedPane = viewMode == "Graph" && !sidebar.isDefault
+        return WorkflowGoalPresentation.suppressesHeaderOutcome(
+            cardShown: viewModel.goalAnsweredElsewhere(for: viewModel.goalPresentation(for: run)) != nil,
+            isDefaultSidebarShown: !selectedPane && WorkflowGoalPresentation.showsBlock(run: run),
+            selectedPaneShowsGoal: selectedPane && sidebar.header.kind == .worker && sidebar.showsGoal)
     }
 
     var selectedTaskID: String? {

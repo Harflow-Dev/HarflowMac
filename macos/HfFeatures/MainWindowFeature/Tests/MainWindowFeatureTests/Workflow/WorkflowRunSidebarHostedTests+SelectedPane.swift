@@ -26,8 +26,6 @@ extension WorkflowRunSidebarHostedTests {
         // when
         vm.selectedNodeID = nodeID
         await fixture.settle { paneElement("workflow-selected-status", in: fixture) != nil }
-        let goal = try #require(paneElement("Goal", in: fixture))
-        #expect(fixture.press(goal))
         await fixture.settle { paneContains("Verify the release.", in: fixture) }
 
         // then

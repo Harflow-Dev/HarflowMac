@@ -10,7 +10,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     @Environment(\.viewEvent) var viewEvent
     @State var viewModel: VM
     private let builderTaskView: ((String, String) -> AnyView)?
-    @AppStorage("workflowViewMode") private var viewMode = "Graph"
+    @AppStorage("workflowViewMode") var viewMode = "Graph"
     /// Local presentation state for the non-blocking recovery overlay; never VM state.
     @State private var summaryExpanded = false
     @State private var lastLoadingWasRun = false
@@ -455,9 +455,11 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     // Native disclosure triangles extend before their label's layout origin.
                     .padding(.leading, HfRadius.Metrics.spacing8)
                 }
-                WorkflowGoalView(viewModel: viewModel, run: run)
-                    .padding(HfRadius.Metrics.spacing16)
-                    .padding(.leading, HfRadius.Metrics.spacing8)
+                if WorkflowGoalPresentation.showsBlock(run: run) {
+                    WorkflowGoalView(viewModel: viewModel, run: run)
+                        .padding(HfRadius.Metrics.spacing16)
+                        .padding(.leading, HfRadius.Metrics.spacing8)
+                }
                 WorkflowRunPlan(run: run)
                     .padding(HfRadius.Metrics.spacing16)
                     .padding(.leading, HfRadius.Metrics.spacing8)

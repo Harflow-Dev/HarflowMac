@@ -36,6 +36,8 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
     var approval = WorkflowSelectedApprovalGate()
     /// Whether the worker pane shows the run goal block.
     var showsGoal = false
+    /// The run goal block's content, derived with the rest of the projection.
+    var goal: WorkflowGoalPresentation?
     var isDefault: Bool { node == nil }
     var announcementIdentity: String { (node?["id"]?.stringValue ?? "default") + ":" + (activationID ?? "") }
     var title: String { node?["title"]?.stringValue ?? node?["id"]?.stringValue ?? "Workflow" }
@@ -43,6 +45,7 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
 
     static func build(run: [String: JSONValue], nodeID: String?, attemptID: String?) -> Self {
         var result = Self()
+        result.goal = WorkflowGoalPresentation(run: WorkflowRunModel(raw: run))
         result.standaloneStatuses = WorkflowStandaloneActivity.statuses(run: run)
         let definition = run["definition"]?.objectValue ?? [:]
         let nodes = WorkflowJSON.objects(definition["nodes"])

@@ -113,7 +113,8 @@ final class WorkflowVM: WorkflowViewModel {
     var selectedRun: WorkflowRunModel? { didSet {
         builderSubmissionFence?.invalidate()
         updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence()
-        if selectedRun?.id != oldValue?.id { selectedActivationID = nil }
+        if selectedRun?.id != oldValue?.id { selectedActivationID = nil; cancelGoalDraft() }
+        reconcileGoalDraft()
         applyRunMessageLock()
         if selectedRun != oldValue { scheduleRunSidebar() }
     } }
@@ -168,6 +169,12 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     var interactionSavedDraft: String?
+    /// The shared unsent goal revision, or nil while no goal block is being edited.
+    var goalDraft: WorkflowGoalDraft?
+    /// The last failed goal save's message, shown inside the goal form.
+    var goalRevisionError: String?
+    /// The revision a lost goal-revision race was submitted against; set and replaced together with the retained outcome.
+    var goalRaceExpectedRevision: Int?
     var instructions = "" { didSet { updateContinuationDraftContext() } }
     var additionalAttempts = 0 { didSet { updateContinuationDraftContext() } }
     @ObservationIgnored var continuationDraftContext: WorkflowContinuationDraftContext?

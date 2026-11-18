@@ -56,6 +56,15 @@ protocol WorkflowViewModel: ViewModel {
     var prompt: String { get set }
     var goal: String { get set }
     func reviseGoal(_ goal: String, runID: String, expectedRevision: Int)
+    /// The shared unsent goal revision, nil while no goal block is being edited.
+    var goalDraft: WorkflowGoalDraft? { get }
+    /// The last failed goal save's message.
+    var goalRevisionError: String? { get }
+    /// The revision a lost goal-revision race was submitted against.
+    var goalRaceExpectedRevision: Int? { get }
+    func beginGoalDraft(run: WorkflowRunModel)
+    func updateGoalDraft(_ text: String)
+    func cancelGoalDraft()
     var freedom: String { get set }
     var interactionOutcome: WorkflowInteractionReceipt? { get }
     var interactionSavedDraft: String? { get }
@@ -161,6 +170,12 @@ extension WorkflowViewModel {
     func loadArtifacts() {}
     var goal: String { get { "" } set { _ = newValue } }
     func reviseGoal(_: String, runID _: String, expectedRevision _: Int) {}
+    var goalDraft: WorkflowGoalDraft? { nil }
+    var goalRevisionError: String? { nil }
+    var goalRaceExpectedRevision: Int? { nil }
+    func beginGoalDraft(run _: WorkflowRunModel) {}
+    func updateGoalDraft(_: String) {}
+    func cancelGoalDraft() {}
     var readFailureText: String? { nil }
     func retryReadFailure() {}
     func control(_ command: String, allowOptionalReviewSkip: Bool) {
@@ -197,4 +212,24 @@ extension WorkflowViewModel {
 extension WorkflowViewModel {
     var interactionOutcome: WorkflowInteractionReceipt? { nil }
     var interactionSavedDraft: String? { nil }
+}
+
+// MARK: - Goal projection
+
+extension WorkflowViewModel {
+    /// The goal block content for `run`, nil until the run projection for that run has arrived.
+    func goalPresentation(for run: WorkflowRunModel) -> WorkflowGoalPresentation? {
+        runSidebar.goal.flatMap { $0.runID == run.id ? $0 : nil }
+    }
+
+    /// The retained winning receipt when the run's goal block shows its answered-elsewhere card, nil otherwise.
+    /// The card and the screen header's copy of the outcome both read this, from the same projection, so the outcome
+    /// is shown exactly once.
+    func goalAnsweredElsewhere(for model: WorkflowGoalPresentation?) -> WorkflowInteractionReceipt? {
+        guard let model, let outcome = interactionOutcome, goalDraft?.runID != model.runID,
+              WorkflowGoalPresentation.showsAnsweredElsewhere(
+                  outcomeAction: outcome.action, expectedRevision: goalRaceExpectedRevision, runRevision: model.goalRevision)
+        else { return nil }
+        return outcome
+    }
 }

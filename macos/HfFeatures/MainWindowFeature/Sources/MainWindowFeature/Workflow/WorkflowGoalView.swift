@@ -1,96 +1,179 @@
 import HfUI
+import MonitorCore
 import SwiftUI
 
 // MARK: - WorkflowGoalView
 
+/// The run goal block: label, goal text, assessment row, revision history and the revise link, or its form and
+/// answered-elsewhere states. The draft lives in the view model so every block of the run shares it.
 struct WorkflowGoalView<VM: WorkflowViewModel>: View {
     var viewModel: VM
     let run: WorkflowRunModel
-    @State private var revisionText = ""
-    @State private var editing = false
-    @State private var expectedRevision = 0
+
+    private var isEditing: Bool { viewModel.goalDraft?.runID == run.id }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            if let goal = run.goal {
-                DisclosureGroup("Goal · revision \(run.goalRevision)") {
-                    ScrollView {
-                        Text(goal)
-.font(.hf(.body))
-.textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(ScrollChrome())
-                    }.frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
-                    if let assessment = run.goalAssessment {
-                        Text("Assessment: \(assessment["status"]?.stringValue ?? "unverifiable")")
-                            .font(.hf(.secondary, weight: .medium))
-                        if let reason = assessment["reason"]?.stringValue { Text(reason).textSelection(.enabled) }
-                        ForEach(Array((assessment["evidence_refs"]?.arrayValue ?? []).enumerated()), id: \.offset) { _, value in
-                            if let text = value.stringValue { Text(text).textSelection(.enabled) }
-                        }
-                    }
-                    DisclosureGroup("Revision history") {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-                        ForEach(Array(run.goalHistory.enumerated()), id: \.offset) { _, item in
-                            Text("Revision \(item["revision"]?.intValue ?? 0)").font(.hf(.secondary, weight: .medium))
-                            Text(item["goal"]?.stringValue ?? "").textSelection(.enabled)
-                        }
-                            }
-.frame(maxWidth: .infinity, alignment: .leading)
-                                .background(ScrollChrome())
-                        }.frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
-                    }
-                }
-            }
-            if run.canReviseGoal || editing {
-                if editing {
-                    TextEditor(text: $revisionText)
-.font(.hf(.body))
-.scrollChromeScope()
-                        .frame(minHeight: HfRadius.Metrics.sidebarSearchMinimumWidth)
-                        .accessibilityLabel("Revised workflow goal")
-                    if run.sharedAnswering {
-                        Text("The original caller can also answer. Whichever answers first is used.")
-                            .font(.hf(.secondary))
-.foregroundStyle(Color.secondaryText)
-                    }
-                    HStack {
-                        Button("Cancel") { editing = false }.buttonStyle(QuietButtonStyle())
-                        Button("Save goal") {
-                            viewModel.reviseGoal(revisionText, runID: run.id, expectedRevision: expectedRevision)
-                        }.disabled(viewModel.isBusy || !run.canReviseGoal || revisionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
+        // Drawn only from the projection of this run; until it arrives nothing is built on the main actor.
+        if let model = viewModel.goalPresentation(for: run) {
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                if let outcome = viewModel.goalAnsweredElsewhere(for: model) {
+                    answeredCard(outcome)
+                } else if isEditing {
+                    form(model)
                 } else {
-                    Button("Revise goal…") {
-                        revisionText = run.goal ?? ""
-                        expectedRevision = run.goalRevision
-                        editing = true
-                    }
-                        .buttonStyle(QuietButtonStyle())
-.disabled(viewModel.isBusy)
+                    block(model)
                 }
-            } else {
-                Button("Revise goal…") {}.buttonStyle(QuietButtonStyle()).disabled(true)
-                if let reason = run.monitorReason("revise_goal") ?? run.goalRevisionReason {
-                    Text(reason).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+            }
+            .font(.hf(.secondary))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, HfRadius.Metrics.spacing12)
+            .overlay(alignment: .bottom) { Divider() }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("workflow-goal")
+        }
+    }
+
+    // MARK: Block
+
+    private func block(_ model: WorkflowGoalPresentation) -> some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            label(model.label)
+            if let goal = model.text {
+                ScrollView {
+                    Text(goal)
+                        .font(.hf(.body))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(ScrollChrome())
+                }.frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
+            }
+            if let assessment = model.assessmentText {
+                HStack(spacing: HfRadius.Metrics.spacing8) {
+                    Image(systemName: "target").accessibilityHidden(true)
+                    Text(assessment)
+                }
+                .font(.hf(.secondary))
+                .foregroundStyle(Color.secondaryText)
+            }
+            if let reason = model.assessmentReason {
+                Text(reason).font(.hf(.caption)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
+            }
+            ForEach(Array(model.evidenceRefs.enumerated()), id: \.offset) { _, ref in
+                Text(ref).font(.hf(.caption)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
+            }
+            if !model.history.isEmpty { history(model.history) }
+            reviseLink(model)
+        }
+    }
+
+    private func history(_ entries: [WorkflowGoalPresentation.HistoryEntry]) -> some View {
+        DisclosureGroup("Revision history") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+                    ForEach(entries) { entry in
+                        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
+                            Text("Revision \(entry.revision)").font(.hf(.secondary, weight: .semibold))
+                            Text(entry.text).font(.hf(.secondary)).textSelection(.enabled)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ScrollChrome())
+            }.frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
+        }
+    }
+
+    @ViewBuilder
+    private func reviseLink(_ model: WorkflowGoalPresentation) -> some View {
+        if run.canReviseGoal {
+            Button("Revise goal…") { viewModel.beginGoalDraft(run: run) }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentLink)
+                .disabled(viewModel.isBusy)
+        } else {
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
+                Button("Revise goal…") {}
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.tertiaryText)
+                    .disabled(true)
+                if let reason = model.unavailableReason {
+                    Text(reason).font(.hf(.caption)).foregroundStyle(Color.tertiaryText)
                 }
             }
         }
-        .font(.hf(.secondary))
-        .onChange(of: viewModel.interactionOutcome) {
-            if viewModel.interactionOutcome?.action == "revise_goal" { editing = false }
+    }
+
+    // MARK: Form
+
+    private func form(_ model: WorkflowGoalPresentation) -> some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            label(model.formLabel)
+            TextEditor(text: Binding(get: { viewModel.goalDraft?.text ?? "" }, set: { viewModel.updateGoalDraft($0) }))
+                .font(.hf(.body))
+                .scrollChromeScope()
+                .frame(minHeight: HfRadius.Metrics.sidebarSearchMinimumWidth)
+                .accessibilityLabel("Revised workflow goal")
+            if run.sharedAnswering {
+                Text("The original caller can also answer. Whichever answers first is used.")
+                    .font(.hf(.caption))
+                    .foregroundStyle(Color.tertiaryText)
+            }
+            if let message = viewModel.goalRevisionError {
+                (Text("Couldn't save the goal.").bold() + Text(" \(message) Your draft is preserved."))
+                    .font(.hf(.secondary))
+                    .foregroundStyle(Color.dangerFG)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(HfRadius.Metrics.spacing8)
+                    .background(RoundedRectangle(cornerRadius: HfRadius.row).fill(Color.dangerBG))
+                    .accessibilityIdentifier("workflow-goal-error")
+            }
+            HStack(spacing: HfRadius.Metrics.spacing8) {
+                Button("Cancel") { viewModel.cancelGoalDraft() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.secondaryText)
+                Button("Save goal") {
+                    if let draft = viewModel.goalDraft {
+                        viewModel.reviseGoal(draft.text, runID: run.id, expectedRevision: draft.expectedRevision)
+                    }
+                }
+                .buttonStyle(MonitorButtonStyle(.primary))
+                .disabled(viewModel.isBusy || !run.canReviseGoal
+                    || (viewModel.goalDraft?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
         }
-        .onChange(of: run.id) { editing = false }
-        .onChange(of: run.goalRevision) {
-            if run.goal == revisionText { editing = false }
+    }
+
+    // MARK: Answered elsewhere
+
+    private func answeredCard(_ outcome: WorkflowInteractionReceipt) -> some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            HStack(spacing: HfRadius.Metrics.spacing6) {
+                Image(systemName: "target").accessibilityHidden(true)
+                label("Goal")
+            }
+            WorkflowInteractionOutcomeView(receipt: outcome, savedDraft: viewModel.interactionSavedDraft,
+                                           isRaceOutcome: true, showsChrome: false)
         }
+        .padding(HfRadius.Metrics.spacing12)
+        .background(RoundedRectangle(cornerRadius: HfRadius.row).fill(Color.composerFill))
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text).font(.hf(.caption, weight: .semibold)).foregroundStyle(Color.tertiaryText)
     }
 }
 
 #if DEBUG
 #Preview {
     let vm = WorkflowPreview.make(run: true)
-    WorkflowGoalView(viewModel: vm, run: WorkflowRunModel(raw: ["goal": .string("Verify the release."), "goal_revision": .number(1)]))
+    WorkflowGoalView(viewModel: vm, run: WorkflowRunModel(raw: [
+        "workflow_run_id": .string("run"), "status": .string("running"),
+        "goal": .string("Verify the release."), "goal_revision": .number(3),
+        "goal_history": .array([.object(["revision": .number(2), "goal": .string("Verify.")]),
+                                .object(["revision": .number(1), "goal": .string("Check.")])])
+    ]))
+    .frame(width: 360)
+    .padding()
 }
 #endif
