@@ -3,7 +3,7 @@
 //  MainWindowFeature
 //
 //  Headless-only: defaults are claude/read_only with an empty repo/message; a non-blank message is
-//  required to start; the repo path is validated by the VM (`NewSessionUseCase.resolvedRepoPath`);
+//  required to start; the VM validates the repository path on field commit and Start;
 //  success dismisses the sheet, failure stays inline.
 //
 
@@ -29,6 +29,8 @@ protocol NewSessionViewModel: ViewModel {
 
     var backend: String { get }
     var repo: String { get }
+    var isRepoEmpty: Bool { get }
+    var repoError: String? { get }
     var freedom: String { get }
     var message: String { get }
     var name: String { get }
@@ -66,6 +68,7 @@ protocol NewSessionViewModel: ViewModel {
     func didDisappear()
     func didChangeBackend(_ value: String)
     func didChangeRepo(_ value: String)
+    func didCommitRepo()
     func didChangeFreedom(_ value: String)
     func didChangeMessage(_ value: String)
     func didChangeName(_ value: String)
@@ -91,6 +94,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     /// Bumped when "Try again" is tapped; the Model field takes focus, since the button disappears while loading.
     @State private var modelFocusRequest = 0
     @FocusState private var focus: Focus?
+    @FocusState private var repositoryFieldFocused: Bool
 
     private enum Focus: Hashable { case prompt, options, firstOption }
 
@@ -121,6 +125,9 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         .background(Color.windowBG)
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
+        .onChange(of: repositoryPresented) { _, presented in
+            if !presented { viewModel.didCommitRepo() }
+        }
         .publishViewEvent(from: viewModel, to: viewEvent)
     }
 
@@ -300,9 +307,32 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     private var repositoryOptions: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
             Text("Repository").font(.hf(.body, weight: .semibold))
-            TextField("/path/to/repo", text: binding(\.repo, { viewModel.didChangeRepo($0) }))
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("Repository path")
+            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
+                TextField("/path/to/repo", text: binding(\.repo, { viewModel.didChangeRepo($0) }))
+                    .textFieldStyle(.roundedBorder)
+                    .overlay {
+                        if viewModel.repoError != nil {
+                            RoundedRectangle(cornerRadius: HfRadius.Metrics.spacing6)
+                                .strokeBorder(Color.failedRed)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .accessibilityLabel("Repository path")
+                    .accessibilityHint(viewModel.repoError ?? "")
+                    .focused($repositoryFieldFocused)
+                    .onSubmit { viewModel.didCommitRepo() }
+                    .submitScope()
+                    .onChange(of: repositoryFieldFocused) { _, focused in
+                        if !focused { viewModel.didCommitRepo() }
+                    }
+                if let error = viewModel.repoError {
+                    Text(error)
+                        .font(.hf(.secondary))
+                        .foregroundStyle(Color.failedRed)
+                        .accessibilityIdentifier("repository-path-error")
+                }
+            }
             Button("Choose folder…", action: viewModel.didTapChooseDirectory)
             RecentRepos(repos: viewModel.recentRepos, onSelect: viewModel.didTapRecentRepo)
         }
@@ -378,7 +408,20 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                 Text("The start outcome is unknown. Review Recent work before starting another task.")
             }
             if viewModel.composerState == .created { Text("Task created.") }
-            if let error = viewModel.errorText { Text(error).foregroundStyle(Color.failedRed) }
+            if let error = viewModel.errorText {
+                Text(error).foregroundStyle(Color.failedRed)
+            }
+            if !viewModel.optionsLocked {
+                if let error = viewModel.repoError {
+                    Text(error)
+.foregroundStyle(Color.failedRed)
+                        .accessibilityIdentifier("composer-repository-error")
+                } else if viewModel.isRepoEmpty {
+                    Text("Choose a repository to continue.")
+.foregroundStyle(Color.secondaryText)
+                        .accessibilityIdentifier("composer-repository-empty")
+                }
+            }
             ForEach(viewModel.validationMessages, id: \.self) { Text($0).foregroundStyle(Color.warningFG) }
             if viewModel.canReviewSettings {
                 Button("Review settings") {
@@ -398,7 +441,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     }
 
     private var repositoryTitle: String {
-        viewModel.repo.isEmpty ? "Choose repository" : (viewModel.repo as NSString).lastPathComponent
+        viewModel.isRepoEmpty ? "Choose repository" : (viewModel.repo as NSString).lastPathComponent
     }
 
     private var harnessTitle: String {

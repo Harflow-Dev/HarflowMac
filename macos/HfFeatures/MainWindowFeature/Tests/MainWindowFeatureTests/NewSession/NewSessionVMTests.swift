@@ -11,7 +11,7 @@ import Testing
 @MainActor
 @Suite struct NewSessionVMTests {
 
-    private func makeSUT(catalog: BackendCatalog = .empty, tasks: [TaskInfo] = []) -> (
+    func makeSUT(catalog: BackendCatalog = .empty, tasks: [TaskInfo] = []) -> (
         sut: NewSessionVM, useCase: MockNewSessionUseCase, routing: MockNewSessionRouting, catalogSubject: PassthroughSubject<BackendCatalog, Never>
     ) {
         let useCase = MockNewSessionUseCase()
@@ -42,7 +42,7 @@ import Testing
         await waitUntil { sut.isStarting == false }
     }
 
-    private func catalog(_ entries: [(String, Bool?)], state: BackendCatalogState = .available) -> BackendCatalog {
+    func catalog(_ entries: [(String, Bool?)], state: BackendCatalogState = .available) -> BackendCatalog {
         BackendCatalog(entries: entries.map { BackendControlFixtures.entry($0.0, installed: $0.1) }, state: state)
     }
 
@@ -72,34 +72,6 @@ import Testing
         // then
         await waitUntil { sut.canStart }
         #expect(sut.canStart == true)
-    }
-
-    @Test func givenAnEmptyRepo_whenCanStartIsRead_thenItIsFalse() {
-        // given — the message is valid, leaving only the empty repo to block starting.
-        let (sut, _, _, _) = makeSUT()
-        sut.didChangeMessage("do the thing")
-        #expect(sut.repo.isEmpty)
-
-        // then
-        #expect(sut.canStart == false)
-    }
-
-    // MARK: - Repo path validation (exact copy)
-
-    @Test func givenARelativeOrMissingPath_whenStarted_thenTheExactValidationTextIsShown() async {
-        // given
-        let (sut, useCase, routing, _) = makeSUT()
-        defer { withExtendedLifetime(routing) {} }
-        given(useCase).resolvedRepoPath(.any).willReturn(nil)
-        sut.didChangeRepo("relative/path")
-        sut.didChangeMessage("do the thing")
-
-        // when
-        await waitUntil { sut.canStart }
-        sut.didTapStart()
-
-        // then
-        #expect(sut.errorText == "Choose an existing folder.")
     }
 
     // MARK: - Headless run

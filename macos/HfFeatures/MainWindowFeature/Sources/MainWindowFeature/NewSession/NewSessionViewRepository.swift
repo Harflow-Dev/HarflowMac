@@ -49,11 +49,7 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
     /// `~`, then require an absolute path to an existing directory.
     func resolvedRepoPath(_ input: String) -> String? {
         let path = (input as NSString).expandingTildeInPath
-        var isDirectory: ObjCBool = false
-        guard path.hasPrefix("/"), FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            return nil
-        }
-        return path
+        return Self.isAbsoluteDirectory(path) ? path : nil
     }
 
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String {
@@ -78,12 +74,14 @@ final class NewSessionViewRepository: NewSessionUseCase, @unchecked Sendable {
         var existing = Set<String>()
         for path in paths {
             if Task.isCancelled { break }
-            var isDirectory: ObjCBool = false
-            if path.hasPrefix("/"), FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
-                existing.insert(path)
-            }
+            if Self.isAbsoluteDirectory(path) { existing.insert(path) }
         }
         return existing
+    }
+
+    private nonisolated static func isAbsoluteDirectory(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return path.hasPrefix("/") && FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     // MARK: Backend catalog (Monitor piece 6)

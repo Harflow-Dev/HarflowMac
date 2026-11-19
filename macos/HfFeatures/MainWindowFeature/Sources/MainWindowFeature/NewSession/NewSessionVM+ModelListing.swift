@@ -5,6 +5,7 @@
 
 import Foundation
 import HfRepository
+import HfUI
 
 // MARK: - NewSessionVM + model listing
 
@@ -89,5 +90,27 @@ extension NewSessionVM {
     /// Ranks off the main actor.
     private nonisolated static func rank(_ options: [ModelOption], backend: String, usage: AgentUsageSnapshot) async -> [ModelOption] {
         await Task.detached { usage.rankedModels(options, backend: backend) }.value
+    }
+}
+
+// MARK: - Harness option presentation
+
+extension NewSessionVM {
+    /// Design's New Session section: every backend harflow reports, in registry order; while
+    /// loading, or when degraded with nothing carried over, falls back to `BackendStyle.known` so
+    /// the picker is never empty — flagged with `agentListUnavailableNote` in the degraded case only
+    /// (loading is not yet known to be unavailable, so it says nothing).
+    static func computeAgentOptions(from catalog: BackendCatalog) -> (options: [BackendTab], note: String?) {
+        switch catalog.state {
+        case .available:
+            return (catalog.entries.map { BackendTab(id: $0.backend, isNotFound: $0.installed == false) }, nil)
+        case .degraded:
+            guard catalog.entries.isEmpty else {
+                return (catalog.entries.map { BackendTab(id: $0.backend, isNotFound: false) }, nil)
+            }
+            return (BackendStyle.known.map { BackendTab(id: $0, isNotFound: false) }, "Harness list unavailable — update harflow.")
+        case .loading:
+            return (BackendStyle.known.map { BackendTab(id: $0, isNotFound: false) }, nil)
+        }
     }
 }

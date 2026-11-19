@@ -35,6 +35,7 @@ extension WorkflowRunSidebarHostedTests {
 
         // then
         #expect(metrics.demand.awaitingDecision)
+        #expect(metrics.labels.isEmpty, "A sole pending request needs no label")
         #expect(metrics.regionIsVisible, "The region is inside the window and the pane and above the composer: \(metrics.description)")
         #expect(metrics.feedHeight < 1, "The feed has yielded down to the step-count line")
         #expect(metrics.topRegionHeight < 1, "The goal region has yielded after the feed")
@@ -133,6 +134,40 @@ extension WorkflowRunSidebarHostedTests {
         #expect(metrics.barLabelsPresent(["req-a", "req-b"]))
         #expect(metrics.labels.count == 2 && metrics.labels.values.allSatisfy { $0.height < 20 }, "Each label is a single line")
         #expect(metrics.actionsAreVisible)
+    }
+
+    @Test(arguments: [ColorScheme.light, .dark])
+    func givenUnknownPendingCardBeforeActionableCard_whenLaidOut_thenOnlyTheActionableRequestHasALabelledBar(appearance: ColorScheme) async throws {
+        // given
+        let unknown = approvalCaptureRequest(owner: "monitor", id: "req-unknown", taskID: "task-0", command: "echo unknown", createdAt: 1)
+        var raw = unknown.raw
+        raw["disposition"] = .string("future_state")
+        raw["delivery"] = .string("reserved")
+        let actionable = approvalCaptureRequest(owner: "monitor", id: "req-action", taskID: "task-0", command: "echo actionable", createdAt: 2)
+        let fake = CallerApprovalCaptureFake(requests: [CallerApprovalRequest(raw: raw), actionable])
+        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake,
+                                              waitFor: ["approval-details-req-unknown", "approval-approve-req-action", "approval-bar-label-req-action"])
+        defer { pane.close() }
+
+        // when
+        let metrics = try pane.metrics(requestIDs: ["req-unknown", "req-action"])
+        let actionableMetrics = try pane.metrics(requestIDs: ["req-action"])
+        let viewport = try #require(metrics.cardScroll.map { pane.windowFrame($0.contentView) })
+        let unknownDetails = try #require(metrics.details["req-unknown"])
+        let actionableDetails = try #require(metrics.details["req-action"])
+        let label = try #require(pane.fixture.element("approval-bar-label-req-action"))
+        let labelFrame = try #require(metrics.labels["req-action"])
+        let approveFrame = try #require(metrics.approves["req-action"])
+
+        // then
+        #expect(unknownDetails.maxY > actionableDetails.maxY, "The visually pending unknown card renders first")
+        #expect(Set(metrics.labels.keys) == ["req-action"])
+        #expect(Set(metrics.approves.keys) == ["req-action"] && Set(metrics.rejects.keys) == ["req-action"])
+        #expect(pane.fixture.string(label, "accessibilityHelp") == "Bash · echo actionable")
+        #expect(metrics.barLabelsPresent(["req-action"]) && labelFrame.midY > approveFrame.midY)
+        #expect(viewport.intersects(unknownDetails))
+        #expect(metrics.regionIsVisible && actionableMetrics.actionsAreVisible && actionableMetrics.allHitsReachTheirTarget)
+        #expect(!metrics.barStackScrolls)
     }
 
     // MARK: History

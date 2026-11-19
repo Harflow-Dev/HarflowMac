@@ -161,8 +161,8 @@ private struct CallerApprovalRegionFrameProbe: NSViewRepresentable {
 // MARK: - CallerApprovalPinnedLayout
 
 /// The panel's pinned layout: the cards scroll; the decision controls of each request awaiting a decision sit in a bar
-/// under them. One bar is never inside a scroll view. With several bars each names its request, and when the stacked bars
-/// exceed the room the bar stack itself scrolls, so every action stays reachable; it never takes the card viewport below
+/// under them. Each bar names its request when several cards are visually pending or several bars are present. A single bar
+/// stays fixed. When stacked bars exceed the room they scroll, so every action stays reachable. The stack keeps the card viewport above
 /// `minimumCardViewport` (or the awaiting cards' own height when that is smaller) and never below the tallest single bar.
 /// The caller frames this view at the region height; the layout fills exactly that height and clips.
 struct CallerApprovalPinnedLayout: View {
@@ -211,7 +211,8 @@ struct CallerApprovalPinnedLayout: View {
                         .background(ScrollChrome())
                 }
                 .frame(height: max(0, region - barsShown))
-                barStack(bars, viewport: barsShown)
+                // A visually pending card may have no actionable bar. Its presence still makes the label necessary.
+                barStack(bars, viewport: barsShown, showsLabels: awaiting.count > 1 || bars.count > 1)
             }
             .frame(height: region, alignment: .top)
             .clipped()
@@ -226,23 +227,23 @@ struct CallerApprovalPinnedLayout: View {
     }
 
     @ViewBuilder
-    private func barStack(_ bars: [CallerApprovalCardModel], viewport: CGFloat) -> some View {
+    private func barStack(_ bars: [CallerApprovalCardModel], viewport: CGFloat, showsLabels: Bool) -> some View {
         if bars.count > 1 {
-            ScrollView { barContent(bars) }
+            ScrollView { barContent(bars, showsLabels: showsLabels) }
                 .background(ScrollChrome())
                 .frame(height: viewport)
                 .accessibilityIdentifier("approval-decision-bars")
         } else if bars.count == 1 {
-            barContent(bars)
+            barContent(bars, showsLabels: showsLabels)
         } else {
-            barContent([])
+            barContent([], showsLabels: false)
         }
     }
 
-    private func barContent(_ bars: [CallerApprovalCardModel]) -> some View {
+    private func barContent(_ bars: [CallerApprovalCardModel], showsLabels: Bool) -> some View {
         VStack(spacing: HfRadius.Metrics.spacing8) {
             ForEach(bars) { bar in
-                CallerApprovalDecisionBar(model: bar, showsLabel: bars.count > 1,
+                CallerApprovalDecisionBar(model: bar, showsLabel: showsLabels,
                                           respond: { controller.submit($0, requestID: bar.id) })
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         if barHeights[bar.id] != height { barHeights[bar.id] = height }
@@ -258,9 +259,9 @@ struct CallerApprovalPinnedLayout: View {
 
 // MARK: - CallerApprovalDecisionBar
 
-/// One request's pinned decision controls, styled like the pending card they belong to. With several bars it opens with a
-/// one-line label naming its request (tool and command, truncated in the middle so requests that differ only at the end stay
-/// distinguishable), with the full text as its help and accessibility label.
+/// One request's pinned decision controls, styled like the pending card they belong to. When context is needed, a one-line
+/// label names its request by tool and command. Middle truncation keeps differing endings visible. Help and accessibility
+/// retain the full text.
 struct CallerApprovalDecisionBar: View {
     let model: CallerApprovalCardModel
     var showsLabel = false

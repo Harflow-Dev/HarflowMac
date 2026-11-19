@@ -41,6 +41,7 @@ final class GatedRecentsUseCase: NewSessionUseCase {
     let base = MockNewSessionUseCase()
     private(set) var requests: [Request] = []
     var currentTasks: [TaskInfo] = []
+    var missingAtStart: Set<String> = []
 
     init() {
         given(base).qualificationSession().willReturn(QualificationFixture.readySession())
@@ -50,7 +51,7 @@ final class GatedRecentsUseCase: NewSessionUseCase {
     }
 
     func qualificationSession() -> QualificationSession { base.qualificationSession() }
-    func resolvedRepoPath(_ input: String) -> String? { input }
+    func resolvedRepoPath(_ input: String) -> String? { missingAtStart.contains(input) ? nil : input }
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String { "task" }
     var tasks: [TaskInfo] { currentTasks }
     var agentUsageSnapshot: AgentUsageSnapshot { .init() }

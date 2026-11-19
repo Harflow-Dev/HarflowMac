@@ -22,6 +22,9 @@ final class HostedListingUseCase: NewSessionUseCase {
     private let pending: Set<String>
     private let taskList: [TaskInfo]
     private let missingPaths: Set<String>
+    private(set) var directoryChecks: [[String]] = []
+    private(set) var startProbes: [String] = []
+    private(set) var launchedRequests: [RunRequest] = []
 
     /// `taskList` is what the recents are built from; `missingPaths` are reported as not existing on disk.
     init(
@@ -38,10 +41,27 @@ final class HostedListingUseCase: NewSessionUseCase {
     }
 
     func qualificationSession() -> QualificationSession { base.qualificationSession() }
-    func resolvedRepoPath(_ input: String) -> String? { input }
-    func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String { "task" }
+    func resolvedRepoPath(_ input: String) -> String? {
+        startProbes.append(input)
+        return existingPaths([input]).first
+    }
+
+    func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String {
+        launchedRequests.append(request)
+        return "task"
+    }
+
     var tasks: [TaskInfo] { taskList }
-    func existingDirectories(among paths: [String]) async -> Set<String> { Set(paths).subtracting(missingPaths) }
+
+    func existingDirectories(among paths: [String]) async -> Set<String> {
+        directoryChecks.append(paths)
+        return existingPaths(paths)
+    }
+
+    private func existingPaths(_ paths: [String]) -> Set<String> {
+        Set(paths.filter { $0.hasPrefix("/fixture/") }).subtracting(missingPaths)
+    }
+
     var agentUsageSnapshot: AgentUsageSnapshot { .init() }
     func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never> { Just(.init()).eraseToAnyPublisher() }
     var backendCatalog: BackendCatalog { catalog }

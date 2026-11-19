@@ -1,5 +1,4 @@
 import AppKit
-import HfUI
 @testable import MainWindowFeature
 import SwiftUI
 import Testing
@@ -17,9 +16,9 @@ import Testing
         return controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
     }
 
-    /// The chip's own ideal width (no width proposed), without the row's label or spacing.
-    private func chipWidth(_ repo: RecentRepoModel) -> CGFloat {
-        NSHostingController(rootView: RecentRepoChip(repo: repo, onSelect: { _ in })).view.fittingSize.width
+    /// The chip's ideal size without the row's label or spacing.
+    private func chipSize(_ repo: RecentRepoModel) -> CGSize {
+        NSHostingController(rootView: RecentRepoChip(repo: repo, onSelect: { _ in })).view.fittingSize
     }
 
     private func size(of repos: [RecentRepoModel], width: CGFloat) -> CGSize {
@@ -64,15 +63,17 @@ import Testing
 
     @Test func givenOneVeryLongName_whenMeasured_thenTheChipStaysOneLine() {
         // given
-        let single = height(of: [repo("app")], width: contentWidth)
+        let single = chipSize(repo("app"))
+        let long = repo(String(repeating: "workflow-definitions-", count: 6))
 
         // when
-        let long = height(of: [repo(String(repeating: "workflow-definitions-", count: 6))], width: contentWidth)
+        let chip = chipSize(long)
+        let rowHeight = height(of: [long], width: contentWidth)
 
         // then
-        #expect(long <= single + 1, "long chip height \(long) vs \(single)")
-        // The chip itself grows to at most the 240 point maximum plus its 8 point side padding.
-        let chip = chipWidth(repo(String(repeating: "workflow-definitions-", count: 6)))
-        #expect(chip <= HfRadius.Metrics.recentRepoChipMaxWidth + 2 * HfRadius.Metrics.spacing8 + 1, "long chip is \(chip) wide")
+        #expect(chip.height <= single.height + 1, "long chip height \(chip.height) vs \(single.height)")
+        #expect(chip.width > 256 && chip.width <= contentWidth + 1, "long chip is \(chip.width) wide")
+        // A full-width chip may take a row of its own below the Recent label.
+        #expect(rowHeight <= 2 * single.height + 7, "Recent label plus one chip should need at most two lines")
     }
 }

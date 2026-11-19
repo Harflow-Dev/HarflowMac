@@ -156,8 +156,8 @@ public enum HfRadius {
         public static let taskSkeletonLongTitleWidth: CGFloat = 170
         public static let taskSkeletonHeadingWidth: CGFloat = 220
         public static let taskSkeletonComposerWidth: CGFloat = 240
-        /// Longest a New Session "Recent" repository chip may grow before its name truncates (the design's `.hd-pill` `max-width`).
-        public static let recentRepoChipMaxWidth: CGFloat = 240
+        /// Maximum text width for a recent repository chip: the 328-point row minus its two 8-point paddings.
+        public static let recentRepoChipMaxWidth: CGFloat = 312
         public static let taskSkeletonStartWidth: CGFloat = 260
         public static let toolRowPreviewWidth: CGFloat = 420
         public static let timelineRowPreviewWidth: CGFloat = 440

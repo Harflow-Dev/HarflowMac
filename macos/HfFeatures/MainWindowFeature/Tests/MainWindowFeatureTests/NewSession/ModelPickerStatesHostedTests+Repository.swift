@@ -20,9 +20,9 @@ import Testing
 /// chips, and only existing folders. An extension of the registered hosted suite, so it shares its identity.
 extension ModelPickerStatesHostedTests {
 
+    private static let worktreePrefix = "harflow-mac-repository-picker-validation-and-recent-chips-review-"
     private static let presentNames = [
-        "HarflowEngine", "r10-workflow-definitions-e2f0c3",
-        "a-very-long-repository-name-that-cannot-fit-on-one-line-anywhere-at-all", "HarflowDesign", "HarflowMCP"
+        "HarflowEngine", worktreePrefix + "e2f0c3", worktreePrefix + "9b41d7", "HarflowDesign", "HarflowMCP"
     ]
     private static let missingName = "DeletedRepositoryFolder"
 
@@ -46,7 +46,7 @@ extension ModelPickerStatesHostedTests {
         )
         let sut = NewSessionVM(useCase: useCase, routing: MockNewSessionRouting())
         sut.didChangeBackend("claude")
-        sut.didChangeRepo("/fixture/repository")
+        sut.didTapRecentRepo("/fixture/repos/HarflowMCP")
         return sut
     }
 
@@ -98,10 +98,16 @@ extension ModelPickerStatesHostedTests {
                 for (name, rect) in frames {
                     #expect(rect.height <= oneLine + 1, "\(name) must not wrap (\(label)): height \(rect.height) vs \(oneLine)")
                     #expect(
-                        rect.width <= HfRadius.Metrics.recentRepoChipMaxWidth + 2 * HfRadius.Metrics.spacing8 + 1,
+                        rect.width <= 329,
                         "\(name) must stay within the chip maximum (\(label)): \(rect.width)"
                     )
                     #expect(bounds.contains(rect), "\(name) must lie inside the popover (\(label)): \(rect) vs \(bounds)")
+                }
+                for name in Self.presentNames where name.hasPrefix(Self.worktreePrefix) {
+                    let frame = try #require(frames.first { $0.0 == name }?.1)
+                    #expect(frame.width > 256, "The chip uses more than the old width: \(name), \(frame.width)")
+                    let chip = try #require(element(label: "Recent repository \(name)", in: popover))
+                    #expect(accessibilityString(chip, property: "accessibilityHelp") == "/fixture/repos/\(name)")
                 }
                 let rows = Set(frames.map { Int($0.1.minY.rounded()) })
                 #expect(rows.count > 1, "The chips must wrap as whole chips onto more than one row (\(label)).")
@@ -111,5 +117,115 @@ extension ModelPickerStatesHostedTests {
                 )
             }
         }
+    }
+
+    @Test
+    func givenNoRecentFolders_whenTheRepositoryPopoverOpens_thenTheEmptyFieldIsNeutral() async throws {
+        // given
+        let (model, _, routing) = makeRepositoryModel(repo: "")
+        defer { withExtendedLifetime(routing) {} }
+        let fixture = makeFixture(model, size: NSSize(width: 1000, height: 620), dark: false,
+                                  harnessPresented: false, repositoryPresented: true)
+        defer { fixture.dispose() }
+
+        // when
+        try await activate(fixture.window)
+        await waitUntil(timeout: 8) { !ownedPopovers(of: fixture.window).isEmpty }
+        let popover = try #require(ownedPopovers(of: fixture.window).first)
+        await DisplayFrames.waitForPresentedFrame()
+
+        // then
+        #expect(element(label: "Repository path", in: popover) != nil)
+        #expect(frame(ofLabel: "Recent", in: popover) == nil)
+        #expect(element(identifier: "repository-path-error", in: popover) == nil)
+        #expect(element(identifier: "composer-repository-empty", in: fixture.window) != nil)
+        #expect(!model.canStart && model.repoError == nil)
+    }
+
+    @Test(arguments: [true, false])
+    func givenATypedMissingFolder_whenReturnOrFocusDepartureCommits_thenTheFieldShowsAnAccessibleErrorWithoutStarting(useReturn: Bool) async throws {
+        // given
+        let (model, useCase, routing) = makeRepositoryModel(repo: "/fixture/repos/initial")
+        defer { withExtendedLifetime(routing) {} }
+        let fixture = makeFixture(model, size: NSSize(width: 1280, height: 800), dark: !useReturn,
+                                  harnessPresented: false, repositoryPresented: true)
+        defer { fixture.dispose() }
+        try await activate(fixture.window)
+        await waitUntil(timeout: 8) { !ownedPopovers(of: fixture.window).isEmpty }
+        let popover = try #require(ownedPopovers(of: fixture.window).first)
+        await waitUntil(timeout: 8) {
+            tree(popover).contains { ($0 as? NSTextField)?.isEditable == true }
+        }
+        let editableField = tree(popover).compactMap { $0 as? NSTextField }.first { $0.isEditable }
+        let field = try #require(editableField)
+        try #require(popover.makeFirstResponder(field))
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        let invalidPath = "/fixture/repos/\(Self.missingName)"
+        editor.insertText(invalidPath, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        await waitUntil(timeout: 8) { model.repo == invalidPath && model.canStart }
+        try #require(model.repo == invalidPath && model.canStart, "The composer can start before the field commit")
+        #expect(useCase.directoryChecks.isEmpty && model.repoError == nil)
+
+        // when
+        if useReturn {
+            let event = try #require(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: popover.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36
+            ))
+            popover.sendEvent(event)
+        } else {
+            try #require(popover.makeFirstResponder(nil))
+        }
+        let error = "Choose an existing folder."
+        await waitUntil(timeout: 8) { model.repoError == error }
+        await DisplayFrames.waitForPresentedFrame()
+
+        // then
+        let note = try #require(element(identifier: "repository-path-error", in: popover))
+        let path = try #require(element(label: "Repository path", in: popover))
+        #expect(accessibilityString(path, property: "accessibilityHelp") == error)
+        let noteFrame = try #require(accessibilityFrame(of: note))
+        let fieldFrame = try #require(accessibilityFrame(of: path))
+        #expect(noteFrame.midY < fieldFrame.midY)
+        #expect(element(identifier: "composer-repository-error", in: fixture.window) != nil)
+        #expect(!model.canStart && useCase.directoryChecks == [[invalidPath]])
+        #expect(useCase.startProbes.isEmpty && useCase.launchedRequests.isEmpty)
+
+        try #require(popover.makeFirstResponder(field))
+        let corrected = try #require(field.currentEditor() as? NSTextView)
+        let validPath = "/fixture/repos/valid"
+        corrected.insertText(validPath, replacementRange: NSRange(location: 0, length: corrected.string.utf16.count))
+        await waitUntil(timeout: 8) { model.repo == validPath && model.canStart }
+        #expect(model.repoError == nil && model.canStart)
+        #expect(useCase.directoryChecks == [[invalidPath]], "Editing clears the mark before the next commit")
+        try #require(popover.makeFirstResponder(nil))
+        await waitUntil(timeout: 8) { useCase.directoryChecks == [[invalidPath], [validPath]] }
+        #expect(model.repoError == nil && model.canStart)
+        #expect(useCase.startProbes.isEmpty && useCase.launchedRequests.isEmpty)
+    }
+
+    private func makeRepositoryModel(repo: String) -> (NewSessionVM, HostedListingUseCase, MockNewSessionRouting) {
+        let catalog = BackendCatalog(entries: [BackendControlFixtures.entry("claude", installed: true)], state: .available)
+        let useCase = HostedListingUseCase(catalog: catalog, listings: [:], missingPaths: ["/fixture/repos/\(Self.missingName)"])
+        let routing = MockNewSessionRouting()
+        given(routing).didStart(taskID: .any).willReturn()
+        let model = NewSessionVM(useCase: useCase, routing: routing)
+        model.didTapRecentRepo(repo)
+        model.didChangeMessage("Inspect the repository")
+        return (model, useCase, routing)
+    }
+
+    private func element(label: String, in window: NSWindow) -> NSObject? {
+        tree(window).first { accessibilityString($0, property: "accessibilityLabel") == label }
+    }
+
+    private func element(identifier: String, in window: NSWindow) -> NSObject? {
+        tree(window).first { accessibilityString($0, property: "accessibilityIdentifier") == identifier }
+    }
+
+    private func accessibilityString(_ object: NSObject, property: String) -> String? {
+        let selector = NSSelectorFromString(property)
+        guard object.responds(to: selector) else { return nil }
+        return object.perform(selector)?.takeUnretainedValue() as? String
     }
 }

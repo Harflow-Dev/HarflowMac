@@ -42,7 +42,7 @@ struct RecentRepos: View {
 
 // MARK: - RecentRepoChip
 
-/// One "Recent" chip: one line, truncated at the tail past the design's pill maximum.
+/// One "Recent" chip: one line, truncated in the middle when the name exceeds the row width.
 struct RecentRepoChip: View {
 
     let repo: RecentRepoModel
@@ -54,7 +54,7 @@ struct RecentRepoChip: View {
                 .font(.hf(.secondary))
                 .foregroundStyle(repo.isSelected ? Color.accentLink : Color.primaryText)
                 .lineLimit(1)
-                .truncationMode(.tail)
+                .truncationMode(.middle)
                 .frame(maxWidth: HfRadius.Metrics.recentRepoChipMaxWidth)
                 .padding(.horizontal, HfRadius.Metrics.spacing8)
                 .padding(.vertical, HfRadius.Metrics.rowLineSpacing)

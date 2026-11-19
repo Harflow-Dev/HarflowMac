@@ -41,6 +41,8 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     func didTapReviewRecent() {}
     var backend: String
     var repo: String
+    var isRepoEmpty: Bool { repo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var repoError: String?
     var freedom: String
     var message: String
     var callerApprovals = false
@@ -103,7 +105,7 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     var canStart: Bool {
         composerState == .editable && validationMessages.isEmpty && turnLimitError == nil
             && !qualificationCards.isEmpty && qualificationCards.allSatisfy { $0.model.state == .ready }
-            && !isStarting && !backend.isEmpty && !repo.isEmpty && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isStarting && !backend.isEmpty && !isRepoEmpty && repoError == nil && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     init(
@@ -154,14 +156,19 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     func didAppear() {}
     func didDisappear() {}
     func didChangeBackend(_ value: String) { backend = value }
-    func didChangeRepo(_ value: String) { repo = value }
+    func didChangeRepo(_ value: String) {
+        if value != repo { repoError = nil }
+        repo = value
+    }
+
+    func didCommitRepo() {}
     func didChangeFreedom(_ value: String) { freedom = value }
     func didChangeMessage(_ value: String) { message = value }
     func didChangeName(_ value: String) { name = value }
     func didChangeModel(_ value: String) { model = value }
     func didChangeTurnLimit(_ value: String) { turnLimit = value }
     func didChangeEffort(_ value: String) { effort = value }
-    func didTapRecentRepo(_ path: String) { repo = path }
+    func didTapRecentRepo(_ path: String) { didChangeRepo(path) }
     func didOpenRepositoryPicker() {}
     func didTapChooseDirectory() {}
     func didTapCancel() {}

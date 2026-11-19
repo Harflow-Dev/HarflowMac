@@ -111,6 +111,7 @@ final class NewSessionVM: NewSessionViewModel {
 
     private(set) var backend = ""
     private(set) var repo = ""
+    var repoError: String?
     private(set) var freedom = "read_only"
     private(set) var message = ""
     private(set) var name = ""
@@ -250,7 +251,8 @@ final class NewSessionVM: NewSessionViewModel {
     }
 
     var canStart: Bool {
-        agentNotFoundNote == nil && qualification?.isReady == true && !optionsLocked && validationMessages.isEmpty && !backend.isEmpty && !repo.isEmpty
+        agentNotFoundNote == nil && qualification?.isReady == true && !optionsLocked && validationMessages.isEmpty && !backend.isEmpty
+            && !isRepoEmpty && repoError == nil
             && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && turnLimitError == nil && callerApprovalError == nil
     }
@@ -308,9 +310,12 @@ final class NewSessionVM: NewSessionViewModel {
     @ObservationIgnored var rerankCompletionGate: (@Sendable () async -> Void)?
     private var usage = AgentUsageSnapshot()
     @ObservationIgnored let useCase: any NewSessionUseCase
-    @ObservationIgnored private weak var routing: (any NewSessionRouting)?
+    @ObservationIgnored weak var routing: (any NewSessionRouting)?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
-    @ObservationIgnored private var didSubscribe = false
+    @ObservationIgnored var didSubscribe = false
+    @ObservationIgnored var hasUncommittedRepoEdit = false
+    @ObservationIgnored var repoCheckGeneration = UUID()
+    @ObservationIgnored var repoCheckTask: Task<Void, Never>?
     @ObservationIgnored var modelsTask: Task<Void, Never>?
 
     // MARK: - Init
@@ -333,6 +338,8 @@ final class NewSessionVM: NewSessionViewModel {
     }
 
     func didDisappear() {
+        hasUncommittedRepoEdit = false
+        cancelRepoCheck()
         qualificationTask?.cancel()
         qualification?.stop()
         cancellables.removeAll()
@@ -359,7 +366,12 @@ final class NewSessionVM: NewSessionViewModel {
 
     func didChangeRepo(_ value: String) {
         guard !optionsLocked else { return }
-        repo = value
+        if !value.utf8.elementsEqual(repo.utf8) {
+            cancelRepoCheck()
+            repoError = nil
+            hasUncommittedRepoEdit = true
+            repo = value
+        }
         if let choices = rememberedChoices[value] {
             backend = choices.backend; model = choices.model; modelBackend = choices.modelBackend
             freedom = choices.freedom; effort = choices.effort; turnLimit = choices.turnLimit
@@ -376,17 +388,9 @@ final class NewSessionVM: NewSessionViewModel {
     func didChangeTurnLimit(_ value: String) { guard !optionsLocked else { return }; turnLimit = value; refreshQualification() }
     func didChangeCallerApprovals(_ value: Bool) { guard !optionsLocked else { return }; callerApprovals = value; approvalNote = nil; refreshQualification() }
     func didChangeEffort(_ value: String) { guard !optionsLocked else { return }; effort = value; refreshQualification() }
-    func didTapRecentRepo(_ path: String) { didChangeRepo(path) }
-
-    func didTapChooseDirectory() {
-        guard !optionsLocked else { return }
-        Task { [weak self] in
-            guard let path = await self?.routing?.chooseDirectory() else { return }
-            self?.didChangeRepo(path)
-        }
-    }
-
     func didTapCancel() {
+        hasUncommittedRepoEdit = false
+        cancelRepoCheck()
         if composerState == .editable { qualification?.stop() }
         routing?.dismiss()
     }
@@ -407,6 +411,9 @@ final class NewSessionVM: NewSessionViewModel {
     func prepareForNewTask() {
         guard composerState == .created else { return }
         composerState = .editable
+        hasUncommittedRepoEdit = false
+        cancelRepoCheck()
+        repoError = nil
         message = ""; name = ""; errorText = nil
         refreshQualification()
     }
@@ -414,8 +421,10 @@ final class NewSessionVM: NewSessionViewModel {
     func didTapStart() {
         guard !optionsLocked else { return }
         guard canStart else { return }
+        hasUncommittedRepoEdit = false
+        cancelRepoCheck()
         guard let path = useCase.resolvedRepoPath(repo) else {
-            errorText = "Choose an existing folder."
+            repoError = Self.missingRepoMessage
             return
         }
         guard let qualification, let routing else { return }
@@ -577,21 +586,4 @@ final class NewSessionVM: NewSessionViewModel {
         agentNotFoundNote = "\(BackendStyle.displayName(backend)) wasn't found on your PATH — starting this harness may fail."
     }
 
-    /// Design's New Session section: every backend harflow reports, in registry order; while
-    /// loading, or when degraded with nothing carried over, falls back to `BackendStyle.known` so
-    /// the picker is never empty — flagged with `agentListUnavailableNote` in the degraded case only
-    /// (loading is not yet known to be unavailable, so it says nothing).
-    private static func computeAgentOptions(from catalog: BackendCatalog) -> (options: [BackendTab], note: String?) {
-        switch catalog.state {
-        case .available:
-            return (catalog.entries.map { BackendTab(id: $0.backend, isNotFound: $0.installed == false) }, nil)
-        case .degraded:
-            guard catalog.entries.isEmpty else {
-                return (catalog.entries.map { BackendTab(id: $0.backend, isNotFound: false) }, nil)
-            }
-            return (BackendStyle.known.map { BackendTab(id: $0, isNotFound: false) }, "Harness list unavailable — update harflow.")
-        case .loading:
-            return (BackendStyle.known.map { BackendTab(id: $0, isNotFound: false) }, nil)
-        }
-    }
 }
