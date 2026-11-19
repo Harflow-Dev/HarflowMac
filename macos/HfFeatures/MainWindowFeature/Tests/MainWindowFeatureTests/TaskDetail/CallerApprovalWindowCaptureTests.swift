@@ -5,59 +5,6 @@ import MonitorCore
 import SwiftUI
 import Testing
 
-@MainActor
-private final class CallerApprovalCaptureFake: CallerApprovalUseCase {
-    let request: CallerApprovalRequest
-    var responseCount = 0
-    var supportsCallerResponses = false
-
-    init(request: CallerApprovalRequest) { self.request = request }
-
-    func page(taskID: String?, workflowRunID: String?, cursor: String?) async throws -> CallerApprovalPage {
-        CallerApprovalPage(requests: [request], total: 1)
-    }
-
-    func detail(_ request: CallerApprovalRequest) async throws -> CallerApprovalRequest { request }
-
-    func respond(_ request: CallerApprovalRequest, decision: String) async throws -> CallerApprovalRequest {
-        responseCount += 1
-        return request
-    }
-
-    func supportsMonitorResponseForCallerApprovals() async throws -> Bool { supportsCallerResponses }
-}
-
-private func captureRequest(owner: String) -> CallerApprovalRequest {
-    let longCommand = [
-        "python3 -c \"open('approval-marker.txt','a').write('APPROVED')\"",
-        "--long-command-scroll-probe-abcdefghijklmnopqrstuvwxyz-0123456789-abcdefghijklmnopqrstuvwxyz-0123456789-",
-        "abcdefghijklmnopqrstuvwxyz-0123456789-abcdefghijklmnopqrstuvwxyz-0123456789-abcdefghijklmnopqrstuvwxyz-0123456789"
-    ].joined()
-    return CallerApprovalRequest(raw: [
-        "request_id": .string("capture-\(owner)"),
-        "task_id": .string("task-capture"),
-        "action_digest": .string(String(repeating: "a", count: 64)),
-        "owner_revision": .number(4),
-        "generation": .string("generation-capture"),
-        "interaction_owner": .string(owner),
-        "disposition": .string("pending"),
-        "delivery": .string("pending"),
-        "execution_outcome": .string("unknown"),
-        "tool_name": .string("Bash"),
-        "cwd": .string("/tmp/harflow-capture"),
-        "freedom": .string("workspace-write"),
-        "scope": .string("caller approval capture"),
-        "deadline": .number(Date().addingTimeInterval(600).timeIntervalSince1970),
-        "complete": .bool(true),
-        "action": .object([
-            "tool_name": .string("Bash"),
-            "input": .object([
-                "command": .string(longCommand)
-            ])
-        ])
-    ])
-}
-
 @MainActor @Suite(.serialized)
 struct CallerApprovalWindowCaptureTests {
     @Test
@@ -74,7 +21,7 @@ struct CallerApprovalWindowCaptureTests {
             ("caller-approval-caller-enabled", .dark, "caller", true)
         ]
         for (name, scheme, owner, supportsCallerResponses) in cases {
-            let request = captureRequest(owner: owner)
+            let request = approvalCaptureRequest(owner: owner)
             let fake = CallerApprovalCaptureFake(request: request)
             fake.supportsCallerResponses = supportsCallerResponses
             let controller = CallerApprovalController(useCase: fake)
@@ -122,7 +69,7 @@ struct CallerApprovalWindowCaptureTests {
 
     @Test
     func givenActionableApprovalUnderDisabledAncestor_whenNativeApproveIsPressed_thenItRemainsDisabled() async throws {
-        let request = captureRequest(owner: "caller")
+        let request = approvalCaptureRequest(owner: "caller")
         let fake = CallerApprovalCaptureFake(request: request)
         fake.supportsCallerResponses = true
         let controller = CallerApprovalController(useCase: fake)

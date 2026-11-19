@@ -49,9 +49,10 @@ struct ParallelColumnView: View {
     @State private var laneBodyHeight: CGFloat = 0
     /// The leading block's natural height; it is shown whole up to the cap, then scrolls.
     @State private var leadingBlockHeight: CGFloat = 0
-    /// The inspector column's height and its approval panel's natural height, which cap the approval region.
+    /// What the inspector column's approval panel reports about its own content, which size the approval region.
+    @State private var approvalDemand = CallerApprovalDemand()
+    /// The inspector column's height as proposed, measured on its clear base.
     @State private var inspectorHeight: CGFloat = 0
-    @State private var approvalNaturalHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @State private var outcomeHeight: CGFloat = 0
     @State private var boundaryHeight: CGFloat = 0
@@ -182,8 +183,20 @@ struct ParallelColumnView: View {
 
     // MARK: Inspector chrome
 
-    /// The Graph inspector's earlier column, unchanged.
+    /// The Graph inspector's column: header, boundary, step-count line and feed, the approval region and the composer, laid out at
+    /// the height it is given.
     private var inspectorBody: some View {
+        // The column is laid out at exactly the height it is given, never at its content's height, so the approval region's room is
+        // the real room and cannot inflate itself: a clear base takes the proposal, is measured, and the stack is overlaid at that
+        // height (an overlay never changes its base's size).
+        Color.clear
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { inspectorHeight = $0 }
+            .overlay(alignment: .top) {
+                inspectorStack(columnHeight: inspectorHeight).frame(height: inspectorHeight, alignment: .top)
+            }
+    }
+
+    private func inspectorStack(columnHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
             header.measured(into: $headerHeight)
             if let message = model.outcomeMessage {
@@ -199,19 +212,19 @@ struct ParallelColumnView: View {
             } content: {
                 feed
             }
-            inspectorApprovalRegion
+            inspectorApprovalRegion(columnHeight: columnHeight)
             composer.measured(into: $composerHeight)
         }
         .padding(HfRadius.Metrics.spacing16)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { inspectorHeight = $0 }
         .preference(key: WorkflowSelectedColumnChromeKey.self, value: inspectorChrome)
     }
 
     /// The approval region's height: derived from measured inputs only, never from itself or from `inspectorChrome`'s feed.
-    private var approvalRegionHeight: CGFloat {
+    /// A request awaiting a decision takes its natural height first (see `WorkflowSelectedPaneSizing.approvalHeight`).
+    private func approvalRegionHeight(columnHeight: CGFloat) -> CGFloat {
         model.inspectorApproval == nil ? 0
-            : WorkflowSelectedPaneSizing.approvalHeight(natural: approvalNaturalHeight, columnHeight: inspectorHeight, chrome: inspectorChrome)
+            : WorkflowSelectedPaneSizing.approvalHeight(natural: approvalDemand.natural, columnHeight: columnHeight,
+                                                        chrome: inspectorChrome, pending: approvalDemand.awaitingDecision)
     }
 
     /// Everything in the column that is neither the feed nor the approval region, from directly measured pieces: header,
@@ -226,18 +239,17 @@ struct ParallelColumnView: View {
             pieces: [headerHeight, outcome, boundaryHeight, ParallelLayout.dividerWidth, callout, composerHeight, countLine], itemCount: count)
     }
 
-    /// The node task's approval panel between the feed and the composer: it takes its natural height up to
-    /// `WorkflowSelectedPaneSizing.approvalShare` of the column, then scrolls, so the feed keeps its floor.
-    @ViewBuilder private var inspectorApprovalRegion: some View {
+    /// The node task's approval panel between the feed and the composer. With no request awaiting a decision it takes its
+    /// natural height up to `WorkflowSelectedPaneSizing.approvalShare` of the column, then scrolls, so the feed keeps its
+    /// floor. While one awaits, the card takes its natural height before the feed (which may shrink to its step-count line)
+    /// and before the goal region; an oversized card scrolls above its pinned Approve once and Reject bars.
+    @ViewBuilder private func inspectorApprovalRegion(columnHeight: CGFloat) -> some View {
         if let gate = model.inspectorApproval {
-            ScrollView {
-                CallerApprovalPanel(taskID: model.task.taskID, polls: gate.polls)
-                    .frame(maxWidth: .infinity)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { approvalNaturalHeight = $0 }
-                    .background(ScrollChrome())
-            }
-            .frame(height: approvalRegionHeight)
-            .accessibilityIdentifier("workflow-selected-approval")
+            CallerApprovalPanel(taskID: model.task.taskID, polls: gate.polls, pinsDecisionControls: true)
+                .frame(height: approvalRegionHeight(columnHeight: columnHeight))
+                .onPreferenceChange(CallerApprovalDemandKey.self) { if approvalDemand != $0 { approvalDemand = $0 } }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("workflow-selected-approval")
         }
     }
 

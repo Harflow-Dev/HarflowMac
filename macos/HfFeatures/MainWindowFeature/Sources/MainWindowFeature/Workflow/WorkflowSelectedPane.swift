@@ -193,16 +193,33 @@ enum WorkflowSelectedPaneSizing {
     /// The height the top region (goal, caption or call list) takes: its natural height, limited to half the pane and to
     /// what leaves the feed its floor after all measured chrome (`reserved`: pane head, picker, composer and the column's
     /// own chrome).
-    static func topRegionHeight(natural: CGFloat, paneHeight: CGFloat, reserved: CGFloat = 0) -> CGFloat {
+    ///
+    /// While a caller approval awaits a decision (`approvalDemand` is its natural height, 0 otherwise) the approval card
+    /// outranks the goal region: the feed's floor no longer applies, and the region is cut further only when the card and the
+    /// chrome leave less than today's allocation. The feed gives up its height first, down to nothing, and only then does
+    /// this region yield. It never exceeds the height it has with no approval pending.
+    static func topRegionHeight(natural: CGFloat, paneHeight: CGFloat, reserved: CGFloat = 0, approvalDemand: CGFloat = 0) -> CGFloat {
         let limit = min(paneHeight * topRegionShare, paneHeight - reserved - transcriptFloor)
-        return max(0, min(natural, limit))
+        let existing = max(0, min(natural, limit))
+        guard approvalDemand > 0 else { return existing }
+        return max(0, min(existing, paneHeight - reserved - approvalDemand))
     }
 
-    /// The height of the approval region inside the inspector column: its natural height, limited to 45% of the column and to
-    /// what leaves the feed its floor after the column's other chrome (`chrome`, which excludes the feed and this region).
-    static func approvalHeight(natural: CGFloat, columnHeight: CGFloat, chrome: CGFloat = 0) -> CGFloat {
-        let limit = min(columnHeight * approvalShare, columnHeight - chrome - transcriptFloor)
-        return max(0, min(natural, limit))
+    /// The height of the approval region inside the inspector column.
+    ///
+    /// With no request awaiting a decision: its natural height, limited to 45% of the column and to what leaves the feed its
+    /// floor after the column's other chrome (`chrome`, which excludes the feed and this region).
+    ///
+    /// While one awaits (`pending`): the card gets its natural height first, limited only by what the column's chrome leaves
+    /// (`chrome` includes the step-count line, so the feed itself may shrink to nothing). The region never exceeds the column.
+    /// The pinned decision bars are part of the natural height and are never what shrinks: the card's scroll view above them
+    /// absorbs any shortfall, so the bars stay whole whenever the column has room for them.
+    static func approvalHeight(natural: CGFloat, columnHeight: CGFloat, chrome: CGFloat = 0, pending: Bool = false) -> CGFloat {
+        guard pending else {
+            let limit = min(columnHeight * approvalShare, columnHeight - chrome - transcriptFloor)
+            return max(0, min(natural, limit))
+        }
+        return max(0, min(natural, columnHeight - chrome))
     }
 
     /// The inspector column's own padding and stack spacing, from its layout.

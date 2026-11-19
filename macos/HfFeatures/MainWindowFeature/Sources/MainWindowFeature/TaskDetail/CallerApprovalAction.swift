@@ -81,11 +81,30 @@ struct CallerApprovalCardModel: Equatable, Identifiable, Sendable {
     let expanded: Bool
     var canRespond: Bool
     var showsDecisionControls = true
+    /// The request is visually pending (`CallerApprovalRequest.isVisuallyPending`): its disposition is none of decided, expired,
+    /// system_rejected, invalidated, cancelled or unsupported and no decision is recorded, so reserved, sending and
+    /// unknown-disposition requests count as well as ordinary pending ones. This holds whether or not this card may offer controls for it: a refused,
+    /// busy or not-current request keeps its card, notice and Refresh. Layout reads only this field to size the approval region.
+    var awaitingDecision = false
     var showsRefresh = false
     let notice: String?
     let submitting: Bool
     var focusToken: UUID?
     var id: String { request.id }
+
+    private var summaryText: String {
+        let input = request.raw["action"]?["input"]?.objectValue ?? [:]
+        return [input["command"]?.stringValue, input["file_path"]?.stringValue, request.raw["description"]?.stringValue]
+            .compactMap(\.self)
+.first ?? action.title
+    }
+
+    /// The pinned bar's label: the tool and the whole command on one line (whitespace collapsed). It is never cut to a prefix, so
+    /// the view can truncate it in the middle and requests that differ only at the end stay distinguishable.
+    var barLabel: String {
+        request.text("tool_name") + " · " + summaryText.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+
     var source: String {
         let tool = request.text("tool_name")
         let input = request.raw["action"]?["input"]?.objectValue ?? [:]

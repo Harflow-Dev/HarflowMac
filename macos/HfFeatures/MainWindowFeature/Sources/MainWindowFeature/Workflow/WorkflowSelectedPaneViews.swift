@@ -10,6 +10,8 @@ struct WorkflowSelectedScrollRegion<Content: View>: View {
     let paneHeight: CGFloat
     /// Fixed chrome around the region and the transcript (head, picker, composer), kept out of the transcript's floor.
     var reserved: CGFloat = 0
+    /// The natural height of a caller approval awaiting a decision, which outranks this region (0 when none).
+    var approvalDemand: CGFloat = 0
     @ViewBuilder let content: () -> Content
     @State private var naturalHeight: CGFloat = 0
 
@@ -20,7 +22,8 @@ struct WorkflowSelectedScrollRegion<Content: View>: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { naturalHeight = $0 }
                 .background(ScrollChrome())
         }
-        .frame(height: WorkflowSelectedPaneSizing.topRegionHeight(natural: naturalHeight, paneHeight: paneHeight, reserved: reserved))
+        .frame(height: WorkflowSelectedPaneSizing.topRegionHeight(natural: naturalHeight, paneHeight: paneHeight, reserved: reserved,
+                                                                            approvalDemand: approvalDemand))
     }
 }
 

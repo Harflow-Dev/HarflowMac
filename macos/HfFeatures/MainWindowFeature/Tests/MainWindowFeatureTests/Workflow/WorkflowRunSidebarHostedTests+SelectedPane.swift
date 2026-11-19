@@ -131,28 +131,28 @@ extension WorkflowRunSidebarHostedTests {
 
     // MARK: Pane-scoped lookups
 
-    private func workerActivation(nodeID: String, taskID: String) -> JSONValue {
+    func workerActivation(nodeID: String, taskID: String) -> JSONValue {
         .object(["id": .string("attempt-0"), "role": .string("node"), "node_id": .string(nodeID), "status": .string("running"),
                  "tasks": .array([.object(["task_id": .string(taskID), "status": .string("running")])])])
     }
 
     /// The inspector pane of the run's split view, the subtree of `workflow-selected-sidebar`.
-    private func pane(in fixture: RedesignHost) -> NSView? {
+    func pane(in fixture: RedesignHost) -> NSView? {
         fixture.descendants.compactMap { $0 as? NSSplitView }.last { $0.isVertical }?.arrangedSubviews.last
     }
 
-    private func allPaneViews(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(allPaneViews) }
+    func allPaneViews(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(allPaneViews) }
 
-    private func paneElements(in fixture: RedesignHost) -> [NSObject] {
+    func paneElements(in fixture: RedesignHost) -> [NSObject] {
         guard fixture.element("workflow-selected-sidebar") != nil, let pane = pane(in: fixture) else { return [] }
         return allPaneViews(pane).flatMap { fixture.elements(in: $0) }
     }
 
-    private func paneElement(_ label: String, in fixture: RedesignHost) -> NSObject? {
+    func paneElement(_ label: String, in fixture: RedesignHost) -> NSObject? {
         paneElements(in: fixture).first { fixture.matches($0, label) }
     }
 
-    private func paneContains(_ text: String, in fixture: RedesignHost) -> Bool {
+    func paneContains(_ text: String, in fixture: RedesignHost) -> Bool {
         paneElements(in: fixture).contains { element in
             ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
                 fixture.string(element, $0)?.contains(text) == true
@@ -160,7 +160,7 @@ extension WorkflowRunSidebarHostedTests {
         }
     }
 
-    private func paneFeed(in fixture: RedesignHost) -> ActivityFeedNativeScrollView? {
+    func paneFeed(in fixture: RedesignHost) -> ActivityFeedNativeScrollView? {
         pane(in: fixture).flatMap { allPaneViews($0).compactMap { $0 as? ActivityFeedNativeScrollView }.first }
     }
 }

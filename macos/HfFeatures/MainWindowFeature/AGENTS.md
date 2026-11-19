@@ -297,6 +297,26 @@ no embedded terminal anywhere in this package:
   acknowledgement only. Verify real predecessor ancestry, not sorted conversation-member position,
   before treating a later task as the acknowledged member's descendant. Caller approvals retain
   independent authority. Generic refusal text does not interpret unqualified chain-stop diagnostics.
+- **Pending approval in the selected-node pane** (`CallerApprovalPanel(pinsDecisionControls: true)`, `CallerApprovalPinnedLayout`,
+  `WorkflowSelectedPaneSizing`). While any request is visually pending (`CallerApprovalCardModel.awaitingDecision`, from
+  `CallerApprovalRequest.isVisuallyPending`: every disposition outside decided, expired, system_rejected, invalidated,
+  cancelled and unsupported with no recorded decision, so reserved, sending and unknown-state requests count, and so does a
+  blocked or not-current card), the inspector column's approval card takes its natural height first: the feed yields, down
+  to the step-count line, then the goal/caption region yields (`topRegionHeight(approvalDemand:)` never exceeds today's
+  allocation and is cut only by what the card and the column chrome leave), and a card taller than the column minus chrome
+  scrolls inside its region. Only the cards awaiting a decision and the bars count towards that demand
+  (`CallerApprovalDemand.natural`); settled, expired and delivery-unknown rows and "Load more" scroll below inside the region
+  and never push the feed or the goal region out. The 45% share cap and the feed's 80 pt floor apply only while nothing is
+  visually pending; when the request settles the demand returns to 0 and both come back. "Approve once" and "Reject" of every
+  pending request leave the card for pinned bars under the scroll view. One bar is never in a scroll view. With several, each
+  bar opens with one line (tool and the whole command, truncated in the middle, full text as help and accessibility label)
+  and, when the stacked bars exceed the room, the bar stack scrolls, capped so the card viewport keeps 80 pt (or the awaiting
+  cards' own height if smaller) but never below the tallest single bar. The panel reports `CallerApprovalDemand` through
+  `CallerApprovalDemandKey`, measured from its content and never from its allocation, so region, column and pane do not feed
+  back into each other. The default panel (task detail, run sidebar) is unchanged, including when it starts polling; only the
+  pinned panel carries a zero-size leaf so its polling task starts while it shows nothing. Hosted proof lives in
+  `WorkflowRunSidebarHostedTests+Approval.swift`. `EnvironmentValues.callerApprovalUseCaseOverride` is a test-only seam: when
+  set, the panel's `.task` builds its controller from it instead of `CallerApprovalRepository`; production code never sets it.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

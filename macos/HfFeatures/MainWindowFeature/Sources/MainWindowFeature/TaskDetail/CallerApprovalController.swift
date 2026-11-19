@@ -276,7 +276,8 @@ final class CallerApprovalController {
             requestRefresh()
         }
         cards[index] = CallerApprovalCardModel(request: card.request, action: card.action, pending: false,
-            expanded: expanded.contains(requestID), canRespond: false, showsDecisionControls: card.showsDecisionControls, notice: card.notice,
+            expanded: expanded.contains(requestID), canRespond: false, showsDecisionControls: card.showsDecisionControls,
+            awaitingDecision: card.awaitingDecision, notice: card.notice,
             submitting: false, focusToken: nil)
     }
 
@@ -452,6 +453,7 @@ final class CallerApprovalController {
             return CallerApprovalCardModel(request: request, action: action,
                 pending: pending && blocked[request.id] == nil, expanded: isExpanded,
                 canRespond: canRespond, showsDecisionControls: pending && Self.knownState(request) && ownerSupported && blocked[request.id] == nil,
+                awaitingDecision: pending,
                 showsRefresh: blocked[request.id]?.refreshable == true,
                 notice: notice, submitting: isSubmitting,
                 focusToken: pendingFocus?.requestID == request.id ? pendingFocus?.token : nil)

@@ -50,6 +50,12 @@ enum CallerApprovalPresentation {
         }
     }
 
+    /// The cards whose decision controls move to a pinned bar: every card offering controls for a request awaiting a
+    /// decision, in card order. When a request settles its bar goes and the next card's bar is unaffected.
+    static func pinnedBars(_ cards: [CallerApprovalCardModel]) -> [CallerApprovalCardModel] {
+        cards.filter { $0.pending && $0.showsDecisionControls }
+    }
+
     static func priority(_ request: CallerApprovalRequest) -> Int {
         if request.text("delivery") == "delivery_unknown" { return 1 }
         if request.text("disposition") == "pending" || ["reserved", "sending"].contains(request.text("delivery")) { return 0 }

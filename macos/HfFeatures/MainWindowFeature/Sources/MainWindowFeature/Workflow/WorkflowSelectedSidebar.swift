@@ -15,6 +15,8 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
     @State private var headBlockHeight: CGFloat = 0
     @State private var composerHeight: CGFloat = 0
     @State private var columnChrome: CGFloat = 0
+    /// The natural height of a caller approval awaiting a decision in the inspector column (0 when none).
+    @State private var approvalDemand: CGFloat = 0
 
     var body: some View {
         let state = viewModel.runSidebar
@@ -56,6 +58,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
             }
         }
         .onPreferenceChange(WorkflowSelectedColumnChromeKey.self) { columnChrome = $0 }
+        .onPreferenceChange(CallerApprovalDemandKey.self) { approvalDemand = $0.reserved }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { paneHeight = $0 }
         .background(TaskScreenStyle.Colors.pageBackground.color)
@@ -70,7 +73,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
         switch state.header.kind {
         case .worker:
             if state.showsGoal || state.caption != nil {
-                WorkflowSelectedScrollRegion(paneHeight: paneHeight, reserved: reserved) {
+                WorkflowSelectedScrollRegion(paneHeight: paneHeight, reserved: reserved, approvalDemand: approvalDemand) {
                     VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing16) {
                         if state.showsGoal, let run = viewModel.selectedRun { WorkflowGoalView(viewModel: viewModel, run: run) }
                         if let caption = state.caption { captionText(caption) }
@@ -79,7 +82,7 @@ struct WorkflowSelectedSidebar<VM: WorkflowViewModel>: View {
                 Divider()
             }
         case .onDemand:
-            WorkflowSelectedScrollRegion(paneHeight: paneHeight, reserved: reserved) {
+            WorkflowSelectedScrollRegion(paneHeight: paneHeight, reserved: reserved, approvalDemand: approvalDemand) {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing16) {
                     Text("Runs only when the orchestrator calls it, one call at a time.")
                         .font(.hf(.secondary))
