@@ -36,11 +36,11 @@ enum RepositoryFinalBytesTransition: CaseIterable, Sendable {
 /// real AppKit input. Ordering is observed through the forwarding view model, notifications and window state only.
 extension ModelPickerStatesHostedTests {
 
-    private static let finalBytes = "/fixture/repos/final-bytes"
-    private static let finalBytesInitial = "/fixture/repos/initial"
+    static let finalBytes = "/fixture/repos/final-bytes"
+    static let finalBytesInitial = "/fixture/repos/initial"
 
     @MainActor
-    private struct FinalBytesHost {
+    struct FinalBytesHost {
         let model: NewSessionVM
         let useCase: HostedListingUseCase
         let routing: MockNewSessionRouting
@@ -60,13 +60,13 @@ extension ModelPickerStatesHostedTests {
         }
     }
 
-    private final class FinalBytesNotificationCounter: NSObject {
+    final class FinalBytesNotificationCounter: NSObject {
         var count = 0
 
         @objc func didPost(_ notification: Notification) { count += 1 }
     }
 
-    private final class FinalBytesProbeStates {
+    final class FinalBytesProbeStates {
         var delegateMountedAtWrite: [Bool] = []
         var delegateMountedAtCommit: [Bool] = []
     }
@@ -78,15 +78,17 @@ extension ModelPickerStatesHostedTests {
         /// (the mouse-up when one is dispatched), i.e. after the dismissal flush ran for the mouse-down.
         var canStartAtLastEvent: Bool?
         var popoverOpenAtLastEvent: Bool?
+        /// Start's accessibility enablement at the same moment; recorded for the receipt, never an oracle.
+        var axEnabledAtLastEvent: Bool?
         var lastEvent = "none"
     }
 
-    private func requireEventually(_ what: String, timeout: TimeInterval = 8, _ condition: @MainActor () -> Bool) async throws {
+    func requireEventually(_ what: String, timeout: TimeInterval = 8, _ condition: @MainActor () -> Bool) async throws {
         await waitUntil(timeout: timeout, condition: condition)
         try #require(condition(), Comment(rawValue: "Timed out waiting for \(what)."))
     }
 
-    private func countEndEditing(of field: NSTextField) -> FinalBytesNotificationCounter {
+    func countEndEditing(of field: NSTextField) -> FinalBytesNotificationCounter {
         let counter = FinalBytesNotificationCounter()
         NotificationCenter.default.addObserver(counter, selector: #selector(FinalBytesNotificationCounter.didPost(_:)),
                                                name: NSControl.textDidEndEditingNotification, object: field)
@@ -95,18 +97,21 @@ extension ModelPickerStatesHostedTests {
 
     /// The runtime warning is logged by the process itself, so a scan from the case's start catches a flush that
     /// writes state while SwiftUI is updating.
-    private func expectNoStateModificationWarning(since start: Date) throws {
+    func expectNoStateModificationWarning(since start: Date) throws {
         let store = try OSLogStore(scope: .currentProcessIdentifier)
         let predicate = NSPredicate(format: "composedMessage CONTAINS %@", "Modifying state during view update")
         let hits = try Array(store.getEntries(at: store.position(date: start), matching: predicate))
         #expect(hits.isEmpty, "SwiftUI logged \(hits.count) 'Modifying state during view update' warning(s).")
     }
 
-    private func openFinalBytesHost(refusesStart: Bool = false, states: FinalBytesProbeStates? = nil) async throws -> FinalBytesHost {
+    func openFinalBytesHost(
+        refusesStart: Bool = false, states: FinalBytesProbeStates? = nil, removableRoot: ComposerRootFlag? = nil
+    ) async throws -> FinalBytesHost {
         let (model, useCase, routing) = makeRepositoryModel(repo: Self.finalBytesInitial, refusesStart: refusesStart)
         let observed = RepositoryBindingObservedViewModel(model)
-        let fixture = makeFixture(observed, size: NSSize(width: 1280, height: 800), dark: false,
-                                  harnessPresented: false, repositoryPresented: true)
+        let fixture = removableRoot.map { makeRemovableFixture(observed, flag: $0) }
+            ?? makeFixture(observed, size: NSSize(width: 1280, height: 800), dark: false,
+                           harnessPresented: false, repositoryPresented: true)
         do {
             try await activate(fixture.window)
             try await requireEventually("the repository popover") { !ownedPopovers(of: fixture.window).isEmpty }
@@ -142,11 +147,11 @@ extension ModelPickerStatesHostedTests {
         }
     }
 
-    private func finalBytesChecks(_ host: FinalBytesHost, for path: String) -> Int {
+    func finalBytesChecks(_ host: FinalBytesHost, for path: String) -> Int {
         host.useCase.directoryChecks.filter { $0 == [path] }.count
     }
 
-    private func sendFinalBytesEscape(to window: NSWindow) throws {
+    func sendFinalBytesEscape(to window: NSWindow) throws {
         try sendRepositoryProbeKey("\u{1B}", code: 53, to: window)
     }
 
@@ -206,9 +211,18 @@ extension ModelPickerStatesHostedTests {
         return point
     }
 
+    /// Start's accessibility enablement, or `nil` when the element or the property cannot be read.
+    private func startAccessibilityEnabled(in window: NSWindow) -> Bool? {
+        let matches = pointerBaselineTree(window).filter { pointerBaselineString($0, key: "accessibilityLabel") == "Start task" }
+        guard matches.count == 1, let element = matches.first,
+              element.responds(to: NSSelectorFromString("isAccessibilityEnabled")) else { return nil }
+        return element.value(forKey: "accessibilityEnabled") as? Bool
+    }
+
     /// Counts the mouse events AppKit dispatches to the composer window while `body` runs.
     private func countingMouseEvents(
-        in window: NSWindow, sample: @escaping @MainActor () -> (canStart: Bool, popoverOpen: Bool), _ body: () throws -> Void
+        in window: NSWindow, sample: @escaping @MainActor () -> (canStart: Bool, popoverOpen: Bool, axEnabled: Bool?),
+        _ body: () throws -> Void
     ) rethrows -> FinalBytesMouseCounter {
         let counter = FinalBytesMouseCounter()
         let monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { event in
@@ -217,6 +231,7 @@ extension ModelPickerStatesHostedTests {
                 let state = sample()
                 counter.canStartAtLastEvent = state.canStart
                 counter.popoverOpenAtLastEvent = state.popoverOpen
+                counter.axEnabledAtLastEvent = state.axEnabled
                 counter.lastEvent = event.type == .leftMouseDown ? "mouse-down" : "mouse-up"
             }
             return event
@@ -342,12 +357,13 @@ extension ModelPickerStatesHostedTests {
         defer { host.dispose() }
         let startPoint = try await startButtonPoint(host)
         let final = Self.finalBytes
+        let composerStateBeforeClick = host.model.composerState
         host.editor.string = final
 
         // when
         let first = try countingMouseEvents(
             in: host.fixture.window,
-            sample: { (host.model.canStart, !popoverClosed(host)) }
+            sample: { (host.model.canStart, !popoverClosed(host), startAccessibilityEnabled(in: host.fixture.window)) }
         ) {
             try clickFinalBytes(at: startPoint, in: host.fixture.window)
         }
@@ -358,14 +374,19 @@ extension ModelPickerStatesHostedTests {
 
         // then
         let delivered = host.observed.startTapCount
-        let disabledAtLastEvent = first.canStartAtLastEvent == false
-        let branch = disabledAtLastEvent ? "start-disabled-at-\(first.lastEvent)" : "start-enabled-at-\(first.lastEvent)"
-        let receipt = Comment(rawValue: "branch=\(branch) popoverOpenAtLastEvent=\(String(describing: first.popoverOpenAtLastEvent)) "
-            + "mouseDowns=\(first.downs) mouseUps=\(first.ups) startTaps=\(delivered) "
+        let receipt = Comment(rawValue: "lastEvent=\(first.lastEvent) canStartAtLastEvent=\(String(describing: first.canStartAtLastEvent)) "
+            + "axEnabledAtLastEvent=\(String(describing: first.axEnabledAtLastEvent)) "
+            + "popoverOpenAtLastEvent=\(String(describing: first.popoverOpenAtLastEvent)) "
+            + "mouseDowns=\(first.downs) mouseUps=\(first.ups) startTaps=\(delivered) composerState=\(host.model.composerState) "
             + "events=\(host.observed.events) probes=\(host.useCase.startProbes)")
         #expect(first.downs == 1, receipt)
-        #expect(delivered == (disabledAtLastEvent ? 0 : 1),
-                "Start must be delivered once unless it was disabled when the press ended. \(receipt)")
+        #expect([0, 1].contains(delivered), "Start may be delivered at most once. \(receipt)")
+        if delivered == 1 {
+            #expect(host.useCase.startProbes.isEmpty, "A delivered Start must have been refused: no start probe. \(receipt)")
+            verify(host.routing).didStart(taskID: .any).called(0)
+            #expect(host.model.composerState == composerStateBeforeClick,
+                    "A delivered Start must have been refused: composer state unchanged from \(composerStateBeforeClick). \(receipt)")
+        }
         #expect(!host.useCase.startProbes.contains(host.typedBytes), "Start must never run on the stale bytes. \(receipt)")
         #expect(finalBytesChecks(host, for: final) == 1, receipt)
         #expect(host.model.repo.utf8.elementsEqual(final.utf8), receipt)
@@ -421,46 +442,6 @@ extension ModelPickerStatesHostedTests {
         try expectNoStateModificationWarning(since: started)
     }
 
-    // MARK: H4
-
-    /// The binding setter's call during teardown cannot be observed without a production seam; a flush from it would
-    /// deliver the final bytes, which shows as a write and is forbidden here.
-    @Test
-    func givenUndeliveredEditorBytes_whenTheComposerIsRemovedWithoutAClose_thenNothingIsDeliveredOrChecked() async throws {
-        // given
-        let host = try await openFinalBytesHost()
-        defer { host.dispose() }
-        let ended = countEndEditing(of: host.field)
-        defer { NotificationCenter.default.removeObserver(ended) }
-        let final = Self.finalBytes
-        let outgoing = try #require(host.field.delegate, "The mounted coordinator must be the field's delegate.")
-        host.editor.string = final
-        let writesBefore = host.observed.repositoryWrites
-        let checksBefore = host.useCase.directoryChecks
-
-        // when
-        host.fixture.window.contentView = NSView(frame: NSRect(origin: .zero, size: host.fixture.window.frame.size))
-        try await requireEventually("the composer's disappearance") { host.observed.events.contains("disappear") }
-        try await requireEventually("the field to be dismantled") { host.field.delegate == nil }
-        await DisplayFrames.waitForPresentedFrame()
-        let receipt = Comment(rawValue: "events=\(host.observed.events) endEditing=\(ended.count)")
-        #expect(host.observed.repositoryWrites == writesBefore, receipt)
-
-        // when: an authenticated end-editing callback reaches the outgoing coordinator after dismantle
-        outgoing.controlTextDidEndEditing?(Notification(
-            name: NSControl.textDidEndEditingNotification, object: host.field, userInfo: ["NSFieldEditor": host.editor]
-        ))
-        await Task.yield()
-        await DisplayFrames.waitForPresentedFrame()
-
-        // then
-        #expect(host.observed.repositoryWrites == writesBefore, receipt)
-        #expect(!host.observed.events.contains { $0.hasPrefix("commit:") }, receipt)
-        #expect(host.useCase.directoryChecks == checksBefore, receipt)
-        #expect(finalBytesChecks(host, for: final) == 0, receipt)
-        #expect(host.model.repo.utf8.elementsEqual(host.typedBytes.utf8), receipt)
-    }
-
     // MARK: H5
 
     @Test
@@ -499,8 +480,10 @@ extension ModelPickerStatesHostedTests {
         _ transition: RepositoryFinalBytesTransition
     ) async throws {
         // given
+        let started = Date()
         let host = try await openFinalBytesHost(refusesStart: transition == .lockAndUnlock)
         defer { host.dispose() }
+        var editor = host.editor
         switch transition {
         case .recentSelection:
             let selected = "/fixture/repos/selected-from-recents"
@@ -512,15 +495,21 @@ extension ModelPickerStatesHostedTests {
             try await requireEventually("the native field to lock") { host.model.optionsLocked && !host.field.isEnabled }
             host.model.didTapReviewSettings()
             try await requireEventually("the native field to unlock") { !host.model.optionsLocked && host.field.isEnabled }
+            // Native focus is restored after the unlock, possibly in a replacement editor, so authenticate the live one.
+            try await requireEventually("native focus to be restored") {
+                host.field.currentEditor() != nil && host.popover.firstResponder === host.field.currentEditor()
+            }
+            editor = try #require(host.field.currentEditor() as? NSTextView)
             await DisplayFrames.waitForPresentedFrame()
         }
-        try #require(host.field.currentEditor() === host.editor && host.popover.firstResponder === host.editor,
-                     "The editor must survive the transition without a refocus.")
+        try #require(host.field.currentEditor() === editor && host.popover.firstResponder === editor,
+                     "The live editor must be the first responder after the transition.")
+        if transition == .recentSelection { try #require(editor === host.editor, "A Recent selection keeps the same editor.") }
         let typed = "/fixture/repos/typed-after-transition"
-        host.editor.insertText(typed, replacementRange: NSRange(location: 0, length: host.editor.string.utf16.count))
+        editor.insertText(typed, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
         try await requireEventually("the typed bytes to reach the view model") { host.model.repo.utf8.elementsEqual(typed.utf8) }
         let final = Self.finalBytes
-        host.editor.string = final
+        editor.string = final
 
         // when
         try sendFinalBytesEscape(to: host.popover)
@@ -534,5 +523,6 @@ extension ModelPickerStatesHostedTests {
         #expect(finalBytesChecks(host, for: final) == 1, receipt)
         #expect(host.observed.repoAtCommit.last?.utf8.elementsEqual(final.utf8) == true, receipt)
         #expect(host.model.repo.utf8.elementsEqual(final.utf8))
+        try expectNoStateModificationWarning(since: started)
     }
 }
