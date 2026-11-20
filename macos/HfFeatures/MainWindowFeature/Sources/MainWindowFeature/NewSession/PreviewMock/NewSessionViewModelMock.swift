@@ -41,6 +41,7 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     func didTapReviewRecent() {}
     var backend: String
     var repo: String
+    private(set) var repoSelectionGeneration = 0
     var isRepoEmpty: Bool { repo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var repoError: String?
     var freedom: String
@@ -168,7 +169,11 @@ final class NewSessionViewModelMock: NewSessionViewModel {
     func didChangeModel(_ value: String) { model = value }
     func didChangeTurnLimit(_ value: String) { turnLimit = value }
     func didChangeEffort(_ value: String) { effort = value }
-    func didTapRecentRepo(_ path: String) { didChangeRepo(path) }
+    func didTapRecentRepo(_ path: String) {
+        repoSelectionGeneration &+= 1
+        didChangeRepo(path)
+    }
+
     func didOpenRepositoryPicker() {}
     func didTapChooseDirectory() {}
     func didTapCancel() {}

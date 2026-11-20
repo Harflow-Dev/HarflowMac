@@ -111,6 +111,8 @@ final class NewSessionVM: NewSessionViewModel {
 
     private(set) var backend = ""
     private(set) var repo = ""
+    // A picker choice supersedes the field edit even when it selects the same bytes.
+    var repoSelectionGeneration = 0
     var repoError: String?
     private(set) var freedom = "read_only"
     private(set) var message = ""

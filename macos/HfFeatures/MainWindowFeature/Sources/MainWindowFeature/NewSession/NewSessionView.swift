@@ -29,6 +29,7 @@ protocol NewSessionViewModel: ViewModel {
 
     var backend: String { get }
     var repo: String { get }
+    var repoSelectionGeneration: Int { get }
     var isRepoEmpty: Bool { get }
     var repoError: String? { get }
     var freedom: String { get }
@@ -90,11 +91,12 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
     @State var viewModel: VM
     @State private var optionsPresented: Bool
     @State private var repositoryPresented: Bool
+    @State private var isComposerVisible = false
     @State private var harnessPresented: Bool
+    @State private var repositoryFlush = RepositoryFieldFlush()
     /// Bumped when "Try again" is tapped; the Model field takes focus, since the button disappears while loading.
     @State private var modelFocusRequest = 0
     @FocusState private var focus: Focus?
-    @FocusState private var repositoryFieldFocused: Bool
 
     private enum Focus: Hashable { case prompt, options, firstOption }
 
@@ -123,8 +125,14 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             }
         }
         .background(Color.windowBG)
-        .onAppear { viewModel.didAppear() }
-        .onDisappear { viewModel.didDisappear() }
+        .onAppear {
+            isComposerVisible = true
+            viewModel.didAppear()
+        }
+        .onDisappear {
+            isComposerVisible = false
+            viewModel.didDisappear()
+        }
         .onChange(of: repositoryPresented) { _, presented in
             if !presented { viewModel.didCommitRepo() }
         }
@@ -190,8 +198,20 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
             .accessibilityLabel("Task prompt")
     }
 
+    /// Every write to `repositoryPresented` goes through here so closing always hands the field's final bytes to the
+    /// view model first, before SwiftUI's own update runs `onChange` or dismantles the field.
+    private func setRepositoryPresented(_ presented: Bool) {
+        if !presented { repositoryFlush.flush() }
+        repositoryPresented = presented
+    }
+
+    private var repositoryPresentedBinding: Binding<Bool> {
+        Binding(get: { repositoryPresented }, set: { setRepositoryPresented($0) })
+    }
+
     private func start() {
         let wasStarting = viewModel.isStarting
+        repositoryFlush.flush()
         viewModel.didTapStart()
         if !wasStarting, viewModel.isStarting { StartAnnouncement.requested("Starting task…") }
     }
@@ -218,10 +238,10 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
                         focus = .options
                     }
             }
-            Button { repositoryPresented.toggle() } label: {
+            Button { setRepositoryPresented(!repositoryPresented) } label: {
                 pill(repositoryTitle, icon: "folder")
             }
-            .popover(isPresented: $repositoryPresented, arrowEdge: .bottom) { repositoryOptions }
+            .popover(isPresented: repositoryPresentedBinding, arrowEdge: .bottom) { repositoryOptions }
             .disabled(viewModel.optionsLocked)
             Button { harnessPresented.toggle() } label: {
                 pill(harnessTitle, icon: "cpu")
@@ -308,24 +328,7 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
             Text("Repository").font(.hf(.body, weight: .semibold))
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing6) {
-                TextField("/path/to/repo", text: binding(\.repo, { viewModel.didChangeRepo($0) }))
-                    .textFieldStyle(.roundedBorder)
-                    .overlay {
-                        if viewModel.repoError != nil {
-                            RoundedRectangle(cornerRadius: HfRadius.Metrics.spacing6)
-                                .strokeBorder(Color.failedRed)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .accessibilityLabel("Repository path")
-                    .accessibilityHint(viewModel.repoError ?? "")
-                    .focused($repositoryFieldFocused)
-                    .onSubmit { viewModel.didCommitRepo() }
-                    .submitScope()
-                    .onChange(of: repositoryFieldFocused) { _, focused in
-                        if !focused { viewModel.didCommitRepo() }
-                    }
+                repositoryField
                 if let error = viewModel.repoError {
                     Text(error)
                         .font(.hf(.secondary))
@@ -340,6 +343,26 @@ struct NewSessionView<VM: NewSessionViewModel>: View {
         .frame(width: Layout.optionsWidth)
         .disabled(viewModel.optionsLocked)
         .onAppear { viewModel.didOpenRepositoryPicker() }
+    }
+
+    private var repositoryField: some View {
+        RepositoryPathField(
+            text: binding(\.repo, { viewModel.didChangeRepo($0) }),
+            selectionGeneration: { viewModel.repoSelectionGeneration },
+            canEdit: { isComposerVisible && repositoryPresented && !viewModel.optionsLocked },
+            canFlush: { isComposerVisible && !viewModel.optionsLocked },
+            flush: repositoryFlush,
+            help: viewModel.repoError,
+            commit: viewModel.didCommitRepo
+        )
+        .overlay {
+            if viewModel.repoError != nil {
+                RoundedRectangle(cornerRadius: HfRadius.Metrics.spacing6)
+                    .strokeBorder(Color.failedRed)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
     private var harnessOptions: some View {

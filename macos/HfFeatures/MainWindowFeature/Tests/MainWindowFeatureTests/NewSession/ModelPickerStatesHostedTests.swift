@@ -22,6 +22,7 @@ final class HostedListingUseCase: NewSessionUseCase {
     private let pending: Set<String>
     private let taskList: [TaskInfo]
     private let missingPaths: Set<String>
+    private let refusesStart: Bool
     private(set) var directoryChecks: [[String]] = []
     private(set) var startProbes: [String] = []
     private(set) var launchedRequests: [RunRequest] = []
@@ -29,13 +30,14 @@ final class HostedListingUseCase: NewSessionUseCase {
     /// `taskList` is what the recents are built from; `missingPaths` are reported as not existing on disk.
     init(
         catalog: BackendCatalog, listings: [String: ModelListing], pending: Set<String> = [],
-        taskList: [TaskInfo] = [], missingPaths: Set<String> = []
+        taskList: [TaskInfo] = [], missingPaths: Set<String> = [], refusesStart: Bool = false
     ) {
         self.catalog = catalog
         self.listings = listings
         self.pending = pending
         self.taskList = taskList
         self.missingPaths = missingPaths
+        self.refusesStart = refusesStart
         given(base).qualificationSession().willReturn(QualificationFixture.readySession())
         given(base).tasks.willReturn([])
     }
@@ -48,6 +50,7 @@ final class HostedListingUseCase: NewSessionUseCase {
 
     func run(_ request: RunRequest, runtime: QualificationRuntimeToken) async throws -> String {
         launchedRequests.append(request)
+        if refusesStart { throw ToolError.refused(code: "invalid_params", message: "Hosted refusal") }
         return "task"
     }
 
@@ -233,7 +236,7 @@ struct ModelPickerStatesHostedTests {
     }
 
     func makeFixture(
-        _ viewModel: NewSessionVM, size: NSSize, dark: Bool, harnessPresented: Bool = true, repositoryPresented: Bool = false
+        _ viewModel: some NewSessionViewModel, size: NSSize, dark: Bool, harnessPresented: Bool = true, repositoryPresented: Bool = false
     ) -> Fixture {
         _ = NSApplication.shared
         let previous = NSApp.activationPolicy()

@@ -124,6 +124,32 @@ extension NewSessionVMTests {
         #expect(sut.repoError == "Choose an existing folder.")
     }
 
+    @Test func givenAnUnansweredCommit_whenTheSameRecentPathIsSelected_thenItsLateMissingAnswerIsIgnored() async throws {
+        // given
+        let useCase = GatedRecentsUseCase()
+        let routing = MockNewSessionRouting()
+        let sut = NewSessionVM(useCase: useCase, routing: routing)
+        let path = "/fixture/same-path"
+        sut.didAppear()
+        defer { sut.didDisappear() }
+        sut.didChangeRepo(path)
+        sut.didCommitRepo()
+        await waitUntil { useCase.requests.count == 1 }
+        try #require(useCase.requests.count == 1)
+        let oldCheck = sut.repoCheckTask
+
+        // when
+        sut.didTapRecentRepo(path)
+        useCase.answer(0, [])
+        await oldCheck?.value
+
+        // then
+        #expect(Array(sut.repo.utf8) == Array(path.utf8))
+        #expect(!sut.hasUncommittedRepoEdit)
+        #expect(sut.repoError == nil && sut.repoCheckTask == nil)
+        #expect(useCase.requests.map(\.paths) == [[path]])
+    }
+
     @Test func givenAnUnansweredCommit_whenStartFindsTheFolderMissing_thenItsLateAnswerCannotClearTheError() async throws {
         // given
         let useCase = GatedRecentsUseCase()

@@ -30,6 +30,13 @@ extension NewSessionVM {
     }
 
     func didTapRecentRepo(_ path: String) {
+        guard !optionsLocked else { return }
+        repoSelectionGeneration &+= 1
+        if path.utf8.elementsEqual(repo.utf8) {
+            // A same-path selection supersedes any field check without changing the binding.
+            cancelRepoCheck()
+            repoError = nil
+        }
         didChangeRepo(path)
         hasUncommittedRepoEdit = false
     }
