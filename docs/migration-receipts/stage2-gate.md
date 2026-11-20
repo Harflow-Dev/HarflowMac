@@ -1,8 +1,8 @@
 # Stage 2 gate
 
 The focused Needs you retry closed the missing Stage 2 capture on the tested commit.
-The owner reported that the Check app looked good. Spoken VoiceOver and formal
-Stage 2 sign-off remain pending. Three Stage 1 fixture failures remain recorded
+The owner reported that the Check app looked good and deferred spoken VoiceOver
+to final app acceptance. Formal Stage 2 sign-off remains pending. Three Stage 1 fixture failures remain recorded
 from the full MainWindow run.
 
 ## Scope
@@ -66,7 +66,7 @@ The actual hosted captures were inspected for queued Send and Cancel in light mo
 delivery in dark mode, the blocked transcript approval, the single and scrollable labelled
 approval bars at 1000×620 in light and dark, and the Needs you text and unavailable question
 cards at minimum size. The approval and question suites exercised keyboard and
-accessibility behavior. Spoken VoiceOver and the integrated Check walkthrough are owner checks.
+accessibility behavior. The owner deferred spoken VoiceOver to final app acceptance.
 
 ## Harflow Check build and runtime evidence
 
@@ -91,7 +91,8 @@ The original full-run result and three remaining Stage 1 failures stand.
 ## Owner check
 
 On 2026-11-20, the owner reported that the Harflow Check app looked good. The
-individual checklist items and spoken VoiceOver were not separately reported.
+individual checklist items were not separately reported. The owner deferred spoken
+VoiceOver to final app acceptance (M12).
 
 Use the Check bundle with an isolated generated fixture and verified managed-runtime and
 preference isolation, as documented in [development.md](../development.md).
@@ -107,9 +108,10 @@ Review the following in light and dark, including the 1000×620 minimum window.
 - In Needs you, inspect question editing, sending, replacement and open-run routing.
   Confirm the menu question Answer action opens the corresponding Needs you destination.
   Check checkpoint refusal and refresh before offering another action.
-- Walk the keyboard order and listen to VoiceOver for request targets, decision names,
-  draft focus and settlement announcements. Fixture accessibility and key assertions
-  supplement the spoken VoiceOver pass.
+- Walk the keyboard order for request targets, decision names and draft focus.
+
+At final app acceptance, listen to VoiceOver for those same controls and for settlement
+announcements. Fixture accessibility and key assertions supplement that pass.
 
 The public contract identifies the answer channel. More specific answering identity requires
 a contract change. Current Mac refusal copy covers the known cases, with additional drawings

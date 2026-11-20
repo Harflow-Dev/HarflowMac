@@ -23,7 +23,8 @@ The requested Xcode app host + SwiftPM modules was delivered in M02 and restruct
 - [ ] M11 Settings/onboarding/harnesses/human-only allowlist, menu bar/notifications,
   deep links/single instance, lifecycle/preferences and truthful unavailable states.
 - [ ] M12 Complete redesigned native acceptance on exact Python route, approved
-  pixels/states, native budgets, accessibility and isolated packaged evidence.
+  pixels/states, native budgets, accessibility and isolated packaged evidence. Include
+  the spoken VoiceOver walkthrough deferred by the owner from [Stage 2](migration-receipts/stage2-gate.md).
 - [ ] I01–I04 Native Rust adapter/responder secure storage, managed engine
   distribution/update/recovery/signing and same product acceptance on fresh roots.
 - [ ] O01–O04 Rehearse/authorize cutover, observe and publish; retain Mac, archive
