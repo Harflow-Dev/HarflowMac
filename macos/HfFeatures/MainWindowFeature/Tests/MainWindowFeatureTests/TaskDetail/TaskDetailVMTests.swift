@@ -290,7 +290,8 @@ import Testing
                                        successorObservation: { try fixtures.successorObservationEffect.value?($0) ?? false })
 
         let sut = TaskDetailVM(taskID: taskID, useCase: useCase, routing: routing,
-                               continuityHistory: TaskContinuityHistoryStore(), chrome: isWorkflowBuilder ? .embedded : chrome,
+                               continuityHistory: TaskContinuityHistoryStore(),
+                               chrome: isWorkflowBuilder && chrome != .builder ? .embedded : chrome,
                                scheduler: scheduler, isWorkflowBuilder: isWorkflowBuilder)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, tasksSubject: fixtures.tasksSubject,

@@ -9,8 +9,9 @@ import Testing
 // MARK: - TaskDetailSettledMessageTests
 
 extension TaskDetailVMTests {
-    @Test(arguments: ["completed", "failed", "cancelled", "timed_out", "running"], [TaskDetailChrome.standalone, .group, .embedded])
-    func givenTaskStatus_whenComposerRecomputes_thenOnlyTerminalStandaloneHidesSendNow(status: String, chrome: TaskDetailChrome) async {
+    @Test(arguments: ["completed", "failed", "cancelled", "timed_out", "running"],
+          [TaskDetailChrome.standalone, .group, .embedded, .builder])
+    func givenTaskStatus_whenComposerRecomputes_thenSendNowRequiresRunningTask(status: String, chrome: TaskDetailChrome) async {
         // given
         let fixtures = Fixtures()
         fixtures.detailBox.value = task(status: status)
@@ -18,7 +19,7 @@ extension TaskDetailVMTests {
         fixtures.continuationRuntime.value = runtime
         fixtures.messagingContext.value = MessagingInvocationContext(runtime: runtime, runtimeEpoch: UUID())
         fixtures.messagingSupported.value = true
-        let harness = makeSUT(chrome: chrome, fixtures: fixtures)
+        let harness = makeSUT(isWorkflowBuilder: chrome == .builder, chrome: chrome, fixtures: fixtures)
         harness.sut.didAppear()
         defer { harness.sut.didDisappear() }
         await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
@@ -26,11 +27,12 @@ extension TaskDetailVMTests {
         harness.sut.recomputeMessageBox(task: fixtures.detailBox.value!)
         // then
         #expect(harness.sut.messageBoxModel.canSend)
-        #expect(harness.sut.messageBoxModel.showsSendNow == !(chrome == .standalone && fixtures.detailBox.value!.status.isTerminal))
+        #expect(harness.sut.messageBoxModel.showsSendNow == (status == "running"))
+        #expect(harness.sut.messageBoxModel.hint == "Send queues; Send now requests immediate delivery when safe")
     }
 
     @Test(arguments: ["workflow_run_id", "workflow_node_id", "workflow_role"])
-    func givenTerminalWorkflowOwnedTaskOnStandaloneMount_whenSendNowCalled_thenExistingWorkflowSemanticsRemain(identity: String) async throws {
+    func givenTerminalWorkflowOwnedTaskOnStandaloneMount_whenNowAndQueuedSendCalled_thenOnlyQueuedSendDispatches(identity: String) async throws {
         // given
         let fixtures = Fixtures()
         var raw = task(status: "completed").raw
@@ -43,6 +45,68 @@ extension TaskDetailVMTests {
         fixtures.messagingSupported.value = true
         let harness = makeSUT(chrome: .standalone, fixtures: fixtures)
         let receipt = try #require(MessagingSendReceipt(raw: ["message_id": .string("message"), "seq": .number(1),
+            "status": .string("queued"), "delivery": .string("queue")]))
+        let attempt = MessagingSubmissionAttempt(id: UUID(), runtime: runtime, runtimeEpoch: context.runtimeEpoch,
+            taskID: "abc12345", operation: .send(now: false), outcome: .send(.receipt(receipt)))
+        given(harness.useCase).submitTypedMessage(.any, text: .any, now: .any, acknowledgingUnconfirmed: .any, context: .any).willReturn(attempt)
+        given(harness.useCase).isMessagingAttemptCurrent(.any).willReturn(true)
+        harness.sut.didAppear()
+        defer { harness.sut.didDisappear() }
+        await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
+        #expect(!harness.sut.messageBoxModel.showsSendNow)
+        var accepted: Bool?
+        // when
+        harness.sut
+.submitMessage("workflow draft", now: true) { accepted = $0 }
+        await waitUntil { accepted != nil }
+        #expect(accepted == false)
+        var queuedAccepted: Bool?
+        harness.sut
+.submitMessage("workflow draft", now: false) { queuedAccepted = $0 }
+        await waitUntil { queuedAccepted != nil }
+        // then
+        #expect(queuedAccepted == true)
+        verify(harness.useCase).submitTypedMessage(.any, text: .any, now: .value(true), acknowledgingUnconfirmed: .any, context: .any).called(0)
+        verify(harness.useCase).submitTypedMessage(.any, text: .any, now: .value(false), acknowledgingUnconfirmed: .any, context: .any).called(1)
+    }
+
+    @Test(arguments: [false, true], [TaskDetailChrome.standalone, .group, .embedded, .builder])
+    func givenTaskSettlesBeforePresentationCatchesUp_whenSendNowIsCalled_thenNothingDispatches(stale: Bool, chrome: TaskDetailChrome) async {
+        // given
+        let fixtures = Fixtures()
+        fixtures.detailBox.value = task(status: stale ? "running" : "failed")
+        let runtime = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))
+        fixtures.continuationRuntime.value = runtime
+        fixtures.messagingContext.value = MessagingInvocationContext(runtime: runtime, runtimeEpoch: UUID())
+        fixtures.messagingSupported.value = true
+        let harness = makeSUT(isWorkflowBuilder: chrome == .builder, chrome: chrome, fixtures: fixtures)
+        harness.sut.didAppear()
+        defer { harness.sut.didDisappear() }
+        await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
+        if stale { #expect(harness.sut.task?.status == .running) }
+        fixtures.detailBox.value = task(status: "failed")
+        var accepted: Bool?
+        // when — no publisher pulse: admission must consult the fresh status source.
+        harness.sut
+.submitMessage("exact draft", now: true) { accepted = $0 }
+        // then
+        #expect(accepted == false)
+        #expect(!harness.sut.messageSendInFlight)
+        verify(harness.useCase).submitTypedMessage(.any, text: .any, now: .any, acknowledgingUnconfirmed: .any, context: .any).called(0)
+    }
+
+    @Test(arguments: [TaskDetailChrome.standalone, .group, .embedded, .builder])
+    func givenRunningSupportedTask_whenSendNowIsSubmitted_thenOneImmediateRequestIsAccepted(chrome: TaskDetailChrome) async throws {
+        // given
+        let fixtures = Fixtures()
+        fixtures.detailBox.value = task(status: "running")
+        let runtime = try #require(fixtures.messagingContext.value?.runtime)
+        let context = MessagingInvocationContext(runtime: runtime, runtimeEpoch: UUID())
+        fixtures.messagingContext.value = context
+        fixtures.continuationRuntime.value = runtime
+        fixtures.messagingSupported.value = true
+        let harness = makeSUT(isWorkflowBuilder: chrome == .builder, chrome: chrome, fixtures: fixtures)
+        let receipt = try #require(MessagingSendReceipt(raw: ["message_id": .string("message"), "seq": .number(1),
             "status": .string("queued"), "delivery": .string("now")]))
         let attempt = MessagingSubmissionAttempt(id: UUID(), runtime: runtime, runtimeEpoch: context.runtimeEpoch,
             taskID: "abc12345", operation: .send(now: true), outcome: .send(.receipt(receipt)))
@@ -53,36 +117,36 @@ extension TaskDetailVMTests {
         await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
         #expect(harness.sut.messageBoxModel.showsSendNow)
         var accepted: Bool?
+
         // when
         harness.sut
-.submitMessage("workflow draft", now: true) { accepted = $0 }
+.submitMessage("immediate draft", now: true) { accepted = $0 }
         await waitUntil { accepted != nil }
+
         // then
         #expect(accepted == true)
         verify(harness.useCase).submitTypedMessage(.any, text: .any, now: .value(true), acknowledgingUnconfirmed: .any, context: .any).called(1)
     }
 
-    @Test(arguments: [false, true])
-    func givenTerminalStandalone_whenSendNowIsCalledDirectlyOrBeforePresentationCatchesUp_thenNothingDispatches(stale: Bool) async {
+    @Test(arguments: [TaskDetailChrome.group, .embedded, .builder])
+    func givenPresentedRunningTaskAndFreshTakeover_whenSendNowIsSubmitted_thenNoRequestDispatches(chrome: TaskDetailChrome) async {
         // given
         let fixtures = Fixtures()
-        fixtures.detailBox.value = task(status: stale ? "running" : "failed")
-        let runtime = QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:]))
-        fixtures.continuationRuntime.value = runtime
-        fixtures.messagingContext.value = MessagingInvocationContext(runtime: runtime, runtimeEpoch: UUID())
-        fixtures.messagingSupported.value = true
-        let harness = makeSUT(chrome: .standalone, fixtures: fixtures)
+        fixtures.detailBox.value = task(status: "running")
+        let harness = makeSUT(isWorkflowBuilder: chrome == .builder, chrome: chrome, fixtures: fixtures)
         harness.sut.didAppear()
         defer { harness.sut.didDisappear() }
         await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
-        fixtures.detailBox.value = task(status: "failed")
+        #expect(harness.sut.task?.status == .running && harness.sut.task?.takenOver == false)
+        fixtures.detailBox.value = task(status: "running", takenOver: true)
         var accepted: Bool?
-        // when — no publisher pulse: admission must consult the fresh status source.
+
+        // when — the displayed task is still running, but its current detail has been taken over.
         harness.sut
 .submitMessage("exact draft", now: true) { accepted = $0 }
+
         // then
         #expect(accepted == false)
-        #expect(!harness.sut.messageSendInFlight)
         verify(harness.useCase).submitTypedMessage(.any, text: .any, now: .any, acknowledgingUnconfirmed: .any, context: .any).called(0)
     }
 
@@ -103,9 +167,72 @@ extension TaskDetailVMTests {
 .submitMessage("keep draft", now: true) { accepted = $0 }
         // then
         #expect(!harness.sut.messageBoxModel.showsSendNow)
+        #expect(harness.sut.messageBoxModel.hint == "Send queues; Send now requests immediate delivery when safe")
         #expect(harness.sut.messageBoxModel.canSend)
         #expect(accepted == false)
         verify(harness.useCase).submitTypedMessage(.any, text: .any, now: .any, acknowledgingUnconfirmed: .any, context: .any).called(0)
+    }
+
+    @Test func givenMessageSupportIsUnknown_whenComposerRecomputes_thenSendNowIsHidden() async {
+        // given
+        let fixtures = Fixtures()
+        fixtures.detailBox.value = task(status: "running")
+        fixtures.messagingSupported.value = nil
+        let harness = makeSUT(chrome: .standalone, fixtures: fixtures)
+        harness.sut.didAppear()
+        defer { harness.sut.didDisappear() }
+        await waitUntil {
+            harness.sut.task != nil && harness.sut.messagingSupportContext != nil && harness.sut.messagingSupported == nil
+        }
+
+        // when
+        harness.sut.recomputeMessageBox(task: fixtures.detailBox.value!)
+
+        // then
+        #expect(harness.sut.messagingSupported == nil)
+        #expect(!harness.sut.messageBoxModel.showsSendNow)
+        #expect(harness.sut.messageBoxModel.hint.isEmpty)
+    }
+
+    @Test func givenMessageSupportIsUnsupported_whenComposerRecomputes_thenSendNowIsHidden() async {
+        // given
+        let fixtures = Fixtures()
+        fixtures.detailBox.value = task(status: "running")
+        fixtures.messagingSupported.value = false
+        let harness = makeSUT(chrome: .standalone, fixtures: fixtures)
+        harness.sut.didAppear()
+        defer { harness.sut.didDisappear() }
+        await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == false }
+        harness.sut.recomputeMessageBox(task: fixtures.detailBox.value!)
+
+        // then
+        #expect(!harness.sut.messageBoxModel.showsSendNow)
+        #expect(harness.sut.messageBoxModel.hint.isEmpty)
+    }
+
+    @Test func givenPositiveMessageSupportBecomesStaleAndCurrentAgain_whenComposerRecomputes_thenVisibilityTracksIt() async {
+        // given — resolve positive capability before making its context stale.
+        let fixtures = Fixtures()
+        fixtures.detailBox.value = task(status: "running")
+        let harness = makeSUT(chrome: .standalone, fixtures: fixtures)
+        harness.sut.didAppear()
+        defer { harness.sut.didDisappear() }
+        await waitUntil { harness.sut.task != nil && harness.sut.messagingSupported == true }
+        harness.sut.recomputeMessageBox(task: fixtures.detailBox.value!)
+        #expect(harness.sut.messageBoxModel.showsSendNow)
+
+        // when — the stored positive result is stale, then current again.
+        fixtures.messagingCurrent.value = false
+        harness.sut.recomputeMessageBox(task: fixtures.detailBox.value!)
+        #expect(harness.sut.messagingSupported == true)
+        #expect(!harness.sut.messageBoxModel.showsSendNow)
+        #expect(harness.sut.messageBoxModel.hint.isEmpty)
+        fixtures.messagingCurrent.value = true
+        harness.sut.recomputeMessageBox(task: fixtures.detailBox.value!)
+
+        // then
+        #expect(harness.sut.messageBoxModel.showsSendNow)
+        #expect(harness.sut.messageBoxModel.hint == "Send queues; Send now requests immediate delivery when safe")
     }
 
     @Test func givenQueueSubmissionAdmittedBeforeItsTaskRuns_whenContinueClicked_thenContinuationIsNotAdmitted() async {

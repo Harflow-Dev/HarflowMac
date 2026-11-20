@@ -50,8 +50,12 @@ extension TaskDetailVM {
     private func submitMessage(_ text: String, now: Bool, acknowledging: UUID?, completion: @escaping (Bool) -> Void) {
         guard isMounted, !messageSendInFlight, !isBusy, messagingSupported == true,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let task = latestActionTask(), !task.takenOver,
-              !(now && settledStandaloneMessagingTarget(task)) else { completion(false); return }
+              let task = latestActionTask(), !task.takenOver else { completion(false); return }
+        if now {
+            let current = chrome == .standalone ? task : useCase.detail(currentTaskID)
+            guard task.taskID == currentTaskID, let current, current.taskID == currentTaskID, current.status == .running,
+                  !current.takenOver else { completion(false); return }
+        }
         let context: MessagingInvocationContext
         do { context = try useCase.messagingInvocationContext() } catch { completion(false); return }
         guard messagingSupportContext == context, useCase.isMessagingContextCurrent(context) else { completion(false); return }

@@ -11,7 +11,7 @@ unsupported, loading and long text in Light/Dark. Composer placement follows the
 
 | Surface | Presentation and public engine route |
 | --- | --- |
-| Task screen | Offers queued Send, including tasks without live input. Terminal standalone tasks without workflow ownership hide Send now; their queued messages retain Cancel and wait for an explicit eligible Continue in a new session. Active standalone and non-standalone composers retain Send now. `send --monitor` routes workflow-owned tasks through their run. Taken-over sessions explain why messaging is unavailable. |
+| Task screen | Offers queued Send, including tasks without live input. Send now appears for running tasks when the current engine reports `messaging.v1`. Settled standalone tasks without workflow ownership retain Cancel on queued messages, which wait for an explicit eligible Continue in a new session. `send --monitor` routes workflow-owned tasks through their run. Taken-over sessions explain why messaging is unavailable. |
 | Queued messages | Queued bubbles appear at the end of the task Activity feed and of each Activity surface, with Cancel while queued. `cancel-message` or `workflow-cancel-message --monitor` withdraws the exact message ID. |
 | Workflow run | The canvas has no global composer. Select Orchestrator to open its right-hand Activity and composer; messages route through that activity’s exact task. |
 | Workflow create/edit | No workflow-window composer (#43). Builder tasks start from Generate and Edit with agent. An embedded builder task keeps its own sole composer. |

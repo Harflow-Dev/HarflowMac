@@ -187,14 +187,6 @@ extension TaskDetailVM {
         useCase.setOutcome(currentTaskID, succeeded ? "Copied path." : "Couldn't copy to the clipboard.")
     }
 
-    /// Workflow ownership keeps its existing messaging semantics even on a standalone mount.
-    func settledStandaloneMessagingTarget(_ task: TaskInfo) -> Bool {
-        chrome == .standalone && task.status.isTerminal && !isWorkflowBuilder
-            && ["workflow_run_id", "workflow_node_id", "workflow_role"].allSatisfy {
-                task.raw[$0] == nil || task.raw[$0] == .null
-            }
-    }
-
     /// The engine owns authorization; a non-live task can still queue a follow-up.
     func recomputeMessageBox(task: TaskInfo) {
         prepareMessagingSupport()
@@ -215,7 +207,7 @@ extension TaskDetailVM {
                 : continuationLocksActions ? continuationPlaceholder
                 : !supported ? "Checking message support…" : eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
             buttonLabel: "Send", isLocked: !eligible || unsupported,
-            isStopping: isStopping, showsSendNow: !unsupported && !settledStandaloneMessagingTarget(task), stopAction: stopAction,
+            isStopping: isStopping, showsSendNow: supported && task.status == .running, stopAction: stopAction,
             allowsDraftEditing: !unsupported && chrome == .standalone && statusReadAvailability == .unread && !task.takenOver
         )
     }

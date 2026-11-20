@@ -498,7 +498,7 @@ resend requires a warning acknowledgement naming the retained attempt internally
 sequence nor later ledger rows reconcile it. Accepted queued refusals preserve queued status and
 Cancel. Delivery uncertainty preserves the engine note and never prompts an automatic resend.
 
-Terminal standalone tasks without workflow ownership hide Send now and reject stale direct Send now invocations against the fresh admitted status. Queued Send remains available. Only an unambiguous standalone queued `target_settled` advisory is omitted; workflow, refusal, reason and uncertain notes remain visible. Continue shares the synchronous message-submission exclusion and never resends queued messages. Source-ledger status supplies delivered outcomes and successor identity after continuation.
+Task Detail shows Send now when the current runtime confirms `messaging.v1` and the task is running. At click time, standalone uses the latest admitted status and the other mounts reread the current task detail. Queued Send remains available on settled tasks. Only an unambiguous standalone queued `target_settled` advisory is omitted; workflow, refusal, reason and uncertain notes remain visible. Continue shares the synchronous message-submission exclusion and never resends queued messages. Source-ledger status supplies delivered outcomes and successor identity after continuation.
 
 ## Shared approval response authority
 
