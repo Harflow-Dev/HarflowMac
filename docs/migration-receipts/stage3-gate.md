@@ -64,3 +64,23 @@ Astra and Opus approved the plan and code by round 3. Keyboard traversal
 of the new control, full-shell header fit and populated Parallel lanes at
 normal size remain Stage 3 acceptance items. Spoken VoiceOver remains deferred
 to M12. The final MainWindow gate and Harflow Check build are pending.
+
+## Workflow steering public adapter
+
+MonitorCore now reads workflow steering status and bounded history and
+submits steering requests through the public `harflow-ctl --monitor`
+operations. Requests use private file input and exact root and episode
+bindings. HfRepository owns the attempt lease and can distinguish a confirmed
+pre-admission refusal from an indeterminate result. An indeterminate result
+keeps dependent sends fenced. A later exact history match establishes
+admission only. Resume and Dismiss remain subject to engine-reported
+eligibility.
+
+The slice is pinned to the selected Python producer `v0.0.14` at
+`a891388b1259add2ec8432d7d0fc5ca38163c27d` for the audited refusal proof.
+Astra and Opus approved the plan in round 3 and the integrated candidate in
+code round 2. The final MonitorCore check passed 31 definitions in seven
+suites. The HfRepository check passed 17 definitions.
+Both scoped checks used fixture data via the guarded runner and shared build
+lane. No live engine was invoked. Native steering presentation and keyboard
+checks follow in the UI slice.

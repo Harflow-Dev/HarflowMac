@@ -97,11 +97,14 @@ public final class Module: HfModule {
 
     private func registerPublicReaders(toolEnvironment: any ToolEnvironmentRepository, stateRecovery: any StateRecoveryRepository,
                                        taskList: any TaskListRepository, actions: any TaskActionRepository, runtime: ManagedRuntimeCoordinator) {
+        let steering = WorkflowSteeringRepositoryImpl(tooling: toolEnvironment)
+        steering.bindRuntimeChanges(runtime.statePublisher())
         let pendingLaunch = PendingLaunchRepositoryImpl(tooling: toolEnvironment, taskList: taskList, actions: actions,
                                                         recovery: stateRecovery, now: { .now })
         pendingLaunch.bindRuntimeChanges(runtime.statePublisher())
         GlobalValues
             .environment(\.pendingLaunchRepository, pendingLaunch)
+            .environment(\.workflowSteeringRepository, steering)
             .environment(\.workflowArtifactRepository, WorkflowArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskArtifactRepository, TaskArtifactRepositoryImpl(toolEnvironment: toolEnvironment))
             .environment(\.taskChangesRepository, TaskChangesRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery, now: { .now }))

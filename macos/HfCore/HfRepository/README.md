@@ -228,3 +228,35 @@ acknowledgement of the prior unconfirmed attempt; cancellation is never replayed
 automatically. Status refreshes never associate records by identical text or sequence
 and never turn an unresolved submission into success. These additive APIs await the
 M06 S3 composer migration; existing raw callers are not yet covered by this owner.
+
+## Root workflow steering
+
+`WorkflowSteeringRepository` is the app-session owner of exact-root public steering
+observations and invocation attempts. It is registered once alongside the workflow
+repository and synchronously invalidates observations on managed-runtime changes,
+including A-to-B-to-A transitions. The first adapter slice supports explicit
+Open, Reply, Retarget and Dismiss only; it adds no UI, poll loop, replay, ownership
+change, Fresh consent or disk persistence.
+
+Each action uses the exact displayed observation and a newly generated UUID.
+In-flight invocations serialize per state root and workflow root. Unknown sends
+remain fenced across navigation and runtime changes; a separately qualified
+Dismiss can remain available, but an unknown Dismiss cannot be repeated for its
+episode. Positive matching receipts or later exact requested history establish
+admission only. Empty or incomplete history never establishes absence. Exact
+positive UUID/action/text/episode evidence remains valid after ledger closure;
+only an unchanged authoritative sequence from the same captured generation,
+schema and epochs can establish the audited producer's conditional refusal.
+Public error receipt references prevent this refusal inference.
+
+The owner bounds the read cache to 128 status scopes and 16 concurrent reads,
+separately from the retained attempt budget of 256 attempts and 32 MiB of serialized
+payload reservations. Each status response is bounded to 1 MiB; cached status
+scopes and in-flight read responses are outside that attempt budget. Each invocation
+reserves 4 MiB before dispatch. Capacity refuses admission instead of dropping
+unresolved evidence. Later authoritative observations retire resolved attempts only
+after consuming their read/receipt barriers. Least-recently-used observation leases
+can be revoked without deleting any attempt. These are payload budgets, not
+measured heap limits. Runtime identity and user text remain in memory and are never
+logged. Evidence is supplied by vendored fixtures and injected process runners;
+this adapter does not establish installed-runtime qualification.
