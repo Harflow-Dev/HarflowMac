@@ -49,6 +49,7 @@ enum WorkflowRunPaneSizing: Hashable {
 struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
     let isGraph: Bool
     var isLoading = false
+    var showsInspector = true
     var canvasChromeHeight: CGFloat = 0
     var presentation: WorkflowRunPaneSizing = .default
     @State private var splitSnapshot = WorkflowRunSplitSnapshot()
@@ -57,18 +58,23 @@ struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
     @ViewBuilder let activity: () -> Activity
 
     var body: some View {
-        if isGraph {
-            WorkflowPaneViewport {
-                HSplitView {
-                    canvas()
+        Group {
+            if isGraph {
+                WorkflowPaneViewport {
+                    HSplitView {
+                        canvas()
 .frame(minWidth: WorkflowInspectorWidth.canvasMinimumWidth, maxWidth: .infinity,
-                                   minHeight: 0, maxHeight: .infinity)
+                                       minHeight: 0, maxHeight: .infinity)
 .clipped()
-                    sidebar
+                        if showsInspector { sidebar }
+                    }
                 }
+            } else {
+                WorkflowPaneViewport { HSplitView { activity(); if showsInspector { sidebar } } }
             }
-        } else {
-            WorkflowPaneViewport { HSplitView { activity(); sidebar } }
+        }
+        .onChange(of: showsInspector) { _, visible in
+            splitSnapshot.updateVisibility(visible)
         }
     }
 
@@ -78,7 +84,7 @@ struct WorkflowRunPanes<Canvas: View, Inspector: View, Activity: View>: View {
 .clipped()
             .frame(minWidth: WorkflowRunLayout.inspectorMinimum, idealWidth: WorkflowRunLayout.inspectorIdeal(for: presentation),
                           maxWidth: WorkflowRunLayout.inspectorMaximum)
-        .background(WorkflowRunSplitPosition(isLoading: isLoading, presentation: presentation, snapshot: splitSnapshot))
+        .background(WorkflowRunSplitPosition(isLoading: isLoading, isGraph: isGraph, presentation: presentation, snapshot: splitSnapshot))
     }
 }
 

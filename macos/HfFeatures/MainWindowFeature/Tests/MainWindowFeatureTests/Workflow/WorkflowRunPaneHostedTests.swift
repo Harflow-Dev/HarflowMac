@@ -104,6 +104,31 @@ import Testing
     }
 
     @Test
+    func givenParallelPaneAtNarrowDetailWidth_whenClamped_thenInspectorKeepsItsIdealBesideTheLaneFloor() async throws {
+        // given: this width fits the 360-point Parallel lane floor, the 288-point inspector, and the divider,
+        // but not the old 400-point Graph reserve plus the inspector ideal.
+        let state = HostedRunPaneState()
+        state.isGraph = false
+        let fixture = RedesignHost(HostedRunPaneFixture(state: state), size: CGSize(width: 660, height: 620))
+        defer { fixture.close() }
+
+        // when: the Parallel split reaches its mode-aware clamp.
+        await fixture.settle {
+            guard let split = fixture.descendants.compactMap({ $0 as? NSSplitView }).first(where: \.isVertical),
+                  split.arrangedSubviews.count == 2 else { return false }
+            return abs((split.arrangedSubviews.last?.bounds.width ?? 0) - WorkflowRunLayout.defaultInspectorIdeal) < 1
+                && (split.arrangedSubviews.first?.bounds.width ?? 0) >= ParallelLayout.minimumColumnWidth
+        }
+
+        // then: native allocations preserve both minimum regions and the default ideal.
+        let split = try #require(fixture.descendants.compactMap { $0 as? NSSplitView }.first { $0.isVertical })
+        let laneRegion = try #require(split.arrangedSubviews.first)
+        let inspector = try #require(split.arrangedSubviews.last)
+        #expect(abs(inspector.bounds.width - WorkflowRunLayout.defaultInspectorIdeal) < 1)
+        #expect(laneRegion.bounds.width >= ParallelLayout.minimumColumnWidth)
+    }
+
+    @Test
     func givenActivityPane_whenLoadingChanges_thenActivityIdealAndUserResizePersist() async throws {
         let state = HostedRunPaneState()
         state.presentation = .activity

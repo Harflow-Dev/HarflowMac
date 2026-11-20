@@ -179,10 +179,7 @@ struct TaskDetailToolbar: View, Equatable {
         let label = snapshot.isRightPane
             ? (snapshot.showsInspector ? "Hide right pane" : "Show right pane")
             : (snapshot.showsInspector ? "Hide event details" : "Show event details")
-        return Button(action: actions.toggleInspector) { Image(systemName: "sidebar.right") }
-            .buttonStyle(QuietButtonStyle(isSelected: snapshot.showsInspector))
-            .help(label)
-.accessibilityLabel(label)
+        return InspectorVisibilityToggle(isVisible: snapshot.showsInspector, label: label, action: actions.toggleInspector)
     }
 
     @ViewBuilder private var menuItems: some View {
@@ -272,4 +269,29 @@ private func noTerminalPreview() -> some View {
 
 #Preview("Toolbar, terminal unavailable - light") { noTerminalPreview().preferredColorScheme(.light) }
 #Preview("Toolbar, terminal unavailable - dark") { noTerminalPreview().preferredColorScheme(.dark) }
+#endif
+
+// MARK: - InspectorVisibilityToggle
+
+struct InspectorVisibilityToggle: View {
+    let isVisible: Bool
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) { Image(systemName: "sidebar.right") }
+            .buttonStyle(QuietButtonStyle(isSelected: isVisible))
+            .help(label)
+            .accessibilityLabel(label)
+    }
+}
+
+#if DEBUG
+#Preview("Inspector visibility") {
+    HStack {
+        InspectorVisibilityToggle(isVisible: true, label: "Hide right pane") {}
+        InspectorVisibilityToggle(isVisible: false, label: "Show right pane") {}
+    }
+    .padding()
+}
 #endif

@@ -14,6 +14,7 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
     /// Local presentation state for the non-blocking recovery overlay; never VM state.
     @State private var summaryExpanded = false
     @State private var lastLoadingWasRun = false
+    @State private var hiddenDefaultSidebarRunID: String?
     @State private var recoveryOverlay = WorkflowRecoveryOverlayPresentation()
     /// The incrementing editor focus request issued by the eligible badge; the visible editor consumes it.
     @State var recoveryFocus = WorkflowRecoveryFocusRequest()
@@ -45,9 +46,13 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
         .onChange(of: viewModel.initialLoadingKind, initial: true) { _, kind in
             if let kind { lastLoadingWasRun = kind == "run" }
         }
+        .onChange(of: viewModel.selectedRun?.id) { _, _ in hiddenDefaultSidebarRunID = nil }
+        .onChange(of: sidebarIsProtected, initial: true) { _, protected in
+            if protected { hiddenDefaultSidebarRunID = nil }
+        }
         .onChange(of: viewMode, initial: true) { _, mode in viewModel.setRunGraphVisible(mode == "Graph") }
         .onChange(of: viewModel.runSidebar.announcementIdentity) { _, _ in
-            guard viewMode == "Graph" else { return }
+            guard viewMode == "Graph", runSidebarSlot != .defaultSidebar || defaultSidebarVisible else { return }
             let message = viewModel.runSidebar.isDefault ? "Workflow summary" : viewModel.runSidebar.title
             NSAccessibility.post(element: NSApp, notification: .announcementRequested,
                                  userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
@@ -116,6 +121,20 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 }
             }
         }
+    }
+
+    private var sidebarIsProtected: Bool {
+        guard let run = viewModel.selectedRun else { return false }
+        return Self.admitsCallerApprovals(run) || viewModel.goalDraft?.runID == run.id
+    }
+
+    private var defaultSidebarVisible: Bool {
+        sidebarIsProtected || hiddenDefaultSidebarRunID != viewModel.selectedRun?.id
+    }
+
+    private var offersSidebarToggle: Bool {
+        viewModel.initialLoadingKind == nil && !viewModel.initialLoadFailed
+            && viewModel.selectedRun?.isBuilder == false && runSidebarSlot == .defaultSidebar && !sidebarIsProtected
     }
 
     private var header: some View {
@@ -234,6 +253,12 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
             if run.parentRunID != nil {
                 Button("Open root to cancel") { viewModel.openRun(run.rootRunID) }
                     .buttonStyle(MonitorButtonStyle(.glass))
+            }
+            if offersSidebarToggle {
+                InspectorVisibilityToggle(isVisible: defaultSidebarVisible,
+                                          label: defaultSidebarVisible ? "Hide right pane" : "Show right pane") {
+                    hiddenDefaultSidebarRunID = defaultSidebarVisible ? run.id : nil
+                }
             }
         } else if viewModel.isEditing {
             Button("Edit with agent", systemImage: "sparkles") { viewModel.prepareGeneration(refining: true) }
@@ -466,6 +491,7 @@ private extension WorkflowView {
         return GeometryReader { viewport in
             VStack(spacing: HfRadius.Metrics.zero) {
             WorkflowRunPanes(isGraph: viewMode == "Graph", isLoading: isLoading,
+                             showsInspector: isLoading || viewModel.initialLoadFailed || slot != .defaultSidebar || defaultSidebarVisible,
                              canvasChromeHeight: WorkflowStandaloneLayout.height,
                              presentation: slot.paneSizing) {
                 SkeletonContent(isLoading: isLoading) { WorkflowLoadingCanvas() } content: {

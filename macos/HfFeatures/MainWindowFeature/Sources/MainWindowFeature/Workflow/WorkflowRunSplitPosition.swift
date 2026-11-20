@@ -8,16 +8,26 @@ import SwiftUI
 /// Retain the last laid-out dividers across that one transition, including user resizing.
 struct WorkflowRunSplitPosition: NSViewRepresentable {
     let isLoading: Bool
+    let isGraph: Bool
     let presentation: WorkflowRunPaneSizing
     let snapshot: WorkflowRunSplitSnapshot
 
     func makeNSView(context _: Context) -> WorkflowRunSplitProbe {
-        WorkflowRunSplitProbe(snapshot: snapshot)
+        snapshot.updateVisibility(true)
+        snapshot.update(isLoading: isLoading, isGraph: isGraph, presentation: presentation)
+        let probe = WorkflowRunSplitProbe(snapshot: snapshot)
+        snapshot.activeProbe = probe
+        return probe
     }
 
     func updateNSView(_ view: WorkflowRunSplitProbe, context _: Context) {
-        snapshot.update(isLoading: isLoading, presentation: presentation)
+        snapshot.updateVisibility(true)
+        snapshot.update(isLoading: isLoading, isGraph: isGraph, presentation: presentation)
         view.needsLayout = true
+    }
+
+    static func dismantleNSView(_ view: WorkflowRunSplitProbe, coordinator _: ()) {
+        view.didUnmount()
     }
 }
 
@@ -100,6 +110,8 @@ final class WorkflowRunSplitSnapshot {
     var restoring = false
     var loadingTransition = false
     var requestedPresentation: WorkflowRunPaneSizing = .default
+    var contentMinimum = WorkflowInspectorWidth.canvasMinimumWidth
+    var inspectorVisible = true
     var appliedPresentation: WorkflowRunPaneSizing?
     var inspectorWidths: [WorkflowRunPaneSizing: CGFloat] = [:]
     var lastInspectorIdentity: ObjectIdentifier?
@@ -108,10 +120,22 @@ final class WorkflowRunSplitSnapshot {
     var canvasHeight: CGFloat?
     var defaultInspectorOrigin: NSPoint?
     weak var defaultInspectorScroll: NSScrollView?
+    weak var activeProbe: WorkflowRunSplitProbe?
+    var lastContentMinimum: CGFloat?
     weak var inspectorSplit: NSSplitView?
     weak var canvasSplit: NSSplitView?
 
-    func update(isLoading: Bool, presentation: WorkflowRunPaneSizing) {
+    func updateVisibility(_ visible: Bool) {
+        guard inspectorVisible != visible else { return }
+        inspectorVisible = visible
+        lastInspectorIdentity = nil
+        lastObservedInspectorWidth = nil
+        defaultInspectorScroll = nil
+        defaultInspectorOrigin = nil
+    }
+
+    func update(isLoading: Bool, isGraph: Bool, presentation: WorkflowRunPaneSizing) {
+        contentMinimum = isGraph ? WorkflowInspectorWidth.canvasMinimumWidth : ParallelLayout.minimumColumnWidth
         if let previous = self.isLoading, previous != isLoading { loadingTransition = true }
         self.isLoading = isLoading
         requestedPresentation = presentation
@@ -131,6 +155,13 @@ final class WorkflowRunSplitProbe: NSView {
     @available(*, unavailable)
     required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    func didUnmount() {
+        if snapshot.activeProbe === self {
+            snapshot.activeProbe = nil
+            snapshot.updateVisibility(false)
+        }
+    }
+
     override func layout() {
         super.layout()
         guard !snapshot.restoring else { return }
@@ -140,13 +171,13 @@ final class WorkflowRunSplitProbe: NSView {
                 let identity = ObjectIdentifier(split)
                 let boundsWidth = split.bounds.width
                 let requested = snapshot.requestedPresentation
-                let availableForInspector = boundsWidth - WorkflowInspectorWidth.canvasMinimumWidth - split.dividerThickness
+                let availableForInspector = boundsWidth - snapshot.contentMinimum - split.dividerThickness
                 let canInitialize = availableForInspector >= WorkflowRunLayout.inspectorMinimum
                 let identityChanged = snapshot.lastInspectorIdentity != identity
                 let boundsChanged = snapshot.lastInspectorBoundsWidth != boundsWidth
                 let presentationChanged = snapshot.appliedPresentation != requested
                 let didApply = canInitialize && (presentationChanged || identityChanged || boundsChanged
-                    || (snapshot.loadingTransition && snapshot.appliedPresentation == requested))
+                    || snapshot.lastContentMinimum != snapshot.contentMinimum || snapshot.loadingTransition)
 
                 if didApply {
                     let defaultScroll = snapshot.defaultInspectorScroll
@@ -154,7 +185,8 @@ final class WorkflowRunSplitProbe: NSView {
                         snapshot.defaultInspectorOrigin = defaultScroll?.contentView.bounds.origin
                     }
                     let preferred = snapshot.inspectorWidths[requested] ?? WorkflowRunLayout.inspectorIdeal(for: requested)
-                    let width = WorkflowInspectorWidth.clamped(preferred, available: boundsWidth)
+                    let width = min(max(WorkflowRunLayout.inspectorMinimum, preferred),
+                                    min(WorkflowRunLayout.inspectorMaximum, availableForInspector))
                     snapshot.restoring = true
                     split.setPosition(boundsWidth - width - split.dividerThickness, ofDividerAt: 0)
                     if presentationChanged, requested.ownsDefaultInspectorScroll,
@@ -178,6 +210,7 @@ final class WorkflowRunSplitProbe: NSView {
                 snapshot.lastObservedInspectorWidth = width
                 snapshot.lastInspectorIdentity = identity
                 snapshot.lastInspectorBoundsWidth = boundsWidth
+                snapshot.lastContentMinimum = snapshot.contentMinimum
                 if requested.ownsDefaultInspectorScroll {
                     // Capture the owner while only the default inspector is visible;
                     // an activity feed may precede it in the native tree when selected.

@@ -6,6 +6,10 @@ import SwiftUI
 // MARK: - Run sidebar
 
 extension WorkflowView {
+    static func admitsCallerApprovals(_ run: WorkflowRunModel) -> Bool {
+        CallerApprovalPanel.containsOptIn(.object(run.raw)) || (run.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0
+    }
+
     /// The default run sidebar. With `showsRecovery` it is re-headed as the recovery pane: a fixed head, then the
     /// recovery section and the goal block, then the same sections in the same order. It is one instance either way, so
     /// the approvals poller and the scroll view keep their identity when recovery eligibility changes.
@@ -53,7 +57,7 @@ extension WorkflowView {
                 .buttonStyle(QuietButtonStyle())
                 .padding(.horizontal, HfRadius.Metrics.spacing16)
         }
-        if CallerApprovalPanel.containsOptIn(.object(run.raw)) || (run.raw["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 {
+        if Self.admitsCallerApprovals(run) {
             CallerApprovalPanel(workflowRunID: run.id,
                                 polls: (viewMode != "Graph" || viewModel.runSidebar.isDefault)
                                     && ["running", "needs_attention", "needs_input"].contains(run.status))
