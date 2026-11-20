@@ -73,4 +73,4 @@ None of the three are in the task screen stage 1 covers; they belong to the M08 
 
 ## Owner sign-off
 
-Pending: the owner's decision whether the three workflow-builder failures block stage 1 or move to the M08 follow-up, the owner's look with the Check copy, and sign-off.
+Signed off by the owner on 2026-11-20, after a look at the Harflow Check copy built from `de3e83fa`. The three workflow-builder failures were handled as M08 work, outside stage 1, and have since been fixed. The owner accepted the repository picker popover in dark mode and its re-anchoring when the pill width changes. Stage 1 is accepted.
