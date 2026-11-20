@@ -1,9 +1,9 @@
 # Stage 2 gate
 
-The focused Needs you retry closed the missing Stage 2 capture on the tested commit.
-The owner reported that the Check app looked good and deferred spoken VoiceOver
-to final app acceptance. Formal Stage 2 sign-off remains pending. Three Stage 1 fixture failures remain recorded
-from the full MainWindow run.
+The owner signed off on Stage 2 on 2026-11-20 after reviewing Harflow Check
+from `a0c5b759`. Spoken VoiceOver is deferred to final app acceptance (M12).
+The focused Needs you retry closed the missing Stage 2 capture. Three Stage 1
+fixture failures remain recorded from the full MainWindow run.
 
 ## Scope
 
@@ -118,3 +118,9 @@ a contract change. Current Mac refusal copy covers the known cases, with additio
 still open in the coverage ledger. Direct inline question submission in the menu bar needs
 an approved design. The delivered menu question flow uses the existing Needs you routing.
 Signing, distribution and broader M07/M12 migration acceptance require their own evidence.
+
+## Owner sign-off
+
+On 2026-11-20, the owner confirmed Stage 2 acceptance after reporting that Harflow
+Check looked good. The sign-off includes the deferral of spoken VoiceOver to M12
+and applies to the delivered Stage 2 scope above.
