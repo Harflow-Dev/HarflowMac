@@ -85,19 +85,84 @@ extension TopBarIntegratedFixture {
     /// The keyboard fallback is the window itself, which is what AppKit makes first responder when nothing in the window
     /// accepts focus. Any other view holding focus (the composer's field editor, the transcript, a facts group) is not a
     /// return to the chip and is not accepted: the accessibility route needs the window as first responder *and* the
-    /// cursor on the chip.
+    /// cursor on the chip. The accessibility route is accepted with Keyboard Navigation off.
     func focusReturn(to item: NSToolbarItem, label: String) -> TopBarFocusReturn? {
-        if let view = item.view, let responder = window.firstResponder as? NSView, responder === view || responder.isDescendant(of: view) {
-            return .keyboard
-        }
-        if window.firstResponder === window, focusedLabel == label { return .accessibility }
+        if hasNativeFocusReturn(to: item) { return .keyboard }
+        if !NSApp.isFullKeyboardAccessEnabled, hasAccessibilityFocusReturn(label: label) { return .accessibility }
         return nil
+    }
+
+    /// Native focus on the toolbar item's own view or one of its descendants.
+    func hasNativeFocusReturn(to item: NSToolbarItem) -> Bool {
+        guard let view = item.view, let responder = window.firstResponder as? NSView else { return false }
+        return responder === view || responder.isDescendant(of: view)
+    }
+
+    /// The accessibility fallback is accepted only when AppKit has fallen back to the window.
+    func hasAccessibilityFocusReturn(label: String) -> Bool {
+        window.firstResponder === window && focusedLabel == label
+    }
+
+    /// Observes AppKit's bounded native key-view loop without changing focus.
+    func keyViewLoopReaches(_ target: NSView, from anchor: NSView, forward: Bool) -> Bool {
+        var visited = Set<ObjectIdentifier>()
+        var current: NSView? = anchor
+        for _ in 0 ..< 128 {
+            guard let view = current, view.window === window,
+                  visited.insert(ObjectIdentifier(view)).inserted else { return false }
+            if view === target { return true }
+            current = forward ? view.nextValidKeyView : view.previousValidKeyView
+        }
+        return false
+    }
+
+    /// Checks that either native direction from More actions reaches the exact production chip responder.
+    func expectChipInNativeKeyViewLoop(_ item: NSToolbarItem) throws {
+        let target = try #require(item.view.flatMap(TaskPaneChipFocus.uniqueResponder(in:)),
+                                  "the exact production chip responder was not unique")
+        let more = try #require(self.item(TopBarIntegratedFixture.more), "More actions toolbar item was not found")
+        let anchor = try #require(more.view.flatMap(TaskPaneChipFocus.uniqueResponder(in:)),
+                                  "More actions has no unique native responder anchor")
+        #expect(anchor.window === window, "More actions responder belongs to another window")
+        #expect(target.window === window, "chip responder belongs to another window")
+        let reachable = keyViewLoopReaches(target, from: anchor, forward: true)
+            || keyViewLoopReaches(target, from: anchor, forward: false)
+        #expect(reachable, "neither native key-view direction reached the exact chip target")
+    }
+
+    /// Preserves explicit evidence that neither accepted focus-return route was active before interaction.
+    func expectFocusNotAlreadyOnChip(_ item: NSToolbarItem, label: String) {
+        #expect(!hasNativeFocusReturn(to: item), "native focus was already on the chip before it was pressed")
+        #expect(!hasAccessibilityFocusReturn(label: label), "accessibility focus was already on the chip before it was pressed")
     }
 }
 
 // MARK: - Interaction
 
 extension TaskTopBarIntegratedHostedTests {
+
+    private func renderedChip(in fixture: Fixture, _ chip: TopBarChip) async throws -> (NSToolbarItem, NSObject, String) {
+        let content = try #require(fixture.content, "the task never published its top bar content")
+        let label = chip.label(for: content)
+        await waitUntil(timeout: 8) {
+            fixture.keepActive()
+            fixture.pump()
+            return fixture.item(chip.identifier).flatMap { item in fixture.element(labelled: label, in: item) } != nil
+        }
+        let item = try #require(fixture.item(chip.identifier), "no \(chip.identifier); items \(fixture.itemIdentifiers)")
+        let button = try #require(fixture.element(labelled: label, in: item),
+                                  "no control labelled \(label): \(item.view.map(fixture.strings(in:)) ?? [])")
+        return (item, button, label)
+    }
+
+    private func waitForExpandedChip(_ fixture: Fixture, chip: TopBarChip) async {
+        await waitUntil(timeout: 8) {
+            fixture.keepActive()
+            fixture.pump()
+            fixture.publish()
+            return fixture.hasPane && fixture.groupValue(chip.header) == "Expanded"
+        }
+    }
 
     @Test(arguments: TopBarChip.allCases)
     func givenARenderedChip_whenPressedAndItsPaneIsClosedFromThePane_thenTheFactsGroupOpensAndFocusReturnsToTheChipOrTheWindow(
@@ -108,30 +173,23 @@ extension TaskTopBarIntegratedHostedTests {
                                           resourceReturn: true))
         defer { fixture.close() }
         fixture.keepActive()
-        let content = try #require(fixture.content, "the task never published its top bar content")
-        let label = chip.label(for: content)
-        await waitUntil(timeout: 8) {
-            fixture.keepActive()
-            fixture.pump()
-            return fixture.item(chip.identifier).flatMap { item in fixture.element(labelled: label, in: item) } != nil
-        }
-        let item = try #require(fixture.item(chip.identifier), "no \(chip.identifier); items \(fixture.itemIdentifiers)")
-        let button = try #require(fixture.element(labelled: label, in: item), "no control labelled \(label): \(item.view.map(fixture.strings(in:)) ?? [])")
+        let (item, button, label) = try await renderedChip(in: fixture, chip)
+        let keyboardNavigationEnabled = NSApp.isFullKeyboardAccessEnabled
+        print("TOPBAR chip focus Keyboard Navigation enabled: \(keyboardNavigationEnabled)")
         #expect(fixture.isOnScreen(item), "the chip is not drawn in the bar")
         #expect(!fixture.hasPane)
         // the return must be a change this test causes: before the press, focus is not already on the chip either way
-        #expect(fixture.focusReturn(to: item, label: label) == nil, "focus was already on the chip before it was pressed")
+        fixture.expectFocusNotAlreadyOnChip(item, label: label)
+
+        if keyboardNavigationEnabled {
+            try fixture.expectChipInNativeKeyViewLoop(item)
+        }
 
         print(fixture.focusDiagnostics(item: item, stage: "\(chip.header) before press"))
 
         // when the actual rendered chip is pressed
         #expect(M04ToolbarEvidence.press(button), "\(label) did not accept a press")
-        await waitUntil(timeout: 8) {
-            fixture.keepActive()
-            fixture.pump()
-            fixture.publish()
-            return fixture.hasPane && fixture.groupValue(chip.header) == "Expanded"
-        }
+        await waitForExpandedChip(fixture, chip: chip)
 
         // then the pane is open on Events with that group expanded, in the rendered tree and in the store
         #expect(fixture.hasPane, "the pane did not open")
@@ -177,7 +235,12 @@ extension TaskTopBarIntegratedHostedTests {
         let responder = String(describing: fixture.window.firstResponder)
         let accessibility = String(describing: fixture.focusedLabel)
         print("TOPBAR chip focus \(chip.header): \(outcome?.rawValue ?? "none"); responder \(responder); accessibility \(accessibility)")
-        #expect(outcome != nil, "focus did not return to the chip; responder \(responder), accessibility \(accessibility)")
+        if keyboardNavigationEnabled {
+            #expect(fixture.hasNativeFocusReturn(to: item),
+                    "native focus did not return to the chip; responder \(responder), accessibility \(accessibility)")
+        } else {
+            #expect(outcome != nil, "focus did not return to the chip; responder \(responder), accessibility \(accessibility)")
+        }
         #expect(fixture.item(chip.identifier) === item, "the chip item was rebuilt by the reveal")
     }
 }

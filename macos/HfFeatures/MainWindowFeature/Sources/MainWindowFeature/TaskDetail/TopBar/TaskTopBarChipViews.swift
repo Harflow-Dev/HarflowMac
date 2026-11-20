@@ -55,7 +55,6 @@ struct TaskTopBarChip: View {
             .fixedSize()
         }
         .buttonStyle(TaskTopBarChipStyle())
-        .modifier(StandaloneFocusable(isEnabled: true))
         .help(help)
         .accessibilityLabel(help)
     }

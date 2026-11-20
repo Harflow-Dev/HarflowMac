@@ -201,16 +201,3 @@ enum NoticeSummary {
         count > 0 ? "\(count) notice\(count == 1 ? "" : "s")" : nil
     }
 }
-
-// MARK: - StandaloneFocusable
-
-/// Makes a control programmatically focusable on the standalone mount only. Elsewhere it is the identity, so the
-/// group and embedded mounts keep the controls' default focus behaviour exactly.
-struct StandaloneFocusable: ViewModifier {
-    let isEnabled: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isEnabled { content.focusable() } else { content }
-    }
-}
