@@ -1,8 +1,9 @@
 # Stage 2 gate
 
 The focused Needs you retry closed the missing Stage 2 capture on the tested commit.
-Owner visual and spoken VoiceOver checks and sign-off remain pending. Three Stage 1
-fixture failures remain recorded from the full MainWindow run.
+The owner reported that the Check app looked good. Spoken VoiceOver and formal
+Stage 2 sign-off remain pending. Three Stage 1 fixture failures remain recorded
+from the full MainWindow run.
 
 ## Scope
 
@@ -88,6 +89,9 @@ Send answer control. Evidence is under `.claude-work/mac/stage2/run-needs-you-2/
 The original full-run result and three remaining Stage 1 failures stand.
 
 ## Owner check
+
+On 2026-11-20, the owner reported that the Harflow Check app looked good. The
+individual checklist items and spoken VoiceOver were not separately reported.
 
 Use the Check bundle with an isolated generated fixture and verified managed-runtime and
 preference isolation, as documented in [development.md](../development.md).
