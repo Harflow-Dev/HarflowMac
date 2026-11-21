@@ -39,14 +39,24 @@ public struct CtlClient: Sendable {
 
     func call(_ command: String, options: [String] = [], positionals: [String] = [], timeout: Double = quickTimeout,
               requiringCapability: String? = nil) async -> Result<CtlDocument, ToolError> {
-        await raw(command, options: options, positionals: positionals, timeout: timeout, requiringCapability: requiringCapability)
-            .flatMap { output in
-                let decodeStart = MonitorMetrics.begin()
-                defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
-                return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
-                                          command: command, productVersion: compatibilityContext.productVersion,
-                                          eventPage: Self.isWorkflowActivity(command, options: options))
-            }
+        await callWithCapabilities(command, options: options, positionals: positionals, timeout: timeout,
+                                   requiringCapability: requiringCapability).map(\.document)
+    }
+
+    /// Decodes the ordinary document while retaining its admitting probe's capabilities.
+    func callWithCapabilities(_ command: String, options: [String] = [], positionals: [String] = [],
+                              timeout: Double = quickTimeout, requiringCapability: String? = nil)
+        async -> Result<(document: CtlDocument, capabilities: Set<String>), ToolError> {
+        await rawWithCapabilities(commandPath: [command], label: command, options: options,
+                                  positionals: positionals, timeout: timeout, requiringCapability: requiringCapability).flatMap { response in
+            let output = response.output
+            let decodeStart = MonitorMetrics.begin()
+            defer { MonitorMetrics.end(decodeStart, stage: .decode, bytes: output.stdout.count) }
+            return CtlDocument.decode(stdout: output.stdout, stderr: output.stderr, exitCode: output.exitCode,
+                                      command: command, productVersion: compatibilityContext.productVersion,
+                                      eventPage: Self.isWorkflowActivity(command, options: options))
+                .map { (document: $0, capabilities: response.capabilities) }
+        }
     }
 
     /// The transport half of `call`, with no document decode: run the argv, classify a timeout,
@@ -62,6 +72,15 @@ public struct CtlClient: Sendable {
     /// Runs a bounded command path as separate argv tokens; the label is used only for diagnostics.
     public func raw(commandPath: [String], label command: String, options: [String] = [], positionals: [String] = [],
                     timeout: Double = 30, requiringCapability: String? = nil) async -> Result<ProcessOutput, ToolError> {
+        await rawWithCapabilities(commandPath: commandPath, label: command, options: options,
+                                  positionals: positionals, timeout: timeout,
+                                  requiringCapability: requiringCapability).map(\.output)
+    }
+
+    /// Retains only the capabilities from the same fresh probe that admitted this command.
+    func rawWithCapabilities(commandPath: [String], label command: String, options: [String] = [],
+                             positionals: [String] = [], timeout: Double = 30,
+                             requiringCapability: String? = nil) async -> Result<(output: ProcessOutput, capabilities: Set<String>), ToolError> {
         guard !commandPath.isEmpty, commandPath.count <= 4,
               commandPath.allSatisfy(Self.validCommandToken) else {
             return .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Invalid command path"))
@@ -74,9 +93,11 @@ public struct CtlClient: Sendable {
         if command == "task-events" || Self.isWorkflowActivity(command, options: options), !operationIsCurrent() || Task.isCancelled {
             return .failure(WireEnvelope.incompatibility("task-events operation superseded after compatibility probe"))
         }
+        let capabilities: Set<String>
         switch probe {
         case .failure(let error): return .failure(error)
         case .success(let info):
+            capabilities = info.capabilities
             if let requiringCapability, !info.capabilities.contains(requiringCapability) {
                 return .failure(.unsupportedCommand(tool: "harflow-ctl", command: command, detail: "Missing capability \(requiringCapability)"))
             }
@@ -93,6 +114,7 @@ public struct CtlClient: Sendable {
             return .failure(WireEnvelope.incompatibility("task-events operation superseded after response"))
         }
         return output.flatMap { validateTransportOutput($0, command: command, options: options, timeout: timeout) }
+            .map { (output: $0, capabilities: capabilities) }
     }
 
     /// Both supported argv spellings share the activity event contract and byte budget.

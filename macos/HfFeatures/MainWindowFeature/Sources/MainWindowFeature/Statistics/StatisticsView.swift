@@ -109,6 +109,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
             } else if let nodes = viewModel.presentation.nodes {
                 nodePage(nodes)
             } else {
+                reportedCost
                 chart
                 ranking
             }
@@ -118,6 +119,17 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var reportedCost: some View {
+        let cost = viewModel.presentation.reportedCost
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Reported cost").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+            Text(cost.value).font(.hf(.title)).foregroundStyle(Color.primaryText)
+            Text(cost.coverage).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .statisticsCard()
     }
 
     private var controls: some View {

@@ -25,6 +25,38 @@ import Testing
         try await assertViewport(style: style, width: 1000, host: host, window: window)
     }
 
+    @Test func givenStaleReadyOverview_whenMounted_thenReportedCostAppearsOnlyOutsideWorkflowDrilldown() async {
+        // given
+        let model = CaptureModel()
+        model.presentation.refreshFailure = "Showing the last complete snapshot."
+        model.presentation.reportedCost = .init(value: "$12.50", coverage: "Reported by 5 of 5 executions")
+        let fixture = RedesignHost(StatisticsView(model), size: CGSize(width: 1000, height: 620), appearance: .light)
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle {
+            fixture.element("Reported cost") != nil
+                && fixture.element("$12.50") != nil
+                && fixture.element("Reported by 5 of 5 executions") != nil
+        }
+
+        // then
+        #expect(model.presentation.state == .ready)
+        #expect(model.presentation.refreshFailure != nil)
+        #expect(fixture.element("Reported cost") != nil)
+        #expect(fixture.element("$12.50") != nil)
+        #expect(fixture.element("Reported by 5 of 5 executions") != nil)
+
+        model.presentation.nodes = .init(
+            workflowID: "flow", title: "Build", subtitle: "Workflow node",
+            wallTime: "Unavailable", executionTime: "10 min", usage: "Unavailable",
+            rows: [], footer: "No executions"
+        )
+        await fixture.settle { fixture.element("Reported cost") == nil }
+        #expect(fixture.element("Reported cost") == nil)
+        #expect(fixture.element("Reported by 5 of 5 executions") == nil)
+    }
+
     private func assertViewport(style: NSScroller.Style, width: CGFloat, host: NSHostingView<StatisticsView<CaptureModel>>, window: NSWindow) async throws {
         window.setContentSize(CGSize(width: width, height: 620))
         host.frame = CGRect(x: 0, y: 0, width: width, height: 620)

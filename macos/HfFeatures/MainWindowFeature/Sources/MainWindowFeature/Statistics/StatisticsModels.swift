@@ -98,6 +98,11 @@ struct StatisticsNodePage: Equatable, Sendable {
     var secondaryColumn = "Usage"
 }
 
+struct StatisticsCostPresentation: Equatable, Sendable {
+    var value = "Unavailable"
+    var coverage = "Cost coverage unavailable"
+}
+
 struct StatisticsPresentation: Equatable, Sendable {
     var state: StatisticsScreenState = .loading
     var range: StatisticsRange = .thirty
@@ -121,4 +126,6 @@ struct StatisticsPresentation: Equatable, Sendable {
     var secondaryColumn = "Usage"
     var nodes: StatisticsNodePage?
     var refreshFailure: String?
+    var reportedCost = StatisticsCostPresentation()
+    var perHarnessCosts: [String: StatisticsCostPresentation] = [:]
 }

@@ -75,6 +75,12 @@ enum StatisticsProjection {
             fact.kind == "execution" && (selection.harness == nil || requestedHarnessID(fact) == selection.harness)
                 && (selection.requestedModel == nil || requestedModelID(fact) == selection.requestedModel)
         }
+        result.reportedCost = reportedCost(matching, qualified: snapshot.costCoverage != nil)
+        for (harness, facts) in Dictionary(grouping: matching, by: requestedHarnessID) {
+            var cost = reportedCost(facts, qualified: snapshot.costCoverage != nil)
+            if harness == unknownHarness { cost.value = "Unavailable" }
+            result.perHarnessCosts[harness] = cost
+        }
         let queryCalendar = snapshot.calendar ?? calendar
         let anchor = snapshot.anchorDate ?? now
         let ranking = ranking(facts: filtered, matching: matching, selection: selection, calendar: queryCalendar)
@@ -93,6 +99,46 @@ enum StatisticsProjection {
             let members = workflowMembers(roots, matching: matching)
             result.nodes = nodePage(id: id, roots: roots, executions: members, selection: selection, calendar: queryCalendar)
             result.coverage = coverage(snapshot, selected: members, label: "Selected workflow")
+        }
+        return result
+    }
+
+    static func reportedCost(_ facts: [StatisticsFact], qualified: Bool) -> StatisticsCostPresentation {
+        guard qualified else { return .init() }
+        var amounts: [Double] = []
+        var eligible = 0
+        for fact in facts {
+            switch fact.reportedCost {
+            case .excluded: continue
+            case .unavailable: eligible += 1
+            case .reported(let value): eligible += 1; amounts.append(value)
+            case .unqualified, .invalid: return .init()
+            }
+        }
+        guard eligible > 0 else { return .init(coverage: "No eligible executions") }
+        var result = StatisticsCostPresentation(coverage: "Reported by \(amounts.count) of \(eligible) executions")
+        guard amounts.count == eligible else { return result }
+        // Add smaller contributions first with compensation before formatting the final USD total.
+        var total = 0.0
+        var compensation = 0.0
+        for amount in amounts.sorted() {
+            let adjusted = amount - compensation
+            let next = total + adjusted
+            compensation = (next - total) - adjusted
+            total = next
+            guard total.isFinite else { return result }
+        }
+        if total > 0, total < 0.005 {
+            result.value = "<$0.01"
+        } else {
+            let formatter = NumberFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.numberStyle = .decimal
+            formatter.usesGroupingSeparator = true
+            formatter.minimumFractionDigits = 2
+            formatter.maximumFractionDigits = 2
+            formatter.roundingMode = .halfUp
+            result.value = formatter.string(from: NSNumber(value: total)).map { "$" + $0 } ?? "Unavailable"
         }
         return result
     }

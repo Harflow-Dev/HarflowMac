@@ -9,6 +9,7 @@ struct StatisticsSnapshot: Equatable, Sendable {
     var page: StatisticsPage
     var anchorDate: Date?
     var calendar: Calendar?
+    var costCoverage: StatisticsCostCoverage?
 }
 
 enum StatisticsHistoryResult: Sendable {
@@ -43,8 +44,17 @@ actor StatisticsHistoryWorker {
         var cursors: Set<String> = []
         var preparing = 0
         var pages = 0
+        var costQualified: Bool?
+        var costCoverage: StatisticsCostCoverage?
+        var costConsistent = true
 
         mutating func append(_ page: StatisticsPage) -> String? {
+            if let costQualified {
+                costConsistent = costConsistent && costQualified == page.costQualified && costCoverage == page.costCoverage
+            } else {
+                costQualified = page.costQualified
+                costCoverage = page.costCoverage
+            }
             for fact in page.items {
                 guard identities.insert("\(fact.kind):\(fact.id)").inserted else { return "History returned duplicate facts. Retry." }
                 facts.append(fact)
@@ -101,9 +111,26 @@ actor StatisticsHistoryWorker {
             guard !Task.isCancelled, now() < deadline else {
                 return .complete(.failed("History read exceeded its time budget or was cancelled. No totals are shown."))
             }
-            return .complete(.ready(.init(facts: walk.facts, page: page)))
+            let coverage = verifiedCostCoverage(walk)
+            return .complete(.ready(.init(facts: walk.facts, page: page, costCoverage: coverage)))
         }
         return nil
+    }
+
+    private func verifiedCostCoverage(_ walk: WalkState) -> StatisticsCostCoverage? {
+        guard walk.costConsistent, walk.costQualified == true, let coverage = walk.costCoverage else { return nil }
+        var eligible = 0
+        var available = 0
+        for fact in walk.facts where fact.kind == "execution" {
+            switch fact.reportedCost {
+            case .excluded: continue
+            case .unavailable: eligible += 1
+            case .reported: eligible += 1; available += 1
+            case .unqualified, .invalid: return nil
+            }
+        }
+        guard eligible == coverage.eligibleExecutions, available == coverage.availableExecutions else { return nil }
+        return coverage
     }
 
     private func prepare(_ walk: inout WalkState) async -> Bool {

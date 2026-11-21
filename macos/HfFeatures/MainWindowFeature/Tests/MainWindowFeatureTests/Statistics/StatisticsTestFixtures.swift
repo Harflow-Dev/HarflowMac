@@ -6,14 +6,17 @@ import MonitorCore
 protocol StatisticsFixtures {}
 
 extension StatisticsFixtures {
-    func fact(_ fields: [String: JSONValue]) -> StatisticsFact { StatisticsFact(raw: fields) }
+    func fact(_ fields: [String: JSONValue], costQualified: Bool = false) -> StatisticsFact {
+        StatisticsFact(raw: fields, costQualified: costQualified)
+    }
 
     func execution(
         _ id: String, cohort: Double, duration: Double = 60, wall: Double? = nil,
         root: String? = nil, repository: String = "/repo", model: String? = nil,
         harness: String? = nil, timeQualification: String? = "qualified_waits", usage: Int? = nil,
         status: String = "completed",
-        durationAdditive: Bool = true
+        durationAdditive: Bool = true,
+        cost: StatisticsReportedCost = .unqualified
     ) -> StatisticsFact {
         var raw: [String: JSONValue] = [
             "id": .string(id), "kind": .string("execution"), "status": .string(status),
@@ -35,7 +38,32 @@ extension StatisticsFixtures {
                     "cache_read_tokens": .number(0), "cache_creation_tokens": .number(0)])
             ])
         }
-        return fact(raw)
+        switch cost {
+        case .unqualified:
+            break
+        case .invalid:
+            raw["execution_kind"] = .string("future")
+            raw["task_id"] = .string(id)
+            raw["cost_additive"] = .bool(false)
+        case .excluded:
+            raw["execution_kind"] = .string("native")
+            raw["cost_usd"] = .null
+            raw["cost_provenance"] = .null
+            raw["cost_additive"] = .bool(false)
+        case .unavailable:
+            raw["execution_kind"] = .string("initial")
+            raw["task_id"] = .string(id)
+            raw["cost_usd"] = .null
+            raw["cost_provenance"] = .null
+            raw["cost_additive"] = .bool(false)
+        case let .reported(value):
+            raw["execution_kind"] = .string("initial")
+            raw["task_id"] = .string(id)
+            raw["cost_usd"] = .number(value)
+            raw["cost_provenance"] = .string("backend_reported")
+            raw["cost_additive"] = .bool(true)
+        }
+        return fact(raw, costQualified: cost != .unqualified)
     }
 
     func workflow(_ id: String, cohort: Double, wall: Double, repo: String = "/repo") -> StatisticsFact {
@@ -47,7 +75,8 @@ extension StatisticsFixtures {
 
     func snapshot(
         _ facts: [StatisticsFact], eligible: Int = 0, available: Int = 0,
-        anchorDate: Date? = nil, calendar: Calendar? = nil
+        anchorDate: Date? = nil, calendar: Calendar? = nil,
+        costCoverage: StatisticsCostCoverage? = nil
     ) -> StatisticsSnapshot {
         let page = StatisticsPage(raw: [
             "projection_version": .number(1), "state": .string("ready"), "snapshot_id": .string("s"),
@@ -56,7 +85,9 @@ extension StatisticsFixtures {
             "accounting_coverage": .object(["eligible_executions": .number(Double(eligible)), "available_executions": .number(Double(available))]),
             "retention": .object(["state": .string("days"), "days": .number(90)])
         ])!
-        return StatisticsSnapshot(facts: facts, page: page, anchorDate: anchorDate, calendar: calendar)
+        return StatisticsSnapshot(
+            facts: facts, page: page, anchorDate: anchorDate, calendar: calendar, costCoverage: costCoverage
+        )
     }
 
     var calendar: Calendar {

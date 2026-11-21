@@ -20,6 +20,9 @@ public enum WireContract: String, Sendable, CaseIterable {
 
 /// Capabilities that qualify individual ctl operations beyond the base wire contract.
 public enum CtlCapability {
+    /// Qualifies reported execution costs and whole-snapshot cost coverage.
+    public static let statisticsCostModel = "statistics-cost-model.v1"
+
     /// Bounded direct-human pending launch inventory and exact lookup.
     public static let taskPendingLaunch = "task-pending-launch.v1"
     /// Permits bounded task event pages with independent lifecycle evidence.
