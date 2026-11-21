@@ -131,6 +131,8 @@ protocol WorkflowViewModel: ViewModel {
     var activityMessageItems: [WorkMessageQueue.Item] { get }
     var messageNotes: [String: String] { get }
     var activityMessageReadError: String? { get }
+    var activityMessagePhaseLock: ParallelMessageLock? { get }
+    func activityMessageSubmitter(now: Bool) -> (String) -> Bool
     /// True once the runtime is known not to support queued messaging; the node pane composers then lock bare.
     var messagingUnsupported: Bool { get }
     func refreshActivityMessageState() async
@@ -181,6 +183,15 @@ extension WorkflowViewModel {
     var messageNotes: [String: String] { [:] }
     var activityMessageBubbles: [WorkMessageBubble] {
         WorkMessageBubble.applying(WorkMessageBubble.project(items: activityMessageItems), notes: messageNotes)
+    }
+
+    var activityMessagePhaseLock: ParallelMessageLock? {
+        guard !steeringOwnsComposer else { return nil }
+        return WorkflowMessageScope.activity(run: selectedRun, sidebar: runSidebar)?.phaseLock(selectedRun?.status ?? "")
+    }
+
+    func activityMessageSubmitter(now: Bool) -> (String) -> Bool {
+        { self.submitActivityMessage($0, now: now) }
     }
 
     var activityMessageReadError: String? { nil }

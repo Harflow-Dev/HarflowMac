@@ -255,6 +255,7 @@ struct ParallelColumnRenderValue: Equatable {
     var hasMessageCancellation = false
     var chrome = ParallelColumnChrome.lane
     var messageLock: ParallelMessageLock?
+    var messageAdmission: WorkflowMessageAdmission?
     var inspectorApproval: WorkflowSelectedApprovalGate?
     var showsInspectorTitle = false
     var hidesInspectorComposer = false
@@ -279,7 +280,8 @@ struct ParallelColumnRenderValue: Equatable {
             && left.memberTaskIDs == right.memberTaskIDs && lhs.animatesArrival == rhs.animatesArrival
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
             && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
-            && lhs.chrome == rhs.chrome && lhs.messageLock == rhs.messageLock && lhs.inspectorApproval == rhs.inspectorApproval
+            && lhs.chrome == rhs.chrome && lhs.messageLock == rhs.messageLock && lhs.messageAdmission == rhs.messageAdmission
+            && lhs.inspectorApproval == rhs.inspectorApproval
             && lhs.showsInspectorTitle == rhs.showsInspectorTitle && lhs.hidesInspectorComposer == rhs.hidesInspectorComposer
             && lhs.request == rhs.request
             && lhs.requestFeedback == rhs.requestFeedback
@@ -306,7 +308,7 @@ extension ParallelColumnModel {
         value.cachedHistoryNotice = cachedHistoryNotice
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
                                         hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil,
-                                        chrome: chrome, messageLock: messageLock, inspectorApproval: inspectorApproval,
+                                        chrome: chrome, messageLock: messageLock, messageAdmission: messageAdmission, inspectorApproval: inspectorApproval,
                                         showsInspectorTitle: showsInspectorTitle, hidesInspectorComposer: hidesInspectorComposer,
                                         request: request, requestFeedback: requestFeedback)
     }

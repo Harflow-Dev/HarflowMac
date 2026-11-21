@@ -56,19 +56,24 @@ struct WorkflowActivityMessageComposer<VM: WorkflowViewModel>: View {
 
     /// An existing reason ("Not called yet.") keeps its own copy; unsupported applies to an otherwise sendable target,
     /// locking with no placeholder, no hint and no Send now.
-    static func boxModel(target: WorkflowActivityMessageTarget, unsupported: Bool, isBusy: Bool, queueOnly: Bool = false) -> MessageBoxModel {
-        let unsupported = unsupported && target.unavailableReason == nil
+    static func boxModel(target: WorkflowActivityMessageTarget, unsupported: Bool, isBusy: Bool, queueOnly: Bool = false,
+                         phaseLock: ParallelMessageLock? = nil) -> MessageBoxModel {
+        let reason = phaseLock?.disabledReason
+        let unsupported = unsupported && target.unavailableReason == nil && reason == nil
         return MessageBoxModel(
-            canSend: target.unavailableReason == nil && !unsupported, canContinue: false, isBusy: isBusy,
+            canSend: target.unavailableReason == nil && reason == nil && !unsupported, canContinue: false, isBusy: isBusy,
             label: queueOnly ? "Message the orchestrator" : target.taskID == nil ? "Message the child workflow orchestrator" : "Message this node",
-            hint: unsupported || queueOnly ? "" : "Send queues; Send now requests immediate delivery when safe",
-            placeholder: unsupported ? "" : target.unavailableReason ?? "Queue a message…", buttonLabel: "Send",
-            isLocked: target.unavailableReason != nil || unsupported, showsSendNow: !unsupported && !queueOnly)
+            hint: unsupported || queueOnly || reason != nil ? "" : "Send queues; Send now requests immediate delivery when safe",
+            placeholder: reason?.text ?? (unsupported ? "" : target.unavailableReason ?? "Queue a message…"), buttonLabel: "Send",
+            isLocked: reason != nil || target.unavailableReason != nil || unsupported,
+            showsSendNow: reason == nil && !unsupported && !queueOnly)
     }
 
     var body: some View {
         let target = viewModel.activityMessageTarget
         let unsupported = viewModel.messagingUnsupported
+        let submit = viewModel.activityMessageSubmitter(now: false)
+        let submitNow = viewModel.activityMessageSubmitter(now: true)
         VStack(spacing: HfRadius.Metrics.zero) {
             if showsBubbles {
                 WorkMessageBubblesView(bubbles: viewModel.activityMessageBubbles, onCancel: viewModel.cancelActivityMessage,
@@ -78,10 +83,11 @@ struct WorkflowActivityMessageComposer<VM: WorkflowViewModel>: View {
                 Text(reason).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }
             if composerEdge { Divider().padding(.bottom, 4) }
-            MessageBoxView(model: Self.boxModel(target: target, unsupported: unsupported, isBusy: viewModel.isBusy, queueOnly: queueOnly),
-                           onSubmitNow: queueOnly ? nil : { viewModel.submitActivityMessage($0, now: true) },
+            MessageBoxView(model: Self.boxModel(target: target, unsupported: unsupported, isBusy: viewModel.isBusy, queueOnly: queueOnly,
+                                               phaseLock: viewModel.activityMessagePhaseLock),
+                           onSubmitNow: queueOnly ? nil : submitNow,
                            isCompact: true, wrapperTopInset: composerEdge ? 0 : nil, selectedTaskInspector: selectedTaskInspector) {
-                viewModel.submitActivityMessage($0, now: false)
+                submit($0)
             }
             .id(target)
         }

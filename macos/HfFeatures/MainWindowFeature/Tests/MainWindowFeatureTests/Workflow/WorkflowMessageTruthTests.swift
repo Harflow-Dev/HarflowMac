@@ -9,15 +9,15 @@ import Testing
 
 // MARK: - WorkflowMessageTruthTests
 
-/// What a workflow's message composers promise: lanes of a cancelled run lock, and a runtime without queued
-/// messaging locks the node pane's composers instead of failing on send.
+/// Workflow composers preserve their target and honor exact phase and runtime admission. An unsupported runtime
+/// locks node panes instead of failing only after the user presses Send.
 @MainActor
 @Suite struct WorkflowMessageTruthTests {
-    private typealias Box = ParallelVMTests.Box
-    private let rootID = String(repeating: "a", count: 32)
-    private let childID = String(repeating: "b", count: 32)
+    typealias Box = ParallelVMTests.Box
+    let rootID = String(repeating: "a", count: 32)
+    let childID = String(repeating: "b", count: 32)
 
-    private struct Harness {
+    struct Harness {
         let vm: WorkflowVM
         let useCase: MockWorkflowUseCase
         let support: MockWorkflowMessagingSupport
@@ -29,12 +29,12 @@ import Testing
         let parallel: ParallelVMTests.SUT
     }
 
-    private func makeContext() -> MessagingInvocationContext {
+    func makeContext() -> MessagingInvocationContext {
         MessagingInvocationContext(runtime: QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])),
                                    runtimeEpoch: UUID())
     }
 
-    private func makeHarness(supported: Bool? = true) -> Harness {
+    func makeHarness(supported: Bool? = true) -> Harness {
         let useCase = MockWorkflowUseCase()
         let support = MockWorkflowMessagingSupport()
         let context = Box<MessagingInvocationContext?>(makeContext())
@@ -72,7 +72,7 @@ import Testing
                        sendFailure: sendFailure, status: status, parallel: parallel)
     }
 
-    private func run(status: String, kind: String = "workflow", taskID: String? = "current-task") -> [String: JSONValue] {
+    func run(status: String, kind: String = "workflow", taskID: String? = "current-task") -> [String: JSONValue] {
         let activation: [String: JSONValue] = ["id": .string("issued-execution"), "node_id": .string("work"),
             "role": .string("node"), "status": .string("running"), "tasks": .array(taskID.map { [.object([
                 "task_id": .string($0), "status": .string("running")])] } ?? [])]
@@ -85,10 +85,11 @@ import Testing
 
     @Test(arguments: [
         ("cancelled", "workflow", true), ("cancelled", "builder", true),
-        ("completed", "workflow", false), ("completed", "builder", false), ("failed", "workflow", false),
-        ("running", "workflow", false), ("paused", "workflow", false), ("cancelling", "workflow", false)
+        ("completed", "workflow", true), ("completed", "builder", false),
+        ("cancelling", "workflow", true), ("cancelling", "builder", false),
+        ("failed", "workflow", false), ("running", "workflow", false), ("paused", "workflow", false)
     ])
-    func givenARun_whenItIsSelected_thenOnlyACancelledRunLocksItsLanes(status: String, kind: String, locked: Bool) {
+    func givenARun_whenItIsSelected_thenOnlyApprovedPhasesLockItsLanes(status: String, kind: String, locked: Bool) {
         // given
         let harness = makeHarness()
         defer { harness.vm.didDisappear() }
@@ -114,7 +115,7 @@ import Testing
         }
 
         // then
-        #expect(locks == [false, false, true])
+        #expect(locks == [false, true, true])
     }
 
     @Test func givenSwitchingBetweenRuns_whenTheSelectionChanges_thenTheLockIsRecomputed() {
@@ -185,13 +186,17 @@ import Testing
     @Test func givenAnUnreadableSupport_whenTheViewAppears_thenTheStateStaysUnknownAndSendingStaysEnabled() async {
         // given
         let harness = makeHarness(supported: nil)
-        harness.vm.selectedRun = WorkflowRunModel(raw: run(status: "running"))
+        let raw = run(status: "running")
+        harness.status.value = raw
+        harness.vm.selectedRun = WorkflowRunModel(raw: raw)
         harness.vm.selectedNodeID = "work"
-        await waitUntil { harness.vm.activityMessageTarget.taskID == "current-task" }
 
         // when
         harness.vm.didAppear()
         defer { harness.vm.didDisappear() }
+        await waitUntil {
+            harness.vm.sidebarTask == nil && harness.vm.activityMessageTarget.taskID == "current-task"
+        }
         await verify(harness.support).messagingSupport(context: .any).calledEventually(1, before: .seconds(5))
 
         // then
@@ -312,7 +317,11 @@ import Testing
         let selected = try #require(harness.vm.selectedActivity)
         let cached = try #require(harness.vm.activityCache.values.first)
         let spare = harness.vm.parallel.makeWorkflowActivity()
+        spare.workflowMessageScope = WorkflowMessageScope(
+            runID: rootID, nodeID: "work", activationID: "issued-execution", role: .node
+        )
         harness.vm.activityCache["spare"] = spare
+        harness.vm.applyRunMessageLock()
         #expect(!selected.isMessagingUnsupported && !cached.isMessagingUnsupported && !spare.isMessagingUnsupported)
 
         // when — the probe answers later
@@ -506,13 +515,13 @@ import Testing
         #expect(!model.showsSendNow)
     }
 
-    @Test func givenAnUnsupportedLaneColumn_whenItsComposerIsBuilt_thenItIsUnchanged() throws {
+    @Test func givenAnUnsupportedWorkflowLane_whenItsComposerIsBuilt_thenItLocks() throws {
         // given
         let model = try column(lock: .messagingUnsupported, chrome: .lane).laneMessageBoxModel
 
         // then
-        #expect(!model.isLocked)
-        #expect(model.canSend)
+        #expect(model.isLocked)
+        #expect(!model.canSend)
     }
 
     @Test func givenATakenOverUnsupportedInspector_whenItsComposerIsBuilt_thenTakeoverKeepsItsCopy() throws {

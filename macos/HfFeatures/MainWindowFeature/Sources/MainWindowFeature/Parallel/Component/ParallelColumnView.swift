@@ -35,8 +35,19 @@ enum ParallelColumnChrome: Equatable, Sendable {
 enum ParallelMessageLock: Equatable, Sendable {
     /// The run whose lanes these are was cancelled; the lane composers lock with the approved copy.
     case runCancelled
-    /// The runtime has no queued messaging; the node pane's inspector composer locks bare, like the task screen's.
+    case runCompleted
+    case runCancelling
+    /// The runtime has no queued messaging; workflow-owned composers lock bare.
     case messagingUnsupported
+
+    var disabledReason: MessageBoxDisabledReason? {
+        switch self {
+        case .runCancelled: .runCancelled
+        case .runCompleted: .runCompleted
+        case .runCancelling: .runCancelling
+        case .messagingUnsupported: nil
+        }
+    }
 }
 
 // MARK: - ParallelColumnView

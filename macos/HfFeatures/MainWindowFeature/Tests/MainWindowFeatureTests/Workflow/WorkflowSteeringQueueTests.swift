@@ -121,11 +121,7 @@ struct WorkflowSteeringQueueTests {
         let harness = WorkflowTests().makeVM(runtime: runtime)
         let run = failedRoot(positiveHold: positiveHold)
         harness.sut.selectedRun = WorkflowRunModel(raw: run)
-        harness.sut.primaryNodeID = WorkflowStandalone.orchestratorID
-        harness.sut.selectedNodeIDs = [WorkflowStandalone.orchestratorID]
-        harness.sut.runSidebar = WorkflowRunSidebarPresentation.build(
-            run: run, nodeID: WorkflowStandalone.orchestratorID, attemptID: nil
-        )
+        harness.sut.selectStandalone(WorkflowStandalone.orchestratorID)
         harness.sut.messagingSupported = messagingSupported
         given(harness.useCase)
             .command(.value("status"), options: .value(["--monitor-view", "--snapshot"]),
@@ -146,6 +142,12 @@ struct WorkflowSteeringQueueTests {
     }
 
     private func establishSteeringRead(_ harness: Harness, expectCurrentStatus: Bool = false) async {
+        await harness.sut.sidebarTask?.value
+        await waitUntil(timeout: 5) {
+            harness.sut.sidebarTask == nil
+                && harness.sut.runSidebar.header.kind == .orchestrator
+                && harness.sut.runSidebar.activationID == "orchestrator-execution"
+        }
         harness.sut.didSubscribe = true
         harness.sut.startSteeringObservation()
         // The visibility publisher delivers its initial value asynchronously. Awaiting the

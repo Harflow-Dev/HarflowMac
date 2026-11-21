@@ -27,6 +27,9 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored var steeringComposerOwned = false
     /// Workflow-set composer locks (see `ParallelVM+MessageLock.swift`); Group lanes never set them.
     @ObservationIgnored var composerLocks = ParallelComposerLocks()
+    @ObservationIgnored var workflowMessageScope: WorkflowMessageScope?
+    @ObservationIgnored var workflowMessageAdmission: WorkflowMessageAdmission?
+    @ObservationIgnored var workflowMessageAdmissionHandler: (@MainActor (WorkflowMessageAdmission, String) -> Bool)?
     /// The Graph inspector's approval panel gate; lane columns never read it.
     @ObservationIgnored var inspectorApprovalGate = WorkflowSelectedApprovalGate()
     @ObservationIgnored var messagingFailureHandler: (@MainActor () -> (@MainActor (any Error) -> Void))?
@@ -132,7 +135,9 @@ final class ParallelVM: ParallelViewModel {
     }
 
     func didAppear() {
+        let shouldRepublishRetainedColumns = !didSubscribe && workflowMessageScope != nil && !columns.isEmpty
         subscribeIfNeeded()
+        if shouldRepublishRetainedColumns { publishColumns() }
         activateTopBar()
     }
 
@@ -178,7 +183,7 @@ final class ParallelVM: ParallelViewModel {
         windowAdoption.reset()
         recoveryCancellables.removeAll()
         recoveryFrames.removeAll()
-        composerLocks.runCancelled = false
+        detachWorkflowMessageState()
         for lease in leases.values { lease.release() }
         leases.removeAll()
         leaseGenerations.removeAll()
@@ -204,8 +209,6 @@ final class ParallelVM: ParallelViewModel {
         schedule(inputs)
         MonitorMetrics.end(start, stage: .parallelPreparation, residentColumns: residentIDs.count, leasedMembers: leases.count)
     }
-
-    // MARK: - Private Methods
 
     private func subscribeIfNeeded() {
         guard !didSubscribe else { return }
@@ -490,11 +493,7 @@ final class ParallelVM: ParallelViewModel {
         let next = orderedConversations.map { conversation in
             let presentation = presentations[conversation.id] ?? descriptors[conversation.id] ?? basePresentation(conversation, includePrompt: false)
             let metadata = descriptors[conversation.id] ?? presentation
-            var column = ParallelColumnModelBuilder.build(presentation: presentation, metadata: metadata,
-                onTapTakeover: isWorkflowInspector ? { [weak self] in self?.didTapTakeover(taskID: metadata.task.taskID) } : nil,
-                onTapOpenTask: { [weak self] in self?.routing.selectTask(metadata.task.taskID) }, onSelectTask: { [weak self] in self?.routing.selectTask($0) })
-            column.onSubmitMessage = { [weak self] text, now in self?.submitMessage(text, conversationID: conversation.id, now: now) ?? false }
-            column.onCancelMessage = { [weak self] messageID in self?.cancelMessage(messageID, conversationID: conversation.id) }
+            var column = messageColumn(presentation: presentation, metadata: metadata, conversationID: conversation.id)
             windowAdoption.prepareColumn(&column, id: conversation.id) { [weak self] in self?.adoptObservationWindow(conversation.id) }
             column.workMessages = WorkMessageBubble.applying(column.workMessages, notes: messageNotes[metadata.task.taskID] ?? [:])
             applyChrome(to: &column)
@@ -562,6 +561,7 @@ final class ParallelVM: ParallelViewModel {
 extension ParallelVM {
     /// Stops hidden inspector work while retaining visited feed presentation and reading state.
     func suspendWorkflowActivity() {
+        detachWorkflowMessageState()
         updateViewport(offset: 0, width: 0)
         epoch &+= 1
         revision &+= 1

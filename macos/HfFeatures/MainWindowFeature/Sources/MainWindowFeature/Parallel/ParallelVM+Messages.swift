@@ -20,7 +20,8 @@ extension ParallelVM {
     @discardableResult
     func submitMessage(_ text: String, conversationID: String, now: Bool) -> Bool {
         guard !(isWorkflowInspector && steeringComposerOwned), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let task = messageTarget(conversationID: conversationID) else { return false }
+              let task = messageTarget(conversationID: conversationID),
+              admitsWorkflowMessage(workflowMessageAdmission, taskID: task.taskID) else { return false }
         let id = task.taskID
         messageDispatches.insert(id)
         recompute()
@@ -73,7 +74,15 @@ extension ParallelVM {
         return current
     }
 
-    private var sendsAreLocked: Bool { isRunMessageLocked || (isWorkflowInspector && isMessagingUnsupported) }
+    private var sendsAreLocked: Bool {
+        isRunMessageLocked || ((workflowMessageScope != nil || isWorkflowInspector) && isMessagingUnsupported)
+    }
+
+    func admitsWorkflowMessage(_ admission: WorkflowMessageAdmission?, taskID: String) -> Bool {
+        guard workflowMessageScope != nil else { return workflowMessageAdmissionHandler == nil }
+        guard let admission, admission == workflowMessageAdmission else { return false }
+        return workflowMessageAdmissionHandler?(admission, taskID) == true
+    }
 
     func didTapTakeover(taskID: String) {
         let dialog = ParallelTakeover.dialog(taskID: taskID,

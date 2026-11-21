@@ -87,6 +87,7 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.ActivityFeedScopedApprovalRevealHostedTests",
     "MainWindowFeatureTests.WorkflowSteeringHostedTests",
     "MainWindowFeatureTests.WorkflowSteeringApprovalHostedTests",
+    "MainWindowFeatureTests.WorkflowMessageLocksHostedTests",
     "MainWindowFeatureTests.NeedsYouQuestionCardHostedTests",
     "MainWindowFeatureTests.WorkMessageBubblesHostedTests",
     "MainWindowFeatureTests.ActivityFeedApprovalHostedTests",

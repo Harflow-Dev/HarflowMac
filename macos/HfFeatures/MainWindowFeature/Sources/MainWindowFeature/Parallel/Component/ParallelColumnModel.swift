@@ -88,6 +88,7 @@ struct ParallelColumnModel: Identifiable {
     var chrome = ParallelColumnChrome.lane
     /// Set only by a workflow VM; `nil` for Group lanes. Takeover keeps its own copy and wins on its own lane.
     var messageLock: ParallelMessageLock?
+    var messageAdmission: WorkflowMessageAdmission?
     /// Set only for the Graph inspector when the run takes caller approvals: the node task's approval panel is drawn
     /// between the feed and the composer.
     var inspectorApproval: WorkflowSelectedApprovalGate?
@@ -110,7 +111,7 @@ struct ParallelColumnModel: Identifiable {
     /// Why a lane composer is locked: takeover first, since it is the more specific reason on its own lane.
     var laneComposerLock: MessageBoxDisabledReason? {
         if task.takenOver { return .takenOver }
-        return messageLock == .runCancelled ? .runCancelled : nil
+        return messageLock?.disabledReason
     }
 
     /// The node pane composer locks bare on an unsupported runtime unless takeover already explains the lock.
@@ -120,10 +121,11 @@ struct ParallelColumnModel: Identifiable {
     var laneMessageBoxModel: MessageBoxModel {
         let harness = laneHarnessName
         let lock = laneComposerLock
+        let unsupported = !task.takenOver && messageLock == .messagingUnsupported
         return MessageBoxModel(
-            canSend: lock == nil && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
-            label: "Message \(harness)", hint: "", placeholder: lock?.text ?? "Message \(harness)",
-            buttonLabel: "Send", isLocked: lock != nil,
+            canSend: lock == nil && !unsupported && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
+            label: "Message \(harness)", hint: "", placeholder: lock?.text ?? (unsupported ? "" : "Message \(harness)"),
+            buttonLabel: "Send", isLocked: lock != nil || unsupported,
             fieldAccessibilityLabel: "Message \(harness)", sendAccessibilityLabel: "Send to \(harness)")
     }
 
@@ -131,11 +133,14 @@ struct ParallelColumnModel: Identifiable {
     /// like the task screen's.
     var inspectorMessageBoxModel: MessageBoxModel {
         let unsupported = inspectorMessagingUnsupported
+        let phase = task.takenOver ? nil : messageLock?.disabledReason
+        let reason = task.takenOver ? MessageBoxDisabledReason.takenOver : phase
         return MessageBoxModel(
-            canSend: !task.takenOver && !unsupported && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
-            label: "Message this task", hint: unsupported ? "" : "Send queues; Send now requests immediate delivery when safe",
-            placeholder: task.takenOver ? MessageBoxDisabledReason.takenOver.text : unsupported ? "" : "Queue a message…",
-            buttonLabel: "Send", isLocked: task.takenOver || unsupported, showsSendNow: !unsupported)
+            canSend: reason == nil && !unsupported && onSubmitMessage != nil, canContinue: false, isBusy: isBusy,
+            label: "Message this task", hint: unsupported || phase != nil ? "" : "Send queues; Send now requests immediate delivery when safe",
+            placeholder: reason?.text ?? (unsupported ? "" : "Queue a message…"),
+            buttonLabel: "Send", isLocked: reason != nil || unsupported,
+            showsSendNow: !unsupported && phase == nil)
     }
 
     /// "<Backend> · <repo name>" plus "· N turns" when `turns > 1` — the lane header's subtitle,

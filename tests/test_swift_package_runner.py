@@ -450,6 +450,7 @@ HOSTED_SUITE_NAMES = (
     "MainWindowFeatureTests.ActivityFeedScopedApprovalRevealHostedTests",
     "MainWindowFeatureTests.WorkflowSteeringHostedTests",
     "MainWindowFeatureTests.WorkflowSteeringApprovalHostedTests",
+    "MainWindowFeatureTests.WorkflowMessageLocksHostedTests",
     "MainWindowFeatureTests.PresentationEscapeHostedTests",
     "MainWindowFeatureTests.WorkflowLibraryHostedTests",
     "MainWindowFeatureTests.WorkflowValidationHostedTests",

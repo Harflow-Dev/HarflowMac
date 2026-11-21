@@ -120,11 +120,11 @@ struct WorkflowSteeringPresentation: Equatable, Sendable {
         switch phase {
         case "cancelled":
             statusLine = "The run was cancelled."
-            placeholder = "Messages are off — this run was cancelled"
-        case "completed": placeholder = "Messages are off — this run is complete"
+            placeholder = MessageBoxDisabledReason.runCancelled.text
+        case "completed": placeholder = MessageBoxDisabledReason.runCompleted.text
         case "cancelling":
             statusLine = "Cancelling the run…"
-            placeholder = "Messages are off — this run is cancelling"
+            placeholder = MessageBoxDisabledReason.runCancelling.text
         case "failed": break
         default: return false
         }

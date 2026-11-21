@@ -53,7 +53,10 @@ final class WorkflowVM: WorkflowViewModel {
         builderSubmissionFence?.invalidate()
         if savedDefinition != oldValue { scheduleLaunchPreview() }
     } }
-    var primaryNodeID: String?
+    var primaryNodeID: String? {
+        didSet { if primaryNodeID != oldValue { messagingRouteID = UUID() } }
+    }
+
     var selectedNodeIDs: Set<String> = []
     var selectedNodeID: String? {
         get { primaryNodeID }
@@ -69,18 +72,12 @@ final class WorkflowVM: WorkflowViewModel {
 
     var selectedEdgeID: String?
     var connectionSourceID: String?
-    var selectedRun: WorkflowRunModel? { didSet {
-        builderSubmissionFence?.invalidate()
-        updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence()
-        if selectedRun?.id != oldValue?.id { selectedActivationID = nil; cancelGoalDraft() }
-        reconcileGoalDraft()
-        applyRunMessageLock()
-        steeringRunDidChange(from: oldValue)
-        updateSteeringSelection()
-        if selectedRun != oldValue { scheduleRunSidebar() }
-    } }
+    var selectedRun: WorkflowRunModel? { didSet { workflowRunDidChange(from: oldValue) } }
     var branchSelection = WorkflowBranchSelection()
-    var selectedActivationID: String?
+    var selectedActivationID: String? {
+        didSet { if selectedActivationID != oldValue { messagingRouteID = UUID() } }
+    }
+
     var isEditing = false
     var operationBusy = false
     var isBusy: Bool {
@@ -174,6 +171,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored var messagingSupportContext: MessagingInvocationContext?
     @ObservationIgnored var messagingSupportRead: Task<Void, Never>?
     @ObservationIgnored var messagingAppearanceID = UUID()
+    var messagingRouteID = UUID()
 
     @ObservationIgnored let useCase: any WorkflowUseCase
     @ObservationIgnored let draftStore: any WorkflowDraftStoring

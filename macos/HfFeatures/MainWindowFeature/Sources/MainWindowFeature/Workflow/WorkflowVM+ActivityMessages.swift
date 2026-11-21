@@ -34,8 +34,20 @@ extension WorkflowVM {
         }
     }
 
+    func activityMessageSubmitter(now: Bool) -> (String) -> Bool {
+        let target = activityMessageTarget
+        let admission = WorkflowMessageScope.activity(run: selectedRun, sidebar: runSidebar).map(makeWorkflowMessageAdmission)
+        return { [weak self] text in
+            guard let self, activityMessageTarget == target, let admission,
+                  admitsWorkflowMessage(admission, taskID: target.taskID) else { return false }
+            return submitActivityMessage(text, now: now)
+        }
+    }
+
     func submitActivityMessage(_ text: String, now: Bool) -> Bool {
         let target = activityMessageTarget
+        guard let scope = WorkflowMessageScope.activity(run: selectedRun, sidebar: runSidebar),
+              admitsWorkflowMessage(makeWorkflowMessageAdmission(scope), taskID: target.taskID) else { return false }
         guard !steeringOwnsComposer || (steeringFailedQueue && !now), !isBusy, !messagingUnsupported,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let runID = target.runID, target.unavailableReason == nil else { return false }

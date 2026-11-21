@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import HfTestUtilities
 @testable import MainWindowFeature
@@ -12,6 +13,15 @@ struct WorkflowActivityMessageTests {
     private let rootID = String(repeating: "a", count: 32)
     private let childID = String(repeating: "b", count: 32)
 
+    private func activate(_ harness: (sut: WorkflowVM, useCase: MockWorkflowUseCase), nodeID: String) async {
+        given(harness.useCase).agentUsagePublisher().willReturn(Just(.init()).eraseToAnyPublisher())
+        harness.sut.didAppear()
+        await harness.sut.sidebarTask?.value
+        await waitUntil {
+            harness.sut.sidebarTask == nil && harness.sut.runSidebar.node?["id"]?.stringValue == nodeID
+        }
+    }
+
     @Test(arguments: [false, true])
     func givenSelectedNodeActivity_whenSending_thenExactCurrentTaskAndDeliveryModeAreRouted(_ now: Bool) async {
         // given
@@ -21,6 +31,7 @@ struct WorkflowActivityMessageTests {
         stub(harness.useCase, root: raw)
         harness.sut.selectedRun = WorkflowRunModel(raw: raw)
         harness.sut.selectedNodeID = "work"
+        await activate(harness, nodeID: "work")
         await waitUntil { harness.sut.activityMessageTarget.taskID == "current-task" }
         // when
         #expect(harness.sut.submitActivityMessage("  exact caller prose\n", now: now))
@@ -40,6 +51,7 @@ struct WorkflowActivityMessageTests {
         stub(harness.useCase, root: raw)
         harness.sut.selectedRun = WorkflowRunModel(raw: raw)
         harness.sut.selectedNodeID = "work"
+        await activate(harness, nodeID: "work")
         await waitUntil { harness.sut.activityMessageTarget.runID == childID }
         // when
         #expect(harness.sut.submitActivityMessage("Ask the child orchestrator", now: false))
@@ -65,6 +77,7 @@ struct WorkflowActivityMessageTests {
         stub(harness.useCase, root: raw, refusesNow: true)
         harness.sut.selectedRun = WorkflowRunModel(raw: raw)
         harness.sut.selectedNodeID = "work"
+        await activate(harness, nodeID: "work")
         await waitUntil { harness.sut.activityMessageTarget.taskID == "current-task" }
         // when
         #expect(harness.sut.submitActivityMessage("Keep this message", now: true))
@@ -84,6 +97,7 @@ struct WorkflowActivityMessageTests {
         stub(harness.useCase, root: current)
         harness.sut.selectedRun = WorkflowRunModel(raw: old)
         harness.sut.selectedNodeID = "work"
+        await activate(harness, nodeID: "work")
         await waitUntil { harness.sut.activityMessageTarget.taskID == "old-task" }
         // when
         harness.sut.selectedRun = WorkflowRunModel(raw: current)

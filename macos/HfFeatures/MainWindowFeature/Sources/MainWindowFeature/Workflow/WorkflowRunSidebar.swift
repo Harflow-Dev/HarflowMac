@@ -111,6 +111,21 @@ struct WorkflowRunSidebarPresentation: Equatable, Sendable {
 // MARK: - WorkflowVM sidebar lifecycle
 
 extension WorkflowVM {
+    func workflowRunDidChange(from oldValue: WorkflowRunModel?) {
+        builderSubmissionFence?.invalidate()
+        updateBranchSelection(); scheduleValidation(); scheduleDraftPersistence()
+        if selectedRun?.id != oldValue?.id {
+            messagingRouteID = UUID()
+            selectedActivationID = nil
+            cancelGoalDraft()
+        }
+        reconcileGoalDraft()
+        applyRunMessageLock()
+        steeringRunDidChange(from: oldValue)
+        updateSteeringSelection()
+        if selectedRun != oldValue { scheduleRunSidebar() }
+    }
+
     func scheduleRunSidebar() {
         sidebarTask?.cancel()
         sidebarTask = nil
@@ -167,7 +182,7 @@ extension WorkflowVM {
         created.messagingFailureHandler = { [weak self] in
             self?.makeMessagingFailureHandler() ?? { _ in }
         }
-        created.setMessagingUnsupported(messagingUnsupported)
+        created.workflowMessageScope = WorkflowMessageScope.activity(run: selectedRun, sidebar: next)
         activityCache[key] = created
         return created
     }
@@ -177,6 +192,7 @@ extension WorkflowVM {
     }
     activity?.setWorkflowTaskIDs(next.taskIDs, titles: next.titles)
     activity?.setInspectorApproval(next.approval)
+    applyRunMessageLock()
     if runGraphVisible { activity?.didAppear() }
     if runGraphVisible { parallel.suspendWorkflowActivity() } else { applyRunMessageLock(); parallel.didAppear() }
     applySteeringComposerOwnership()
@@ -186,6 +202,7 @@ extension WorkflowVM {
     func setRunGraphVisible(_ visible: Bool) {
         guard runGraphVisible != visible else { return }
         runGraphVisible = visible
+        messagingRouteID = UUID()
         updateSteeringSelection()
         if visible {
             parallel.suspendWorkflowActivity()
@@ -195,6 +212,7 @@ extension WorkflowVM {
             applyRunMessageLock()
             parallel.didAppear()
         }
+        applyRunMessageLock()
         applySteeringComposerOwnership()
     updateNativeActivity()
     }
