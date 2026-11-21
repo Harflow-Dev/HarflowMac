@@ -126,7 +126,7 @@ final class WorkflowRunPolling {
         let options = hasDigests ? ["--monitor-view"] : ["--monitor-view", "--snapshot"]
         let response = try await useCase.command("status", options: options, positionals: [id], runtime: selectedRuntime)
         let stateKeys = [
-            "status", "updated_at", "settling", "draft_revision", "input_decision_id", "revision",
+            "steering_summary", "pending_steering_count", "status", "updated_at", "settling", "draft_revision", "input_decision_id", "revision",
             "interaction_owner", "interaction_state", "interaction_history", "can_cancel_from_monitor", "monitor_cancel_reason", "monitor_controls", "messages",
             "can_revise_goal", "goal_revision_reason", "goal_revision", "goal_replanning_required", "goal_replanning_revision"
         ]

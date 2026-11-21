@@ -19,7 +19,7 @@ extension ParallelVM {
 
     @discardableResult
     func submitMessage(_ text: String, conversationID: String, now: Bool) -> Bool {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard !(isWorkflowInspector && steeringComposerOwned), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let task = messageTarget(conversationID: conversationID) else { return false }
         let id = task.taskID
         messageDispatches.insert(id)

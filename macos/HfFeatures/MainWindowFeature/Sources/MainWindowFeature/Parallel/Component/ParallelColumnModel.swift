@@ -104,6 +104,9 @@ struct ParallelColumnModel: Identifiable {
     var laneHarnessName: String { harnessName.isEmpty ? ParallelLaneStatus.harnessName(current: task) : harnessName }
     var laneStatus: TaskBadgeModel { status ?? ParallelLaneStatus.make(current: task, snapshot: nil, frame: nil) }
 
+    /// The selected root renders its steering composer outside this inspector.
+    var hidesInspectorComposer = false
+
     /// Why a lane composer is locked: takeover first, since it is the more specific reason on its own lane.
     var laneComposerLock: MessageBoxDisabledReason? {
         if task.takenOver { return .takenOver }

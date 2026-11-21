@@ -1,14 +1,14 @@
 import Foundation
 @testable import MainWindowFeature
 @testable import MonitorCore
+import SwiftUI
 import Testing
 
 /// Headless plan coverage for the live-append tail insert. Every entry list comes from the
 /// production `ActivityFeedNativeEntries.build`, so the bottom sentinel, header, approvals and
-/// tail are real. `case tailInsert(removeLeading: Int, insertAt: Int, count: Int)`: `removeLeading`
-/// is the number of leading table entries removed from `previous` (a lost header counts),
-/// `insertAt` is the index in post-removal coordinates at which `count` entries of `next` are
-/// inserted, and the first trailing non-row entry (approval, tail or bottom) sits at `insertAt`.
+/// tail are real. Tail insertion plans preserve any typed document context before the history
+/// header, timeline, approvals and tail. `insertAt` is the index in post-removal coordinates at
+/// which entries from `next` are inserted, immediately before the trailing non-row entries.
 struct ActivityFeedNativeTailInsertPlanTests {
 
     // MARK: Fixtures
@@ -39,12 +39,20 @@ struct ActivityFeedNativeTailInsertPlanTests {
                         approvals: approvals))
     }
 
-    private func build(_ rows: [ActivityRow], header: ActivityFeedNativeEntry.Header? = nil,
+    private func context(_ scope: String = "task") -> ActivityFeedSupplementaryRow {
+        ActivityFeedSupplementaryRow(scope: scope, kind: .taskContext,
+                                      input: .caption("Task context"),
+                                      content: AnyView(Text("Task context")))
+    }
+
+    private func build(_ rows: [ActivityRow], context: [ActivityFeedSupplementaryRow] = [],
+                       header: ActivityFeedNativeEntry.Header? = nil,
                        tail: ActivityFeedTailPresentation = .absent) -> [ActivityFeedNativeEntry] {
         let model = ActivityFeedNativeModel(
             shownRows: rows, allRowIDs: rows.map(\.id), start: nil, emptyText: nil, horizontalPadding: 0,
             showsPromptBubble: false, expandedGroups: [], tailPresentation: tail, history: EventHistoryState(),
-            paginationRevision: 0, visible: true, loading: false, approvalReveal: nil, activitySnapshot: nil)
+            paginationRevision: 0, visible: true, loading: false, approvalReveal: nil, activitySnapshot: nil,
+            leadingContent: context)
         return ActivityFeedNativeEntries.build(model: model, header: header)
     }
 
@@ -231,13 +239,27 @@ struct ActivityFeedNativeTailInsertPlanTests {
 
     private func ids(_ entries: [ActivityFeedNativeEntry]) -> [String] { entries.map(\.id) }
 
-    /// Replays a tail insert on the previous ids in the table's own order of operations: remove the
-    /// leading run, then insert `count` next entries at `insertAt` in post-removal coordinates.
+    /// Replays either tail insert form in table coordinates, including a preserved context prefix.
     private func replay(_ plan: ActivityFeedNativePlan, previous: [ActivityFeedNativeEntry],
                         next: [ActivityFeedNativeEntry]) -> [String]? {
-        guard case .tailInsert(let removeLeading, let insertAt, let count) = plan,
-              removeLeading <= previous.count else { return nil }
-        var result = Array(ids(previous).dropFirst(removeLeading))
+        let remove: Range<Int>
+        let insertAt: Int
+        let count: Int
+        switch plan {
+        case .tailInsert(let removeLeading, let index, let insertedCount):
+            remove = 0 ..< removeLeading
+            insertAt = index
+            count = insertedCount
+        case .contextTailInsert(let range, let index, let insertedCount):
+            remove = range
+            insertAt = index
+            count = insertedCount
+        default:
+            return nil
+        }
+        guard remove.lowerBound >= 0, remove.upperBound <= previous.count else { return nil }
+        var result = ids(previous)
+        result.removeSubrange(remove)
         guard insertAt >= 0, insertAt <= result.count, insertAt + count <= next.count else { return nil }
         result.insert(contentsOf: ids(next)[insertAt ..< insertAt + count], at: insertAt)
         return result
@@ -314,6 +336,28 @@ struct ActivityFeedNativeTailInsertPlanTests {
     @Test func givenPinnedBoundaryBeyondPageSize_whenRowAppended_thenPlainTailInsertWithoutRemoval() {
         // given / when / then — 101 rows are shown because the boundary is retained.
         expectTailInsert(build(rows(5 ... 105)), build(rows(5 ... 106)), removeLeading: 0, insertAt: 101, count: 1)
+    }
+
+    @Test func givenTypedContextBeforeHeader_whenRowsAppend_thenContextAndHeaderStayInOrder() {
+        let document = context()
+        let previous = build(rows(1 ... 4), context: [document], header: .beginning)
+        let next = build(rows(1 ... 5), context: [document], header: .beginning)
+
+        #expect(previous.first?.id == document.id)
+        #expect(previous.dropFirst().first?.id == "activity-feed-header")
+        #expect(plan(previous, next) == .contextTailInsert(remove: 1 ..< 1, insertAt: 6, count: 1))
+        #expect(replay(plan(previous, next), previous: previous, next: next) == ids(next))
+    }
+
+    @Test func givenTypedContextBeforeTimeline_whenWindowEvictsRows_thenOnlyTimelineRowsAreRemoved() {
+        let document = context()
+        let previous = build(rows(1 ... 100), context: [document])
+        let next = build(rows(2 ... 101), context: [document])
+
+        let result = plan(previous, next)
+        #expect(result == .contextTailInsert(remove: 1 ..< 2, insertAt: 100, count: 1))
+        #expect(replay(result, previous: previous, next: next) == ids(next))
+        #expect(ids(next).first == document.id)
     }
 
     @Test func givenShortFeedWithBeginningHeaderBothSides_whenRowAppended_thenHeaderMatchedByCase() {

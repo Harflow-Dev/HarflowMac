@@ -13,7 +13,7 @@ unsupported, loading and long text in Light/Dark. Composer placement follows the
 | --- | --- |
 | Task screen | Offers queued Send, including tasks without live input. Send now appears for running tasks when the current engine reports `messaging.v1`. Settled standalone tasks without workflow ownership retain Cancel on queued messages, which wait for an explicit eligible Continue in a new session. `send --monitor` routes workflow-owned tasks through their run. Taken-over sessions explain why messaging is unavailable. |
 | Queued messages | Queued bubbles appear at the end of the task Activity feed and of each Activity surface, with Cancel while queued. `cancel-message` or `workflow-cancel-message --monitor` withdraws the exact message ID. |
-| Workflow run | The canvas has no global composer. Select Orchestrator to open its right-hand Activity and composer; messages route through that activity’s exact task. |
+| Workflow run | The canvas has no global composer. Select Orchestrator on a regular root run to open its right-hand conversation. Open, Reply, starting a new conversation and Dismiss follow current engine eligibility for the exact root and episode. A held conversation shows Needs you. A real open run question keeps the composer locked and links to Needs you. |
 | Workflow create/edit | No workflow-window composer (#43). Builder tasks start from Generate and Edit with agent. An embedded builder task keeps its own sole composer. |
 | Selected node Activity | Every node’s right-hand Activity includes a composer. Task activities use their current task; native and fallback surfaces use `workflow-send --monitor --task-id`, child-workflow Activity addresses that child’s orchestrator. An unstarted or unavailable target shows a disabled composer with its specific reason. Empty activity keeps the header at the top, the placeholder centred in the remaining space and the composer at the bottom, including when an attempt picker is present. |
 | Parallel mode | Each visible conversation panel owns a composer for its current task, including the selected node Activity’s shared panel. A Parallel lane's composer is one row that queues only, labelled for its harness ("Message Codex", send "Send to Codex"), enabled on a settled lane and locked on a taken-over one; the Graph inspector's column keeps Send now. A lane's queued bubbles and its outcome line (after the bubbles) sit in the feed tail. There is no global run composer. |
@@ -29,6 +29,29 @@ Eligibility is advisory and refreshed with status. The engine revalidates owners
 approval, settling, checkpoint identity and supported operation when the user acts. A stale
 allowed flag cannot grant authority. Immediate delivery never bypasses those checks; refusal
 keeps queued text intact. The app neither reads nor mutates engine records to implement actions.
+
+Root orchestrator conversations use the paired `workflow-steering-read.v1`
+and `workflow-steering-orchestrator.v1` capabilities via public monitor
+operations. The composer keeps the draft while an invocation is unresolved.
+Only a confirmed admission for that exact request can clear the corresponding
+draft. Dismiss does not replay or submit a draft. When Dismiss leaves Resume
+unavailable, the run shows the engine's reason when supplied. Existing exact
+queued-message Cancel remains available where the engine offers it.
+
+Approval requests from issued workers in the selected root run expand in the
+Orchestrator conversation. Each request names its issuer and carries its own
+Approve once and Reject controls. The conversation, requests and Dismiss
+share the same scrolling body, with the heading and reply composer fixed.
+Approval eligibility and steering reply eligibility are checked separately.
+The Run pane retains the wider workflow-tree approval list.
+
+In the selected task inspector, approval details and actions expand together
+inside the activity scroll area. In a retained Orchestrator conversation,
+the task activity and its exact task requests precede steering history and
+the issued workers' run-scoped requests. Pending replies appear as outgoing
+bubbles at the end of that same content with their available Cancel action.
+The fixed composer edge fades while there is content below the viewport
+and stays clear at the end or over an action.
 
 Non-question workflow recovery requires `workflow-attention-checkpoints.v1` and an identifier from the displayed status. The engine refuses a changed checkpoint; Harflow refreshes the status and preserves the entered instructions without replaying them. Engines without this capability cannot perform these actions. Questions continue to use their decision identifier.
 

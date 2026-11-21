@@ -36,7 +36,8 @@ extension WorkflowVM {
 
     func submitActivityMessage(_ text: String, now: Bool) -> Bool {
         let target = activityMessageTarget
-        guard !isBusy, !messagingUnsupported, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard !steeringOwnsComposer || (steeringFailedQueue && !now), !isBusy, !messagingUnsupported,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let runID = target.runID, target.unavailableReason == nil else { return false }
         let options = ["--monitor", "--delivery=\(now ? "now" : "queue")"]
             + (target.taskID.map { ["--task-id=\($0)"] } ?? [])

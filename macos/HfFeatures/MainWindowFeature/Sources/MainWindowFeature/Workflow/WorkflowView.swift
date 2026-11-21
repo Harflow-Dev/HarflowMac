@@ -145,7 +145,8 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                     workflowTitle
                     if let run = viewModel.selectedRun {
                         WorkflowRecoveryBadge(run: run, isEligible: recoveryEligibleRunID != nil,
-                                              focus: $recoveryBadgeFocused, onOpen: openRecoveryFromBadge)
+                                              focus: $recoveryBadgeFocused, onOpen: openRecoveryFromBadge,
+                                              steeringHold: viewModel.steeringHeaderHold)
                     }
                     }
                     stateLine
@@ -236,7 +237,14 @@ struct WorkflowView<VM: WorkflowViewModel>: View {
                 .pickerStyle(.segmented)
                 .frame(width: HfRadius.Metrics.workflowRunCanvasMinimumHeight)
             }
-            if ["running", "starting"].contains(run.status) {
+            if viewModel.steering.isDismissed, run.status == "paused", run.attentionCheckpointID == nil, run.continuationDecisionID == nil {
+                Button("Resume") {}
+.buttonStyle(MonitorButtonStyle(.glass))
+.disabled(true)
+                    .help(viewModel.steering.resumeReason ?? "Resume is unavailable.")
+                    .accessibilityHint(viewModel.steering.resumeReason ?? "Resume is unavailable.")
+                    .accessibilityIdentifier("workflow-steering-resume")
+            } else if ["running", "starting"].contains(run.status) {
                 Button("Pause") { viewModel.control("pause") }
 .buttonStyle(MonitorButtonStyle(.glass))
                     .disabled(viewModel.isBusy || !run.permitsMonitor("pause", fallback: run.allowsMonitorControl))
@@ -477,7 +485,7 @@ private extension WorkflowView {
                                          maximumHeight: maximumHeight,
                                          isRecoveryPanelVisible: runSidebarSlot.suppressesSummaryQuestion(
                                              overlayIsVisible: recoveryOverlay.isVisible(runID: recoveryEligibleRunID)))
-        if viewModel.initialLoadFailed {
+        if viewModel.initialLoadFailed || viewModel.steeringOwnsComposer {
             summary.hidden()
         } else {
             summary

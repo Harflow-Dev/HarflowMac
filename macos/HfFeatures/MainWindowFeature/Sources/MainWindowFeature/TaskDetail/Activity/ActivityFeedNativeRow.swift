@@ -21,6 +21,8 @@ import SwiftUI
 /// each owning its own height, so no synthetic SwiftUI structure participates in the document.
 enum ActivityFeedNativeEntry: Equatable, Identifiable {
     /// The older-history header: loading, error with retry, or "Beginning of activity".
+    case supplementary(ActivityFeedSupplementaryRow)
+    case scopedApproval(ActivityFeedApprovalEntry, topSpacing: CGFloat)
     case header(Header)
     /// The feed's empty text, shown only when there are no rows.
     case empty(String, topSpacing: CGFloat)
@@ -49,6 +51,8 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
 
     var id: String {
         switch self {
+        case .supplementary(let row): row.id
+        case .scopedApproval(let entry, _): entry.id
         case .header: "activity-feed-header"
         case .empty: "activity-feed-empty"
         case .row(let row): row.row.id
@@ -62,6 +66,8 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     /// The entry's top spacing: 12 before the feed's first content, 20 otherwise.
     var topSpacing: CGFloat {
         switch self {
+        case .supplementary: HfRadius.Metrics.spacing12
+        case .scopedApproval(_, let spacing): spacing
         case .header: HfRadius.Metrics.spacing12
         case .empty(_, let spacing), .tail(_, let spacing), .approval(_, let spacing), .taskState(_, let spacing), .bottom(let spacing): spacing
         case .row(let row): row.topSpacing
@@ -72,7 +78,7 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var anchorID: String? {
         switch self {
         case .row(let row): row.row.id
-        case .tail, .approval, .taskState: id
+        case .tail, .approval, .taskState, .supplementary, .scopedApproval: id
         default: nil
         }
     }
@@ -85,6 +91,12 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
 /// including updates whose inputs are otherwise equal; the coordinator owns `retry`, whose
 /// paging state machine lives beside it.
 @MainActor final class ActivityFeedNativeActions {
+    var onScopedApprovalResponse: (ActivityFeedApprovalEntry.Source, String, String) -> Void = { _, _, _ in }
+    var onScopedApprovalToggle: (ActivityFeedApprovalEntry.Source, String) -> Void = { _, _ in }
+    var onScopedApprovalRefresh: (ActivityFeedApprovalEntry.Source) -> Void = { _ in }
+    var onScopedApprovalScrollAcknowledged: (ActivityFeedApprovalEntry.Source, String, UUID) -> Void = { _, _, _ in }
+    var onScopedApprovalFocusAcknowledged: (ActivityFeedApprovalEntry.Source, String, UUID) -> Void = { _, _, _ in }
+    var onCallScrollAcknowledged: (UUID) -> Void = { _ in }
     var onLoadMore: (() -> Bool)?
     var onDisclosure: (String) -> Void = { _ in }
     var onSelectChildTask: (String) -> Void = { _ in }
@@ -106,6 +118,12 @@ enum ActivityFeedNativeEntry: Equatable, Identifiable {
     var openURL = EnvironmentValues().openURL
 
     func reset() {
+        onScopedApprovalResponse = { _, _, _ in }
+        onScopedApprovalToggle = { _, _ in }
+        onScopedApprovalRefresh = { _ in }
+        onScopedApprovalScrollAcknowledged = { _, _, _ in }
+        onScopedApprovalFocusAcknowledged = { _, _, _ in }
+        onCallScrollAcknowledged = { _ in }
         onLoadMore = nil
         onDisclosure = { _ in }
         onSelectChildTask = { _ in }
@@ -206,11 +224,13 @@ struct ActivityFeedNativeRowRoot: View {
     let actions: ActivityFeedNativeActions
     var disclosureContext: ActivityFeedDisclosureContext?
     var approvalFocusReady: () -> Bool = { false }
+    var supplementaryFocusReady: () -> Bool = { false }
     var availableWidth: CGFloat?
     var onHostedHeight: (@MainActor @Sendable (CGFloat) -> Void)?
 
     var body: some View {
         content
+            .environment(\.workflowInspectorFocusReady, supplementaryFocusReady)
             .environment(\.activityFeedDisclosure, disclosureContext)
             .environment(\.activityFeedStyle, style)
             .id(entry.id)
@@ -243,6 +263,16 @@ struct ActivityFeedNativeRowRoot: View {
 
     @ViewBuilder private var content: some View {
         switch entry {
+        case .supplementary(let row): row.content
+        case .scopedApproval(let entry, _):
+            CallerApprovalRequestCard(model: entry.card,
+                                      respond: { actions.onScopedApprovalResponse(entry.source, entry.card.id, $0) },
+                                      toggle: { actions.onScopedApprovalToggle(entry.source, entry.card.id) },
+                                      refresh: { actions.onScopedApprovalRefresh(entry.source) },
+                                      onFocusAcknowledged: onHostedHeight == nil ? nil : {
+                                          actions.onScopedApprovalFocusAcknowledged(entry.source, entry.card.id, $0)
+                                      }, isFocusReady: approvalFocusReady,
+                                      pendingDisclosures: entry.pendingDisclosures, nativeInlineDisclosure: true, issuer: entry.issuer)
         case .header(let header): headerContent(header)
         case .empty(let text, _):
             if style.isLane {

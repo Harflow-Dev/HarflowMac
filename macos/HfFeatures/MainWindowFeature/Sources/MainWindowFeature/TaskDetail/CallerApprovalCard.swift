@@ -67,10 +67,24 @@ struct CallerApprovalPanel: View {
     var workflowRunID: String?
     var polls = true
     var pinsDecisionControls = false
+    var suspended = false
+    var pendingDisclosures = false
+    var rootScope: WorkflowRootApprovalScope?
+    /// A pane-owned session renders here without transferring discovery or teardown ownership.
+    var suppliedController: CallerApprovalController?
+    var ownsObservation = true
     @State private var controller: CallerApprovalController?
     @GlobalEnvironment(\.toolEnvironmentRepository) private var environment
     @GlobalEnvironment(\.approvalResponseOwner) private var approvalResponseOwner
     @Environment(\.callerApprovalUseCaseOverride) private var useCaseOverride
+
+    private struct ObservationKey: Equatable {
+        let taskID: String?
+        let workflowRunID: String?
+        let polls: Bool
+        let suspended: Bool
+        let rootID: String?
+    }
 
     nonisolated static func containsOptIn(_ value: JSONValue) -> Bool {
         if let object = value.objectValue {
@@ -80,33 +94,97 @@ struct CallerApprovalPanel: View {
     }
 
     var body: some View {
+        let displayController = ownsObservation ? controller : suppliedController
         Group {
-            if pinsDecisionControls {
+            if pendingDisclosures {
+                ZStack(alignment: .top) {
+                    Color.clear.frame(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.zero)
+                    if let controller = displayController { CallerApprovalRootCards(controller: controller, scope: rootScope) }
+                }
+            } else if pinsDecisionControls {
                 // The zero-size leaf keeps the pinned panel a real view while it shows nothing, so its polling task starts
                 // and the pane can learn its demand. The default panel keeps its original start condition.
                 ZStack(alignment: .top) {
                     Color.clear.frame(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.zero)
-                    if let controller, !controller.cards.isEmpty || controller.error != nil {
+                    if let controller = displayController, !controller.cards.isEmpty || controller.error != nil {
                         CallerApprovalPinnedLayout(controller: controller)
                     }
                 }
-            } else if let controller, !controller.cards.isEmpty || controller.error != nil {
+            } else if let controller = displayController, !controller.cards.isEmpty || controller.error != nil {
                 CallerApprovalCard(controller: controller).padding(HfRadius.Metrics.spacing12)
             }
         }
-        .task(id: "\(taskID ?? ""):\(workflowRunID ?? ""):\(polls)") {
-            let useCase: any CallerApprovalUseCase = useCaseOverride?()
-                ?? CallerApprovalRepository(environment: environment, owner: approvalResponseOwner)
-            let value = CallerApprovalController(useCase: useCase)
-            controller = value
-            await value.selectTarget(taskID: taskID, workflowRunID: workflowRunID)
+        .task(id: ObservationKey(taskID: taskID, workflowRunID: workflowRunID, polls: polls,
+                                  suspended: suspended, rootID: rootScope?.rootID)) {
+            guard ownsObservation else { return }
+            guard !suspended else { controller?.stop(); return }
+            let value: CallerApprovalController
+            if let controller {
+                value = controller
+            } else {
+                let useCase: any CallerApprovalUseCase = useCaseOverride?()
+                    ?? CallerApprovalRepository(environment: environment, owner: approvalResponseOwner)
+                value = CallerApprovalController(useCase: useCase, pendingDisclosures: pendingDisclosures)
+                controller = value
+            }
+            await value.selectTarget(taskID: taskID, workflowRunID: workflowRunID, rootScope: rootScope)
             while polls, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled else { break }
                 await value.refresh()
             }
         }
-        .onDisappear { controller?.stop() }
+        .onChange(of: rootScope) { _, scope in
+            guard ownsObservation, !suspended, let scope, let controller else { return }
+            controller.updateRootScope(scope)
+            controller.requestRefresh()
+        }
+        .onDisappear { if ownsObservation { controller?.stop() } }
+    }
+}
+
+// MARK: - CallerApprovalRootCards
+
+/// Root cards participate in the steering body's single scroll path.
+private struct CallerApprovalRootCards: View {
+    @Bindable var controller: CallerApprovalController
+    let scope: WorkflowRootApprovalScope?
+
+    var body: some View {
+        let cards = controller.cards.filter { scope?.contains($0.request) ?? true }.map { card in
+            var card = card
+            card.canRespond = card.canRespond && !controller.isLoading && !controller.isSubmitting && !controller.isResponseQueued
+            return card
+        }
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            if !cards.isEmpty {
+                Text(scope == nil ? "Orchestrator approval requests" : "Worker approval requests")
+                    .font(.hf(.caption, weight: .semibold))
+.foregroundStyle(Color.secondaryText)
+            }
+            ForEach(cards) { card in
+                CallerApprovalRequestCard(model: card, respond: { controller.submit($0, requestID: card.id) },
+                                          toggle: { controller.toggle(card.id) }, refresh: { controller.requestRefresh() },
+                                          onFocusAcknowledged: { controller.acknowledgeFocus(requestID: card.id, token: $0) },
+                                          pendingDisclosures: true, issuer: scope?.issuer(for: card.request))
+                    .id(card.id)
+            }
+            if controller.nextCursor != nil {
+                Button("More requests available · Load more") { controller.requestRefresh(loadMore: true) }
+                    .disabled(controller.isLoading || controller.isSubmitting)
+            }
+            if controller.acquisitionLimited {
+                Text("The request read reached its limit. Refresh to review the current requests.")
+                    .font(.hf(.caption))
+.foregroundStyle(Color.secondaryText)
+                if controller.nextCursor == nil {
+                    Button("Refresh") { controller.requestRefresh() }.disabled(controller.isLoading || controller.isSubmitting)
+                }
+            }
+            if let error = controller.error { Text(error).font(.hf(.caption)).foregroundStyle(Color.failedRed).textSelection(.enabled) }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(scope == nil ? "workflow-selected-approval" : "workflow-root-approvals")
     }
 }
 
@@ -121,7 +199,9 @@ struct CallerApprovalDemand: Equatable {
     /// True while any request is visually pending (`isVisuallyPending`: includes reserved, sending and unknown-disposition
     /// requests), including one whose controls are withheld (refused, busy, not current).
     var awaitingDecision = false
-
+    /// A complete request-local decision bar, measured independently of the panel's allocated height.
+    var decisionBarMinimum: CGFloat = 0
+    var regularDecisionBarMinimum: CGFloat = 0
     /// The height the pane must leave the region: the natural height while a request awaits a decision, else nothing.
     var reserved: CGFloat { awaitingDecision ? natural : 0 }
 }
@@ -142,6 +222,7 @@ struct CallerApprovalDemandKey: PreferenceKey {
 /// bounds (its accessibility group stops at the last child). It takes no events and is not an accessibility element.
 private struct CallerApprovalRegionFrameProbe: NSViewRepresentable {
     static let identifier = "workflow-selected-approval-frame"
+    var viewIdentifier: String = Self.identifier
 
     /// Never the hit-test target, so it cannot take a click from anything it sits behind.
     final class ProbeView: NSView {
@@ -151,7 +232,7 @@ private struct CallerApprovalRegionFrameProbe: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = ProbeView()
         view.setAccessibilityElement(false)
-        view.setAccessibilityIdentifier(Self.identifier)
+        view.setAccessibilityIdentifier(viewIdentifier)
         return view
     }
 
@@ -166,15 +247,15 @@ private struct CallerApprovalRegionFrameProbe: NSViewRepresentable {
 /// `minimumCardViewport` (or the awaiting cards' own height when that is smaller) and never below the tallest single bar.
 /// The caller frames this view at the region height; the layout fills exactly that height and clips.
 struct CallerApprovalPinnedLayout: View {
+    @Environment(\.compactRootApprovalCoexistence) private var compactCoexistence
     @Bindable var controller: CallerApprovalController
     @State private var contentHeight: CGFloat = 0
     @State private var cardHeights: [String: CGFloat] = [:]
-    @State private var measuredBarsHeight: CGFloat = 0
-    @State private var barHeights: [String: CGFloat] = [:]
+    @State private var measuredBarsHeight = WorkflowLayoutHeights()
+    @State private var barHeights: [String: WorkflowLayoutHeights] = [:]
 
     /// The card viewport kept while several bars scroll.
     static let minimumCardViewport: CGFloat = 80
-
     /// The height of the bar stack's viewport. A single bar is never scrolled, so it keeps its natural height. Several bars
     /// take their natural height when it fits; otherwise they are capped so the card viewport keeps `minCardViewport`, but
     /// never below the tallest single bar (with its bottom padding) and never above the region.
@@ -188,13 +269,18 @@ struct CallerApprovalPinnedLayout: View {
         let bars = CallerApprovalPresentation.pinnedBars(controller.cards)
         let awaiting = controller.cards.filter(\.awaitingDecision)
         // With no bar the measured value is stale (an empty stack reports nothing), so it counts as zero.
-        let barsHeight = bars.isEmpty ? HfRadius.Metrics.zero : measuredBarsHeight
+        let barsHeight = bars.isEmpty ? HfRadius.Metrics.zero : measuredBarsHeight.actual
         let spacing = HfRadius.Metrics.spacing8
         let padding = HfRadius.Metrics.spacing12
         // The cards awaiting a decision come first; only they (and the bars) are demanded.
         let awaitingContent: CGFloat? = awaiting.isEmpty ? nil
             : awaiting.reduce(2 * padding) { $0 + (cardHeights[$1.id] ?? 0) } + spacing * CGFloat(awaiting.count - 1)
-        let tallestBar = (bars.compactMap { barHeights[$0.id] }.max() ?? 0) + padding
+        let barBottomPadding = compactCoexistence ? WorkflowCompactMetrics.compactBarBottom : WorkflowCompactMetrics.regularBarBottom
+        let tallestBar = (bars.compactMap { barHeights[$0.id]?.actual }.max() ?? 0) + barBottomPadding
+        let regularBarHeights = bars.compactMap { barHeights[$0.id]?.regular }
+        let regularTallestBar = (regularBarHeights.max() ?? 0) + WorkflowCompactMetrics.regularBarBottom
+        let regularBarMinimum = bars.isEmpty || regularBarHeights.count != bars.count ? 0
+            : (bars.count > 1 ? regularTallestBar : measuredBarsHeight.regular)
         GeometryReader { proxy in
             let region = proxy.size.height
             let barsShown = Self.barViewportHeight(barCount: bars.count, barsHeight: barsHeight, tallestBar: tallestBar, region: region,
@@ -211,6 +297,8 @@ struct CallerApprovalPinnedLayout: View {
                         .background(ScrollChrome())
                 }
                 .frame(height: max(0, region - barsShown))
+                .background(CallerApprovalRegionFrameProbe(viewIdentifier: "approval-card-viewport-frame"))
+                .clipped()
                 // A visually pending card may have no actionable bar. Its presence still makes the label necessary.
                 barStack(bars, viewport: barsShown, showsLabels: awaiting.count > 1 || bars.count > 1)
             }
@@ -223,7 +311,8 @@ struct CallerApprovalPinnedLayout: View {
             if !cardHeights.keys.allSatisfy(live.contains) { cardHeights = cardHeights.filter { live.contains($0.key) } }
         }
         .preference(key: CallerApprovalDemandKey.self, value: CallerApprovalDemand(
-            natural: (awaitingContent ?? contentHeight) + barsHeight, awaitingDecision: !awaiting.isEmpty))
+            natural: (awaitingContent ?? contentHeight) + barsHeight, awaitingDecision: !awaiting.isEmpty,
+            decisionBarMinimum: bars.count > 1 ? tallestBar : barsHeight, regularDecisionBarMinimum: regularBarMinimum))
     }
 
     @ViewBuilder
@@ -232,6 +321,7 @@ struct CallerApprovalPinnedLayout: View {
             ScrollView { barContent(bars, showsLabels: showsLabels) }
                 .background(ScrollChrome())
                 .frame(height: viewport)
+                .clipped()
                 .accessibilityIdentifier("approval-decision-bars")
         } else if bars.count == 1 {
             barContent(bars, showsLabels: showsLabels)
@@ -241,19 +331,29 @@ struct CallerApprovalPinnedLayout: View {
     }
 
     private func barContent(_ bars: [CallerApprovalCardModel], showsLabels: Bool) -> some View {
-        VStack(spacing: HfRadius.Metrics.spacing8) {
+        let barDelta = compactCoexistence ? 2 * (WorkflowCompactMetrics.regularInner - WorkflowCompactMetrics.compactInner) : 0
+        let stackDelta = compactCoexistence && !bars.isEmpty
+            ? CGFloat(bars.count) * barDelta + WorkflowCompactMetrics.regularBarBottom - WorkflowCompactMetrics.compactBarBottom : 0
+        return VStack(spacing: HfRadius.Metrics.spacing8) {
             ForEach(bars) { bar in
                 CallerApprovalDecisionBar(model: bar, showsLabel: showsLabels,
                                           respond: { controller.submit($0, requestID: bar.id) })
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    .onGeometryChange(for: WorkflowLayoutHeights.self) {
+                        let height = $0.size.height
+                        return WorkflowLayoutHeights(actual: height, regular: height + barDelta)
+                    } action: { height in
                         if barHeights[bar.id] != height { barHeights[bar.id] = height }
                     }
             }
         }
         .padding(.horizontal, HfRadius.Metrics.spacing12)
-        .padding(.bottom, bars.isEmpty ? HfRadius.Metrics.zero : HfRadius.Metrics.spacing12)
+        .padding(.bottom, bars.isEmpty ? HfRadius.Metrics.zero
+            : (compactCoexistence ? WorkflowCompactMetrics.compactBarBottom : WorkflowCompactMetrics.regularBarBottom))
         .frame(maxWidth: .infinity)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredBarsHeight = $0 }
+        .onGeometryChange(for: WorkflowLayoutHeights.self) {
+            let height = $0.size.height
+            return WorkflowLayoutHeights(actual: height, regular: height + stackDelta)
+        } action: { measuredBarsHeight = $0 }
     }
 }
 
@@ -263,6 +363,7 @@ struct CallerApprovalPinnedLayout: View {
 /// label names its request by tool and command. Middle truncation keeps differing endings visible. Help and accessibility
 /// retain the full text.
 struct CallerApprovalDecisionBar: View {
+    @Environment(\.compactRootApprovalCoexistence) private var compactCoexistence
     let model: CallerApprovalCardModel
     var showsLabel = false
     let respond: (String) -> Void
@@ -282,7 +383,7 @@ struct CallerApprovalDecisionBar: View {
             CallerApprovalDecisionControls(model: model, respond: respond)
         }
         .padding(.horizontal, HfRadius.Metrics.spacing12)
-        .padding(.vertical, HfRadius.Metrics.spacing8)
+        .padding(.vertical, compactCoexistence ? WorkflowCompactMetrics.compactInner : WorkflowCompactMetrics.regularInner)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.warningBG, in: RoundedRectangle(cornerRadius: HfRadius.row))
         .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.warningFG))
@@ -344,140 +445,3 @@ struct CallerApprovalCard: View {
         }
     }
 }
-
-// MARK: - CallerApprovalRequestCard
-
-struct CallerApprovalRequestCard: View {
-    let model: CallerApprovalCardModel
-    let respond: (String) -> Void
-    let toggle: () -> Void
-    var refresh: (() -> Void)?
-    var onFocusAcknowledged: ((UUID) -> Void)?
-    var isFocusReady: () -> Bool = { true }
-    /// False when the decision controls are drawn elsewhere (a pinned bar); the card then omits them.
-    var showsInlineDecisionControls = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            if model.pending {
-                Text(model.source).font(.hf(.secondary, weight: .semibold)).foregroundStyle(Color.warningFG)
-            } else {
-                Button(action: toggle) {
-                    HStack(alignment: .top) {
-                        Image(systemName: model.expanded ? "chevron.down" : "chevron.right")
-                        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-                            Text(model.action.title)
-                            Text(settledStatus).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }.buttonStyle(.plain)
-            }
-            if model.expanded || model.pending { detail }
-        }
-        .padding(HfRadius.Metrics.spacing12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(model.pending ? Color.warningBG : Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
-        .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(model.pending ? Color.warningFG : Color.hairline))
-    }
-
-    private var focusToken: UUID? { onFocusAcknowledged == nil ? nil : model.focusToken }
-
-    private func acknowledgeFocus(_ token: UUID) { onFocusAcknowledged?(token) }
-
-    private var settledStatus: String {
-        var values = [model.request.text("disposition")]
-        values += CallerApprovalPresentation.decisionSummary(model.request)
-        if model.request.text("responder") == "monitor" { values.append("Answered from Harflow") }
-        if model.request.text("responder") == "caller" { values.append("Answered by the owning caller") }
-        if model.request.text("decided_by") == "harflow" { values.append("Rejected by Harflow") }
-        values.append("Delivery: " + model.request.text("delivery"))
-        return values.joined(separator: " · ")
-    }
-
-    private var detail: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-            Text(model.action.title).font(.hf(.secondary, weight: .semibold))
-            context
-            ApprovalDetailsScroll(identifier: "approval-details-\(model.id)",
-                                  label: "Requested action details for \(model.action.title)",
-                                  token: model.canRespond ? nil : focusToken,
-                                  isFocusReady: isFocusReady, acknowledge: acknowledgeFocus) {
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-                    ForEach(model.action.fields) { field in
-                        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-                            Text("\(field.label) · \(field.type)").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                            Text(verbatim: field.value)
-.font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
-.frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 8)
-                                .background(Color.composerFill, in: RoundedRectangle(cornerRadius: 6))
-                        }
-                    }
-                }
-.frame(maxWidth: .infinity, alignment: .leading)
-            }
-.frame(maxHeight: 220)
-.fixedSize(horizontal: false, vertical: true)
-            if let reason = model.request.raw["decision_reason"]?.stringValue, !reason.isEmpty {
-                Text("Agent's stated reason").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-                ScrollView { Text(verbatim: reason).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                    .frame(maxHeight: 96)
-.font(.hf(.caption))
-.fixedSize(horizontal: false, vertical: true)
-            }
-            if !model.pending {
-                ForEach(CallerApprovalPresentation.resultLines(model.request), id: \.self) { Text($0).font(.hf(.caption)) }
-            }
-            if let notice = model.notice {
-                Text(notice).font(.hf(.caption)).foregroundStyle(Color.secondaryText).textSelection(.enabled)
-            }
-            if model.showsRefresh || model.notice == CallerApprovalPresentation.refusalMessage(.notCurrent) {
-                Button("Refresh") { refresh?() }.disabled(refresh == nil || model.submitting)
-            }
-            if model.pending, model.showsDecisionControls, showsInlineDecisionControls {
-                CallerApprovalDecisionControls(model: model, respond: respond, onFocusAcknowledged: onFocusAcknowledged,
-                                               isFocusReady: isFocusReady)
-            }
-        }
-    }
-
-    private var context: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
-            if !model.request.text("task_title").isEmpty { Text("Agent task: \(model.request.text("task_title"))") }
-            if !model.request.text("workflow_node_name").isEmpty { Text("Workflow node: \(model.request.text("workflow_node_name"))") }
-            Text("Working directory: \(model.request.text("cwd"))")
-            Text("Access level: \(model.request.text("freedom")) · Scope: \(model.request.text("scope"))")
-            if let deadline = model.request.deadline { Text("Deadline: \(deadline.formatted())") }
-        }
-.font(.hf(.caption))
-.foregroundStyle(Color.secondaryText)
-.textSelection(.enabled)
-    }
-}
-
-#if DEBUG
-@MainActor
-private func approvalPreview(pending: Bool = true) -> some View {
-    let request = CallerApprovalRequest(raw: [
-        "request_id": .string("preview-request"), "task_id": .string("preview-task"),
-        "tool_name": .string("Bash"), "cwd": .string("/workspace/repo"),
-        "freedom": .string("write_in_repo"), "scope": .string("exact_action_once"),
-        "disposition": .string(pending ? "pending" : "decided"),
-        "delivery": .string(pending ? "pending" : "sent"), "execution_outcome": .string("unknown"),
-        "action": .object(["tool_name": .string("Bash"), "input": .object(["command": .string("swift test --filter PersistenceTests")])])
-    ])
-    let model = CallerApprovalCardModel(request: request, action: CallerApprovalAction.build(request),
-                                        pending: pending, expanded: pending, canRespond: pending,
-                                        notice: nil, submitting: false)
-    return CallerApprovalRequestCard(model: model, respond: { _ in }, toggle: {})
-        .padding()
-.frame(width: 288)
-}
-
-#Preview("Pending approval · Light") { approvalPreview().preferredColorScheme(.light) }
-#Preview("Pending approval · Dark") { approvalPreview().preferredColorScheme(.dark) }
-#Preview("Settled approval") { approvalPreview(pending: false) }
-#endif

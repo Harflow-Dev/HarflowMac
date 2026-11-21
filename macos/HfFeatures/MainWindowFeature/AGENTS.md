@@ -297,7 +297,7 @@ no embedded terminal anywhere in this package:
   acknowledgement only. Verify real predecessor ancestry, not sorted conversation-member position,
   before treating a later task as the acknowledged member's descendant. Caller approvals retain
   independent authority. Generic refusal text does not interpret unqualified chain-stop diagnostics.
-- **Pending approval in the selected-node pane** (`CallerApprovalPanel(pinsDecisionControls: true)`, `CallerApprovalPinnedLayout`,
+- **Legacy pinned approval fallback** (`CallerApprovalPanel(pinsDecisionControls: true)`, `CallerApprovalPinnedLayout`,
   `WorkflowSelectedPaneSizing`). While any request is visually pending (`CallerApprovalCardModel.awaitingDecision`, from
   `CallerApprovalRequest.isVisuallyPending`: every disposition outside decided, expired, system_rejected, invalidated,
   cancelled and unsupported with no recorded decision, so reserved, sending and unknown-state requests count, and so does a
@@ -315,9 +315,23 @@ no embedded terminal anywhere in this package:
   The panel reports `CallerApprovalDemand` through
   `CallerApprovalDemandKey`, measured from its content and never from its allocation, so region, column and pane do not feed
   back into each other. The default panel (task detail, run sidebar) is unchanged, including when it starts polling; only the
-  pinned panel carries a zero-size leaf so its polling task starts while it shows nothing. Hosted proof lives in
-  `WorkflowRunSidebarHostedTests+Approval.swift`. `EnvironmentValues.callerApprovalUseCaseOverride` is a test-only seam: when
-  set, the panel's `.task` builds its controller from it instead of `CallerApprovalRepository`; production code never sets it.
+  pinned panel carries a zero-size leaf so its polling task starts while it shows nothing.
+- **Selected task approvals** use the native activity document. The header and exact adjacent composer
+  stay fixed. Each card expands its details and decision controls together in that document's scroll
+  area. Pending messages follow the rest of the task content and use its existing Cancel authority.
+  The composer edge is clear at the end and near focused or actionable controls.
+  `EnvironmentValues.callerApprovalUseCaseOverride` is the fixture seam for approval use cases.
+  Hosted proof lives in `WorkflowRunSidebarHostedTests+Approval.swift`.
+  Regular root steering has one body scroll for status, steering history, bubbles, inline request
+  disclosures and Dismiss. Header and composer stay fixed. `WorkflowRootApprovalScope` qualifies
+  direct worker requests using the selected run's issued membership before detail and response
+  admission. An ordinary orchestrator-task approval remains exact-task scoped. The default Run
+  pane suspends its run approval reader while the visible root surface owns it. The retained
+  native feed renders task activity and task cards before steering history, run cards and controls,
+  then pending replies. Exact task and run controllers belong to the selected sidebar, including
+  when its fallback panel renders the same authority. Native responses, reveals and focus
+  acknowledgements use exact scope and request identity. Root hosted geometry and action checks
+  live in `WorkflowSteeringFallbackHostedTests.swift` and `WorkflowSteeringFallbackRetainedHostedTests.swift`.
 - **Conversations.** A follow-up sent to a finished task continues the same
   conversation, never a new sidebar row: `Lineage.conversations(_:)`/`conversationSections(_:matches:)`
   (`MonitorCore/Conversation.swift`) group tasks by `parent_task_id` (a resume chain — distinct from

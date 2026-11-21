@@ -257,6 +257,7 @@ struct ParallelColumnRenderValue: Equatable {
     var messageLock: ParallelMessageLock?
     var inspectorApproval: WorkflowSelectedApprovalGate?
     var showsInspectorTitle = false
+    var hidesInspectorComposer = false
     var request: TaskRequestReadState?
     var requestFeedback: String?
 
@@ -279,7 +280,7 @@ struct ParallelColumnRenderValue: Equatable {
             && lhs.isResident == rhs.isResident && lhs.isVisible == rhs.isVisible
             && lhs.hasMessageActions == rhs.hasMessageActions && lhs.hasMessageCancellation == rhs.hasMessageCancellation
             && lhs.chrome == rhs.chrome && lhs.messageLock == rhs.messageLock && lhs.inspectorApproval == rhs.inspectorApproval
-            && lhs.showsInspectorTitle == rhs.showsInspectorTitle
+            && lhs.showsInspectorTitle == rhs.showsInspectorTitle && lhs.hidesInspectorComposer == rhs.hidesInspectorComposer
             && lhs.request == rhs.request
             && lhs.requestFeedback == rhs.requestFeedback
     }
@@ -306,6 +307,7 @@ extension ParallelColumnModel {
         return ParallelColumnRenderValue(presentation: value, animatesArrival: animatesArrival, isResident: isResident, isVisible: isVisible,
                                         hasMessageActions: onSubmitMessage != nil, hasMessageCancellation: onCancelMessage != nil,
                                         chrome: chrome, messageLock: messageLock, inspectorApproval: inspectorApproval,
-                                        showsInspectorTitle: showsInspectorTitle, request: request, requestFeedback: requestFeedback)
+                                        showsInspectorTitle: showsInspectorTitle, hidesInspectorComposer: hidesInspectorComposer,
+                                        request: request, requestFeedback: requestFeedback)
     }
 }

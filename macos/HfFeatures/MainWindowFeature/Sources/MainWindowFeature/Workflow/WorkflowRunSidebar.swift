@@ -179,12 +179,14 @@ extension WorkflowVM {
     activity?.setInspectorApproval(next.approval)
     if runGraphVisible { activity?.didAppear() }
     if runGraphVisible { parallel.suspendWorkflowActivity() } else { applyRunMessageLock(); parallel.didAppear() }
+    applySteeringComposerOwnership()
     updateNativeActivity()
     }
 
     func setRunGraphVisible(_ visible: Bool) {
         guard runGraphVisible != visible else { return }
         runGraphVisible = visible
+        updateSteeringSelection()
         if visible {
             parallel.suspendWorkflowActivity()
             selectedActivity?.didAppear()
@@ -193,6 +195,7 @@ extension WorkflowVM {
             applyRunMessageLock()
             parallel.didAppear()
         }
-        updateNativeActivity()
+        applySteeringComposerOwnership()
+    updateNativeActivity()
     }
 }

@@ -19,7 +19,7 @@ extension ActivityFeedNativeList.Coordinator {
     /// reader keeps the captured row in place when anything was removed or resized, and
     /// otherwise no scroll write happens.
     func applyTailInsert(next: [ActivityFeedNativeEntry], following: Bool, removeLeading: Int,
-                         insertAt: Int, count: Int) {
+                         insertAt: Int, count: Int, removeAt: Int = 0) {
         guard let table else { return }
         let captured = following ? nil : tailInsertReading(next: next)
         let changedIDs = installEntries(next)
@@ -28,7 +28,7 @@ extension ActivityFeedNativeList.Coordinator {
             context.duration = 0
             context.allowsImplicitAnimation = false
             table.beginUpdates()
-            if removeLeading > 0 { table.removeRows(at: IndexSet(0 ..< removeLeading), withAnimation: []) }
+            if removeLeading > 0 { table.removeRows(at: IndexSet(removeAt ..< removeAt + removeLeading), withAnimation: []) }
             table.insertRows(at: IndexSet(insertAt ..< insertAt + count), withAnimation: [])
             table.endUpdates()
             if !changed.isEmpty { table.noteHeightOfRows(withIndexesChanged: changed) }

@@ -203,11 +203,14 @@ struct ActivityFeedNativeList: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         let actions = ActivityFeedNativeActions()
+        var composerEdge: TaskComposerNativeEdge?
         weak var scroll: ActivityFeedNativeScrollView?
         weak var table: ActivityFeedNativeTableView?
         var model: ActivityFeedNativeModel?
         var previousModel: ActivityFeedNativeModel?
         var consumedApprovalReveal: UUID?
+        var consumedScopedApprovalReveals: [ActivityFeedApprovalReveal] = []
+        var consumedCallReveal: UUID?
         var state: ParallelColumnUIState?
         var entries: [ActivityFeedNativeEntry] = []
         var boxes: [ActivityFeedNativeItemBox] = []
@@ -224,6 +227,9 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         var rootInputsRevision = 0
         var fingerprint: ActivityFeedNativeEnvironmentFingerprint?
         var width: CGFloat = 0
+        var historyHeaderIndex: Int?
+        var firstTimelineIndex: Int?
+        var lastTimelineIndex: Int?
         var firstRowIndex: Int?
         var lastRowIndex: Int?
         var positioned = false
@@ -302,6 +308,8 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         }
 
         func stop() {
+            composerEdge?.stop()
+            composerEdge = nil
             observers.forEach(NotificationCenter.default.removeObserver)
             observers.removeAll()
             scrollerObservation?.invalidate()
@@ -327,6 +335,43 @@ struct ActivityFeedNativeList: NSViewRepresentable {
             actions.reset()
             scroll = nil
             table = nil
+        }
+
+        /// Geometry-only suppression, with no row realization or accessibility lookup.
+        func refreshComposerEdge() {
+            guard model?.composerEdge == true else {
+                composerEdge?.stop()
+                composerEdge = nil
+                return
+            }
+            guard let scroll else { return }
+            if composerEdge == nil {
+                let edge = TaskComposerNativeEdge()
+                edge.install(in: scroll)
+                composerEdge = edge
+            }
+            var protectsActions = false
+            if let table, table.numberOfRows == entries.count {
+                let visible = scroll.documentVisibleRect
+                let band = CGRect(x: visible.minX, y: visible.maxY - 16, width: visible.width, height: 16)
+                let range = table.rows(in: band)
+                let indices = range.location == NSNotFound ? 0 ..< 0
+                    : max(0, range.location) ..< min(entries.count, NSMaxRange(range))
+                for index in indices {
+                    switch entries[index] {
+                    case .scopedApproval, .approval:
+                        protectsActions = true
+                    case .supplementary(let row):
+                        protectsActions = row.protectsActions
+                    case .tail(.standard(let tail), _):
+                        protectsActions = tail.cancel != .hidden && tail.workMessages.contains(where: \.isPinned)
+                    default: break
+                    }
+                    if protectsActions { break }
+                }
+            }
+            composerEdge?.update(enabled: true, positioned: positioned,
+                                suppressForReveal: protectsActions || model?.approvalReveal != nil || hasActionableScopedApprovalReveal)
         }
 
         // MARK: Chrome
@@ -356,6 +401,12 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         }
 
         private func refreshActions(_ actions: ActivityFeedNativeActions) {
+            self.actions.onScopedApprovalResponse = actions.onScopedApprovalResponse
+            self.actions.onScopedApprovalToggle = actions.onScopedApprovalToggle
+            self.actions.onScopedApprovalRefresh = actions.onScopedApprovalRefresh
+            self.actions.onScopedApprovalScrollAcknowledged = actions.onScopedApprovalScrollAcknowledged
+            self.actions.onScopedApprovalFocusAcknowledged = actions.onScopedApprovalFocusAcknowledged
+            self.actions.onCallScrollAcknowledged = actions.onCallScrollAcknowledged
             self.actions.onLoadMore = actions.onLoadMore
             self.actions.onDisclosure = actions.onDisclosure
             self.actions.onSelectChildTask = actions.onSelectChildTask
@@ -379,6 +430,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
 
         func update(model: ActivityFeedNativeModel, state: ParallelColumnUIState, environment: EnvironmentValues,
                     actions: ActivityFeedNativeActions) {
+            defer { refreshComposerEdge() }
             // Callbacks are refreshed on every SwiftUI update, including input-equal ones.
             refreshActions(actions)
             let previous = self.model
@@ -422,6 +474,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
                 || lastReconciledPendingPage != (pendingPage != nil)
             guard stateChanged || previous != model || environmentChanged || rootInputsChanged || localInputsChanged else {
                 maybePerformInitialPositioning()
+                revealCallIfNeeded()
                 revealApprovalIfNeeded()
                 maybeLoadOlder()
                 commitPendingHeader()
@@ -437,6 +490,8 @@ struct ActivityFeedNativeList: NSViewRepresentable {
         /// object is the same persists all of it, and nothing here runs.
         private func resetForStateOwnerChange() {
             consumedApprovalReveal = nil
+            consumedScopedApprovalReveals.removeAll()
+            consumedCallReveal = nil
             pendingPage = nil
             pendingPageObservedLoading = false
             rejectedIDs = nil

@@ -5,324 +5,84 @@ import MonitorCore
 import SwiftUI
 import Testing
 
-// MARK: - WorkflowRunSidebarHostedTests pending approval
+// MARK: - WorkflowRunSidebarHostedTests inline approvals
 
-/// The owner rule for a caller approval awaiting a decision in the selected-node pane's inspector column: the card gets its
-/// natural height first, the feed yields, the goal region yields after the feed, and an oversized card scrolls above its
-/// pinned Approve once and Reject bars. Visibility is proved by geometry (frames inside the visible region above the
-/// composer) and by activation through accessibility.
+/// Hosted coverage for approvals rendered as expandable entries in the inspector's activity document.
 extension WorkflowRunSidebarHostedTests {
     private static let minimumWindow = CGSize(width: 1000, height: 620)
-    private static let longGoal = (1 ... 10)
-.map {
-        "Step \($0): confirm the release notes, the changelog entry and the migration receipt agree with the shipped build."
-    }
-.joined(separator: " ")
-
-    // MARK: Minimum window
 
     @Test(arguments: [ColorScheme.light, .dark])
-    func givenPendingRequestAtMinimumWindow_whenLaidOut_thenFeedAndGoalRegionYieldAndCardScrollsAbovePinnedActions(appearance: ColorScheme) async throws {
-        // given: a realistic single-field Bash request; the 1000x620 chrome leaves less room than its natural height
-        let request = approvalCaptureRequest(owner: "monitor", id: "req-fit", taskID: "task-0", command: "swift test --filter PersistenceTests")
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: CallerApprovalCaptureFake(request: request),
-                                              waitFor: ["approval-approve-req-fit"])
-        defer { pane.close() }
-
-        // when
-        let metrics = try pane.metrics(requestIDs: ["req-fit"])
-        try pane.capture("fit-1000x620-\(appearance == .dark ? "dark" : "light")")
-
-        // then
-        #expect(metrics.demand.awaitingDecision)
-        #expect(metrics.labels.isEmpty, "A sole pending request needs no label")
-        #expect(metrics.regionIsVisible, "The region is inside the window and the pane and above the composer: \(metrics.description)")
-        #expect(metrics.feedHeight < 1, "The feed has yielded down to the step-count line")
-        #expect(metrics.topRegionHeight < 1, "The goal region has yielded after the feed")
-        #expect(metrics.stepCountLinePresent, "The step-count line stays")
-        #expect(metrics.regionHeight < metrics.demand.natural, "The column's chrome leaves the card less than its natural height")
-        #expect(metrics.cardScrolls, "so the card scrolls inside its region")
-        #expect(metrics.actionsAreVisible, "Approve once and Reject are whole inside the region")
-        #expect(metrics.cardScrollKeepsActionsFixed(pane), "Scrolling the card to its end and back leaves the actions in place")
-        #expect(metrics.allHitsReachTheirTarget, "Every action answers its own hit test: \(metrics.hitTests)")
-    }
-
-    // MARK: Overflow
-
-    @Test(arguments: [ColorScheme.light, .dark])
-    func givenOversizedCardAndTwoRequests_whenWindowIsAtMinimum_thenBarsStackNameTheirRequestsAndEveryActionIsReachable(appearance: ColorScheme) async throws {
-        // given
-        let fake = CallerApprovalCaptureFake(requests: Self.overflowRequests())
-        let ids = fake.requests.map(\.id)
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake,
-                                              waitFor: ids.map { "approval-approve-\($0)" })
-        defer { pane.close() }
-
-        // when
-        let metrics = try pane.metrics(requestIDs: ids)
-        try pane.capture("overflow-1000x620-\(appearance == .dark ? "dark" : "light")")
-
-        // then
-        #expect(metrics.demand.awaitingDecision)
-        #expect(metrics.regionHeight < metrics.demand.natural - 1, "The card is larger than the room the column leaves")
-        #expect(metrics.regionIsVisible)
-        #expect(metrics.barLabelsPresent(ids), "Each of the two bars names its request")
-        #expect(metrics.actionsAreVisible, "Both bars' four actions are inside the region without scrolling the bar stack")
-        #expect(metrics.allHitsReachTheirTarget, "Every action answers its own hit test: \(metrics.hitTests)")
-        #expect(metrics.cardScrolls, "The oversized card scrolls above the bars")
-        #expect(metrics.cardScrollKeepsActionsFixed(pane), "Scrolling the card to its end and back leaves every action in place")
-    }
-
-    // MARK: Many bars
-
-    @Test(arguments: [ColorScheme.light, .dark])
-    func givenMoreBarsThanTheRegionHolds_whenBarStackScrolls_thenCardViewportSurvivesAndEveryRequestIsReachable(appearance: ColorScheme) async throws {
-        // given
-        let requests = (0 ..< 6).map {
-            approvalCaptureRequest(owner: "monitor", id: "req-m\($0)", taskID: "task-0", command: "echo step \($0)", createdAt: Double($0))
-        }
+    func givenTwoOversizedApprovals_whenWindowGrowsAndShrinks_thenEachCardAndDecisionRemainsReachable(appearance: ColorScheme) async throws {
+        let requests = Self.overflowRequests()
         let fake = CallerApprovalCaptureFake(requests: requests)
         let ids = requests.map(\.id)
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake,
-                                              waitFor: ids.map { "approval-approve-\($0)" })
+        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake, requestIDs: ids)
         defer { pane.close() }
-        let metrics = try pane.metrics(requestIDs: ids)
-        try pane.capture("many-bars-1000x620-\(appearance == .dark ? "dark" : "light")")
 
-        // when / then
-        #expect(metrics.regionIsVisible)
-        #expect(metrics.barStackScrolls, "The stacked bars exceed the room, so the bar stack scrolls")
-        #expect(metrics.cardViewportHeight >= CallerApprovalPinnedLayout.minimumCardViewport - 1, "The cards keep a viewport: \(metrics.description)")
-        for id in ids {
-            let reach = try pane.scrollIntoView(requestID: id)
-            #expect(reach.approve && reach.reject, "Both actions of \(id) are inside the bar viewport after scrolling it into view")
-            #expect(reach.viewportAboveComposer)
-            let details = try pane.scrollDetailsIntoView(requestID: id)
-            #expect(details.isReachable, "The details of \(id) come into the card viewport: \(details)")
+        let feed = try #require(pane.activityFeed)
+        let table = try #require(feed.documentView as? ActivityFeedNativeTableView)
+        #expect(pane.activityFeeds.count == 1, "The inspector has one activity document")
+        #expect(pane.hasNoApprovalInnerScroll, "Approval details and decisions use the main activity document")
+        let entryIDs = table.owner?.entries.map(\.id) ?? []
+        #expect(entryIDs.contains("activity-scoped-approval-task-task-0-req-big"))
+        #expect(entryIDs.contains("activity-scoped-approval-task-task-0-req-two"))
+
+        let secondDisclosure = try #require(pane.fixture.element("approval-disclosure-req-two"))
+        let secondIndex = try #require(table.owner?.entries.firstIndex { $0.id.hasSuffix("-req-two") })
+        let collapsedSecondHeight = table.rect(ofRow: secondIndex).height
+        #expect(pane.fixture.press(secondDisclosure))
+        await pane.settle(timeout: 5) {
+            table.rect(ofRow: secondIndex).height > collapsedSecondHeight + 30
+                && pane.fixture.element("approval-approve-req-two") != nil
         }
-    }
 
-    // MARK: Labels
-
-    @Test(arguments: [ColorScheme.light, .dark])
-    func givenTwoCommandsSharingALongPrefix_whenBarsAreLabelled_thenTheLabelsDifferVisiblyAndAccessibly(appearance: ColorScheme) async throws {
-        // given: the commands differ only in their last word, far past where a tail-truncated label would end
-        let prefix = String(repeating: "run-the-long-verification-step-with-every-argument-spelled-out ", count: 4)
-        let first = approvalCaptureRequest(owner: "monitor", id: "req-a", taskID: "task-0", command: prefix + "alpha", createdAt: 1)
-        let second = approvalCaptureRequest(owner: "monitor", id: "req-b", taskID: "task-0", command: prefix + "omega", createdAt: 2)
-        let fake = CallerApprovalCaptureFake(requests: [first, second])
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake,
-                                              waitFor: ["approval-approve-req-a", "approval-approve-req-b"])
-        defer { pane.close() }
-
-        // when
-        let metrics = try pane.metrics(requestIDs: ["req-a", "req-b"])
-        let labelA = try #require(pane.fixture.element("approval-bar-label-req-a"))
-        let labelB = try #require(pane.fixture.element("approval-bar-label-req-b"))
-        func text(_ element: NSObject) -> String? {
-            ["accessibilityLabel", "accessibilityValue", "accessibilityTitle"].compactMap { pane.fixture.string(element, $0) }.first
+        for size in [Self.minimumWindow, CGSize(width: 1440, height: 900), Self.minimumWindow] {
+            pane.fixture.window.setContentSize(size)
+            await pane.settle { (pane.activityFeed?.bounds.height ?? 0) > 0 }
+            try pane.capture("inline-approvals-\(Int(size.width))x\(Int(size.height))-\(appearance == .dark ? "dark" : "light")")
+            for id in ids {
+                for suffix in ["approve", "reject"] {
+                    let identifier = "approval-\(suffix)-\(id)"
+                    let frame = try await pane.revealControl(identifier, in: feed)
+                    #expect(pane.frameIsVisibleInActivity(frame, feed: feed), "\(identifier) is visible in the main scroll document: \(frame)")
+                }
+            }
         }
-        let textA = try #require(text(labelA))
-        let textB = try #require(text(labelB))
 
-        // then: the accessibility text carries the whole command, so the two differ at the end; the visible line is one line
-        // truncated in the middle, so its end (the differing word) stays on screen
-        #expect(textA != textB)
-        #expect(textA.hasSuffix("alpha") && textB.hasSuffix("omega"), "\(textA) | \(textB)")
-        #expect(textA.hasPrefix("Bash · ") && !textA.contains("Waiting for approval"))
-        #expect(pane.fixture.string(labelA, "accessibilityHelp") == textA, "The full text is the label's help")
-        #expect(metrics.barLabelsPresent(["req-a", "req-b"]))
-        #expect(metrics.labels.count == 2 && metrics.labels.values.allSatisfy { $0.height < 20 }, "Each label is a single line")
-        #expect(metrics.actionsAreVisible)
+        let firstDisclosure = try #require(pane.fixture.element("approval-disclosure-req-big"))
+        #expect(pane.fixture.press(firstDisclosure))
+        await pane.settle { !pane.containsText("line 1 of a multi-line description") }
+        #expect(pane.containsText("pwd"), "Collapsing one request leaves its neighbor expanded")
+        #expect(pane.fixture.press(try #require(pane.fixture.element("approval-disclosure-req-big"))))
+        await pane.settle { pane.containsText("line 1 of a multi-line description") }
+
+        let secondDecision = try await pane.revealControl("approval-approve-req-two", in: feed)
+        #expect(pane.frameIsVisibleInActivity(secondDecision, feed: feed))
+        try await pane.clickDecisionAtAXCenter("approval-approve-req-two", in: feed)
+        let recorded = await pane.settle(timeout: 3) { fake.responseCount == 1 }
+        #expect(recorded, "The pointer decision reaches the fake approval endpoint")
+        #expect(fake.responses == [CallerApprovalCaptureFake.Response(requestID: "req-two", decision: "approve")])
     }
-
-    @Test(arguments: [ColorScheme.light, .dark])
-    func givenUnknownPendingCardBeforeActionableCard_whenLaidOut_thenOnlyTheActionableRequestHasALabelledBar(appearance: ColorScheme) async throws {
-        // given
-        let unknown = approvalCaptureRequest(owner: "monitor", id: "req-unknown", taskID: "task-0", command: "echo unknown", createdAt: 1)
-        var raw = unknown.raw
-        raw["disposition"] = .string("future_state")
-        raw["delivery"] = .string("reserved")
-        let actionable = approvalCaptureRequest(owner: "monitor", id: "req-action", taskID: "task-0", command: "echo actionable", createdAt: 2)
-        let fake = CallerApprovalCaptureFake(requests: [CallerApprovalRequest(raw: raw), actionable])
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake,
-                                              waitFor: ["approval-details-req-unknown", "approval-approve-req-action", "approval-bar-label-req-action"])
-        defer { pane.close() }
-
-        // when
-        let metrics = try pane.metrics(requestIDs: ["req-unknown", "req-action"])
-        let actionableMetrics = try pane.metrics(requestIDs: ["req-action"])
-        let viewport = try #require(metrics.cardScroll.map { pane.windowFrame($0.contentView) })
-        let unknownDetails = try #require(metrics.details["req-unknown"])
-        let actionableDetails = try #require(metrics.details["req-action"])
-        let label = try #require(pane.fixture.element("approval-bar-label-req-action"))
-        let labelFrame = try #require(metrics.labels["req-action"])
-        let approveFrame = try #require(metrics.approves["req-action"])
-
-        // then
-        #expect(unknownDetails.maxY > actionableDetails.maxY, "The visually pending unknown card renders first")
-        #expect(Set(metrics.labels.keys) == ["req-action"])
-        #expect(Set(metrics.approves.keys) == ["req-action"] && Set(metrics.rejects.keys) == ["req-action"])
-        #expect(pane.fixture.string(label, "accessibilityHelp") == "Bash · echo actionable")
-        #expect(metrics.barLabelsPresent(["req-action"]) && labelFrame.midY > approveFrame.midY)
-        #expect(viewport.intersects(unknownDetails))
-        #expect(metrics.regionIsVisible && actionableMetrics.actionsAreVisible && actionableMetrics.allHitsReachTheirTarget)
-        #expect(!metrics.barStackScrolls)
-    }
-
-    // MARK: History
-
-    @Test
-    func givenOnePendingRequestAndSettledHistory_whenLaidOut_thenTheDemandIsThePendingCardAlone() async throws {
-        // given: one pending request alone in the pane
-        let pending = approvalCaptureRequest(owner: "monitor", id: "req-p", taskID: "task-0", command: "swift test --filter PersistenceTests", createdAt: 50)
-        let fake = CallerApprovalCaptureFake(request: pending)
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: .light, fake: fake, waitFor: ["approval-approve-req-p"])
-        defer { pane.close() }
-        let alone = try pane.metrics(requestIDs: ["req-p"])
-        let aloneDocument = alone.cardScroll?.documentView?.frame.height ?? 0
-
-        // when: answered and expired requests arrive with the next poll (an expired card is expanded by default)
-        fake.requests = [pending,
-            approvalCaptureRequest(owner: "monitor", id: "req-d1", taskID: "task-0", command: "ls", disposition: "decided", createdAt: 10),
-            approvalCaptureRequest(owner: "monitor", id: "req-d2", taskID: "task-0", command: "pwd", disposition: "decided", createdAt: 20),
-            approvalCaptureRequest(owner: "monitor", id: "req-x1", taskID: "task-0", command: "make", disposition: "expired", createdAt: 30)]
-        await pane.settle(timeout: 10) {
-            ((try? pane.metrics(requestIDs: ["req-p"]))?.cardScroll?.documentView?.frame.height ?? 0) > aloneDocument + 50
-        }
-        await pane.settle(timeout: 1) { false }
-        let metrics = try pane.metrics(requestIDs: ["req-p"])
-        try pane.capture("history-1000x620-light")
-
-        // then
-        let document = metrics.cardScroll?.documentView?.frame.height ?? 0
-        #expect(document > aloneDocument + 50, "The history is really in the card scroll: \(document) against \(aloneDocument)")
-        #expect(abs(metrics.demand.natural - alone.demand.natural) < 0.5, "Only the pending card is demanded")
-        #expect(metrics.demand.awaitingDecision)
-        #expect(abs(metrics.feedHeight - alone.feedHeight) < 0.5, "The history does not move the feed")
-        #expect(abs(metrics.topRegionHeight - alone.topRegionHeight) < 0.5, "The history does not move the goal region")
-        #expect(abs(metrics.regionHeight - alone.regionHeight) < 0.5, "The history does not resize the region")
-        #expect(metrics.actionsAreVisible && metrics.regionIsVisible)
-    }
-
-    // MARK: Ordering
-
-    @Test
-    func givenExpandedHistoryAndAnUnknownStatePendingRequest_whenLaidOut_thenTheAwaitingCardRendersFirstInTheCardViewport() async throws {
-        // given: the app's own ordering (`CallerApprovalPresentation.orderedBefore`) sorts an unknown-disposition request that is still pending among settled history, and an older
-        // expired request is expanded by default
-        let expired = approvalCaptureRequest(owner: "monitor", id: "req-old", taskID: "task-0", command: "old-expired-command-marker",
-                                             disposition: "expired", createdAt: 1)
-        let unknown = approvalCaptureRequest(owner: "monitor", id: "req-new", taskID: "task-0", command: "unknown-state-command-marker",
-                                             disposition: "pending", createdAt: 2)
-        var raw = unknown.raw
-        raw["disposition"] = .string("future_state")
-        let fake = CallerApprovalCaptureFake(requests: [expired, CallerApprovalRequest(raw: raw)])
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: .light, fake: fake, waitFor: ["approval-details-req-new"])
-        defer { pane.close() }
-
-        // when
-        let metrics = try pane.metrics(requestIDs: ["req-new"])
-        try pane.capture("ordering-1000x620-light")
-
-        // then
-        let awaitingFirst = try #require(pane.frame(ofElementContaining: "unknown-state-command-marker"))
-        let viewport = try #require(metrics.cardScroll.map { pane.windowFrame($0.contentView) })
-        #expect(metrics.demand.awaitingDecision, "The unknown-state request is visually pending")
-        #expect(metrics.cardViewportHeight > 0)
-        #expect(viewport.insetBy(dx: -1, dy: -1).contains(CGPoint(x: awaitingFirst.midX, y: awaitingFirst.midY)),
-                "The awaiting card starts inside the card viewport: \(awaitingFirst) in \(viewport)")
-        let history = try #require(pane.frame(ofElementContaining: "old-expired-command-marker"), "The expired card is expanded by default")
-        #expect(awaitingFirst.maxY > history.maxY, "The awaiting card is above the expanded history")
-        let details = try #require(metrics.details["req-new"])
-        let oldDetails = try #require(pane.fixture.element("approval-details-req-old").flatMap { pane.fixture.frame($0) })
-        #expect(details.maxY > oldDetails.maxY, "The awaiting card renders before the expired one")
-        #expect(metrics.approves["req-new"] == nil && metrics.rejects["req-new"] == nil, "An unknown state is never actionable, so it has no bar")
-    }
-
-    // MARK: Activation
 
     @Test(arguments: ["approve", "reject"], [ColorScheme.light, .dark])
-    func givenTwoPendingRequests_whenTheSecondBarIsPressed_thenTheFakeRecordsItsRequestAndDecision(decision: String, appearance: ColorScheme) async throws {
-        // given
-        let fake = CallerApprovalCaptureFake(requests: Self.overflowRequests())
-        let ids = fake.requests.map(\.id)
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake,
-                                              waitFor: ids.map { "approval-approve-\($0)" })
-        defer { pane.close() }
-        let target = try #require(ids.last)
-        let reach = try pane.scrollIntoView(requestID: target)
-        #expect(reach.approve && reach.reject)
-        let identifier = decision == "approve" ? "approval-approve-\(target)" : "approval-reject-\(target)"
-        let button = try #require(pane.fixture.element(identifier))
-
-        // when: a press that lands while the panel's 3 s poll is mid-refresh is ignored by the controller, as a click is for
-        // a person, so the press is repeated (at most four times) until the fake has an answer
-        for _ in 0 ..< 4 where fake.responseCount == 0 {
-            #expect(pane.fixture.press(button), "The accessibility press of \(identifier) is accepted")
-            await pane.settle(timeout: 1.5) { fake.responseCount > 0 }
-        }
-
-        // then
-        #expect(fake.responses == [CallerApprovalCaptureFake.Response(requestID: target, decision: decision)])
-    }
-
-    // MARK: Resolution
-
-    @Test
-    func givenPendingRequest_whenItSettles_thenTheFeedFloorComesBack() async throws {
-        // given
-        let request = approvalCaptureRequest(owner: "monitor", id: "req-resolve", taskID: "task-0", command: "swift test --filter PersistenceTests")
+    func givenInlineApproval_whenDecisionIsPressed_thenTheFakeRecordsTheExactRequestAndOutcome(decision: String, appearance: ColorScheme) async throws {
+        let request = approvalCaptureRequest(owner: "monitor", id: "req-decision", taskID: "task-0", command: "swift test")
         let fake = CallerApprovalCaptureFake(request: request)
-        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: .light, fake: fake, waitFor: ["approval-approve-req-resolve"])
-        defer { pane.close() }
-        #expect(pane.demand.value.awaitingDecision)
-        let pendingFeed = try #require(paneFeed(in: pane.fixture)).bounds.height
-
-        // when: the engine reports the request answered; the panel's next 3 s poll reads it
-        fake.requests = [approvalCaptureRequest(owner: "monitor", id: "req-resolve", taskID: "task-0",
-                                                command: "swift test --filter PersistenceTests", disposition: "decided")]
-        func barButton() -> NSView? {
-            pane.paneView.flatMap { root in pane.allViews(root).first {
-                $0.accessibilityIdentifier() == "approval-approve-req-resolve" && $0.window != nil
-                    && !$0.isHiddenOrHasHiddenAncestor && !$0.visibleRect.isEmpty
-            } }
-        }
-        await pane.settle(timeout: 10) {
-            !pane.demand.value.awaitingDecision && barButton() == nil
-                && (paneFeed(in: pane.fixture)?.bounds.height ?? 0) >= WorkflowSelectedPaneSizing.transcriptFloor - 0.5
-        }
-
-        // then
-        let feed = try #require(paneFeed(in: pane.fixture))
-        try pane.capture("resolved-1000x620-light")
-        #expect(pane.demand.value.awaitingDecision == false)
-        #expect(pane.demand.value.reserved == 0)
-        #expect(feed.bounds.height >= WorkflowSelectedPaneSizing.transcriptFloor - 0.5, "The feed's 80 pt floor is back")
-        #expect(barButton() == nil, "The pinned bar is gone")
-    }
-
-    // MARK: Large window
-
-    @Test
-    func givenPendingRequestInALargeWindow_whenLaidOut_thenCardAndGoalRegionKeepTheirNaturalHeightsAndTheFeedKeepsWhatIsLeft() async throws {
-        // given
-        let request = approvalCaptureRequest(owner: "monitor", id: "req-large", taskID: "task-0", command: "swift test --filter PersistenceTests")
-        let pane = try await makeApprovalPane(size: CGSize(width: 1440, height: 900), appearance: .light,
-                                              fake: CallerApprovalCaptureFake(request: request), waitFor: ["approval-approve-req-large"],
-                                              goal: "Verify the release.")
+        let identifier = "approval-\(decision)-req-decision"
+        let pane = try await makeApprovalPane(size: Self.minimumWindow, appearance: appearance, fake: fake, requestIDs: [request.id])
         defer { pane.close() }
 
-        // when
-        let metrics = try pane.metrics(requestIDs: ["req-large"])
-        try pane.capture("pending-1440x900-light")
-
-        // then: at 1440x900 the card, the goal block and the step line all fit; the feed gets what is left, which is below its 80 pt floor
-        #expect(abs(metrics.regionHeight - metrics.demand.natural) <= 1.5, "The card is at its natural height")
-        #expect(metrics.actionsAreVisible && metrics.regionIsVisible && metrics.detailsAreInsideRegion)
-        #expect(metrics.topRegionIsNatural, "The goal region keeps its natural height")
-        #expect(!metrics.cardScrolls, "The card does not scroll")
-        #expect(metrics.feedHeight > 0, "The feed keeps what is left")
+        let feed = try #require(pane.activityFeed)
+        let frame = try await pane.revealControl(identifier, in: feed)
+        #expect(pane.frameIsVisibleInActivity(frame, feed: feed))
+        try await pane.clickDecisionAtAXCenter(identifier, in: feed)
+        let recorded = await pane.settle(timeout: 3) { fake.responseCount == 1 }
+        #expect(recorded, "The pointer decision reaches the fake approval endpoint")
+        #expect(fake.responses == [CallerApprovalCaptureFake.Response(requestID: request.id, decision: decision)])
+        let outcomeFocused = await pane.settle(timeout: 5) {
+            (pane.fixture.window.firstResponder as? NSView)?.accessibilityIdentifier() == "approval-disclosure-\(request.id)"
+        }
+        #expect(outcomeFocused, "The answered request retains focus on its exact outcome disclosure")
     }
 
     // MARK: Fixtures
@@ -340,13 +100,13 @@ extension WorkflowRunSidebarHostedTests {
     }
 
     @MainActor
-    private func makeApprovalPane(size: CGSize, appearance: ColorScheme, fake: CallerApprovalCaptureFake, waitFor identifiers: [String],
-                                  goal: String? = nil) async throws -> ApprovalPane {
+    private func makeApprovalPane(size: CGSize, appearance: ColorScheme, fake: CallerApprovalCaptureFake,
+                                  requestIDs: [String]) async throws -> ApprovalPane {
         let vm = WorkflowPreview.make(run: true)
         let nodeID = try #require(vm.nodes.first { $0.type == "agent" }?.id)
         var raw = try #require(vm.selectedRun?.raw)
         raw["caller_approvals"] = .bool(true)
-        raw["goal"] = .string(goal ?? Self.longGoal)
+        raw["goal"] = .string("Verify the release.")
         raw["activations"] = .array([workerActivation(nodeID: nodeID, taskID: "task-0")])
         vm.selectedRun = WorkflowRunModel(raw: raw)
         WorkflowPreview.synchronizeRun(vm)
@@ -367,10 +127,24 @@ extension WorkflowRunSidebarHostedTests {
         vm.selectedNodeID = nodeID
         await vm.sidebarTask?.value
         harness.tasksSubject.send(Array(harness.tasksBox.value.values))
-        await pane.settle(timeout: 8) { identifiers.allSatisfy { fixture.element($0) != nil } && pane.demand.value.natural > 0 }
-        // The layout needs a few passes after the cards appear: demand, region, then the pane's top region.
-        await pane.settle(timeout: 2) { false }
-        for identifier in identifiers { #expect(fixture.element(identifier) != nil, "\(identifier) is on screen") }
+        let selectedTaskReady = await pane.settle(timeout: 5) {
+            vm.selectedNodeID == nodeID
+                && vm.selectedActivity?.columns.first?.task.taskID == "task-0"
+                && vm.selectedActivity?.columns.first?.inspectorApproval != nil
+        }
+        try #require(selectedTaskReady, "The selected task update mounts the retained approval activity")
+        let ready = await pane.settle(timeout: 8) {
+            fake.pageCalls.contains { $0.taskID == "task-0" }
+                && Set(pane.activityEntryIDs).isSuperset(of: Set(requestIDs.map(pane.scopedApprovalEntryID)))
+                && pane.approvalControllerSettled && pane.hasMeasuredActivityRows
+        }
+        if !ready {
+            try pane.capture("approval-readiness-\(Int(size.width))x\(Int(size.height))-\(appearance == .dark ? "dark" : "light")")
+        }
+        let diagnostic = "expected=\(requestIDs), task=\(vm.activityMessageTarget.taskID ?? "nil"), "
+            + "pages=\(fake.pageCalls.map(\.taskID)), entries=\(pane.activityEntryIDs), "
+            + "status=\(pane.approvalStatus), width=\(pane.activityWidth), positioned=\(pane.activityPositioned)"
+        try #require(ready, Comment(rawValue: diagnostic))
         return pane
     }
 }
@@ -397,39 +171,180 @@ struct ApprovalPane {
         fixture.close()
     }
 
-    /// Pumps layout until `predicate` holds or the timeout passes.
-    func settle(timeout: TimeInterval = 3, _ predicate: () -> Bool) async {
+    func settle(timeout: TimeInterval = 3, _ predicate: () -> Bool) async -> Bool {
+        var reached = false
         await waitUntil(timeout: timeout) {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
             fixture.host.layoutSubtreeIfNeeded()
             fixture.host.displayIfNeeded()
-            return predicate()
+            reached = predicate()
+            return reached
         }
+        return reached
     }
 
     var paneView: NSView? { fixture.descendants.compactMap { $0 as? NSSplitView }.last { $0.isVertical }?.arrangedSubviews.last }
+    var paneScrollViews: [NSScrollView] { paneView.map { allViews($0).compactMap { $0 as? NSScrollView } } ?? [] }
+    var activityFeeds: [ActivityFeedNativeScrollView] { paneScrollViews.compactMap { $0 as? ActivityFeedNativeScrollView } }
+    var activityFeed: ActivityFeedNativeScrollView? { activityFeeds.first }
+    var activityEntryIDs: [String] {
+        guard let table = activityFeed?.documentView as? ActivityFeedNativeTableView else { return [] }
+        return table.owner?.entries.map(\.id) ?? []
+    }
 
-    var paneScrollViews: [NSScrollView] {
-        paneView.map { allViews($0).compactMap { $0 as? NSScrollView } } ?? []
+    var approvalStatus: String {
+        guard let table = activityFeed?.documentView as? ActivityFeedNativeTableView else { return "missing table" }
+        for entry in table.owner?.entries ?? [] {
+            guard case .supplementary(let row) = entry else { continue }
+            switch row.input {
+            case .approval(let status), .approvalCards(_, let status):
+                return "loading=\(status.loading) error=\(String(describing: status.error))"
+            default:
+                continue
+            }
+        }
+        return "missing"
+    }
+
+    var activityWidth: CGFloat { activityFeed?.owner?.currentWidth ?? 0 }
+    var activityPositioned: Bool { activityFeed?.owner?.positioned == true }
+    var hasMeasuredActivityRows: Bool {
+        guard let table = activityFeed?.documentView as? ActivityFeedNativeTableView,
+              let owner = table.owner else { return false }
+        return owner.positioned && owner.currentWidth > 0 && owner.boxes.count == owner.entries.count
+            && owner.boxes.contains { ($0.height ?? 0) > 0 }
+    }
+
+    var approvalControllerSettled: Bool {
+        guard let table = activityFeed?.documentView as? ActivityFeedNativeTableView else { return false }
+        for entry in table.owner?.entries ?? [] {
+            guard case .supplementary(let row) = entry else { continue }
+            switch row.input {
+            case .approval(let status), .approvalCards(_, let status): return !status.loading
+            default: continue
+            }
+        }
+        return false
+    }
+
+    func scopedApprovalEntryID(_ requestID: String) -> String {
+        "activity-scoped-approval-task-task-0-\(requestID)"
+    }
+
+    func windowFrame(_ view: NSView) -> CGRect { view.convert(view.bounds, to: nil) }
+    var hasNoApprovalInnerScroll: Bool {
+        guard let paneView else { return false }
+        return allViews(paneView).compactMap { $0 as? NSScrollView }.allSatisfy {
+            !$0.accessibilityIdentifier().hasPrefix("approval-details-")
+        }
     }
 
     func allViews(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(allViews) }
+    func containsText(_ text: String) -> Bool {
+        guard let paneView else { return false }
+        return allViews(paneView).flatMap { fixture.elements(in: $0) }.contains { element in
+            ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
+                fixture.string(element, $0)?.contains(text) == true
+            }
+        }
+    }
 
-    func windowFrame(_ view: NSView) -> CGRect { view.convert(view.bounds, to: nil) }
+    func revealControl(_ identifier: String, in feed: ActivityFeedNativeScrollView) async throws -> CGRect {
+        let requestID = identifier.components(separatedBy: "-").last ?? ""
+        guard let document = feed.documentView,
+              let table = document as? ActivityFeedNativeTableView else {
+            Issue.record("Activity document is missing")
+            return .zero
+        }
+
+        var latestFrame = CGRect.zero
+        var latestViewport = CGRect.zero
+        var latestPaneViewport = CGRect.zero
+        var latestRow = CGRect.zero
+        for _ in 0 ..< 4 {
+            let mounted = await settle(timeout: 2) {
+                fixture.element(identifier) != nil
+                    && feed.owner?.entries.contains { $0.id.hasSuffix("-\(requestID)") } == true
+            }
+            try #require(mounted, "The exact approval control and row are mounted: \(identifier)")
+            guard let element = fixture.element(identifier), let frame = fixture.frame(element),
+                  let row = feed.owner?.entries.firstIndex(where: { $0.id.hasSuffix("-\(requestID)") })
+            else { continue }
+
+            latestFrame = frame
+            latestViewport = feed.contentView.convert(feed.contentView.bounds, to: nil)
+            latestPaneViewport = feed.convert(feed.bounds, to: nil)
+            latestRow = table.rect(ofRow: row)
+            if latestViewport.insetBy(dx: -1, dy: -1).contains(frame) { return frame }
+
+            document.scrollToVisible(document.convert(frame, from: nil))
+            feed.reflectScrolledClipView(feed.contentView)
+            fixture.host.layoutSubtreeIfNeeded()
+            let visible = await settle(timeout: 1) {
+                guard let currentElement = fixture.element(identifier),
+                      let currentFrame = fixture.frame(currentElement) else { return false }
+                latestFrame = currentFrame
+                latestViewport = feed.contentView.convert(feed.contentView.bounds, to: nil)
+                latestPaneViewport = feed.convert(feed.bounds, to: nil)
+                return latestViewport.insetBy(dx: -1, dy: -1).contains(currentFrame)
+            }
+            if visible { return latestFrame }
+        }
+
+        let diagnostic = "\(identifier) failed to fit current activity viewport: frame=\(latestFrame), viewport=\(latestViewport), "
+            + "pane=\(latestPaneViewport), row=\(latestRow), document=\(document.bounds)"
+        try #require(false, Comment(rawValue: diagnostic))
+        return latestFrame
+    }
+
+    func frameIsVisibleInActivity(_ frame: CGRect, feed: ActivityFeedNativeScrollView) -> Bool {
+        let viewport = feed.contentView.convert(feed.contentView.bounds, to: nil)
+        return viewport.insetBy(dx: -1, dy: -1).contains(frame)
+    }
+
+    func clickDecisionAtAXCenter(_ identifier: String, in feed: ActivityFeedNativeScrollView) async throws {
+        let priorActivationPolicy = NSApp.activationPolicy()
+        defer { NSApp.setActivationPolicy(priorActivationPolicy) }
+        try await resourceInteractionForeground(fixture)
+        _ = try await revealControl(identifier, in: feed)
+
+        var frame = CGRect.zero
+        let ready = await settle(timeout: 5) {
+            guard let element = fixture.element(identifier), let currentFrame = fixture.frame(element),
+                  !currentFrame.isEmpty, frameIsVisibleInActivity(currentFrame, feed: feed) else { return false }
+            // Approve is AppKit-backed. Reject is a SwiftUI button exposed through AX.
+            guard element.responds(to: NSSelectorFromString("isAccessibilityEnabled")) else { return false }
+            let enabled = (element as? any NSAccessibilityProtocol)?.isAccessibilityEnabled()
+                ?? (element.value(forKey: "accessibilityEnabled") as? NSNumber)?.boolValue
+            guard enabled == true else { return false }
+            frame = currentFrame
+            return true
+        }
+        let viewport = feed.contentView.convert(feed.contentView.bounds, to: nil)
+        let diagnostic = "Enabled decision after foreground activation: id=\(identifier), frame=\(frame), viewport=\(viewport)"
+        try #require(ready, Comment(rawValue: diagnostic))
+
+        let point = CGPoint(x: frame.midX, y: frame.midY)
+        let mouseDown = try #require(NSEvent.mouseEvent(
+            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: fixture.window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1
+        ))
+        let mouseUp = try #require(NSEvent.mouseEvent(
+            with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: fixture.window.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 0
+        ))
+        NSApp.postEvent(mouseUp, atStart: false)
+        fixture.window.sendEvent(mouseDown)
+    }
 
     func capture(_ name: String) throws {
         let directory = URL(fileURLWithPath: ProcessInfo.processInfo.environment["HARFLOW_APPROVAL_CAPTURE_DIR"] ?? NSTemporaryDirectory(),
                             isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let host = fixture.host
-        host.layoutSubtreeIfNeeded()
-        let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-        host.cacheDisplay(in: host.bounds, to: bitmap)
+        fixture.host.layoutSubtreeIfNeeded()
+        let bitmap = try #require(fixture.host.bitmapImageRepForCachingDisplay(in: fixture.host.bounds))
+        fixture.host.cacheDisplay(in: fixture.host.bounds, to: bitmap)
         let png = try #require(bitmap.representation(using: .png, properties: [:]))
         try png.write(to: directory.appendingPathComponent(name + ".png"))
-    }
-
-    func metrics(requestIDs: [String]) throws -> ApprovalMetrics {
-        try ApprovalMetrics(pane: self, requestIDs: requestIDs)
     }
 }

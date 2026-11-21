@@ -60,6 +60,7 @@ struct WorkflowRunSummary<VM: WorkflowViewModel>: View {
 
     private var preview: String {
         guard let run = viewModel.selectedRun else { return "Loading workflow…" }
+        if WorkflowSteeringPresentation.hidesParkedReason(run.raw, dismissed: viewModel.steering.isDismissed) { return run.status.capitalized }
         return run.reason.isEmpty ? run.status.replacingOccurrences(of: "_", with: " ") : run.reason
     }
 

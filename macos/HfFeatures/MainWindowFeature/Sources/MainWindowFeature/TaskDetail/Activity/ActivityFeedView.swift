@@ -18,6 +18,20 @@ import SwiftUI
 
 /// Shared reading, progressive reveal and older-page behavior across activity surfaces.
 struct ActivityFeedView: View {
+    var leadingContent: [ActivityFeedSupplementaryRow] = []
+    var trailingContent: [ActivityFeedSupplementaryRow] = []
+    var followingContent: [ActivityFeedDocumentEntry] = []
+    var scopedApprovalReveals: [ActivityFeedApprovalReveal] = []
+    var scopedApprovals: [ActivityFeedApprovalEntry] = []
+    var approvalSource: ActivityFeedApprovalEntry.Source?
+    var composerEdge = false
+    var callReveal: WorkflowInspectorCallReveal?
+    var onCallScrollAcknowledged: (UUID) -> Void = { _ in }
+    var onScopedApprovalResponse: (ActivityFeedApprovalEntry.Source, String, String) -> Void = { _, _, _ in }
+    var onScopedApprovalToggle: (ActivityFeedApprovalEntry.Source, String) -> Void = { _, _ in }
+    var onScopedApprovalRefresh: (ActivityFeedApprovalEntry.Source) -> Void = { _ in }
+    var onScopedApprovalScrollAcknowledged: (ActivityFeedApprovalEntry.Source, String, UUID) -> Void = { _, _, _ in }
+    var onScopedApprovalFocusAcknowledged: (ActivityFeedApprovalEntry.Source, String, UUID) -> Void = { _, _, _ in }
     let rows: [ActivityRow]
     var activitySnapshot: ActivityFeedSnapshot?
     let start: Date?
@@ -140,7 +154,10 @@ struct ActivityFeedView: View {
             visible: isVisible,
             loading: isLoading,
             approvalReveal: approvalReveal,
-            activitySnapshot: activitySnapshot, stateTreatment: stateTreatment
+            activitySnapshot: activitySnapshot, stateTreatment: stateTreatment,
+            leadingContent: leadingContent, trailingContent: trailingContent, scopedApprovals: scopedApprovals,
+            approvalSource: approvalSource, composerEdge: composerEdge, callReveal: callReveal,
+            followingContent: followingContent, scopedApprovalReveals: scopedApprovalReveals
         )
     }
 
@@ -148,6 +165,12 @@ struct ActivityFeedView: View {
 
     private var currentActions: ActivityFeedNativeActions {
         let actions = ActivityFeedNativeActions()
+        actions.onScopedApprovalResponse = onScopedApprovalResponse
+        actions.onScopedApprovalToggle = onScopedApprovalToggle
+        actions.onScopedApprovalRefresh = onScopedApprovalRefresh
+        actions.onScopedApprovalScrollAcknowledged = onScopedApprovalScrollAcknowledged
+        actions.onScopedApprovalFocusAcknowledged = onScopedApprovalFocusAcknowledged
+        actions.onCallScrollAcknowledged = onCallScrollAcknowledged
         actions.onLoadMore = onLoadMore
         actions.onDisclosure = { id in
             if state.expandedGroups.insert(id).inserted == false { state.expandedGroups.remove(id) }

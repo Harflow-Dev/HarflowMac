@@ -49,17 +49,21 @@ struct WorkflowActivityMessageComposer<VM: WorkflowViewModel>: View {
     /// Native Activity draws its bubbles in the transcript. This footer keeps them when it is the
     /// only transcript on the surface.
     var showsBubbles = true
+    /// The approved failed root keeps ordinary queueing without immediate-delivery controls.
+    var queueOnly = false
+    var composerEdge = false
+    var selectedTaskInspector = false
 
     /// An existing reason ("Not called yet.") keeps its own copy; unsupported applies to an otherwise sendable target,
     /// locking with no placeholder, no hint and no Send now.
-    static func boxModel(target: WorkflowActivityMessageTarget, unsupported: Bool, isBusy: Bool) -> MessageBoxModel {
+    static func boxModel(target: WorkflowActivityMessageTarget, unsupported: Bool, isBusy: Bool, queueOnly: Bool = false) -> MessageBoxModel {
         let unsupported = unsupported && target.unavailableReason == nil
         return MessageBoxModel(
             canSend: target.unavailableReason == nil && !unsupported, canContinue: false, isBusy: isBusy,
-            label: target.taskID == nil ? "Message the child workflow orchestrator" : "Message this node",
-            hint: unsupported ? "" : "Send queues; Send now requests immediate delivery when safe",
+            label: queueOnly ? "Message the orchestrator" : target.taskID == nil ? "Message the child workflow orchestrator" : "Message this node",
+            hint: unsupported || queueOnly ? "" : "Send queues; Send now requests immediate delivery when safe",
             placeholder: unsupported ? "" : target.unavailableReason ?? "Queue a message…", buttonLabel: "Send",
-            isLocked: target.unavailableReason != nil || unsupported, showsSendNow: !unsupported)
+            isLocked: target.unavailableReason != nil || unsupported, showsSendNow: !unsupported && !queueOnly)
     }
 
     var body: some View {
@@ -73,12 +77,16 @@ struct WorkflowActivityMessageComposer<VM: WorkflowViewModel>: View {
             if let reason = viewModel.activityMessageReadError {
                 Text(reason).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             }
-            MessageBoxView(model: Self.boxModel(target: target, unsupported: unsupported, isBusy: viewModel.isBusy),
-                           onSubmitNow: { viewModel.submitActivityMessage($0, now: true) }, isCompact: true) {
+            if composerEdge { Divider().padding(.bottom, 4) }
+            MessageBoxView(model: Self.boxModel(target: target, unsupported: unsupported, isBusy: viewModel.isBusy, queueOnly: queueOnly),
+                           onSubmitNow: queueOnly ? nil : { viewModel.submitActivityMessage($0, now: true) },
+                           isCompact: true, wrapperTopInset: composerEdge ? 0 : nil, selectedTaskInspector: selectedTaskInspector) {
                 viewModel.submitActivityMessage($0, now: false)
             }
             .id(target)
         }
+        .padding(.horizontal, composerEdge ? 16 : 0)
+        .padding(.bottom, composerEdge ? 16 : 0)
         .accessibilityIdentifier("workflow-activity-message-composer")
         .task(id: target) { await viewModel.refreshActivityMessageState() }
     }

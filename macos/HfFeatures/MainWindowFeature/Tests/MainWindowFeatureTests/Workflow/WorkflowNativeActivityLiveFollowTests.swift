@@ -7,6 +7,43 @@ import SwiftUI
 import Testing
 
 @MainActor @Suite(.serialized) struct WorkflowNativeActivityLiveFollowTests {
+    @Test func givenPinnedQueueAndTimeline_whenMounted_thenQueuedBubbleIsLastInsideTheActivityDocument() async throws {
+        let model = WorkflowLiveFollowFixtureModel(count: 8)
+        model.messages = [WorkMessageBubble(id: "workflow-queued-last", seq: 1,
+            kind: .queued(canCancel: true, note: nil), text: "Queued follow-up inside the task content")]
+        let fixture = RedesignHost(WorkflowLiveFollowFixture(model: model), size: CGSize(width: 420, height: 450))
+        defer { fixture.close() }
+        var scroll: WorkflowActivityNativeScrollView?
+        await fixture.settle {
+            scroll = fixture.descendants.compactMap { $0 as? WorkflowActivityNativeScrollView }.first
+            return scroll?.owner?.positioned == true && scroll.map { bottomGap($0) <= 3 } == true
+        }
+
+        let feed = try #require(scroll)
+        let document = try #require(feed.documentView)
+        let marker = try #require(fixture.elements(in: document).first {
+            fixture.string($0, "accessibilityLabel")?.contains("Queued follow-up inside the task content") == true
+                || fixture.string($0, "accessibilityValue")?.contains("Queued follow-up inside the task content") == true
+        })
+        let lastTimeline = try #require(fixture.elements(in: document).first {
+            fixture.string($0, "accessibilityLabel")?.contains("Activity row 7:") == true
+                || fixture.string($0, "accessibilityValue")?.contains("Activity row 7:") == true
+        })
+        let queuedFrame = try #require(fixture.frame(marker))
+        let timelineFrame = try #require(fixture.frame(lastTimeline))
+        let queuedDocumentFrame = document.convert(queuedFrame, from: nil)
+        let timelineDocumentFrame = document.convert(timelineFrame, from: nil)
+        let documentFrame = document.convert(document.bounds, to: nil)
+        let viewportFrame = feed.contentView.convert(feed.contentView.bounds, to: nil)
+        #expect(documentFrame.insetBy(dx: -1, dy: -1).contains(queuedFrame), "The queued bubble belongs to the activity document")
+        #expect(document.isFlipped ? queuedDocumentFrame.minY > timelineDocumentFrame.maxY
+            : queuedDocumentFrame.maxY < timelineDocumentFrame.minY,
+                "The queued bubble follows the newest timeline row")
+        let gap = bottomGap(feed)
+        #expect(viewportFrame.intersects(queuedFrame) && gap <= 3,
+                "viewport=\(viewportFrame), queued=\(queuedFrame), gap=\(gap)")
+    }
+
     @Test func givenFollowingNativeActivity_whenSameExecutionGrows_thenViewportRemainsAtBottom() async throws {
         // given — include the workflow composer in the same mounted activity container.
         let model = WorkflowLiveFollowFixtureModel()
@@ -168,6 +205,30 @@ import Testing
             && bottomGap(replacementScroll) <= 3)
     }
 
+    @Test func givenNativeCallSelectors_whenPointerThenKeyboardSelectAcrossExecutionRemounts_thenRevealAndFocusFollowInputModality() async throws {
+        let previousActivationPolicy = NSApp.activationPolicy()
+        defer { NSApp.setActivationPolicy(previousActivationPolicy) }
+        let model = WorkflowLiveFollowFixtureModel(count: 20)
+        model.callRows = [
+            WorkflowOnDemandCallRow(id: "call-one", number: 1, status: "succeeded", startedAt: 1000, finishedAt: 1010, taskID: nil),
+            WorkflowOnDemandCallRow(id: "call-two", number: 2, status: "succeeded", startedAt: 1020, finishedAt: 1030, taskID: nil)
+        ]
+        model.selectedCallID = "call-two"
+        let fixture = RedesignHost(WorkflowLiveFollowFixture(model: model), size: CGSize(width: 420, height: 320))
+        defer { fixture.close() }
+        try await resourceInteractionForeground(fixture)
+
+        var initialScroll: WorkflowActivityNativeScrollView?
+        await fixture.settle {
+            initialScroll = fixture.descendants.compactMap { $0 as? WorkflowActivityNativeScrollView }.first
+            return initialScroll?.owner?.positioned == true
+        }
+        let firstFeed = try #require(initialScroll)
+        let callOneFeed = try await selectNativeCallByPointer("call-one", from: firstFeed, model: model, fixture: fixture)
+        let callTwoFeed = try await selectNativeCallByKeyboard("call-two", from: callOneFeed, model: model, fixture: fixture)
+        #expect(callTwoFeed !== callOneFeed)
+    }
+
     @Test func givenPausedFollow_whenRowsShrink_thenReadingOffsetStaysPut() async throws {
         let model = WorkflowLiveFollowFixtureModel(count: 20)
         let host = NSHostingView(rootView: WorkflowLiveFollowFixture(model: model))
@@ -290,6 +351,149 @@ import Testing
                      "A focused feed must handle Page Up through the window responder chain")
     }
 
+    private func nativeCallSelector(_ identifier: String, in fixture: RedesignHost) throws -> NSButton {
+        let buttons = fixture.descendants.compactMap { $0 as? NSButton }
+        return try #require(buttons.first { $0.accessibilityIdentifier() == identifier })
+    }
+
+    private func selectNativeCallByPointer(
+        _ activationID: String,
+        from oldFeed: WorkflowActivityNativeScrollView,
+        model: WorkflowLiveFollowFixtureModel,
+        fixture: RedesignHost
+    ) async throws -> WorkflowActivityNativeScrollView {
+        let identifier = "workflow-call-selector-\(activationID)"
+        let frame = try await revealCallSelector(identifier, in: oldFeed, fixture: fixture)
+        try clickCallSelector(identifier, frame: frame, fixture: fixture)
+        var newFeed: WorkflowActivityNativeScrollView?
+        await fixture.settle {
+            newFeed = fixture.descendants.compactMap { $0 as? WorkflowActivityNativeScrollView }.first { $0 !== oldFeed }
+            return model.selectedCallID == activationID && newFeed?.owner?.positioned == true
+        }
+        let feed = try #require(newFeed)
+        let revealed = try await visibleCallSelector(identifier, in: feed, fixture: fixture)
+        let revealToken = try #require(model.callRevealTokens[activationID])
+        await fixture.settle { model.callScrollAcknowledgements.contains(revealToken) }
+        try #require(model.callScrollAcknowledgements.contains(revealToken),
+                     "Pointer selection acknowledges scrolling to the exact selector token")
+        try #require(feed.contentView
+.convert(feed.contentView.bounds, to: nil)
+.insetBy(dx: -1, dy: -1)
+            .contains(revealed), "Pointer selection keeps the exact selector visible")
+        #expect(fixture.window.firstResponder !== (try nativeCallSelector(identifier, in: fixture)),
+                "Pointer selection does not programmatically focus the remounted native selector")
+        return feed
+    }
+
+    private func selectNativeCallByKeyboard(
+        _ activationID: String,
+        from oldFeed: WorkflowActivityNativeScrollView,
+        model: WorkflowLiveFollowFixtureModel,
+        fixture: RedesignHost
+    ) async throws -> WorkflowActivityNativeScrollView {
+        let identifier = "workflow-call-selector-\(activationID)"
+        _ = try await revealCallSelector(identifier, in: oldFeed, fixture: fixture)
+        let oldButton = try nativeCallSelector(identifier, in: fixture)
+        try #require(fixture.window.makeFirstResponder(oldButton))
+        try sendSpaceKey(in: fixture.window)
+        await fixture.settle { model.selectedCallID == activationID }
+
+        var newFeed: WorkflowActivityNativeScrollView?
+        await fixture.settle {
+            newFeed = fixture.descendants.compactMap { $0 as? WorkflowActivityNativeScrollView }.first { $0 !== oldFeed }
+            return newFeed?.owner?.positioned == true
+        }
+        let feed = try #require(newFeed)
+        let revealed = try await visibleCallSelector(identifier, in: feed, fixture: fixture)
+        let revealToken = try #require(model.callRevealTokens[activationID])
+        await fixture.settle { model.callScrollAcknowledgements.contains(revealToken) }
+        try #require(model.callScrollAcknowledgements.contains(revealToken),
+                     "Keyboard selection acknowledges scrolling to the exact selector token")
+        try #require(feed.contentView
+.convert(feed.contentView.bounds, to: nil)
+.insetBy(dx: -1, dy: -1)
+            .contains(revealed), "Keyboard selection keeps the exact selector visible")
+        let newButton = try nativeCallSelector(identifier, in: fixture)
+        await fixture.settle { fixture.window.firstResponder === newButton }
+        try #require(fixture.window.firstResponder === newButton,
+                     "Keyboard selection restores focus to the exact selector in the remounted execution")
+        return feed
+    }
+
+    private func revealCallSelector(_ identifier: String, in scroll: WorkflowActivityNativeScrollView,
+                                    fixture: RedesignHost) async throws -> CGRect {
+        if let owner = scroll.owner, owner.following { try sendPageUp(scroll) }
+        var frame = CGRect.zero
+        var viewport = CGRect.zero
+        for _ in 0 ..< 4 {
+            let button = try nativeCallSelector(identifier, in: fixture)
+            frame = try #require(fixture.frame(button))
+            viewport = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
+            if viewport.insetBy(dx: -1, dy: -1).contains(frame) { return frame }
+            guard let document = scroll.documentView else { break }
+            document.scrollToVisible(document.convert(frame, from: nil))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            await fixture.settle {
+                guard let currentButton = try? nativeCallSelector(identifier, in: fixture),
+                      let currentFrame = fixture.frame(currentButton) else { return false }
+                frame = currentFrame
+                viewport = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
+                return viewport.insetBy(dx: -1, dy: -1).contains(currentFrame)
+            }
+        }
+        try #require(viewport.insetBy(dx: -1, dy: -1).contains(frame),
+                     Comment(rawValue: "Could not reveal \(identifier): frame=\(frame), viewport=\(viewport)"))
+        return frame
+    }
+
+    private func visibleCallSelector(_ identifier: String, in scroll: WorkflowActivityNativeScrollView,
+                                     fixture: RedesignHost) async throws -> CGRect {
+        var frame = CGRect.zero
+        var viewport = CGRect.zero
+        await fixture.settle {
+            guard let button = try? nativeCallSelector(identifier, in: fixture),
+                  let currentFrame = fixture.frame(button) else { return false }
+            frame = currentFrame
+            viewport = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
+            return viewport.insetBy(dx: -1, dy: -1).contains(currentFrame)
+        }
+        try #require(viewport.insetBy(dx: -1, dy: -1).contains(frame),
+                     Comment(rawValue: "Remounted selector is not visible: \(identifier), frame=\(frame), viewport=\(viewport)"))
+        return frame
+    }
+
+    private func clickCallSelector(_ identifier: String, frame: CGRect, fixture: RedesignHost) throws {
+        let button = try nativeCallSelector(identifier, in: fixture)
+        let nativeFrame = button.convert(button.bounds, to: nil)
+        try #require(nativeFrame.insetBy(dx: -1, dy: -1).contains(CGPoint(x: frame.midX, y: frame.midY)))
+        let point = CGPoint(x: frame.midX, y: frame.midY)
+        let mouseDown = try #require(NSEvent.mouseEvent(
+            with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: fixture.window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1
+        ))
+        let mouseUp = try #require(NSEvent.mouseEvent(
+            with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: fixture.window.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 0
+        ))
+        NSApp.postEvent(mouseUp, atStart: false)
+        fixture.window.sendEvent(mouseDown)
+    }
+
+    private func sendSpaceKey(in window: NSWindow) throws {
+        let keyDown = try #require(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ",
+            isARepeat: false, keyCode: 49
+        ))
+        let keyUp = try #require(NSEvent.keyEvent(
+            with: .keyUp, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ",
+            isARepeat: false, keyCode: 49
+        ))
+        NSApp.postEvent(keyDown, atStart: true)
+        NSApp.postEvent(keyUp, atStart: false)
+    }
+
     private func pageUpEvent(in window: NSWindow) throws -> NSEvent {
         try #require(NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
@@ -320,6 +524,11 @@ import Testing
     @Published var cancelledMessageID: String?
     @Published var cancelCallbackVersion: Int?
     @Published var colorScheme: ColorScheme = .light
+    @Published var callRows: [WorkflowOnDemandCallRow] = []
+    @Published var selectedCallID: String?
+    @Published var callReveal: WorkflowInspectorCallReveal?
+    private(set) var callRevealTokens: [String: UUID] = [:]
+    private(set) var callScrollAcknowledgements: Set<UUID> = []
 
     init(count: Int = 12, textLength: Int = 8) {
         self.count = count
@@ -333,29 +542,40 @@ import Testing
         return WorkflowNativeActivityModel(executionID: executionID, title: "Review", status: "running",
                                            limited: false, items: items)
     }
-}
 
-@MainActor struct WorkflowLiveFollowFixture: View {
-    @ObservedObject var model: WorkflowLiveFollowFixtureModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if model.showActivity {
-                let callbackVersion = model.callbackVersion
-                WorkflowNativeActivityView(model: model.activity, messages: model.messages, onCancel: { id in
-                    model.cancelledMessageID = id
-                    model.cancelCallbackVersion = callbackVersion
-                })
-                    .id(model.executionID)
-            }
-            MessageBoxView(model: model.composerEnabled ? MessageBoxModel(
-                canSend: true, canContinue: false, isBusy: false, label: "Messages",
-                hint: "", placeholder: "Write a message", buttonLabel: "Send"
-            ) : .disabled) { _ in true }
+    var callSelectorRows: [ActivityFeedSupplementaryRow] {
+        callRows.map { row in
+            let rowID = "workflow-inspector-live-follow-callSelector-\(row.id)"
+            let reveal = callReveal?.rowID == rowID ? callReveal : nil
+            let focusToken = reveal?.takesFocus == true ? reveal?.token : nil
+            let selected = selectedCallID == row.id
+            let content = AnyView(WorkflowInspectorCallSelector(row: row, selected: selected, focusToken: focusToken,
+                onSelect: { self.selectCall(rowID: rowID, activationID: row.id) }, onOpenTask: { _ in },
+                onFocusAcknowledged: { self.acknowledgeCallFocus($0) }))
+            return ActivityFeedSupplementaryRow(scope: "live-follow", kind: .callSelector,
+                input: .call(row, selected: selected, focusToken: focusToken), content: content, key: row.id)
         }
-        .background(Text("\(model.refresh)").hidden())
-        .environment(\.colorScheme, model.colorScheme)
-        .frame(width: model.fixedWidth)
-        .frame(minWidth: model.fixedWidth == nil ? 220 : 0, minHeight: 280)
+    }
+
+    private func selectCall(rowID: String, activationID: String) {
+        let eventType = NSApp.currentEvent?.type
+        let takesFocus = eventType == .keyDown || eventType == .keyUp
+        let token = UUID()
+        callRevealTokens[activationID] = token
+        callReveal = WorkflowInspectorCallReveal(rowID: rowID, token: token, takesFocus: takesFocus,
+                                                  activationID: activationID)
+        selectedCallID = activationID
+        executionID = "workflow-live-follow-\(activationID)"
+    }
+
+    func acknowledgeCallScroll(_ token: UUID) {
+        callScrollAcknowledgements.insert(token)
+        guard callReveal?.token == token, callReveal?.takesFocus == false else { return }
+        callReveal = nil
+    }
+
+    private func acknowledgeCallFocus(_ token: UUID) {
+        guard callReveal?.token == token, callReveal?.takesFocus == true else { return }
+        callReveal = nil
     }
 }

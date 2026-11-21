@@ -15,6 +15,7 @@ import SwiftUI
     private(set) var measurementCount = 0
     private(set) var followPublicationCount = 0
     private(set) var attachmentGeneration = 0
+    private var composerEdge: TaskComposerNativeEdge?
     private var presentation: WorkflowActivityPresentation?
     private var environment: ActivityFeedNativeEnvironment?
     private var fingerprint: ActivityFeedNativeEnvironmentFingerprint?
@@ -30,6 +31,11 @@ import SwiftUI
     private var revision = 0
     private var pendingHeight: CGFloat?
     private var reconciling = false
+    private var consumedApprovalReveal: UUID?
+    private var approvalFrames: [String: CGRect] = [:]
+    private var queuedMessagesFrame: CGRect?
+    private var consumedCallReveal: UUID?
+    private var callFrames: [String: CGRect] = [:]
     private var dispatchDepth = 0
     private var inputOffset: CGFloat = 0
 
@@ -57,6 +63,33 @@ import SwiftUI
         scroll.documentView = document
         applyChrome()
         actions.jump = { [weak self] in self?.resumeFollowing() }
+        actions.queuedFrame = { [weak self] frame in
+            guard let self, presentation?.messages.contains(where: \.isPinned) == true else { return }
+            queuedMessagesFrame = frame
+            refreshComposerEdge()
+        }
+        actions.approvalFocusReady = { [weak self] in
+            guard let self else { return false }
+            return positioned && !reconciling && presentation?.approvalReveal == nil && consumedApprovalReveal != nil
+        }
+        actions.approvalFrame = { [weak self] id, rect in
+            guard let self, approvalFrames[id] != rect,
+                  let input = presentation?.approvalContent?.input,
+                  case .approvalCards(let entries, _) = input,
+                  id == "workflow-approval-status" || entries.contains(where: { $0.card.id == id }) else { return }
+            approvalFrames[id] = rect
+            scheduleReconcile()
+        }
+        actions.callFocusReady = { [weak self] in
+            guard let self else { return false }
+            return positioned && !reconciling && presentation?.callReveal?.token == consumedCallReveal
+        }
+        actions.callFrame = { [weak self] id, rect in
+            guard let self, callFrames[id] != rect,
+                  presentation?.leadingContent.contains(where: { $0.id == id }) == true else { return }
+            callFrames[id] = rect
+            scheduleReconcile()
+        }
         actions.height = { [weak self] height, revision, generation in
             self?.onHostedHeight(height, revision: revision, generation: generation)
         }
@@ -64,8 +97,16 @@ import SwiftUI
     }
 
     func update(presentation: WorkflowActivityPresentation, environment: EnvironmentValues) {
+        defer { refreshComposerEdge() }
         let nextFingerprint = ActivityFeedNativeEnvironmentFingerprint(environment)
         if self.presentation != presentation || fingerprint != nextFingerprint {
+            if !presentation.messages.contains(where: \.isPinned) { queuedMessagesFrame = nil }
+            let callIDs = Set(presentation.leadingContent.map(\.id))
+            callFrames = callFrames.filter { callIDs.contains($0.key) }
+            if let input = presentation.approvalContent?.input, case .approvalCards(let entries, _) = input {
+                let approvalIDs = Set(entries.map(\.card.id))
+                approvalFrames = approvalFrames.filter { approvalIDs.contains($0.key) }
+            } else { approvalFrames.removeAll() }
             self.presentation = presentation
             self.environment = ActivityFeedNativeEnvironment(environment)
             fingerprint = nextFingerprint
@@ -125,6 +166,8 @@ import SwiftUI
     }
 
     func stop() {
+        composerEdge?.stop()
+        composerEdge = nil
         removeObservations()
         attachmentGeneration += 1
         queued?.cancel()
@@ -174,6 +217,7 @@ import SwiftUI
         reconciling = true
         defer {
             reconciling = false
+            refreshComposerEdge()
             if let pendingHeight, abs(pendingHeight - document.frame.height) > 0.5 {
                 scheduleReconcile()
             } else { pendingHeight = nil }
@@ -213,6 +257,52 @@ import SwiftUI
             measureDirty = false
         }
         positionAfterLayout(previousHeight: previousHeight)
+        revealCallIfNeeded()
+        revealApprovalIfNeeded()
+        if let host {
+            Task { @MainActor [weak self, weak host] in
+                await Task.yield()
+                guard let self, !reconciling, let host else { return }
+                CallerApprovalNativeFocus.retry(in: host)
+            }
+        }
+    }
+
+    private func revealApprovalIfNeeded() {
+        guard positioned, let reveal = presentation?.approvalReveal, reveal.token != consumedApprovalReveal,
+              let frame = approvalFrames[reveal.requestID] else { return }
+        consumedApprovalReveal = reveal.token
+        reading.beginInput(upward: true)
+        reading.consumeInput()
+        reading.endInput(contentHeight: document?.frame.height ?? 0, viewportHeight: scroll?.contentView.bounds.height ?? 0)
+        writeOffset(frame.minY)
+        publishFollowing()
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.actions?.onApprovalScrollAcknowledged(reveal.requestID, reveal.token)
+        }
+    }
+
+    private func revealCallIfNeeded() {
+        guard positioned, let reveal = presentation?.callReveal, reveal.token != consumedCallReveal,
+              let frame = callFrames[reveal.rowID] else { return }
+        consumedCallReveal = reveal.token
+        reading.beginInput(upward: true)
+        reading.consumeInput()
+        reading.endInput(contentHeight: document?.frame.height ?? 0, viewportHeight: scroll?.contentView.bounds.height ?? 0)
+        writeOffset(frame.minY)
+        publishFollowing()
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.actions?.onCallScrollAcknowledged(reveal.token)
+        }
+        if let host {
+            Task { @MainActor [weak self, weak host] in
+                await Task.yield()
+                guard let self, !reconciling, let host else { return }
+                CallerApprovalNativeFocus.retry(in: host)
+            }
+        }
     }
 
     private func positionAfterLayout(previousHeight: CGFloat) {
@@ -226,6 +316,29 @@ import SwiftUI
             positioned = true
         }
         publishFollowing()
+    }
+
+    private func refreshComposerEdge() {
+        guard presentation?.composerEdge == true else {
+            composerEdge?.stop()
+            composerEdge = nil
+            return
+        }
+        guard let scroll else { return }
+        if composerEdge == nil {
+            let edge = TaskComposerNativeEdge()
+            edge.install(in: scroll)
+            composerEdge = edge
+        }
+        let visible = scroll.documentVisibleRect
+        let band = CGRect(x: visible.minX, y: visible.maxY - 16, width: visible.width, height: 16)
+        let contextActions = presentation?.leadingContent.contains { row in
+            row.protectsActions && callFrames[row.id]?.intersects(band) == true
+        } == true
+        let protectsActions = contextActions || approvalFrames.values.contains { $0.intersects(band) }
+            || queuedMessagesFrame?.intersects(band) == true
+        composerEdge?.update(enabled: true, positioned: positioned,
+                            suppressForReveal: protectsActions || presentation?.approvalReveal != nil)
     }
 
     private var maxOffset: CGFloat {
@@ -245,6 +358,7 @@ import SwiftUI
     }
 
     func boundsChanged() {
+        defer { refreshComposerEdge() }
         guard programmaticScrollDepth == 0, !reconciling else { return }
         if pendingInput { observeUserPosition() } else { scheduleReconcile() }
     }

@@ -43,8 +43,16 @@ enum ParallelMessageLock: Equatable, Sendable {
 
 struct ParallelColumnView: View {
     let model: ParallelColumnModel
+    @Environment(\.workflowInspectorDocument) var inspectorDocument
+    @Environment(\.workflowInspectorApprovalController) var inlineApprovalController
+    @Environment(\.workflowInspectorRootApprovalController) var rootApprovalController
+    @Environment(\.workflowInspectorCallScrollAcknowledged) var acknowledgeCallScroll
+    @Environment(\.rootApprovalCoexistence) private var rootApprovalCoexistence
+    @Environment(\.compactRootApprovalCoexistence) private var compactRootApprovalCoexistence
+    @Environment(\.rootApprovalFeedMinimum) private var rootApprovalFeedMinimum
     @FocusState private var historyBoundaryFocused: Bool
     @State private var headFocusToken = 0
+    @State var inlineHistoryFocus: UUID?
     /// The lane body's height, so the block above the feed can be capped at 40% of it.
     @State private var laneBodyHeight: CGFloat = 0
     /// The leading block's natural height; it is shown whole up to the cap, then scrolls.
@@ -53,14 +61,14 @@ struct ParallelColumnView: View {
     @State private var approvalDemand = CallerApprovalDemand()
     /// The inspector column's height as proposed, measured on its clear base.
     @State private var inspectorHeight: CGFloat = 0
-    @State private var headerHeight: CGFloat = 0
+    @State private var headerHeight = WorkflowLayoutHeights()
     @State private var outcomeHeight: CGFloat = 0
     @State private var boundaryHeight: CGFloat = 0
     @State private var composerHeight: CGFloat = 0
     /// The inspector's step-count line above the feed, measured so its height and the gap below it reach the pane's reserve.
     @State private var countLineHeight: CGFloat = 0
     @State private var adoptionFocus = AdoptionFocusTracker()
-    @State private var state: ParallelColumnUIState
+    @State var state: ParallelColumnUIState
     @State private var resultContentSize = CGSize(width: HfRadius.Metrics.zero, height: HfRadius.Metrics.parallelResultMaximumHeight)
 
     init(model: ParallelColumnModel, state: ParallelColumnUIState? = nil) {
@@ -72,7 +80,8 @@ struct ParallelColumnView: View {
         Group {
             switch model.chrome {
             case .lane: laneBody
-            case .inspector: inspectorBody
+            case .inspector:
+                if inspectorDocument.isEnabled { inlineInspectorBody } else { inspectorBody }
             }
         }
         .opensFileLinks(repoPath: model.task.repoPath)
@@ -197,8 +206,13 @@ struct ParallelColumnView: View {
     }
 
     private func inspectorStack(columnHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing10) {
-            header.measured(into: $headerHeight)
+        let headerDelta = compactRootApprovalCoexistence && model.showsInspectorTitle
+            ? WorkflowCompactMetrics.regularInner - WorkflowCompactMetrics.compactInner : 0
+        return VStack(alignment: .leading, spacing: inspectorSpacing) {
+            header.onGeometryChange(for: WorkflowLayoutHeights.self) {
+                let height = $0.size.height
+                return WorkflowLayoutHeights(actual: height, regular: height + headerDelta)
+            } action: { headerHeight = $0 }
             if let message = model.outcomeMessage {
                 Text(message).font(.hf(.caption)).foregroundStyle(Color.secondaryText).measured(into: $outcomeHeight)
             }
@@ -213,10 +227,11 @@ struct ParallelColumnView: View {
                 feed
             }
             inspectorApprovalRegion(columnHeight: columnHeight)
-            composer.measured(into: $composerHeight)
+            if !model.hidesInspectorComposer { composer.measured(into: $composerHeight) }
         }
-        .padding(HfRadius.Metrics.spacing16)
-        .preference(key: WorkflowSelectedColumnChromeKey.self, value: inspectorChrome)
+        .padding(.horizontal, HfRadius.Metrics.spacing16)
+        .padding(.vertical, inspectorPadding)
+        .preference(key: WorkflowSelectedColumnChromeKey.self, value: WorkflowLayoutHeights(actual: inspectorChrome, regular: regularInspectorChrome))
     }
 
     /// The approval region's height: derived from measured inputs only, never from itself or from `inspectorChrome`'s feed.
@@ -224,19 +239,31 @@ struct ParallelColumnView: View {
     private func approvalRegionHeight(columnHeight: CGFloat) -> CGFloat {
         model.inspectorApproval == nil ? 0
             : WorkflowSelectedPaneSizing.approvalHeight(natural: approvalDemand.natural, columnHeight: columnHeight,
-                                                        chrome: inspectorChrome, pending: approvalDemand.awaitingDecision)
+                                                        chrome: inspectorChrome + (rootApprovalCoexistence ? rootApprovalFeedMinimum : 0),
+                                                        pending: approvalDemand.awaitingDecision)
     }
 
     /// Everything in the column that is neither the feed nor the approval region, from directly measured pieces: header,
     /// outcome line, history boundary, divider, result callout, the step-count line (while it is drawn) and composer, plus the stack's padding and spacing.
-    private var inspectorChrome: CGFloat {
+    private var inspectorPadding: CGFloat { compactRootApprovalCoexistence ? HfRadius.Metrics.spacing4 : HfRadius.Metrics.spacing16 }
+    private var inspectorSpacing: CGFloat { compactRootApprovalCoexistence ? HfRadius.Metrics.spacing4 : HfRadius.Metrics.spacing10 }
+    private var inspectorInnerSpacing: CGFloat { compactRootApprovalCoexistence ? WorkflowCompactMetrics.compactInner : WorkflowCompactMetrics.regularInner }
+
+    private var inspectorChrome: CGFloat { inspectorChrome(regular: false) }
+    private var regularInspectorChrome: CGFloat { inspectorChrome(regular: true) }
+
+    private func inspectorChrome(regular: Bool) -> CGFloat {
         let outcome = model.outcomeMessage == nil ? 0 : outcomeHeight
         let callout = showsResultCallout ? min(resultContentSize.height, HfRadius.Metrics.parallelResultMaximumHeight) : 0
-        let countLine = showsCountLine ? countLineHeight + HfRadius.Metrics.spacing8 : 0
-        // The 5 assumes the header, history boundary, divider, feed and composer are always mounted.
-        let count = 5 + (model.outcomeMessage == nil ? 0 : 1) + (showsResultCallout ? 1 : 0) + (model.inspectorApproval == nil ? 0 : 1)
+        let countLine = showsCountLine ? countLineHeight + (regular ? WorkflowCompactMetrics.regularInner : inspectorInnerSpacing) : 0
+        // Header, history boundary, divider and feed are always mounted.
+        let count = 4 + (model.hidesInspectorComposer ? 0 : 1) + (model.outcomeMessage == nil ? 0 : 1)
+            + (showsResultCallout ? 1 : 0) + (model.inspectorApproval == nil ? 0 : 1)
         return WorkflowSelectedPaneSizing.columnChrome(
-            pieces: [headerHeight, outcome, boundaryHeight, ParallelLayout.dividerWidth, callout, composerHeight, countLine], itemCount: count)
+            pieces: [regular ? headerHeight.regular : headerHeight.actual, outcome, boundaryHeight, ParallelLayout.dividerWidth, callout,
+                     model.hidesInspectorComposer ? 0 : composerHeight, countLine], itemCount: count,
+            padding: regular ? WorkflowSelectedPaneSizing.columnPadding : inspectorPadding,
+            spacing: regular ? WorkflowSelectedPaneSizing.columnSpacing : inspectorSpacing)
     }
 
     /// The node task's approval panel between the feed and the composer. With no request awaiting a decision it takes its
@@ -285,7 +312,7 @@ struct ParallelColumnView: View {
         }
     }
 
-    private var inspectorHistoryBoundary: some View {
+    var inspectorHistoryBoundary: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.cachedHistoryNotice ?? "Available captured history")
                 .font(.hf(.caption))
@@ -306,7 +333,7 @@ struct ParallelColumnView: View {
 
     @ViewBuilder
     private var composer: some View {
-        if model.chrome == .lane { laneComposer } else { inspectorComposer }
+        if model.chrome == .lane { laneComposer } else if !model.hidesInspectorComposer { inspectorComposer }
     }
 
     /// The lane's composer: Queue only (no Send now), labelled for the harness, with a note when messaging is unavailable.
@@ -328,10 +355,14 @@ struct ParallelColumnView: View {
         .accessibilityIdentifier("parallel-column-composer")
     }
 
-    private var inspectorComposer: some View {
+    var inspectorComposer: some View {
         VStack(spacing: HfRadius.Metrics.zero) {
             MessageBoxView(model: model.inspectorMessageBoxModel,
-                           onSubmitNow: { model.onSubmitMessage?($0, true) ?? false }, isCompact: true) { model.onSubmitMessage?($0, false) ?? false }
+                           onSubmitNow: { model.onSubmitMessage?($0, true) ?? false }, isCompact: true,
+                           wrapperTopInset: inspectorDocument.isEnabled ? 0 : nil,
+                           selectedTaskInspector: inspectorDocument.isEnabled) {
+                model.onSubmitMessage?($0, false) ?? false
+            }
             if model.onSubmitMessage == nil {
                 Text("Messaging is unavailable for this activity view.")
                     .font(.hf(.caption))
@@ -348,8 +379,8 @@ struct ParallelColumnView: View {
 
     /// The inspector header: the actions row, preceded by the task's title, subtitle and status row only where the pane head
     /// does not already name the node and its status (the orchestrator pane).
-    private var header: some View {
-        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+    var header: some View {
+        VStack(alignment: .leading, spacing: inspectorInnerSpacing) {
             if model.showsInspectorTitle {
                 HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
                     StatusIcon(status: model.task.status)
@@ -399,7 +430,7 @@ struct ParallelColumnView: View {
     /// the snapshot's own, with no fallback to `task.summary`, and an empty or missing one is
     /// omitted entirely. Long results scroll independently within a bounded callout so activity
     /// remains reachable without changing the activity feed's own identity or scroll state.
-    private var showsResultCallout: Bool {
+    var showsResultCallout: Bool {
         guard let summary = model.summary else { return false }
         return !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && model.task.status.isTerminal
     }
@@ -427,7 +458,7 @@ struct ParallelColumnView: View {
 
     /// The result callout's background: the state's own tint, never a status colour as a fill for
     /// anything but this callout.
-    private var resultBackground: Color {
+    var resultBackground: Color {
         switch model.task.status {
         case .completed: Color.doneBG
         case .failed, .timedOut: Color.dangerBG
@@ -458,7 +489,7 @@ struct ParallelColumnView: View {
     }
 
     private var feed: some View {
-        VStack(spacing: HfRadius.Metrics.spacing8) {
+        VStack(spacing: model.chrome == .inspector ? inspectorInnerSpacing : HfRadius.Metrics.spacing8) {
             if showsCountLine {
                 HStack(spacing: HfRadius.Metrics.spacing8) {
                     if let stepCountText = model.stepCountText {

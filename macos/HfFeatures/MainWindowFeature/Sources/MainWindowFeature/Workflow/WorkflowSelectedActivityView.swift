@@ -1,4 +1,5 @@
 import HfUI
+import MonitorCore
 import SwiftUI
 
 // MARK: - WorkflowSelectedActivityView
@@ -10,6 +11,11 @@ struct WorkflowSelectedActivityView: View {
     var unavailableDetails: WorkflowCallDetails?
     /// True for the orchestrator pane, whose task title and status the pane head does not carry.
     var showsTaskTitle = false
+    var fallbackMessages: [WorkMessageBubble] = []
+    var onCancelFallbackMessage: ((String) -> Void)?
+    var cancelDisabled = false
+    @Environment(\.workflowInspectorDocument) private var inspectorDocument
+    @Environment(\.workflowInspectorApprovalController) private var approvalController
     @State private var pickerHeight: CGFloat = 0
     @State private var residencyHandoffs = ParallelResidencyHandoffStore()
 
@@ -27,8 +33,9 @@ struct WorkflowSelectedActivityView: View {
                 .padding(12)
                 Divider()
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pickerHeight = $0 }
-                .preference(key: WorkflowSelectedColumnChromeKey.self, value: pickerHeight)
+                .preference(key: WorkflowSelectedColumnChromeKey.self, value: WorkflowLayoutHeights(actual: pickerHeight, regular: pickerHeight))
             }
             GeometryReader { viewport in
                 if let column = activity.columns.first(where: { $0.id == activity.selectedConversationID }) {
@@ -40,13 +47,22 @@ struct WorkflowSelectedActivityView: View {
                         .equatable()
                         .id(column.id)
                 } else {
-                    VStack(spacing: 0) {
-                        if let unavailableDetails {
-                            WorkflowCallDetailsView(details: unavailableDetails)
-                            Divider()
+                    if inspectorDocument.isEnabled {
+                        WorkflowInspectorFiniteDocument(document: inspectorDocument,
+                            protectsTrailingContent: fallbackMessages.contains(where: \.isPinned)) {
+                            if let unavailableDetails { WorkflowCallDetailsView(details: unavailableDetails, naturalHeight: true) }
+                            ContentUnavailableView("Activity unavailable", systemImage: "text.alignleft",
+                                description: Text("The task record is not available."))
+                            if let approvalController { WorkflowInspectorApprovalCards(controller: approvalController) }
+                            WorkMessageBubblesView(bubbles: fallbackMessages, onCancel: onCancelFallbackMessage,
+                                                   isCancelDisabled: cancelDisabled)
                         }
-                        ContentUnavailableView("Activity unavailable", systemImage: "text.alignleft",
-                                               description: Text("The task record is not available."))
+                    } else {
+                        VStack(spacing: 0) {
+                            if let unavailableDetails { WorkflowCallDetailsView(details: unavailableDetails); Divider() }
+                            ContentUnavailableView("Activity unavailable", systemImage: "text.alignleft",
+                                description: Text("The task record is not available."))
+                        }
                     }
                 }
                 Color.clear

@@ -72,6 +72,7 @@ extension WorkflowVM {
             case .ready:
                 try applyWorkflowRead(response, context: context)
                 resolveReadFailure(source: context.source)
+                requestSteeringRead()
                 await refreshActivityMessageState()
             }
         } catch is CancellationError {
@@ -105,6 +106,7 @@ extension WorkflowVM {
             case let .ready(records):
                 applyCatalog(records)
                 resolveReadFailure(source: context.source)
+                requestSteeringRead()
                 await refreshActivityMessageState()
             }
         } catch is CancellationError {
@@ -165,6 +167,7 @@ extension WorkflowVM {
     private func finishRunRead(_ context: WorkflowReadContext, preparing: Bool) {
         guard !preparing, context.isCurrent(self), context.runID != nil, initialLoadingKind == "run" else { return }
         initialLoadingKind = nil
+        requestSteeringRead()
         initialLoadFailed = selectedRun?.raw["status"]?.stringValue == nil
     }
 }

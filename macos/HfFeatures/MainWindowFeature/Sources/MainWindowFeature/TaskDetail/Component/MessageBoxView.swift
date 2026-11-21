@@ -134,6 +134,9 @@ struct MessageBoxView: View {
     let model: MessageBoxModel
     var onSubmitNow: ((String) -> Bool)?
     var isCompact = false
+    var compactWrapper = false
+    var wrapperTopInset: CGFloat?
+    var selectedTaskInspector = false
     var style: MessageBoxStyle = .standard
     /// An external home for the draft; `nil` keeps it in local state.
     var text: Binding<String>?
@@ -246,7 +249,7 @@ struct MessageBoxView: View {
             .padding(.horizontal, isCompact ? HfRadius.Metrics.spacing12 : HfRadius.Metrics.spacing16)
             .padding(.vertical, HfRadius.Metrics.spacing12)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: HfRadius.Metrics.composerCornerRadius))
-            if isEnabled {
+            if isEnabled, !selectedTaskInspector {
                 Text(model.printedHint)
                     .font(.hf(.caption))
                     .foregroundStyle(Color.tertiaryText)
@@ -254,8 +257,9 @@ struct MessageBoxView: View {
             }
         }
         .padding(.horizontal, isCompact ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing24)
-        .padding(.top, HfRadius.Metrics.spacing12)
-        .padding(.bottom, HfRadius.Metrics.spacing20)
+        .padding(.top, wrapperTopInset ?? (compactWrapper ? WorkflowCompactMetrics.compactWrapperTop : WorkflowCompactMetrics.regularWrapperTop))
+        .padding(.bottom, selectedTaskInspector ? 0
+            : (compactWrapper ? WorkflowCompactMetrics.compactWrapperBottom : WorkflowCompactMetrics.regularWrapperBottom))
     }
 
     /// `.hd-composer` inside its task-screen wrapper. The wrapper is clear so the page background shows.
@@ -324,7 +328,8 @@ struct MessageBoxView: View {
                 .disabled(model.isBusy || model.isStopping)
                 .accessibilityIdentifier("task-composer.stop")
         }
-        if model.showsSendNow, let onSubmitNow {
+        if model.showsSendNow, let onSubmitNow,
+           !selectedTaskInspector || !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             sendNowButton(onSubmitNow)
         }
         if !isCompact || fieldFocused {

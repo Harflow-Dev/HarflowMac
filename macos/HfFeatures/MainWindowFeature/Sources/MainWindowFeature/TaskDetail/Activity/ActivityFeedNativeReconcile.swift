@@ -34,9 +34,8 @@ extension ActivityFeedNativeList.Coordinator {
             lastReconciledBoundary = state.retainedFirstID
             lastReconciledPendingPage = pendingPage != nil
             reconciling = false
-            for cell in cells.values where cell.entryID?.hasPrefix("activity-approval-") == true {
-                CallerApprovalNativeFocus.retry(in: cell)
-            }
+            refreshComposerEdge()
+            retryHostedFocus()
         }
 
         // What an incoherent native window held resumes first: its paging intent at the
@@ -48,7 +47,8 @@ extension ActivityFeedNativeList.Coordinator {
         resolvePendingPage(model: model, state: state)
         transferRegroupedState(state: state, model: model)
         let following = state.followLive.isFollowing
-        let header = ActivityFeedNativeEntries.resolveHeader(
+        let header = model.loading && model.shownRows.isEmpty && !model.leadingContent.isEmpty
+            ? ActivityFeedNativeEntry.Header.loading : ActivityFeedNativeEntries.resolveHeader(
             history: model.history,
             showsBeginning: ActivityFeedNativeEntries.showsBeginning(
                 allRowIDs: model.allRowIDs, shownRows: model.shownRows,
@@ -65,25 +65,11 @@ extension ActivityFeedNativeList.Coordinator {
             if state.retainedFirstID != nil { state.retainedFirstID = nil }
         }
         maybePerformInitialPositioning()
+        revealCallIfNeeded()
         revealApprovalIfNeeded()
         publishPosition()
         maybeLoadOlder()
         commitPendingHeader()
-    }
-
-    func revealApprovalIfNeeded() {
-        guard let reveal = model?.approvalReveal, reveal.token != consumedApprovalReveal,
-              positioned, let table, table.window != nil,
-              let index = entries.firstIndex(where: { $0.id == "activity-approval-" + reveal.requestID }) else { return }
-        consumedApprovalReveal = reveal.token
-        state?.followLive.suspend()
-        writeOffset(table.rect(ofRow: index).minY)
-        layoutNow()
-        _ = table.view(atColumn: 0, row: index, makeIfNecessary: true)
-        Task { @MainActor [weak self] in
-            await Task.yield()
-            self?.actions.onApprovalScrollAcknowledged(reveal.requestID, reveal.token)
-        }
     }
 
     /// An accepted request owns its loading header immediately, even when the caller has
@@ -91,7 +77,7 @@ extension ActivityFeedNativeList.Coordinator {
     /// outside it this is one controlled native geometry transaction preserving the latest reading.
     func commitPendingHeader() {
         guard pendingPage != nil, let model, let state else { return }
-        if case .header(.loading) = entries.first { return }
+        if entries.contains(where: { if case .header(.loading) = $0 { true } else { false } }) { return }
         let wasReconciling = reconciling
         // A direct request callback can precede the bounds notification that publishes the
         // reading; a reconcile already owns any transferred regroup anchor.
@@ -127,6 +113,13 @@ extension ActivityFeedNativeList.Coordinator {
             } else {
                 applyTailInsert(next: next, following: following, removeLeading: removeLeading,
                                 insertAt: insertAt, count: count)
+            }
+        case .contextTailInsert(let remove, let insertAt, let count):
+            if environmentHeightsInvalidated || rootsNeedRefresh || !positioned || table.window == nil {
+                applyStructural(next: next, following: following)
+            } else {
+                applyTailInsert(next: next, following: following, removeLeading: remove.count,
+                                insertAt: insertAt, count: count, removeAt: remove.lowerBound)
             }
         case .structural:
             applyStructural(next: next, following: following)
@@ -403,11 +396,23 @@ extension ActivityFeedNativeList.Coordinator {
         }
         if reporting {
             let id = box.entry.id
-            if case .approval(let card, _) = box.entry {
+            root.supplementaryFocusReady = { [weak self] in
+                guard let self, positioned, !reconciling,
+                      model?.callReveal == nil || model?.callReveal?.token == consumedCallReveal,
+                      let cell = cells[id], let table,
+                      let index = entries.firstIndex(where: { $0.id == id }),
+                      table.view(atColumn: 0, row: index, makeIfNecessary: false) === cell else { return false }
+                return table.visibleRect.intersects(table.rect(ofRow: index))
+            }
+            let approvalCard: CallerApprovalCardModel? = switch box.entry {
+            case .approval(let card, _): card
+            case .scopedApproval(let entry, _): entry.card
+            default: nil
+            }
+            if let card = approvalCard {
                 root.approvalFocusReady = { [weak self] in
                     guard let self, positioned, !reconciling,
-                          consumedApprovalReveal == card.focusToken,
-                          model?.approvalReveal == nil,
+                          approvalFocusIsReady(entry: box.entry, card: card),
                           let cell = cells[id], cell.window != nil,
                           let table, let index = entries.firstIndex(where: { $0.id == id }),
                           table.view(atColumn: 0, row: index, makeIfNecessary: false) === cell else { return false }
@@ -423,13 +428,20 @@ extension ActivityFeedNativeList.Coordinator {
         return root
     }
 
-    func indexRowEntries() {
-        firstRowIndex = nil
-        lastRowIndex = nil
-        for (index, entry) in entries.enumerated() where entry.anchorID != nil {
-            if firstRowIndex == nil { firstRowIndex = index }
-            lastRowIndex = index
+    private func approvalFocusIsReady(entry: ActivityFeedNativeEntry, card: CallerApprovalCardModel) -> Bool {
+        if case .scopedApproval(let scoped, _) = entry {
+            if let token = card.focusToken,
+               consumedScopedApprovalReveals.contains(where: {
+                   $0.source == scoped.source && $0.requestID == card.id && $0.token == token
+                       && scopedApprovalIndex(for: $0) != nil
+               }) {
+                return model?.scopedApprovalReveals.contains(where: {
+                    $0.source == scoped.source && $0.requestID == card.id && $0.token == token
+                }) == false
+            }
+            guard model?.approvalSource == scoped.source else { return false }
         }
+        return consumedApprovalReveal == card.focusToken && model?.approvalReveal == nil
     }
 
     // MARK: Reading geometry
@@ -516,7 +528,10 @@ extension ActivityFeedNativeList.Coordinator {
         guard let first = firstRowIndex else { return nil }
         guard let capture = captureReading(),
               let index = entries.firstIndex(where: { $0.id == capture.id }), index >= first else { return nil }
-        return ParallelVerticalAnchor(id: capture.id, index: index - first, relativeOffset: capture.relativeOffset)
+        let timelineIndex = entries[..<index].reduce(0) { count, entry in
+            if case .row = entry { count + 1 } else { count }
+        }
+        return ParallelVerticalAnchor(id: capture.id, index: timelineIndex, relativeOffset: capture.relativeOffset)
     }
 
     // MARK: Owned scroll writes
@@ -559,20 +574,6 @@ extension ActivityFeedNativeList.Coordinator {
 
     // MARK: Initial positioning
 
-    func schedulePositioningCheck() {
-        guard !positioningCheckQueued else { return }
-        positioningCheckQueued = true
-        Task { @MainActor [weak self] in
-            await Task.yield()
-            guard let self else { return }
-            positioningCheckQueued = false
-            maybePerformInitialPositioning()
-            revealApprovalIfNeeded()
-            publishPosition()
-            maybeLoadOlder()
-        }
-    }
-
     func maybePerformInitialPositioning() {
         guard needsInitialPosition, let scroll, let table, let state else { return }
         let viewport = scroll.contentView.bounds.height
@@ -580,7 +581,7 @@ extension ActivityFeedNativeList.Coordinator {
         needsInitialPosition = false
         let previouslyReconciling = reconciling
         reconciling = true
-        defer { reconciling = previouslyReconciling }
+        defer { reconciling = previouslyReconciling; refreshComposerEdge() }
         width = scroll.contentView.bounds.width
         applyColumnWidth(width)
         _ = measureChangedHeights()

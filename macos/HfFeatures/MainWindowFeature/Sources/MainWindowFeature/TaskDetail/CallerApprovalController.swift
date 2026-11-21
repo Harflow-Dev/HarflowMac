@@ -20,14 +20,24 @@ final class CallerApprovalController {
     private(set) var error: String?
     private(set) var isLoading = false
     private(set) var isSubmitting = false
+    private(set) var isResponseQueued = false
     private(set) var supportsCallerResponses = false
     private(set) var awaitingDecisionCount: Int?
     private(set) var reveal: CallerApprovalReveal?
     @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var responseGeneration = UUID()
+    @ObservationIgnored private var activeResponse: CallerApprovalRequest?
+    @ObservationIgnored private var scopeRefreshPending = false
     @ObservationIgnored private var targetTask: String?
     @ObservationIgnored private var targetRun: String?
     @ObservationIgnored private var details: [String: CallerApprovalRequest] = [:]
     @ObservationIgnored private var expanded: Set<String> = []
+    @ObservationIgnored private var manuallyCollapsed: Set<String> = []
+    @ObservationIgnored private var seededPending = false
+    @ObservationIgnored private var disclosureIdentities: [String: String] = [:]
+    @ObservationIgnored private var rootScope: WorkflowRootApprovalScope?
+    @ObservationIgnored private let pendingDisclosures: Bool
+    @ObservationIgnored private let retainsOutcomeFocus: Bool
     private struct BlockedResult {
         let request: CallerApprovalRequest
         let message: String
@@ -48,10 +58,14 @@ final class CallerApprovalController {
     @ObservationIgnored private var pendingReveal = false
     @ObservationIgnored private var poll: Task<Void, Never>?
 
-    init(useCase: any CallerApprovalUseCase) { self.useCase = useCase }
+    init(useCase: any CallerApprovalUseCase, pendingDisclosures: Bool = false, retainsOutcomeFocus: Bool = false) {
+        self.useCase = useCase
+        self.pendingDisclosures = pendingDisclosures
+        self.retainsOutcomeFocus = retainsOutcomeFocus
+    }
 
     var hasMorePending: Bool {
-        guard let awaitingDecisionCount else { return nextCursor != nil || acquisitionLimited }
+        guard rootScope == nil, let awaitingDecisionCount else { return nextCursor != nil || acquisitionLimited }
         return awaitingDecisionCount > requests.filter(Self.awaiting).count
     }
 
@@ -86,10 +100,13 @@ final class CallerApprovalController {
         requests = []; cards = []; details = [:]; blocked = [:]; expanded = []
         detail = nil; selectedID = nil; isCurrentDetail = false; total = 0; nextCursor = nil
         acquisitionLimited = false; error = nil; reveal = nil; pendingFocus = nil
+        manuallyCollapsed = []; seededPending = false; disclosureIdentities = [:]
     }
 
     func stop() {
         generation = UUID()
+        responseGeneration = UUID()
+        activeResponse = nil; scopeRefreshPending = false; isResponseQueued = false
         pendingReveal = false
         listCurrent = false
         responseWork?.cancel(); responseWork = nil
@@ -99,20 +116,65 @@ final class CallerApprovalController {
         for index in cards.indices where cards[index].canRespond { cards[index].canRespond = false }
     }
 
-    func selectTarget(taskID: String?, workflowRunID: String?) async {
+    func selectTarget(taskID: String?, workflowRunID: String?, rootScope: WorkflowRootApprovalScope? = nil) async {
+        if targetTask == taskID, targetRun == workflowRunID,
+           let rootScope, self.rootScope?.rootID == rootScope.rootID {
+            updateRootScope(rootScope)
+            restartRootRead()
+            await refresh()
+            return
+        }
+        let changed = targetTask != taskID || targetRun != workflowRunID || self.rootScope != rootScope
         stop()
         targetTask = taskID; targetRun = workflowRunID
-        clearPresentation()
+        self.rootScope = rootScope
+        if changed { clearPresentation() }
         await refresh()
     }
 
+    /// A changed poll policy must replace a cancelled read while retaining exact response settlement.
+    private func restartRootRead() {
+        generation = UUID()
+        refreshWork?.cancel(); refreshWork = nil
+        isLoading = false; listCurrent = false; isCurrentDetail = false
+        for index in cards.indices where cards[index].canRespond { cards[index].canRespond = false }
+        if isSubmitting || isResponseQueued { scopeRefreshPending = true }
+    }
+
+    /// Reconciles direct membership without replacing the run's retained disclosure or pagination state.
+    func updateRootScope(_ scope: WorkflowRootApprovalScope) {
+        guard targetRun == scope.rootID, rootScope?.rootID == scope.rootID, rootScope != scope else { return }
+        rootScope = scope
+        generation = UUID()
+        refreshWork?.cancel(); refreshWork = nil
+        isLoading = false; listCurrent = false; isCurrentDetail = false
+        requests = requests.filter(scope.contains)
+        cards = cards.filter { scope.contains($0.request) }.map { card in
+            var card = card; card.canRespond = false; return card
+        }
+        total = requests.count
+        details = details.filter { scope.contains($0.value) }
+        blocked = blocked.filter { scope.contains($0.value.request) }
+        if let detail, !scope.contains(detail) { self.detail = nil; selectedID = nil }
+        let retained = Set(requests.map(\.id))
+        expanded.formIntersection(retained); manuallyCollapsed.formIntersection(retained)
+        disclosureIdentities = disclosureIdentities.filter { retained.contains($0.key) }
+        if let activeResponse, !scope.contains(activeResponse) {
+            responseGeneration = UUID()
+            responseWork?.cancel(); responseWork = nil
+            self.activeResponse = nil; isSubmitting = false; isResponseQueued = false
+        }
+        scopeRefreshPending = isSubmitting || isResponseQueued
+    }
+
     func refresh(loadMore: Bool = false, recoverPreflight: Bool = false) async {
-        guard !isLoading, !isSubmitting, targetTask != nil || targetRun != nil else { return }
+        guard !isLoading, !isSubmitting, !isResponseQueued, targetTask != nil || targetRun != nil else { return }
         let token = generation
         isLoading = true
         defer { if generation == token { isLoading = false } }
         do {
             let context = try useCase.responseContext()
+            resetPresentationIfContextChanged(context)
             let capability = (try? await useCase.supportsMonitorResponseForCallerApprovals()) ?? false
             guard generation == token, !Task.isCancelled else { return }
             if supportsCallerResponses != capability { supportsCallerResponses = capability }
@@ -136,6 +198,10 @@ final class CallerApprovalController {
             listCurrent = false
             await publishCards(token: token, finishingRefresh: true)
         }
+    }
+
+    private func resetPresentationIfContextChanged(_ context: ApprovalResponseContext?) {
+        if let previous = responseContext, previous != context { clearPresentation() }
     }
 
     private func validateResponseContext(_ context: ApprovalResponseContext?) throws {
@@ -187,11 +253,11 @@ final class CallerApprovalController {
     }
 
     private func acquirePage(loadMore: Bool, token: UUID) async throws -> Acquisition {
-        let retainedIDs = Set(requests.map(\.id))
-        let awaitingCount = awaitingDecisionCount
+        let retainedIDs = Set(requests.filter { rootScope?.contains($0) ?? true }.map(\.id))
+        let awaitingCount = rootScope == nil ? awaitingDecisionCount : nil
         var awaitingIDs = Set<String>()
         var acquiredIDs = Set<String>()
-        var values = loadMore ? requests : []
+        var values = loadMore ? requests.filter { rootScope?.contains($0) ?? true } : []
         var cursor = loadMore ? nextCursor : nil
         var seenCursors = Set<String>()
         var pageCount = 0
@@ -209,9 +275,10 @@ final class CallerApprovalController {
             // freshly acquired rows, so budget exhaustion never promotes stale retained actions.
             guard pageBytes <= Self.acquisitionByteLimit - sourceBytes else { limited = true; break }
             sourceBytes += pageBytes
-            values += page.requests
-            acquiredIDs.formUnion(page.requests.map(\.id))
-            awaitingIDs.formUnion(page.requests.filter(Self.awaiting).map(\.id))
+            let qualified = page.requests.filter { rootScope?.contains($0) ?? true }
+            values += qualified
+            acquiredIDs.formUnion(qualified.map(\.id))
+            awaitingIDs.formUnion(qualified.filter(Self.awaiting).map(\.id))
             cursor = page.nextCursor
             pageCount += 1
             if let next = cursor, !seenCursors.insert(next).inserted { limited = true; break }
@@ -226,7 +293,8 @@ final class CallerApprovalController {
             var seen = Set<String>()
             return acquired.filter { seen.insert($0.id).inserted }.sorted(by: CallerApprovalPresentation.orderedBefore)
         }.value
-        return Acquisition(page: CallerApprovalPage(requests: listed, nextCursor: cursor, total: acquiredTotal), limited: limited)
+        let page = CallerApprovalPage(requests: listed, nextCursor: cursor, total: rootScope == nil ? acquiredTotal : listed.count)
+        return Acquisition(page: page, limited: limited)
     }
 
     private func acquireDetails(_ listed: [CallerApprovalRequest], token: UUID) async {
@@ -243,7 +311,7 @@ final class CallerApprovalController {
             guard details[request.id] == nil, Self.visuallyPending(request) || expanded.contains(request.id) else { continue }
             let result = try? await useCase.detail(request)
             guard generation == token, !Task.isCancelled else { return }
-            if let result, Self.sameCurrent(result, request), result.text("disposition") == request.text("disposition"),
+            if let result, rootScope?.contains(result) ?? true, Self.sameCurrent(result, request), result.text("disposition") == request.text("disposition"),
                result.text("delivery") == request.text("delivery"), result.raw["decision"] == request.raw["decision"] {
                 details[request.id] = result
             }
@@ -269,26 +337,50 @@ final class CallerApprovalController {
     }
 
     func toggle(_ requestID: String) {
-        guard let index = cards.firstIndex(where: { $0.id == requestID }), !cards[index].pending else { return }
-        if !expanded.insert(requestID).inserted { expanded.remove(requestID) }
+        guard let index = cards.firstIndex(where: { $0.id == requestID }), pendingDisclosures || !cards[index].pending else { return }
         let card = cards[index]
-        if expanded.contains(requestID), details[requestID] == nil {
-            requestRefresh()
+        guard pendingDisclosures else {
+            if !expanded.insert(requestID).inserted { expanded.remove(requestID) }
+            if expanded.contains(requestID), details[requestID] == nil { requestRefresh() }
+            cards[index] = CallerApprovalCardModel(request: card.request, action: card.action, pending: false,
+                expanded: expanded.contains(requestID), canRespond: false, showsDecisionControls: card.showsDecisionControls,
+                awaitingDecision: card.awaitingDecision, notice: card.notice,
+                submitting: false, focusToken: nil)
+            return
         }
-        cards[index] = CallerApprovalCardModel(request: card.request, action: card.action, pending: false,
-            expanded: expanded.contains(requestID), canRespond: false, showsDecisionControls: card.showsDecisionControls,
-            awaitingDecision: card.awaitingDecision, notice: card.notice,
-            submitting: false, focusToken: nil)
+        let opens = !card.expanded
+        if opens {
+            expanded.insert(requestID); manuallyCollapsed.remove(requestID)
+        } else {
+            expanded.remove(requestID); manuallyCollapsed.insert(requestID); seededPending = true
+        }
+        if opens, details[requestID] == nil { requestRefresh() }
+        cards[index] = CallerApprovalCardModel(request: card.request, action: card.action, pending: card.pending,
+            expanded: opens, canRespond: card.canRespond, showsDecisionControls: card.showsDecisionControls,
+            awaitingDecision: card.awaitingDecision, showsRefresh: card.showsRefresh, notice: card.notice,
+            submitting: card.submitting, focusToken: card.focusToken)
     }
 
     func revealPending() {
         pendingReveal = true
         guard let card = cards.first(where: \.pending) else { return }
         pendingReveal = false
-        let value = CallerApprovalReveal(requestID: card.id, token: UUID())
-        reveal = value
-        pendingFocus = value
-        if let index = cards.firstIndex(where: { $0.id == card.id }) { cards[index].focusToken = value.token }
+        if pendingDisclosures, let index = cards.firstIndex(where: { $0.id == card.id }), !card.expanded {
+            toggle(cards[index].id)
+        }
+        focusRequest(card.id)
+    }
+
+    private func focusRequest(_ requestID: String) {
+        guard let index = cards.firstIndex(where: { $0.id == requestID }) else { return }
+        let value = CallerApprovalReveal(requestID: requestID, token: UUID())
+        reveal = value; pendingFocus = value
+        cards[index].focusToken = value.token
+    }
+
+    private func focusOutcome(_ requestID: String, generation: UUID) {
+        guard retainsOutcomeFocus, responseGeneration == generation else { return }
+        focusRequest(requestID)
     }
 
     func acknowledgeFocus(requestID: String, token: UUID) {
@@ -309,9 +401,30 @@ final class CallerApprovalController {
         refreshWork = Task { [weak self] in await self?.refresh(loadMore: loadMore, recoverPreflight: !loadMore) }
     }
 
+}
+
+// MARK: - Caller approval responses
+
+extension CallerApprovalController {
     func submit(_ decision: String, requestID: String) {
-        guard listCurrent, !isLoading, !isSubmitting else { return }
-        responseWork = Task { [weak self] in await self?.respond(decision, requestID: requestID) }
+        guard listCurrent, !isLoading, !isSubmitting, !isResponseQueued else { return }
+        guard pendingDisclosures else {
+            responseWork = Task { [weak self] in await self?.respond(decision, requestID: requestID) }
+            return
+        }
+        // Reserve the accepted UI intent before yielding, so a poll cannot overtake its fresh admission.
+        isResponseQueued = true
+        let token = responseGeneration
+        responseWork = Task { [weak self] in
+            guard let self, responseGeneration == token, !Task.isCancelled else { return }
+            defer {
+                if responseGeneration == token {
+                    isResponseQueued = false
+                    if scopeRefreshPending { scopeRefreshPending = false; requestRefresh() }
+                }
+            }
+            await respond(decision, requestID: requestID)
+        }
     }
 
     func respond(_ decision: String, requestID: String? = nil) async {
@@ -319,18 +432,24 @@ final class CallerApprovalController {
               listCurrent, !isLoading, ["approve", "reject"].contains(decision), !isSubmitting,
               let id = requestID ?? selectedID,
               let card = cards.first(where: { $0.id == id }), card.canRespond,
-              let request = details[id], Self.awaiting(request), request.complete, Self.validIdentity(request),
+              let request = details[id], rootScope?.contains(request) ?? true, Self.awaiting(request), request.complete, Self.validIdentity(request),
               let listed = requests.first(where: { $0.id == id }), Self.sameCurrent(request, listed),
               Self.awaiting(listed), Self.knownState(listed),
               (request.deadline ?? .distantPast) > Date() else { return }
-        let token = generation
+        let token = responseGeneration
         isSubmitting = true; error = nil; isCurrentDetail = false
-        defer { if generation == token { isSubmitting = false } }
-        await publishCards(token: token)
-        guard generation == token, !Task.isCancelled, listCurrent else { return }
+        activeResponse = request
+        defer {
+            if responseGeneration == token {
+                isSubmitting = false; activeResponse = nil
+                if scopeRefreshPending { scopeRefreshPending = false; requestRefresh() }
+            }
+        }
+        await publishCards(token: generation)
+        guard responseGeneration == token, !Task.isCancelled, listCurrent, rootScope?.contains(request) ?? true else { return }
         do {
             let response = try await useCase.respond(request, decision: decision, context: responseContext)
-            guard generation == token, !Task.isCancelled else { return }
+            guard responseGeneration == token, !Task.isCancelled, rootScope?.contains(request) ?? true else { return }
             guard Self.confirmsResponse(response, for: request, decision: decision) else {
                 throw ToolError.unknownOutcome(message: "The approval response did not confirm the submitted decision.")
             }
@@ -338,16 +457,15 @@ final class CallerApprovalController {
             details[id] = response
             if let index = requests.firstIndex(where: { $0.id == id }) { requests[index] = response }
         } catch {
-            guard generation == token, !Task.isCancelled else { return }
+            guard responseGeneration == token, !Task.isCancelled, rootScope?.contains(request) ?? true else { return }
             recordResponseFailure(error, request: request)
         }
-        guard generation == token else { return }
+        guard responseGeneration == token else { return }
         isSubmitting = false
+        isResponseQueued = false
+        scopeRefreshPending = false
         await refresh()
-    }
-
-    static func confirmsResponse(_ response: CallerApprovalRequest, for request: CallerApprovalRequest, decision: String) -> Bool {
-        request.isConfirmedBy(response, decision: decision)
+        focusOutcome(id, generation: token)
     }
 
     private func recordResponseFailure(_ error: Error, request: CallerApprovalRequest) {
@@ -440,16 +558,30 @@ final class CallerApprovalController {
         guard generation == token, !Task.isCancelled else { return }
         if finishingRefresh { isLoading = false }
         let now = Date()
+        if pendingDisclosures {
+            let identities = Dictionary(values.map { request in
+                let fields = [request.taskID, request.id, request.text("generation"), request.text("root_workflow_run_id"),
+                              request.text("workflow_run_id"), request.text("workflow_execution_id"), request.text("workflow_node_id")]
+                return (request.id, fields.joined(separator: ":"))
+            }, uniquingKeysWith: { first, _ in first })
+            expanded = expanded.filter { identities[$0] == disclosureIdentities[$0] }
+            manuallyCollapsed = manuallyCollapsed.filter { identities[$0] == disclosureIdentities[$0] }
+            disclosureIdentities = identities
+            if !seededPending, let first = values.first(where: Self.visuallyPending) {
+                expanded.insert(first.id); seededPending = true
+            }
+        }
         let next = zip(values, actions).map { request, action in
             let pending = Self.visuallyPending(request)
             let ownerSupported = request.isMonitorOwned || (request.interactionOwner == .caller && supportsCallerResponses)
-            let known = Self.knownState(request) && action.knownEnums
             let full = details[request.id] != nil && request.complete && action.covered && action.knownEnums && Self.validIdentity(request)
             let canRespond = details[request.id] != nil && listCurrent && blocked[request.id] == nil && !isSubmitting
                 && request.isEligibleForMonitorResponse(supportsCallerResponses: supportsCallerResponses, now: now)
             let notice = notice(for: request, ownerSupported: ownerSupported, full: full, now: now, knownEnums: action.knownEnums)
-            let isExpanded = pending || blocked[request.id] != nil || request.text("disposition") == "expired"
-                || request.text("delivery") == "delivery_unknown" || expanded.contains(request.id)
+            let needsReview = blocked[request.id] != nil || request.text("disposition") == "expired" || request.text("delivery") == "delivery_unknown"
+            let isExpanded = pendingDisclosures
+                ? (expanded.contains(request.id) || (needsReview && !manuallyCollapsed.contains(request.id)))
+                : (pending || needsReview || expanded.contains(request.id))
             return CallerApprovalCardModel(request: request, action: action,
                 pending: pending && blocked[request.id] == nil, expanded: isExpanded,
                 canRespond: canRespond, showsDecisionControls: pending && Self.knownState(request) && ownerSupported && blocked[request.id] == nil,
@@ -462,9 +594,4 @@ final class CallerApprovalController {
         if pendingReveal { revealPending() }
         if let selectedID { detail = details[selectedID]; isCurrentDetail = next.first { $0.id == selectedID }?.canRespond == true }
     }
-}
-
-struct CallerApprovalReveal: Equatable, Sendable {
-    let requestID: String
-    let token: UUID
 }

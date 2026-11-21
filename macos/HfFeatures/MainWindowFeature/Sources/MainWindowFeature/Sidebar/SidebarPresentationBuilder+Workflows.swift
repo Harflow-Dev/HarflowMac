@@ -68,12 +68,14 @@ extension SidebarPresentationBuilder {
         let specialStatus = ["paused", "needs_input", "needs_attention", "starting", "cancelling"].contains(rawStatus)
         let status: TaskStatus = run.raw["settling"]?.boolValue == true ? .other("Settling") : specialStatus
             ? .other(rawStatus.replacingOccurrences(of: "_", with: " ").capitalized) : TaskStatus(rawStatus)
+        let subtitle = WorkflowSteeringPresentation.hidesParkedReason(run.raw) ? nil : run.raw["attention_reason"]?.stringValue
         return TaskRowModel(id: run.id, backend: "workflow", title: run.name, status: status,
                             repoName: Format.repoName(run.raw["repo_path"]?.stringValue ?? ""), ageText: Format.age(run.startedAt, now: input.now),
                             detailLabel: shortcut ? "Child workflow" : nil,
-                            indent: depth, subTaskSummary: run.raw["attention_reason"]?.stringValue, startedAt: run.startedAt,
+                            indent: depth, subTaskSummary: subtitle,
+                            startedAt: run.startedAt,
                             hasChildren: !shortcut && (!workflowChildren(run.id).isEmpty || unfilteredChildRuns.contains(run.id)),
                             isExpanded: expanded ?? expandedExecutionParents.contains("workflow:\(run.id)"), guides: guides,
-                            kind: .workflowRun)
+                            kind: .workflowRun, iconStatus: WorkflowSteeringPresentation.hasPositiveHold(run.raw) ? .other("needs_input") : nil)
     }
 }

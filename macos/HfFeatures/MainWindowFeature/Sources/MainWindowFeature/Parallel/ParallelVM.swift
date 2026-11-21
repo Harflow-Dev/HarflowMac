@@ -24,6 +24,7 @@ final class ParallelVM: ParallelViewModel {
     private(set) var columns: [ParallelColumnModel] = []
     private(set) var selectedConversationID: String?
     @ObservationIgnored var isWorkflowInspector = false
+    @ObservationIgnored var steeringComposerOwned = false
     /// Workflow-set composer locks (see `ParallelVM+MessageLock.swift`); Group lanes never set them.
     @ObservationIgnored var composerLocks = ParallelComposerLocks()
     /// The Graph inspector's approval panel gate; lane columns never read it.

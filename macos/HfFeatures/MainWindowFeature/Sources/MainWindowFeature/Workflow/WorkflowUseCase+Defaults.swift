@@ -5,6 +5,19 @@ import MonitorCore
 // MARK: - WorkflowUseCase defaults
 
 extension WorkflowUseCase {
+    func steeringObservation(rootID _: String) async throws -> WorkflowSteeringObservation { throw WorkflowSteeringAdmissionError.unsupported }
+    func steeringHistory(observation _: WorkflowSteeringObservation, cursor _: String?) async throws -> WorkflowSteeringHistoryPage {
+        throw WorkflowSteeringAdmissionError.unsupported
+    }
+
+    func performSteering(action _: WorkflowSteeringAction, text _: String?,
+                         observation _: WorkflowSteeringObservation) async throws -> WorkflowSteeringAttempt {
+        throw WorkflowSteeringAdmissionError.unsupported
+    }
+
+    func steeringAttempts(rootID _: String) -> [WorkflowSteeringAttempt] { [] }
+    func isSteeringCurrent(_: WorkflowSteeringObservation) -> Bool { false }
+
     func activityRuntime() throws -> QualificationRuntimeToken {
         throw ToolError.notFound(tool: "harflow-ctl", searched: [])
     }
@@ -32,4 +45,10 @@ extension WorkflowUseCase {
     func artifactPage(runID _: String, executionID _: String, cursor _: String?) async -> Result<WorkflowArtifactPage, ToolError> {
         .failure(.unreadable(tool: "harflow-ctl", exitCode: 0, stderr: "Artifact metadata unavailable"))
     }
+}
+
+// MARK: - WorkflowRouting preview defaults
+
+extension WorkflowRouting {
+    func showNeedsYou(itemID _: String?) {}
 }

@@ -23,7 +23,8 @@ struct WorkflowRecoveryOverlayHost<VM: WorkflowViewModel>: View {
     @State private var contentHeight = HfRadius.Metrics.recoveryPanelInitialHeight
 
     private var eligibleRunID: String? {
-        WorkflowRecoveryOverlayPresentation.eligibleRunID(
+        if let run = viewModel.selectedRun, WorkflowSteeringPresentation.hidesParkedReason(run.raw, dismissed: viewModel.steering.isDismissed) { return nil }
+        return WorkflowRecoveryOverlayPresentation.eligibleRunID(
             run: viewModel.selectedRun,
             initialLoadingKind: viewModel.initialLoadingKind,
             initialLoadFailed: viewModel.initialLoadFailed,
@@ -126,11 +127,13 @@ struct WorkflowRecoveryBadge: View {
     var isEligible: Bool
     var focus: FocusState<Bool>.Binding
     var onOpen: () -> Void
+    var steeringHold: Bool?
 
     private var badge: some View {
         StatusBadge(
             status: .other(run.status),
-            presentationOverride: WorkflowRunStatusBadge.presentation(status: run.status, isSettling: run.isSettling)
+            presentationOverride: WorkflowRunStatusBadge.presentation(status: run.status, isSettling: run.isSettling,
+                                                                      steeringHold: steeringHold ?? WorkflowSteeringPresentation.hasPositiveHold(run.raw))
         )
     }
 

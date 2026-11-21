@@ -37,6 +37,14 @@ struct ActivityFeedNativeModel: Equatable {
     var approvalReveal: CallerApprovalReveal?
     var activitySnapshot: ActivityFeedSnapshot?
     var stateTreatment: TaskStateTreatment?
+    var leadingContent: [ActivityFeedSupplementaryRow] = []
+    var trailingContent: [ActivityFeedSupplementaryRow] = []
+    var scopedApprovals: [ActivityFeedApprovalEntry] = []
+    var approvalSource: ActivityFeedApprovalEntry.Source?
+    var composerEdge = false
+    var callReveal: WorkflowInspectorCallReveal?
+    var followingContent: [ActivityFeedDocumentEntry] = []
+    var scopedApprovalReveals: [ActivityFeedApprovalReveal] = []
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         let rowsEqual: Bool = if let left = lhs.activitySnapshot, let right = rhs.activitySnapshot {
@@ -48,6 +56,10 @@ struct ActivityFeedNativeModel: Equatable {
         return rowsEqual && lhs.start == rhs.start && lhs.emptyText == rhs.emptyText
             && lhs.horizontalPadding == rhs.horizontalPadding && lhs.showsPromptBubble == rhs.showsPromptBubble
             && lhs.style == rhs.style && lhs.stateTreatment == rhs.stateTreatment
+            && lhs.leadingContent == rhs.leadingContent && lhs.trailingContent == rhs.trailingContent
+            && lhs.scopedApprovals == rhs.scopedApprovals && lhs.approvalSource == rhs.approvalSource
+            && lhs.followingContent == rhs.followingContent && lhs.scopedApprovalReveals == rhs.scopedApprovalReveals
+            && lhs.composerEdge == rhs.composerEdge && lhs.callReveal == rhs.callReveal
             && lhs.expandedGroups == rhs.expandedGroups && lhs.tailPresentation == rhs.tailPresentation
             && lhs.history == rhs.history && lhs.paginationRevision == rhs.paginationRevision
             && lhs.visible == rhs.visible && lhs.loading == rhs.loading && lhs.approvalReveal == rhs.approvalReveal
@@ -69,7 +81,7 @@ enum ActivityFeedNativeEntries {
     }
 
     static func build(model: ActivityFeedNativeModel, header: ActivityFeedNativeEntry.Header?) -> [ActivityFeedNativeEntry] {
-        var entries: [ActivityFeedNativeEntry] = []
+        var entries = model.leadingContent.map(ActivityFeedNativeEntry.supplementary)
         let style = model.style
         let hasHeader = header != nil
         if let header { entries.append(.header(header)) }
@@ -92,6 +104,9 @@ enum ActivityFeedNativeEntries {
                                           standardBetween: HfRadius.Metrics.spacing20)
             )))
         }
+        for approval in model.scopedApprovals { entries.append(.scopedApproval(approval, topSpacing: 12)) }
+        entries.append(contentsOf: model.trailingContent.map(ActivityFeedNativeEntry.supplementary))
+        entries.append(contentsOf: model.followingContent.map(\.nativeEntry))
         if case .standard(let standard) = model.tailPresentation {
             for card in standard.approvals {
                 entries.append(.approval(card, topSpacing: style.isTranscript
@@ -99,7 +114,9 @@ enum ActivityFeedNativeEntries {
                     : HfRadius.Metrics.spacing12))
             }
         }
-        let hasContent = hasHeader || hasNotice || showsEmpty || !model.shownRows.isEmpty || (style.isTranscript && !entries.isEmpty)
+        let hasContext = !model.leadingContent.isEmpty || !model.scopedApprovals.isEmpty || !model.trailingContent.isEmpty || !model.followingContent.isEmpty
+        let hasContent = hasContext || hasHeader || hasNotice || showsEmpty
+            || !model.shownRows.isEmpty || (style.isTranscript && !entries.isEmpty)
         let hasTail = hasTail(model)
         if hasTail {
             var tail = model.tailPresentation
@@ -156,6 +173,7 @@ enum ActivityFeedNativePlan: Equatable {
     /// header included. `insertAt` is the index, after that removal, of the first trailing
     /// non-row entry, where `count` entries of the next list are inserted.
     case tailInsert(removeLeading: Int, insertAt: Int, count: Int)
+    case contextTailInsert(remove: Range<Int>, insertAt: Int, count: Int)
     case structural
 
     static func plan(previous: [ActivityFeedNativeEntry], next: [ActivityFeedNativeEntry]) -> Self {
@@ -170,21 +188,26 @@ enum ActivityFeedNativePlan: Equatable {
         guard new.rowIDs.count > kept, Array(old.rowIDs[dropped...]) == Array(new.rowIDs.prefix(kept)) else {
             return .structural
         }
+        guard old.context == new.context else { return .structural }
         let leadingOK = if dropped == 0 {
-            old.leading == new.leading && (old.leading.isEmpty || old.leading == [.beginning])
+            old.headers == new.headers && (old.headers.isEmpty || old.headers == [.beginning])
         } else {
-            new.leading.isEmpty && (old.leading.isEmpty || old.leading == [.beginning])
+            new.headers.isEmpty && (old.headers.isEmpty || old.headers == [.beginning])
         }
         guard leadingOK else { return .structural }
-        let removeLeading = dropped == 0 ? 0 : old.leading.count + dropped
-        return .tailInsert(removeLeading: removeLeading, insertAt: new.leading.count + kept,
-                           count: new.rowIDs.count - kept)
+        let removeCount = dropped == 0 ? 0 : old.headers.count + dropped
+        let insertAt = new.context.count + new.headers.count + kept
+        if old.context.isEmpty {
+            return .tailInsert(removeLeading: removeCount, insertAt: insertAt, count: new.rowIDs.count - kept)
+        }
+        return .contextTailInsert(remove: old.context.count ..< old.context.count + removeCount,
+                                  insertAt: insertAt, count: new.rowIDs.count - kept)
     }
 
-    /// An entry list split into leading headers, one contiguous run of rows and the trailing
-    /// non-row entries. Rows are identified by their case, never by id.
-    private struct Segments {
-        var leading: [ActivityFeedNativeEntry.Header] = []
+    /// Leading typed context, an optional history header, the contiguous timeline, then trailing content.
+    struct Segments {
+        var context: [String] = []
+        var headers: [ActivityFeedNativeEntry.Header] = []
         var rowIDs: [String] = []
         var trailing: [String] = []
 
@@ -193,12 +216,14 @@ enum ActivityFeedNativePlan: Equatable {
             var finished = false
             for entry in entries {
                 switch entry {
+                case .supplementary where !inRun && !finished && headers.isEmpty:
+                    context.append(entry.id)
                 case .row(let row):
                     guard !finished else { return nil }
                     inRun = true
                     rowIDs.append(row.row.id)
                 case .header(let header) where !inRun && !finished:
-                    leading.append(header)
+                    headers.append(header)
                 case .header:
                     return nil
                 default:

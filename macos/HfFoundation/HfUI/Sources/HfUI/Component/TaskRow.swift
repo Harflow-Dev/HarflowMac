@@ -28,6 +28,8 @@ public struct TaskRowModel: Identifiable, Equatable, Sendable {
     public let backend: String
     public let title: String
     public let status: TaskStatus
+    /// Optional icon-only status; the raw status continues to drive the running clock.
+    public let iconStatus: TaskStatus?
     /// The repository's name (`Format.repoName`), the first part of the subtitle.
     public let repoName: String
     public let detailLabel: String?
@@ -90,12 +92,14 @@ public struct TaskRowModel: Identifiable, Equatable, Sendable {
         hasChildren: Bool = false,
         isExpanded: Bool = true,
         guides: [TreeGuide] = [],
-        kind: StatusIcon.Kind = .task
+        kind: StatusIcon.Kind = .task,
+        iconStatus: TaskStatus? = nil
     ) {
         self.id = id
         self.backend = backend
         self.title = title
         self.status = status
+        self.iconStatus = iconStatus
         self.repoName = repoName
         self.detailLabel = detailLabel
         self.ageText = ageText
@@ -232,7 +236,7 @@ public struct TaskRow: View {
                 .padding(.vertical, -verticalPadding)
                 // The sidebar's 20 pt guide includes the surrounding row gap.
                 .padding(.trailing, sidebarAppearance != nil && !model.guides.isEmpty ? -HfRadius.Metrics.rowItemSpacing : HfRadius.Metrics.zero)
-            StatusIcon(status: model.status, kind: model.kind, size: iconSize)
+            StatusIcon(status: model.iconStatus ?? model.status, kind: model.kind, size: iconSize)
             VStack(alignment: .leading, spacing: HfRadius.Metrics.rowLineSpacing) {
                 title
                 if let detail = model.detailLabel {
@@ -480,6 +484,23 @@ private struct TaskRowSidebarPreview: View {
         .padding(HfRadius.Metrics.spacing16)
         .frame(width: HfRadius.Metrics.activityPreviewWidth)
         .background(selectedFill ? Color.selectedRow : Color.sidebarBG)
+    }
+}
+
+#Preview("Workflow hold icon keeps elapsed clock - light") {
+    TaskRowSteeringPreview().preferredColorScheme(.light)
+}
+
+#Preview("Workflow hold icon keeps elapsed clock - dark") {
+    TaskRowSteeringPreview().preferredColorScheme(.dark)
+}
+
+private struct TaskRowSteeringPreview: View {
+    var body: some View {
+        TaskRow(model: TaskRowModel(id: "synthetic-held-run", backend: "workflow", title: "Workflow",
+                                   status: .running, repoName: "Preview", ageText: "", startedAt: .now.addingTimeInterval(-42),
+                                   kind: .workflowRun, iconStatus: .other("needs_input")))
+            .padding(HfRadius.Metrics.spacing16)
     }
 }
 

@@ -38,13 +38,23 @@ struct WorkflowNativeActivityView: View {
     var messages: [WorkMessageBubble] = []
     var onCancel: ((String) -> Void)?
     var isCancelDisabled = false
+    var leadingContent: [ActivityFeedSupplementaryRow] = []
+    var composerEdge = false
+    var callReveal: WorkflowInspectorCallReveal?
+    var approvalContent: ActivityFeedSupplementaryRow?
+    var approvalReveal: CallerApprovalReveal?
+    var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
+    var onCallScrollAcknowledged: ((UUID) -> Void)?
     @State private var following = true
     @State private var actions = WorkflowActivityActions()
 
     var body: some View {
         WorkflowActivityNativeView(presentation: WorkflowActivityPresentation(model: model, messages: messages,
-                                                                            isCancelDisabled: isCancelDisabled, hasCancel: onCancel != nil),
-                                   actions: actions, onCancel: onCancel, onFollowing: { following = $0 })
+                                                                            isCancelDisabled: isCancelDisabled, hasCancel: onCancel != nil,
+                                                                            leadingContent: leadingContent, composerEdge: composerEdge, callReveal: callReveal,
+                                                                            approvalContent: approvalContent, approvalReveal: approvalReveal),
+                                   actions: actions, onCancel: onCancel, onFollowing: { following = $0 },
+                                   onApprovalScrollAcknowledged: onApprovalScrollAcknowledged, onCallScrollAcknowledged: onCallScrollAcknowledged)
             .overlay(alignment: .bottomTrailing) {
                 let pinned = messages.filter(\.isPinned)
                 if !following, !pinned.isEmpty {

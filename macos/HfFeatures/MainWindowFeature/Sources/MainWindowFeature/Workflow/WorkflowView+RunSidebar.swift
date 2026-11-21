@@ -60,7 +60,8 @@ extension WorkflowView {
         if Self.admitsCallerApprovals(run) {
             CallerApprovalPanel(workflowRunID: run.id,
                                 polls: (viewMode != "Graph" || viewModel.runSidebar.isDefault)
-                                    && ["running", "needs_attention", "needs_input"].contains(run.status))
+                                    && ["running", "needs_attention", "needs_input"].contains(run.status),
+                                suspended: viewModel.rootOwnsCallerApprovals)
         }
         WorkflowChildLinks(groups: WorkflowChildLinkGroup.build(run: run), onOpen: viewModel.openRun)
             .padding(.horizontal, HfRadius.Metrics.spacing16)

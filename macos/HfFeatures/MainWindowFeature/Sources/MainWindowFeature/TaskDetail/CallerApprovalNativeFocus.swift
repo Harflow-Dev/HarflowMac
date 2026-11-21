@@ -75,6 +75,7 @@ struct ApprovalDecisionButton: NSViewRepresentable {
     let isFocusReady: () -> Bool
     let action: () -> Void
     let acknowledge: (UUID) -> Void
+    var usesInlineStyle = false
 
     func makeNSView(context: Context) -> Control {
         let button = Control(title: title, target: nil, action: nil)
@@ -88,11 +89,29 @@ struct ApprovalDecisionButton: NSViewRepresentable {
 
     func updateNSView(_ button: Control, context: Context) {
         button.title = title
+        if usesInlineStyle {
+            button.bezelStyle = .inline
+            button.alignment = .left
+            button.font = .systemFont(ofSize: 13)
+            button.cell?.wraps = false
+            button.cell?.usesSingleLineMode = true
+            button.cell?.lineBreakMode = .byTruncatingMiddle
+            button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        }
         button.isEnabled = enabled && context.environment.isEnabled
         button.setAccessibilityIdentifier(identifier)
         button.performDecision = action
         button.focus.configure(token: button.isEnabled ? token : nil, view: button, isReady: isFocusReady,
                                acknowledge: acknowledge)
+    }
+
+    /// Inline summaries share the offered document width. Their complete action remains
+    /// selectable in the card body; a native button's intrinsic title width cannot widen it.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: Control, context: Context) -> CGSize? {
+        guard usesInlineStyle else { return nil }
+        let width = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil } ?? 0
+        return CGSize(width: width, height: max(22, nsView.intrinsicContentSize.height))
     }
 
     /// AppKit exposes the button cell as its accessible element in ordinary hosted windows.
@@ -123,6 +142,46 @@ struct ApprovalDecisionButton: NSViewRepresentable {
         }
 
         @objc func invoke() { performDecision() }
+    }
+}
+
+// MARK: - ApprovalFocusLabel
+
+struct ApprovalFocusLabel: NSViewRepresentable {
+    let text: String
+    let identifier: String
+    let token: UUID?
+    let isReady: () -> Bool
+    let acknowledge: (UUID) -> Void
+
+    func makeNSView(context: Context) -> Control {
+        let field = Control(wrappingLabelWithString: text)
+        field.isEditable = false
+        field.isSelectable = true
+        field.font = .systemFont(ofSize: 12)
+        field.textColor = .secondaryLabelColor
+        return field
+    }
+
+    func updateNSView(_ field: Control, context: Context) {
+        field.stringValue = text
+        field.setAccessibilityIdentifier(identifier)
+        field.focus.configure(token: token, view: field, isReady: isReady, acknowledge: acknowledge)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: Control, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
+        let size = nsView.cell?.cellSize(forBounds: CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude))
+        return size.map { CGSize(width: width, height: $0.height) }
+    }
+
+    final class Control: NSTextField {
+        fileprivate let focus = ApprovalFocusOperation()
+        override var acceptsFirstResponder: Bool { true }
+        override func becomeFirstResponder() -> Bool { needsDisplay = true; return true }
+        override func resignFirstResponder() -> Bool { needsDisplay = true; return true }
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); focus.retry() }
+        override func layout() { super.layout(); focus.retry() }
     }
 }
 
@@ -255,6 +314,7 @@ enum CallerApprovalNativeFocus {
     static func retry(in view: NSView) {
         if let button = view as? ApprovalDecisionButton.Control { button.focus.retry() }
         if let scroll = view as? ApprovalDetailsScrollView { scroll.focus.retry() }
+        if let label = view as? ApprovalFocusLabel.Control { label.focus.retry() }
         for child in view.subviews { retry(in: child) }
     }
 }

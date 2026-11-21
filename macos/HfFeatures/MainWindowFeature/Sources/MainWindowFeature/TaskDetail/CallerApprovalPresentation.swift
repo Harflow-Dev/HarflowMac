@@ -103,3 +103,16 @@ enum CallerApprovalPresentation {
         return values
     }
 }
+
+struct CallerApprovalReveal: Equatable, Sendable {
+    let requestID: String
+    let token: UUID
+}
+
+// MARK: - Approval response confirmation
+
+extension CallerApprovalController {
+    static func confirmsResponse(_ response: CallerApprovalRequest, for request: CallerApprovalRequest, decision: String) -> Bool {
+        request.isConfirmedBy(response, decision: decision)
+    }
+}

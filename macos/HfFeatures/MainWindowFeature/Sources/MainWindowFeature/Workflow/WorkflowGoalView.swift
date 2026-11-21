@@ -9,6 +9,7 @@ import SwiftUI
 struct WorkflowGoalView<VM: WorkflowViewModel>: View {
     var viewModel: VM
     let run: WorkflowRunModel
+    var naturalHeight = false
 
     private var isEditing: Bool { viewModel.goalDraft?.runID == run.id }
 
@@ -39,13 +40,12 @@ struct WorkflowGoalView<VM: WorkflowViewModel>: View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
             label(model.label)
             if let goal = model.text {
-                ScrollView {
-                    Text(goal)
-                        .font(.hf(.body))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(ScrollChrome())
-                }.frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
+                if naturalHeight {
+                    goalText(goal)
+                } else {
+                    ScrollView { goalText(goal).background(ScrollChrome()) }
+                        .frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
+                }
             }
             if let assessment = model.assessmentText {
                 HStack(spacing: HfRadius.Metrics.spacing8) {
@@ -66,21 +66,30 @@ struct WorkflowGoalView<VM: WorkflowViewModel>: View {
         }
     }
 
+    private func goalText(_ goal: String) -> some View {
+        Text(goal).font(.hf(.body)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func history(_ entries: [WorkflowGoalPresentation.HistoryEntry]) -> some View {
         DisclosureGroup("Revision history") {
-            ScrollView {
-                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-                    ForEach(entries) { entry in
-                        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
-                            Text("Revision \(entry.revision)").font(.hf(.secondary, weight: .semibold))
-                            Text(entry.text).font(.hf(.secondary)).textSelection(.enabled)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(ScrollChrome())
-            }.frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
+            if naturalHeight {
+                historyEntries(entries)
+            } else {
+                ScrollView { historyEntries(entries).background(ScrollChrome()) }
+                    .frame(maxHeight: HfRadius.Metrics.workflowRunActivityMinimumHeight)
+            }
         }
+    }
+
+    private func historyEntries(_ entries: [WorkflowGoalPresentation.HistoryEntry]) -> some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            ForEach(entries) { entry in
+                VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing2) {
+                    Text("Revision \(entry.revision)").font(.hf(.secondary, weight: .semibold))
+                    Text(entry.text).font(.hf(.secondary)).textSelection(.enabled)
+                }
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

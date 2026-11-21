@@ -8,6 +8,19 @@ import SwiftUI
 
 @MainActor
 protocol WorkflowViewModel: ViewModel {
+    var steering: WorkflowSteeringPresentation { get }
+    var steeringAuthority: WorkflowSteeringAuthority? { get }
+    var steeringHeaderHold: Bool? { get }
+    var steeringRevalidating: Bool { get }
+    var steeringDraft: String { get set }
+    var steeringOwnsComposer: Bool { get }
+    var steeringFailedQueue: Bool { get }
+    func submitSteering(_ text: String)
+    func submitSteering(_ text: String, authority: WorkflowSteeringAuthority?)
+    func dismissSteering(authority: WorkflowSteeringAuthority?)
+    func openSteeringNeedsYou(authority: WorkflowSteeringAuthority?)
+    func dismissSteering()
+    func openSteeringNeedsYou()
     var qualificationCards: [QualificationCard] { get }
     func didTapQualification()
     var workflows: [WorkflowRecord] { get }
@@ -144,6 +157,19 @@ protocol WorkflowViewModel: ViewModel {
 }
 
 extension WorkflowViewModel {
+    var steering: WorkflowSteeringPresentation { .init() }
+    var steeringAuthority: WorkflowSteeringAuthority? { nil }
+    var steeringHeaderHold: Bool? { nil }
+    var steeringRevalidating: Bool { false }
+    func submitSteering(_: String, authority _: WorkflowSteeringAuthority?) {}
+    func dismissSteering(authority _: WorkflowSteeringAuthority?) {}
+    func openSteeringNeedsYou(authority _: WorkflowSteeringAuthority?) {}
+    var steeringDraft: String { get { "" } set { _ = newValue } }
+    var steeringOwnsComposer: Bool { false }
+    var steeringFailedQueue: Bool { false }
+    func submitSteering(_: String) {}
+    func dismissSteering() {}
+    func openSteeringNeedsYou() {}
     var deleteFailureText: String? { nil }
     var canDeleteWorkflow: Bool {
         isEditing && !loadedName.isEmpty && !isBusy && selectedRun == nil

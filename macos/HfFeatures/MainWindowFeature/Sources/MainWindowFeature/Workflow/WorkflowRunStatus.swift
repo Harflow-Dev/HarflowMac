@@ -31,7 +31,8 @@ enum WorkflowRecoveryPresentation {
     }
 
     static func showsRecovery(_ run: WorkflowRunModel) -> Bool {
-        run.isSchedulerRecovery || showsRecovery(status: run.status, allowsMonitorControl: run.allowsMonitorControl, isDelegation: run.isDelegation)
+        !WorkflowSteeringPresentation.hidesParkedReason(run.raw)
+            && (run.isSchedulerRecovery || showsRecovery(status: run.status, allowsMonitorControl: run.allowsMonitorControl, isDelegation: run.isDelegation))
     }
 }
 
@@ -82,7 +83,7 @@ struct WorkflowRunStatus<VM: WorkflowViewModel>: View {
         // painting of a duplicate question (below).
         let fallback = WorkflowDecisionFallback.text(
             status: run.status,
-            reason: run.reason,
+            reason: WorkflowSteeringPresentation.hidesParkedReason(run.raw, dismissed: viewModel.steering.isDismissed) ? "" : run.reason,
             hasWorkerStep: !WorkflowExecutionPresentation.showsPrestartPlaceholder(activations: run.activations)
         )
         let lastReason = last?["reason"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }

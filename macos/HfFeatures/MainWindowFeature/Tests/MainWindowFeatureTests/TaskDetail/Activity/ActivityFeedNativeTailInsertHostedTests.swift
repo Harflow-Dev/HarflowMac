@@ -87,6 +87,58 @@ private enum TableReloadSpy {
         #expect(abs(mounted.table.bounds.maxY - mounted.scroll.documentVisibleRect.maxY) < 3)
     }
 
+    @Test func givenTypedContextAndPausedTimeline_whenRowAppended_thenContextAndReadingAnchorArePreserved() async throws {
+        let context = taskContext()
+        let mounted = try await mount(1 ... 40, leadingContent: [context])
+        defer { mounted.close() }
+        try await pause(mounted, atRow: "ti-20", inset: 30)
+        let anchor = try #require(mounted.state.anchor?.id)
+        let before = try #require(mounted.relativeOffset(of: anchor))
+        let reloads = TableReloadSpy.count(mounted.table)
+
+        mounted.update(feed(1 ... 41, state: mounted.state, leadingContent: [context]))
+        await waitUntil(timeout: 5) { mounted.index(of: "ti-41") != nil }
+
+        #expect(mounted.owner.entries.first?.id == context.id)
+        #expect(mounted.owner.entries.contains { $0.id == anchor })
+        #expect(TableReloadSpy.count(mounted.table) == reloads)
+        #expect(abs(try #require(mounted.relativeOffset(of: anchor)) - before) < 3)
+        #expect(!mounted.state.followLive.isFollowing)
+    }
+
+    @Test func givenTypedContextAndOlderHistory_whenPagingReachesTimelineWindow_thenContextDoesNotShiftTheLoadBoundary() async throws {
+        let context = taskContext()
+        let mounted = try await mount(1 ... 40, height: 280, hasLoader: true, leadingContent: [context])
+        defer { mounted.close() }
+        let contextIndex = try #require(mounted.index(of: context.id))
+        let firstTimelineIndex = try #require(mounted.index(of: "ti-1"))
+        let lastTimelineIndex = try #require(mounted.index(of: "ti-40"))
+        let geometry = mounted.owner.historyWindowGeometry
+        let firstTimeline = mounted.table.rect(ofRow: firstTimelineIndex)
+        let viewport = mounted.scroll.contentView.bounds.height
+        let beforeTimeline = geometry.origin - viewport - 1
+        #expect(geometry.origin > viewport + 1, "The leading context must extend beyond the viewport")
+        #expect(mounted.table.rect(ofRow: contextIndex).maxY <= firstTimeline.minY)
+        #expect(abs(geometry.origin - firstTimeline.minY) < 1)
+        #expect(abs(geometry.height - (mounted.table.rect(ofRow: lastTimelineIndex).maxY - firstTimeline.minY)) < 1,
+                "The older-history window excludes leading task context")
+
+        var pageRequests = 0
+        mounted.owner.actions.onLoadMore = {
+            pageRequests += 1
+            return true
+        }
+        #expect(beforeTimeline > 0)
+        #expect(!mounted.owner.maybeLoadOlder(at: beforeTimeline),
+                "The load window does not begin inside the leading context")
+        #expect(pageRequests == 0)
+        #expect(mounted.owner.maybeLoadOlder(at: geometry.origin + ActivityFeedWindow.threshold))
+        #expect(pageRequests == 1)
+        #expect(mounted.owner.pendingPage != nil)
+        #expect(!mounted.owner.maybeLoadOlder(at: geometry.origin + ActivityFeedWindow.threshold))
+        #expect(pageRequests == 1, "Only one older-page request can be outstanding")
+    }
+
     @Test func givenFollowingFeed_whenRowAppended_thenSentinelKeepsSixteenPointsAndBottomStaysPinned() async throws {
         // given
         let mounted = try await mount(1 ... 40)
@@ -407,11 +459,13 @@ private enum TableReloadSpy {
     private func mount(_ range: ClosedRange<Int>, hasMore: Bool = true, height: CGFloat = 450,
                        state: ParallelColumnUIState = ParallelColumnUIState(),
                        tall: Set<Int> = [], approvals: [CallerApprovalCardModel] = [], hasLoader: Bool = false,
+                       leadingContent: [ActivityFeedSupplementaryRow] = [],
                        awaitPositioned: Bool = true) async throws -> Mounted {
         _ = TableReloadSpy.install
         _ = NSApplication.shared
         let host = NSHostingView(rootView: AnyView(feed(range, state: state, hasMore: hasMore, tall: tall,
-                                                        approvals: approvals, hasLoader: hasLoader, height: height)))
+                                                        approvals: approvals, leadingContent: leadingContent,
+                                                        hasLoader: hasLoader, height: height)))
         let window = activityMountedTestWindow(host, style: [.titled, .resizable])
         window.orderFront(nil)
         if awaitPositioned {
@@ -496,16 +550,25 @@ private enum TableReloadSpy {
     private func feed(_ range: ClosedRange<Int>, state: ParallelColumnUIState, hasMore: Bool = true,
                       grown: Set<Int> = [], tall: Set<Int> = [], padding: CGFloat = 12,
                       dynamicType: DynamicTypeSize? = nil, approvals: [CallerApprovalCardModel] = [],
+                      leadingContent: [ActivityFeedSupplementaryRow] = [],
                       reveal: CallerApprovalReveal? = nil, hasLoader: Bool = false,
                       height: CGFloat = 450) -> some View {
         let rows = rows(range, grown: grown, tall: tall)
         let presentation: ActivityFeedTailPresentation = approvals.isEmpty ? .absent : .standard(.init(approvals: approvals))
-        return ActivityFeedView(rows: rows, start: nil, history: EventHistoryState(hasMore: hasMore), isLoading: false,
-                                horizontalPadding: padding, state: state,
-                                onLoadMore: hasLoader ? { false } : nil,
-                                tailPresentation: presentation, approvalReveal: reveal)
+        var view = ActivityFeedView(rows: rows, start: nil, history: EventHistoryState(hasMore: hasMore), isLoading: false,
+                                    horizontalPadding: padding, state: state,
+                                    onLoadMore: hasLoader ? { false } : nil,
+                                    tailPresentation: presentation, approvalReveal: reveal)
+        view.leadingContent = leadingContent
+        return view
             .environment(\.hfReduceMotionOverride, true)
             .environment(\.dynamicTypeSize, dynamicType ?? .large)
             .frame(width: 420, height: height)
+    }
+
+    private func taskContext() -> ActivityFeedSupplementaryRow {
+        ActivityFeedSupplementaryRow(scope: "task-context", kind: .taskContext,
+                                     input: .caption("Task context"),
+                                     content: AnyView(Text("Task context").frame(height: 320)))
     }
 }

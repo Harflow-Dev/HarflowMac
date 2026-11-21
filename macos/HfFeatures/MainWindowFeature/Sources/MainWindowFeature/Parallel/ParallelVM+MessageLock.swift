@@ -20,6 +20,7 @@ extension ParallelVM {
 
     /// Chrome and the lock its composer reads travel together, so a column never shows one without the other.
     func applyChrome(to column: inout ParallelColumnModel) {
+        column.hidesInspectorComposer = isWorkflowInspector && steeringComposerOwned
         column.chrome = isWorkflowInspector ? .inspector : .lane
         switch column.chrome {
         case .lane: column.messageLock = composerLocks.runCancelled ? .runCancelled : nil
@@ -33,6 +34,13 @@ extension ParallelVM {
     func setWorkflowRunMessageLock(_ locked: Bool) {
         guard composerLocks.runCancelled != locked else { return }
         composerLocks.runCancelled = locked
+        if didSubscribe { publishColumns() }
+    }
+
+    /// Hides and independently refuses the legacy root inspector composer while steering owns it.
+    func setSteeringComposerOwned(_ owned: Bool) {
+        guard steeringComposerOwned != owned else { return }
+        steeringComposerOwned = owned
         if didSubscribe { publishColumns() }
     }
 

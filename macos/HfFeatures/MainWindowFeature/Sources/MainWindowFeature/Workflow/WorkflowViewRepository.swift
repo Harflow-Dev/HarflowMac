@@ -11,6 +11,19 @@ final class WorkflowViewRepository: WorkflowUseCase, @unchecked Sendable {
     @GlobalEnvironment(\.qualificationRepository) private var qualificationRepository
     func qualificationSession() -> QualificationSession { QualificationSession(repository: qualificationRepository) }
 
+    @GlobalEnvironment(\.workflowSteeringRepository) private var steering
+    func steeringObservation(rootID: String) async throws -> WorkflowSteeringObservation { try await steering.observation(rootID: rootID) }
+    func steeringHistory(observation: WorkflowSteeringObservation, cursor: String?) async throws -> WorkflowSteeringHistoryPage {
+        try await steering.history(observation: observation, cursor: cursor)
+    }
+
+    func performSteering(action: WorkflowSteeringAction, text: String?, observation: WorkflowSteeringObservation) async throws -> WorkflowSteeringAttempt {
+        try await steering.perform(action: action, text: text, observation: observation)
+    }
+
+    func steeringAttempts(rootID: String) -> [WorkflowSteeringAttempt] { steering.attempts(rootID: rootID) }
+    func isSteeringCurrent(_ observation: WorkflowSteeringObservation) -> Bool { steering.isCurrent(observation) }
+
     @GlobalEnvironment(\.workflowArtifactRepository) private var artifacts
     @GlobalEnvironment(\.workflowRepository) private var repository
     @GlobalEnvironment(\.taskListRepository) private var taskList

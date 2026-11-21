@@ -228,8 +228,8 @@ enum WorkflowSelectedPaneSizing {
 
     /// The inspector column's chrome: its padding, the stack spacing between `itemCount` children (feed and approval region
     /// included) and the directly measured heights of every child that is neither the feed nor the approval region.
-    static func columnChrome(pieces: [CGFloat], itemCount: Int) -> CGFloat {
-        columnPadding * 2 + columnSpacing * CGFloat(max(0, itemCount - 1)) + pieces.reduce(0) { $0 + max(0, $1) }
+    static func columnChrome(pieces: [CGFloat], itemCount: Int, padding: CGFloat = columnPadding, spacing: CGFloat = columnSpacing) -> CGFloat {
+        padding * 2 + spacing * CGFloat(max(0, itemCount - 1)) + pieces.reduce(0) { $0 + max(0, $1) }
     }
 
     /// The call list's height: every row up to the visible cap.
@@ -238,10 +238,45 @@ enum WorkflowSelectedPaneSizing {
     }
 }
 
+// Both values are captured in the same geometry pass, before a layout mode can change.
+struct WorkflowLayoutHeights: Equatable {
+    var actual: CGFloat = 0
+    var regular: CGFloat = 0
+}
+
+enum WorkflowCompactMetrics {
+    static let regularInner = HfRadius.Metrics.spacing8
+    static let compactInner = HfRadius.Metrics.spacing4
+    static let regularRootPadding = HfRadius.Metrics.spacing12
+    static let compactRootPadding = HfRadius.Metrics.spacing8
+    static let regularWrapperTop = HfRadius.Metrics.spacing12
+    static let regularWrapperBottom = HfRadius.Metrics.spacing20
+    static let compactWrapperTop = HfRadius.Metrics.spacing4
+    static let compactWrapperBottom = HfRadius.Metrics.spacing8
+    static let regularWrapper = regularWrapperTop + regularWrapperBottom
+    static let compactWrapper = compactWrapperTop + compactWrapperBottom
+    static let regularBarBottom = HfRadius.Metrics.spacing12
+    static let compactBarBottom = HfRadius.Metrics.spacing8
+}
+
 // MARK: - WorkflowSelectedColumnChromeKey
 
 /// The measured non-feed chrome of the inspector column and its conversation picker (their values add), reported to the pane so the region above the transcript leaves the feed its floor.
 struct WorkflowSelectedColumnChromeKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value += nextValue() }
+    static let defaultValue = WorkflowLayoutHeights()
+    static func reduce(value: inout WorkflowLayoutHeights, nextValue: () -> WorkflowLayoutHeights) {
+        let next = nextValue()
+        value.actual += next.actual
+        value.regular += next.regular
+    }
+}
+
+// MARK: - Root approval coexistence
+
+extension EnvironmentValues {
+    /// Keeps the retained root inspector's feed usable beside its independent steering body.
+    @Entry var rootApprovalCoexistence = false
+    @Entry var compactRootApprovalCoexistence = false
+    /// The root's measured allocation may reduce the retained feed toward one readable row.
+    @Entry var rootApprovalFeedMinimum: CGFloat = WorkflowSelectedPaneSizing.transcriptFloor
 }

@@ -4,71 +4,29 @@ import Foundation
 import HfCommon
 import HfRepository
 import HfUI
-import Mockable
 import MonitorCore
-
-// MARK: - WorkflowUseCase
-
-@Mockable
-@MainActor
-protocol WorkflowUseCase: Sendable {
-    func activityRuntime() throws -> QualificationRuntimeToken
-    func activity(runID: String, executionID: String, intent: WorkflowActivityReadIntent,
-                  runtime: QualificationRuntimeToken) async throws -> WorkflowActivityPage
-    func qualificationSession() -> QualificationSession
-    func command(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken?) async throws -> [String: JSONValue]
-    func boundBuilderCommand(_ command: String, options: [String], positionals: [String], runtime: QualificationRuntimeToken,
-                             isCurrent: @escaping @Sendable () -> Bool) async throws -> [String: JSONValue]
-    func validate(definition: JSONValue) async throws -> [String: JSONValue]
-    func save(name: String, definition: JSONValue, expectedRevision: Int, expectedWorkflowID: String?) async throws -> [String: JSONValue]
-    func artifactPage(runID: String, executionID: String, cursor: String?) async -> Result<WorkflowArtifactPage, ToolError>
-    func refreshTasks() async
-    var backendIDs: [String] { get }
-    var agentUsageSnapshot: AgentUsageSnapshot { get }
-    func agentUsagePublisher() -> AnyPublisher<AgentUsageSnapshot, Never>
-    func recordAgentUsage(_ identity: AgentUsageIdentity, acknowledgementID: String) async
-    var callerApprovalBackends: Set<String> { get }
-    var backendCatalog: BackendCatalog { get }
-    func backendCatalogPublisher() -> AnyPublisher<BackendCatalog, Never>
-    func modelOptions(backend: String) async -> [ModelOption]
-}
-
-// MARK: - WorkflowMessagingSupport
-
-/// The runtime's queued-messaging capability, probed the way the task screen does. Kept apart from `WorkflowUseCase`
-/// so a use case that cannot probe leaves the support unknown, which keeps sending enabled.
-@Mockable
-@MainActor
-protocol WorkflowMessagingSupport: Sendable {
-    func messagingInvocationContext() throws -> MessagingInvocationContext
-    func isMessagingContextCurrent(_ context: MessagingInvocationContext) -> Bool
-    /// `nil` when the capability cannot be read for `context` (changed runtime, failed or cancelled check).
-    func messagingSupport(context: MessagingInvocationContext) async -> Bool?
-}
-
-// MARK: - WorkflowRouting
-
-@Mockable
-@MainActor
-protocol WorkflowRouting: ParallelRouting {
-    func selectTask(_ taskID: String)
-    func copyToPasteboard(_ text: String) -> Bool
-    func publishTopBar(_ content: GroupTopBarContent, tag: TaskTopBarHolder.Tag)
-    func clearTopBar(tag: TaskTopBarHolder.Tag)
-    func activateTopBar(tag: TaskTopBarHolder.Tag)
-    func deactivateTopBar(tag: TaskTopBarHolder.Tag)
-    func retryTopBarActivation(tag: TaskTopBarHolder.Tag)
-    func chooseDirectory() async -> String?
-    func didSaveWorkflow(name: String)
-    func openWorkflowEditor(name: String?)
-    func openWorkflowRun(id: String)
-}
 
 // MARK: - WorkflowVM
 
 @Observable
 @MainActor
 final class WorkflowVM: WorkflowViewModel {
+    var steeringDisplay = WorkflowSteeringDisplay()
+    var steeringUnsupported = false
+    var steeringDraft = "" { didSet { if !steeringRestoringDraft, steeringDraft != oldValue { steeringEditRevision &+= 1 } } }
+    @ObservationIgnored var steeringRestoringDraft = false
+    @ObservationIgnored var steeringEditRevision: UInt64 = 0
+    @ObservationIgnored var steeringReadTask: Task<Void, Never>?
+    @ObservationIgnored var steeringLease = UUID()
+    @ObservationIgnored let steeringVisibilityFence = WorkflowSteeringVisibilityFence()
+    @ObservationIgnored var steeringLeaseVisibilityEpoch: UInt64 = 0
+    @ObservationIgnored var steeringVisibilitySubscription: AnyCancellable?
+    @ObservationIgnored var steeringProvenance: (QualificationRuntimeToken, UInt64)?
+    @ObservationIgnored var steeringProgress = WorkflowSteeringHistoryProgress()
+    @ObservationIgnored var steeringScope: WorkflowSteeringDraftScope?
+    @ObservationIgnored var steeringDrafts: [(WorkflowSteeringDraftScope, String, UInt64)] = []
+    @ObservationIgnored var steeringCaptures: [UUID: WorkflowSteeringDraftCapture] = [:]
+    var steeringActionPending = false
     var workflows: [WorkflowRecord] = []
     var hasLoadedWorkflowList = false
     var runs: [WorkflowRunModel] = []
@@ -103,6 +61,7 @@ final class WorkflowVM: WorkflowViewModel {
             guard primaryNodeID != newValue else { return }
             selectedNodeIDs = newValue.map { [$0] } ?? []
             primaryNodeID = newValue
+            updateSteeringSelection()
             selectedActivationID = nil
             scheduleRunSidebar()
         }
@@ -116,6 +75,8 @@ final class WorkflowVM: WorkflowViewModel {
         if selectedRun?.id != oldValue?.id { selectedActivationID = nil; cancelGoalDraft() }
         reconcileGoalDraft()
         applyRunMessageLock()
+        steeringRunDidChange(from: oldValue)
+        updateSteeringSelection()
         if selectedRun != oldValue { scheduleRunSidebar() }
     } }
     var branchSelection = WorkflowBranchSelection()
@@ -148,7 +109,7 @@ final class WorkflowVM: WorkflowViewModel {
     var messageNotes: [String: String] = [:]
     var activityMessageSnapshot: [String: JSONValue]?
     var activityMessageSnapshotRunID: String?
-    @ObservationIgnored var runGraphVisible = true
+    var runGraphVisible = true
     var nativeActivity: WorkflowNativeActivityModel?
     @ObservationIgnored var nativeActivityTask: Task<Void, Never>?
 
@@ -252,7 +213,7 @@ final class WorkflowVM: WorkflowViewModel {
     @ObservationIgnored let routesStartedRun: Bool
     /// Whether anyone can see the Monitor — pauses this screen's poll while the window is hidden,
     /// with the showing window waking it for an immediate refresh.
-    @ObservationIgnored private let visibility: any MonitorVisibility
+    @ObservationIgnored let visibility: any MonitorVisibility
     /// The poll's 2 s wait runs on the scheduler seam so tests fire it directly, never a real timer.
     @ObservationIgnored private let scheduler: any Scheduling
 
@@ -340,6 +301,7 @@ final class WorkflowVM: WorkflowViewModel {
         prepareMessagingSupport()
         applyRunMessageLock()
         parallel.didAppear()
+        startSteeringObservation()
         scheduleRunSidebar()
         let generation = UUID()
         generationID = generation
@@ -365,6 +327,8 @@ final class WorkflowVM: WorkflowViewModel {
     }
 
     func didDisappear() {
+        invalidateSteeringRead()
+        steeringVisibilitySubscription = nil
         invalidateMessagingSupport()
         discardRequestID = nil
         deleteRequestID = nil
@@ -439,15 +403,6 @@ final class WorkflowVM: WorkflowViewModel {
         savedDefinition = [:]
         draftPersistenceSuspended = false
         persistDraft()
-    }
-
-    func chooseRepo() {
-        Task { [weak self] in
-            guard let self, let chosen = await routing.chooseDirectory() else {
-                return
-            }
-            repo = chosen
-        }
     }
 
     func prepareLaunch() {

@@ -8,7 +8,8 @@ import MonitorCore
 @MainActor
 extension WorkflowTests {
     func makeVM(qualification: QualificationFixture = QualificationFixture(gated: false),
-                session: QualificationSession? = nil) -> (sut: WorkflowVM, useCase: MockWorkflowUseCase) {
+                session: QualificationSession? = nil,
+                runtime: QualificationRuntimeToken? = nil) -> (sut: WorkflowVM, useCase: MockWorkflowUseCase) {
         let useCase = MockWorkflowUseCase()
         useCase.stubBackendCatalog()
         given(useCase).qualificationSession().willReturn(session ?? QualificationSession(repository: qualification))
@@ -19,7 +20,7 @@ extension WorkflowTests {
         given(useCase).agentUsageSnapshot.willReturn(.init())
         given(useCase).recordAgentUsage(.any, acknowledgementID: .any).willReturn()
         given(useCase).refreshTasks().willReturn()
-        given(useCase).activityRuntime().willReturn(QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
+        given(useCase).activityRuntime().willReturn(runtime ?? QualificationRuntimeToken(client: CtlClient(executable: "/fixture/ctl", environment: [:])))
         given(useCase).activity(runID: .any, executionID: .any, intent: .any, runtime: .any).willProduce { runID, executionID, _, _ in
             WorkflowActivityPage(raw: ["workflow_run_id": .string(runID), "execution_id": .string(executionID),
                                       "events": .array([]), "has_more": .bool(false)], runID: runID, executionID: executionID)!

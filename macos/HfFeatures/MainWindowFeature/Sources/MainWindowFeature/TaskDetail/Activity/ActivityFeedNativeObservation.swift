@@ -34,6 +34,7 @@ extension ActivityFeedNativeList.Coordinator {
     /// only the tracking baseline advances, so the first observed movement after reappearing
     /// is not misread as upward.
     func handleBoundsChange() {
+        defer { refreshComposerEdge() }
         guard let scroll, let table else { return }
         let visible = scroll.documentVisibleRect
         guard scroll.documentView === table else {
@@ -108,6 +109,7 @@ extension ActivityFeedNativeList.Coordinator {
     /// Viewport frame changes: a width change is one full transaction; a height change keeps
     /// the paused reading anchor or, while following, keeps the live bottom pinned.
     func handleViewportFrameChange() {
+        defer { refreshComposerEdge() }
         guard let scroll else { return }
         maybePerformInitialPositioning()
         let newWidth = max(0, scroll.contentView.bounds.width)
@@ -283,26 +285,41 @@ extension ActivityFeedNativeList.Coordinator {
     /// any repetition. `overrideOffset` evaluates a held intent at the offset it reached.
     @discardableResult
     func maybeLoadOlder(at overrideOffset: CGFloat? = nil) -> Bool {
-        guard let model, let state, let scroll, let table, positioned, pendingPage == nil else { return false }
+        guard let model, let state, let scroll, table != nil, positioned, pendingPage == nil else { return false }
         let visible = scroll.documentVisibleRect
         let viewport = visible.height
         guard viewport > 0 else { return false }
         let offset = overrideOffset ?? visible.minY
+        let historyWindow = historyWindowGeometry
+        guard model.leadingContent.isEmpty || offset + viewport >= historyWindow.origin else { return false }
         guard ActivityFeedWindow.shouldLoad(
-            offset: offset, viewport: viewport,
+            offset: max(0, offset - historyWindow.origin), viewport: viewport,
             eligibility: ActivityFeedEligibility(positioned: positioned, restoring: false, visible: model.visible,
                                                  loading: model.history.isLoading, error: model.history.error)
         ), rejectedIDs != model.allRowIDs else { return false }
         guard let boundary = ActivityFeedWindow.olderBoundary(ids: model.allRowIDs,
                                                               retainedID: state.retainedFirstID) else {
             guard model.history.hasMore,
-                  shortFill.consume(content: table.bounds.height, viewport: viewport) else { return false }
+                  shortFill.consume(content: historyWindow.height, viewport: viewport) else { return false }
             requestPage(retry: false)
             return true
         }
-        guard shortFill.consume(content: table.bounds.height, viewport: viewport) else { return false }
+        guard shortFill.consume(content: historyWindow.height, viewport: viewport) else { return false }
         state.retainedFirstID = boundary
         return true
+    }
+
+    /// Paging geometry excludes inspector context and trailing controls/queue.
+    var historyWindowGeometry: (origin: CGFloat, height: CGFloat) {
+        guard let table else { return (0, 0) }
+        guard let first = historyHeaderIndex ?? firstTimelineIndex,
+              let last = lastTimelineIndex ?? historyHeaderIndex else {
+            let count = model?.leadingContent.count ?? 0
+            let origin = count > 0 && entries.indices.contains(count - 1) ? table.rect(ofRow: count - 1).maxY : 0
+            return (origin, 0)
+        }
+        let origin = table.rect(ofRow: first).minY
+        return (origin, max(0, table.rect(ofRow: last).maxY - origin))
     }
 
     /// Resumes what an incoherent native window held, in the order a coherent reader would

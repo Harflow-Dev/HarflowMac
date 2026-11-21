@@ -67,13 +67,14 @@ struct WorkflowSelectedHead<VM: WorkflowViewModel>: View {
 
 /// An on-demand node's calls as selectable rows, newest first. Five rows show whole; more scroll.
 struct WorkflowOnDemandCallList: View {
+    var naturalHeight = false
     let rows: [WorkflowOnDemandCallRow]
     let selectedID: String?
     let onSelect: (String) -> Void
     let onOpenTask: (String) -> Void
 
     var body: some View {
-        if rows.count > WorkflowSelectedPaneSizing.visibleCallRows {
+        if !naturalHeight, rows.count > WorkflowSelectedPaneSizing.visibleCallRows {
             ScrollView { list }
                 .frame(height: WorkflowSelectedPaneSizing.callListHeight(rowCount: rows.count))
         } else {
@@ -142,21 +143,24 @@ struct WorkflowOnDemandCallRowView: View {
 /// The call's assignment, reason and result, for a call with no transcript to carry them.
 struct WorkflowCallDetailsView: View {
     let details: WorkflowCallDetails
+    var naturalHeight = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
-                if !details.assignment.isEmpty { Text(details.assignment).font(.hf(.body, weight: .semibold)) }
-                Text(details.origin).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-                if !details.reason.isEmpty { Text(details.reason).font(.hf(.body)) }
-                if !details.result.isEmpty { ReadingMarkdownView(text: details.result) }
-            }
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(HfRadius.Metrics.spacing16)
-            .background(ScrollChrome())
+        Group {
+            if naturalHeight { content } else { ScrollView { content.background(ScrollChrome()) } }
+        }.accessibilityIdentifier("workflow-call-details")
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
+            if !details.assignment.isEmpty { Text(details.assignment).font(.hf(.body, weight: .semibold)) }
+            Text(details.origin).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+            if !details.reason.isEmpty { Text(details.reason).font(.hf(.body)) }
+            if !details.result.isEmpty { ReadingMarkdownView(text: details.result) }
         }
-        .accessibilityIdentifier("workflow-call-details")
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(HfRadius.Metrics.spacing16)
     }
 }
 

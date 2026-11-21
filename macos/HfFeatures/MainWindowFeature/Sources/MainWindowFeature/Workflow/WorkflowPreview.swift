@@ -150,6 +150,7 @@ private final class PreviewWorkflowUseCase: WorkflowUseCase, @unchecked Sendable
 
 @MainActor
 private struct PreviewWorkflowRouting: WorkflowRouting {
+    func showNeedsYou(itemID _: String?) {}
     func chooseDirectory() async -> String? { nil }
     func selectTask(_: String) {}
     func copyToPasteboard(_: String) -> Bool { false }

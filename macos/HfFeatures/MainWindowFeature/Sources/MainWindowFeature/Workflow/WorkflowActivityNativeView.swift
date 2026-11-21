@@ -9,12 +9,24 @@ struct WorkflowActivityPresentation: Equatable {
     let messages: [WorkMessageBubble]
     let isCancelDisabled: Bool
     var hasCancel = false
+    var leadingContent: [ActivityFeedSupplementaryRow] = []
+    var composerEdge = false
+    var callReveal: WorkflowInspectorCallReveal?
+    var approvalContent: ActivityFeedSupplementaryRow?
+    var approvalReveal: CallerApprovalReveal?
 }
 
 // MARK: - WorkflowActivityActions
 
 /// Stable callbacks let identical updates refresh actions without replacing hosted content.
 @MainActor final class WorkflowActivityActions {
+    var queuedFrame: (CGRect) -> Void = { _ in }
+    var approvalFrame: (String, CGRect) -> Void = { _, _ in }
+    var approvalFocusReady: () -> Bool = { false }
+    var onApprovalScrollAcknowledged: (String, UUID) -> Void = { _, _ in }
+    var onCallScrollAcknowledged: (UUID) -> Void = { _ in }
+    var callFrame: (String, CGRect) -> Void = { _, _ in }
+    var callFocusReady: () -> Bool = { false }
     var cancel: ((String) -> Void)?
     var jump: () -> Void = {}
     var following: (Bool) -> Void = { _ in }
@@ -22,6 +34,13 @@ struct WorkflowActivityPresentation: Equatable {
     var openURL = EnvironmentValues().openURL
 
     func reset() {
+        queuedFrame = { _ in }
+        approvalFrame = { _, _ in }
+        approvalFocusReady = { false }
+        onApprovalScrollAcknowledged = { _, _ in }
+        onCallScrollAcknowledged = { _ in }
+        callFrame = { _, _ in }
+        callFocusReady = { false }
         cancel = nil
         jump = {}
         following = { _ in }
@@ -59,6 +78,12 @@ struct WorkflowActivityHostedRoot: View {
         let settled = presentation.messages.filter { !$0.isPinned }
         let pinned = presentation.messages.filter(\.isPinned)
         return VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+            ForEach(presentation.leadingContent) { row in
+                row.content
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("workflow-activity-document")) } action: {
+                        actions.callFrame(row.id, $0)
+                    }
+            }
             Text(model.title + " · Subagent").font(.hf(.body, weight: .semibold))
             Text(model.status).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
             if model.limited { Text("Activity limited").font(.hf(.caption)).foregroundStyle(Color.secondaryText) }
@@ -69,13 +94,21 @@ struct WorkflowActivityHostedRoot: View {
                     live: ["running", "launch_requested"].contains(model.status), markdown: model.markdown[item.id]))
             }
             if !settled.isEmpty { WorkMessageBubblesView(bubbles: settled) }
+            if let content = presentation.approvalContent { content.content }
             if !pinned.isEmpty {
                 WorkMessageBubblesView(bubbles: pinned, onCancel: presentation.hasCancel ? { actions.cancel?($0) } : nil,
                                        isCancelDisabled: presentation.isCancelDisabled)
                     .id("queued-messages")
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("workflow-activity-document")) } action: {
+                        actions.queuedFrame($0)
+                    }
             }
         }
         .padding(HfRadius.Metrics.spacing16)
+        .coordinateSpace(name: "workflow-activity-document")
+        .environment(\.workflowInspectorFocusReady, actions.callFocusReady)
+        .environment(\.workflowInspectorApprovalFocusReady, actions.approvalFocusReady)
+        .environment(\.workflowInspectorApprovalFrame, actions.approvalFrame)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -87,6 +120,8 @@ struct WorkflowActivityNativeView: NSViewRepresentable {
     let actions: WorkflowActivityActions
     let onCancel: ((String) -> Void)?
     let onFollowing: (Bool) -> Void
+    var onApprovalScrollAcknowledged: ((String, UUID) -> Void)?
+    var onCallScrollAcknowledged: ((UUID) -> Void)?
 
     func makeCoordinator() -> WorkflowActivityScrollOwner { WorkflowActivityScrollOwner() }
 
@@ -97,6 +132,8 @@ struct WorkflowActivityNativeView: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: WorkflowActivityNativeScrollView, context: Context) {
+        actions.onCallScrollAcknowledged = { onCallScrollAcknowledged?($0) }
+        actions.onApprovalScrollAcknowledged = { onApprovalScrollAcknowledged?($0, $1) }
         actions.cancel = onCancel
         actions.following = onFollowing
         actions.openURL = context.environment.openURL

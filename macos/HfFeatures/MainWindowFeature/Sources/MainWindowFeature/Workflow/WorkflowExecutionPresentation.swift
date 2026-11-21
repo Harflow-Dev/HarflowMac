@@ -36,7 +36,8 @@ struct WorkflowExecutionPresentation: Equatable {
 /// "Needs attention" family shape and word; an unmapped status keeps its readable raw label
 /// on the neutral dashed-circle treatment — a visual mapping never claims an execution state.
 enum WorkflowRunStatusBadge {
-    static func presentation(status: String, isSettling: Bool) -> StatusBadgePresentation {
+    static func presentation(status: String, isSettling: Bool, steeringHold: Bool = false) -> StatusBadgePresentation {
+        if steeringHold { return StatusBadgePresentation(indicator: .glyph(.hand), label: "Needs you", tint: .warning) }
         if isSettling {
             return StatusBadgePresentation(indicator: .spinner, label: "Settling", tint: .running)
         }

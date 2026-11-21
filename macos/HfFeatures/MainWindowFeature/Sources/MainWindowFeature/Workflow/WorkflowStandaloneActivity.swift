@@ -97,6 +97,15 @@ extension WorkflowRunSidebarPresentation {
                     repository: WorkflowRunMetadata.repoName(WorkflowRunModel(raw: run)))
             }
         }
+        applyStandaloneApproval(nodeID: nodeID, run: run)
         return true
     }
+
+    private mutating func applyStandaloneApproval(nodeID: String, run: [String: JSONValue]) {
+        guard nodeID == WorkflowStandalone.orchestratorID, WorkflowSteeringPresentation.isRegularRoot(run) else { return }
+        approval = WorkflowSelectedApprovalGate.make(run: run)
+        if run["status"]?.stringValue == "paused", WorkflowSteeringPresentation.hasPositiveHold(run),
+           (run["approval_summary"]?["pending_count"]?.intValue ?? 0) > 0 { approval.polls = true }
+    }
+
 }

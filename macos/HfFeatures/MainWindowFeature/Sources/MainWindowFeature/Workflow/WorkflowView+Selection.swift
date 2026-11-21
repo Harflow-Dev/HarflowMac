@@ -53,7 +53,8 @@ extension WorkflowView {
     /// The shared recovery-overlay eligibility of the current selected run: the loaded
     /// non-builder surface plus the unchanged `WorkflowRecoveryPresentation.showsRecovery`.
     var recoveryEligibleRunID: String? {
-        WorkflowRecoveryOverlayPresentation.eligibleRunID(
+        if let run = viewModel.selectedRun, WorkflowSteeringPresentation.hidesParkedReason(run.raw, dismissed: viewModel.steering.isDismissed) { return nil }
+        return WorkflowRecoveryOverlayPresentation.eligibleRunID(
             run: viewModel.selectedRun,
             initialLoadingKind: viewModel.initialLoadingKind,
             initialLoadFailed: viewModel.initialLoadFailed, answeredInteractionID: viewModel.interactionOutcome?.interactionID)

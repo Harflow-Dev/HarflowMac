@@ -4,6 +4,15 @@ import MonitorCore
 // MARK: - WorkflowVM selection
 
 extension WorkflowVM {
+    func chooseRepo() {
+        Task { [weak self] in
+            guard let self, let chosen = await routing.chooseDirectory() else {
+                return
+            }
+            repo = chosen
+        }
+    }
+
     func selectNode(_ id: String) {
         if let source = connectionSourceID, source != id, selectedRun == nil {
             addEdge(source: source, target: id)
@@ -19,6 +28,7 @@ extension WorkflowVM {
         let valid = ids.intersection(Set(nodes.map(\.id)))
         selectedNodeIDs = valid
         primaryNodeID = primary.flatMap { valid.contains($0) ? $0 : nil } ?? valid.sorted().first
+        updateSteeringSelection()
         selectedEdgeID = nil
         connectionSourceID = nil
         selectedActivationID = nil
