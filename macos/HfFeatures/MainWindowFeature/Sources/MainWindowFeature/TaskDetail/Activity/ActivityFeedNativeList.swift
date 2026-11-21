@@ -370,6 +370,7 @@ struct ActivityFeedNativeList: NSViewRepresentable {
                     if protectsActions { break }
                 }
             }
+            composerEdge?.usesWindowBackground = model?.composerEdgeUsesWindowBackground == true
             composerEdge?.update(enabled: true, positioned: positioned,
                                 suppressForReveal: protectsActions || model?.approvalReveal != nil || hasActionableScopedApprovalReveal)
         }

@@ -117,6 +117,8 @@ struct TimelinePaneView: View {
     var approvalController: CallerApprovalController?
     var isCancelDisabled = false
     var style = ActivityFeedStyle.standard
+    var composerEdge = false
+    var composerEdgeUsesWindowBackground = false
     var stateTreatment: TaskStateTreatment?
     var onStateContinue: (String) -> Void = { _ in }
     var onStateCheck: (String, UUID) -> Void = { _, _ in }
@@ -130,7 +132,8 @@ struct TimelinePaneView: View {
     @State private var state: ParallelColumnUIState
 
     init(model: TimelinePaneModel, state: ParallelColumnUIState? = nil, approvalController: CallerApprovalController? = nil,
-         isCancelDisabled: Bool = false, style: ActivityFeedStyle = .standard,
+         isCancelDisabled: Bool = false, style: ActivityFeedStyle = .standard, composerEdge: Bool = false,
+         composerEdgeUsesWindowBackground: Bool = false,
          stateTreatment: TaskStateTreatment? = nil,
          onStateContinue: @escaping (String) -> Void = { _ in },
          onStateCheck: @escaping (String, UUID) -> Void = { _, _ in }, onStateNewTask: @escaping () -> Void = {}, onStateStop: @escaping () -> Void = {},
@@ -146,6 +149,8 @@ struct TimelinePaneView: View {
         self.onStateCopyResumeCommand = onStateCopyResumeCommand
         self.onStateOpenEvents = onStateOpenEvents
         self.style = style
+        self.composerEdge = composerEdge
+        self.composerEdgeUsesWindowBackground = composerEdgeUsesWindowBackground
         self.approvalController = approvalController
         self.isCancelDisabled = isCancelDisabled
         self.model = model
@@ -211,7 +216,8 @@ struct TimelinePaneView: View {
                             outcome: model.messageOutcome,
                             outcomeFocus: model.messageOutcomeFocus, outcomeUsesFocusTarget: true
                          )), onSelectChildTask: model.onSelectTask ?? model.subTaskStrip?.onSelectTask,
-                         approvalReveal: approvalController?.reveal,
+                         approvalReveal: approvalController?.reveal, composerEdge: composerEdge,
+                         composerEdgeUsesWindowBackground: composerEdgeUsesWindowBackground,
                          onApprovalResponse: { id, decision in approvalController?.submit(decision, requestID: id) },
                          onApprovalToggle: { approvalController?.toggle($0) },
                          onApprovalLoadMore: { approvalController?.requestRefresh(loadMore: approvalController?.nextCursor != nil) },

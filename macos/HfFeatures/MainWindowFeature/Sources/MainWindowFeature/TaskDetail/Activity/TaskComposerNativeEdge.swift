@@ -23,7 +23,7 @@ final class TaskComposerNativeEdge {
     var actionOverlap: ((CGRect) -> Bool)?
 
     var usesWindowBackground = false {
-        didSet { schedulePaint() }
+        didSet { if usesWindowBackground != oldValue { schedulePaint() } }
     }
 
     func install(in scroll: NSScrollView) {
@@ -142,7 +142,7 @@ final class TaskComposerNativeEdge {
 private final class TaskComposerEdgeView: NSView {
     var onWindowChange: (() -> Void)?
     var usesWindowBackground = false {
-        didSet { updateColors() }
+        didSet { if usesWindowBackground != oldValue { updateColors() } }
     }
 
     override init(frame frameRect: NSRect) {
@@ -165,6 +165,7 @@ private final class TaskComposerEdgeView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        updateColors()
         onWindowChange?()
     }
 

@@ -25,6 +25,7 @@ struct ActivityFeedView: View {
     var scopedApprovals: [ActivityFeedApprovalEntry] = []
     var approvalSource: ActivityFeedApprovalEntry.Source?
     var composerEdge = false
+    var composerEdgeUsesWindowBackground = false
     var callReveal: WorkflowInspectorCallReveal?
     var onCallScrollAcknowledged: (UUID) -> Void = { _ in }
     var onScopedApprovalResponse: (ActivityFeedApprovalEntry.Source, String, String) -> Void = { _, _, _ in }
@@ -70,7 +71,8 @@ struct ActivityFeedView: View {
          emptyText: String? = nil, horizontalPadding: CGFloat = HfRadius.Metrics.zero, showsPromptBubble: Bool = true,
          style: ActivityFeedStyle = .standard, state: ParallelColumnUIState, onLoadMore: (() -> Bool)?,
          tailPresentation: ActivityFeedTailPresentation = .absent, onSelectChildTask: ((String) -> Void)? = nil,
-         approvalReveal: CallerApprovalReveal? = nil, onApprovalResponse: ((String, String) -> Void)? = nil,
+         approvalReveal: CallerApprovalReveal? = nil, composerEdge: Bool = false, composerEdgeUsesWindowBackground: Bool = false,
+         onApprovalResponse: ((String, String) -> Void)? = nil,
          onApprovalToggle: ((String) -> Void)? = nil, onApprovalLoadMore: (() -> Void)? = nil,
          consumeMessageOutcomeFocus: ((UUID) -> Bool)? = nil,
          onApprovalFocusAcknowledged: ((String, UUID) -> Void)? = nil,
@@ -105,6 +107,8 @@ struct ActivityFeedView: View {
         self.tailPresentation = tailPresentation
         self.onSelectChildTask = onSelectChildTask
         self.approvalReveal = approvalReveal
+        self.composerEdge = composerEdge
+        self.composerEdgeUsesWindowBackground = composerEdgeUsesWindowBackground
         self.onApprovalResponse = onApprovalResponse
         self.onApprovalToggle = onApprovalToggle
         self.onApprovalLoadMore = onApprovalLoadMore
@@ -156,7 +160,8 @@ struct ActivityFeedView: View {
             approvalReveal: approvalReveal,
             activitySnapshot: activitySnapshot, stateTreatment: stateTreatment,
             leadingContent: leadingContent, trailingContent: trailingContent, scopedApprovals: scopedApprovals,
-            approvalSource: approvalSource, composerEdge: composerEdge, callReveal: callReveal,
+            approvalSource: approvalSource, composerEdge: composerEdge,
+            composerEdgeUsesWindowBackground: composerEdgeUsesWindowBackground, callReveal: callReveal,
             followingContent: followingContent, scopedApprovalReveals: scopedApprovalReveals
         )
     }

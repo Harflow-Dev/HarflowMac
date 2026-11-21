@@ -278,7 +278,7 @@ struct MessageBoxView: View {
             }
         }
         .padding(.horizontal, wrapper.paddingHorizontal)
-        .padding(.top, wrapper.paddingTop)
+        .padding(.top, wrapperTopInset ?? wrapper.paddingTop)
         .padding(.bottom, wrapper.paddingBottom)
         .frame(maxWidth: wrapper.maxWidth)
         .frame(maxWidth: .infinity)

@@ -11,6 +11,7 @@ extension TaskDetailView {
         VStack(spacing: HfRadius.Metrics.zero) {
             content
             MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow,
+                           wrapperTopInset: chrome == .builder ? nil : HfRadius.Metrics.spacing4,
                            style: transcriptStyle.isTranscript ? .transcript : .standard,
                            text: isStandalone ? draftMount?.text : nil,
                            onSubmitCompletion: viewModel.submitMessage,
@@ -36,6 +37,8 @@ extension TaskDetailView {
             TimelinePaneView(model: viewModel.timelineModel, state: activityState, approvalController: viewModel.callerApprovalController,
                              isCancelDisabled: viewModel.continuationPresentation?.locksActions == true || viewModel.isBusy
                                  || (chrome == .standalone && !viewModel.hasStatusAuthority), style: transcriptStyle,
+                             composerEdge: chrome != .builder,
+                             composerEdgeUsesWindowBackground: chrome != .builder && !transcriptStyle.isTranscript,
                              stateTreatment: isStandalone ? viewModel.stateTreatment : nil,
                              onStateContinue: viewModel.didTapContinue,
                              onStateCheck: viewModel.didTapCheckContinuation, onStateNewTask: viewModel.didTapNewTask,

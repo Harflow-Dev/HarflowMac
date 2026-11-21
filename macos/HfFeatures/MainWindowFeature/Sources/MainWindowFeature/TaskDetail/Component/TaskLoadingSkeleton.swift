@@ -202,13 +202,14 @@ struct TaskLoadingSkeleton: View {
                 TranscriptComposerHint(text: MessageBoxModel.disabled.printedHint).hidden()
             }
             .padding(.horizontal, wrapper.paddingHorizontal)
-                .padding(.top, wrapper.paddingTop)
+                .padding(.top, chrome == .builder ? wrapper.paddingTop : HfRadius.Metrics.spacing4)
                 .padding(.bottom, wrapper.paddingBottom)
                 .frame(maxWidth: wrapper.maxWidth)
                 .frame(maxWidth: .infinity)
         } else {
             composer
                 .padding(.horizontal, HfRadius.Metrics.spacing24)
+                .padding(.top, chrome == .builder ? 0 : HfRadius.Metrics.spacing4)
                 .padding(.bottom, HfRadius.Metrics.spacing20)
         }
     }

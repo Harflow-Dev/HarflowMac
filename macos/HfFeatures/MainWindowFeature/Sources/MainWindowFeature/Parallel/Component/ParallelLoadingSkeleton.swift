@@ -61,7 +61,9 @@ struct ParallelLoadingSkeleton: View {
                     buttonLabel: "Send", fieldAccessibilityLabel: "Message", sendAccessibilityLabel: "Send"
                 ), style: .lane) { _ in false }
                     .disabled(true)
-                    .padding(HfRadius.Metrics.spacing12)
+                    .padding(.horizontal, HfRadius.Metrics.spacing12)
+                    .padding(.top, HfRadius.Metrics.spacing4)
+                    .padding(.bottom, HfRadius.Metrics.spacing12)
             }
         }
     }

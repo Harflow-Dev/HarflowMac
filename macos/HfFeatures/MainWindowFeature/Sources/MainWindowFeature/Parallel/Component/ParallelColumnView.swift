@@ -133,7 +133,9 @@ struct ParallelColumnView: View {
                 }
                 composer
             }
-            .padding(HfRadius.Metrics.spacing12)
+            .padding(.horizontal, HfRadius.Metrics.spacing12)
+            .padding(.top, HfRadius.Metrics.spacing4)
+            .padding(.bottom, HfRadius.Metrics.spacing12)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .onChange(of: model.cachedHistoryNotice) { old, notice in
@@ -516,6 +518,7 @@ struct ParallelColumnView: View {
                                 settled: model.chrome == .lane && !laneFeedIsLoading
                                     ? ParallelLaneStatus.settledLine(current: model.task, status: model.laneStatus) : nil
                              )), onSelectChildTask: model.onSelectTask,
+                             composerEdge: model.chrome == .lane,
                              onCancelQueuedMessage: model.onCancelMessage)
         }
     }

@@ -42,6 +42,7 @@ struct ActivityFeedNativeModel: Equatable {
     var scopedApprovals: [ActivityFeedApprovalEntry] = []
     var approvalSource: ActivityFeedApprovalEntry.Source?
     var composerEdge = false
+    var composerEdgeUsesWindowBackground = false
     var callReveal: WorkflowInspectorCallReveal?
     var followingContent: [ActivityFeedDocumentEntry] = []
     var scopedApprovalReveals: [ActivityFeedApprovalReveal] = []
@@ -59,7 +60,8 @@ struct ActivityFeedNativeModel: Equatable {
             && lhs.leadingContent == rhs.leadingContent && lhs.trailingContent == rhs.trailingContent
             && lhs.scopedApprovals == rhs.scopedApprovals && lhs.approvalSource == rhs.approvalSource
             && lhs.followingContent == rhs.followingContent && lhs.scopedApprovalReveals == rhs.scopedApprovalReveals
-            && lhs.composerEdge == rhs.composerEdge && lhs.callReveal == rhs.callReveal
+            && lhs.composerEdge == rhs.composerEdge && lhs.composerEdgeUsesWindowBackground == rhs.composerEdgeUsesWindowBackground
+            && lhs.callReveal == rhs.callReveal
             && lhs.expandedGroups == rhs.expandedGroups && lhs.tailPresentation == rhs.tailPresentation
             && lhs.history == rhs.history && lhs.paginationRevision == rhs.paginationRevision
             && lhs.visible == rhs.visible && lhs.loading == rhs.loading && lhs.approvalReveal == rhs.approvalReveal

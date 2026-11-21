@@ -3,6 +3,7 @@ import HfTestUtilities
 import HfUI
 @testable import MainWindowFeature
 import MonitorCore
+import QuartzCore
 import SwiftUI
 import Testing
 
@@ -129,6 +130,72 @@ import Testing
         #expect(bottomDistance(scroll) > 1000, "Resize must not jump manual reading back to live")
     }
 
+    @Test func givenOverflowingLane_whenReadingAndReachingTheEnd_thenFadeTracksClipAndInspectorOptsOut() async throws {
+        // given
+        _ = NSApplication.shared
+        let task = try #require(TaskInfo(.object([
+            "task_id": .string("composer-edge-lane"), "backend": .string("codex"),
+            "status": .string("running"), "repo_path": .string("/tmp")
+        ])))
+        let body = Array(repeating: "A long row keeps the native activity document taller than the viewport.", count: 12)
+            .joined(separator: "\n")
+        let rows = (0 ..< 8).map { index in
+            ConversationTimelineRow(id: "edge-\(index)", taskID: task.id, timestamp: nil,
+                                    kind: .item(PreviewFixtures.textItem(body, seq: index)), live: false)
+        }
+        var model = ParallelColumnModel(id: task.id, task: task, title: "Composer edge", subtitle: "Codex", isBusy: false,
+                                        outcomeMessage: nil, showPrompt: false, rows: rows,
+                                        activityRows: ActivityRowsBuilder.build(from: rows), liveStep: nil, isLoading: false,
+                                        summary: nil, onTapTakeover: {}, onTapOpenTask: {})
+        model.chrome = .lane
+        model.onSubmitMessage = { _, _ in true }
+        model.onCancelMessage = { _ in }
+        let laneFixture = RedesignHost(ParallelColumnView(model: model),
+                                       size: CGSize(width: 380, height: 700))
+        defer { laneFixture.close() }
+        await laneFixture.settle {
+            guard let table = descendants(laneFixture.host).compactMap({ $0 as? ActivityFeedNativeTableView }).first,
+                  let scroll = table.enclosingScrollView, let document = scroll.documentView else { return false }
+            return table.owner?.model != nil && document.bounds.height > scroll.contentView.bounds.height
+                && scroll.subviews.contains { $0.layer is CAGradientLayer }
+        }
+        let laneTable = try #require(descendants(laneFixture.host).compactMap { $0 as? ActivityFeedNativeTableView }.first)
+        let laneScroll = try #require(laneTable.enclosingScrollView)
+        let laneDocument = try #require(laneScroll.documentView)
+        let edge = try #require(laneScroll.subviews.first { $0.layer is CAGradientLayer })
+        await laneFixture.settle {
+            laneTable.owner?.model != nil && laneDocument.bounds.height > laneScroll.contentView.bounds.height
+        }
+
+        // when — moving above the end exposes a clip-aligned fade; reaching the end hides it.
+        activityNativeTestScroll(laneScroll, to: max(0, laneScroll.documentVisibleRect.minY - 250))
+        await laneFixture.settle {
+            !edge.isHidden && laneDocument.bounds.maxY - laneScroll.documentVisibleRect.maxY > 100
+        }
+        #expect(!edge.isHidden, "the Parallel lane fade appears above the end")
+        let endY = laneDocument.isFlipped
+            ? laneDocument.bounds.maxY - laneScroll.contentView.bounds.height : laneDocument.bounds.minY
+        laneScroll.contentView.scroll(to: NSPoint(x: 0, y: endY))
+        laneScroll.reflectScrolledClipView(laneScroll.contentView)
+        await laneFixture.settle { edge.isHidden && laneDocument.bounds.maxY - laneScroll.documentVisibleRect.maxY <= 1 }
+        #expect(edge.isHidden, "the Parallel lane fade is hidden at the end")
+
+        // then — the legacy inspector composer remains outside this lane-only opt-in.
+        model.chrome = .inspector
+        let inspectorFixture = RedesignHost(ParallelColumnView(model: model),
+                                            size: CGSize(width: 380, height: 700))
+        defer { inspectorFixture.close() }
+        await inspectorFixture.settle {
+            guard let table = descendants(inspectorFixture.host).compactMap({ $0 as? ActivityFeedNativeTableView }).first,
+                  let scroll = table.enclosingScrollView else { return false }
+            return table.owner?.model != nil && scroll.documentView != nil
+        }
+        let inspectorTable = try #require(descendants(inspectorFixture.host).compactMap { $0 as? ActivityFeedNativeTableView }.first)
+        let inspectorScroll = try #require(inspectorTable.enclosingScrollView)
+        await inspectorFixture.settle { inspectorTable.owner?.model != nil }
+        #expect(!inspectorScroll.subviews.contains { $0.layer is CAGradientLayer })
+    }
+
     private func assertComposerSpacing(_ chrome: ParallelColumnChrome, viewport: CGRect, composer composerFrame: CGRect, hostBounds: CGRect) {
         switch chrome {
         case .inspector:
@@ -137,9 +204,9 @@ import Testing
             #expect(abs(composerFrame.maxY - (hostBounds.maxY - HfRadius.Metrics.spacing16)) < 2,
                     "The composer must fit inside the cell's bottom padding")
         case .lane:
-            let foot = ParallelLayout.dividerWidth + HfRadius.Metrics.spacing12
+            let foot = ParallelLayout.dividerWidth + HfRadius.Metrics.spacing4
             #expect(abs(viewport.maxY + foot - composerFrame.minY) < 2,
-                    "Activity must reach the foot's top hairline, which sits 12 points above the composer")
+                    "Activity must reach the foot's top hairline, which sits four points above the composer")
             #expect(abs(composerFrame.maxY - (hostBounds.maxY - HfRadius.Metrics.spacing12)) < 2,
                     "The composer must fit inside the foot's 12-point padding")
         }
