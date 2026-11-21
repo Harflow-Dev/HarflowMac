@@ -19,6 +19,7 @@ struct ResourceSlotsQualifier: Equatable, Sendable, Identifiable {
     let id: String
     let text: String
     let isWarning: Bool
+    var showsRetry: Bool = false
 }
 
 struct ResourceSlotsGroup: Equatable, Sendable, Identifiable {

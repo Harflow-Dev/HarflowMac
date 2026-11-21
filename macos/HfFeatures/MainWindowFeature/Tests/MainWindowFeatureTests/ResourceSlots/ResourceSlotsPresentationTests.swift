@@ -8,7 +8,7 @@ import Testing
 struct ResourceSlotsPresentationTests {
     private func owner(_ raw: [String: JSONValue]) throws -> ResourceSlotOwner { try ResourceSlotOwner(raw: raw) }
 
-    private func data() throws -> ResourceSlotsData {
+    func fixtureData() throws -> ResourceSlotsData {
         let taskOwner = try owner(["kind": .string("task"), "task_id": .string("task-1")])
         let workflowOwner = try owner(["kind": .string("workflow_attempt"), "workflow_run_id": .string("run-1"), "activation_id": .string("attempt-2")])
         let cleanupOwner = try owner(["kind": .string("task"), "task_id": .string("task-cleanup")])
@@ -68,9 +68,18 @@ struct ResourceSlotsPresentationTests {
         return ResourceSlotsData(inventory: [inventory], phaseStatus: phaseStatus, owners: owners)
     }
 
+    private func emptyData() throws -> ResourceSlotsData {
+        let phaseStatus = try PhaseSlotsStatus(raw: [
+            "leases": .array([]), "truncated": .bool(false),
+            "configuration": .object(["epoch": .number(1), "names": .object([:])]),
+            "service": .object(["state": .string("alive")])
+        ])
+        return ResourceSlotsData(inventory: [], phaseStatus: phaseStatus, owners: [:])
+    }
+
     @Test func givenQualifiedAndUnknownOwners_whenAssembled_thenTitlesFallBackAndOnlyQualifiedDestinationsRemainActionable() throws {
         // given
-        let snapshot = ResourceSlotsSnapshot(phase: .ready, data: try data())
+        let snapshot = ResourceSlotsSnapshot(phase: .ready, data: try fixtureData())
 
         // when
         let result = ResourceSlotsAssembly.assemble(snapshot)
@@ -104,6 +113,35 @@ struct ResourceSlotsPresentationTests {
         let idle = try #require(groups.first { $0.id == "idle" })
         #expect(idle.capacitySummary == "0 of 2 in use")
         #expect(idle.emptyHolderMessage == "No current holders.")
+    }
+
+    @Test func givenStaleSnapshot_whenAssembled_thenOnlyStaleQualifierOffersRetryIncludingRetainedEmpty() throws {
+        // given
+        let retainedData = try fixtureData()
+        let stalePopulated = ResourceSlotsAssembly.assemble(ResourceSlotsSnapshot(phase: .ready, data: retainedData, isStale: true)).presentation
+        let emptySnapshot = ResourceSlotsSnapshot(phase: .ready, data: try emptyData())
+        let staleEmptySnapshot = ResourceSlotsSnapshot(phase: .ready, data: try emptyData(), isStale: true)
+        let staleEmpty = ResourceSlotsAssembly.assemble(staleEmptySnapshot).presentation
+        let ordinaryEmpty = ResourceSlotsAssembly.assemble(emptySnapshot).presentation
+        let unsupported = ResourceSlotsAssembly.assemble(ResourceSlotsSnapshot(phase: .unsupported)).presentation
+        let unavailable = ResourceSlotsAssembly.assemble(ResourceSlotsSnapshot(phase: .unavailable)).presentation
+        let retainedUnsupported = ResourceSlotsAssembly.assemble(
+            ResourceSlotsSnapshot(phase: .unsupported, data: retainedData, isStale: true)
+        )
+.presentation
+        let retainedNotEnabled = ResourceSlotsAssembly.assemble(
+            ResourceSlotsSnapshot(phase: .notEnabled, data: retainedData, isStale: true)
+        )
+.presentation
+
+        // then
+        #expect(stalePopulated.qualifiers.contains { $0.id == "stale" && $0.showsRetry })
+        #expect(staleEmpty.qualifiers.contains { $0.id == "stale" && $0.showsRetry })
+        #expect(ordinaryEmpty.qualifiers.allSatisfy { !$0.showsRetry })
+        #expect(unsupported.qualifiers.allSatisfy { !$0.showsRetry })
+        #expect(unavailable.qualifiers.allSatisfy { !$0.showsRetry })
+        #expect(retainedUnsupported.qualifiers.contains { $0.id == "stale" && $0.showsRetry })
+        #expect(retainedNotEnabled.qualifiers.contains { $0.id == "stale" && $0.showsRetry })
     }
 
     @Test func givenCurrentTaskSnapshot_whenMapped_thenAbsentEmptyUnavailableAndQueueBlockersStayDistinct() throws {

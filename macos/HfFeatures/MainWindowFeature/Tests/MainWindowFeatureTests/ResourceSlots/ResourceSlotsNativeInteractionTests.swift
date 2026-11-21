@@ -1,15 +1,108 @@
 import AppKit
 import HfCommon
 import HfCommonTestMock
+import HfRepository
 import HfTestUtilities
 import HfUI
 @testable import MainWindowFeature
+import MonitorCore
 import Observation
 import SwiftUI
 import Testing
 
 /// These checks require the opt-in native runner and an unlocked foreground window server.
 extension ActivityFeedApprovalHostedTests {
+    @Test func givenUnavailableState_whenNativeRetryIsPressed_thenReasonRemainsAndActionDelegatesOnce() async throws {
+        guard ProcessInfo.processInfo.environment["HARFLOW_RESOURCE_SLOTS_NATIVE_INTERACTION"] == "1" else { return }
+        // given
+        let reason = "Runtime permission denied for resource observations."
+        let refusal = ToolError.refused(code: "permission_denied", message: reason)
+        let assembledUnavailable = ResourceSlotsAssembly.assemble(ResourceSlotsSnapshot(phase: .unavailable, error: refusal))
+        let unavailable = assembledUnavailable.presentation
+        guard case let .unavailable(_, shownReason) = unavailable.state else {
+            Issue.record("Expected unavailable state")
+            return
+        }
+        #expect(shownReason == refusal.message)
+        #expect(shownReason.contains(reason))
+        let model = ResourceSlotsRetryHostedModel(presentation: unavailable)
+        let fixture = RedesignHost(ResourceSlotsRetryContainer(model: model),
+                                   size: ResourceSlotsInteractionViewport.size, appearance: .light)
+        fixture.window.contentMinSize = ResourceSlotsInteractionViewport.size
+        let previousPolicy = NSApp.activationPolicy()
+        defer { fixture.close(); NSApp.setActivationPolicy(previousPolicy) }
+        try await resourceInteractionForeground(fixture)
+
+        // when: invoke the exact native SwiftUI accessibility Press action.
+        await fixture.settle { fixture.element(shownReason) != nil && fixture.element("Retry") != nil }
+        #expect(fixture.element(shownReason) != nil)
+        let retry = try #require(fixture.element("Retry"))
+        #expect(fixture.string(retry, "accessibilityRole") == NSAccessibility.Role.button.rawValue)
+        #expect(resourceSlotsNativeEnabled(retry) == true)
+        try #require(fixture.press(retry))
+        #expect(model.retryCount == 1)
+        #expect(fixture.element("Retry") != nil)
+        guard case let .unavailable(_, remainingReason) = model.presentation.state else {
+            Issue.record("The fixture should preserve its unavailable state until a repository result arrives")
+            return
+        }
+        #expect(remainingReason == refusal.message)
+    }
+
+    @Test func givenStaleSnapshot_whenRetryFails_thenRetainedViewAndReadingIntentSurvive() async throws {
+        guard ProcessInfo.processInfo.environment["HARFLOW_RESOURCE_SLOTS_NATIVE_INTERACTION"] == "1" else { return }
+        // given: a real stale projection retains the complete last successful engine data.
+        let retainedData = try ResourceSlotsPresentationTests().fixtureData()
+        let initial = ResourceSlotsAssembly.assemble(
+            ResourceSlotsSnapshot(phase: .unsupported, data: retainedData,
+                                  error: .refused(code: "unavailable", message: "The latest resource read failed."), isStale: true)
+        )
+.presentation
+        let staleQualifierID = try #require(initial.qualifiers.first { $0.id == "stale" }?.id)
+        let model = ResourceSlotsRetryHostedModel(presentation: initial, retainedData: retainedData)
+        model.expandedResourceIDs = ["sim"]
+        let fixture = RedesignHost(ResourceSlotsRetryContainer(model: model),
+                                   size: ResourceSlotsInteractionViewport.size, appearance: .light)
+        fixture.window.contentMinSize = ResourceSlotsInteractionViewport.size
+        let previousPolicy = NSApp.activationPolicy()
+        defer { fixture.close(); NSApp.setActivationPolicy(previousPolicy) }
+        try await resourceInteractionForeground(fixture)
+        let scroll = try #require(resourceInteractionScroll(fixture))
+
+        // when: native accessibility Press activates Retry; the next read fails with retained data.
+        await fixture.settle { fixture.element("Retry") != nil }
+        let initialViewport = scroll.contentView.bounds
+        let retry = try #require(fixture.element("Retry"))
+        #expect(fixture.string(retry, "accessibilityRole") == NSAccessibility.Role.button.rawValue)
+        #expect(resourceSlotsNativeEnabled(retry) == true)
+        // Seed a pending owner-focus restoration immediately before activating the real button.
+        model.readingState.focusedRowID = "sim/task-hold"
+        model.readingState.authorizeFocusReturn()
+        model.readingState.beginAppearance()
+        #expect(model.readingState.focusReturnRequest != nil)
+        try #require(fixture.press(retry))
+        await fixture.settle { model.retryCount == 1 && model.presentation.qualifiers.contains { $0.id == "stale" } }
+
+        // then: failure preserves the stable warning, rows, expanded section, viewport and route.
+        #expect(model.retryCount == 1)
+        #expect(model.expandedResourceIDs == ["sim"])
+        #expect(model.readingState.focusReturnRequest == nil)
+        #expect(!model.readingState.focusRestorationPending)
+        #expect(model.readingState.restorationOutcome == .userCancelled)
+        #expect(scroll.contentView.bounds == initialViewport)
+        #expect(fixture.element("Retry") != nil)
+        #expect(model.presentation.qualifiers.first { $0.id == "stale" }?.id == staleQualifierID)
+        let ownerAction = try #require(fixture.element("Open task Build turn, task-1"))
+        try #require(fixture.press(ownerAction))
+        #expect(model.openedOwners == ["sim/task-hold"])
+        guard case let .ready(_, groups) = model.presentation.state else {
+            Issue.record("Failed reread should retain the qualified rows")
+            return
+        }
+        let sim = try #require(groups.first { $0.id == "sim" })
+        #expect(sim.holders.map(\.id) == ["sim/task-hold", "sim/workflow-hold", "sim/cleanup-row", "sim/unknown-owner"])
+    }
+
     @Test(arguments: [1, 4])
     func givenDeepResourceOwner_whenOpeningAndReturning_thenNativeOffsetAndKeyboardFocusAreRestored(_ groupCount: Int) async throws {
         guard ProcessInfo.processInfo.environment["HARFLOW_RESOURCE_SLOTS_NATIVE_INTERACTION"] == "1" else { return }
@@ -111,6 +204,53 @@ extension ActivityFeedApprovalHostedTests {
         try resourceInteractionRequireViewport(fixture, expectedClipSize: originalClipSize, expectedWindowSize: originalWindowSize)
         testBodyCompleted = true
     }
+}
+
+@MainActor @Observable
+private final class ResourceSlotsRetryHostedModel: ResourceSlotsViewModel {
+    var presentation: ResourceSlotsPresentation
+    var expandedResourceIDs: Set<String> = []
+    var expandedBlockerIDs: Set<String> = []
+    let readingState = ResourceSlotsReadingState()
+    var retryCount = 0
+    var openedOwners: [String] = []
+    private let retainedData: ResourceSlotsData?
+
+    init(presentation: ResourceSlotsPresentation, retainedData: ResourceSlotsData? = nil) {
+        self.presentation = presentation
+        self.retainedData = retainedData
+    }
+
+    func didAppear() {}
+    func didDisappear() {}
+    func didTapRefresh() {
+        retryCount += 1
+        guard let retainedData else { return }
+        presentation = ResourceSlotsAssembly.assemble(
+            ResourceSlotsSnapshot(phase: .notEnabled, data: retainedData,
+                                  error: .refused(code: "not_enabled", message: "The retry was refused."), isStale: true)
+        )
+.presentation
+    }
+
+    func didToggleResource(_: String) {}
+    func didToggleBlockers(_: String) {}
+    func didOpenOwner(_ rowID: String) { openedOwners.append(rowID) }
+
+}
+
+private struct ResourceSlotsRetryContainer: View {
+    let model: ResourceSlotsRetryHostedModel
+    var body: some View { ResourceSlotsView(model).frame(width: 1000, height: 620) }
+}
+
+@MainActor
+private func resourceSlotsNativeEnabled(_ object: NSObject) -> Bool? {
+    let selector = NSSelectorFromString("isAccessibilityEnabled")
+    guard object.responds(to: selector) else { return nil }
+    typealias Getter = @convention(c) (AnyObject, Selector) -> Bool
+    let getter = unsafeBitCast(object.method(for: selector), to: Getter.self)
+    return getter(object, selector)
 }
 
 @MainActor @Observable

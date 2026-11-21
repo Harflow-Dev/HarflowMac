@@ -32,7 +32,8 @@ struct ResourceSlotsView<VM: ResourceSlotsViewModel>: View {
                              expandedBlockerIDs: viewModel.expandedBlockerIDs,
                              onToggleResource: viewModel.didToggleResource,
                              onToggleBlockers: viewModel.didToggleBlockers,
-                             onOpenOwner: viewModel.didOpenOwner)
+                             onOpenOwner: viewModel.didOpenOwner,
+                             onRetry: viewModel.didTapRefresh)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Refresh resource slots", systemImage: "arrow.clockwise", action: viewModel.didTapRefresh)

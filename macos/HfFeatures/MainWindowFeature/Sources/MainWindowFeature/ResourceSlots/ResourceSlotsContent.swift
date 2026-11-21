@@ -13,6 +13,7 @@ struct ResourceSlotsContent: View {
     let onToggleResource: (String) -> Void
     let onToggleBlockers: (String) -> Void
     let onOpenOwner: (String) -> Void
+    let onRetry: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.hfReduceMotionOverride) private var motionOverride
@@ -120,12 +121,19 @@ struct ResourceSlotsContent: View {
     @ViewBuilder private var content: some View {
         LazyVStack(alignment: .leading, spacing: 14) {
             ForEach(presentation.qualifiers) { qualifier in
-                Text(qualifier.text)
-                    .font(.hf(.secondary))
-                    .foregroundStyle(qualifier.isWarning ? Color.warningFG : Color.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
+                HStack {
+                    Text(qualifier.text)
+                        .font(.hf(.secondary))
+                        .foregroundStyle(qualifier.isWarning ? Color.warningFG : Color.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if qualifier.showsRetry {
+                        Button("Retry", action: retry)
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+                .padding(12)
+                .background(Color.composerFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
             }
             switch presentation.state {
             case .loading:
@@ -161,17 +169,33 @@ struct ResourceSlotsContent: View {
                         .onDisappear { readingState.removeGroup(groupID: group.id) }
                 }
             case let .empty(title, message), let .notEnabled(title, message),
-                 let .unsupported(title, message), let .unavailable(title, message):
-                VStack(spacing: 6) {
-                    Text(title).font(.hf(.headline, weight: .semibold)).foregroundStyle(Color.primaryText)
-                    Text(message).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
-                }
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 100)
+                 let .unsupported(title, message):
+                stateMessage(title: title, message: message, showsRetry: false)
+            case let .unavailable(title, message):
+                stateMessage(title: title, message: message, showsRetry: true)
             }
         }
         .padding(.top, 4)
+    }
+
+    private func stateMessage(title: String, message: String, showsRetry: Bool) -> some View {
+        VStack(spacing: 6) {
+            Text(title).font(.hf(.headline, weight: .semibold)).foregroundStyle(Color.primaryText)
+            Text(message).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+            if showsRetry {
+                Button("Retry", action: retry)
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 100)
+    }
+
+    private func retry() {
+        readingState.cancelRestorationForUser()
+        onRetry()
     }
 }
 

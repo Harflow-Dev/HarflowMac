@@ -45,7 +45,7 @@ enum ResourceSlotsAssembly {
         }
         if snapshot.isStale {
             let text = "Showing the last successful observations. " + (snapshot.error?.message ?? "Refresh failed.")
-            qualifiers.append(.init(id: "stale", text: text, isWarning: true))
+            qualifiers.append(.init(id: "stale", text: text, isWarning: true, showsRetry: true))
         }
         return qualifiers
     }

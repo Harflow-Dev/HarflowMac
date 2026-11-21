@@ -22,7 +22,7 @@ private let syntheticReady = ResourceSlotsPresentation(
 private func resourcePreview(_ presentation: ResourceSlotsPresentation) -> some View {
     ResourceSlotsContent(presentation: presentation, readingState: ResourceSlotsReadingState(), expandedResourceIDs: ["synthetic-resource"],
                          expandedBlockerIDs: ["synthetic-row"], onToggleResource: { _ in },
-                         onToggleBlockers: { _ in }, onOpenOwner: { _ in })
+                         onToggleBlockers: { _ in }, onOpenOwner: { _ in }, onRetry: {})
         .frame(width: 850, height: 700)
 }
 
