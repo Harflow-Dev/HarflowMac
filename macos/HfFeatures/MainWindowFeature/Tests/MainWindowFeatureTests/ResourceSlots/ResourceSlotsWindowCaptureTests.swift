@@ -6,6 +6,96 @@ import SwiftUI
 import Testing
 
 extension ActivityFeedApprovalHostedTests {
+    @Test func givenOverCapacityCaptureDirectory_whenRenderingMinimumAndStandardWindows_thenMeterStaysInsideAccessibleResourceHeader() async throws {
+        guard let directory = HostedCaptureEvidence.directory("HARFLOW_RESOURCE_SLOTS_OVER_CAPACITY_CAPTURE_DIR") else { return }
+        let sizes = [CGSize(width: 1000, height: 620), CGSize(width: 1280, height: 800)]
+
+        for dark in [false, true] {
+            for size in sizes {
+                // given
+                let model = CaptureModel(state: "over-capacity")
+                let sidebar = SidebarViewModelMock(searchQuery: "", selection: .resourceSlots)
+                let navigation = NavigationSplitView {
+                    SidebarView(sidebar).navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
+                } detail: {
+                    ResourceSlotsView(model)
+                }
+                .preferredColorScheme(dark ? .dark : .light)
+                .environment(\.hfReduceMotionOverride, true)
+                let fixture = RedesignHost(navigation, size: size, appearance: dark ? .dark : .light)
+                defer { fixture.close() }
+                try await resourceSlotsForeground(fixture)
+                await fixture.settle { resourceSlotsCaptureHeaders(fixture, groupID: "sim").count == 1 }
+
+                // when
+                let header = try #require(resourceSlotsCaptureHeaders(fixture, groupID: "sim").first)
+                let label = fixture.string(header, "accessibilityLabel") ?? fixture.string(header, "accessibilityTitle")
+                await fixture.settle { fixture.hasStableRenderedFrame }
+                try resourceSlotsRequireNativeHeader(header, fixture: fixture, expanded: true)
+
+                // then
+                #expect(label == "sim, 3 of 2 in use · above capacity")
+                #expect(resourceSlotsCaptureHeaders(fixture, groupID: "sim").count == 1)
+                try #require(fixture.hasRenderedInk, "The over-capacity resource card must render visible pixels")
+
+                await HostedCaptureEvidence.prepare(fixture.window, dark: dark)
+                try await HostedCaptureEvidence.record(
+                    directory: directory,
+                    subject: .init(
+                        suite: "ResourceSlotsWindowCaptureTests", state: "over-capacity", dark: dark,
+                        size: NSSize(width: size.width, height: size.height),
+                        design: .init(
+                            route: "resources/over-capacity", file: "v2/scripts/states-capacity-gaps.js",
+                            commit: "3101abe348a0757db8989074c8e554dd19463f08"
+                        )
+                    ),
+                    window: fixture.window, host: fixture.host
+                )
+            }
+        }
+    }
+
+    @Test func givenOverCapacityCaptureDirectory_whenRenderingTwelveCellBoundAtMinimumSize_thenMeterRemainsInResourceHeader() async throws {
+        guard let directory = HostedCaptureEvidence.directory("HARFLOW_RESOURCE_SLOTS_OVER_CAPACITY_CAPTURE_DIR") else { return }
+        let size = CGSize(width: 1000, height: 620)
+        let model = TwelveCellOverCapacityCaptureModel()
+        let sidebar = SidebarViewModelMock(searchQuery: "", selection: .resourceSlots)
+        let navigation = NavigationSplitView {
+            SidebarView(sidebar).navigationSplitViewColumnWidth(min: 240, ideal: 272, max: 340)
+        } detail: {
+            ResourceSlotsView(model)
+        }
+        .preferredColorScheme(.light)
+        .environment(\.hfReduceMotionOverride, true)
+        let fixture = RedesignHost(navigation, size: size, appearance: .light)
+        defer { fixture.close() }
+        try await resourceSlotsForeground(fixture)
+        await fixture.settle { resourceSlotsCaptureHeaders(fixture, groupID: "sim").count == 1 }
+
+        let header = try #require(resourceSlotsCaptureHeaders(fixture, groupID: "sim").first)
+        let label = fixture.string(header, "accessibilityLabel") ?? fixture.string(header, "accessibilityTitle")
+        await fixture.settle { fixture.hasStableRenderedFrame }
+
+        #expect(label == "sim, 7 of 6 in use · above capacity")
+        #expect(resourceSlotsCaptureHeaders(fixture, groupID: "sim").count == 1)
+        try resourceSlotsRequireNativeHeader(header, fixture: fixture, expanded: true)
+        try #require(fixture.hasRenderedInk, "The twelve-cell meter must render visible pixels at minimum window size")
+
+        await HostedCaptureEvidence.prepare(fixture.window, dark: false)
+        try await HostedCaptureEvidence.record(
+            directory: directory,
+            subject: .init(
+                suite: "ResourceSlotsWindowCaptureTests", state: "over-capacity-twelve-cell-bound", dark: false,
+                size: NSSize(width: size.width, height: size.height),
+                design: .init(
+                    route: "resources/over-capacity", file: "v2/scripts/states-capacity-gaps.js",
+                    commit: "3101abe348a0757db8989074c8e554dd19463f08"
+                )
+            ),
+            window: fixture.window, host: fixture.host
+        )
+    }
+
     @Test func givenCaptureDirectory_whenCapturingResourceSlotStates_thenCaptureProductionWindows() async throws {
         guard let directory = try resourceSlotsCaptureDirectory() else { return }
         let sizes: [(name: String, size: CGSize)] = [
@@ -111,6 +201,46 @@ extension ActivityFeedApprovalHostedTests {
         try #require(!Data(contentsOf: url).isEmpty)
     }
 
+    @Observable @MainActor fileprivate final class TwelveCellOverCapacityCaptureModel: ResourceSlotsViewModel {
+        let presentation: ResourceSlotsPresentation
+        let expandedResourceIDs: Set<String> = ["sim"]
+        let expandedBlockerIDs: Set<String> = []
+        let readingState = ResourceSlotsReadingState()
+
+        init() {
+            let holders = (1 ... 7).map { index in
+                ResourceSlotsOwner(
+                    id: "sim/holder-\(index)", title: "Active holder \(index)", ownerID: "task-\(index)",
+                    status: index == 7 ? "Held · phase capacity overcommitted" : "Held", since: nil,
+                    detail: nil, position: nil, action: nil, blockers: nil
+                )
+            }
+            let waiters = (1 ... 5).map { index in
+                ResourceSlotsOwner(
+                    id: "sim/waiter-\(index)", title: "Queued holder \(index)", ownerID: "waiting-\(index)",
+                    status: "Queue position \(index)", since: nil,
+                    detail: "Waiting for a holder to release capacity", position: String(index), action: nil, blockers: nil
+                )
+            }
+            let group = ResourceSlotsGroup(
+                id: "sim", title: "sim", capacitySummary: "7 of 6 in use · above capacity",
+                holderHeading: "Current holders", holders: holders, emptyHolderMessage: nil,
+                waiterHeading: "Waiting", waiters: waiters,
+                meterCells: Array(repeating: .used, count: 6) + [.aboveCapacity] + Array(repeating: .waiting, count: 5)
+            )
+            self.presentation = ResourceSlotsPresentation(
+                state: .ready(summary: "Observed holdings and queued resource entries", groups: [group]), qualifiers: []
+            )
+        }
+
+        func didAppear() {}
+        func didDisappear() {}
+        func didTapRefresh() {}
+        func didToggleResource(_: String) {}
+        func didToggleBlockers(_: String) {}
+        func didOpenOwner(_: String) {}
+    }
+
     @Observable @MainActor fileprivate final class CaptureModel: ResourceSlotsViewModel {
         let presentation: ResourceSlotsPresentation
         let expandedResourceIDs: Set<String>
@@ -141,21 +271,28 @@ extension ActivityFeedApprovalHostedTests {
             }
             let group = ResourceSlotsGroup(
                 id: "sim", title: groupTitle,
-                capacitySummary: cleanupState ? "1 of 1 in use" : "2 of 3 in use",
+                capacitySummary: state == "over-capacity"
+                    ? "3 of 2 in use · above capacity"
+                    : cleanupState ? "1 of 1 in use" : "2 of 3 in use",
                 holderHeading: "Current holders",
                 holders: cleanupState
                     ? [Self.owner(
                         "sim/cleanup", title: cleanupTitle, status: cleanupTitle + " · capacity retained",
                         detail: "Cleanup policy unavailable; capacity remains occupied"
                     )]
+                    : state == "over-capacity" ? [
+                        Self.owner("sim/used-1", title: "First active holder", status: "Held"),
+                        Self.owner("sim/used-2", title: "Second active holder", status: "Held"),
+                        Self.owner("sim/used-3", title: "Third active holder", status: "Held", detail: "Phase capacity is overcommitted")
+                    ]
                     : holders,
                 emptyHolderMessage: state == "empty" ? "No reservations are using this resource." : nil,
                 waiterHeading: "Waiting",
-                waiters: state == "populated" ? [Self.owner(
+                waiters: state == "populated" || state == "over-capacity" ? [Self.owner(
                     "sim/waiter", title: "Queued task", status: "Queue position 1",
                     detail: "Waiting for a holder to release capacity", position: "1"
-                )]
-                    : []
+                )] : [],
+                meterCells: state == "over-capacity" ? [.used, .used, .aboveCapacity, .waiting] : nil
             )
             let qualifiers: [ResourceSlotsQualifier] = switch state {
             case "error": [.init(id: "stale", text: "Showing the last successful observations. The latest read failed.", isWarning: true)]

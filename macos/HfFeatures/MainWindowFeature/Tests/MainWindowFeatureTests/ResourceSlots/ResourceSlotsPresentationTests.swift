@@ -115,6 +115,187 @@ struct ResourceSlotsPresentationTests {
         #expect(idle.emptyHolderMessage == "No current holders.")
     }
 
+    @Test func givenOverCapacityWithBorrowedCleanupAndWaiter_whenAssembled_thenMeterCountsOnlyConsumingHoldersAndQueue() throws {
+        // given
+        let snapshot = try overCapacitySnapshot(
+            inventoryCapacity: 2,
+            configuredCapacity: 2,
+            consumingHolders: 3,
+            borrowedHolders: 1,
+            queueCount: 1,
+            cleanupHolderID: "holder-2"
+        )
+
+        // when
+        let result = ResourceSlotsAssembly.assemble(snapshot)
+
+        // then
+        guard case .ready(_, let groups) = result.presentation.state,
+              let group = groups.first(where: { $0.id == "sim" }) else {
+            Issue.record("Expected a resource group for the qualified inventory")
+            return
+        }
+        #expect(group.capacitySummary == "3 of 2 in use · above capacity · 1 borrowed")
+        #expect(group.meterCells == [.used, .used, .aboveCapacity, .waiting])
+        #expect(group.holders.count == 4)
+        #expect(group.holders.first(where: { $0.id == "sim/holder-2" })?.detail?.contains("Phase capacity is overcommitted") == true)
+        #expect(group.waiters.count == 1)
+    }
+
+    @Test func givenInventoryOnlyCapacity_whenOverCapacity_thenMeterStillUsesQualifiedInventory() throws {
+        // given
+        let snapshot = try overCapacitySnapshot(
+            inventoryCapacity: 2,
+            configuredCapacity: nil,
+            consumingHolders: 3,
+            borrowedHolders: 0,
+            queueCount: 0
+        )
+
+        // when
+        let result = ResourceSlotsAssembly.assemble(snapshot)
+
+        // then
+        guard case .ready(_, let groups) = result.presentation.state else {
+            Issue.record("Expected ready resource observations")
+            return
+        }
+        #expect(groups.first?.meterCells == [.used, .used, .aboveCapacity])
+    }
+
+    @Test func givenCapacityConflictOrOrdinaryUsage_whenAssembled_thenMeterFallsBackToExistingText() throws {
+        // given
+        let conflict = try overCapacitySnapshot(
+            inventoryCapacity: 2,
+            configuredCapacity: 3,
+            consumingHolders: 3,
+            borrowedHolders: 0,
+            queueCount: 0
+        )
+        let ordinary = try overCapacitySnapshot(
+            inventoryCapacity: 3,
+            configuredCapacity: 3,
+            consumingHolders: 2,
+            borrowedHolders: 0,
+            queueCount: 1
+        )
+        let configuredOnly = try overCapacitySnapshot(
+            inventoryCapacity: 2,
+            configuredCapacity: 2,
+            consumingHolders: 0,
+            borrowedHolders: 0,
+            queueCount: 0,
+            includeInventory: false
+        )
+
+        // when
+        let conflictResult = ResourceSlotsAssembly.assemble(conflict)
+        let ordinaryResult = ResourceSlotsAssembly.assemble(ordinary)
+        let configuredOnlyResult = ResourceSlotsAssembly.assemble(configuredOnly)
+
+        // then
+        guard case .ready(_, let conflictGroups) = conflictResult.presentation.state,
+              case .ready(_, let ordinaryGroups) = ordinaryResult.presentation.state,
+              case .ready(_, let configuredOnlyGroups) = configuredOnlyResult.presentation.state else {
+            Issue.record("Expected ready resource observations")
+            return
+        }
+        #expect(conflictGroups.first?.capacitySummary.contains("capacity differs between reads") == true)
+        #expect(conflictGroups.first?.meterCells == nil)
+        #expect(ordinaryGroups.first?.meterCells == nil)
+        #expect(configuredOnlyGroups.first?.meterCells == nil)
+        #expect(configuredOnlyGroups.first?.capacitySummary == "0 of 2 in use")
+    }
+
+    @Test func givenCellCountAtAndBeyondBound_whenAssembled_thenOnlyTwelveCellMeterIsRetained() throws {
+        // given
+        let atBound = try overCapacitySnapshot(
+            inventoryCapacity: 6,
+            configuredCapacity: 6,
+            consumingHolders: 7,
+            borrowedHolders: 0,
+            queueCount: 5
+        )
+        let beyondBound = try overCapacitySnapshot(
+            inventoryCapacity: 6,
+            configuredCapacity: 6,
+            consumingHolders: 7,
+            borrowedHolders: 0,
+            queueCount: 6
+        )
+
+        // when
+        let atBoundResult = ResourceSlotsAssembly.assemble(atBound)
+        let beyondBoundResult = ResourceSlotsAssembly.assemble(beyondBound)
+
+        // then
+        guard case .ready(_, let atBoundGroups) = atBoundResult.presentation.state,
+              case .ready(_, let beyondBoundGroups) = beyondBoundResult.presentation.state else {
+            Issue.record("Expected ready resource observations")
+            return
+        }
+        #expect(atBoundGroups.first?.meterCells?.count == 12)
+        #expect(beyondBoundGroups.first?.meterCells == nil)
+        #expect(beyondBoundGroups.first?.capacitySummary == "7 of 6 in use · above capacity")
+    }
+
+    private func overCapacitySnapshot(
+        inventoryCapacity: Int,
+        configuredCapacity: Int?,
+        consumingHolders: Int,
+        borrowedHolders: Int,
+        queueCount: Int,
+        cleanupHolderID: String? = nil,
+        includeInventory: Bool = true
+    ) throws -> ResourceSlotsSnapshot {
+        let holders = (0 ..< consumingHolders + borrowedHolders).map { index -> [String: JSONValue] in
+            let id = "holder-\(index)"
+            var row: [String: JSONValue] = [
+                "reservation_id": .string(id), "names": .array([.string("sim")]), "state": .string("held"),
+                "owner": .object(["kind": .string("task"), "task_id": .string("task-\(index)")]),
+                "generation": .number(1), "enqueued_at": .string("2026-10-31T00:00:00+00:00"),
+                "granted_at": .string("2026-10-31T00:00:01+00:00")
+            ]
+            if index >= consumingHolders { row["borrows_from"] = .string("holder-0") }
+            if id == cleanupHolderID {
+                row["purpose"] = .string("phase")
+                row["phase_state"] = .string("cleanup_uncertain")
+                row["lease_id"] = .string(id)
+            }
+            return row
+        }
+        let waiters = (0 ..< queueCount).map { index in
+            JSONValue.object([
+                "reservation_id": .string("waiter-\(index)"), "names": .array([.string("sim")]),
+                "owner": .object(["kind": .string("task"), "task_id": .string("waiting-\(index)")]),
+                "generation": .number(1), "enqueued_at": .string("2026-10-31T00:00:02+00:00")
+            ])
+        }
+        let inventory = try ResourceInventoryEntry(raw: [
+            "name": .string("sim"), "capacity": .number(Double(inventoryCapacity)),
+            "holders": .array(holders.map(JSONValue.object)), "queue": .array(waiters)
+        ])
+        let leases: [JSONValue] = cleanupHolderID.map { id in
+            [.object([
+                "lease_id": .string(id), "task_id": .string("task-2"), "name": .string("sim"),
+                "state": .string("cleanup_uncertain"), "capacity": .number(Double(inventoryCapacity)), "position": .null,
+                "overcommitted": .bool(true), "enqueued_at": .string("2026-10-31T00:00:00+00:00"),
+                "granted_at": .string("2026-10-31T00:00:01+00:00"), "blocked_by": .array([]), "blockers": .array([])
+            ])]
+        } ?? []
+        var names: [String: JSONValue] = [:]
+        if let configuredCapacity {
+            names["sim"] = .object(["capacity": .number(Double(configuredCapacity))])
+        }
+        let phaseStatus = try PhaseSlotsStatus(raw: [
+            "leases": .array(leases), "truncated": .bool(false),
+            "configuration": .object(["epoch": .number(1), "names": .object(names)]),
+            "service": .object(["state": .string("alive")])
+        ])
+        let data = ResourceSlotsData(inventory: includeInventory ? [inventory] : [], phaseStatus: phaseStatus, owners: [:])
+        return ResourceSlotsSnapshot(phase: .ready, data: data)
+    }
+
     @Test func givenStaleSnapshot_whenAssembled_thenOnlyStaleQualifierOffersRetryIncludingRetainedEmpty() throws {
         // given
         let retainedData = try fixtureData()

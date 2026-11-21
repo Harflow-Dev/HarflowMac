@@ -108,7 +108,17 @@ enum ResourceSlotsAssembly {
         return .init(id: resource.name, title: resource.name, capacitySummary: capacitySummary(resource),
                      holderHeading: resource.holders.count == 1 ? "Current holder" : "Holders", holders: holders,
                      emptyHolderMessage: resource.holders.isEmpty ? "No current holders." : nil,
-                     waiterHeading: resource.queue.isEmpty ? nil : "Waiting · in order", waiters: waiters)
+                     waiterHeading: resource.queue.isEmpty ? nil : "Waiting · in order", waiters: waiters,
+                     meterCells: meterCells(resource))
+    }
+
+    private static func meterCells(_ resource: ResourceSlotsResource) -> [ResourceSlotsMeterCell]? {
+        let used = resource.observedConsumingHolders
+        guard let capacity = resource.inventoryCapacity, capacity > 0, used > capacity,
+              !resource.capacityObservationsDisagree, used <= 12, resource.queue.count <= 12 - used else { return nil }
+        return Array(repeating: .used, count: capacity)
+            + Array(repeating: .aboveCapacity, count: used - capacity)
+            + Array(repeating: .waiting, count: resource.queue.count)
     }
 
     private static func row(

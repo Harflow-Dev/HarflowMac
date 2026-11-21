@@ -231,6 +231,11 @@ private struct ResourceSlotsCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(group.title).font(.hf(.headline, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                         Text(group.capacitySummary).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+                        if let cells = group.meterCells {
+                            meter(cells)
+                                .padding(.top, 3)
+                                .padding(.bottom, 4)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -244,6 +249,29 @@ private struct ResourceSlotsCard: View {
         }
         .background(Color.cardFill, in: RoundedRectangle(cornerRadius: HfRadius.card))
         .overlay(RoundedRectangle(cornerRadius: HfRadius.card).stroke(Color.cardBorder, lineWidth: 1))
+    }
+
+    private func meter(_ cells: [ResourceSlotsMeterCell]) -> some View {
+        HStack(spacing: 3) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(cell == .waiting ? Color.clear : Color.warningFG)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 8)
+                    .overlay {
+                        if cell == .aboveCapacity {
+                            // The centered 1.5-point stroke leaves a 1-point gap.
+                            RoundedRectangle(cornerRadius: 2)
+                                .inset(by: -1.75)
+                                .stroke(Color.warningFG, lineWidth: 1.5)
+                        } else if cell == .waiting {
+                            RoundedRectangle(cornerRadius: 2)
+                                .strokeBorder(Color.warningFG, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                        }
+                    }
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     private func sectionHeading(_ title: String) -> some View {

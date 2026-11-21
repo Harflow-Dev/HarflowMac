@@ -31,6 +31,13 @@ struct ResourceSlotsGroup: Equatable, Sendable, Identifiable {
     let emptyHolderMessage: String?
     let waiterHeading: String?
     let waiters: [ResourceSlotsOwner]
+    var meterCells: [ResourceSlotsMeterCell]?
+}
+
+enum ResourceSlotsMeterCell: Equatable, Sendable {
+    case used
+    case aboveCapacity
+    case waiting
 }
 
 struct ResourceSlotsOwner: Equatable, Sendable, Identifiable {
