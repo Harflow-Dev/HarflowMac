@@ -104,8 +104,10 @@ struct SummaryPaneModel {
     var editedFileRows: [SummaryFileRow] { editedFiles.map(SummaryFileRow.init) }
 
     /// The scope of every reported Summary metric, including tasks that report no agent-turn count.
+    static let provenanceText = "Reported by current agent run"
+
     var metricScopeText: String? {
-        !statTiles.isEmpty || hero?.turnsText != nil ? "Reported by current agent run" : nil
+        !statTiles.isEmpty || hero?.turnsText != nil ? Self.provenanceText : nil
     }
 
     /// How many file rows show before the rest collapses behind the "Show all N" button (item 13).
@@ -139,6 +141,18 @@ struct SummaryPaneModel {
             let output = outputTokens.map(Self.tokenCount) ?? "–"
             tiles.append(SummaryStatTile(title: "Tokens (in / out)", value: "\(input) / \(output)"))
         }
+        if let costUSD { tiles.append(SummaryStatTile(title: "Cost", value: String(format: "$%.4f", costUSD))) }
+        return tiles
+    }
+
+    /// Measurements shown in the standalone Events disclosure, each only when recorded.
+    var inlineStatTiles: [SummaryStatTile] {
+        var tiles: [SummaryStatTile] = []
+        if let duration = hero?.settledDuration {
+            tiles.append(SummaryStatTile(title: "Duration", value: Format.clock(duration)))
+        }
+        if let inputTokens { tiles.append(SummaryStatTile(title: "Input tokens", value: Self.tokenCount(inputTokens))) }
+        if let outputTokens { tiles.append(SummaryStatTile(title: "Output tokens", value: Self.tokenCount(outputTokens))) }
         if let costUSD { tiles.append(SummaryStatTile(title: "Cost", value: String(format: "$%.4f", costUSD))) }
         return tiles
     }
@@ -262,13 +276,15 @@ struct SummaryPaneView: View {
     /// transcript's Summary entry shows the result; the model keeps its hero, so the Duration tile and the
     /// metric scope text stay.
     let showsHeroAndResult: Bool
+    let inlineEvents: Bool
     var artifactMembers: [ArtifactMemberModel] = []
     var loadArtifacts: (String) -> Void = { _ in }
 
-    init(model: SummaryPaneModel, showsHeroAndResult: Bool = true, artifactMembers: [ArtifactMemberModel] = [],
+    init(model: SummaryPaneModel, showsHeroAndResult: Bool = true, inlineEvents: Bool = false, artifactMembers: [ArtifactMemberModel] = [],
          loadArtifacts: @escaping (String) -> Void = { _ in }) {
         self.model = model
         self.showsHeroAndResult = showsHeroAndResult
+        self.inlineEvents = inlineEvents
         self.artifactMembers = artifactMembers
         self.loadArtifacts = loadArtifacts
     }
@@ -276,7 +292,34 @@ struct SummaryPaneView: View {
     @State private var refusalsExpanded = false
     @State private var showAllFiles = false
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if inlineEvents {
+            inlineContent
+        } else {
+            legacyContent
+        }
+    }
+
+    private var inlineContent: some View {
+        let answer = showsHeroAndResult ? model.finalAnswer.flatMap { $0.isEmpty ? nil : $0 } : nil
+        let tiles = model.inlineStatTiles
+        return VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing12) {
+            if let answer {
+                section("Result") { ReadingMarkdownView(text: answer) }
+            }
+            if answer != nil || !tiles.isEmpty {
+                Text(SummaryPaneModel.provenanceText).font(.hf(.caption)).foregroundStyle(Color.tertiaryText)
+            } else {
+                Text(showsHeroAndResult ? "Reported result and usage unavailable." : "Reported usage unavailable.")
+                    .font(.hf(.secondary))
+.foregroundStyle(Color.secondaryText)
+            }
+            if !tiles.isEmpty { SummaryStatTilesView(tiles: tiles, compact: true) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var legacyContent: some View {
         ScrollView {
             // Redesign §6.2: hero → stat tiles → Result → Files edited → Refusals & warnings.
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing28) {

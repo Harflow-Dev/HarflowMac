@@ -325,6 +325,33 @@ import Testing
         #expect(tiles.map(\.value) == [Format.clock(1260), "3", "48210 / 3150", "$0.4213"])
     }
 
+    @Test func givenInlineEventsMetrics_whenBuilt_thenOnlyQualifiedMeasurementsAreShownInDesignOrder() {
+        // Inline Events keeps input and output distinct and omits agent-turn count. Duration still requires a settled exit.
+        let fields: [String: JSONValue] = [
+            "status": .string("completed"), "exit_code": .number(0), "duration_seconds": .number(1260),
+            "num_turns": .number(3),
+            "usage": .object(["input_tokens": .number(48210), "output_tokens": .number(3150)]),
+            "total_cost_usd": .number(0.4213)
+        ]
+
+        let tiles = build(fields).inlineStatTiles
+
+        #expect(tiles.map(\.title) == ["Duration", "Input tokens", "Output tokens", "Cost"])
+        #expect(tiles.map(\.value) == [Format.clock(1260), "48210", "3150", "$0.4213"])
+    }
+
+    @Test func givenOnlyAgentTurns_whenBuilt_thenInlineEventsHasNoReportedMeasurement() {
+        let model = build(["num_turns": .number(3)])
+
+        #expect(model.inlineStatTiles.isEmpty)
+    }
+
+    @Test func givenDurationWithoutSettledExit_whenBuilt_thenInlineEventsOmitsDuration() {
+        let model = build(["status": .string("completed"), "duration_seconds": .number(1260)])
+
+        #expect(!model.inlineStatTiles.contains { $0.title == "Duration" })
+    }
+
     // MARK: - Edited file rows (D8, item 13)
 
     @Test func givenANestedPath_whenMappedToARow_thenItShowsOnlyTheLastParentFolderButKeepsTheFullPath() {

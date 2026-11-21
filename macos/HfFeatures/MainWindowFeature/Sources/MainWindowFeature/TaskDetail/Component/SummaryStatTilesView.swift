@@ -6,12 +6,23 @@ import SwiftUI
 /// Current agent run metrics: four bounded tiles fit the default reading measure and stack in narrow panes.
 struct SummaryStatTilesView: View {
     let tiles: [SummaryStatTile]
+    var compact = false
 
     /// §6.2's responsive tile row: fixed-width, leading-aligned tiles that never stretch to the
     /// pane's full width, and — when the column is too narrow for the whole row — the tiles wrap
     /// into a vertical list instead of clipping. Values use `.headline` semibold with tabular
     /// digits.
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if compact {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 6)], alignment: .leading, spacing: 6) {
+                ForEach(tiles) { tile in statTile(tile) }
+            }
+        } else {
+            legacyTiles
+        }
+    }
+
+    private var legacyTiles: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: HfRadius.Metrics.summaryTileSpacing) {
                 ForEach(tiles) { tile in
@@ -35,8 +46,9 @@ struct SummaryStatTilesView: View {
 .monospacedDigit()
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(HfRadius.Metrics.spacing12)
-        .frame(width: HfRadius.Metrics.summaryTileWidth, alignment: .leading)
+        .padding(compact ? HfRadius.Metrics.spacing8 : HfRadius.Metrics.spacing12)
+        .frame(maxWidth: compact ? .infinity : nil, alignment: .leading)
+        .frame(width: compact ? nil : HfRadius.Metrics.summaryTileWidth, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: HfRadius.card).fill(Color.cardFill))
         .overlay(RoundedRectangle(cornerRadius: HfRadius.card).stroke(Color.cardBorder, lineWidth: HfRadius.Metrics.hairlineStroke))
         .accessibilityElement(children: .combine)
