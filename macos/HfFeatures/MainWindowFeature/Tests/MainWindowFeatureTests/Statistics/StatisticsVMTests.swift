@@ -28,8 +28,10 @@ private final class StatisticsRefreshGate: @unchecked Sendable {
     private let lock = NSLock()
     private var started = false
     private var released = false
+    private var returned = false
     private var startWaiter: CheckedContinuation<Void, Never>?
     private var releaseWaiter: CheckedContinuation<Void, Never>?
+    private var returnWaiter: CheckedContinuation<Void, Never>?
 
     func markStarted() {
         let waiter = lock.withLock { () -> CheckedContinuation<Void, Never>? in
@@ -70,6 +72,26 @@ private final class StatisticsRefreshGate: @unchecked Sendable {
         }
         waiter?.resume()
     }
+
+    func markReturned() {
+        let waiter = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            returned = true
+            defer { returnWaiter = nil }
+            return returnWaiter
+        }
+        waiter?.resume()
+    }
+
+    func waitUntilReturned() async {
+        await withCheckedContinuation { continuation in
+            let alreadyReturned = lock.withLock {
+                if returned { return true }
+                returnWaiter = continuation
+                return false
+            }
+            if alreadyReturned { continuation.resume() }
+        }
+    }
 }
 
 private final class SequencedStatisticsRepository: StatisticsRepository, @unchecked Sendable {
@@ -92,7 +114,11 @@ private final class SequencedStatisticsRepository: StatisticsRepository, @unchec
                 results.isEmpty ? .failure(.unreadable(tool: "ctl", exitCode: 1, stderr: "exhausted")) : results.removeFirst()
             )
         }
-        if call == 2, let refreshGate { refreshGate.markStarted(); await refreshGate.waitForRelease() }
+        if call == 2, let refreshGate {
+            refreshGate.markStarted()
+            await refreshGate.waitForRelease()
+            refreshGate.markReturned()
+        }
         return result
     }
 }
@@ -100,6 +126,22 @@ private final class SequencedStatisticsRepository: StatisticsRepository, @unchec
 @MainActor
 private struct FixedStatisticsUseCase: StatisticsUseCase {
     let repository: any StatisticsRepository
+}
+
+private func statisticsVMPage(id: String, seconds: Double) -> StatisticsPage {
+    StatisticsPage(raw: [
+        "projection_version": .number(1), "state": .string("ready"), "snapshot_id": .string(id),
+        "generation": .string(id), "observed_at": .string("now"), "items": .array([.object([
+            "id": .string(id), "kind": .string("execution"), "status": .string("completed"),
+            "started_at": .number(1_800_000_000), "finished_at": .number(1_800_000_000 + seconds),
+            "cohort_started_at": .number(1_800_000_000), "execution_seconds": .number(seconds),
+            "duration_additive": .bool(true), "usage_additive": .bool(false), "repo_path": .string("/repo")
+        ])]),
+        "has_more": .bool(false), "history_complete": .bool(true), "ownership_complete": .bool(true),
+        "retained_history_only": .bool(true),
+        "accounting_coverage": .object(["eligible_executions": .number(1), "available_executions": .number(0)]),
+        "retention": .object(["state": .string("days"), "days": .number(90)])
+    ])!
 }
 
 @MainActor
@@ -121,6 +163,79 @@ private struct FixedStatisticsUseCase: StatisticsUseCase {
         vm.didDisappear()
         vm.didDisappear()
         #expect(repository.calls == 2)
+    }
+
+    @Test func givenRangeReadIsPending_whenSelectionChangesAgain_thenLateOldGenerationCannotReplaceCurrentRange() async {
+        // given
+        let gate = StatisticsRefreshGate()
+        let repository = SequencedStatisticsRepository(
+            [.success(statisticsVMPage(id: "initial", seconds: 180)), .success(statisticsVMPage(id: "stale-seven-day", seconds: 60)),
+             .success(statisticsVMPage(id: "current-thirty-day", seconds: 120))],
+            refreshGate: gate
+        )
+        let vm = StatisticsVM(
+            useCase: FixedStatisticsUseCase(repository: repository),
+            now: { Date(timeIntervalSince1970: 1_800_000_000) }
+        )
+
+        // when
+        vm.didAppear()
+        await waitUntil(timeout: 5) { vm.presentation.state == .ready }
+        #expect(vm.presentation.range == .thirty)
+        vm.selectRange(.seven)
+        await gate.waitUntilStarted()
+        vm.selectRange(.thirty)
+        await waitUntil(timeout: 5) {
+            repository.calls == 3 && vm.presentation.state == .ready && vm.presentation.chart.total == "2.0 min"
+        }
+        gate.release()
+        await gate.waitUntilReturned()
+        await Task.yield()
+
+        // then
+        #expect(vm.presentation.range == .thirty)
+        #expect(vm.presentation.chart.total == "2.0 min")
+        #expect(vm.presentation.chart.bars.count == 30)
+        vm.didDisappear()
+    }
+
+    @Test func givenThirtyDaySnapshotAndFailedRefresh_whenSelectingSevenDays_thenLoadingHidesOldDataAndResultUsesNewRange() async {
+        // given
+        let gate = StatisticsRefreshGate()
+        let repository = SequencedStatisticsRepository(
+            [.success(statisticsVMPage(id: "thirty-day", seconds: 60)),
+             .failure(.unreadable(tool: "ctl", exitCode: 1, stderr: "refresh failed")),
+             .success(statisticsVMPage(id: "seven-day", seconds: 30))],
+            refreshGate: gate
+        )
+        let vm = StatisticsVM(
+            useCase: FixedStatisticsUseCase(repository: repository),
+            now: { Date(timeIntervalSince1970: 1_800_000_000) }
+        )
+
+        // when
+        vm.didAppear()
+        await waitUntil(timeout: 5) { vm.presentation.state == .ready && vm.presentation.chart.total == "1.0 min" }
+        vm.retry()
+        await gate.waitUntilStarted()
+        gate.release()
+        await waitUntil(timeout: 5) { vm.presentation.refreshFailure?.contains("refresh failed") == true }
+        #expect(vm.presentation.state == .ready)
+        #expect(vm.presentation.refreshFailure?.contains("refresh failed") == true)
+
+        vm.selectRange(.seven)
+
+        // then — loading replaces the previous ready surface and its refresh notice immediately.
+        #expect(vm.presentation.state == .loading)
+        #expect(vm.presentation.range == .seven)
+        await waitUntil(timeout: 5) {
+            repository.calls == 3 && vm.presentation.state == .ready && vm.presentation.range == .seven
+                && vm.presentation.chart.total == "30 s"
+        }
+        #expect(vm.presentation.chart.total == "30 s")
+        #expect(vm.presentation.chart.bars.count == 7)
+        #expect(vm.presentation.refreshFailure == nil)
+        vm.didDisappear()
     }
 
     @Test func givenUnavailableRepository_whenMounted_thenScreenShowsUnsupportedInsteadOfEmpty() async {

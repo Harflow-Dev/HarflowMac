@@ -90,7 +90,7 @@ import Testing
             var value = StatisticsPresentation()
             value.state = .ready
             var bars: [StatisticsBar] = []
-            for index in 0 ..< 90 {
+            for index in 0 ..< 30 {
                 let label = index.isMultiple(of: 7) ? "Oct \(index + 1)" : ""
                 let workflowFraction = Double(index % 8 + 1) / 12
                 let taskFraction = Double(index % 3) / 20
@@ -102,7 +102,7 @@ import Testing
             value.chart = StatisticsChart(
                 title: "Total time", total: "85 h 32 min", caption: "Workflow wall time + standalone execution time",
                 workflowTotal: "74 h 12 min", taskTotal: "11 h 20 min", topAxis: "10 h", middleAxis: "5 h",
-                bottomAxis: "0", bars: bars
+                bottomAxis: "0", bars: bars, gap: 4
             )
             let run = StatisticsChildRow(
                 id: "run", title: "Oct 25, 10:00", subtitle: "Done · 5 nodes", value: "42 min",
@@ -130,5 +130,62 @@ import Testing
         func showNodes(for id: String) {}
         func showOverview() {}
         func retry() {}
+    }
+}
+
+extension ActivityFeedApprovalHostedTests {
+    @Test func givenStatisticsOverview_whenHostedAtSupportedSizesAndStates_thenHeaderKeepsBothRangesWithoutOldFilters() async throws {
+        let states: [(name: String, state: StatisticsScreenState)] = [
+            ("ready", .ready), ("unsupported", .unsupported("statistics-page unavailable"))
+        ]
+        let sizes = [CGSize(width: 1000, height: 620), CGSize(width: 1280, height: 800)]
+        let captureDirectory = HostedCaptureEvidence.directory("HARFLOW_STATISTICS_CAPTURE_DIR")
+
+        for size in sizes {
+            for (stateName, state) in states {
+                let model = StatisticsPreparedSurfaceCaptureTests.CaptureModel()
+                model.presentation.state = state
+                let fixture = RedesignHost(StatisticsView(model), size: size, appearance: .light)
+                defer { fixture.close() }
+
+                await fixture.settle {
+                    fixture.element("Statistics") != nil
+                        && fixture.element("7 days") != nil
+                        && fixture.element("30 days") != nil
+                }
+
+                let texts = fixture.descendants.flatMap { fixture.elements(in: $0) }.flatMap { element in
+                    ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].compactMap {
+                        fixture.string(element, $0)
+                    }
+                }
+                #expect(fixture.element("Statistics") != nil)
+                #expect(fixture.element("7 days") != nil)
+                #expect(fixture.element("30 days") != nil)
+                #expect(!texts.contains { $0.localizedCaseInsensitiveContains("90 days") })
+                #expect(!texts.contains { value in
+                    ["repository:", "harness:", "requested model:"].contains {
+                        value.localizedCaseInsensitiveContains($0)
+                    }
+                })
+
+                if stateName == "ready", size.width == 1280, let captureDirectory {
+                    await HostedCaptureEvidence.prepare(fixture.window, dark: false)
+                    await fixture.settle { fixture.hasStableRenderedFrame }
+                    try await HostedCaptureEvidence.record(
+                        directory: captureDirectory,
+                        subject: .init(
+                            suite: "StatisticsPreparedSurfaceCaptureTests", state: "overview-header",
+                            dark: false, size: NSSize(width: size.width, height: size.height),
+                            design: .init(
+                                route: "statistics/overview", file: "v2/scripts/screens-statistics.js",
+                                commit: "be78fa43eac717dc8054f644825ac1b256cd9cad"
+                            )
+                        ),
+                        window: fixture.window, host: fixture.host
+                    )
+                }
+            }
+        }
     }
 }

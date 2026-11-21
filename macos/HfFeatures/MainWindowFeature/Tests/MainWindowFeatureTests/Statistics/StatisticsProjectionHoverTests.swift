@@ -253,7 +253,7 @@ struct StatisticsProjectionHoverTests: StatisticsFixtures {
         for variant in variants { #expect(variant != base) }
     }
 
-    @Test(arguments: [StatisticsRange.seven, .thirty, .ninety])
+    @Test(arguments: [StatisticsRange.seven, .thirty])
     func givenRange_whenChartBuilt_thenEveryBarHasDistinctOrderedHoverDate(range: StatisticsRange) {
         // given
         let selection = StatisticsSelection(range: range)

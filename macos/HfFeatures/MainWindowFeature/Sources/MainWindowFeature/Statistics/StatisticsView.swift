@@ -44,11 +44,16 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("Statistics").font(.hf(.title)).foregroundStyle(Color.primaryText)
-            Text("Last \(viewModel.presentation.range.rawValue) days · Finished work")
-                .font(.hf(.caption))
-                .foregroundStyle(Color.secondaryText)
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Text("Statistics").font(.hf(.title)).foregroundStyle(Color.primaryText)
+                Spacer(minLength: 12)
+                rangePicker.frame(width: 150)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Statistics").font(.hf(.title)).foregroundStyle(Color.primaryText)
+                rangePicker.frame(width: 150)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -61,7 +66,13 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         case let .empty(message):
             preparedContent(emptyMessage: message)
         case let .unsupported(message):
-            Text(message).foregroundStyle(Color.secondaryText).frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 6) {
+                Text("Statistics are unavailable in this runtime")
+                Text("The installed runtime does not provide the statistics history. Update the Harflow runtime.")
+            }
+            .foregroundStyle(Color.secondaryText)
+            .help(message)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .error(message):
             VStack(spacing: 12) {
                 Text(message).foregroundStyle(Color.secondaryText)
@@ -92,7 +103,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
                 }.statisticsCard()
             }
             if let emptyMessage {
-                Text(emptyMessage + " Choose another range or adjust the filters to look for retained finished work.")
+                Text(emptyMessage + " Choose another range to look for retained finished work.")
                     .foregroundStyle(Color.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else if let nodes = viewModel.presentation.nodes {
@@ -110,23 +121,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
     }
 
     private var controls: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                rangePicker.frame(width: 215)
-                filterControls
-                Spacer(minLength: 8)
-                measurePicker.frame(width: 150)
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { rangePicker.frame(width: 215); measurePicker.frame(width: 150) }
-                    VStack(alignment: .leading, spacing: 6) { rangePicker; measurePicker }
-                }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 8) {
-                    filterControls
-                }
-            }
-        }
+        measurePicker.frame(width: 150)
     }
 
     private var rangePicker: some View {
@@ -145,35 +140,6 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         .pickerStyle(.segmented)
         .labelsHidden()
         .accessibilityLabel("Measure")
-    }
-
-    @ViewBuilder private var filterControls: some View {
-        filter("Repository", selected: viewModel.presentation.repository, selectedLabel: viewModel.presentation.repositoryLabel,
-               options: viewModel.presentation.repositoryOptions, action: viewModel.selectRepository)
-        filter("Harness", selected: viewModel.presentation.harness, selectedLabel: viewModel.presentation.harnessLabel,
-               options: viewModel.presentation.harnessOptions, action: viewModel.selectHarness)
-        filter("Requested model", selected: viewModel.presentation.requestedModel, selectedLabel: viewModel.presentation.modelLabel,
-               options: viewModel.presentation.modelOptions, action: viewModel.selectRequestedModel)
-    }
-
-    private func filter(
-        _ title: String,
-        selected: String?,
-        selectedLabel: String?,
-        options: [StatisticsOption],
-        action: @escaping (String?) -> Void
-    ) -> some View {
-        let label = selectedLabel ?? options.first(where: { $0.id == selected })?.label ?? (selected == nil ? "All" : "Unavailable selection")
-        return Menu {
-            Button("All") { action(nil) }
-            ForEach(options) { option in
-                Button(option.label) { action(option.id) }.help(option.label)
-            }
-        } label: {
-            Text("\(title): \(label)").lineLimit(1)
-        }
-        .help("\(title): \(label)")
-        .accessibilityLabel("\(title): \(label)")
     }
 
     private var chart: some View {
@@ -271,7 +237,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
             }
             if viewModel.presentation.rows.isEmpty {
                 Text(
-                    "No \(viewModel.presentation.list.rawValue.lowercased()) match these filters. Change the range or filters to find retained work."
+                    "No \(viewModel.presentation.list.rawValue.lowercased()) in this range. Change the range to find retained work."
                 )
                 .font(.hf(.body))
                 .foregroundStyle(Color.secondaryText)

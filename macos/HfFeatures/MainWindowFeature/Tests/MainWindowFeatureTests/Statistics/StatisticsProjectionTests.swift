@@ -16,7 +16,30 @@ struct StatisticsProjectionTests: StatisticsFixtures {
         let before = ISO8601DateFormatter().date(from: bounds.before)!
         #expect(calendar.component(.hour, from: since) == 0)
         #expect(calendar.dateComponents([.day], from: since, to: before).day == 7)
+        #expect(before == calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)))
         #expect(before.timeIntervalSince(since) == 6 * 24 * 3600 + 23 * 3600)
+    }
+
+    @Test func givenThirtyDayRange_whenBoundsDerived_thenIncludesTodayAndExcludesBeforeLocalDayAcrossDST() {
+        // given
+        let now = ISO8601DateFormatter().date(from: "2026-03-10T12:00:00-07:00")!
+        let today = calendar.startOfDay(for: now)
+
+        // when
+        let bounds = StatisticsProjection.bounds(range: .thirty, now: now, calendar: calendar)
+        let since = ISO8601DateFormatter().date(from: bounds.since)!
+        let before = ISO8601DateFormatter().date(from: bounds.before)!
+
+        // then
+        #expect(calendar.dateComponents([.month, .day, .hour], from: since).month == 2)
+        #expect(calendar.component(.day, from: since) == 9)
+        #expect(calendar.component(.hour, from: since) == 0)
+        #expect(calendar.dateComponents([.month, .day, .hour], from: before).month == 3)
+        #expect(calendar.component(.day, from: before) == 11)
+        #expect(calendar.component(.hour, from: before) == 0)
+        #expect(calendar.date(byAdding: .day, value: 29, to: since) == today)
+        #expect(before == calendar.date(byAdding: .day, value: 1, to: today))
+        #expect(before.timeIntervalSince(since) == 29 * 24 * 3600 + 23 * 3600)
     }
 
     @Test func givenSnapshotCrossesMidnight_whenDerivedAfterMidnight_thenTotalsAndBarsKeepOneAnchor() {
@@ -43,8 +66,7 @@ struct StatisticsProjectionTests: StatisticsFixtures {
         let now = ISO8601DateFormatter().date(from: "2026-10-28T12:00:00-07:00")!
         let cases: [(range: StatisticsRange, labelOffsets: [Int])] = [
             (.seven, Array(0 ... 6)),
-            (.thirty, [0, 7, 14, 21, 29]),
-            (.ninety, [0, 22, 44, 66, 89])
+            (.thirty, [0, 7, 14, 21, 29])
         ]
 
         for testCase in cases {

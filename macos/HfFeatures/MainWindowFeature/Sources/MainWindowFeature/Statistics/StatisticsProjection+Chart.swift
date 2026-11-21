@@ -33,7 +33,7 @@ extension StatisticsProjection {
         let workflow = value(workflowFacts, measure: selection.measure, wall: !filteredTime)
         let tasks = value(standalone, measure: selection.measure, wall: false)
         var chart = StatisticsChart()
-        chart.gap = selection.range == .seven ? 16 : selection.range == .thirty ? 4 : 2
+        chart.gap = selection.range == .seven ? 16 : 4
         if selection.measure == .usage { chart.disclosure = usageDisclosure(roots: roots, executions: executions) }
         chart.title = selection.measure == .usage ? "Usage" : filteredTime ? "Execution time" : "Total time"
         let total = selection.measure == .usage ? usage(executions) : workflow

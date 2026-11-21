@@ -4,7 +4,7 @@ import MonitorCore
 
 // MARK: - Statistics presentation
 
-enum StatisticsRange: Int, CaseIterable, Sendable { case seven = 7, thirty = 30, ninety = 90 }
+enum StatisticsRange: Int, CaseIterable, Sendable { case seven = 7, thirty = 30 }
 enum StatisticsMeasure: String, CaseIterable, Sendable { case time = "Total time", usage = "Usage" }
 enum StatisticsList: String, CaseIterable, Sendable { case workflows = "Workflows", tasks = "Tasks", harnesses = "Harnesses" }
 enum StatisticsScreenState: Equatable, Sendable { case loading, empty(String), error(String), unsupported(String), ready }
