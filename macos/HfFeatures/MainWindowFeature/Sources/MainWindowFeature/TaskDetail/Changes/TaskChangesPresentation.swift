@@ -83,7 +83,7 @@ struct TaskChangesScopeID: Hashable, Sendable {
 
 // MARK: - TaskChangesRowModel
 
-/// One changed path. Not interactive in this stage.
+/// One changed path and its optional stored-text disclosure address.
 struct TaskChangesRowModel: Equatable, Identifiable, Sendable {
     let id: Int
     /// `M A D T U S ? ·`.
@@ -101,7 +101,7 @@ struct TaskChangesRowModel: Equatable, Identifiable, Sendable {
     let deletions: Int?
     /// True when no selector can address the row (cut path, cut repository fields, no root).
     let isDimmed: Bool
-    /// The address of the row; `nil` exactly when `isDimmed`.
+    /// The disclosure address, present only for addressable stored text.
     var selector: TaskChangesSelector?
 }
 
@@ -161,6 +161,18 @@ enum TaskChangesPresentation: Equatable, Sendable {
     case note(TaskChangesNote)
     /// A listing.
     case document(TaskChangesDocument)
+
+    func revealLocation(for selection: TaskChangesSelection) -> (TaskChangesScopeID, Int)? {
+        guard case .document(let document) = self else { return nil }
+        for repository in document.repositories {
+            for scope in repository.scopes where scope.id.taskID == selection.taskID {
+                if let index = scope.rows.firstIndex(where: { $0.selector == selection.selector }) {
+                    return (scope.id, index + 1)
+                }
+            }
+        }
+        return nil
+    }
 
     /// "Stored changes aren't available yet" after the settling cadence reached its cap.
     static let settlingCapped = TaskChangesPresentation.note(TaskChangesNote(

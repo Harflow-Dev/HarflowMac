@@ -280,7 +280,7 @@ extension TaskDetailVMTests {
         #expect(shownDiff(rig.sut)?.header == TaskChangesDiffHeader(path: "src/app.py", scope: "Working tree"))
     }
 
-    @Test func givenARememberedRowThatIsPresentWithoutText_whenTheListingLoads_thenItIsSelectedWithItsLabelAndNothingIsRead() async throws {
+    @Test func givenARememberedRowThatIsPresentWithoutText_whenTheListingLoads_thenItIsDroppedWithoutReadingAPatch() async throws {
         // given
         let rig = try await openTextRig(paneOpen: false)
         defer { rig.sut.didDisappear() }
@@ -289,11 +289,11 @@ extension TaskDetailVMTests {
         // when
         rig.sut.restoreChangesSelection(remembered)
         rig.sut.setPaneOpen(true)
-        await waitUntil { rig.sut.changesDiff != .none }
+        await waitUntil { rig.sut.changesTabCount == 6 }
 
         // then
-        #expect(rig.sut.changesDiff == .noText(TaskChangesDiffHeader(path: "assets/logo.png", scope: "Committed"), label: "Binary"))
-        #expect(rig.sut.changesSelection == remembered)
+        #expect(rig.sut.changesDiff == .none)
+        #expect(rig.sut.changesSelection == nil)
         #expect(rig.patches.isEmpty)
     }
 

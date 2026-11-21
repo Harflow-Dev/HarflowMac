@@ -16,6 +16,8 @@ import SwiftUI
 struct ChangesDiffView: View {
     let diff: TaskChangesDiffPresentation
     let perform: (TaskChangesNote.Action) -> Void
+    var retryFocus: FocusState<ChangesFocus?>.Binding?
+    var selection: TaskChangesSelection?
 
     var body: some View {
         switch diff {
@@ -35,7 +37,11 @@ struct ChangesDiffView: View {
             ChangesDiffBlock(model: model)
         case .failure(let header, let note):
             if let header { ChangesDiffHead(header: header) }
-            ChangesNoteView(note: note, perform: perform)
+            if note.action == .retryDiff, let retryFocus, let selection {
+                ChangesNoteView(note: note, perform: perform, retryFocus: retryFocus, selection: selection)
+            } else {
+                ChangesNoteView(note: note, perform: perform)
+            }
         }
     }
 
@@ -71,17 +77,9 @@ private struct ChangesDiffHead: View {
 
 // MARK: - ChangesDiffBlock
 
-/// `.hd-diff`: mono 12/19 lines in a bordered surface. The lines are one read-only, selectable text view that scrolls sideways
-/// rather than wrapping, at its natural height up to a cap and then with its own vertical scrolling.
+/// Mono lines in a bordered, selectable text view sized to the wrapped document.
 private struct ChangesDiffBlock: View {
     let model: TaskChangesDiffModel
-    private static let maxHeight: CGFloat = 440
-
-    /// With legacy (always visible) scrollers the horizontal one takes room from the lines; overlay scrollers take none.
-    private static var scrollerExtra: CGFloat {
-        NSScroller.preferredScrollerStyle == .legacy ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
-    }
-
     var body: some View {
         ChangesDiffHead(header: model.header)
         ForEach([model.notice, model.lineEndingNotice].compactMap(\.self), id: \.self) { notice in
@@ -89,7 +87,6 @@ private struct ChangesDiffBlock: View {
         }
         let style = TaskScreenStyle.Diff.self
         ChangesDiffTextView(text: model.text, label: "Diff of \(model.header.path)")
-            .frame(height: min(model.text.contentHeight + Self.scrollerExtra, Self.maxHeight))
             .background(style.fill.color)
             .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius))
             .overlay(RoundedRectangle(cornerRadius: style.cornerRadius).stroke(style.borderColor.color, lineWidth: style.borderWidth))
@@ -104,55 +101,68 @@ private struct ChangesDiffBlock: View {
 
 // MARK: - ChangesDiffTextView
 
-/// A TextKit 1 text view over the prebuilt attributed string. Only the visible lines are laid out and drawn, so a long
-/// patch costs no more than a short one. Read-only and selectable; its accessibility label names the file, and each
-/// added or removed line starts with its `+` or `-`.
+/// A width-tracking TextKit 1 document, measured once per patch and width. It remains selectable and read-only.
 private struct ChangesDiffTextView: NSViewRepresentable {
     let text: TaskChangesDiffText
     let label: String
 
     final class Coordinator {
-        var identity: Int?
+        var displayIdentity: Int?
+        var measurementIdentity: Int?
+        var heights: [CGFloat: CGFloat] = [:]
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+
+        init() {
+            container.lineFragmentPadding = TaskScreenStyle.Diff.linePaddingHorizontal
+            storage.addLayoutManager(layout)
+            layout.addTextContainer(container)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> DiffNSTextView {
         let storage = NSTextStorage()
         let layout = NSLayoutManager()
-        layout.allowsNonContiguousLayout = true
-        let container = NSTextContainer(size: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = false
+        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = true
         container.lineFragmentPadding = TaskScreenStyle.Diff.linePaddingHorizontal
         storage.addLayoutManager(layout)
         layout.addTextContainer(container)
-        let textView = DiffNSTextView(frame: .zero, textContainer: container)
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.drawsBackground = false
-        textView.isHorizontallyResizable = true
-        textView.isVerticallyResizable = true
-        textView.autoresizingMask = []
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainerInset = NSSize(width: 0, height: TaskChangesDiffText.verticalInset)
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
-        scroll.hasHorizontalScroller = true
-        scroll.autohidesScrollers = true
-        scroll.drawsBackground = false
-        scroll.borderType = .noBorder
-        scroll.documentView = textView
-        return scroll
+        let view = DiffNSTextView(frame: .zero, textContainer: container)
+        view.isEditable = false
+        view.isSelectable = true
+        view.drawsBackground = false
+        view.isHorizontallyResizable = false
+        view.isVerticallyResizable = false
+        view.textContainerInset = NSSize(width: 0, height: TaskChangesDiffText.verticalInset)
+        return view
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let textView = scroll.documentView as? NSTextView else { return }
-        textView.setAccessibilityLabel(label)
-        (textView as? DiffNSTextView)?.syncMinimumWidth()
-        guard context.coordinator.identity != text.identity else { return }
-        context.coordinator.identity = text.identity
-        textView.textStorage?.setAttributedString(text.attributed)
-        textView.scroll(.zero)
+    func updateNSView(_ view: DiffNSTextView, context: Context) {
+        view.setAccessibilityLabel(label)
+        guard context.coordinator.displayIdentity != text.identity else { return }
+        context.coordinator.displayIdentity = text.identity
+        view.textStorage?.setAttributedString(text.attributed)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: DiffNSTextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
+        let coordinator = context.coordinator
+        if coordinator.measurementIdentity != text.identity {
+            coordinator.measurementIdentity = text.identity
+            coordinator.heights.removeAll()
+            coordinator.storage.setAttributedString(text.attributed)
+        }
+        if let height = coordinator.heights[width] { return CGSize(width: width, height: height) }
+        coordinator.container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        coordinator.layout.ensureLayout(for: coordinator.container)
+        let height = ceil(coordinator.layout.usedRect(for: coordinator.container).maxY + 2 * TaskChangesDiffText.verticalInset)
+        if coordinator.heights.count >= 4 { coordinator.heights.removeAll() }
+        coordinator.heights[width] = height
+        return CGSize(width: width, height: height)
     }
 }
 
@@ -160,23 +170,11 @@ private struct ChangesDiffTextView: NSViewRepresentable {
 
 /// Fills the whole width behind added, removed, hunk and header lines, for the lines in view only.
 private final class DiffNSTextView: NSTextView {
-    /// Keeps the view at least as wide as the clip view, so the fills span the block however short the longest line is.
-    func syncMinimumWidth() {
-        guard let width = enclosingScrollView?.contentSize.width, minSize.width != width else { return }
-        minSize.width = width
-        needsDisplay = true
-    }
-
-    override func layout() {
-        syncMinimumWidth()
-        super.layout()
-    }
-
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
         guard let layoutManager, let textContainer, let storage = textStorage, storage.length > 0 else { return }
         let origin = textContainerOrigin
-        let width = max(bounds.width, enclosingScrollView?.contentSize.width ?? 0)
+        let width = bounds.width
         let glyphs = layoutManager.glyphRange(forBoundingRect: rect.offsetBy(dx: -origin.x, dy: -origin.y), in: textContainer)
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layoutManager.enumerateLineFragments(forGlyphRange: glyphs) { lineRect, _, _, fragment, _ in

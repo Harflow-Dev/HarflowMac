@@ -20,7 +20,7 @@ import Testing
     }
 
     static func mock(_ snapshot: TaskChangesSnapshot) -> TaskDetailViewModelMock {
-        mock(TaskChangesPresentationBuilder.built(snapshot))
+        mock(TaskChangesPresentationBuilder.built(snapshot, taskID: PaneMocks.taskID))
     }
 
     static func store(tab: TaskPaneStateStore.Tab = .changes) -> TaskPaneStateStore {
@@ -294,7 +294,7 @@ import Testing
         let mock = ChangesPaneMocks.mock(snapshot)
         let host = await mount(mock)
         defer { host.close() }
-        let scope = TaskChangesScopeID(taskID: "t1", repository: 0, scope: "committed_range")
+        let scope = TaskChangesScopeID(taskID: PaneMocks.taskID, repository: 0, scope: "committed_range")
         #expect(mock.changesRevealLimits[scope] == nil)
 
         // when

@@ -79,7 +79,7 @@ final class TaskChangesDiffText: @unchecked Sendable, Equatable, CustomStringCon
         let paragraph = NSMutableParagraphStyle()
         paragraph.minimumLineHeight = lineHeight
         paragraph.maximumLineHeight = lineHeight
-        paragraph.lineBreakMode = .byClipping
+        paragraph.lineBreakMode = .byCharWrapping
         let primary = dynamic(TaskScreenStyle.Colors.text)
         let muted = dynamic(TaskScreenStyle.Diff.hunkColor)
         let output = NSMutableAttributedString()

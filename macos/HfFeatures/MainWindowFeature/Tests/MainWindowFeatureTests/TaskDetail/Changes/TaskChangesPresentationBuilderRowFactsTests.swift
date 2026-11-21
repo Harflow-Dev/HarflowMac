@@ -50,22 +50,26 @@ struct TaskChangesPresentationBuilderRowFactsTests {
 
     // MARK: Selector and dimming
 
-    @Test func givenEveryRow_whenBuilt_thenTheSelectorIsNilExactlyWhenTheRowIsDimmed() throws {
+    @Test func givenAddressableAndDescriptiveRows_whenBuilt_thenOnlyStoredTextRowsHaveDisclosureSelectors() throws {
         // given
         let cut = ChangesJSON.row("cut/path", pathTruncated: true, additions: nil, deletions: nil, content: "not_captured", reason: "path_too_long")
         let truncatedRepository = ChangesJSON.repository(root: "/a/one", fieldsTruncated: true, committed: ChangesJSON.committed(rows: [ChangesJSON.row("x")]))
         let noRoot = ChangesJSON.repository(root: nil, committed: ChangesJSON.committed(rows: [ChangesJSON.row("y")]))
-        let fine = ChangesJSON.repository(root: "/b/two", committed: ChangesJSON.committed(rows: [ChangesJSON.row("z"), cut]))
+        let descriptive = ChangesJSON.row("image.png", additions: nil, deletions: nil, binary: true, content: "binary")
+        let fine = ChangesJSON.repository(root: "/b/two", committed: ChangesJSON.committed(rows: [ChangesJSON.row("z"), descriptive, cut]))
 
         // when
         let result = try built([truncatedRepository, noRoot, fine])
 
         // then
         let all = rows(result)
-        #expect(all.count == 4)
-        #expect(all.allSatisfy { ($0.selector == nil) == $0.isDimmed })
-        #expect(all.map(\.isDimmed) == [true, true, false, true])
-        #expect(result.rowFacts.count == 1, "only the addressable row has facts")
+        #expect(all.count == 5)
+        #expect(all.map(\.isDimmed) == [true, true, false, false, true])
+        #expect(all.map { $0.selector != nil } == [false, false, true, false, false])
+        let descriptiveFacts = try #require(result.rowFacts[TaskChangesSelector(
+            repositoryRoot: "/b/two", scope: .committedRange, pathBytes: Data("image.png".utf8))!])
+        #expect(!descriptiveFacts.hasText && descriptiveFacts.label == "Binary")
+        #expect(result.rowFacts.count == 2, "descriptive rows retain their raw facts without becoming disclosures")
     }
 
     @Test func givenARowSelector_whenRead_thenItCarriesTheRootScopeAndPathBytes() throws {

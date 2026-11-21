@@ -426,12 +426,13 @@ enum TaskChangesPresentationBuilder {
     private static func row(index: Int, entry: TaskChangesRepositoryEntry, scope: TaskChangesScope, row: TaskChangesRow) -> TaskChangesRowModel {
         let (letter, word) = status(row.status)
         let (state, help) = rowState(row)
-        let selector = TaskChangesSelector(repository: entry, scope: scope.name, row: row)
+        let address = TaskChangesSelector(repository: entry, scope: scope.name, row: row)
+        let selector = [TaskChangesContentState.available, .truncated].contains(row.content.state) ? address : nil
         let knownContent = [TaskChangesContentState.available, .truncated, .binary, .omittedSize, .notCaptured].contains(row.content.state)
         return TaskChangesRowModel(
             id: index, letter: letter, statusWord: word, path: TaskChangesDisplayText.escaped(row.path), state: state, stateHelp: help,
             additions: knownContent ? row.additions : nil, deletions: knownContent ? row.deletions : nil,
-            isDimmed: selector == nil, selector: selector)
+            isDimmed: address == nil, selector: selector)
     }
 
     /// The status letter and the word read aloud.

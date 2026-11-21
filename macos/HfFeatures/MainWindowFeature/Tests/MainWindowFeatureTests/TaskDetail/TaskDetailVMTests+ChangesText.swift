@@ -151,10 +151,25 @@ extension TaskDetailVMTests {
         rig.sut.didSelectChangesRow(ChangesJSON.selector(path, scope: scope))
 
         // then
-        let header = TaskChangesDiffHeader(path: path, scope: scope == .workingTree ? "Working tree" : "Committed")
-        #expect(rig.sut.changesDiff == .noText(header, label: label))
-        #expect(rig.sut.changesSelection?.selector.pathBytes == Data(path.utf8))
+        #expect(rig.sut.changesDiff == .none)
+        #expect(rig.sut.changesSelection == nil)
         await waitUntil(timeout: 0.3) { !rig.patches.isEmpty }
+        #expect(rig.patches.isEmpty)
+    }
+
+    @Test func givenARememberedNonTextRow_whenRestored_thenItIsClearedWithoutReadingAPatch() async throws {
+        // given
+        let rig = try await openTextRig()
+        defer { rig.sut.didDisappear() }
+        let selection = TaskChangesSelection(taskID: "t1", selector: ChangesJSON.selector("assets/logo.png"))
+
+        // when
+        rig.sut.restoreChangesSelection(selection)
+        await waitUntil(timeout: 0.3) { rig.sut.changesSelection == nil }
+
+        // then
+        #expect(rig.sut.changesSelection == nil)
+        #expect(rig.sut.changesDiff == .none)
         #expect(rig.patches.isEmpty)
     }
 
@@ -192,6 +207,57 @@ extension TaskDetailVMTests {
         #expect(rig.sut.changesSelection?.selector == second)
         #expect(!rig.patches.calls[0].fence())
         #expect(rig.patches.calls[1].fence())
+    }
+
+    @Test func givenAReadInFlight_whenItsExactRowIsCollapsed_thenTheReadIsFencedAndItsLateResultIsIgnored() async throws {
+        // given
+        let rig = try await openTextRig()
+        defer { rig.sut.didDisappear() }
+        let selector = ChangesJSON.selector("README.md")
+        let sut = rig.sut
+        rig.patches.answer(0, .text("@@ -1 +1 @@\n+STALE AFTER COLLAPSE\n"))
+        rig.patches.whileInFlight(0) { sut.didCollapseChangesRow(selector) }
+
+        // when
+        rig.sut.didSelectChangesRow(selector)
+        await waitUntil { rig.patches.count == 1 }
+        await waitUntil(timeout: 0.3) { rig.sut.changesDiff == .none }
+
+        // then
+        #expect(rig.sut.changesSelection == nil)
+        #expect(rig.sut.changesDiff == .none)
+        #expect(!rig.patches.calls[0].fence())
+    }
+
+    @Test func givenRestoredSelectionBeyondRevealStep_whenApplied_thenVisibleRestoreKeepsDefaultAndLoadMoreAdvancesFromItsFloor() async throws {
+        // given: file-204 is the 205th row, beyond the initial 200-row reveal step.
+        let snapshot = try ChangesJSON.snapshot(
+            ChangesJSON.page(repositories: [ChangesJSON.repository(
+                committed: ChangesJSON.committed(rows: ChangesJSON.rows(205)), working: nil)], limit: 500), limit: 500)
+        let rig = try await openTextRig(paneOpen: false, reply: .snapshot(snapshot))
+        defer { rig.sut.didDisappear() }
+        let scope = TaskChangesScopeID(taskID: "t1", repository: 0, scope: "committed_range")
+        rig.sut.setPaneOpen(true)
+        await waitUntil { rig.sut.changesTabCount == 205 }
+        #expect(rig.sut.changesRevealLimits[scope] == nil)
+
+        // A visible selection does not create a redundant limit override.
+        let visible = TaskChangesSelection(taskID: "t1", selector: ChangesJSON.selector("file-1.txt"))
+        rig.sut.restoreChangesSelection(visible)
+        await waitUntil { isDiffShown(rig.sut) }
+        #expect(rig.sut.changesRevealLimits[scope] == nil)
+        rig.sut.didCollapseChangesRow(visible.selector)
+
+        // when: a remembered exact selector is restored beyond the current reveal limit.
+        let far = TaskChangesSelection(taskID: "t1", selector: ChangesJSON.selector("file-204.txt"))
+        rig.sut.restoreChangesSelection(far)
+        await waitUntil { rig.sut.changesSelection == far && rig.sut.changesRevealLimits[scope] == 205 }
+        await waitUntil { rig.patches.calls.last?.selector == far.selector }
+
+        // then: the following Load more advances from the restored floor rather than the default 200.
+        #expect(rig.patches.calls.last?.selector == far.selector)
+        rig.sut.didTapLoadMoreChangeRows(scope: scope)
+        #expect(rig.sut.changesRevealLimits[scope] == 405)
     }
 
     @Test func givenTheSameRowSelectedAgainWhileShown_whenSelected_thenItIsNotReadAgain() async throws {

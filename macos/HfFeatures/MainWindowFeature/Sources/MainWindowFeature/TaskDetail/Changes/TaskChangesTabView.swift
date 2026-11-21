@@ -3,7 +3,7 @@
 //  MainWindowFeature
 //
 //  The standalone pane's Changes tab (HarflowDesign 17739e4, G-DIFF): repository, then scope, then rows. In this stage
-//  rows are plain text, not controls. The view only draws a presentation built elsewhere.
+//  stored text opens inline beneath its exact file row.
 //
 
 import MonitorCore
@@ -14,6 +14,7 @@ import SwiftUI
 /// The Changes tab body. Generic over the screen's view model like the other tabs.
 struct TaskChangesTabView<VM: TaskDetailViewModel>: View {
     let viewModel: VM
+    @FocusState private var focused: ChangesFocus?
 
     var body: some View {
         ScrollView {
@@ -28,11 +29,14 @@ struct TaskChangesTabView<VM: TaskDetailViewModel>: View {
                     ChangesNoteView(note: note, perform: perform)
                 case .document(let document):
                     ChangesDocumentView(document: document, limits: viewModel.changesRevealLimits,
-                                        selected: viewModel.changesSelection?.selector,
+                                        selected: viewModel.changesSelection, diff: viewModel.changesDiff, focused: $focused, perform: perform,
                                         loadMore: { viewModel.didTapLoadMoreChangeRows(scope: $0) },
-                                        select: { viewModel.didSelectChangesRow($0) })
+                                        select: { viewModel.didSelectChangesRow($0) },
+                                        collapse: { viewModel.didCollapseChangesRow($0) })
                 }
-                ChangesDiffView(diff: viewModel.changesDiff, perform: perform)
+                if case .failure(_, let note) = viewModel.changesDiff, note.action == .reloadChanges {
+                    ChangesDiffView(diff: viewModel.changesDiff, perform: perform)
+                }
             }
             .padding(TaskScreenStyle.PaneBody.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -51,12 +55,19 @@ struct TaskChangesTabView<VM: TaskDetailViewModel>: View {
     }
 }
 
+enum ChangesFocus: Hashable {
+    case row(TaskChangesSelection)
+    case retry(TaskChangesSelection)
+}
+
 // MARK: - ChangesNoteView
 
 /// `.hd-m05-panenote`: a title, detail and reason, optional placeholder bars and an action. A neutral note is a caption.
 struct ChangesNoteView: View {
     let note: TaskChangesNote
     let perform: (TaskChangesNote.Action) -> Void
+    var retryFocus: FocusState<ChangesFocus?>.Binding?
+    var selection: TaskChangesSelection?
 
     var body: some View {
         if note.tone == .neutral {
@@ -94,9 +105,16 @@ struct ChangesNoteView: View {
             noteText
             skeleton.padding(.top, 8)
             if let action = note.action {
-                Button(action.title) { perform(action) }
-                    .controlSize(.small)
-                    .padding(.top, 8)
+                if let retryFocus, let selection, action == .retryDiff {
+                    Button(action.title) { perform(action) }
+                        .focused(retryFocus, equals: .retry(selection))
+                        .controlSize(.small)
+                        .padding(.top, 8)
+                } else {
+                    Button(action.title) { perform(action) }
+                        .controlSize(.small)
+                        .padding(.top, 8)
+                }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -140,9 +158,13 @@ struct ChangesNoteView: View {
 private struct ChangesDocumentView: View {
     let document: TaskChangesDocument
     let limits: [TaskChangesScopeID: Int]
-    let selected: TaskChangesSelector?
+    let selected: TaskChangesSelection?
+    let diff: TaskChangesDiffPresentation
+    let focused: FocusState<ChangesFocus?>.Binding
+    let perform: (TaskChangesNote.Action) -> Void
     let loadMore: (TaskChangesScopeID) -> Void
     let select: (TaskChangesSelector) -> Void
+    let collapse: (TaskChangesSelector) -> Void
 
     var body: some View {
         if let banner = document.banner {
@@ -155,7 +177,8 @@ private struct ChangesDocumentView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         ForEach(document.repositories) { repository in
-            ChangesRepositoryView(repository: repository, limits: limits, selected: selected, loadMore: loadMore, select: select)
+            ChangesRepositoryView(repository: repository, limits: limits, selected: selected, diff: diff, focused: focused, perform: perform,
+                                  loadMore: loadMore, select: select, collapse: collapse)
         }
         ForEach([document.caption, document.countCaption].compactMap(\.self), id: \.self) { caption in
             Text(verbatim: caption)
@@ -172,25 +195,39 @@ private struct ChangesDocumentView: View {
 private struct ChangesRepositoryView: View {
     let repository: TaskChangesRepositoryModel
     let limits: [TaskChangesScopeID: Int]
-    let selected: TaskChangesSelector?
+    let selected: TaskChangesSelection?
+    let diff: TaskChangesDiffPresentation
+    let focused: FocusState<ChangesFocus?>.Binding
+    let perform: (TaskChangesNote.Action) -> Void
     let loadMore: (TaskChangesScopeID) -> Void
     let select: (TaskChangesSelector) -> Void
+    let collapse: (TaskChangesSelector) -> Void
     @State private var isOpen: Bool
 
-    init(repository: TaskChangesRepositoryModel, limits: [TaskChangesScopeID: Int], selected: TaskChangesSelector?,
-         loadMore: @escaping (TaskChangesScopeID) -> Void, select: @escaping (TaskChangesSelector) -> Void) {
-        self.repository = repository
-        self.limits = limits
-        self.selected = selected
-        self.loadMore = loadMore
-        self.select = select
-        _isOpen = State(initialValue: repository.startsOpen)
+    init(repository: TaskChangesRepositoryModel, limits: [TaskChangesScopeID: Int], selected: TaskChangesSelection?,
+         diff: TaskChangesDiffPresentation, focused: FocusState<ChangesFocus?>.Binding,
+         perform: @escaping (TaskChangesNote.Action) -> Void, loadMore: @escaping (TaskChangesScopeID) -> Void,
+         select: @escaping (TaskChangesSelector) -> Void, collapse: @escaping (TaskChangesSelector) -> Void) {
+        self.repository = repository; self.limits = limits; self.selected = selected; self.diff = diff
+        self.focused = focused; self.perform = perform; self.loadMore = loadMore; self.select = select; self.collapse = collapse
+        _isOpen = State(initialValue: repository.startsOpen || Self.contains(repository, selected))
+    }
+
+    private static func contains(_ repository: TaskChangesRepositoryModel, _ selection: TaskChangesSelection?) -> Bool {
+        guard let selection else { return false }
+        return repository.scopes.contains { $0.id.taskID == selection.taskID && $0.rows.contains { $0.selector == selection.selector } }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             header
             if isOpen { content }
+        }
+        .onChange(of: selected) { _, selection in
+            if Self.contains(repository, selection) { isOpen = true }
+        }
+        .onChange(of: repository) { _, repository in
+            if Self.contains(repository, selected) { isOpen = true }
         }
         .padding(.bottom, 6)
         .overlay(alignment: .bottom) {
@@ -199,7 +236,10 @@ private struct ChangesRepositoryView: View {
     }
 
     private var header: some View {
-        Button { isOpen.toggle() } label: {
+        Button {
+            if isOpen, Self.contains(repository, selected), let selector = selected?.selector { collapse(selector) }
+            isOpen.toggle()
+        } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
                     .font(TaskScreenStyle.sans(size: 10).weight(.semibold))
@@ -241,7 +281,7 @@ private struct ChangesRepositoryView: View {
         }
         ForEach(repository.scopes) { scope in
             ChangesScopeView(scope: scope, limit: limits[scope.id] ?? TaskChangesPresentationBuilder.revealStep, selected: selected,
-                             loadMore: loadMore, select: select)
+                             diff: diff, focused: focused, perform: perform, loadMore: loadMore, select: select, collapse: collapse)
         }
     }
 }
@@ -252,10 +292,13 @@ private struct ChangesRepositoryView: View {
 private struct ChangesScopeView: View {
     let scope: TaskChangesScopeModel
     let limit: Int
-    let selected: TaskChangesSelector?
+    let selected: TaskChangesSelection?
+    let diff: TaskChangesDiffPresentation
+    let focused: FocusState<ChangesFocus?>.Binding
+    let perform: (TaskChangesNote.Action) -> Void
     let loadMore: (TaskChangesScopeID) -> Void
     let select: (TaskChangesSelector) -> Void
-
+    let collapse: (TaskChangesSelector) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
@@ -273,8 +316,19 @@ private struct ChangesScopeView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(scope.rows.prefix(limit))) { row in
-                    ChangesRowView(row: row, isSelected: row.selector != nil && row.selector == selected, select: select)
+                ForEach(Array(scope.rows.prefix(limit)).map { IdentifiedChangesRow(row: $0, member: scope.id.taskID) }) { item in
+                    let row = item.row
+                    let selection = row.selector.map { TaskChangesSelection(taskID: scope.id.taskID, selector: $0) }
+                    let isSelected = selection != nil && selection == selected
+                    ChangesRowView(row: row, member: scope.id.taskID, isSelected: isSelected, focused: focused, select: select, collapse: collapse)
+                    if isSelected, let selection {
+                        ChangesDiffView(diff: diff, perform: { action in
+                            if action == .retryDiff, focused.wrappedValue == .retry(selection) {
+                                focused.wrappedValue = .row(selection)
+                            }
+                            perform(action)
+                        }, retryFocus: focused, selection: selection)
+                    }
                 }
             }
             if scope.rows.count > limit {
@@ -292,30 +346,52 @@ private struct ChangesScopeView: View {
     }
 }
 
+private enum ChangesRowIdentity: Hashable {
+    case selector(TaskChangesSelection)
+    case position(Int)
+}
+
+private struct IdentifiedChangesRow: Identifiable {
+    let row: TaskChangesRowModel
+    let member: String
+    var id: ChangesRowIdentity {
+        row.selector.map { .selector(TaskChangesSelection(taskID: member, selector: $0)) } ?? .position(row.id)
+    }
+}
+
 // MARK: - ChangesRowView
 
-/// `.hd-file.hd-m05-file`: status letter, path, row state and counts. A button that selects the row; a row that no
-/// selector can address is dimmed and disabled.
+/// A file disclosure for stored text, or a descriptive row when text cannot be disclosed.
 private struct ChangesRowView: View {
     let row: TaskChangesRowModel
+    let member: String
     let isSelected: Bool
+    let focused: FocusState<ChangesFocus?>.Binding
     let select: (TaskChangesSelector) -> Void
+    let collapse: (TaskChangesSelector) -> Void
     @State private var isHovering = false
 
     var body: some View {
+        if let selector = row.selector {
         Button {
-            if let selector = row.selector { select(selector) }
+            if isSelected { collapse(selector) } else { select(selector) }
         } label: {
             content
                 .background(RoundedRectangle(cornerRadius: TaskScreenStyle.ChangeRow.cornerRadius).fill(fill))
                 .contentShape(RoundedRectangle(cornerRadius: TaskScreenStyle.ChangeRow.cornerRadius))
         }
         .buttonStyle(.plain)
-        .disabled(row.selector == nil)
+        .focused(focused, equals: .row(TaskChangesSelection(taskID: member, selector: selector)))
         .onHover { isHovering = $0 }
         .modifier(OptionalHelp(text: row.stateHelp))
         .accessibilityLabel(accessibilityText)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(isSelected ? "Expanded" : "Collapsed")
+        } else {
+            content
+                .modifier(OptionalHelp(text: row.stateHelp))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityText)
+        }
     }
 
     private var fill: Color {
@@ -327,6 +403,12 @@ private struct ChangesRowView: View {
     private var content: some View {
         let style = TaskScreenStyle.ChangeRow.self
         return HStack(spacing: style.gap) {
+            Image(systemName: "chevron.right")
+                .font(TaskScreenStyle.sans(size: 9).weight(.semibold))
+                .rotationEffect(.degrees(isSelected ? 90 : 0))
+                .frame(width: 10)
+                .opacity(row.selector == nil ? 0 : 1)
+                .accessibilityHidden(true)
             Text(verbatim: row.letter)
                 .font(TaskScreenStyle.mono(size: style.statusSize, weight: .semibold))
                 .foregroundStyle(statusColor.color)

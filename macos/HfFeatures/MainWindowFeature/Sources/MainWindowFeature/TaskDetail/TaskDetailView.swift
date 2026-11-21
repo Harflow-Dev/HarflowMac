@@ -91,6 +91,7 @@ protocol TaskDetailViewModel: ViewModel {
     var changesDiff: TaskChangesDiffPresentation { get }
     var changesTurns: TaskChangesTurnPicker? { get }
     func didSelectChangesRow(_ selector: TaskChangesSelector)
+    func didCollapseChangesRow(_ selector: TaskChangesSelector)
     func restoreChangesSelection(_ selection: TaskChangesSelection?)
     func didTapRetryChangesDiff()
     func didTapReloadChanges()

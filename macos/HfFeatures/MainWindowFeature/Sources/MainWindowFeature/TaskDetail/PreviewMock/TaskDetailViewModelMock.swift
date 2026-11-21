@@ -9,8 +9,17 @@ import Foundation
 import HfCommon
 import HfRepository
 import MonitorCore
+import Observation
 
 // MARK: - TaskDetailViewModelMock
+
+@Observable
+private final class MockChangesState {
+    var presentation = TaskChangesPresentation.loading
+    var selection: TaskChangesSelection?
+    var diff = TaskChangesDiffPresentation.none
+    var revealLimits: [TaskChangesScopeID: Int] = [:]
+}
 
 /// Preview mock for `TaskDetailView`.
 @MainActor
@@ -50,20 +59,55 @@ final class TaskDetailViewModelMock: TaskDetailViewModel {
     )
     var artifactMembers: [ArtifactMemberModel] = []
     func didLoadArtifacts(taskID _: String) {}
-    var changesPresentation = TaskChangesPresentation.loading
-    var changesTabCount: Int?
-    var changesCaptureSettling = false
-    var changesRevealLimits: [TaskChangesScopeID: Int] = [:]
-    func setPaneOpen(_: Bool) {}
-    var changesSelection: TaskChangesSelection?
-    var changesDiff = TaskChangesDiffPresentation.none
-    var changesTurns: TaskChangesTurnPicker?
-    func didSelectChangesRow(_ selector: TaskChangesSelector) {
-        changesSelection = TaskChangesSelection(taskID: taskID, selector: selector)
+    private let changesState = MockChangesState()
+    var changesPresentation: TaskChangesPresentation {
+        get { changesState.presentation }
+        set { changesState.presentation = newValue; revealChangesSelection() }
     }
 
-    func restoreChangesSelection(_ selection: TaskChangesSelection?) { changesSelection = selection }
-    func didTapRetryChangesDiff() {}
+    var changesTabCount: Int?
+    var changesCaptureSettling = false
+    var changesRevealLimits: [TaskChangesScopeID: Int] {
+        get { changesState.revealLimits }
+        set { changesState.revealLimits = newValue }
+    }
+
+    func setPaneOpen(_: Bool) {}
+    var changesSelection: TaskChangesSelection? {
+        get { changesState.selection }
+        set { changesState.selection = newValue; revealChangesSelection() }
+    }
+
+    var changesDiff: TaskChangesDiffPresentation {
+        get { changesState.diff }
+        set { changesState.diff = newValue }
+    }
+
+    private func revealChangesSelection() {
+        guard let selection = changesState.selection,
+              let (scope, count) = changesState.presentation.revealLocation(for: selection) else { return }
+        let current = changesState.revealLimits[scope] ?? TaskChangesPresentationBuilder.revealStep
+        if count > current { changesState.revealLimits[scope] = count }
+    }
+
+    var changesTurns: TaskChangesTurnPicker?
+    func didSelectChangesRow(_ selector: TaskChangesSelector) {
+        changesSelection = TaskChangesSelection(taskID: changesTurns?.selectedID ?? taskID, selector: selector)
+    }
+
+    func didCollapseChangesRow(_ selector: TaskChangesSelector) {
+        if changesSelection?.selector == selector { changesSelection = nil; changesDiff = .none }
+    }
+
+    func restoreChangesSelection(_ selection: TaskChangesSelection?) {
+        guard changesSelection == nil, let selection else { return }
+        changesSelection = selection
+    }
+
+    func didTapRetryChangesDiff() {
+        if case .failure(let header?, _) = changesDiff { changesDiff = .loading(header) }
+    }
+
     func didTapReloadChanges() {}
     func didSelectChangesTurn(_: String) {}
     func didTapRetryChanges() {}

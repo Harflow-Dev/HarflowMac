@@ -17,10 +17,16 @@ extension TaskDetailVM {
 
     /// Selects a listed row. A row whose content stores no text is selected and reads nothing.
     func didSelectChangesRow(_ selector: TaskChangesSelector) {
-        guard chrome == .standalone, changesLifecycle.rowFacts[selector] != nil, let member = changesLifecycle.memberID else { return }
+        guard chrome == .standalone, changesLifecycle.rowFacts[selector]?.hasText == true, let member = changesLifecycle.memberID else { return }
         let selection = TaskChangesSelection(taskID: member, selector: selector)
         if changesSelection == selection, changesDiff != .none, !isDiffFailure { return }
         changesSelection = selection
+        reconcileChangesSelection()
+    }
+
+    func didCollapseChangesRow(_ selector: TaskChangesSelector) {
+        guard changesSelection?.selector == selector, changesSelection?.taskID == changesLifecycle.memberID else { return }
+        changesSelection = nil
         reconcileChangesSelection()
     }
 
@@ -86,11 +92,15 @@ extension TaskDetailVM {
             if changesDiff != .none { changesDiff = .none }
             return
         }
-        guard let facts = changesLifecycle.rowFacts[selection.selector] else {
+        guard let facts = changesLifecycle.rowFacts[selection.selector], facts.hasText else {
             changesSelection = nil
             cancelChangesPatch()
             if changesDiff != .none, !isReloadFailure { changesDiff = .none }
             return
+        }
+        if let (scope, count) = changesPresentation.revealLocation(for: selection) {
+            let current = changesRevealLimits[scope] ?? TaskChangesPresentationBuilder.revealStep
+            if count > current { changesRevealLimits[scope] = count }
         }
         readChangesPatch(selection, facts: facts)
     }

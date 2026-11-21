@@ -251,9 +251,11 @@ struct M05ChangesStateMatrixHostedTests {
         #expect(all.count == 7)
         for row in all {
             let label = rowLabel(row)
-            let element = ctx.element(label)
-            #expect(element != nil, "row \(label) \(ctx.name)")
-            if row.isDimmed, let element { #expect(ShellMatrix.isEnabled(element) == false, "non-addressable row is not a control \(label)") }
+            let elements = ShellMatrix.elements(label, in: ctx.window)
+            #expect(!elements.isEmpty, "row \(label) \(ctx.name)")
+            let buttons = elements.filter { ShellMatrix.string($0, "accessibilityRole") == NSAccessibility.Role.button.rawValue }
+            #expect((!buttons.isEmpty) == (row.selector != nil),
+                    "only rows with stored text enter the button chain: \(label) \(ctx.name)")
         }
         #expect(all.contains { $0.isDimmed }, "a non-addressable row exists")
         for tag in ["Binary", "Name only", "Directory · name only", "Path cut · no text", "Text omitted · task limit"] {
