@@ -110,6 +110,74 @@ import Testing
         vm.didDisappear()
     }
 
+    // Rust pre-admission refusals stay unknown until the engine advertises a capability for them (follow-up).
+    @Test func givenAnInvalidParamsRefusal_whenRunThrows_thenOutcomeIsRefusedWithoutTaskMayExistNote() async {
+        // given
+        let (vm, useCase, routing) = make()
+        defer { withExtendedLifetime(routing) {} }
+        given(useCase).run(.any, runtime: .any).willThrow(ToolError.refused(code: "invalid_params", message: "m"))
+        await waitUntil { vm.canStart }
+        // when
+        vm.didTapStart()
+        await waitUntil { vm.composerState == .refused }
+        // then
+        #expect(vm.composerState == .refused)
+        #expect(vm.errorText?.contains("A task may exist") == false)
+        vm.didDisappear()
+    }
+
+    @Test func givenAStateIncompatibleRefusal_whenRunThrows_thenOutcomeStaysUnknownAndTaskMayExist() async {
+        // given
+        let (vm, useCase, routing) = make()
+        defer { withExtendedLifetime(routing) {} }
+        given(useCase).run(.any, runtime: .any).willThrow(ToolError.refused(code: "state_incompatible", message: "m"))
+        await waitUntil { vm.canStart }
+        // when
+        vm.didTapStart()
+        await waitUntil { vm.composerState == .unknown }
+        // then
+        #expect(vm.composerState == .unknown && vm.optionsLocked)
+        #expect(vm.errorText?.contains("m") == true)
+        #expect(vm.errorText?.contains("A task may exist") == true)
+        verify(routing).didStart(taskID: .any).called(0)
+        vm.didDisappear()
+    }
+
+    @Test func givenAStructuredForeignStoreRefusal_whenRunThrows_thenOutcomeStaysUnknown() async {
+        // given
+        let (vm, useCase, routing) = make()
+        defer { withExtendedLifetime(routing) {} }
+        let error = ToolError.structuredRefusal(
+            code: "state_incompatible", message: "m", data: ["reason": .string("foreign_store")]
+        )
+        given(useCase).run(.any, runtime: .any).willThrow(error)
+        await waitUntil { vm.canStart }
+        // when
+        vm.didTapStart()
+        await waitUntil { vm.composerState == .unknown }
+        // then
+        #expect(vm.composerState == .unknown && vm.optionsLocked)
+        #expect(vm.errorText?.contains("A task may exist") == true)
+        verify(routing).didStart(taskID: .any).called(0)
+        vm.didDisappear()
+    }
+
+    @Test func givenAStructuredStateBusyRefusal_whenRunThrows_thenOutcomeStaysUnknown() async {
+        // given
+        let (vm, useCase, routing) = make()
+        defer { withExtendedLifetime(routing) {} }
+        given(useCase).run(.any, runtime: .any).willThrow(ToolError.structuredRefusal(code: "state_busy", message: "m", data: [:]))
+        await waitUntil { vm.canStart }
+        // when
+        vm.didTapStart()
+        await waitUntil { vm.composerState == .unknown }
+        // then
+        #expect(vm.composerState == .unknown && vm.optionsLocked)
+        #expect(vm.errorText?.contains("A task may exist") == true)
+        verify(routing).didStart(taskID: .any).called(0)
+        vm.didDisappear()
+    }
+
     @Test func givenAnAcknowledgedTask_whenDoubleTappedAndRemounted_thenRoutesExactlyOnceUntilExplicitNewIntent() async {
         // given
         let (vm, useCase, routing) = make()
