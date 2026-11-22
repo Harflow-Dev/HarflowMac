@@ -169,3 +169,9 @@ MainWindowFeature.
     - the reconcile tests infer cancellation through the patch-generation fence;
     - the group toolbar contrast checks only the dialog title.
 - VoiceOver remains deferred to M12.
+
+## Owner sign-off
+
+The owner signed off on 2026-11-23 after looking at the Harflow Check copy built from `002b2b45` ("app looks good";
+"Yes, sign off"). The visual-pass items above are accepted. The deferred slices and known limitations remain open as
+listed. Stage 3 is accepted.
